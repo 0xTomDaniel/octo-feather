@@ -23,5 +23,9 @@ Format: date, decision, decided by, why. Open items stay open until Tom decides.
 ## Open
 
 - **Which remote.** Size, provider, cost. See plan block 0.
-- **Linear.** octo-lite is Linear-first; for a solo take-home Exo proposes GitHub-only (octo-lite already supports keeping the ticket graph in the local brief without issue consent).
-- **meta-operator.** Exo proposes dropping it for a single-lane take-home; the director is enough.
+
+## 2026-10-18 11:3x MDT (Tom)
+
+- **GitHub Issues, no Linear.** Tom: "no linear, we'll use github issues to keep it simple". Lane slug = `gh<issue number>`; `implement-spec` files tickets with `gh issue create`; meta-operator's "create the primary Linear issue" becomes a GitHub issue.
+- **Keep the director: octo-lite's meta-operator.** Tom: "we MUST have the director (meta-operator/coordinator). that's a KEY automation unlock that basically stands in for the human. I expect this take home to have several issues ongoing in parallel." So topology is meta-operator (director, writes no repo files, asks the human only at gates) over one orchestrator per issue/lane, each spawning Pi workers + integrator + code-reviewer. Deltas: spawn `-- pi` not `-- claude`; Linear steps -> `gh`.
+- **Remote host under evaluation: exe.dev** (vs home VM). sebox not used (third-party access; Tom may deprecate it).
