@@ -6,7 +6,7 @@ Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The
 
 Base: octo-lite `cc6fa4e`. Work is deltas on it. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
 
-Pending: role-file format waits on the pi-subagents spike (VM, 10-18); Jev placement (`just check` or a merge gate) waits on Tom.
+Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatter, `scripts/pi-role` for panes, pi-subagents@0.79.1 pinned project-local); per-role models are proposals awaiting Tom. Pending: Jev placement (`just check` or a merge gate) waits on Tom.
 
 | # | Block | Est | Output |
 |---|---|---|---|

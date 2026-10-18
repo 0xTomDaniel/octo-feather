@@ -13,3 +13,11 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 ## octo-feather's own spec
 
 `spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#acceptance-receipt`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
+
+## Hard limit on which agents a lane owner pane may launch
+
+`allowedAgents: code-reviewer` binds only when a role runs as a pi-subagents child. In a pane the lane owner could launch a builtin (scout, worker, delegate, the claude/codex runners). Options: a pi-subagents setting such as `subagents.disableBuiltins` passed to pane sessions, or a small patch. See docs/adr/0013.
+
+## Spec Chat skills for the lane owner
+
+octo-lite's orchestrator listed `spec-chat-shape` and `spec-chat-review`, which live in the Spec Chat peer repo. They were dropped from `agents/orchestrator.md` because nothing provides them on the remote; add them to its `skills` and `skillPath` once Spec Chat is installed there.
