@@ -1,6 +1,6 @@
 # octo-feather
 
-Lightweight agentic development kit: one director, a few Pi workers in Herdr panes, a spec, and a validation gate tight enough that sloppy code cannot land.
+Lightweight agentic development kit built on octo-lite (`varelaseb/octo-lite`, Apache-2.0): one director (orchestrator), Pi workers in Herdr panes, a spec-chat HTML spec, and a validation gate tight enough that sloppy code cannot land. Runs on a dedicated remote box, never on the owner's Mac.
 
 This file governs work on the kit itself. Target repos get their own `AGENTS.md` from `templates/`.
 
@@ -16,7 +16,8 @@ This file governs work on the kit itself. Target repos get their own `AGENTS.md`
 
 ## Layout
 
-- `roles/` role contracts appended to Pi's system prompt at spawn: director, implementer, verifier.
+- `agents/` role contracts from octo-lite, appended to Pi's system prompt at spawn: orchestrator (director), implementer, integrator, code-reviewer.
+- `spec/` spec-chat HTML specs (`*.spec.html`).
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` start and new-project helpers.

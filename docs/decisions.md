@@ -5,18 +5,23 @@ Format: date, decision, decided by, why. Open items stay open until Tom decides.
 ## 2026-10-18
 
 - **Purpose: pass the Martell/Winly take-home at Tom's best, starting Mon 10-19.** Tom. Take-home due EoD Thu 10-22. Kit must be ready tonight; the email stays unopened until then, so the kit is stack-agnostic.
-- **New repo, not a fork.** Tom. Take the best parts of scaling-octo-engine (Octo Heavy), octo-lite, spec-chat, AnnotateAnything, pstack (Lauren Tan / poteto), mattpocock/skills.
-- **Pi only; AGENTS.md only.** Tom. No Claude Code or Codex surfaces.
+- **New repo, built on octo-lite.** Tom ("here's octo lite", "did you even take a look at octo lite?"). octo-lite (`varelaseb/octo-lite` @ `cc6fa4e`, Apache-2.0, NOTICE kept) already has the loop: orchestrator (director), implementer, integrator, code-reviewer, `implement-spec` dispatch through Herdr workers to one PR, `herdr-comms` (`herdr-spawn ... -- pi`), spec-chat HTML specs, `grill-with-docs`, pinned Pocock `tdd`. octo-feather is octo-lite plus deltas, not a rewrite. Other sources (pstack, mattpocock/skills, scaling-octo-engine) contribute pieces only.
+- **Pi only; AGENTS.md only.** Tom. No Claude Code or Codex surfaces, no `CLAUDE.md`. Delta: octo-lite defaults to Claude and installs `.claude`/`.codex` projections; octo-feather defaults every spawn to `pi`.
+- **Specs are spec-chat HTML (`*.spec.html`).** Tom: "a workflow I'm already happy with combined with spec chat". Supersedes Exo's Markdown recommendation.
+- **Comms: Herdr.** Tom. Pi Durable revisited after the take-home.
+- **Gate runner: `just`.** Tom. One `just check` used identically by agents, git hooks and CI.
+- **Nothing installed on Tom's Mac; a dedicated remote box runs the kit.** Tom: "we're not setting any of this up on this box. we'll make a dedicated remote". Not sebox (Varela/Noah access), not exo (Exo's own box). Mac clone of this repo is for editing docs only.
 - **Python and TypeScript both prepared.** Tom. Low cost, high payoff if the take-home names either.
-- **Integration and E2E tests only, no unit tests.** Tom. Matches pstack "test behavior, not implementation". Exo note: logic-heavy pure modules may get table tests through their public function; still behavior tests, not internals.
-- **App-specific CLI as the verification surface; MCP optional.** Tom, from pstack create-verification-skill. Every template ships an app CLI with `--json` output that agents and E2E tests drive. Pi on this Mac already loads MCP servers from `~/.pi/agent/mcp.json`, so an MCP wrapper over the same CLI commands is possible; build it only if the take-home benefits.
-- **Tight validation gate.** Tom, from pstack "make the mistake impossible": strict types, strict lint, format, import boundaries, dead-code check, tests, all in `just check`, enforced by a pre-commit hook and CI.
-- **Director on top.** Tom (pstack calls it the coordinator). Never edits code; writes briefs, handles escalations, keeps implementations aligned to the spec, decides.
-- **Agents hand off to each other, but no programmatic workflow.** Tom correcting Exo's "no orchestration": excluded are Symphony, Linear control plane, lane records and services; included are director-driven handoffs between agents.
+- **Integration and E2E tests only, no unit tests.** Tom. Delta: patch the vendored `tdd` skill so spec-named seams are integration/E2E boundaries. Exo note: logic-heavy pure modules may get table tests through their public function; still behavior tests.
+- **App-specific CLI as the verification surface; MCP optional.** Tom, from pstack create-verification-skill. Every template ships an app CLI with `--json` output that agents and E2E tests drive. MCP wrapper only if the take-home benefits.
+- **Tight validation gate.** Tom, from pstack "make the mistake impossible": strict types, strict lint, format, import boundaries, dead-code check, tests, all in `just check`, enforced by pre-commit hook and CI. Error messages name the fix.
+- **Director on top.** Tom (pstack: coordinator; octo-lite: orchestrator). Never edits code; dispatches, handles escalations, keeps implementations aligned to the spec.
+- **Agents hand off to each other, no workflow engine.** Tom correcting Exo's "no orchestration". Excluded: Symphony, Linear control plane, daemons. Included: director-driven Herdr handoffs (octo-lite's model).
 - **A2A and Exomachina are out.** Tom.
-- **Submit the method with the code if rules allow.** Tom agreed with Exo: AGENTS.md, spec and verification evidence alongside the code show Winly the AI-first method they want.
+- **Submit the method with the code if rules allow.** Tom agreed: AGENTS.md, spec and verification evidence alongside the code.
 
 ## Open
 
-- **Comms: Herdr or Pi Durable.** Exo recommends Herdr for Monday. Herdr 0.9.0 and Pi 1.1.0 are installed, octo-lite's `herdr-spawn` already supports `-- pi` with `--append-system-prompt`, and agents talk with plain `herdr-say`. Pi Durable is an experimental TypeScript library ("API changes without notice") with no CLI; using it means writing our own harness first, which is Octo #3 on the clock. Revisit Pi Durable after the take-home.
-- **Spec format.** Exo recommends a Markdown spec with stable anchors per acceptance criterion: readable on GitHub by Winly reviewers. spec-chat HTML and AnnotateAnything review loop stay out for Monday (AA smoke failed 10-09).
+- **Which remote.** Size, provider, cost. See plan block 0.
+- **Linear.** octo-lite is Linear-first; for a solo take-home Exo proposes GitHub-only (octo-lite already supports keeping the ticket graph in the local brief without issue consent).
+- **meta-operator.** Exo proposes dropping it for a single-lane take-home; the director is enough.
