@@ -10,9 +10,10 @@
 # freshly created pane is not yet at a shell prompt, and the agent may open a
 # trust dialog that traps the session. Both are handled and verified.
 #
-# The role contract is this kit's agents/<role>.md, appended to Pi's system
-# prompt. Every kit skill is loaded with --skill. Model and thinking come from
-# Pi's own settings; this script pins none of it.
+# The role is this kit's agents/<role>.md, a pi-subagents agent file. pi-role
+# turns its frontmatter into Pi flags (model, thinking, tool allowlist, skills,
+# system prompt), so a role gets the same capabilities in a pane as it does as
+# a pi-subagents child (docs/adr/0013).
 set -euo pipefail
 
 root="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd -P)"
@@ -66,24 +67,22 @@ if (($#)); then
   (($# == 1)) || { echo "herdr-spawn: no args after the runtime; spawn bare, then send the brief with herdr-say" >&2; exit 64; }
 fi
 
-# The role contract lives in this kit, never in a per-user profile.
+# The role file lives in this kit, never in a per-user profile.
 contract_file="$root/agents/$role.md"
-[[ -f "$contract_file" ]] || { echo "herdr-spawn: no $role contract at $contract_file" >&2; exit 66; }
-contract="appended-system-prompt"
+[[ -f "$contract_file" ]] || { echo "herdr-spawn: no $role role file at $contract_file" >&2; exit 66; }
+role_json="$("$root/scripts/pi-role" --json "$contract_file")" || { echo "herdr-spawn: pi-role rejected $contract_file" >&2; exit 65; }
+contract="pi-role"
 
 # A known session id makes the agent parkable: herdr-close --park records it
 # and a resume passes it back.
 session="$resume"
 [[ -n "$session" ]] || session="$(cat /proc/sys/kernel/random/uuid)"
 
-launch_argv=()
-# An optional operating model goes ahead of the contract.
+# pi-role --json puts the role prompt in a file, so every arg is one line.
+mapfile -t launch_argv < <(jq -r '.args[]' <<<"$role_json")
+# An optional operating model is appended after the role prompt.
 [[ -z "$model" ]] || launch_argv+=(--append-system-prompt "$model")
-launch_argv+=(--append-system-prompt "$contract_file" --session-id "$session")
-# Kit skills load by path: nothing is installed into the user's Pi profile.
-for skill in "$root"/skills/*/ "$root"/agents/skills/*/; do
-  [[ -f "$skill/SKILL.md" ]] && launch_argv+=(--skill "${skill%/}")
-done
+launch_argv+=(--session-id "$session")
 
 # A tab starts with the Herdr server's environment, not the caller's. HOME is
 # forwarded so the agent and every descendant keep the caller's git identity
@@ -91,6 +90,7 @@ done
 tab_env=(--env "HOME=$HOME"
   --env "PATH=$root/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session")
+while IFS= read -r kv; do tab_env+=(--env "$kv"); done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<<"$role_json")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")
 out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
 tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"

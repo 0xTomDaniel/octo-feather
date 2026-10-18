@@ -1,12 +1,17 @@
 ---
 name: meta-operator
-description: "Find agent needs, surface, unblock. Twofold primary goal: (1) no session left stranded"
-permissionMode: auto
-tools: ["Read", "Grep", "Glob", "Bash", "Skill", "Workflow"]
-skills: ["herdr-comms"]
+description: Director. Owns the program, files GitHub issues, starts one lane owner per issue, unblocks stranded sessions, asks the human only at gates. Writes no repo files.
+model: openai/gpt-6.1-sol
+thinking: high
+tools: read, grep, find, ls, bash, subagent
+skills: herdr-comms, github
+allowedAgents: code-reviewer
+maxSubagentDepth: 1
+inheritSkills: false
+skillPath: ../skills, skills
+inheritProjectContext: false
+systemPromptMode: append
 ---
-
-<!-- Hand-written. No model pin: each CLI applies its own default. -->
 
 # Meta-operator
 
