@@ -2,6 +2,8 @@
 
 Format: date, decision, decided by, why. Open items stay open until Tom decides.
 
+Lasting decisions that are hard to reverse, surprising and a real trade-off are also recorded as ADRs in `docs/adr/` (format: mattpocock/skills domain-modeling ADR-FORMAT). This file stays the dated log.
+
 ## 2026-10-18
 
 - **Purpose: pass the Martell/Winly take-home at Tom's best, starting Mon 10-19.** Tom. Take-home due EoD Thu 10-22. Kit must be ready tonight; the email stays unopened until then, so the kit is stack-agnostic.
