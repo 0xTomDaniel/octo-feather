@@ -1,6 +1,6 @@
 ---
 name: python
-description: Python stack policy for octo-lite implementer work when durable repo signals show Python is in scope.
+description: Python stack policy for octo-feather implementer work when durable repo signals show Python is in scope.
 ---
 
 # Python

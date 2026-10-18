@@ -11,7 +11,7 @@ No em-dashes or en-dashes. Ever.
 
 The owner dispatches; it never edits repo files itself. Deliver the complete
 spec or ticket on one branch and leave one PR ready for human review. Workers
-load their `agents/*.md` role contracts and use octo-lite skills as guidance.
+load their `agents/*.md` role contracts and use octo-feather skills as guidance.
 Workers are the whole mechanism: no role resolver, loop workflow, journal, or
 exact-role gate sits on top of them.
 
@@ -38,7 +38,7 @@ the implementation PR, approve a merge, promote to preproduction, or approve
 live traffic.
 
 The tickets are a task graph, not ordered steps. The ready frontier contains
-every incomplete ticket whose blockers are complete. Keep Linear titles,
+every incomplete ticket whose blockers are complete. Keep GitHub issue titles,
 descriptions, relations, assignees, and states aligned with reality throughout.
 Do not copy ticket or spec prose into agent messages. Send essential absolute
 source paths in the message body; artifact metadata alone is insufficient.
@@ -54,7 +54,7 @@ evidence still applies; human QA, code readiness and acceptance are separate.
 ## Start
 
 1. After spec acceptance, file the dependency-linked tickets under the spec
-   issue as [consent](../octo-lite-github/SKILL.md#consent) allows, else keep
+   issue as [consent](../github/SKILL.md#consent) allows, else keep
    the graph in the local brief: one outcome each, spec anchors, real blockers
    only.
 2. Read the spec, issue, and enough of the graph to identify the first
@@ -66,7 +66,7 @@ evidence still applies; human QA, code readiness and acceptance are separate.
 4. Continue the draft PR the orchestrator opened while shaping, else create the
    integration branch from the target base and open one draft PR.
    Push, open PRs, and file issues only as
-   [consent](../octo-lite-github/SKILL.md#consent) allows; otherwise the lane stays on local
+   [consent](../github/SKILL.md#consent) allows; otherwise the lane stays on local
    branches and ends at a local integration head.
    Put `Closes <issue-key>` lines in the PR body for the spec issue and every
    implementation ticket.
@@ -82,25 +82,24 @@ implementation, merge, review-fix worker through Herdr. Prefer background tabs
 and fill available capacity from the current frontier.
 
 Spawn every worker into the owner's space, `--workspace "$HERDR_WORKSPACE_ID"`,
-named `<role>-<ticket>` lowercase (`implementer-ann-64`; a lane-wide worker such
+named `<role>-<ticket>` lowercase (`implementer-gh64`; a lane-wide worker such
 as the integrator carries the primary issue key), per spec
-`#transport-spawn-name`. Close a worker before reusing its name. Herdr owns
-session selection. Spawn Claude workers
-(`-- claude`, CLI default model; brief via `herdr-say`); Codex only when the operator
-explicitly selects it. Keep the worker-specific nuance: every writer still
+`#transport-spawn-name`, each in its own tab labelled `worker-<k>` or
+`integrator` (docs/adr/0011: one agent per tab, one pane per tab). Close a worker before reusing its name. Herdr owns
+session selection. Spawn Pi workers
+(`-- pi`, Pi's default model; brief via `herdr-say`); Pi is the only runtime. Keep the worker-specific nuance: every writer still
 gets its own worktree, and only one integrator writes the integration branch.
 
 For each ready ticket:
 
 1. Create a dedicated worktree and branch from the current integration branch.
-2. Mark the Linear ticket In Progress only when its worker starts.
+2. Comment on the ticket's GitHub issue (`gh issue comment`) only when its worker starts.
 3. Spawn a Herdr implementer in that worktree, under the `implementer` role
    contract. Prompt it with pointers to the ticket, spec, target `AGENTS.md`,
    optional research notes, integration branch, and relevant prior commits.
 4. The contract declares the skills available to it and the bounds it works in,
-   so neither has to be restated here or kept in step by hand. A Claude worker
-   loads it with `--agent implementer`; a Codex worker gets it as developer
-   instructions from `herdr-spawn --role implementer`.
+   so neither has to be restated here or kept in step by hand. `herdr-spawn --role implementer`
+   appends this kit's `agents/implementer.md` to the worker's system prompt.
 
 The worker owns only that ticket, validates it, commits it, and returns the
 commit plus terse evidence. It does not merge, push, or update unrelated
@@ -119,11 +118,11 @@ When an implementer completes:
 2. Give it the ticket, worker commit, integration branch, and spec pointers.
 3. Have it merge or cherry-pick the worker commit, resolve only integration
    conflicts, run proportionate validation, push the integration branch as
-   [consent](../octo-lite-github/SKILL.md#consent) allows, and `herdr-say`
+   [consent](../github/SKILL.md#consent) allows, and `herdr-say`
    the resulting commit to the owner pane.
 4. Mark the ticket Done only after its change is integrated (and pushed when
    consent allows). If the merge fails or validation is red, reflect that
-   truth in Linear and return the ticket to active work.
+   truth in the GitHub issue and return the ticket to active work.
 5. Recompute the frontier and immediately fill newly available capacity.
 
 One integrator writes the integration branch at a time. Implementers may continue
@@ -199,14 +198,14 @@ After every ticket is integrated:
 3. Run the target repo's required validation.
 4. Mark the PR ready for review only when the final review is clear, every
    required validation succeeds, and any required evidence (QA bundle) is
-   published. The Human inbox derives its gate from PR draft status
-   (ANN-373): ready means the merge ask is out; draft means work is still in
+   published. The Human inbox derives its gate from PR draft status:
+   ready means the merge ask is out; draft means work is still in
    progress. Otherwise keep it draft and report the blocker. Keep the spec
    issue open until human review or repository automation closes it.
 5. Close each consumed worker with `herdr-close TAB`, which also ends its
    detached processes. A worker you would keep idle through a long wait (human
    gate, another lane) is parked instead, never a consumed one:
-   `herdr-close --park <pane> >> $(octo-lite-state)/lanes/<lane record name>.handoffs.jsonl`;
+   `herdr-close --park <pane> >> $(octo-feather-state)/lanes/<lane record name>.handoffs.jsonl`;
    `herdr-say <name>` resumes it. Remove every temporary worker worktree only after it is
    clean and its commits are reachable from the integration branch. Never
    force-remove a worktree with uncommitted or unmerged work.
@@ -224,13 +223,13 @@ Acceptance follows the worklane. If the human explicitly accepts and instructs
 this owning worklane to merge the named PR, treat a merge instruction as
 acceptance of that exact head unless the human says otherwise. Mechanical
 updates onto accepted main (merge main in; never rebase or force-push a pushed branch) do not require renewed acceptance when behavior and
-scope are unchanged. Load `octo-lite-github`, verify required checks and exact
-head, record acceptance, execute the merge, and verify post-merge Linear sync.
+scope are unchanged. Load `github`, verify required checks and exact
+head, record acceptance, execute the merge, and verify the GitHub issue closed.
 A human statement that this worklane owns the action is sufficient.
 Failed required checks still block merge until fixed or durably waived through
 a repository-approved path.
 
 The merge completes the worklane: reconcile the PR and worklane state together,
-reconcile the primary Linear issue to Done, tear down in the close order of
+reconcile the primary GitHub issue to closed, tear down in the close order of
 `agents/orchestrator.md` (review rows before any worktree, lane record archived
 last), and stop.

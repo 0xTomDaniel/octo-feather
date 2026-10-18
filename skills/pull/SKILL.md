@@ -10,7 +10,7 @@ description: Pull latest origin/main into the current local branch and resolve m
 Be extremely concise. Sacrifice grammar for the sake of concision.
 No em-dashes or en-dashes. Ever.
 
-Use this skill when an octo-lite branch must be updated from the remote default
+Use this skill when an octo-feather branch must be updated from the remote default
 branch or when push is rejected because the branch is stale.
 
 ## Workflow

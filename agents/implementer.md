@@ -3,7 +3,7 @@ name: implementer
 description: "Implement one ticket inside the worktree it was given, and return the commit."
 permissionMode: auto
 tools: ["Read", "Grep", "Glob", "Bash", "Edit", "Write", "Skill"]
-skills: ["commit", "frontend-design", "nodejs", "octo-lite-github", "pnpm", "pnpm-patching", "pull", "python", "tdd", "typescript"]
+skills: ["commit", "frontend-design", "nodejs", "github", "pnpm", "pnpm-patching", "pull", "python", "tdd", "typescript"]
 ---
 
 <!-- Hand-written. No model pin: each CLI applies its own default. -->
@@ -32,7 +32,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 
 - Work only inside the given worktree. It is the isolation, and leaving it breaks the one thing that lets workers run in parallel.
 - Follow the target `AGENTS.md` for how to build, test, and validate. It outranks habit.
-- Load only the skills this ticket needs: from the octo-lite skills the frontmatter lists (available, not mandatory), and by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks an octo-lite skill on the same subject, as a project's UI skill outranks `frontend-design`. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
+- Load only the skills this ticket needs: from the octo-feather skills the frontmatter lists (available, not mandatory), and by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks `frontend-design`. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
 - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while the behavior stays wrong.
 - Validate proportionately to the change, then commit.
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; report the smoke result first.
@@ -51,4 +51,4 @@ Stop on a ticket that contradicts the spec, a missing environment, or work that 
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, declared repo skills loaded, validation run and its result, and blockers to the owner pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the owner pane, to the operator pane (`pane` in `$(octo-lite-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, declared repo skills loaded, validation run and its result, and blockers to the owner pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the owner pane, to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

@@ -1,6 +1,6 @@
 ---
 name: grill-with-docs
-description: Run a docs-backed grilling session for octo-lite issue shaping; stress-test a draft or rough Linear/GitHub issue against target repo specs, ADRs, code, repo instructions, and domain language before implementation.
+description: Run a docs-backed grilling session for octo-feather issue shaping; stress-test a draft or rough GitHub issue against target repo specs, ADRs, code, repo instructions, and domain language before implementation.
 ---
 
 # Grill With Docs
@@ -10,20 +10,20 @@ description: Run a docs-backed grilling session for octo-lite issue shaping; str
 Be extremely concise. Sacrifice grammar for the sake of concision.
 No em-dashes or en-dashes. Ever.
 
-Use this skill from `$spec-chat-shape` when a new idea, rough Linear or
-GitHub issue, or issue draft needs clarification before it can be marked ready.
+Use this skill from `$spec-chat-shape` when a new idea, rough GitHub
+issue, or issue draft needs clarification before it can be marked ready.
 
 This skill keeps issue shaping grounded in the target repo's durable context:
-Linear issues, GitHub PRs, explicitly requested GitHub issues, `.octo-lite`
+GitHub issues and PRs, `.octo-feather`
 drafts, specs, ADRs, repo docs, code, and configuration.
 
 ## Operating Rules
 
 - Ask one question at a time and wait for the operator's answer.
 - Include a recommended answer with each question.
-- Explore code, specs, ADRs, repo docs, package scripts, existing Linear issue
-  context, GitHub PRs, explicitly requested GitHub issues, and the active
-  `.octo-lite/drafts/<slug>.md` before asking when the answer is discoverable.
+- Explore code, specs, ADRs, repo docs, package scripts, existing GitHub issue
+  and PR context, and the active
+  `.octo-feather/drafts/<slug>.md` before asking when the answer is discoverable.
 - Challenge fuzzy or overloaded terms against existing specs and repo language.
 - Use concrete scenarios to stress-test boundaries, edge cases, ordering,
   dependencies, evidence, runtime expectations, and env/config needs.
@@ -31,15 +31,14 @@ drafts, specs, ADRs, repo docs, code, and configuration.
   decisions crystallize. For a changed decision, write a superseding ADR;
   never amend a committed one.
 - Do not batch durable terminology or behavior updates until the end.
-- Do not mutate Linear or GitHub tracker state unless shaping has reached
-  its approved final mutation step. In Linear-first repos, do not mutate GitHub
-  issues unless the operator explicitly requested a GitHub issue operation.
+- Do not mutate GitHub issue state unless shaping has reached
+  its approved final mutation step.
 
 ## Domain Awareness
 
 Start with the smallest useful context set:
 
-1. Target repo `AGENTS.md` for repo-specific Codex conventions.
+1. Target repo `AGENTS.md` for repo-specific conventions.
 2. The target repo's spec format signal (`Spec format: spec-chat`, or the
    Markdown default when absent).
 3. `spec/index.md` or `spec/index.spec.html`, when present.
@@ -50,9 +49,8 @@ Start with the smallest useful context set:
    docs.
 7. Code, tests, configuration, and package scripts directly related to the
    planned change.
-8. Existing Linear issue context and GitHub PR context when shaping an existing
-   issue or a follow-up from PR review. Use GitHub issue context only when the
-   repo is GitHub-first or the operator explicitly names a GitHub issue.
+8. Existing GitHub issue and PR context when shaping an existing issue or a
+   follow-up from PR review.
 
 When a term conflicts with existing domain language, call out the conflict and
 ask which meaning should become canonical. When a term is vague, recommend a
@@ -76,7 +74,7 @@ Use these shaping patterns:
 ## Spec Updates
 
 Record resolved product or system behavior in the relevant canonical spec.
-Follow the target repo's declared format. Use octo-lite's target repo spec
+Follow the target repo's declared format. Use octo-feather's target repo spec
 structure in either Markdown or spec-chat HTML:
 
 - `## Intended behavior`

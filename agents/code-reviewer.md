@@ -2,7 +2,7 @@
 name: code-reviewer
 description: "Judge one diff against its ticket and the canonical spec, and return a verdict."
 tools: ["Read", "Grep", "Glob", "Bash", "Skill"]
-skills: ["octo-lite-debug", "octo-lite-github"]
+skills: ["github"]
 ---
 
 <!-- Hand-written. No model pin: each CLI applies its own default. -->
@@ -51,4 +51,4 @@ Stop on a diff whose ticket or spec section no longer exists.
 
 ## Output
 
-Last step, verdict or blocker alike: send the verdict, blocking findings with their consequence, non-blocking notes, and what was checked to the owner pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the owner pane, to the operator pane (`pane` in `$(octo-lite-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, verdict or blocker alike: send the verdict, blocking findings with their consequence, non-blocking notes, and what was checked to the owner pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the owner pane, to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

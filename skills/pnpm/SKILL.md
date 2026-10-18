@@ -1,6 +1,6 @@
 ---
 name: pnpm
-description: pnpm package-management policy for octo-lite implementer work when durable repo signals show pnpm is the selected package manager.
+description: pnpm package-management policy for octo-feather implementer work when durable repo signals show pnpm is the selected package manager.
 ---
 
 # pnpm

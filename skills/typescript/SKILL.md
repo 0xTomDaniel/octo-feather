@@ -1,6 +1,6 @@
 ---
 name: typescript
-description: TypeScript policy for octo-lite implementer work when durable repo signals show TypeScript is in scope.
+description: TypeScript policy for octo-feather implementer work when durable repo signals show TypeScript is in scope.
 ---
 
 # TypeScript

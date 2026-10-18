@@ -5,30 +5,36 @@ description: Spawn Herdr agents and send them messages, over native Herdr.
 
 # herdr-comms
 
-Thin wrappers over native Herdr. Herdr itself owns the transport; these
-exist only for the failure modes it leaves to the caller, and for parking an
-idle Claude agent so it holds no memory while it waits.
+Thin wrappers over native Herdr, ported from octo-lite
+(`varelaseb/octo-lite@cc6fa4e`, Apache-2.0) and cut to Pi only. Herdr itself
+owns the transport; these exist only for the failure modes it leaves to the
+caller, and for parking an idle Pi agent so it holds no memory while it waits.
 
 Every wrapper acts only in the caller's Herdr session,
 `${HERDR_SESSION:-default}`: pane, tab, and space ids repeat across sessions.
-`octo-lite-state` prints the caller's session state directory, holding `lanes/`
+`octo-feather-state` prints the caller's session state directory, holding `lanes/`
 (lane records, hand-off logs, `archive/`), `operator.toml`, and
-`operator.handoffs.jsonl` (spec `#session-state`).
+`operator.handoffs.jsonl` (spec `#session-state`). Every spawned tab has the
+kit's `skills/herdr-comms/assets` and `scripts` on `PATH`.
+
+## Layout (docs/adr/0011)
+
+- Workspace `director`, one tab `director`: the director (meta-operator),
+  started by `octo-feather-start --director` (`just start`).
+- One workspace per issue, `gh<n>`: tab `lane` is the lane owner
+  (orchestrator), started by `octo-feather-start --issue <n> --cwd <worktree>`.
+- In that workspace, one tab per worker and for the integrator: `worker-1`,
+  `worker-2`, `integrator`. One agent per tab, one pane per tab.
 
 ## Spawn an agent
 
 ```
-herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \
-  -- claude    # default
-herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \
-  -- codex     # non-default alternative
-herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \
-  -- pi        # non-default alternative
+herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE [-- pi]
 ```
 
-A lane worker spawns into its lane space, `--workspace "$HERDR_WORKSPACE_ID"`,
-named `<role>-<ticket>` lowercase (`implementer-ann-64`). A pane never moves
-between spaces: Herdr rewrites its ids.
+A lane worker spawns into its lane workspace, `--workspace "$HERDR_WORKSPACE_ID"`,
+named `<role>-<ticket>` lowercase (`implementer-gh64`), labelled `worker-<k>`
+or `integrator`. A pane never moves between spaces: Herdr rewrites its ids.
 
 Spawn bare, then send the brief with `herdr-say`. Nothing follows the runtime:
 with an inline prompt, `herdr agent start` times out waiting for readiness.
@@ -39,51 +45,41 @@ One tab, one pane, one agent, at an explicit worktree. Prints:
 name= role= tab= pane= cwd= contract= provider_session_id=
 ```
 
-The runtime comes from the agent definition and each CLI's own defaults. This
-pins no model, effort, or service tier.
+The model and thinking level come from Pi's own settings. This pins no model.
 
-`--role` is not just a label. A Claude agent loads its own contract through
-`--agent ROLE`, which `herdr-spawn` passes. Codex has no custom-agent file, so
-the contract at `~/.claude/agents/ROLE.md` is passed as `-c developer_instructions=...`. It
-binds at the developer layer and the agent waits for its brief; a contract sent
-as a prompt is worked as a task. Pi has neither, so it gets the contract file
-through `--append-system-prompt FILE`. The output reports `contract=` so a
-silent miss is visible.
+`--role` is not just a label: `herdr-spawn` appends this kit's
+`agents/ROLE.md` to Pi's system prompt (`--append-system-prompt FILE`) and
+fails when it is missing. Every kit skill under `skills/` loads with
+`--skill DIR`, so nothing is installed into the user's Pi profile. Each agent
+gets a fresh `--session-id`, reported as `provider_session_id=`.
 
-`--operating-model FILE` is optional. It hands that file to the agent at start,
-so no global instruction file is needed: Claude gets
-`--append-system-prompt-file FILE`, Codex gets it ahead of the contract in
-`developer_instructions`, pi gets `--append-system-prompt FILE` ahead of the
-contract's. It defaults to `$OCTO_LITE_OPERATING_MODEL`, and the
+`--operating-model FILE` is optional. It is appended to Pi's system prompt
+ahead of the contract. It defaults to `$OCTO_FEATHER_OPERATING_MODEL`, and the
 spawn exports that path into the new tab, so every child inherits the model
-without passing the flag. Without either, nothing changes.
+without passing the flag.
 
 A new tab gets the Herdr server's environment, so the spawn always exports the
-caller's `HOME` into it. The agent and every child it spawns keep the caller's
-home: git identity, consent, and sessions.
-
-Codex runs with `--no-daemon`, so its thread and commands live in the tab's own
-process tree, not the shared app-server that outlives the tab.
+caller's `HOME`, the kit `PATH`, `OCTO_FEATHER_ROLE` and
+`OCTO_FEATHER_SESSION_ID` into it.
 
 It wraps `herdr tab create` and `herdr agent start`, and handles three things
 those leave to the caller:
 
 - A freshly created pane is not yet at a shell prompt. Herdr reports
   `agent_pane_busy`; only that code is retried, with backoff.
-- An agent that opens its trusted-folder dialog makes `agent start` report
+- An agent that opens a trust dialog makes `agent start` report
   `agent_not_ready`. That is a started agent waiting on a keystroke, not a
   failure.
-- The dialog is answered at the **pane**, never blindly. A blocked agent refuses
-  agent-level input, and the highlighted row may be `No, exit`, where a bare
-  Enter kills the agent being spawned. The selection is moved onto the trust
-  option and verified before confirming.
+- The dialog is answered at the **pane**, never blindly. The highlighted row
+  may be the refusal, where a bare Enter kills the agent being spawned. The
+  selection is moved onto the trust option and verified before confirming.
 
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 
-`--resume SESSION` (Claude only) starts a parked agent as it was launched:
-Claude gets `--agent ROLE --resume SESSION` and keeps its conversation. An
-owner resumes through `octo-lite-start --cwd WORKTREE --name LANE --resume
-SESSION`, in a new lane space. `herdr-say` does both for you; see below.
+`--resume SESSION` starts a parked agent with its old `--session-id`, so Pi
+keeps its conversation. An owner resumes through `octo-feather-start --cwd
+WORKTREE --name LANE --resume SESSION`, in a new lane workspace. `herdr-say`
+does both for you; see below.
 
 ## Close an agent or a lane space
 
@@ -107,14 +103,14 @@ exits with the close status.
 herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
 ```
 
-`$lanes` is `$(octo-lite-state)/lanes`. Reads the Claude session of the process
-in PANE, a pane of the caller's session, from `~/.claude/sessions/<pid>.json`,
-closes its tab, or its whole space when that tab is the space's only one (a
-lane owner in its own space), and prints one parked line (`at kind pane name
-role cwd session`) on stdout, even when the close fails; the close report goes
-to stderr. The parker appends the line: the operator for an owner, the owner
-for a worker. An agent Herdr does not report idle is refused with exit 75, a
-Codex or pi agent (no Claude session file) with 65; nothing is closed.
+`$lanes` is `$(octo-feather-state)/lanes`. Reads the Pi session id and role
+`herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
+that tab is the space's only one (a lane owner in its own space), and prints
+one parked line (`at kind pane name role cwd session`) on stdout, even when the
+close fails; the close report goes to stderr. The parker appends the line: the
+operator for an owner, the owner for a worker. An agent Herdr does not report
+idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
+is closed.
 
 ## Send a message
 

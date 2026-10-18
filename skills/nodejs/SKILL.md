@@ -1,6 +1,6 @@
 ---
 name: nodejs
-description: Node.js runtime policy for octo-lite implementer work when durable repo signals show a Node.js project and the issue touches runtime scripts, modules, env loading, or server-side JavaScript.
+description: Node.js runtime policy for octo-feather implementer work when durable repo signals show a Node.js project and the issue touches runtime scripts, modules, env loading, or server-side JavaScript.
 ---
 
 # Node.js

@@ -21,19 +21,19 @@ Own one issue or one epic coordination layer from brief through closure.
 - Your spawner sets your `/goal` (an agent cannot run slash commands itself): the lane's end is its PR merged and the lane torn down, or a human gate pending with its review link or merge ask sent. At each goal check-in, read `herdr agent get <pane>` for every worker whose result you await: one idle, gone, or stuck at an interactive prompt ended without reporting; read its pane (`herdr pane read`): a finished result there is its report, so consume it; otherwise recover or respawn it. Either way tell the operator which worker ended without reporting and what you did: the result you consumed, or the worker started in its place.
 - Maintain stream brief, status, topology, resources, and gates.
 - Shape with `spec-chat-shape`, producing the accepted canonical spec only, committed locally. It never publishes. Tickets are filed by `implement-spec` after acceptance.
-- Publishing during shaping is yours, only as [consent](../skills/octo-lite-github/SKILL.md#consent) allows, in parallel with the review link and never before it: file the spec issue, name it to `spec-chat-shape` to link, push the shaping branch, open the draft PR.
+- Publishing during shaping is yours, only as [consent](../skills/github/SKILL.md#consent) allows, in parallel with the review link and never before it: file the spec issue, name it to `spec-chat-shape` to link, push the shaping branch, open the draft PR.
 - When you process an Accept spec hand-off from the review page, record it at once with `gh pr comment <pr> --body 'Spec acceptance receipt: human "Accept spec" on the review page (<date>) accepts <spec path> at <exact commit>. Recorded by <owner agent name>.'` (spec `#acceptance-receipt`).
 - A spec commit after acceptance that is wording-only keeps the original acceptance: no new review, no new receipt. Wording-only means it changes only wording, labels, or anchors, adds or removes no criterion, and changes no stated behavior, value, or outcome. You decide, and list each such commit in the PR body with one line saying what it rewords. A commit you cannot plainly call wording-only is not: send its review link for a fresh spec acceptance before any merge ask (spec `#gates-wording-only`).
 - Choose sequential, stacked, parallel, or train delivery from actual constraints.
 - Notify the parent after meaningful gate or risk change.
 - Register each review row with `--owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"`, your session and pane: the review service may run in another Herdr session, and it wakes you only in the session the owner names (spec `#session-wake-owner`).
 - As lane owner, use
-  `$(octo-lite-state)/lanes/<owner agent name>.toml`.
+  `$(octo-feather-state)/lanes/<owner agent name>.toml`.
   Its `owner` is your Herdr pane id (`owner = "w5:pP8"`, the `pane=` value
   herdr-spawn printed), never your agent name or tab. Change it only when
   resumed from a park: on a wake, if `$HERDR_PANE_ID` is not `owner`, first set
   `owner` to it, then act on the message that resumed you.
-  Keys follow octo-lite's lane record format, spec `#lane-record`.
+  Keys follow the lane record format, spec `#lane-record`.
   The operator creates it at launch; edit that file in place, changing only the
   fields a moment names and keeping every other field;
   the owner never creates or rewrites it. `last_handoff_at` is a quoted UTC string, as in spec
@@ -42,7 +42,7 @@ Own one issue or one epic coordination layer from brief through closure.
   `#octo-lane-record-workers`). Spawn every worker into your space,
   `--workspace "$HERDR_WORKSPACE_ID"`, named `<role>-<ticket>` lowercase per spec
   `#transport-spawn-name` (lane-wide workers carry the primary issue key); close
-  it before reusing the name. Never move a lane pane to another space. Ticket state lives in Linear only;
+  it before reusing the name. Never move a lane pane to another space. Ticket state lives in GitHub issues only;
   the record holds no tickets (spec `#octo-lane-record-tickets`). Set `waiting_on` per spec `#octo-lane-record-key-waiting`: `"operator"` while escalated,
   one other lane's issue key while parked on that lane, `"blocked"` for any other wait
   (ticket, role, outside issue), `""` on resume or at a human gate; never a gate value.
@@ -79,7 +79,7 @@ governs its workers governs it: every writer gets its own worktree.
 
 ## Rules
 
-- Use the operator's current Herdr session, your space, and Claude at its CLI
+- Use the operator's current Herdr session, your space, and Pi at its
   default; give one concise context pointer and identify as operator-facing.
 - Default to action. Prior explicit operator intent is authorization; former approval gates are act-then-notify with a prepared rollback; the operator vetoes by rollback. Stop only for operator-held access, legally binding irreversible actions without rollback, or the instruction-gated carve-outs in Never. A freeze halts only the named loop; keep fixing defects and never ask permission to fix.
 - Reconcile current facts before dispatch; use a fresh exact-model probe before outage classification. Never infer fleet outage from one session.
@@ -87,7 +87,7 @@ governs its workers governs it: every writer gets its own worktree.
 - Before the one merge ask, self-check: CI green on its PR, QA bundle published and its URL loads (when required), every failed QA criterion triaged and listed with its evidence (spec `#delivery-qa-triage`), review verdict linked, spec acceptance receipt (spec `#acceptance-receipt`, or `#delivery-single-ticket`). A red check is never "pre-existing": a red main gets fixed first.
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; the owner reports the smoke result first.
 - Verify a message's target pane against the lane record before sending.
-- Keep one writer per mutable resource. An accepted PR merged into target main closes the lane: reconcile the PR and worklane state together, reconcile the primary Linear issue to Done, remove your own `/tmp` scratch, then tear down in order: review rows, worktrees, workers. Last, after your last hand-off line (the final worker close) and before your close report, move `<name>.toml` and `<name>.handoffs.jsonl` unchanged into `archive/` in the lanes directory (`mkdir -p` it; spec `#octo-lane-record-life-archive`), then report with proof nothing is left and terminate. The close report names what the operator closes: your space id (your owner pane id's prefix) only when it is your lane's own, no other lane record's owner and not the operator's pane (`operator.toml`), both read from `$(octo-lite-state)`, carrying that prefix; otherwise your owner tab (`$HERDR_TAB_ID`), never the space (spec `#transport-close-space`). On operator poke or investigate signal, re-check own workers; worker-level liveness (belief vs observable contradiction) is caught here, not escalated.
+- Keep one writer per mutable resource. An accepted PR merged into target main closes the lane: reconcile the PR and worklane state together, reconcile the primary GitHub issue to closed, remove your own `/tmp` scratch, then tear down in order: review rows, worktrees, workers. Last, after your last hand-off line (the final worker close) and before your close report, move `<name>.toml` and `<name>.handoffs.jsonl` unchanged into `archive/` in the lanes directory (`mkdir -p` it; spec `#octo-lane-record-life-archive`), then report with proof nothing is left and terminate. The close report names what the operator closes: your space id (your owner pane id's prefix) only when it is your lane's own, no other lane record's owner and not the operator's pane (`operator.toml`), both read from `$(octo-feather-state)`, carrying that prefix; otherwise your owner tab (`$HERDR_TAB_ID`), never the space (spec `#transport-close-space`). On operator poke or investigate signal, re-check own workers; worker-level liveness (belief vs observable contradiction) is caught here, not escalated.
 
 ## Never
 
