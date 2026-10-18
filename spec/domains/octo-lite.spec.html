@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>octo-lite current state</title>
+<link rel="stylesheet" href="../.style/spec.css">
+<script defer src="../.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+<header data-anchor="header" id="header">
+<h1>octo-lite current state</h1>
+<nav><a href="../index.spec.html">Specifications</a> / octo-lite</nav>
+<p data-anchor="header-scope" id="header-scope">This spec describes only what exists in this repository today.</p>
+<p data-anchor="header-replaces" id="header-replaces">It replaces the operating-model, delivery-lifecycle, role-runtime, and operator-control domain specs, which described deleted apparatus; they remain in git history.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-anchor="user-story-deliver-spec" id="user-story-deliver-spec" data-user-facing="true" data-guided-journey="no">As an operator, I can shape an idea into an accepted spec, then have it filed as a ticket graph and delivered on one PR ready for my review.</p>
+<p data-user-story data-anchor="user-story-install" id="user-story-install" data-user-facing="true" data-guided-journey="no">As an operator, I can install or verify octo-lite with one script and a plain git pull keeps it current; on a box with an existing setup, the installer adopts compatible links, skips what belongs to someone else, and never overwrites or fails.</p>
+<p data-user-story data-anchor="user-story-operator-log" id="user-story-operator-log" data-user-facing="false" data-guided-journey="no">As the fleet operator, I append one line per prod and note to the human to my own hand-off file, so the floor shows what I did beside each lane's own lines.</p>
+<p data-user-story data-anchor="user-story-lane-log" id="user-story-lane-log" data-user-facing="false" data-guided-journey="no">As a lane owner, I append one line per hand-off moment to my lane's hand-off file, so the floor shows what happened on my lane.</p>
+<p data-user-story data-anchor="user-story-lane-space" id="user-story-lane-space" data-user-facing="true" data-guided-journey="no">As an operator, I see each lane in its own Herdr space named after the lane, holding its owner and every worker of that lane, while I work in a space of my own; closing a finished lane's space leaves nothing of it running.</p>
+<p data-user-story data-anchor="user-story-qa-triage" id="user-story-qa-triage" data-user-facing="true" data-guided-journey="no">As an operator, every QA criterion that failed on my lane reaches my merge ask either fixed and recaptured or named as outside the lane with why, beside what the judge saw and the head it judged, so no failure ships as a note and no wrong triage reaches my merge.</p>
+<p data-user-story data-anchor="user-story-owner-liveness" id="user-story-owner-liveness" data-user-facing="true" data-guided-journey="no">As an operator, a lane never stalls silently: every worker delivers its result to its lane owner as a message, the owner notices a worker that ended without reporting, recovers it, and tells me, a worker whose owner cannot be reached sends its result to me and stops instead of retrying without end, and every report reaches me as a message.</p>
+<p data-user-story data-anchor="user-story-park" id="user-story-park" data-user-facing="true" data-guided-journey="no">As an operator on a box short of memory, I can park an idle lane owner or worker so it holds no memory while it waits, and a later message to it resumes it under the same name with its conversation intact.</p>
+<p data-user-story data-anchor="user-story-session" id="user-story-session" data-user-facing="true" data-guided-journey="no">As an operator running several Herdr sessions on one box, I work in each without coordinating: an agent in one session never sees, wakes, or tears down a lane of another.</p>
+<p data-user-story data-anchor="user-story-repo-skills" id="user-story-repo-skills" data-user-facing="true" data-guided-journey="no">As an operator whose project keeps its own skills, such as its design rules, every implementer on my lanes loads the ones its ticket needs from my live main checkout, and onboarding warns me when a skill link points at a stale clone.</p>
+<p data-user-story data-anchor="user-story-wording-only" id="user-story-wording-only" data-user-facing="true" data-guided-journey="no">As an operator, a wording-only correction to a spec I accepted rides on my original acceptance, while any change to what the spec makes the system do comes back to me for acceptance.</p>
+<p data-user-story data-anchor="user-story-general-rule" id="user-story-general-rule" data-user-facing="true" data-guided-journey="no">As an operator, work that passes the cases at hand without following the rule the spec states never reaches my merge ask.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-deliver-spec" id="acceptance-deliver-spec" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator with an accepted spec in a lane, When the lane owner runs <code>implement-spec</code> to completion and the operator opens the lane's PR,</span> <span data-acceptance-observable>Then that one PR shows every ticket's work, a clear review, and passing required checks, ready for the operator's review.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-install" id="acceptance-install" data-story="user-story-install"><span data-acceptance-scenario>Given an operator on a box where some install paths are already occupied by someone else's files, When the operator runs the installer,</span> <span data-acceptance-observable>Then it reports each occupied path as skipped, links every other item, and exits successfully, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-operator-log" id="acceptance-operator-log" data-story="user-story-operator-log"><span data-acceptance-scenario>Given the fleet operator and a live lane owner, When the fleet operator sends the lane owner a prod,</span> <span data-acceptance-observable>Then the operator's hand-off file gains one prod line naming the lane, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-log" id="acceptance-lane-log" data-story="user-story-lane-log"><span data-acceptance-scenario>Given a lane owner waiting on an implementer, When the owner consumes the implementer's result,</span> <span data-acceptance-observable>Then the lane's hand-off file gains one attempt line naming the worker's role, ticket, pane, and commit, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-start" id="acceptance-lane-space-start" data-story="user-story-lane-space"><span data-acceptance-scenario>Given an operator in its own Herdr space, When the operator launches a lane,</span> <span data-acceptance-observable>Then Herdr shows a new space named after the lane holding only that lane's owner, and the operator's space is unchanged.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-workers" id="acceptance-lane-space-workers" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a lane owner delivering a spec, When it spawns implementer, integrator, and reviewer workers,</span> <span data-acceptance-observable>Then Herdr shows each worker in the lane's space under a name that carries its role and its ticket, and no worker in any other space.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-derive" id="acceptance-lane-space-derive" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a lane with live workers in its space, When a reader reads the lane's workers,</span> <span data-acceptance-observable>Then it gets each worker's pane, role, and ticket from the lane's space and the workers' names, with no worker list in the lane record, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-close" id="acceptance-lane-space-close" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a finished lane whose space still holds its owner and a worker that started a background process, When the operator closes the lane's space,</span> <span data-acceptance-observable>Then Herdr lists neither the space nor any of the lane's agents.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-close-processes" id="acceptance-lane-space-close-processes" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a finished lane whose space still holds its owner and a worker that started a background process, When the operator closes the lane's space,</span> <span data-acceptance-observable>Then none of the lane's agents or their background processes is still running, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-shared" id="acceptance-lane-space-shared" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a finished lane whose owner was started in a space shared with the operator and other lanes, When its owner reports the lane closed,</span> <span data-acceptance-observable>Then the owner's report names its owner tab to close and no space.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-space-shared-teardown" id="acceptance-lane-space-shared-teardown" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a finished lane whose owner was started in a space shared with the operator and other lanes, When its owner reports the lane closed and the operator closes the tab the report names,</span> <span data-acceptance-observable>Then Herdr no longer shows that tab and still shows the shared space, the operator, and every other lane in it running.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-install-consent" id="acceptance-install-consent" data-story="user-story-install"><span data-acceptance-scenario>Given an operator installing octo-lite with no kept consent answers, When the operator runs the installer with onboarding and answers whether agents may push, open pull requests, and file issues,</span> <span data-acceptance-observable>Then the answers are kept in octo-lite's published onboarding status, which reads done, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-consent-local" id="acceptance-consent-local" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator whose kept consent answer refuses push, When the lane owner runs <code>implement-spec</code> to completion,</span> <span data-acceptance-observable>Then the owner's report to the operator names the local integration head that holds every ticket's work.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-consent-local-unpushed" id="acceptance-consent-local-unpushed" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator whose kept consent answer refuses push, When the lane owner runs <code>implement-spec</code> to completion,</span> <span data-acceptance-observable>Then no lane branch is pushed, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-wake-provider" id="acceptance-wake-provider" data-story="user-story-install"><span data-acceptance-scenario>Given an operator on a box with Herdr, When the operator installs octo-lite and later uninstalls it,</span> <span data-acceptance-observable>Then octo-lite is registered as Spec Chat's wake provider after install and stays registered after uninstall, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-operating-model" id="acceptance-operating-model" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a lane owner started with an operating model file, When it spawns a worker and that worker spawns a child,</span> <span data-acceptance-observable>Then the worker and the child each start with that operating model and the caller's home, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-spawn-fail" id="acceptance-spawn-fail" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a lane owner whose next worker's agent fails to start, needs an induced failure: agent start fails, When the lane owner spawns that worker and the spawn ends,</span> <span data-acceptance-observable>Then the spawn reports the failure and Herdr shows no tab left for that worker.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-start-fail" id="acceptance-start-fail" data-story="user-story-lane-space"><span data-acceptance-scenario>Given an operator with a lane whose owner fails to start, needs an induced failure: owner agent start fails, When the operator launches the lane with <code>octo-lite-start</code> and it ends,</span> <span data-acceptance-observable>Then it reports the failure and Herdr shows no space for the lane.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-say-blocked" id="acceptance-say-blocked" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given a lane owner and a worker waiting on an interactive dialog, When the owner sends the worker a message with <code>herdr-say</code>,</span> <span data-acceptance-observable>Then nothing is typed into the dialog and the message is reported not delivered, to retry once the worker frees, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-single-ticket" id="acceptance-single-ticket" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator with a ticket whose behavior the spec on main already states, When the lane owner runs <code>implement-spec</code> on that ticket to completion and the operator opens the lane's PR,</span> <span data-acceptance-observable>Then no spec review was asked, and that one PR shows the ticket's work, a clear review, and passing required checks, ready for the operator's review.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-chat-acceptance" id="acceptance-chat-acceptance" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator with a lane's spec under review, When the operator accepts the spec in chat with the fleet operator, the fleet operator records it, and the operator opens the lane's PR,</span> <span data-acceptance-observable>Then the PR shows a receipt comment from the fleet operator, not from the lane owner.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-archive" id="acceptance-lane-archive" data-story="user-story-lane-space"><span data-acceptance-scenario>Given a lane owner whose PR merged, When it closes the lane,</span> <span data-acceptance-observable>Then the lanes directory no longer lists the lane, and its archive holds the lane's record and hand-off log unchanged, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets" id="acceptance-lane-no-tickets" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given a lane owner delivering a ticket graph, When a ticket moves state,</span> <span data-acceptance-observable>Then the lane record holds no ticket entry, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets-tracker" id="acceptance-lane-no-tickets-tracker" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given a lane owner delivering a ticket graph, When a ticket moves state and the operator opens that ticket in the tracker,</span> <span data-acceptance-observable>Then the tracker shows the ticket's new state.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-one-record" id="acceptance-one-record" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator with a lane's PR ready to merge, When the operator tells the fleet to merge it and the PR merges,</span> <span data-acceptance-observable>Then the box holds no record of that acceptance besides the PR's receipt comment, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-one-record-receipt" id="acceptance-one-record-receipt" data-story="user-story-deliver-spec"><span data-acceptance-scenario>Given an operator with a lane's PR ready to merge, When the operator tells the fleet to merge it, the PR merges, and the operator opens the PR,</span> <span data-acceptance-observable>Then the PR shows one receipt comment quoting the operator's words and the accepted commit.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-code-fault" id="acceptance-qa-code-fault" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed because the product does not do what it states, When the owner triages that failure and the operator opens the lane's issue in the tracker,</span> <span data-acceptance-observable>Then the tracker shows a repair ticket under that issue naming the criterion, worked by a new implementer.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-code-fault-ask" id="acceptance-qa-code-fault-ask" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed because the product does not do what it states, When the repair is integrated and the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion as a code fault with its repair ticket and its outcome in a recapture at the repaired head.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-capture-fault" id="acceptance-qa-capture-fault" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed because the capture never reached or showed the state it names, When the owner fixes that cause and the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion as a capture fault with the cause fixed, the commit that fixed it, and its outcome in a recapture of just that criterion.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-outside" id="acceptance-qa-outside" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed in behavior the lane did not change, When the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion as outside the lane with the reason, and the lane's PR is ready for review.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-ask-evidence" id="acceptance-qa-ask-evidence" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed, When the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion with what the judge saw, whose decision it was and the head it was judged at, its triage, its cause or reason, and its outcome.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-ask-complete" id="acceptance-qa-ask-complete" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA capture shows a criterion failed where the judge reached the state it names and saw the product not match it, When the owner triages it as a capture fault and the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion as a capture fault naming the specific way the capture went wrong.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qa-ask-carried" id="acceptance-qa-ask-carried" data-story="user-story-qa-triage"><span data-acceptance-scenario>Given a lane owner whose QA bundle carries a criterion's failure from an older head, When the operator reads the lane's merge ask,</span> <span data-acceptance-observable>Then the merge ask lists that criterion as judged at the merge ask's head, never as carried.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-ended" id="acceptance-worker-ended" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given a lane owner waiting on a worker that ends without reporting, needs an induced failure: the worker's session exits mid-ticket, When the owner's goal next checks in and the operator reads the owner's next message,</span> <span data-acceptance-observable>Then the message names that worker as ended without reporting and the worker started in its place.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-report" id="acceptance-worker-report" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given a lane owner waiting on an implementer, an integrator, or a code reviewer, When that worker finishes its task,</span> <span data-acceptance-observable>Then the owner's pane shows the worker's result as a message from that worker.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-result-on-screen" id="acceptance-worker-result-on-screen" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given a lane owner waiting on a worker that finished its task but whose report never reached the owner, needs an induced failure: every send of the worker's report fails, When the owner's goal next checks in and the operator reads the owner's next message,</span> <span data-acceptance-observable>Then the message names that worker as ended without reporting, carries the result the worker's pane shows, and names no worker started in its place.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-owner-gone" id="acceptance-worker-owner-gone" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given a worker whose lane owner is gone, needs an induced failure: the owner's pane closes before the worker reports, When the worker finishes its task,</span> <span data-acceptance-observable>Then the operator's pane shows the worker's result as a message from that worker.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-owner-gone-stops" id="acceptance-worker-owner-gone-stops" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given a worker whose lane owner is gone, needs an induced failure: the owner's pane closes before the worker reports, When the worker finishes its task and the operator looks at the lane's space,</span> <span data-acceptance-observable>Then Herdr shows the worker idle, no longer sending.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-watch-red" id="acceptance-watch-red" data-story="user-story-owner-liveness"><span data-acceptance-scenario>Given the fleet operator and a Bitbucket release the plugin watch reports red, When the fleet operator receives the watch's report,</span> <span data-acceptance-observable>Then Herdr shows a new lane space for a fix of that release.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-owner" id="acceptance-park-owner" data-story="user-story-park"><span data-acceptance-scenario>Given an operator with an idle lane owner waiting at a human gate, When the operator parks that owner,</span> <span data-acceptance-observable>Then Herdr no longer shows the lane's space.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-owner-free" id="acceptance-park-owner-free" data-story="user-story-park"><span data-acceptance-scenario>Given an operator with an idle lane owner waiting at a human gate, When the operator parks that owner,</span> <span data-acceptance-observable>Then no process of that owner is still running and the lane's hand-off log holds one parked line naming its session, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-wake" id="acceptance-park-wake" data-story="user-story-park"><span data-acceptance-scenario>Given an operator with a parked lane owner, When the operator sends that owner a message asking what its lane is waiting on,</span> <span data-acceptance-observable>Then Herdr shows the lane's space again with the owner under the lane's name, and the owner answers from its earlier conversation.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-wake-once" id="acceptance-park-wake-once" data-story="user-story-park"><span data-acceptance-scenario>Given an operator with a parked lane owner already resumed by one message, When the operator sends a second message to the owner's old pane,</span> <span data-acceptance-observable>Then the message reaches the resumed owner and no second copy of it starts, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-worker" id="acceptance-park-worker" data-story="user-story-park"><span data-acceptance-scenario>Given a lane owner with an idle worker, When the owner parks that worker and later sends it a message by its name,</span> <span data-acceptance-observable>Then Herdr shows the worker in the lane's space under the same name, answering from its earlier conversation.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-fleet" id="acceptance-park-fleet" data-story="user-story-park"><span data-acceptance-scenario>Given the fleet operator on a box short of memory with a lane owner idle at a human gate, When the fleet operator checks the fleet,</span> <span data-acceptance-observable>Then Herdr no longer shows that lane's space, and every working lane is still shown.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-park-refuse" id="acceptance-park-refuse" data-story="user-story-park"><span data-acceptance-scenario>Given an operator with a lane agent that is working, or that runs Codex, When the operator tries to park it,</span> <span data-acceptance-observable>Then the park is refused and the agent keeps running, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-dir" id="acceptance-session-dir" data-story="user-story-session"><span data-acceptance-scenario>Given an agent in a named Herdr session, When it locates octo-lite's state,</span> <span data-acceptance-observable>Then it gets that session's own state directory, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-default" id="acceptance-session-default" data-story="user-story-session"><span data-acceptance-scenario>Given an agent in the default Herdr session, When it locates octo-lite's state,</span> <span data-acceptance-observable>Then it gets octo-lite's top state directory, the one holding the onboarding file, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-fleet" id="acceptance-session-fleet" data-story="user-story-session"><span data-acceptance-scenario>Given an operator with a lane open in each of two Herdr sessions on one box, When the fleet operator of one session checks the fleet,</span> <span data-acceptance-observable>Then its fleet report names its own session's lane and not the other.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-wake" id="acceptance-session-wake" data-story="user-story-session"><span data-acceptance-scenario>Given a parked lane owner in one Herdr session and no agent under its pane id in another, When an agent in that other session sends a message to the owner's pane id,</span> <span data-acceptance-observable>Then no agent is resumed and the message is reported not delivered, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-wake-owner" id="acceptance-session-wake-owner" data-story="user-story-session"><span data-acceptance-scenario>Given a lane owner, live or parked, in one Herdr session and the review service in another, When a spec review hand-off for that owner's row is sent,</span> <span data-acceptance-observable>Then the hand-off reaches that owner in its own session, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-close" id="acceptance-session-close" data-story="user-story-session"><span data-acceptance-scenario>Given lanes in two Herdr sessions whose spaces have the same id and each run a background process, When the operator of one session closes its finished lane's space,</span> <span data-acceptance-observable>Then the other session's lane processes keep running, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-park" id="acceptance-session-park" data-story="user-story-session"><span data-acceptance-scenario>Given idle Claude agents in two Herdr sessions under the same pane id, When the operator of one session parks that pane,</span> <span data-acceptance-observable>Then the parked line names the conversation of its own session's agent, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-session-own-space" id="acceptance-session-own-space" data-story="user-story-session"><span data-acceptance-scenario>Given a finished lane in its own space and a lane in another Herdr session whose owner pane carries the same space id, When the lane's owner reports the lane closed,</span> <span data-acceptance-observable>Then the owner's report names its space to close.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-repo-skills-link" id="acceptance-repo-skills-link" data-story="user-story-repo-skills"><span data-acceptance-scenario>Given an operator whose project's instructions declare the project's own skills, When the operator runs the installer with the project's live main checkout,</span> <span data-acceptance-observable>Then each declared skill is linked from that checkout for Claude and Codex agents, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-repo-skills-stale" id="acceptance-repo-skills-stale" data-story="user-story-repo-skills"><span data-acceptance-scenario>Given an operator whose project declares a skill whose existing link points into another clone of the project, When the operator runs the installer with the project's live main checkout,</span> <span data-acceptance-observable>Then the installer warns that the link is stale, naming it and the clone it points into, leaves it untouched, and exits successfully, proven by a unit test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-repo-skills-load" id="acceptance-repo-skills-load" data-story="user-story-repo-skills"><span data-acceptance-scenario>Given a lane owner delivering a ticket in a project that declares a skill bearing on that ticket, When the implementer finishes the ticket and reports to the owner,</span> <span data-acceptance-observable>Then the report names that declared skill as loaded.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-wording-only" id="acceptance-wording-only" data-story="user-story-wording-only"><span data-acceptance-scenario>Given an operator with an accepted spec on a lane, When the owner commits a correction that only rewords that spec and the operator opens the lane's PR,</span> <span data-acceptance-observable>Then the PR body names that commit as wording-only in one line, and the PR shows no new acceptance receipt for it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-wording-behavior" id="acceptance-wording-behavior" data-story="user-story-wording-only"><span data-acceptance-scenario>Given an operator with an accepted spec on a lane, When the owner commits a spec change that alters a behavior the spec states,</span> <span data-acceptance-observable>Then the operator receives a review link for that change before any merge ask.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-general-rule" id="acceptance-general-rule" data-story="user-story-general-rule"><span data-acceptance-scenario>Given a lane whose integration head passes a named criterion through code keyed to that criterion's own case instead of the rule the spec states, When a fresh code reviewer judges the head,</span> <span data-acceptance-observable>Then its verdict to the owner is changes, with a blocker naming the keyed case.</span></p>
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-transport" id="boundary-transport">
+<span data-boundary-responsibility>The Herdr wrappers (<code>octo-lite-start</code>, <code>herdr-spawn</code>, <code>herdr-say</code>, <code>herdr-close</code>) own placing lane agents in spaces, messaging them, parking and resuming them, and closing tabs and spaces.</span>
+<span data-boundary-seam>The caller-facing seam is each wrapper's arguments and its printed <code>pane=</code> and <code>workspace=</code> lines.</span>
+<span data-boundary-dependency>Direction is external-provider: the wrappers depend on the Herdr CLI, the <a href="#session-key">session key</a> Herdr exports, and, for parking, on Claude's own per-process session file and <code>--resume</code>; roles and skills depend on the wrappers, never the reverse.</span>
+<span data-boundary-scope>Observable scope: Herdr spaces, tabs, and agents, and process exit.</span>
+</p>
+<p data-modular-boundary data-anchor="boundary-lane-record" id="boundary-lane-record">
+<span data-boundary-responsibility>octo-lite owns and publishes the lane record and hand-off formats; roles write them at the named moments.</span>
+<span data-boundary-seam>The caller-facing seam is the files in each Herdr session's <a href="#session-state">state directory</a>, plus the lane's Herdr space and spawn names for workers.</span>
+<span data-boundary-dependency>Direction is self-contained: readers such as a board depend on the format and locate a session's files from the Herdr session key; octo-lite names no reader.</span>
+<span data-boundary-scope>Observable scope: file contents and the lane's space membership.</span>
+</p>
+<p data-modular-boundary data-anchor="boundary-delivery" id="boundary-delivery">
+<span data-boundary-responsibility>Role contracts and skills own shaping, delivery, review, and gates.</span>
+<span data-boundary-seam>The caller-facing seam is the role contracts in <code>agents/</code> and the skills in <code>skills/</code>.</span>
+<span data-boundary-dependency>Direction is downward: roles use the wrappers and the lane record format; external providers are Linear, GitHub, Spec Chat, and annotateanything's QA capture program, whose rules (when QA runs, outcomes, owner triage) live in its <code>jev-capture</code> spec under QA rules.</span>
+<span data-boundary-scope>Observable scope: tickets, the PR, and the lane record.</span>
+</p>
+<p data-modular-boundary data-anchor="boundary-install" id="boundary-install">
+<span data-boundary-responsibility>The installer owns linking octo-lite's skills, roles, and helpers, and a project's declared skills, into the agent profiles.</span>
+<span data-boundary-seam>The caller-facing seam is the installer's flags and the target <code>AGENTS.md</code> <code>Repo skills:</code> line.</span>
+<span data-boundary-dependency>Direction is external-provider: the installer reads the target's declaration from its checkout; the target names no octo-lite path, and octo-lite names no project skill.</span>
+<span data-boundary-scope>Observable scope: links in the profile skill, agent, and helper directories, and the installer's printed report.</span>
+</p>
+</section>
+
+<section data-anchor="install" id="install">
+<h2>Install</h2>
+<p data-anchor="install-symlink" id="install-symlink"><code>scripts/install-octo-lite</code> symlinks <code>skills/*</code> into the Claude, Codex, and shared <code>~/.agents</code> skill directories, <code>agents/*.md</code> into the Claude and Codex agent directories, the <code>agents</code> directory as each profile's <code>octo-lite/adapters</code>, and executable helpers into <code>~/.local/bin</code>; <code>--check</code> verifies the links.</p>
+<p data-anchor="install-collision" id="install-collision">When a target path is already occupied, the installer classifies it: a symlink resolving into a different clone of this repository (matched by <code>git remote get-url origin</code>) is adopted and reported; any other existing file or symlink is skipped and reported; the installer never overwrites, never fails on an occupied path, and continues with the remaining items.
+A dangling link whose target was inside this repository is pruned as a known legacy path.
+Any other dangling link, including one at a path the installer links, belongs to someone else: it is reported and left untouched, never replaced.</p>
+<p data-anchor="install-repo-skills" id="install-repo-skills">A target repository declares its own skills in its root <code>AGENTS.md</code> with one line, <code>Repo skills:</code> followed by comma-separated repository-relative paths to skill directories.
+<code>install-octo-lite --project &lt;checkout&gt;</code> reads that line from the project's live main checkout, the clone the operator keeps on main, and links each declared skill from that checkout under its directory name, into the same skill directories as octo-lite's own skills.
+A declared skill's existing link that resolves anywhere but that checkout is stale: with or without <code>--check</code>, the installer warns, naming the link and where it points, leaves it untouched, and continues.
+It never links a project skill from another clone and never repairs a link.</p>
+<p data-anchor="install-peers" id="install-peers">Each peer links only what it owns (<a href="https://github.com/varelaseb/annotateanything/blob/main/docs/specs/toolchain-ownership.spec.html#toolchain-install">toolchain ownership</a>); Spec Chat's installer links Spec Chat's own skills.
+Only the third-party tdd skill is pinned, by <code>Skillfile</code> into <code>agents/skills</code> (ADR 0002).</p>
+<p data-anchor="install-floors" id="install-floors"><code>--check</code> also reports version floors: for each tool octo-lite uses at runtime (git, herdr, jq, gh, node, python3, and at least one of claude or codex), it prints ok, missing, or too old (found version vs minimum) with the upgrade source.
+The installer never upgrades anything without the user's explicit consent.</p>
+<p data-anchor="install-consent" id="install-consent">With <code>--onboard</code>, the installer asks once whether agents may push, open pull requests, and file issues, and keeps the answers in octo-lite's one onboarding file, <code>$XDG_STATE_HOME/octo-lite/onboarding.toml</code>, beside its published onboarding status, done once answers are kept.
+Kept answers are not asked again; deleting that file asks afresh.</p>
+<p data-anchor="install-wake" id="install-wake">On a box with Herdr, the installer registers <code>herdr-wake</code> as Spec Chat's wake provider; a provider file someone else wrote is kept unchanged, and <code>--undo</code> leaves the registration in place because Spec Chat's review service depends on it.</p>
+</section>
+
+<section data-anchor="roles" id="roles">
+<h2>Roles</h2>
+<p data-anchor="roles-contracts" id="roles-contracts"><code>agents/*.md</code> are the hand-written role contracts: orchestrator, implementer, integrator, code-reviewer, and meta-operator; none pins a model.</p>
+<p data-anchor="roles-loaded" id="roles-loaded">Every spawned worker with a role contract (implementer, integrator, or code-reviewer) loads it: Claude through <code>--agent ROLE</code>, Codex as developer instructions, and pi as an appended system prompt, via <code>herdr-spawn --role ROLE</code>.</p>
+<p data-anchor="roles-repo-skills" id="roles-repo-skills">An implementer loads by name each skill the target <code>AGENTS.md</code> declares under <code>Repo skills:</code> that bears on its ticket, beside the octo-lite skills its contract lists; a declared skill outranks an octo-lite skill on the same subject, as a project's UI skill outranks <code>frontend-design</code>.
+Its report to the owner names the declared skills it loaded; a declared skill it needs that does not resolve is a missing environment, reported as a blocker.</p>
+<p data-anchor="roles-general-rule" id="roles-general-rule">An implementer implements the general rule the spec states, so every case the rule covers holds, not only the criterion, fixture, label, or evaluation case at hand.
+A code reviewer blocks code keyed to the instances at hand, such as a named criterion, fixture, label, or evaluation case, in place of the rule the spec states: it passes the check while the behavior stays wrong.</p>
+<p data-anchor="roles-park" id="roles-park">Waiting agents hold no memory: the fleet operator parks a lane owner idle at a human gate, on another lane, or held back for load, and resumes it by sending it the wake message, or when load allows, one owner at a time as memory frees.
+A parked owner is resumed, never relaunched fresh; only an owner with no parked line and no live pane is relaunched.
+A lane owner parks a worker it would otherwise keep idle through a long wait, such as a human gate or another lane, and messages it to resume; a worker whose result is consumed is closed, not parked.
+A resumed owner first sets its lane record's <code>owner</code> to its new pane, then acts on the message that resumed it.
+The meta-operator and orchestrator contracts and the <code>herdr-comms</code> and <code>implement-spec</code> skills state these moves where they wait or close.</p>
+<p data-anchor="roles-goal" id="roles-goal">Every lane owner, and every operator-like pane, runs under a <code>/goal</code> for its lane outcome, so goal check-ins keep invoking it while work is unfinished.
+Every report goes to its recipient through <code>herdr-say</code>; text left in the sender's own pane is not reported.
+A worker's last step sends its result to the owner pane its brief names, and only a <code>herdr-say</code> exit 0 confirms the send; a send that does not exit 0 is sent again, a bounded number of times.
+When no send to the owner is confirmed, the worker sends its result once to the operator's pane, read from the session's <code>operator.toml</code>, and stops whether or not that send is confirmed, so an unreachable owner never holds a worker in a send loop.
+The operator brings the lane's owner back as <a href="#roles-park">parking</a> states and forwards it the result.
+At each check-in the owner reads the Herdr state of every worker it waits on; one that is idle, gone, or stuck on an interactive prompt ended without reporting, and the owner reads its pane.
+A finished result on that pane is consumed as the worker's report; otherwise the owner recovers or respawns the worker.
+Either way the owner tells the operator which worker ended without reporting and what it did.</p>
+<p data-anchor="roles-load" id="roles-load">Before a heavy job, such as a full test suite, a QA capture, or a build, the owner checks box load; when load is high it runs one heavy job at a time.</p>
+<p data-anchor="roles-teardown" id="roles-teardown">At lane close the owner removes the lane's review rows before removing any worktree, closes its workers, removes its own <code>/tmp</code> scratch, and archives the lane record last, per <a href="#octo-lane-record-life-archive">the archive moment</a>.</p>
+<p data-anchor="roles-watch" id="roles-watch">The fleet operator acts on annotateanything's Bitbucket plugin watch: a red report starts a fix lane.</p>
+<p data-anchor="roles-operating-model" id="roles-operating-model">An optional operating model given to <code>herdr-spawn</code> reaches the agent at start and passes to every agent it spawns, and each spawn forwards the caller's <code>HOME</code>.</p>
+</section>
+
+<section data-anchor="delivery" id="delivery">
+<h2>Delivery</h2>
+<p data-anchor="delivery-shape" id="delivery-shape"><code>spec-chat-shape</code> produces the reviewed canonical spec, committed locally, and never publishes; it sends the review link as soon as the draft validates and is hosted, with no agent browser pass.
+In parallel, never before that link, the orchestrator files the Linear issue, pushes, and opens the draft PR, only as consent allows.
+A processed human spec acceptance (page action Accept spec, formerly called Finish review) permits implementation dispatch under the reviewed canonical spec.</p>
+<p data-anchor="delivery-brief" id="delivery-brief">Operator briefs carry the human decisions already made and exact source pointers (files and anchors), so shaping reads only those before drafting.</p>
+<p data-anchor="delivery-implement" id="delivery-implement"><code>implement-spec</code> first files the dependency-linked ticket graph from the accepted spec, runs its pre-dispatch mechanical checks, then fills the ready ticket frontier with implementer workers, each in its own worktree; repository tests run in delivery, never during shaping.</p>
+<p data-anchor="delivery-merge" id="delivery-merge">One integrator at a time integrates finished commits onto the single integration branch and PR.</p>
+<p data-anchor="delivery-review" id="delivery-review">A code-reviewer judges the integration head, and findings get bounded repair until review is clear and required checks pass.</p>
+<p data-anchor="delivery-linear" id="delivery-linear">Linear stays truthful: a ticket is Done only once integrated, and pushed when consent allows, and a merged accepted PR completes the worklane.</p>
+<p data-anchor="delivery-consent" id="delivery-consent">Pushing, opening pull requests, and filing issues follow the kept consent answers alone when present, overriding any instruction; when absent, target instructions decide.
+Without push consent the lane stays on local branches and ends at a local integration head.</p>
+<p data-anchor="delivery-single-ticket" id="delivery-single-ticket">A ticket whose behavior the spec on main already states needs no shaping or new acceptance: that spec's commit on main is the acceptance receipt, the ticket is a one-node graph, and one implementer, one integrator, and one reviewer still run.</p>
+<p data-anchor="delivery-qa-triage" id="delivery-qa-triage">Before the merge ask, the owner triages every criterion the lane's QA capture shows failed, from its evidence, whatever owner the bundle names, by annotateanything's <a href="https://github.com/varelaseb/annotateanything/blob/main/docs/specs/jev-capture.spec.html#qa-rules-owner-triage">owner triage rule</a>, the one home of QA rules.
+A code fault's repair is a ticket under the spec issue, worked by a fresh implementer and integrated like any ticket; a fault in the QA program itself is fixed through annotateanything's own lane.
+A reshaped criterion keeps its meaning; one whose meaning changes is a spec change and goes back to spec review.
+Every verdict the merge ask lists was judged at the merge ask's head: a failure carried from an older head is recaptured at that head before it is triaged.
+The merge ask lists each failed criterion with the bundle's <code>evidence_state</code>, its <code>decision_source</code> and the head it was judged at, its triage, its cause or reason, and its outcome.
+A failure whose <code>evidence_state</code> is <code>complete</code>, where the judge reached the state and saw the product not match the criterion, is listed as a code fault unless a specific capture cause is named, such as a wrong fixture, a wrong page reached, or the criterion's shape.</p>
+</section>
+
+<section data-anchor="session" id="session">
+<h2>Herdr session</h2>
+<p data-anchor="session-unit" id="session-unit">The Herdr session is octo-lite's isolation unit: an agent sees, messages, parks, wakes, and tears down only the lanes of its own session, and sessions need no coordination.
+Every wrapper and role acts in its caller's session and reads and writes only that session's state.</p>
+<p data-anchor="session-key" id="session-key">The session key is the Herdr session name, read from Herdr alone.
+Herdr exports the name as <code>HERDR_SESSION</code> to every pane of a named session, and a pane of the default session has none, so a process reads the key as <code>${HERDR_SESSION:-default}</code>.
+The Herdr CLI selects its own session by the same variable, so a process outside any pane that sets it acts in that session, and one that does not acts in the default session; a set <code>HERDR_SOCKET_PATH</code> pins the session over it.
+Herdr limits session names to ASCII letters, digits, <code>.</code>, <code>_</code>, and <code>-</code>, so the key is safe as a path component.
+Any repository that scopes its own state by Herdr session reads this same key from Herdr directly.</p>
+<p data-anchor="session-state" id="session-state">octo-lite's state directory for a session is <code>$XDG_STATE_HOME/octo-lite/</code> for the key <code>default</code>, and <code>$XDG_STATE_HOME/octo-lite/sessions/&lt;key&gt;/</code> for any other key, as Herdr keeps its own named sessions under <code>sessions/&lt;name&gt;</code>.
+It holds the session's <code>lanes/</code> directory, with each lane's record, hand-off log, and archive, and the session's <code>operator.toml</code> and <code>operator.handoffs.jsonl</code>.
+<code>octo-lite-state</code> prints the caller's session state directory, and roles and wrappers locate lane and operator files through it.
+The onboarding file belongs to the box, not a session, and stays at <code>$XDG_STATE_HOME/octo-lite/onboarding.toml</code>.</p>
+<p data-anchor="session-ids" id="session-ids">Herdr pane, tab, and space ids are unique only within a session; another session repeats them.
+Every id in a session's state is read and acted on in that session: a message, park, wake, or close by id reaches only the caller's session, unless a wake owner names its own session (<a href="#session-wake-owner">wake owner</a>), and a close stops only processes of the caller's session.
+No record key names a session.</p>
+<p data-anchor="session-wake-owner" id="session-wake-owner">The one box-wide service, Spec Chat's review service, runs in one session and wakes owners of every session, so a review row's owner names its session: a lane registers with <code>--owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"</code>, for example <code>second/wP:p2</code>.
+<code>herdr-wake</code> checks and wakes a <code>&lt;session&gt;/&lt;pane&gt;</code> owner in that session, with that session's state for its parked lines, and a bare pane in its caller's session; it never searches sessions for a pane, since ids repeat across them.</p>
+</section>
+
+<section data-anchor="transport" id="transport">
+<h2>Transport</h2>
+<p data-anchor="transport-herdr" id="transport-herdr"><code>herdr-spawn</code> opens one tab and agent at an explicit worktree, and <code>herdr-say</code> delivers a message, returning only once Herdr observes a state change.
+A target blocked on interactive input gets nothing typed, and <code>herdr-say</code> exits 75, not delivered, so the caller retries once it frees.</p>
+<p data-anchor="transport-spawn-bare" id="transport-spawn-bare"><code>herdr-spawn</code> starts the agent bare, and its brief follows by <code>herdr-say</code>.</p>
+<p data-anchor="transport-spawn-fail" id="transport-spawn-fail">A failed spawn closes the tab it created, and a failed <code>octo-lite-start</code> closes the lane space it created, so no orphan is left.
+<code>herdr-spawn</code> answers the agent's startup trust dialog at the pane, confirming only once the affirmative row is selected and never a refusal; a dialog that does not clear fails the spawn closed.</p>
+<p data-anchor="transport-no-ack" id="transport-no-ack">There is no acknowledgement step, inbox, or drain.</p>
+<p data-anchor="transport-lane-space" id="transport-lane-space">Each lane, one PR, runs in its own Herdr space labelled with the lane name; the fleet operator runs in a space of its own.
+<code>octo-lite-start</code> creates the lane space and starts the owner in it, leaving no other tab there, and prints its <code>workspace=</code> beside <code>pane=</code>.
+The owner spawns every worker of its lane into its own space, <code>$HERDR_WORKSPACE_ID</code>.
+A lane's own space is the one <code>octo-lite-start</code> created for it; a lane started in a space shared with the operator or other lanes has no space of its own.</p>
+<p data-anchor="transport-space-derived" id="transport-space-derived">A lane's space id is the prefix of its owner pane id, <code>w7</code> in <code>"w7:p1"</code>, so no record key holds it.
+That space is the lane's own when no other lane's owner pane and not the operator's pane, both read from the session's state, carries the same prefix.</p>
+<p data-anchor="transport-spawn-name" id="transport-spawn-name">Every worker is spawned under the name <code>&lt;role&gt;-&lt;ticket&gt;</code>, lowercase, for example <code>implementer-ann-64</code>, where the role is the role contract it runs and the ticket is the issue key it works; the lane space already names the lane, and Herdr accepts only lowercase names of at most 32 characters.
+The ticket is the issue key ending the name, read back in upper case; a worker serving the whole lane, such as the integrator or a reviewer of the integration head, carries the lane's primary issue key.
+An agent in the lane's space whose name does not follow this form is still a worker of the lane, with no role or ticket.
+The owner closes a worker once its result is consumed, before spawning the next one under the same name, so a name is live at most once; Herdr refuses a spawn under a live name.</p>
+<p data-anchor="transport-no-move" id="transport-no-move">A lane pane never moves to another space: Herdr rewrites a moved pane's pane and tab ids, which breaks the lane record, review rows, and teardown.</p>
+<p data-anchor="transport-close-space" id="transport-close-space">At teardown the operator closes a lane's own space with <code>herdr-close &lt;space id&gt;</code>, which closes the space and stops every process started in it, including detached ones.
+A lane started in a shared space ends at its owner tab: the operator closes it with <code>herdr-close &lt;owner tab&gt;</code>, and the owner's close report names that tab, never the space.</p>
+<p data-anchor="transport-park" id="transport-park">An idle Claude lane agent is parked with <code>herdr-close --park &lt;pane&gt;</code>: it reads the agent's session id and role from Claude's own session file for the process in that pane, closes the agent's tab, or the lane's own space when the agent is that lane's owner, and prints one <a href="#handoff-kind-parked">parked line</a>.
+The parker appends that line to the lane's hand-off log: the operator when it parks an owner, the owner when it parks a worker.
+A working agent or a Codex or pi agent is refused with nothing closed; only Claude keeps a per-process session file, so parking is Claude only.</p>
+<p data-anchor="transport-resume" id="transport-resume">A parked agent resumes as it was launched, plus <code>--resume &lt;session&gt;</code>: an owner through <code>octo-lite-start --resume &lt;session&gt;</code> in a new lane space under the lane's name at its worktree, a worker through <code>herdr-spawn --resume &lt;session&gt;</code> in the caller's space under its old name and role; Claude starts with <code>--agent &lt;role&gt; --resume &lt;session&gt;</code> and keeps its conversation.</p>
+<p data-anchor="transport-wake-parked" id="transport-wake-parked">When Herdr finds no agent for a <code>herdr-say</code> target, the latest parked line naming that pane or name decides: if an agent already runs under the line's name, the message goes to it; otherwise the agent is resumed first, then the message is delivered, and <code>herdr-say</code> prints the resumed agent's <code>pane=</code>.
+<code>herdr-wake check</code> counts a parked owner as present, so a spec review hand-off to it resumes it.</p>
+<p data-anchor="transport-restart-risk" id="transport-restart-risk" data-spec-tbd="later">Risk: whether Herdr keeps space and pane ids across a Herdr server restart is unproven; if it does not, a restart breaks every lane record owner pane and every space derived from it.</p>
+</section>
+
+<section data-anchor="lane-record" id="lane-record">
+<h2>Lane record</h2>
+<p data-anchor="lane-record-intent">Octo-lite owns and publishes the lane record format: one TOML file per open lane in the <code>lanes/</code> directory of its Herdr session's <a href="#session-state">state directory</a>, named by the owner agent name, with the keys below, written at the moments below.
+A closed lane's record and hand-off log live in <code>archive/</code> inside that directory.
+Readers follow this format; octo-lite names no reader.</p>
+<figure data-anchor="octo-lane-record-fields">
+<h3 data-anchor="octo-lane-record-fields-heading">Lane record keys</h3>
+<div class="table-scroll" data-anchor="octo-lane-record-fields-wrap">
+<table data-anchor="octo-lane-record-fields-table">
+<thead><tr><th>Key</th><th>Value</th></tr></thead>
+<tbody>
+<tr data-anchor="octo-lane-record-key-issue"><td><code>issue</code></td><td>The lane key, the primary issue, for example <code>"ANN-45"</code>.</td></tr>
+<tr data-anchor="octo-lane-record-key-repository"><td><code>repository</code></td><td><code>"owner/name"</code> where the lane's PR lives.</td></tr>
+<tr data-anchor="octo-lane-record-key-goal"><td><code>goal</code></td><td>One line: a short plain feature name, the lane title.</td></tr>
+<tr data-anchor="octo-lane-record-key-pr"><td><code>pr</code></td><td>Pull request number; absent until one opens.</td></tr>
+<tr data-anchor="octo-lane-record-key-owner"><td><code>owner</code></td><td>The owner's Herdr pane id, the <code>pane=</code> value <code>herdr-spawn</code> printed, for example <code>"w5:pB2"</code>; never the agent name or tab. A <a href="#roles-park">resumed owner</a> rewrites it to its new pane.</td></tr>
+<tr data-anchor="octo-lane-record-key-started"><td><code>started_at</code></td><td>Quoted UTC instant when the lane launched, for example <code>"2026-09-26T01:05:00Z"</code>, written once at launch.</td></tr>
+<tr data-anchor="octo-lane-record-key-last-handoff"><td><code>last_handoff_at</code></td><td>Quoted UTC instant of the owner's last worker spawn, close, or hand-off consumption.</td></tr>
+<tr data-anchor="octo-lane-record-key-waiting"><td><code>waiting_on</code></td><td><code>""</code>, <code>"blocked"</code>, <code>"operator"</code> (the lane escalated to the fleet operator), or one other lane's issue key, for example <code>"ANN-136"</code>, while this lane waits on that lane.
+A key no listed lane has means that lane is done.
+A wait on a ticket, role, or outside issue is <code>"blocked"</code>.
+A human gate leaves it <code>""</code>: gate names such as <code>"spec review"</code>, <code>"QA review"</code>, and <code>"merge"</code> are never set here.</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption data-anchor="octo-lane-record-fields-caption">The file is rewritten when the lane moves, so its modified time is the lane's last activity.</figcaption>
+</figure>
+<p data-anchor="octo-lane-record-tickets" id="octo-lane-record-tickets">The record holds no ticket state: a ticket's state, holder, and repair passes live in the tracker only.</p>
+<p data-anchor="octo-lane-record-workers" id="octo-lane-record-workers">The record lists no workers.
+A lane's workers are the Herdr agents in the lane's space other than the owner; each worker's pane is its Herdr pane id, and its role and ticket come from its <a href="#transport-spawn-name">spawn name</a>.</p>
+<figure data-anchor="octo-lane-record">
+<h3 data-anchor="octo-lane-record-heading">The lane record</h3>
+<pre data-anchor="octo-lane-record-example"><code># $(octo-lite-state)/lanes/ann45-44-shape.toml
+owner = "w7:pB2"                 # owner pane id: herdr-spawn pane=, never agent name or tab; its prefix w7 is the lane space
+repository = "varelaseb/octo-lite"
+issue = "ANN-45"                 # primary issue; operator at launch if known, else owner at shaping
+goal = "Shape ANN-45 and ANN-44 through spec acceptance"
+pr = 30                          # set when shaping opens the draft PR
+started_at = "2026-09-24T17:02:00Z"   # operator, once, at launch
+last_handoff_at = "2026-09-24T18:24:09Z"
+waiting_on = ""                  # "", "blocked", "operator", or another lane's issue key "ANN-136"; human gates leave it ""</code></pre>
+<figcaption data-anchor="octo-lane-record-caption">Current control state, so TOML.</figcaption>
+</figure>
+<figure data-anchor="octo-lane-record-life">
+<h3 data-anchor="octo-lane-record-life-heading">Who touches the lane record, and when</h3>
+<div class="table-scroll" data-anchor="octo-lane-record-life-wrap">
+<table data-anchor="octo-lane-record-life-table">
+<thead><tr><th>Moment</th><th>Who</th><th>Record change</th></tr></thead>
+<tbody>
+<tr data-anchor="octo-lane-record-life-launch"><td>Operator launches a lane orchestrator</td><td>Operator</td><td>Creates the lane space through <code>octo-lite-start</code>, then the record with owner, repository, goal, and issue when known, plus <code>started_at</code> set to now and <code>waiting_on</code> set to <code>""</code>. Writes <code>operator.toml</code> with its own <code>pane</code> beside the lanes directory at its own launch, and appends to <code>operator.handoffs.jsonl</code> beside it per the <a href="#handoff-operator">operator log</a>.</td></tr>
+<tr data-anchor="octo-lane-record-life-pr"><td>Shaping opens the draft pull request</td><td>Owner</td><td>Sets <code>issue</code> if missing and <code>pr</code>.</td></tr>
+<tr data-anchor="octo-lane-record-life-work"><td>Owner spawns or closes a worker, or consumes a handoff</td><td>Owner</td><td>Updates <code>last_handoff_at</code>.</td></tr>
+<tr data-anchor="octo-lane-record-life-waiting-lane"><td>Owner parks the lane on another lane, such as its merge, or resumes</td><td>Owner</td><td>Sets <code>waiting_on</code> to that lane's issue key; clears it to <code>""</code> on resume. One lane at a time.</td></tr>
+<tr data-anchor="octo-lane-record-life-operator"><td>Owner escalates to the fleet operator, or the operator answers</td><td>Owner</td><td>Sets <code>waiting_on</code> to <code>"operator"</code>; clears it to <code>""</code> on answer.</td></tr>
+<tr data-anchor="octo-lane-record-life-audit"><td>Operator checks fleet status or wakes</td><td>Operator</td><td>Reads every record, writes none: a record is stale when its <code>waiting_on</code> key names no listed lane, its owner pane is neither live nor named by the latest parked line in its hand-off log, or its <code>goal</code> no longer names the lane's scope; the operator wakes that owner to fix it.</td></tr>
+<tr data-anchor="octo-lane-record-life-park"><td>Operator parks an idle owner, or the owner parks an idle worker</td><td>Parker</td><td>Appends the parked line to the lane's hand-off log; touches no record. A resumed owner sets <code>owner</code> to its new pane.</td></tr>
+<tr data-anchor="octo-lane-record-life-archive" id="octo-lane-record-life-archive"><td>Owner closes the finished lane, after its last hand-off line</td><td>Owner</td><td>Moves <code>&lt;name&gt;.toml</code> and <code>&lt;name&gt;.handoffs.jsonl</code> unchanged into <code>archive/</code> inside the lanes directory, before its close report.</td></tr>
+<tr data-anchor="octo-lane-record-life-teardown"><td>Operator tears down the finished lane and its children</td><td>Operator</td><td>Closes the lane's own space, or only its owner tab when the lane started in a shared space; touches no record.</td></tr>
+</tbody>
+</table>
+</div>
+<figcaption data-anchor="octo-lane-record-life-caption">The operator creates the record. Only the owner updates it in place, and at close moves it and its hand-off log into the archive.</figcaption>
+</figure>
+<p data-anchor="octo-lane-record-handoffs">At each hand-off moment the owner appends one line to <code>&lt;lane record name&gt;.handoffs.jsonl</code> beside the lane record, per the <a href="#handoff-fields">hand-off field list</a>; only the owner writes the file, except the parked line for the owner itself, which the operator appends when it parks the owner.</p>
+<figure data-anchor="handoff-fields" id="handoff-fields">
+<h3 data-anchor="handoff-fields-heading">Hand-off field list: one line per hand-off</h3>
+<p data-anchor="handoff-fields-common">Every line has <code>at</code>, an RFC 3339 UTC instant, and <code>kind</code>; <code>ticket</code> is the ticket key where one applies.</p>
+<div class="table-scroll" data-anchor="handoff-fields-wrap">
+<table data-anchor="handoff-fields-table">
+<thead><tr><th><code>kind</code></th><th>Written when</th><th>Fields</th></tr></thead>
+<tbody>
+<tr data-anchor="handoff-kind-attempt"><td><code>attempt</code></td><td>A worker's result is consumed.</td><td><code>role</code>, <code>ticket</code>, <code>worker</code> (pane), <code>commit</code>, <code>result</code> (done, blocked, stalled, failed), <code>duration_s</code></td></tr>
+<tr data-anchor="handoff-kind-review"><td><code>review</code></td><td>A review verdict is consumed.</td><td><code>ticket</code>, <code>commit</code>, <code>verdict</code> (approve, changes), <code>blockers</code>, <code>round</code>, <code>step_back</code></td></tr>
+<tr data-anchor="handoff-kind-integration"><td><code>integration</code></td><td>The integration head moves.</td><td><code>commit</code></td></tr>
+<tr data-anchor="handoff-kind-qa"><td><code>qa</code></td><td>A QA phase ends.</td><td><code>phase</code> (capture, review), <code>started_at</code>, <code>commit</code>, <code>verdict</code> (passed, failed, empty for capture)</td></tr>
+<tr data-anchor="handoff-kind-gate"><td><code>gate</code></td><td>A human gate is asked or answered.</td><td><code>gate</code> (spec review, QA review, merge), <code>event</code> (asked, answered), <code>answer</code></td></tr>
+<tr data-anchor="handoff-kind-blocked"><td><code>blocked</code></td><td>The lane becomes blocked.</td><td><code>reason</code></td></tr>
+<tr data-anchor="handoff-kind-parked" id="handoff-kind-parked"><td><code>parked</code></td><td>An idle agent is parked.</td><td><code>pane</code>, <code>name</code>, <code>role</code>, <code>cwd</code>, <code>session</code>; a line without <code>name</code> or <code>role</code> is the lane owner under the lane's name</td></tr>
+<tr data-anchor="handoff-kind-scope"><td><code>scope</code></td><td>Scope or ship grouping changes.</td><td><code>change</code></td></tr>
+</tbody>
+</table>
+</div>
+<figcaption data-anchor="handoff-fields-caption">Minimal append-only trace, so JSONL. The lane record keeps current state; this file keeps what happened.</figcaption>
+</figure>
+<p data-anchor="operator-handoffs" id="operator-handoffs">The fleet operator appends one line per operator moment to <code>operator.handoffs.jsonl</code> beside <code>operator.toml</code>, with the same common fields and the kinds below; it is the file's only writer.
+This is the lane hand-off mechanism with a different writer; readers follow this format, and octo-lite names no reader.</p>
+<figure data-anchor="handoff-operator" id="handoff-operator">
+<h3 data-anchor="handoff-operator-heading">Operator log: one line per operator moment</h3>
+<div class="table-scroll" data-anchor="handoff-operator-wrap">
+<table data-anchor="handoff-operator-table">
+<thead><tr><th><code>kind</code></th><th>Written when</th><th>Fields</th></tr></thead>
+<tbody>
+<tr data-anchor="handoff-operator-note"><td><code>note</code></td><td>The operator tells the human something the floor should keep: an answer, a report, a recommendation.</td><td><code>issue</code> when about one lane, <code>text</code></td></tr>
+<tr data-anchor="handoff-operator-prod"><td><code>prod</code></td><td>The operator wakes or redirects a lane owner.</td><td><code>issue</code>, <code>note</code></td></tr>
+</tbody>
+</table>
+</div>
+<pre data-anchor="handoff-operator-example"><code>{"at": "2026-10-02T03:40:00Z", "kind": "prod", "issue": "ANN-9", "note": "integrate the finished worker"}</code></pre>
+<figcaption data-anchor="handoff-operator-caption">The log keeps what the operator needs; an acceptance is the <a href="#acceptance-receipt">PR receipt</a>, a merge is git, and a lane's gate is its own gate line.</figcaption>
+</figure>
+</section>
+
+<section data-anchor="gates" id="gates">
+<h2>Human gates</h2>
+<p data-anchor="gates-list" id="gates-list">Spec acceptance, acceptance of delivered work, merge of unaccepted work, preproduction promotion, and live traffic shifts require explicit human instruction.</p>
+<p data-anchor="gates-chat-acceptance" id="gates-chat-acceptance">A spec acceptance the human gives the fleet operator in chat is recorded by the fleet operator at once, on the review page and as a receipt comment on the PR, and the owner is told; an owner never records it, since that reads as self-approval.</p>
+<p data-anchor="acceptance-receipt" id="acceptance-receipt">Every acceptance, of a spec or of delivered work, is recorded once, as a receipt comment on the lane's PR, and everything that needs it reads that comment.
+The receipt quotes the human's words, gives the date, names what is accepted (the spec path or the PR), the exact accepted commit, and who recorded it.
+A spec accepted on the review page is recorded by the owner processing that hand-off, quoting the action; a spec accepted in chat by the fleet operator; delivered work by the agent receiving the instruction, before it merges.
+A delivered-work receipt goes on the PR before the merge, and the merge commit closes it; nothing else records the merge.
+The review host's <code>accepted</code> flag is a view cache for screens and is never cited as the record.</p>
+<p data-anchor="gates-merge-check" id="gates-merge-check">On a human instruction to merge, the receiving agent checks that the PR head is the accepted commit and that required checks pass, then records the receipt and merges.
+It re-checks no QA evidence: a merge ask goes out only after every step it needs, that evidence included.</p>
+<p data-anchor="gates-wording-only" id="gates-wording-only">A spec commit after acceptance that is wording-only keeps the original acceptance, with no new review and no new receipt.
+Wording-only means the commit changes only wording, labels, or anchors: it adds or removes no criterion and changes no stated behavior, value, or outcome.
+The lane owner decides, and lists each such commit in the PR body with one line saying what it rewords, so the human sees it at the merge gate.
+A commit the owner cannot plainly call wording-only is not, and goes back to spec review for a fresh acceptance.</p>
+<figure data-anchor="acceptance-receipt-figure">
+<h3 data-anchor="acceptance-receipt-heading">The acceptance receipt</h3>
+<pre data-anchor="acceptance-receipt-example"><code>Acceptance receipt: human "merge #74" (2026-09-26) accepts and merges PR #74 at 9be60f6. Recorded by meta-operator.</code></pre>
+<figcaption data-anchor="acceptance-receipt-caption">A PR comment outlives the box, so it is the record.</figcaption>
+</figure>
+</section>
+
+<section data-anchor="absent" id="absent">
+<h2>Not present</h2>
+<p data-anchor="absent-list" id="absent-list">There is no sweep or host timer, loop workflow, role resolver or <code>roles.toml</code>, control CLI, owner file, readiness envelope, trust root, conformance checker, or wording-only diff detector; do not rebuild them.
+There is no cross-session addressing or coordination and no session key in any record: the session scopes state by directory alone.
+The removed owner file was coordination and control state; the <a href="#lane-record">lane record</a> is a read-only declaration for observation that nothing gates on.</p>
+</section>
+</article>
+</body>
+</html>

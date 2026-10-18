@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# octo-lite's published start command: one lane owner in its own Herdr space,
+# labelled with the lane name. Callers use this, never herdr-spawn's path
+# inside the clone. --resume SESSION continues a parked owner in a new lane space.
+set -euo pipefail
+
+cwd="$PWD"; name=""; label="orchestrator"; runtime="claude"; model=(); resume=()
+usage() {
+  echo "usage: octo-lite-start [--cwd DIR] [--name LANE] [--label LABEL]" \
+       "[--runtime claude|codex|pi] [--operating-model FILE] [--resume SESSION]" >&2
+  exit 64
+}
+while (($#)); do
+  case "$1" in
+    --cwd) cwd="${2:?}"; shift 2 ;;
+    --name) name="${2:?}"; shift 2 ;;
+    --label) label="${2:?}"; shift 2 ;;
+    --runtime) runtime="${2:?}"; shift 2 ;;
+    --operating-model) model=(--operating-model "${2:?}"); shift 2 ;;
+    --resume) resume=(--resume "${2:?}"); shift 2 ;;
+    *) usage ;;
+  esac
+done
+case "$runtime" in
+  claude|codex|pi) ;;
+  *) usage ;;
+esac
+# Herdr rejects '/' and the like in agent names.
+[[ -n "$name" ]] || name="orchestrator-$(basename "$(cd "$cwd" && pwd -P)" | tr -c 'A-Za-z0-9_\n-' -)"
+
+root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+out="$(herdr workspace create --label "$name" --cwd "$cwd" --no-focus)"
+workspace="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
+seed="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+[[ -n "$workspace" && -n "$seed" ]] || { echo "octo-lite-start: workspace create returned no space or tab" >&2; exit 1; }
+spawned="$("$root/skills/herdr-comms/assets/herdr-spawn" --workspace "$workspace" --name "$name" \
+  --label "$label" --cwd "$cwd" --role orchestrator "${model[@]}" "${resume[@]}" -- "$runtime")" || {
+  rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
+# The space's seed tab is a bare shell; the owner's tab is the only one left.
+herdr tab close "$seed" >/dev/null
+echo "workspace=$workspace $spawned"

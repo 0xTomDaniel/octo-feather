@@ -1,0 +1,250 @@
+#!/usr/bin/env bash
+# Spawn one agent in its own Herdr tab, at a given worktree, under a role.
+#
+# This is a thin wrapper over two native Herdr commands:
+#   herdr tab create   -> a tab and root pane at the worktree
+#   herdr agent start  -> the agent adopts that pane
+# Everything else here exists because those two have real failure modes: a
+# freshly created pane is not yet at a shell prompt, and the agent may open a
+# trusted-folder dialog that traps the session. Both are handled and verified.
+#
+# The runtime (model, effort, skills) comes from the agent definition and the
+# CLI's own defaults. This script pins none of it.
+set -euo pipefail
+
+workspace=""; name=""; label=""; cwd="$PWD"; role=""; resume=""
+# The operating model is inherited: each spawn exports it into the tab it creates,
+# so every child spawned from there defaults to the same file.
+model="${OCTO_LITE_OPERATING_MODEL:-}"
+
+usage() {
+  cat <<'EOF'
+usage:
+  herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \
+    [--operating-model FILE] [--resume SESSION] -- claude|codex|pi
+
+Spawn bare, then send the brief with herdr-say. Claude gets --agent ROLE from
+--role. --resume SESSION continues a parked Claude session (Claude only).
+
+Prints: name= role= tab= pane= cwd= contract= provider_session_id=
+EOF
+}
+
+while (($#)); do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --workspace) workspace="${2:?}"; shift 2 ;;
+    --name) name="${2:?}"; shift 2 ;;
+    --label) label="${2:?}"; shift 2 ;;
+    --cwd) cwd="${2:?}"; shift 2 ;;
+    --role) role="${2:?}"; shift 2 ;;
+    --operating-model) model="${2:?}"; shift 2 ;;
+    --resume) resume="${2:?}"; shift 2 ;;
+    --direct) shift ;;                 # accepted and ignored; kept for callers
+    --) shift; break ;;
+    *) echo "herdr-spawn: unknown option $1" >&2; exit 64 ;;
+  esac
+done
+[[ -n "$workspace" && -n "$name" && -n "$role" && $# -gt 0 ]] || { usage >&2; exit 64; }
+[[ -d "$cwd" ]] || { echo "herdr-spawn: no such worktree: $cwd" >&2; exit 66; }
+cwd="$(cd "$cwd" && pwd -P)"
+if [[ -n "$model" ]]; then
+  [[ -f "$model" ]] || { echo "herdr-spawn: no such operating model: $model" >&2; exit 66; }
+  model="$(cd "$(dirname "$model")" && pwd -P)/$(basename "$model")"
+fi
+
+runtime="$(basename "$1")"
+case "$runtime" in
+  claude|codex|pi) kind="$runtime" ;;
+  *) echo "herdr-spawn: persistent tabs require claude, codex, or pi, got $runtime" >&2; exit 65 ;;
+esac
+# An inline prompt makes herdr agent start wait for a readiness it never sees and
+# time out, so the runtime takes no arguments.
+(($# == 1)) || { echo "herdr-spawn: no args after the runtime; spawn bare, then send the brief with herdr-say" >&2; exit 64; }
+# Only Claude keeps the per-process session file parking resumes from.
+[[ -z "$resume" || "$kind" == claude ]] || { echo "herdr-spawn: --resume is Claude only" >&2; exit 64; }
+
+# The role contract. A Claude agent loads it itself through `--agent ROLE`,
+# derived from --role. Codex has no custom-agent file, so the contract goes
+# in at the developer layer as one TOML string argv. Delivered as a prompt
+# instead, Codex treats it as a task and starts working it. Pi has neither,
+# and appends the contract file to its system prompt.
+#
+# The installed profile is the lookup, so a contract owned by any peer
+# repository resolves without this script knowing which one.
+contract_file="$HOME/.claude/agents/$role.md"
+contract="not-found"
+# `agent start --kind` supplies the executable.
+if [[ "$kind" == claude ]]; then
+  contract="loaded-by-agent-flag"
+  launch_argv=(--agent "$role")
+  [[ -z "$resume" ]] || launch_argv+=(--resume "$resume")
+elif [[ "$kind" == pi ]]; then
+  launch_argv=()
+  if [[ -f "$contract_file" ]]; then
+    contract="appended-system-prompt"
+    launch_argv=(--append-system-prompt "$contract_file")
+  else
+    echo "herdr-spawn: no $role contract at $contract_file; the agent does not know its bounds" >&2
+  fi
+else
+  # --no-daemon keeps the thread and its commands in this tab's process tree,
+  # tagged with HERDR_TAB_ID, so herdr-close can end all of it. The shared
+  # app-server daemon would outlive the tab.
+  launch_argv=(--no-daemon)
+  if [[ -f "$contract_file" ]]; then
+    contract="developer-instructions"
+  else
+    echo "herdr-spawn: no $role contract at $contract_file; the agent does not know its bounds" >&2
+  fi
+fi
+
+# An optional operating model, handed over at start so the agent needs no global
+# instruction file. Claude and pi append it to their system prompt, pi ahead of
+# the contract. Codex takes it ahead of the contract in the one
+# developer_instructions string.
+if [[ "$kind" == claude ]]; then
+  [[ -z "$model" ]] || launch_argv=(--append-system-prompt-file "$model" "${launch_argv[@]}")
+elif [[ "$kind" == pi ]]; then
+  [[ -z "$model" ]] || launch_argv=(--append-system-prompt "$model" "${launch_argv[@]}")
+elif [[ -n "$model" || -f "$contract_file" ]]; then
+  instructions="$({ [[ -z "$model" ]] || { cat "$model"; echo; }; [[ ! -f "$contract_file" ]] || cat "$contract_file"; } | jq -Rs .)"
+  launch_argv=(-c "developer_instructions=$instructions" "${launch_argv[@]}")
+fi
+
+# A tab starts with the Herdr server's environment, not the caller's. HOME is
+# forwarded so the agent and every descendant keep the caller's git identity,
+# consent, and sessions; the model path likewise.
+tab_env=(--env "HOME=$HOME")
+[[ -z "$model" ]] || tab_env+=(--env "OCTO_LITE_OPERATING_MODEL=$model")
+out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
+tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
+[[ -n "$tab" && -n "$pane" ]] || { echo "herdr-spawn: tab create returned no tab or pane" >&2; exit 1; }
+
+close_orphan_tab() { herdr tab close "$tab" >/dev/null 2>&1 || true; }
+
+# A new root pane may not have reached its shell prompt yet; herdr reports that
+# as the structured error agent_pane_busy. Only that code retries. Any other
+# failure, or exhausting the retries, closes the tab so no orphan survives.
+retries="${HERDR_SPAWN_START_RETRIES:-8}"; delay="0.5"; attempt=0
+while :; do
+  attempt=$((attempt + 1)); rc=0
+  err="$(herdr agent start "$name" --kind "$kind" --pane "$pane" -- "${launch_argv[@]}" 2>&1 >/dev/null)" || rc=$?
+  [[ "$rc" == 0 ]] && break
+  code="$(jq -r '.error.code // empty' <<<"$err" 2>/dev/null || true)"
+  # herdr registers the agent but reports agent_not_ready while the agent's own
+  # trusted-folder dialog is open. That is a started agent waiting on a
+  # keystroke, not a failed start; the dialog step below is what clears it.
+  [[ "$code" == agent_not_ready ]] && break
+  if [[ "$code" != agent_pane_busy ]]; then
+    [[ -n "$err" ]] && printf '%s\n' "$err" >&2
+    echo "herdr-spawn: agent start failed; closing tab $tab" >&2
+    close_orphan_tab; exit "$rc"
+  fi
+  if (( attempt >= retries )); then
+    printf '%s\n' "$err" >&2
+    echo "herdr-spawn: pane still busy after $retries attempts; closing tab $tab" >&2
+    close_orphan_tab; exit "$rc"
+  fi
+  sleep "$delay"; [[ "$delay" == 0.5 ]] && delay=1 || delay=2
+done
+
+# Answer the startup dialogs, then verify they actually cleared.
+#
+# Two agents, two shapes. Claude marks the selected row with U+276F and offers
+# "Yes, I trust this folder"; Codex marks it with U+203A and offers
+# "1. Yes, continue" or, since 2026-09, "1. Trust and continue". Codex also
+# asks, separately, to trust each hook before it will run, which is a single
+# keypress rather than a menu.
+#
+# Never confirm blindly. The highlighted row is whatever the CLI last left
+# selected, and for a previously declined directory it is the refusal, so a bare
+# Enter kills the agent being spawned. Read the row, move onto the affirmative,
+# verify it moved, and only then confirm.
+#
+# Three states matter: a dialog is open (0), verified clear (1), read failed
+# (2). A failed read is not evidence of clearing, so it retries and then fails
+# closed rather than reporting a session that is really still trapped.
+pane_text() { herdr pane read "$pane" --source visible --lines 60 2>/dev/null; }
+
+dialog_state() {
+  local text
+  text="$(pane_text)" || return 2
+  grep -qiE 'Quick safety check|trust this folder|trust the contents of this directory|Trust and continue|Press t to trust' <<<"$text" && return 0
+  is_appearance_wizard <<<"$text" && return 0
+  return 1
+}
+
+# Claude's first-run appearance wizard. Every option is a preference and none of
+# them is destructive, so unlike a trust dialog this one may be confirmed as it
+# stands. It is recognised by its own options rather than by a title, so a
+# reworded heading does not turn it into an unrecognised dialog.
+is_appearance_wizard() {
+  local text; text="$(cat)"
+  grep -qiE 'Dark mode' <<<"$text" && grep -qiE 'Light mode' <<<"$text"
+}
+
+# The row the CLI has highlighted, for either marker.
+selected_row() { pane_text | grep -E '^[[:space:]]*(❯|›)' | head -1; }
+
+send_key() {
+  herdr pane send-keys "$pane" "$1" >/dev/null 2>&1 || {
+    echo "herdr-spawn: dialog keystroke failed; closing tab $tab" >&2
+    close_orphan_tab; exit 69; }
+}
+
+cleared=0
+for _ in $(seq 1 "${HERDR_SPAWN_TRUST_RETRIES:-14}"); do
+  state=0; dialog_state || state=$?
+  [[ "$state" == 1 ]] && { cleared=1; break; }
+  if [[ "$state" == 0 ]]; then
+    if pane_text | grep -qiE 'Press t to trust'; then
+      # hook trust: a single key, not a menu
+      herdr pane send-text "$pane" "t" >/dev/null 2>&1 || send_key t
+    elif pane_text | is_appearance_wizard; then
+      send_key Enter
+    elif selected_row | grep -qiE 'trust (this folder|the contents)|Yes, continue|Trust and continue|^[^A-Za-z]*[0-9]+\. *Yes'; then
+      send_key Enter
+    else
+      send_key Down
+    fi
+  fi
+  sleep 1
+done
+if [[ "$cleared" != 1 ]]; then
+  state=0; dialog_state || state=$?
+  case "$state" in
+    1) : ;;
+    2) echo "herdr-spawn: could not read the pane to verify the dialog; failing closed" >&2
+       close_orphan_tab; exit 69 ;;
+    *) # Print what was actually on screen: an unrecognised dialog shape is a
+       # fixable report, where a bare "did not clear" is a guessing game.
+       echo "herdr-spawn: a startup dialog did not clear; failing closed. Pane showed:" >&2
+       pane_text | grep -vE '^[[:space:]]*$' | tail -12 >&2
+       close_orphan_tab; exit 69 ;;
+  esac
+fi
+
+# The dialogs clearing does not mean the agent can accept a prompt yet: it may
+# still be booting, and a prompt fired into that window is never reacted to -
+# Herdr reports `agent_prompt_stalled` and the message is lost. Wait until the
+# agent reports its own status before calling the spawn done.
+provider_session_id=""; agent_status=""
+for _ in $(seq 1 "${HERDR_SPAWN_READY_RETRIES:-20}"); do
+  info="$(herdr agent get "$name" 2>/dev/null || true)"
+  provider_session_id="$(jq -r '.result.agent.agent_session.value // empty' <<<"$info" 2>/dev/null || true)"
+  agent_status="$(jq -r '.result.agent.agent_status // empty' <<<"$info" 2>/dev/null || true)"
+  # Readiness is the reported status, not the session id: Herdr resolves a
+  # provider session on some hosts and not others, but a status means the agent
+  # is attached and can be prompted.
+  [[ -n "$agent_status" ]] && break
+  sleep 1
+done
+if [[ -z "$agent_status" ]]; then
+  echo "herdr-spawn: agent never reported a status; it is not ready for prompts" >&2
+  close_orphan_tab; exit 69
+fi
+[[ -n "$provider_session_id" ]] || provider_session_id="herdr:$name"
+
+echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$provider_session_id"
