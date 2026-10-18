@@ -16,9 +16,11 @@ This file governs work on the kit itself. Target repos get their own `AGENTS.md`
 
 ## Layout
 
-- `agents/` role contracts from octo-lite, appended to Pi's system prompt at spawn: orchestrator (director), implementer, integrator, code-reviewer.
-- `spec/` spec-chat HTML specs (`*.spec.html`).
+- `agents/` role contracts from octo-lite, appended to Pi's system prompt by `herdr-spawn --role`: meta-operator (director), orchestrator (lane owner), implementer, integrator, code-reviewer. `agents/skills/` holds the skillfile-managed upstream skills (Matt's `tdd` with its seam-gate patch).
+- `spec/` spec-chat HTML specs (`*.spec.html`). Today it holds octo-lite's own spec, kept as the format reference and for the `#anchors` the role contracts cite; it still describes Claude and Linear, so `docs/adr/` wins where they differ.
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
-- `scripts/` start and new-project helpers.
+- `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir).
+- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just lane N`, `just state`.
+- `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.
