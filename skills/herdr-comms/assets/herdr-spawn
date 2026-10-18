@@ -1,30 +1,34 @@
 #!/usr/bin/env bash
-# Spawn one agent in its own Herdr tab, at a given worktree, under a role.
+# Spawn one Pi agent in its own Herdr tab, at a given worktree, under a role.
+#
+# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0); Pi only.
 #
 # This is a thin wrapper over two native Herdr commands:
 #   herdr tab create   -> a tab and root pane at the worktree
 #   herdr agent start  -> the agent adopts that pane
 # Everything else here exists because those two have real failure modes: a
 # freshly created pane is not yet at a shell prompt, and the agent may open a
-# trusted-folder dialog that traps the session. Both are handled and verified.
+# trust dialog that traps the session. Both are handled and verified.
 #
-# The runtime (model, effort, skills) comes from the agent definition and the
-# CLI's own defaults. This script pins none of it.
+# The role contract is this kit's agents/<role>.md, appended to Pi's system
+# prompt. Every kit skill is loaded with --skill. Model and thinking come from
+# Pi's own settings; this script pins none of it.
 set -euo pipefail
 
+root="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd -P)"
 workspace=""; name=""; label=""; cwd="$PWD"; role=""; resume=""
 # The operating model is inherited: each spawn exports it into the tab it creates,
 # so every child spawned from there defaults to the same file.
-model="${OCTO_LITE_OPERATING_MODEL:-}"
+model="${OCTO_FEATHER_OPERATING_MODEL:-}"
 
 usage() {
   cat <<'EOF'
 usage:
   herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE \
-    [--operating-model FILE] [--resume SESSION] -- claude|codex|pi
+    [--operating-model FILE] [--resume SESSION] [-- pi]
 
-Spawn bare, then send the brief with herdr-say. Claude gets --agent ROLE from
---role. --resume SESSION continues a parked Claude session (Claude only).
+Spawn bare, then send the brief with herdr-say. The runtime is always pi.
+--resume SESSION continues a parked Pi session (its --session-id).
 
 Prints: name= role= tab= pane= cwd= contract= provider_session_id=
 EOF
@@ -45,7 +49,8 @@ while (($#)); do
     *) echo "herdr-spawn: unknown option $1" >&2; exit 64 ;;
   esac
 done
-[[ -n "$workspace" && -n "$name" && -n "$role" && $# -gt 0 ]] || { usage >&2; exit 64; }
+[[ -n "$workspace" && -n "$name" && -n "$role" ]] || { usage >&2; exit 64; }
+[[ -n "$label" ]] || label="$name"
 [[ -d "$cwd" ]] || { echo "herdr-spawn: no such worktree: $cwd" >&2; exit 66; }
 cwd="$(cd "$cwd" && pwd -P)"
 if [[ -n "$model" ]]; then
@@ -53,70 +58,40 @@ if [[ -n "$model" ]]; then
   model="$(cd "$(dirname "$model")" && pwd -P)/$(basename "$model")"
 fi
 
-runtime="$(basename "$1")"
-case "$runtime" in
-  claude|codex|pi) kind="$runtime" ;;
-  *) echo "herdr-spawn: persistent tabs require claude, codex, or pi, got $runtime" >&2; exit 65 ;;
-esac
-# An inline prompt makes herdr agent start wait for a readiness it never sees and
-# time out, so the runtime takes no arguments.
-(($# == 1)) || { echo "herdr-spawn: no args after the runtime; spawn bare, then send the brief with herdr-say" >&2; exit 64; }
-# Only Claude keeps the per-process session file parking resumes from.
-[[ -z "$resume" || "$kind" == claude ]] || { echo "herdr-spawn: --resume is Claude only" >&2; exit 64; }
-
-# The role contract. A Claude agent loads it itself through `--agent ROLE`,
-# derived from --role. Codex has no custom-agent file, so the contract goes
-# in at the developer layer as one TOML string argv. Delivered as a prompt
-# instead, Codex treats it as a task and starts working it. Pi has neither,
-# and appends the contract file to its system prompt.
-#
-# The installed profile is the lookup, so a contract owned by any peer
-# repository resolves without this script knowing which one.
-contract_file="$HOME/.claude/agents/$role.md"
-contract="not-found"
-# `agent start --kind` supplies the executable.
-if [[ "$kind" == claude ]]; then
-  contract="loaded-by-agent-flag"
-  launch_argv=(--agent "$role")
-  [[ -z "$resume" ]] || launch_argv+=(--resume "$resume")
-elif [[ "$kind" == pi ]]; then
-  launch_argv=()
-  if [[ -f "$contract_file" ]]; then
-    contract="appended-system-prompt"
-    launch_argv=(--append-system-prompt "$contract_file")
-  else
-    echo "herdr-spawn: no $role contract at $contract_file; the agent does not know its bounds" >&2
-  fi
-else
-  # --no-daemon keeps the thread and its commands in this tab's process tree,
-  # tagged with HERDR_TAB_ID, so herdr-close can end all of it. The shared
-  # app-server daemon would outlive the tab.
-  launch_argv=(--no-daemon)
-  if [[ -f "$contract_file" ]]; then
-    contract="developer-instructions"
-  else
-    echo "herdr-spawn: no $role contract at $contract_file; the agent does not know its bounds" >&2
-  fi
+# Pi is the only runtime (docs/adr/0001). `-- pi` is accepted for callers.
+if (($#)); then
+  [[ "$(basename "$1")" == pi ]] || { echo "herdr-spawn: pi is the only runtime, got $1" >&2; exit 65; }
+  # An inline prompt makes herdr agent start wait for a readiness it never sees
+  # and time out, so the runtime takes no arguments.
+  (($# == 1)) || { echo "herdr-spawn: no args after the runtime; spawn bare, then send the brief with herdr-say" >&2; exit 64; }
 fi
 
-# An optional operating model, handed over at start so the agent needs no global
-# instruction file. Claude and pi append it to their system prompt, pi ahead of
-# the contract. Codex takes it ahead of the contract in the one
-# developer_instructions string.
-if [[ "$kind" == claude ]]; then
-  [[ -z "$model" ]] || launch_argv=(--append-system-prompt-file "$model" "${launch_argv[@]}")
-elif [[ "$kind" == pi ]]; then
-  [[ -z "$model" ]] || launch_argv=(--append-system-prompt "$model" "${launch_argv[@]}")
-elif [[ -n "$model" || -f "$contract_file" ]]; then
-  instructions="$({ [[ -z "$model" ]] || { cat "$model"; echo; }; [[ ! -f "$contract_file" ]] || cat "$contract_file"; } | jq -Rs .)"
-  launch_argv=(-c "developer_instructions=$instructions" "${launch_argv[@]}")
-fi
+# The role contract lives in this kit, never in a per-user profile.
+contract_file="$root/agents/$role.md"
+[[ -f "$contract_file" ]] || { echo "herdr-spawn: no $role contract at $contract_file" >&2; exit 66; }
+contract="appended-system-prompt"
+
+# A known session id makes the agent parkable: herdr-close --park records it
+# and a resume passes it back.
+session="$resume"
+[[ -n "$session" ]] || session="$(cat /proc/sys/kernel/random/uuid)"
+
+launch_argv=()
+# An optional operating model goes ahead of the contract.
+[[ -z "$model" ]] || launch_argv+=(--append-system-prompt "$model")
+launch_argv+=(--append-system-prompt "$contract_file" --session-id "$session")
+# Kit skills load by path: nothing is installed into the user's Pi profile.
+for skill in "$root"/skills/*/ "$root"/agents/skills/*/; do
+  [[ -f "$skill/SKILL.md" ]] && launch_argv+=(--skill "${skill%/}")
+done
 
 # A tab starts with the Herdr server's environment, not the caller's. HOME is
-# forwarded so the agent and every descendant keep the caller's git identity,
-# consent, and sessions; the model path likewise.
-tab_env=(--env "HOME=$HOME")
-[[ -z "$model" ]] || tab_env+=(--env "OCTO_LITE_OPERATING_MODEL=$model")
+# forwarded so the agent and every descendant keep the caller's git identity
+# and sessions; PATH gains the kit commands (herdr-say, octo-feather-state).
+tab_env=(--env "HOME=$HOME"
+  --env "PATH=$root/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
+  --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session")
+[[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")
 out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
 tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
 pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"
@@ -130,12 +105,12 @@ close_orphan_tab() { herdr tab close "$tab" >/dev/null 2>&1 || true; }
 retries="${HERDR_SPAWN_START_RETRIES:-8}"; delay="0.5"; attempt=0
 while :; do
   attempt=$((attempt + 1)); rc=0
-  err="$(herdr agent start "$name" --kind "$kind" --pane "$pane" -- "${launch_argv[@]}" 2>&1 >/dev/null)" || rc=$?
+  err="$(herdr agent start "$name" --kind pi --pane "$pane" -- "${launch_argv[@]}" 2>&1 >/dev/null)" || rc=$?
   [[ "$rc" == 0 ]] && break
   code="$(jq -r '.error.code // empty' <<<"$err" 2>/dev/null || true)"
-  # herdr registers the agent but reports agent_not_ready while the agent's own
-  # trusted-folder dialog is open. That is a started agent waiting on a
-  # keystroke, not a failed start; the dialog step below is what clears it.
+  # herdr registers the agent but reports agent_not_ready while a trust dialog
+  # is open. That is a started agent waiting on a keystroke, not a failed
+  # start; the dialog step below is what clears it.
   [[ "$code" == agent_not_ready ]] && break
   if [[ "$code" != agent_pane_busy ]]; then
     [[ -n "$err" ]] && printf '%s\n' "$err" >&2
@@ -150,13 +125,7 @@ while :; do
   sleep "$delay"; [[ "$delay" == 0.5 ]] && delay=1 || delay=2
 done
 
-# Answer the startup dialogs, then verify they actually cleared.
-#
-# Two agents, two shapes. Claude marks the selected row with U+276F and offers
-# "Yes, I trust this folder"; Codex marks it with U+203A and offers
-# "1. Yes, continue" or, since 2026-09, "1. Trust and continue". Codex also
-# asks, separately, to trust each hook before it will run, which is a single
-# keypress rather than a menu.
+# Answer a startup trust dialog, then verify it actually cleared.
 #
 # Never confirm blindly. The highlighted row is whatever the CLI last left
 # selected, and for a previously declined directory it is the refusal, so a bare
@@ -171,22 +140,12 @@ pane_text() { herdr pane read "$pane" --source visible --lines 60 2>/dev/null; }
 dialog_state() {
   local text
   text="$(pane_text)" || return 2
-  grep -qiE 'Quick safety check|trust this folder|trust the contents of this directory|Trust and continue|Press t to trust' <<<"$text" && return 0
-  is_appearance_wizard <<<"$text" && return 0
+  grep -qiE 'Quick safety check|trust this (folder|project)|trust the contents of this directory|Trust and continue|Press t to trust' <<<"$text" && return 0
   return 1
 }
 
-# Claude's first-run appearance wizard. Every option is a preference and none of
-# them is destructive, so unlike a trust dialog this one may be confirmed as it
-# stands. It is recognised by its own options rather than by a title, so a
-# reworded heading does not turn it into an unrecognised dialog.
-is_appearance_wizard() {
-  local text; text="$(cat)"
-  grep -qiE 'Dark mode' <<<"$text" && grep -qiE 'Light mode' <<<"$text"
-}
-
-# The row the CLI has highlighted, for either marker.
-selected_row() { pane_text | grep -E '^[[:space:]]*(❯|›)' | head -1; }
+# The row the CLI has highlighted.
+selected_row() { pane_text | grep -E '^[[:space:]]*(❯|›|>)' | head -1; }
 
 send_key() {
   herdr pane send-keys "$pane" "$1" >/dev/null 2>&1 || {
@@ -200,11 +159,8 @@ for _ in $(seq 1 "${HERDR_SPAWN_TRUST_RETRIES:-14}"); do
   [[ "$state" == 1 ]] && { cleared=1; break; }
   if [[ "$state" == 0 ]]; then
     if pane_text | grep -qiE 'Press t to trust'; then
-      # hook trust: a single key, not a menu
       herdr pane send-text "$pane" "t" >/dev/null 2>&1 || send_key t
-    elif pane_text | is_appearance_wizard; then
-      send_key Enter
-    elif selected_row | grep -qiE 'trust (this folder|the contents)|Yes, continue|Trust and continue|^[^A-Za-z]*[0-9]+\. *Yes'; then
+    elif selected_row | grep -qiE 'trust (this|the contents)|Yes, continue|Trust and continue|^[^A-Za-z]*[0-9]+\. *Yes'; then
       send_key Enter
     else
       send_key Down
@@ -226,18 +182,14 @@ if [[ "$cleared" != 1 ]]; then
   esac
 fi
 
-# The dialogs clearing does not mean the agent can accept a prompt yet: it may
-# still be booting, and a prompt fired into that window is never reacted to -
+# The dialog clearing does not mean the agent can accept a prompt yet: it may
+# still be booting, and a prompt fired into that window is never reacted to.
 # Herdr reports `agent_prompt_stalled` and the message is lost. Wait until the
 # agent reports its own status before calling the spawn done.
-provider_session_id=""; agent_status=""
+agent_status=""
 for _ in $(seq 1 "${HERDR_SPAWN_READY_RETRIES:-20}"); do
   info="$(herdr agent get "$name" 2>/dev/null || true)"
-  provider_session_id="$(jq -r '.result.agent.agent_session.value // empty' <<<"$info" 2>/dev/null || true)"
   agent_status="$(jq -r '.result.agent.agent_status // empty' <<<"$info" 2>/dev/null || true)"
-  # Readiness is the reported status, not the session id: Herdr resolves a
-  # provider session on some hosts and not others, but a status means the agent
-  # is attached and can be prompted.
   [[ -n "$agent_status" ]] && break
   sleep 1
 done
@@ -245,6 +197,5 @@ if [[ -z "$agent_status" ]]; then
   echo "herdr-spawn: agent never reported a status; it is not ready for prompts" >&2
   close_orphan_tab; exit 69
 fi
-[[ -n "$provider_session_id" ]] || provider_session_id="herdr:$name"
 
-echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$provider_session_id"
+echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"

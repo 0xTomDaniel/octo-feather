@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Close one Herdr tab or space and end everything it ran, or park one idle
-# Claude agent.
+# Pi agent.
+#
+# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 # Closing a tab or space kills its panes, but a detached command child (setsid)
 # survives, reparented. Every process started in a tab carries
@@ -11,12 +13,12 @@
 # session count: those whose HERDR_SESSION equals the caller's, unset in both
 # for the default session.
 #
-# --park PANE reads the session of the Claude process in PANE from Claude's own
-# ~/.claude/sessions/<pid>.json, closes its tab, or its space when that tab is
-# the space's only one (a lane owner in its own space), and prints one parked
-# hand-off line, even when the close fails. An agent Herdr does not report idle
-# or done (Herdr 0.9.0 reports a Claude agent waiting at its prompt as done), or
-# one with no Claude session file (Codex, pi), is refused with nothing closed.
+# --park PANE reads the Pi session id and role herdr-spawn exported into PANE's
+# tab (OCTO_FEATHER_SESSION_ID, OCTO_FEATHER_ROLE), closes its tab, or its
+# space when that tab is the space's only one (a lane owner in its own space),
+# and prints one parked hand-off line, even when the close fails. An agent Herdr
+# does not report idle or done, or one not spawned by herdr-spawn, is refused
+# with nothing closed.
 set -uo pipefail
 
 usage() { echo "usage: herdr-close TAB|SPACE | --park PANE" >&2; exit 64; }
@@ -30,20 +32,26 @@ ours() {
 line=""
 if [[ "${1:-}" == --park ]]; then
   (($# == 2)) && [[ "$2" == *:* ]] || usage
-  pane="$2"; session=""
-  for file in "$HOME"/.claude/sessions/[0-9]*.json; do
-    pid="${file##*/}"; pid="${pid%.json}"
-    ours /proc/"$pid"/environ "HERDR_PANE_ID=$pane" && { session="$file"; break; }
+  pane="$2"; session=""; role=""; cwd=""
+  for env in /proc/[0-9]*/environ; do
+    ours "$env" "HERDR_PANE_ID=$pane" || continue
+    vars="$(tr '\0' '\n' 2>/dev/null <"$env")" || continue
+    session="$(sed -n 's/^OCTO_FEATHER_SESSION_ID=//p' <<<"$vars")"
+    [[ -n "$session" ]] || continue
+    role="$(sed -n 's/^OCTO_FEATHER_ROLE=//p' <<<"$vars")"
+    pid="${env#/proc/}"; cwd="$(readlink "/proc/${pid%/environ}/cwd" 2>/dev/null || true)"
+    break
   done
-  [[ -n "$session" ]] || { echo "herdr-close: no Claude session in $pane; parking is Claude only" >&2; exit 65; }
+  [[ -n "$session" ]] || { echo "herdr-close: no herdr-spawn Pi session in $pane; not parked" >&2; exit 65; }
   agent="$(herdr agent get "$pane")" || { printf '%s\n' "$agent" >&2; exit 1; }
   [[ "$(jq -r .result.agent.agent_status <<<"$agent")" == @(idle|done) ]] || { echo "herdr-close: $pane is not idle; not parked" >&2; exit 75; }
   name="$(jq -r .result.agent.name <<<"$agent")"
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$agent")"
   tabs="$(herdr workspace get "$space" 2>/dev/null | jq -r '.result.workspace.tab_count // empty')"
   [[ "$tabs" == 1 ]] && set -- "$space" || set -- "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")"
-  line="$(jq -c --arg at "$(date -u +%FT%TZ)" --arg pane "$pane" --arg name "$name" \
-    '{at: $at, kind: "parked", pane: $pane, name: $name, role: .agent, cwd, session: .sessionId}' "$session")"
+  line="$(jq -nc --arg at "$(date -u +%FT%TZ)" --arg pane "$pane" --arg name "$name" \
+    --arg role "$role" --arg cwd "$cwd" --arg session "$session" \
+    '{at: $at, kind: "parked", pane: $pane, name: $name, role: $role, cwd: $cwd, session: $session}')"
 fi
 
 id="${1:-}"

@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+# octo-feather's published start command (ported from octo-lite-start,
+# varelaseb/octo-lite@cc6fa4e, Apache-2.0).
+#
+#   octo-feather-start --director [--cwd DIR]
+#     the director (meta-operator) in Herdr workspace `director`, tab `director`
+#   octo-feather-start --issue N [--cwd WORKTREE]
+#     one lane owner (orchestrator) in its own workspace `gh<N>`, tab `lane`
+#
+# Layout per docs/adr/0011. Workers and the integrator later get their own tab
+# in the lane workspace, spawned by the lane owner with herdr-spawn.
+# --name and --resume SESSION continue a parked owner in a new lane workspace.
+set -euo pipefail
+
+cwd="$PWD"; name=""; label=""; role="orchestrator"; model=(); resume=()
+usage() {
+  echo "usage: octo-feather-start (--director | --issue N | --name LANE) [--cwd DIR]" \
+       "[--label LABEL] [--operating-model FILE] [--resume SESSION]" >&2
+  exit 64
+}
+while (($#)); do
+  case "$1" in
+    --director) name="director"; label="director"; role="meta-operator"; shift ;;
+    --issue) [[ "${2:?}" =~ ^[0-9]+$ ]] || usage; name="gh$2"; shift 2 ;;
+    --cwd) cwd="${2:?}"; shift 2 ;;
+    --name) name="${2:?}"; shift 2 ;;
+    --label) label="${2:?}"; shift 2 ;;
+    --runtime) [[ "${2:?}" == pi ]] || usage; shift 2 ;;   # pi only, kept for callers
+    --operating-model) model=(--operating-model "${2:?}"); shift 2 ;;
+    --resume) resume=(--resume "${2:?}"); shift 2 ;;
+    *) usage ;;
+  esac
+done
+[[ -n "$name" ]] || usage
+[[ -n "$label" ]] || label="lane"
+
+# One workspace per name: refuse a second director or a second lane gh<N>.
+if herdr workspace list 2>/dev/null | jq -e --arg n "$name" \
+     '[.result.workspaces[]? | select(.label == $n)] | length > 0' >/dev/null 2>&1; then
+  echo "octo-feather-start: workspace $name already exists" >&2; exit 73
+fi
+
+root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+out="$(herdr workspace create --label "$name" --cwd "$cwd" --no-focus)"
+workspace="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
+seed="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+[[ -n "$workspace" && -n "$seed" ]] || { echo "octo-feather-start: workspace create returned no workspace or tab" >&2; exit 1; }
+spawned="$("$root/skills/herdr-comms/assets/herdr-spawn" --workspace "$workspace" --name "$name" \
+  --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" -- pi)" || {
+  rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
+# The workspace's seed tab is a bare shell; the agent's tab is the only one left.
+herdr tab close "$seed" >/dev/null
+echo "workspace=$workspace $spawned"
