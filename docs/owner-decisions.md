@@ -1,8 +1,6 @@
-# Decisions
+# Owner decisions
 
-Format: date, decision, decided by, why. Open items stay open until Tom decides.
-
-Lasting decisions that are hard to reverse, surprising and a real trade-off are also recorded as ADRs in `docs/adr/` (format: mattpocock/skills domain-modeling ADR-FORMAT). This file stays the dated log.
+Tom's decisions, dated, with why. Lasting ones (hard to reverse, surprising, a real trade-off) are also ADRs in `docs/adr/` (mattpocock/skills domain-modeling ADR-FORMAT). Agents never write here: decisions agents make during a run go in that run's decision log (see `docs/future.md` until its format is settled). Open items stay open until Tom decides.
 
 ## 2026-10-18
 
