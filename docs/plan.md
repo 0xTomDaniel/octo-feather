@@ -2,7 +2,11 @@
 
 Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project per language went spec-chat HTML spec, accepted, director (orchestrator) dispatch, Pi implementer, integrator, code-reviewer, green `just check`, evidence bundle, without Tom touching code.
 
-Base: octo-lite `cc6fa4e`. Work is deltas on it.
+Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The email stays unopened until the kit is ready, so the kit is stack-agnostic: Python and TypeScript both prepared. Submit the method (AGENTS.md, spec, evidence) with the code if the rules allow.
+
+Base: octo-lite `cc6fa4e`. Work is deltas on it. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
+
+Pending: role-file format waits on the pi-subagents spike (VM, 10-18); Jev placement (`just check` or a merge gate) waits on Tom.
 
 | # | Block | Est | Output |
 |---|---|---|---|

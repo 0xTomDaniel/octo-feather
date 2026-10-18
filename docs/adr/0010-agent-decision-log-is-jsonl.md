@@ -1,0 +1,3 @@
+# The agent decision log is JSONL, checked by a schema
+
+Agents record their run decisions in an append-only JSONL file, one object per line (ts, agent, phase, decision, why, evidence, result), validated by a JSON schema inside `just check`. A different model audits it at the end of a run, and `correct` mines it for repeated mistakes. pstack's show-me-your-work and orchestrate playbook use TSV; free text in the why and evidence fields eventually contains a tab or newline and silently corrupts a TSV row, and TSV has no types. Every TSV reference in the vendored pstack files is patched to JSONL, with the patch recorded in `skills.lock`. Pi sessions and octo-lite handoff logs are JSONL already. Decided by Tom, 2026-10-18.

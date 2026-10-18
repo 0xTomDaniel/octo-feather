@@ -21,4 +21,4 @@ This file governs work on the kit itself. Target repos get their own `AGENTS.md`
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` start and new-project helpers.
-- `docs/owner-decisions.md` Tom's dated decisions; `docs/adr/` the lasting ones.
+- `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.
