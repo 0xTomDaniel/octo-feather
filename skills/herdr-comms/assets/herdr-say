@@ -66,7 +66,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../scripts/octo-feather-start" "${resume[@]}")"
     else
-      started="$("$here/herdr-spawn" --workspace "${HERDR_WORKSPACE_ID:-}" --label "$name" \
+      started="$("$here/herdr-spawn" --workspace "${HERDR_WORKSPACE_ID:-}" --label "$(jq -r '.label // .name' <<<"$line")" \
         --role "$(jq -r '.role // empty' <<<"$line")" "${resume[@]}" -- pi)"
     fi
     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"

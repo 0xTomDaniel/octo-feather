@@ -5,7 +5,7 @@
 # session and to none of the default one. The default session's directory is
 # the top one, beside the box's onboarding file; a named session's is
 # sessions/<key> under it, as Herdr keeps its own.
-# Ported from octo-lite-state (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
+# Ported from octo-lite's state command (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 set -euo pipefail
 dir="${XDG_STATE_HOME:-$HOME/.local/state}/octo-feather"
 [[ "${HERDR_SESSION:-default}" == default ]] || dir+="/sessions/$HERDR_SESSION"

@@ -1,0 +1,51 @@
+octo-feather
+Copyright 2026 Tom Daniel
+
+This product includes software derived from octo-lite
+(https://github.com/varelaseb/octo-lite, commit cc6fa4e),
+Copyright 2026 Sebastian Varela, licensed under the Apache License, Version 2.0
+(see LICENSE). octo-lite's NOTICE reads:
+
+    Dev Workflows
+    Copyright 2026 Sebastian Varela
+
+    This repository contains general-purpose development workflows, scripts, templates,
+    and related tooling independently developed by Sebastian Varela.
+
+    These materials are provided under the Apache License, Version 2.0.
+
+Files derived from octo-lite, modified by Tom Daniel on 2026-10-18 (Pi as the
+only runtime, GitHub Issues instead of Linear, octo-feather names, Herdr layout
+of docs/adr/0011):
+
+    agents/meta-operator.md
+    agents/orchestrator.md
+    agents/implementer.md
+    agents/integrator.md
+    agents/code-reviewer.md
+    agents/skills/tdd/ (materialized from mattpocock/skills, MIT, with octo-lite's patch)
+    skills/commit/SKILL.md
+    skills/github/SKILL.md (was skills/octo-lite-github)
+    skills/grill-with-docs/SKILL.md
+    skills/herdr-comms/SKILL.md
+    skills/herdr-comms/assets/herdr-close
+    skills/herdr-comms/assets/herdr-say
+    skills/herdr-comms/assets/herdr-spawn
+    skills/herdr-comms/assets/herdr-wake
+    skills/implement-spec/SKILL.md
+    skills/nodejs/SKILL.md
+    skills/pnpm/SKILL.md
+    skills/pull/SKILL.md
+    skills/push/SKILL.md
+    skills/python/SKILL.md
+    skills/typescript/SKILL.md
+    scripts/octo-feather-start (was scripts/octo-lite-start)
+    scripts/octo-feather-state (was scripts/octo-lite-state)
+    Skillfile, Skillfile.lock
+    .skillfile/patches/skills/tdd/SKILL.md.patch
+
+Copied unmodified from octo-lite as a reference for the spec format:
+
+    spec/ (index.spec.html, domains/octo-lite.spec.html, adr/*.spec.html,
+    .style/, .viz/; .viz/vendor/echarts-5.5.1.min.js is Apache ECharts,
+    Apache-2.0)

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# octo-feather's published start command (ported from octo-lite-start,
+# octo-feather's published start command (ported from octo-lite's start command,
 # varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 #   octo-feather-start --director [--cwd DIR]
