@@ -8,7 +8,7 @@ Base: octo-lite `cc6fa4e`. Work is deltas on it.
 |---|---|---|---|
 | 0 | Remote box | 45m | Provider chosen by Tom; Debian/Ubuntu, 8+ GB RAM (several Pi agents plus pnpm/Playwright); Tailscale; git, gh, just, uv, node+pnpm, pi, herdr, jq; spec-chat review hosting reachable from Tom's browser |
 | 1 | Repo, decisions, plan | done | this repo |
-| 2 | Import octo-lite + Pi delta | 60m | octo-lite tree with NOTICE; spawns default `-- pi`; `.claude`/`.codex` projections and `CLAUDE.md` removed; Linear removed (GitHub Issues); meta-operator kept as director, spawns Pi; installer `--check` green on the remote |
+| 2 | Port octo-lite pieces into octo-feather + Pi delta | 60m | Built here in the octo-feather repo (octo-lite is a source, never installed on the remote); octo-lite-derived files with NOTICE; spawns default `-- pi`; `.claude`/`.codex` projections and `CLAUDE.md` removed; Linear removed (GitHub Issues); meta-operator kept as director, spawns Pi; installer `--check` green on the remote |
 | 3 | Comms smoke | 45m | `octo-lite-start --runtime pi` director spawns a Pi implementer, `herdr-say` brief, result returns to director pane |
 | 4 | Python template | 90m | uv, ruff strict, basedpyright strict, import-linter, pytest integration+E2E, app CLI `--json`, `just check`, pre-commit, GitHub Actions; target `AGENTS.md` with `Repo skills:` line |
 | 5 | TypeScript template | 90m | pnpm, tsc strictest, typescript-eslint strict-type-checked, dependency-cruiser, knip, Vitest integration, Playwright E2E if UI, app CLI `--json`, same `just check` |
