@@ -165,3 +165,7 @@ qa *args:
 # Print this Herdr session's octo-feather state directory.
 state:
     @octo-feather-state
+
+# New target repo at DEST from templates/LANG: tracked files, one commit on main, Spec Chat links unless --no-spec-chat; never `just setup` or GitHub (#21).
+new-repo lang dest *flags:
+    cd "{{invocation_directory()}}" && octo-feather-new-repo "{{lang}}" "{{dest}}" {{flags}}
