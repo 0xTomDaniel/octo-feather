@@ -1,0 +1,34 @@
+{
+  "spec": "remote.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-login-gate": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-signed-in": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-stays-private": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-after-logout": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-after-reboot": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-vm-only": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-no-url-in-records": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}
