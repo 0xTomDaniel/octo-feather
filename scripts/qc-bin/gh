@@ -67,7 +67,16 @@ def parse(args, flags, bools=()):
 
 
 def pick(obj, fields):
-    return {f: obj.get(f) for f in fields.split(",")} if fields else obj
+    """Only fields the snapshot stored: an absent one is a miss (refused, logged), never a made-up null."""
+    return picks([obj], fields)[0]
+
+
+def picks(rows, fields):
+    if not fields: return rows
+    want = [f for f in fields.split(",") if f]
+    gone = [f for f in want if any(f not in r for r in rows)]
+    if gone: miss(f"not in snapshot: {','.join(gone)} (stored: {','.join(sorted({k for r in rows for k in r}))})")
+    return [{f: r[f] for f in want} for r in rows]
 
 
 def check_repo(o):
@@ -131,7 +140,7 @@ def item_list(kind, args):
         if key in o: rows = [r for r in rows if f(r, o[key])]
     if o.get("draft"): rows = [r for r in rows if r.get("isDraft")]
     rows = sorted(rows, key=lambda r: -r["number"])[: int(o.get("limit", 30))]
-    if o.get("json"): emit([pick(r, o["json"]) for r in rows], o.get("jq"))
+    if o.get("json"): emit(picks(rows, o["json"]), o.get("jq"))
     for r in rows:
         print("\t".join(map(str, [r["number"], r["title"], r.get("headRefName", ", ".join(l["name"] for l in r.get("labels", []))), r["state"], r["updatedAt"]])))
     sys.exit(0)
@@ -219,7 +228,7 @@ def run_cmd(sub, args):
     for k, f in (("branch", "headBranch"), ("workflow", "workflowName"), ("status", "conclusion"), ("commit", "headSha")):
         if k in o: rows = [r for r in rows if r.get(f) == o[k] or (k == "status" and r.get("status") == o[k])]
     rows = rows[: int(o.get("limit", 20))]
-    if o.get("json"): emit([pick(r, o["json"]) for r in rows], o.get("jq"))
+    if o.get("json"): emit(picks(rows, o["json"]), o.get("jq"))
     for r in rows: print("\t".join(map(str, [r["status"], r["conclusion"], r["displayTitle"], r["workflowName"], r["headBranch"], r["event"], r["databaseId"], r["createdAt"]])))
     sys.exit(0)
 
@@ -248,7 +257,7 @@ def main(a):
         o, pos = parse(rest, {"-R": "repo", "--repo": "repo", "--json": "json", "-q": "jq", "--jq": "jq", "--required": "req"}, ("req",))
         d = load(f"pr/{num(pos[0]) if pos else 0}.json") or miss("pr not in snapshot")
         rows = d.get("statusCheckRollup") or []
-        if o.get("json"): emit([pick({**r, "state": r.get("conclusion") or r.get("state"), "bucket": (r.get("conclusion") or r.get("state") or "").lower()}, o["json"]) for r in rows], o.get("jq"))
+        if o.get("json"): emit(picks([{**r, "name": r.get("name") or r.get("context"), "link": r.get("detailsUrl") or r.get("targetUrl"), "state": r.get("conclusion") or r.get("state"), "bucket": (r.get("conclusion") or r.get("state") or "").lower()} for r in rows], o["json"]), o.get("jq"))
         for r in rows: print(f"{r.get('name') or r.get('context')}\t{(r.get('conclusion') or r.get('state') or r.get('status') or '').lower()}\t{r.get('detailsUrl') or r.get('targetUrl') or ''}")
         sys.exit(0 if all((r.get("conclusion") or r.get("state")) in ("SUCCESS", "NEUTRAL", "SKIPPED") for r in rows) else 8)
     if c == "api": api(a[1:])

@@ -142,10 +142,32 @@ run 3 "$st" 5 acceptance-a
 git config --unset core.hooksPath
 grep -q "status commit failed" <<< "$out" || fail "failed commit not reported: $out"
 [[ "$(git rev-parse HEAD)" == "$base" && -z "$(git status --porcelain)" ]] || fail "status file left modified: $(git status --porcelain)"
+# Snapshot misses on --json: an absent field is refused, logged and counted; a stored null is returned.
+sn="$t/snap"; mkdir -p "$sn/pr"
+echo '{"repo": "o/r", "fetched_at": "x", "counts": {}, "capped": []}' > "$sn/meta.json"
+echo '[{"databaseId": 7, "status": "in_progress", "conclusion": null, "headBranch": "gh1"}]' > "$sn/run-list.json"
+pr2='{"number": 2, "title": "T", "state": "OPEN", "headRefName": "gh1", "baseRefName": "main", "mergedAt": null, "author": {"login": "a"}, "updatedAt": "x"}'
+echo "$pr2" > "$sn/pr/2.json"; echo "[$pr2]" > "$sn/pr-list.json"
+echo '[{"number": 1, "title": "I", "state": "OPEN", "updatedAt": "x"}]' > "$sn/issue-list.json"
+echo '{"nameWithOwner": "o/r"}' > "$sn/repo.json"
+shim() { local want="$1"; shift; set +e; out="$(OCTO_FEATHER_GHSNAP="$sn" OCTO_FEATHER_GHSNAP_MISS="$t/miss.log" "$kit/scripts/qc-bin/gh" "$@" 2>&1)"; rc=$?; set -e
+  [[ "$rc" == "$want" ]] || fail "offline gh $* want exit $want, got $rc: $out"; }
+rm -f "$t/miss.log"; n=0
+for c in "run view 7 --json jobs" "run view 7 --json conclusion,jobs" "pr view 2 --json title,reviews" "pr list --json number,reviews" \
+         "issue list --json number,labels" "run list --json databaseId,jobs" "repo view --json nameWithOwner,description"; do
+  shim 1 $c; n=$((n + 1))
+  grep -q "not in snapshot: ${c##*[, ]} " <<< "$out" || fail "gh $c: no 'not in snapshot' refusal: $out"
+  grep -q null <<< "$out" && fail "gh $c answered a made-up null: $out"
+  [[ "$(wc -l < "$t/miss.log")" == "$n" ]] || fail "gh $c: refusal not logged/counted: $(cat "$t/miss.log")"
+done
+shim 0 run view 7 --json conclusion,status; [[ "$out" == *'"conclusion": null'* ]] || fail "genuine null run conclusion: $out"
+shim 0 pr view 2 --json mergedAt -q .mergedAt; [[ "$out" == null ]] || fail "genuine null mergedAt: $out"
+shim 0 pr list --json number,mergedAt; [[ "$out" == *'"mergedAt": null'* ]] || fail "genuine null in list: $out"
+[[ "$(wc -l < "$t/miss.log")" == "$n" ]] || fail "a genuine null was logged as a miss"
 # Kit on kit: a copy of the kit judging itself (kit inside the judged worktree) passes the proof.
 mkdir -p "$t/kc"; git -C "$kit" ls-files -z | (cd "$kit" && xargs -0 cp -P --parents -t "$t/kc" 2>/dev/null || true)
 cd "$t/kc"; git init -q -b main .; cp "$t/repo/docs/specs/demo.spec.html" docs/specs/zz-demo.spec.html
 "$S" init docs/specs/zz-demo.spec.html 0123abc >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
 Q="$t/kc/scripts/octo-feather-qc" run 0 docs/specs/zz-demo.status.json 5 acceptance-a
 grep -q "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" <<< "$out" || fail "kit-on-kit proof: $out"
-echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored)"
+echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, --json fields absent from the snapshot refused and counted, stored nulls kept)"
