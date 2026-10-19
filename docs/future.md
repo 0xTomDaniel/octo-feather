@@ -18,9 +18,9 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 
 octo-lite's supervisor listed `spec-chat-shape` and `spec-chat-review`, which live in the Spec Chat peer repo. They were dropped from `agents/supervisor.md` because nothing provides them on the remote; add them to its `skills` and `skillPath` once Spec Chat is installed there.
 
-## Jev QA recipe (name pending)
+## `just qc` and `just qa`
 
-Jev capture, replay and judging stay out of `just check`, which runs only deterministic checks (Tom, 2026-10-18). They get their own `just` recipe, name not chosen yet, run by the supervisor before a merge ask. `just check` fails if the justfile mentions it.
+Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target's product, `just qa` runs factory evals of the kit's own agents and loop. Both are stubs that exit 2. Neither runs inside `just check`, which stays deterministic and free; check-refs fails if a gate recipe calls them.
 
 ## Reviewer scope drift (gpt-6.1-sol)
 

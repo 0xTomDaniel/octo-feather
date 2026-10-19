@@ -47,8 +47,9 @@ check-refs:
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
-    if grep -nHi 'j[e]v' justfile; then
-      echo "check-refs: the QA judge above stays out of the justfile gate; just check is deterministic only (docs/future.md)" >&2; bad=1; fi
+    # The gate and its check-* recipes never reach the product judge or factory evals.
+    if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
+      echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
@@ -111,6 +112,14 @@ start cwd=invocation_directory():
 # Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "{{issue}}" --cwd "{{cwd}}"
+
+# Product QC: the Jev judge on a target's product. Not implemented yet (docs/future.md); never inside `just check`.
+qc *args:
+    @echo "just qc: not implemented yet (Jev product judge, docs/future.md)" >&2; exit 2
+
+# Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
+qa *args:
+    @echo "just qa: not implemented yet (factory evals, docs/future.md)" >&2; exit 2
 
 # Print this Herdr session's octo-feather state directory.
 state:

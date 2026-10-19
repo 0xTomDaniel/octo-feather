@@ -21,6 +21,6 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir).
-- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just state`.
+- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just state`, and the stubs `just qc` (Jev product judge) and `just qa` (factory evals), which never run inside `just check`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.
