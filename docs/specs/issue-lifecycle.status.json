@@ -1,0 +1,110 @@
+{
+  "spec": "issue-lifecycle.spec.html",
+  "accepted_commit": "44c4c92",
+  "criteria": {
+    "acceptance-kickoff-refuses": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-spec-pr": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-chat-not-acceptance": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-kickoff-lanes": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-from-main": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-built-in-merge": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-status-check": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-sub-issues": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tracer-tickets": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pilot-alone": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pilot-pr": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-one-head": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-interim": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parallel": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-integrate-conflict": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-integrate-red": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-ask-evidence": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-approved-head": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-main-merged": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-head-moved": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-fresh-review": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-wording-only": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-wording-behavior": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-on-main": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-repeat-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-gate-correction-lane": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

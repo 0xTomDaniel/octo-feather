@@ -1,0 +1,46 @@
+{
+  "spec": "comms.spec.html",
+  "accepted_commit": "44c4c92",
+  "criteria": {
+    "acceptance-guard-other-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parent-delivery": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-parent-gone": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-worker-ended": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-resume-live-space": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-close-report-first": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-escalation-content": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-no-tickets": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-finding-lines": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-lane-archive": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}
