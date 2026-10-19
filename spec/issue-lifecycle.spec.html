@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Issue lifecycle: spec to merge - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Issue lifecycle: spec to merge</h1>
+<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / issue-lifecycle.spec.html</nav>
+<p class="lede" data-anchor="context">How one work item moves through the factory, which steps stop the line, and what the owner decides. Roles are in <a href="./roles.spec.html">roles</a>; messages and lane state in <a href="./comms.spec.html">comms</a>; the gate recipes in <a href="./quality.spec.html">quality</a>.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-spec-first">As the owner, nothing is built for a work item until I accept its spec, so I approve what the work must do before agents spend on it.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-one-ask">As the owner, I get one merge ask per work item, relayed by the director, that already carries every piece of evidence I need to decide.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-deterministic-integration">As a supervisor, I combine my workers' branches with a script that either lands all of them with a green gate or lands nothing, so conflicts never get resolved by guesswork.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-wording-only">As the owner, a wording-only correction to a spec I accepted rides on my acceptance, while any change to what the spec makes the system do comes back to me.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-already-specified">As the owner, a ticket whose behavior the spec on main already states goes straight to delivery with no new spec review.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-no-build-before-accept" data-story="story-spec-first"><span data-acceptance-scenario>Given a supervisor with a shaped spec under review, When the owner opens the work item's workspace before pressing Accept spec,</span> <span data-acceptance-observable>Then the workspace shows the supervisor tab and no implementer tab.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-receipt-on-pr" data-story="story-spec-first"><span data-acceptance-scenario>Given the owner with a spec under review, When the owner presses Accept spec, then opens the work item's pull request,</span> <span data-acceptance-observable>Then the pull request shows one receipt comment quoting the action, its date, the spec path, the accepted commit, and who recorded it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-integrate-conflict" data-story="story-deterministic-integration"><span data-acceptance-scenario>Given a supervisor with two finished implementer branches that change the same lines, When the supervisor integrates both,</span> <span data-acceptance-observable>Then the lane branch is where it was before the second merge and the supervisor is told it stopped on a conflict, proven by an integration test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-integrate-red" data-story="story-deterministic-integration"><span data-acceptance-scenario>Given a supervisor with a finished implementer branch that turns the gate red, When the supervisor integrates it,</span> <span data-acceptance-observable>Then the lane branch is where it was before and the supervisor is told the gate is red, proven by an integration test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-merge-ask-evidence" data-story="story-one-ask"><span data-acceptance-scenario>Given a work item whose final head passed review, When the owner reads the merge ask the director relays,</span> <span data-acceptance-observable>Then it names the head, shows required checks passing, links the review verdict and the spec acceptance receipt, and lists every failed product criterion with its triage.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-fresh-review" data-story="story-one-ask" data-project-rule="Fresh independent review"><span data-acceptance-scenario>Given any change on a work item, When its supervisor sends the merge ask,</span> <span data-acceptance-observable>Then a code reviewer from a different model family than the implementer, started fresh for that head, has judged it, and no worker reviewed its own work.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-wording-only" data-story="story-wording-only"><span data-acceptance-scenario>Given the owner with an accepted spec, When the supervisor commits a correction that only rewords that spec, then the owner opens the pull request,</span> <span data-acceptance-observable>Then the pull request body names that commit as wording-only in one line, and the pull request shows no new acceptance receipt for it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-wording-behavior" data-story="story-wording-only"><span data-acceptance-scenario>Given the owner with an accepted spec, When the supervisor commits a spec change that alters a behavior the spec states,</span> <span data-acceptance-observable>Then the owner receives a review link for that change from the director before any merge ask.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-single-ticket" data-story="story-already-specified"><span data-acceptance-scenario>Given the owner with a ticket whose behavior the spec on main already states, When the supervisor delivers it and the owner opens the pull request,</span> <span data-acceptance-observable>Then no spec review was asked, and the pull request shows the ticket's work, a review verdict, and passing required checks.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-supervisor-delivery"><span data-boundary-responsibility>The supervisor role and the vendored <code>implement-spec</code> skill own the order of steps, briefs and the merge ask.</span> <span data-boundary-seam>Caller-facing seam: the brief the director sends and the merge ask the supervisor sends back.</span> <span data-boundary-dependency>Dependency direction: external-provider; the supervisor uses the integrate script, the Herdr wrappers and GitHub, and nothing calls the supervisor but its director.</span> <span data-boundary-scope>Observable scope: the lane's workspace, the work item's issues and pull request.</span></p>
+<p data-modular-boundary data-anchor="boundary-integrate"><span data-boundary-responsibility>The integrate script owns landing named worker branches or commits on one lane branch with a green gate, all or nothing.</span> <span data-boundary-seam>Caller-facing seam: <code>just integrate N REF...</code> and its exit status (0 landed, 1 conflict, 2 red gate).</span> <span data-boundary-dependency>Dependency direction: self-contained over git and the target's <code>just check</code>; it never pushes and calls no model.</span> <span data-boundary-scope>Observable scope: the lane branch head.</span></p>
+<p data-modular-boundary data-anchor="boundary-github"><span data-boundary-responsibility>GitHub owns issues, pull requests, receipts and merges as the one durable record.</span> <span data-boundary-seam>Caller-facing seam: the <code>gh</code> CLI.</span> <span data-boundary-dependency>Dependency direction: external-provider.</span> <span data-boundary-scope>Observable scope: issues, pull request comments and merge commits.</span></p>
+</section>
+
+<section data-anchor="lifecycle" id="lifecycle">
+<h2>The line</h2>
+<figure data-anchor="lifecycle-rail">
+<h3 data-anchor="lifecycle-rail-heading">One work item, spec to merge, by actor</h3>
+<div class="table-scroll" data-anchor="lifecycle-swimlane-wrap">
+<table data-anchor="lifecycle-swimlane">
+<thead><tr><th>#</th><th>Owner</th><th>Director</th><th>Supervisor</th><th>Workers and scripts</th></tr></thead>
+<tbody>
+<tr data-anchor="lc-file"><td>1</td><td></td><td>Files the GitHub issue and starts its supervisor with <code>just supervise N</code></td><td></td><td></td></tr>
+<tr data-anchor="lc-shape"><td>2</td><td></td><td></td><td>Shapes the spec with Spec Chat, commits it locally, registers it for review</td><td></td></tr>
+<tr data-anchor="lc-link"><td>3</td><td>Opens the review link</td><td>Relays the review link</td><td>Sends the review link up with <code>herdr-say --parent</code></td><td></td></tr>
+<tr data-anchor="lc-accept"><td>4</td><td><strong>Gate: presses Accept spec</strong></td><td></td><td>Records the acceptance receipt on the pull request</td><td></td></tr>
+<tr data-anchor="lc-tickets"><td>5</td><td></td><td></td><td>Files the tickets as GitHub issues (<code>to-tickets</code>)</td><td></td></tr>
+<tr data-anchor="lc-brief"><td>6</td><td></td><td></td><td>Briefs one implementer per ready ticket, in the pstack brief format</td><td>Implementers build in their own worktrees, run <code>just check</code>, merge the integration tip, report</td></tr>
+<tr data-anchor="lc-integrate"><td>7</td><td></td><td></td><td>Runs <code>just integrate N</code> on each finished branch</td><td>The script merges, runs <code>just check</code>, and stops on any conflict or red gate</td></tr>
+<tr data-anchor="lc-correct"><td>8</td><td></td><td></td><td>Starts a fresh corrector on the integration head, then integrates its commits</td><td>The corrector runs pstack <code>correct</code> in a fresh context</td></tr>
+<tr data-anchor="lc-review"><td>9</td><td></td><td></td><td>Starts a fresh code reviewer, routes findings to one implementer</td><td>The code reviewer returns a verdict and changes nothing</td></tr>
+<tr data-anchor="lc-qc"><td>10</td><td></td><td></td><td>Runs <code>just qc</code> once on the final head</td><td>The product judge rates the head against the spec</td></tr>
+<tr data-anchor="lc-ask"><td>11</td><td>Reads the merge ask</td><td>Relays the merge ask</td><td>Self-checks, then sends one merge ask up</td><td></td></tr>
+<tr data-anchor="lc-merge"><td>12</td><td><strong>Gate: says merge</strong></td><td>Records the receipt and merges, or tells the supervisor to</td><td>Closes the lane: issue closed, rows, worktrees and workers torn down, records archived</td><td></td></tr>
+</tbody>
+</table>
+</div>
+<figcaption data-anchor="lifecycle-rail-caption">A swimlane read top to bottom: each row is one step in the column of the actor that takes it. The two bold steps are the owner's only gates; everything between them runs without the owner.</figcaption>
+</figure>
+</section>
+<section data-anchor="stops" id="stops">
+<h2>Stops</h2>
+<div class="table-scroll" data-anchor="lifecycle-stops-wrap">
+<table data-anchor="lifecycle-stops"><caption>Where the line stops, and who moves it</caption>
+<thead><tr><th>Stop</th><th>Raised by</th><th>Next move</th></tr></thead>
+<tbody>
+<tr data-anchor="stop-conflict"><td>Integration conflict</td><td><code>just integrate N</code> (resets the lane branch to where it started)</td><td>Supervisor briefs an implementer to resolve it on its own branch, then integrates that branch</td></tr>
+<tr data-anchor="stop-red"><td>Red <code>just check</code> after a merge</td><td><code>just integrate N</code> (resets the lane branch)</td><td>Supervisor briefs an implementer with the failure</td></tr>
+<tr data-anchor="stop-review"><td>Review verdict is changes</td><td>Code reviewer</td><td>Supervisor sends every finding to one implementer, then a fresh reviewer judges the delta</td></tr>
+<tr data-anchor="stop-qc"><td>Red <code>just qc</code></td><td>Product judge</td><td>The merge ask waits; the supervisor triages each failed criterion</td></tr>
+<tr data-anchor="stop-scope"><td>Scope conflict or missing judgment</td><td>Any worker or the supervisor</td><td>Escalation one level up (see <a href="./comms.spec.html#escalation">comms</a>)</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section data-anchor="gates" id="gates">
+<h2>Owner gates</h2>
+<p data-anchor="gates-list">Spec acceptance and merge are the owner's gates, and so are any acceptance of unaccepted work, promotion and live traffic changes. No agent decides any of them.</p>
+<p data-anchor="gates-relay">Every gate reaches the owner through the director: the supervisor sends the review link and the merge ask up with <code>herdr-say --parent</code>, and never addresses the owner (ADR 0015).</p>
+<p data-anchor="acceptance-receipt">Every acceptance, of a spec or of delivered work, is recorded once, as a receipt comment on the work item's pull request, and everything that needs it reads that comment. The receipt quotes the owner's words or page action, gives the date, names what is accepted and the exact commit, and who recorded it. A spec accepted on the review page is recorded by the supervisor processing that hand-off; a spec accepted in chat is recorded by the director; delivered work is recorded by the agent receiving the merge instruction, before it merges.</p>
+<p data-anchor="gates-wording-only">A spec commit after acceptance that changes only wording, labels or anchors, adds or removes no criterion, and changes no stated behavior, value or outcome keeps the original acceptance. The supervisor decides and lists each such commit in the pull request body; a commit it cannot plainly call wording-only goes back for a fresh acceptance.</p>
+<p data-anchor="delivery-single-ticket">A ticket whose behavior the spec on main already states needs no shaping and no new acceptance: that spec's commit on main is the acceptance receipt, and one implementer, the corrector and one code reviewer still run.</p>
+<p data-anchor="delivery-qa-triage">Before the merge ask, the supervisor triages every product criterion the product judge failed: a code fault gets a repair ticket worked by a fresh implementer; a fault in how the criterion was judged is fixed and re-judged; a failure in behavior the lane did not change is listed as outside the lane with the reason. Every verdict the merge ask lists was judged at the merge ask's head.</p>
+</section>
+<section data-anchor="open-questions" id="open-questions">
+<h2>Open questions</h2>
+<p data-anchor="tbd-qc-stub" data-spec-tbd>TBD: <code>just qc</code> is a stub that always exits red, while a red product judge blocks the merge ask. Until the judge exists, what does the supervisor do at the qc step?
+  <button type="button" data-spec-choice="Skip qc and say so in the merge ask">Skip qc and say so in the merge ask (recommended)</button>
+  <button type="button" data-spec-choice="Block every merge ask until qc exists">Block every merge ask until qc exists</button></p>
+</section>
+
+</article>
+</body>
+</html>

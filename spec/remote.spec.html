@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Remote host and review hosting - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Remote host and review hosting</h1>
+<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / remote.spec.html</nav>
+<p class="lede" data-anchor="context">The factory runs on one dedicated VM, and the owner reviews specs in a browser through that VM's private HTTPS proxy. Box setup is done once by the box's owner, outside any lane.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-review-anywhere">As the owner, I open a spec's review link in an ordinary browser, sign in to exe.dev once, and review and accept the spec, with no SSH tunnel.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-private">As the owner, no one without access to the VM's exe.dev account can read a spec under review.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-survives">As the owner, review links keep working after I log out of the VM and after the VM restarts.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-dedicated">As the owner, agents never run on my laptop, so the factory cannot touch my personal files.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-login-gate" data-story="story-private"><span data-acceptance-scenario>Given a visitor not signed in to exe.dev, When the visitor opens a spec's review link,</span> <span data-acceptance-observable>Then the browser shows the exe.dev login page and no spec content.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-signed-in" data-story="story-review-anywhere"><span data-acceptance-scenario>Given the owner signed in to exe.dev, When the owner opens a spec's review link,</span> <span data-acceptance-observable>Then the spec loads with its review controls, including Accept spec.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-stays-private" data-story="story-private" data-project-rule="Review stays private"><span data-acceptance-scenario>Given the box's owner, When any change to box setup or the review service is applied,</span> <span data-acceptance-observable>Then exe.dev still reports the VM's sharing mode as Private and no share link or added user exists.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-after-logout" data-story="story-survives"><span data-acceptance-scenario>Given a supervisor that registered a spec, When every SSH session to the VM ends, then the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-after-reboot" data-story="story-survives"><span data-acceptance-scenario>Given a registered spec, needs an induced failure: the VM restarts, When the VM is back up and the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads with no one having started the review service by hand.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-vm-only" data-story="story-dedicated"><span data-acceptance-scenario>Given the owner with a work item in progress, When the owner opens the factory's Herdr session on the VM over SSH,</span> <span data-acceptance-observable>Then it shows the director and the work item's supervisor, and the owner's laptop runs no agent of the factory.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-no-url-in-records" data-story="story-private" data-project-rule="No review URLs in durable records"><span data-acceptance-scenario>Given a supervisor, When any change opens or edits an issue or pull request,</span> <span data-acceptance-observable>Then it holds no review URL.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-vm"><span data-boundary-responsibility>The VM owns running every agent, Herdr session, toolchain and the review service.</span> <span data-boundary-seam>Caller-facing seam: SSH to <code>&lt;vm&gt;.exe.xyz</code> and exe.dev's admin commands.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on exe.dev.</span> <span data-boundary-scope>Observable scope: the VM's services and sharing mode.</span></p>
+<p data-modular-boundary data-anchor="boundary-review"><span data-boundary-responsibility>Spec Chat's review service owns serving specs, review spools and acceptance.</span> <span data-boundary-seam>Caller-facing seam: the lane registration command and the review URL.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit depends on Spec Chat, which names no kit path.</span> <span data-boundary-scope>Observable scope: the review page and its hand-offs.</span></p>
+<p data-modular-boundary data-anchor="boundary-proxy"><span data-boundary-responsibility>exe.dev's HTTPS proxy owns TLS and the login gate.</span> <span data-boundary-seam>Caller-facing seam: <code>https://&lt;vm&gt;.exe.xyz:&lt;port&gt;/</code> and the VM's sharing mode.</span> <span data-boundary-dependency>Dependency direction: external-provider.</span> <span data-boundary-scope>Observable scope: the login redirect and the served page.</span></p>
+</section>
+
+<section data-anchor="host" id="host">
+<h2>The VM</h2>
+<div class="table-scroll" data-anchor="host-table-wrap">
+<table data-anchor="host-table"><caption>The remote</caption>
+<thead><tr><th>Item</th><th>Contract</th></tr></thead>
+<tbody>
+<tr data-anchor="host-vm"><td>Host</td><td>One exe.dev VM, <code>&lt;vm&gt;.exe.xyz</code>, 4 vCPU and 8 GB, Ubuntu (ADR 0005). Not a shared home server, not the assistant's own host</td></tr>
+<tr data-anchor="host-never-laptop"><td>Never</td><td>The owner's laptop runs no agent, Herdr session or toolchain; a laptop clone is for reading and editing docs only</td></tr>
+<tr data-anchor="host-tools"><td>Toolchain</td><td>git, gh, jq, just, python3, uv, node, pnpm, Herdr and Pi; <code>just install-check</code> lists what is missing</td></tr>
+<tr data-anchor="host-models"><td>Models</td><td>Every model call goes through the deployment's model proxy, keyed on the VM; no provider sign-in on the VM</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section data-anchor="review-hosting" id="review-hosting">
+<h2>Review hosting</h2>
+<div class="table-scroll" data-anchor="review-table-wrap">
+<table data-anchor="review-table"><caption>Spec review hosting on the VM</caption>
+<thead><tr><th>Item</th><th>Contract</th></tr></thead>
+<tbody>
+<tr data-anchor="review-service"><td>Service</td><td>Spec Chat's review server, from a clone on the VM, runs as a systemd user service and restarts after a crash and at boot</td></tr>
+<tr data-anchor="review-bind"><td>Listening</td><td>The VM's internal address on an approved port (7400), which only exe.dev's HTTPS proxy can reach; it never listens on loopback, which the proxy cannot reach</td></tr>
+<tr data-anchor="review-proxy"><td>Exposure</td><td>exe.dev's HTTPS proxy with the VM's sharing mode Private: a request without an exe.dev login is redirected to the login page, so that login is the gate. The exe.dev share port (8000) is not used by Spec Chat</td></tr>
+<tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/spec-chat/&lt;spec path&gt;</code></td></tr>
+<tr data-anchor="review-register"><td>A lane registers a spec</td><td><code>review-host.py register --slug &lt;lane&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill; a lane passes no exposure argument</td></tr>
+<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked for the user in <code>~/.agents/skills</code>; the supervisor loads them through <code>externalSkills</code></td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="review-setup">Box setup installs the service once with Spec Chat's installer, passing <code>--public &lt;vm&gt;.exe.xyz --service</code>. Spec Chat's word <q>public</q> only means it binds an address other than loopback; exposure stays private because the exe.dev proxy and its login sit in front.</p>
+<p data-anchor="review-never-public">Never make the VM's exe.dev sharing public: a public share has no login and anyone with the link reads the spec.</p>
+</section>
+<section data-anchor="open-questions" id="open-questions">
+<h2>Open questions</h2>
+<p data-anchor="tbd-printed-url" data-spec-tbd>TBD: The review service prints links on the VM's internal address over plain HTTP, not the working <code>https://&lt;vm&gt;.exe.xyz:7400/spec-chat/&lt;spec path&gt;</code> form, so a supervisor must rewrite the link before sending it up. Fix in Spec Chat, or rewrite in the kit?
+  <button type="button" data-spec-choice="Fix the printed URL in Spec Chat">Fix the printed URL in Spec Chat (recommended)</button>
+  <button type="button" data-spec-choice="Rewrite the link in the kit">Rewrite the link in the kit</button></p>
+<p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's installer does not yet link its skills into <code>~/.agents/skills</code>, so that link is made by hand on the VM; the one-line upstream change is open, not merged.</p>
+<p data-anchor="tbd-model-key" data-spec-tbd="later">TBD: The model proxy key sits in plain text on the VM; swap it for a revocable key.</p>
+</section>
+
+</article>
+</body>
+</html>

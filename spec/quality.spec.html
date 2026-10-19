@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Quality: QA of the factory, QC of the product - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Quality: QA of the factory, QC of the product</h1>
+<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / quality.spec.html</nav>
+<p class="lede" data-anchor="context">The factory has to be trusted as much as what it makes, so octo-feather keeps two separate quality loops: assurance of the factory (QA) and control of the product (QC). Each has its own gates and evidence.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="false" data-anchor="story-fast-gate">As an implementer, one fast, free gate tells me whether my change can be handed off, and it says the same thing on every machine.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-product-judged">As the owner, every merge ask says whether a judge saw the product meet its spec, so I do not discover fuzzy failures after merge.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-factory-proven">As the owner, a change to how agents are instructed comes with proof that it fixes what it claims, so prompts do not drift by feel.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-decisions-auditable">As the owner, agents' run decisions are recorded in one checkable log, so a different model can audit a run and repeated mistakes can be mined.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-gate-green" data-story="story-fast-gate" data-project-rule="Green gate before hand-off"><span data-acceptance-scenario>Given an implementer, When any change is ready for hand-off,</span> <span data-acceptance-observable>Then the target's <code>just check</code> is green at its head, and the change was not handed off while it was red.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-gate-no-model" data-story="story-fast-gate" data-project-rule="Deterministic gate"><span data-acceptance-scenario>Given a maintainer, When any change makes a recipe inside <code>just check</code> reach the product judge or the factory evals,</span> <span data-acceptance-observable>Then the gate fails, saying it stays deterministic and free.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-public-surfaces" data-story="story-fast-gate" data-project-rule="Integration and end-to-end tests only"><span data-acceptance-scenario>Given an implementer adding tests, When any change adds a test,</span> <span data-acceptance-observable>Then the test drives the app's CLI, HTTP or UI and calls no internal function or module directly.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-qc-listed" data-story="story-product-judged"><span data-acceptance-scenario>Given a supervisor with a final head the code reviewer passed, When the owner reads the merge ask,</span> <span data-acceptance-observable>Then it shows the product judge's verdict for that head, per acceptance criterion.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-prompt-eval" data-story="story-factory-proven" data-project-rule="Prompt changes ship an eval"><span data-acceptance-scenario>Given a maintainer, When any change edits a prompt, a role file's contract, or a vendored-skill patch,</span> <span data-acceptance-observable>Then the change carries an eval case that fails before it and passes after it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-decision-log-schema" data-story="story-decisions-auditable"><span data-acceptance-scenario>Given an agent that appends a decision log line missing its why field, When the gate runs,</span> <span data-acceptance-observable>Then the gate fails naming the line and the missing field.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-gate"><span data-boundary-responsibility><code>just check</code> owns every deterministic check, in the kit and in each target.</span> <span data-boundary-seam>Caller-facing seam: <code>just check</code> and its exit status.</span> <span data-boundary-dependency>Dependency direction: self-contained; it calls no model and no network service.</span> <span data-boundary-scope>Observable scope: gate output naming each failure and its fix.</span></p>
+<p data-modular-boundary data-anchor="boundary-judge"><span data-boundary-responsibility>The product judge owns rating a head against its spec's acceptance criteria.</span> <span data-boundary-seam>Caller-facing seam: <code>just qc</code>, run by the supervisor.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on a model through the deployment's proxy and on the app CLI's output.</span> <span data-boundary-scope>Observable scope: per-criterion verdicts in the merge ask.</span></p>
+<p data-modular-boundary data-anchor="boundary-evals"><span data-boundary-responsibility>Factory eval cases own proving a change to the kit's instructions.</span> <span data-boundary-seam>Caller-facing seam: <code>just qa</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; cases run kit roles through <code>pi-role</code>.</span> <span data-boundary-scope>Observable scope: pass or fail per case.</span></p>
+</section>
+
+<section data-anchor="split" id="split">
+<h2>QA and QC</h2>
+<div class="table-scroll" data-anchor="qa-qc-table-wrap">
+<table data-anchor="qa-qc-table"><caption>Two kinds of quality, kept apart</caption>
+<thead><tr><th></th><th>QA: assurance of the factory</th><th>QC: control of the product</th></tr></thead>
+<tbody>
+<tr data-anchor="qaqc-object"><td>Checks</td><td>The kit itself: roles, prompts, gates, escalation, skills</td><td>The product a work item delivers</td></tr>
+<tr data-anchor="qaqc-question"><td>Asks</td><td>Does the factory behave as its contracts say?</td><td>Does this head do what its accepted spec says?</td></tr>
+<tr data-anchor="qaqc-recipe"><td>Recipe</td><td><code>just qa</code>: eval cases of the kit's own agents and loop <span class="k" data-build="stub">stub</span></td><td><code>just check</code> for what is deterministic; <code>just qc</code> for the product judge <span class="k" data-build="stub">stub</span></td></tr>
+<tr data-anchor="qaqc-when"><td>Runs</td><td>On every change to a prompt, role file or vendored-skill patch</td><td><code>just check</code> on every change; <code>just qc</code> once on the final head, by the supervisor, before the merge ask</td></tr>
+<tr data-anchor="qaqc-blocks"><td>Blocks</td><td>The kit change that fails its eval case</td><td>A red gate blocks hand-off; a red judge blocks the merge ask</td></tr>
+</tbody>
+</table>
+</div>
+<div class="table-scroll" data-anchor="recipes-table-wrap">
+<table data-anchor="recipes-table"><caption>The three recipes</caption>
+<thead><tr><th>Recipe</th><th>Properties</th><th>Holds</th></tr></thead>
+<tbody>
+<tr data-anchor="recipe-check"><td><code>just check</code></td><td>Fast, free, deterministic; identical for agents, git hooks and CI; never calls a model</td><td>In the kit: script syntax, Pi-only and GitHub-only references, retired words, no dashes, skill frontmatter, role files, the integrate test. In a target: lint, types, structure, integration and end-to-end tests, and the decision log schema <span class="k" data-build="decided-not-built">decided, not yet built</span></td></tr>
+<tr data-anchor="recipe-qc"><td><code>just qc</code> <span class="k" data-build="stub">stub</span></td><td>Model-judged, so fuzzy; run once per merge ask, never inside <code>just check</code></td><td>The product judge rating the head against the spec's acceptance criteria (Jev)</td></tr>
+<tr data-anchor="recipe-qa"><td><code>just qa</code> <span class="k" data-build="stub">stub</span></td><td>Model-run eval cases; never inside <code>just check</code></td><td>Eval cases shaped as <code>cases.json</code>, a harness and graders, each failing before its change and passing after</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="quality-reviewer">The code reviewer and the corrector are QC on code: a fresh code reviewer from another model family judges every head, blocking only on a failed acceptance criterion, broken behavior or a hard standard; the corrector runs pstack <code>correct</code> in a fresh context before review.</p>
+</section>
+<section data-anchor="ladder" id="ladder">
+<h2>Verification ladder</h2>
+<figure data-anchor="verification-ladder">
+<h3 data-anchor="verification-ladder-heading">Fix a mistake as high on this ladder as it will go</h3>
+<ol data-anchor="verification-ladder-list">
+<li data-anchor="ladder-structure"><strong>Structure and types</strong> make the mistake impossible.</li>
+<li data-anchor="ladder-checks"><strong>A check in <code>just check</code></strong> rejects it with an error that names the fix.</li>
+<li data-anchor="ladder-judges"><strong>A model judge</strong> catches what is fuzzy (does the result match the spec).</li>
+<li data-anchor="ladder-prose"><strong>Prose</strong> in a role file or skill, last, only for process behavior nothing above can catch.</li>
+</ol>
+<figcaption data-anchor="verification-ladder-caption">From ADR 0008. Higher rungs are more trusted; the owner sets direction and criteria and stays the final gate.</figcaption>
+</figure>
+</section>
+<section data-anchor="decision-log" id="decision-log">
+<h2>Decision log</h2>
+<div class="table-scroll" data-anchor="decision-log-table-wrap">
+<table data-anchor="decision-log-table"><caption>Decision log line: one JSON object per line, append-only</caption>
+<thead><tr><th>Field</th><th>Holds</th></tr></thead>
+<tbody>
+<tr data-anchor="dlog-ts"><td><code>ts</code></td><td>UTC instant</td></tr>
+<tr data-anchor="dlog-agent"><td><code>agent</code></td><td>Agent name</td></tr>
+<tr data-anchor="dlog-phase"><td><code>phase</code></td><td>Where in the lifecycle</td></tr>
+<tr data-anchor="dlog-decision"><td><code>decision</code></td><td>What was chosen</td></tr>
+<tr data-anchor="dlog-why"><td><code>why</code></td><td>Reason</td></tr>
+<tr data-anchor="dlog-evidence"><td><code>evidence</code></td><td>What it rests on</td></tr>
+<tr data-anchor="dlog-result"><td><code>result</code></td><td>How it turned out</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="decision-log-rule">Agents append run decisions to one JSONL file checked by a JSON schema inside <code>just check</code> <span class="k" data-build="decided-not-built">decided, not yet built</span>. A different model audits it at the end of a run, and <code>correct</code> reads it for repeated mistakes. JSONL, not TSV, because free text with a tab or newline silently corrupts a TSV row (ADR 0010).</p>
+</section>
+<section data-anchor="open-questions" id="open-questions">
+<h2>Open questions</h2>
+<p data-anchor="tbd-judge-model" data-spec-tbd>TBD: Which model runs the product judge in <code>just qc</code>, and does it need a different family from the implementer like the code reviewer?
+  <button type="button" data-spec-choice="A different family, like the reviewer">A different family, like the reviewer (recommended)</button>
+  <button type="button" data-spec-choice="Any allowed model">Any allowed model</button></p>
+<p data-anchor="tbd-decision-log-home" data-spec-tbd="later">TBD: Where each target keeps its decision log file and schema.</p>
+<p data-anchor="tbd-reviewer-drift" data-spec-tbd="later">TBD: An eval case where a finding outside the acceptance criteria must not block, to watch the gpt-6.1-sol reviewer for scope drift.</p>
+</section>
+
+</article>
+</body>
+</html>

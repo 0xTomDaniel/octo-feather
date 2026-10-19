@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skills and their sources - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Skills and their sources</h1>
+<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / skills.spec.html</nav>
+<p class="lede" data-anchor="context">Skills are plain folders in <code>.agents/skills/</code>, the cross-client Agent Skills location (ADR 0018). Skills with an upstream in Matt Pocock's skills or pstack are vendored from it and patched only where a decided ADR needs it; octo-lite supplies requirements, not skill text.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="false" data-anchor="story-upstream-base">As a maintainer, every skill with a Matt or pstack equivalent uses that upstream text plus a small patch, so the kit stays lighter than octo-lite and picks up upstream fixes.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-patch-reason">As a maintainer, every patch says on its first line which decision it serves, so I can tell whether it is still needed.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-role-skills">As the owner, each role loads only the skills its role file lists, so one role's instructions never leak into another.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-licences">As the owner, every vendored skill's licence and author is credited, so the kit can be shared.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-patch-only" data-story="story-upstream-base story-patch-reason" data-project-rule="Vendored skills change only by patch"><span data-acceptance-scenario>Given a maintainer, When any change edits the text of a vendored skill,</span> <span data-acceptance-observable>Then the edit lands as a patch in the skill's patch folder whose first line names the ADR it serves, and re-applying the pinned upstream with its patches reproduces the committed skill.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-skill-frontmatter" data-story="story-role-skills"><span data-acceptance-scenario>Given a maintainer, When any change adds a skill without a name or description in its frontmatter,</span> <span data-acceptance-observable>Then the gate fails naming the skill.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-only-listed" data-story="story-role-skills"><span data-acceptance-scenario>Given a supervisor in a target repository that has its own skills folder, When it starts an implementer there,</span> <span data-acceptance-observable>Then the implementer has loaded exactly the skills its role file lists, and none from the target's folder or the kit's by discovery.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-external-skill" data-story="story-role-skills"><span data-acceptance-scenario>Given a box with Spec Chat's skills installed for the user, When the director starts a supervisor,</span> <span data-acceptance-observable>Then the supervisor has loaded Spec Chat's shaping and review skills beside the kit skills its role file lists.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-notice" data-story="story-licences" data-project-rule="Vendored skills credited in NOTICE"><span data-acceptance-scenario>Given a maintainer, When any change vendors a new upstream skill,</span> <span data-acceptance-observable>Then NOTICE names that skill with its upstream, pin, licence and author.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-skillfile"><span data-boundary-responsibility>The Skillfile owns which upstream skills are vendored, at which pin, and how patches are kept across updates.</span> <span data-boundary-seam>Caller-facing seam: <code>Skillfile</code>, <code>Skillfile.lock</code> and <code>.skillfile/patches/skills/&lt;name&gt;/</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the upstream repositories and the skillfile tool.</span> <span data-boundary-scope>Observable scope: the committed folders in <code>.agents/skills/</code>.</span></p>
+<p data-modular-boundary data-anchor="boundary-skill-loading"><span data-boundary-responsibility><code>pi-role</code> owns which skills a role gets: discovery off, one load per listed skill, external skills from the user's skill folders.</span> <span data-boundary-seam>Caller-facing seam: the role file's <code>skills</code> and <code>externalSkills</code> keys.</span> <span data-boundary-dependency>Dependency direction: self-contained over the kit checkout and the user's skill folders.</span> <span data-boundary-scope>Observable scope: the skills a started agent reports.</span></p>
+</section>
+
+<section data-anchor="vendored" id="vendored">
+<h2>Vendored from upstream</h2>
+<div class="table-scroll" data-anchor="skills-table-wrap">
+<table data-anchor="skills-table"><caption>Vendored skills: upstream base, pin, licence, and the one reason each is patched</caption>
+<thead><tr><th>Skill</th><th>Upstream, pin, licence</th><th>Patch reason (first line of its patch)</th><th>Loaded by</th></tr></thead>
+<tbody>
+<tr data-anchor="skill-tdd"><td><code>tdd</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0002: seams are public surfaces only; ADR 0015: seams come from the ticket</td><td>implementer</td></tr>
+<tr data-anchor="skill-implement"><td><code>implement</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked; the gate is <code>just check</code>; ADR 0007 no self-review</td><td>implementer</td></tr>
+<tr data-anchor="skill-implement-spec"><td><code>implement-spec</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues; ADR 0011 Herdr workers; ADR 0007 fresh reviewer; ADR 0015 merge ask up the chain</td><td>supervisor</td></tr>
+<tr data-anchor="skill-to-tickets"><td><code>to-tickets</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues</td><td>supervisor</td></tr>
+<tr data-anchor="skill-grill-with-docs"><td><code>grill-with-docs</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked</td><td>supervisor</td></tr>
+<tr data-anchor="skill-grilling"><td><code>grilling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>supervisor</td></tr>
+<tr data-anchor="skill-domain-modeling"><td><code>domain-modeling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>supervisor</td></tr>
+<tr data-anchor="skill-code-review"><td><code>code-review</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0007 fresh reviewer; ADR 0015 escalate with <code>--parent</code>; block only on criteria, broken behavior or hard standards; sequential axes</td><td>code reviewer</td></tr>
+<tr data-anchor="skill-correct"><td><code>correct</code></td><td>cursor/plugins@0b8e952 (pstack), MIT</td><td>ADR 0012 model-invoked</td><td>corrector</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="vendored-model-invoked">Matt's workflow skills are model-invoked in the kit: each patch drops <code>disable-model-invocation</code> where upstream sets it, because agents, not a person typing slash commands, run the workflow (ADR 0012).</p>
+<p data-anchor="vendored-brief">The supervisor's brief format is pstack orchestrate's: GOAL, SCOPE, CONTEXT, ACCEPTANCE, VERIFY, TIMEBOX, at the same pin and licence.</p>
+</section>
+<section data-anchor="local" id="local">
+<h2>Authored here</h2>
+<div class="table-scroll" data-anchor="local-skills-table-wrap">
+<table data-anchor="local-skills-table"><caption>Kit skills authored here</caption>
+<thead><tr><th>Skill</th><th>For</th></tr></thead>
+<tbody>
+<tr data-anchor="local-herdr-comms"><td><code>herdr-comms</code></td><td>Spawning, messaging, parking, waking and closing agents, with the Herdr wrappers in its assets</td></tr>
+<tr data-anchor="local-github"><td><code>github</code></td><td>Issues, pull requests and consent rules</td></tr>
+<tr data-anchor="local-git"><td><code>commit</code>, <code>pull</code>, <code>push</code></td><td>Git moves</td></tr>
+<tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+<section data-anchor="loading" id="loading">
+<h2>Where skills live and how they load</h2>
+<p data-anchor="loading-folder">Every kit skill, vendored or local, is a folder in <code>.agents/skills/</code>; role files stay in <code>agents/</code>.</p>
+<p data-anchor="loading-listed">A role loads exactly the skills its file lists: discovery is off for every role, so neither the kit's nor a target repository's <code>.agents/skills</code> loads by itself. A target's own skills reach an implementer only when the target's <code>AGENTS.md</code> declares them on its <code>Repo skills:</code> line and the implementer loads them by name.</p>
+<p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found in the user's <code>~/.agents/skills</code>, then <code>~/.pi/agent/skills</code>.</p>
+</section>
+<section data-anchor="open-questions" id="open-questions">
+<h2>Open questions</h2>
+<p data-anchor="tbd-verification-skill" data-spec-tbd="later">TBD: Vendor pstack <code>create-verification-skill</code> for the templates.</p>
+<p data-anchor="tbd-unvendored" data-spec-tbd="later">TBD: Matt's <code>handoff</code>, <code>to-spec</code> and <code>improve-codebase-architecture</code> stay unvendored until a role needs them.</p>
+</section>
+
+</article>
+</body>
+</html>

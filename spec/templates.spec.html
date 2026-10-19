@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Project templates - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Project templates</h1>
+<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / templates.spec.html</nav>
+<p class="lede" data-anchor="context">The kit is stack-agnostic: a target repository starts from one of two templates, Python or TypeScript, that already carry a strict gate, an app CLI and a target <code>AGENTS.md</code>, so agents land on a codebase that resists sloppy changes (ADR 0008).</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-start-strict">As the owner starting a new project, I pick Python or TypeScript and get a repository whose gate already rejects type errors, lint, structure breaks and failing tests.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-cli-surface">As an implementer, I verify my work through the app's CLI with <code>--json</code>, the same surface the end-to-end tests and the product judge use (ADR 0009).</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-same-gate">As the owner, the gate an agent runs is the gate the git hook and CI run, so green means the same thing everywhere.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-fresh-green" data-story="story-start-strict"><span data-acceptance-scenario>Given the owner with a new repository from either template, When the owner runs its gate,</span> <span data-acceptance-observable>Then the gate passes and reports lint, types, structure and tests each as checked.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-type-error" data-story="story-start-strict"><span data-acceptance-scenario>Given an implementer in a repository from either template, When it commits a change with a type error,</span> <span data-acceptance-observable>Then the commit is refused by the gate, naming the file and line.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-layer-break" data-story="story-start-strict"><span data-acceptance-scenario>Given an implementer in a repository from either template, When it adds an import that crosses a forbidden layer,</span> <span data-acceptance-observable>Then the gate fails naming the rule broken.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-cli-json" data-story="story-cli-surface" data-project-rule="App CLI speaks JSON"><span data-acceptance-scenario>Given an implementer in a repository from either template, When it runs any app command with <code>--json</code>,</span> <span data-acceptance-observable>Then the command prints one JSON document describing the result.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-same-gate" data-story="story-same-gate" data-project-rule="One gate everywhere"><span data-acceptance-scenario>Given the owner, When any change is pushed from a template-born repository,</span> <span data-acceptance-observable>Then CI runs the same <code>just check</code> the agents and the git hook run, and a red result blocks the pull request.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-target-agents-md" data-story="story-start-strict"><span data-acceptance-scenario>Given the owner with a new repository from either template, When an implementer starts in it,</span> <span data-acceptance-observable>Then the implementer has loaded the repository's AGENTS.md, which names the gate and the repository's own skills.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-template"><span data-boundary-responsibility>Each template owns a starter repository: toolchain, gate, app CLI, tests and target <code>AGENTS.md</code>.</span> <span data-boundary-seam>Caller-facing seam: <code>just check</code>, the app CLI with <code>--json</code>, and the <code>AGENTS.md</code> <code>Repo skills:</code> line.</span> <span data-boundary-dependency>Dependency direction: self-contained; a template names no kit path and the kit reads only those seams.</span> <span data-boundary-scope>Observable scope: the generated repository and its gate output.</span></p>
+</section>
+
+<section data-anchor="templates" id="templates">
+<h2>Templates</h2>
+<div class="table-scroll" data-anchor="templates-table-wrap">
+<table data-anchor="templates-table"><caption>The two starter templates</caption>
+<thead><tr><th>Concern</th><th>Python</th><th>TypeScript</th></tr></thead>
+<tbody>
+<tr data-anchor="tpl-deps"><td>Packages</td><td>uv</td><td>pnpm</td></tr>
+<tr data-anchor="tpl-lint"><td>Lint</td><td>ruff, every rule enabled, plus ruff format</td><td>typescript-eslint strict-type-checked</td></tr>
+<tr data-anchor="tpl-types"><td>Types</td><td>basedpyright, strict</td><td>tsc, strictest settings</td></tr>
+<tr data-anchor="tpl-structure"><td>Structure</td><td>import-linter: the core never imports the CLI</td><td>dependency-cruiser: the core never imports the CLI, no cycles; knip for dead code</td></tr>
+<tr data-anchor="tpl-tests"><td>Tests</td><td>pytest, integration and end-to-end only</td><td>Vitest, integration and end-to-end through the app CLI; Playwright end-to-end when the app has a UI <span class="k" data-build="decided-not-built">decided, not yet built</span></td></tr>
+<tr data-anchor="tpl-cli"><td>App surface</td><td>An app CLI whose commands print <code>--json</code></td><td>An app CLI whose commands print <code>--json</code></td></tr>
+<tr data-anchor="tpl-gate"><td>Gate</td><td><code>just check</code></td><td><code>just check</code></td></tr>
+<tr data-anchor="tpl-hooks"><td>Wiring</td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="templates-tests-rule">Tests drive only public surfaces, the app CLI, HTTP or UI; there are no unit tests of internals (ADR 0002).</p>
+<p data-anchor="templates-location">Templates live in the kit at <code>templates/python</code> and <code>templates/typescript</code>.</p>
+</section>
+<section data-anchor="open-questions" id="open-questions">
+<h2>Open questions</h2>
+<p data-anchor="tbd-integrate-in-target" data-spec-tbd>TBD: In a target repository, <code>just integrate</code> exists only because the template's justfile defines it; a target not made from a template has no such recipe. Where should the supervisor's integrate command live?
+  <button type="button" data-spec-choice="The supervisor calls the kit's integrate script directly">The supervisor calls the kit's integrate script directly (recommended)</button>
+  <button type="button" data-spec-choice="Every target defines the recipe">Every target defines the recipe</button></p>
+<p data-anchor="tbd-template-instantiation" data-spec-tbd>TBD: How the owner creates a repository from a template.
+  <button type="button" data-spec-choice="A just recipe that copies the template">A just recipe that copies the template (recommended)</button>
+  <button type="button" data-spec-choice="GitHub template repositories">GitHub template repositories</button></p>
+</section>
+
+</article>
+</body>
+</html>
