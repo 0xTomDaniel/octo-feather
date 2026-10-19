@@ -1,33 +1,37 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-qc with a fake `pi` and a fake
-# `herdr` on PATH (no model call, no real Herdr session): only passed criteria
+# `herdr` on PATH (no model call; a real Herdr only in the pane test on a box): only passed criteria
 # become built, one status-only commit, a same-family judge, a dirty tree, an
 # unusable report and a judge that writes are refused, reports never overwrite;
 # the sandbox (#33): a judge trying each escape fails at every one, a failed
 # proof aborts before the judge, leftovers are killed and agents counted,
 # masks cannot be unmounted, a nested-namespace survivor dies, Pi credential
-# copies cannot persist outside the worktree and fail the run inside it,
+# copies cannot persist outside the worktree and fail the run inside it, a pane
+# the judge spawns runs in its PID namespace and dies with it (real herdr when
+# installed, else the fake; the test prints which),
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"
+stop() { local f; for f in "$t"/pids/*; do [[ -f "$f" ]] && kill -- -"$(cat "$f")" 2>/dev/null; done; rm -rf "$t"; }
+trap stop EXIT
 fail() { echo "qc test: $*" >&2; exit 1; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports"
-unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION SPEC_CHAT_STATE
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION SPEC_CHAT_STATE HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
 export GH_TOKEN=SECRET-token OCTO_FEATHER_PARENT=wX:p9 HERDR_PANE_ID=p9 HERDR_TAB_ID=t9 HERDR_WORKSPACE_ID=w9
 live="$HOME/.local/state/octo-feather"
-mkdir -p "$HOME/.config/herdr" "$HOME/.config/gh" "$live/lanes/archive" "$t/bin" "$t/repo/docs/specs"
+mkdir -p "$HOME/.config/herdr" "$HOME/.config/gh" "$live/lanes/archive" "$t/bin" "$t/fakeherdr" "$t/pids" "$t/repo/docs/specs"
 echo default > "$HOME/.config/herdr/herdr.sock"
 echo 'oauth_token: SECRET-gh' > "$HOME/.config/gh/hosts.yml"; echo 'https://x:SECRET-git@github.com' > "$HOME/.git-credentials"
 echo LIVE > "$live/lanes/gh9.toml"; echo ARCHIVED > "$live/lanes/archive/gh1.toml"; echo '{"director":1}' > "$live/director.handoffs.jsonl"
 echo 'pane = "LIVE"' > "$live/director.toml"
 mkdir -p "$HOME/.pi/agent"; echo '{"k": "SECRET-pi-auth-0123456789"}' > "$HOME/.pi/agent/auth.json"
 echo '{"providers": {"p": {"apiKey": "SECRET-pi-models-0123456789"}}}' > "$HOME/.pi/agent/models.json"
-cat > "$t/bin/herdr" <<'EOF'
+cat > "$t/fakeherdr/herdr" <<'EOF'
 #!/usr/bin/env bash
 # Fake Herdr: a session's socket is a file under the config dir naming the session.
 C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
@@ -40,6 +44,11 @@ case "${a[*]}" in
 esac
 [[ -n "${FAKE_HERDR_LEAK:-}" ]] && { echo '{"session":"default"}'; exit 0; }
 [[ -f "$sock" ]] || { echo server_not_running >&2; exit 1; }
+case "${a[*]}" in   # one pane per workspace; `pane run` starts its command detached, as the server would
+  "workspace create"*) echo '{"result":{"root_pane":{"pane_id":"w1:p1"}}}'; exit 0;;
+  "pane run "*) echo "{\"pane_id\":\"${a[2]}\"}" >> "${sock%/*}/panes"; setsid sh -c "${a[*]:3}" < /dev/null > /dev/null 2>&1 & exit 0;;
+  "pane list") cat "${sock%/*}/panes" 2>/dev/null; exit 0;;
+esac
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 cat > "$t/bin/pi" <<'EOF'
@@ -52,6 +61,22 @@ case "$FAKE_QC" in
   garbage) echo "I think it works." ;;
   writes) echo hacked > judge-was-here; printf '```json\n{"criteria": []}\n```\n' ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
+  pane)   # spawn a pane through the sandbox herdr; it reports what it sees, then tries to outlive the run
+    mkdir -p scratch; rm -f scratch/pane.txt
+    cat > scratch/pane.sh <<'P'
+{ echo "pane pidns $(readlink /proc/self/ns/pid)"
+  for h in $(type -ap herdr); do for s in default qclive; do
+    "$h" --session "$s" workspace list 2>/dev/null | grep -q '"default"\|QCLIVE' && echo "ESCAPE pane reached Herdr $s via $h"; done; done
+  cat "$HOME/.config/herdr/herdr.sock" "$HOME/.config/gh/hosts.yml" "$HOME/.git-credentials" 2>/dev/null | grep -q 'SECRET\|default' && echo "ESCAPE pane creds or live socket"
+  env | grep -q SECRET && echo "ESCAPE pane token in env"
+  echo "PANE done"; } > "$1.tmp"; mv "$1.tmp" "$1"
+exec sleep 303031
+P
+    id=$(herdr workspace create --cwd "$PWD" --no-focus | grep -o '"pane_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    herdr pane run "$id" "bash $PWD/scratch/pane.sh $PWD/scratch/pane.txt" > /dev/null
+    for _ in $(seq 100); do [[ -f scratch/pane.txt ]] && break; sleep 0.1; done
+    echo "judge pidns $(readlink /proc/self/ns/pid)"; cat scratch/pane.txt 2>/dev/null || echo "MISSING pane output (pane $id)"
+    printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
       for flag in "--session default" "--remote live" "--machine live" ""; do
@@ -82,7 +107,11 @@ case "$FAKE_QC" in
     printf "$ok" ;;
 esac
 EOF
-chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/scripts:$PATH"
+chmod +x "$t/bin/pi" "$t/fakeherdr/herdr"; base="$t/bin:$kit/scripts:$PATH"; export PATH="$t/bin:$t/fakeherdr:$kit/scripts:$PATH"
+# Sandbox Herdr mode for the pane test: the real herdr when installed (the box), else the fake (CI).
+real="$(PATH="$base" command -v herdr || true)"; mode=fake
+[[ -n "$real" && "${QC_TEST_HERDR:-}" != fake ]] && mode=real
+echo "qc test: sandbox Herdr mode: $mode${real:+ ($real)}" >&2
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
 "$S" init docs/specs/demo.spec.html 0123abc >/dev/null; echo scratch/ > .gitignore; git add -A; git commit -qm spec
@@ -144,10 +173,34 @@ ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
   || fail "judge wrote live state"
 [[ ! -e "$HOME/.config/herdr/sessions" ]] || fail "sandbox Herdr session left in the real config dir"
 
+# A pane the judge spawns through the sandbox herdr runs in the judge's PID namespace (the sandbox
+# server started inside it), sees no live Herdr socket and no creds, and dies with the run.
+pp="$t/bin:$t/fakeherdr:$kit/scripts:$PATH"
+if [[ "$mode" == real ]]; then   # a real "live" Herdr session under the throwaway HOME
+  pp="$base"
+  setsid sh -c 'echo $$ > "$1"; exec "$2" --session qclive server' _ "$t/pids/qclive" "$real" < /dev/null > /dev/null 2>&1 &
+  for _ in $(seq 50); do "$real" --session qclive workspace list > /dev/null 2>&1 && break; sleep 0.2; done
+  "$real" --session qclive workspace create --label QCLIVE --cwd "$t" --no-focus > /dev/null || fail "real herdr: live test session did not start"
+fi
+PATH="$pp" run 0 pane $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "sandbox pane escape ($mode herdr): $judge"
+grep -q "PANE done" <<< "$judge" || fail "pane never ran ($mode herdr): $judge"
+[[ "$(grep 'judge pidns' <<< "$judge" | cut -d' ' -f3)" == "$(grep 'pane pidns' <<< "$judge" | cut -d' ' -f3)" \
+  && "$(grep 'pane pidns' <<< "$judge" | cut -d' ' -f3)" != "$(readlink /proc/self/ns/pid)" ]] \
+  || fail "pane not in the judge's PID namespace ($mode herdr): $judge"
+[[ "$(report '["sandbox"]["herdr_panes"]')" == 1 ]] || fail "pane not counted ($mode herdr): $(report '["sandbox"]')"
+sleep 0.3; ! pgrep -fx 'sleep 303031' > /dev/null || fail "judge's pane survived the run ($mode herdr)"
+if [[ "$mode" == real ]]; then
+  "$real" --session qclive workspace list > /dev/null 2>&1 || fail "the run hurt the live Herdr session"
+  [[ "$(ls "$HOME/.config/herdr/sessions")" == qclive ]] || fail "sandbox session left: $(ls "$HOME/.config/herdr/sessions")"
+fi
+rm -rf scratch
+
 # The qc recipes pass arguments as data, never as shell source.
 for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/typescript/justfile"; do
   set +e; o="$(just --justfile "$jf" --working-directory "$t/repo" qc "$st" 5 'acceptance-a$(touch pwned)' 'x;touch pwned2' 2>&1)"; rc=$?; set -e
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote, unique reports, sandbox escapes, proof abort, cleanup count, --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote, unique reports, sandbox escapes, proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
