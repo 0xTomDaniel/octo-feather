@@ -63,4 +63,9 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, lane scope (implement-spec patch, audit F05): a two-lane spec; the lane builds only its brief's criteria, runs `just integrate` itself, fixes blocking findings only and lists notes in the PR body. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Supervisor, QC then review on one head (audit F02, docs/adr/0022): after the pilot's integration the supervisor opens the draft PR, runs `just qc`, then reviews the head QC left; a code fix after QC reruns both. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Supervisor, spec revision (one review row per spec): a behaviour revision is registered under the spec's own slug, not `gh<N>`. Smoke: `evidence/2026-10-19-role-probes.md`.
+- Supervisor, behaviour revision (audit F03): a revision changes a clause governing a built criterion; the review link lists that criterion and its acceptance resets it to planned. Smoke: `evidence/2026-10-19-role-probes.md`.
 <!-- owed-evals-end -->
+
+## `octo-feather-spec-status reaccept`
+
+After Thursday 10-22: `octo-feather-spec-status reaccept STATUS COMMIT --reset ID...` applies an accepted revision mechanically (reset the listed ids to `planned`, add new ids as `planned`, drop removed ones, move `accepted_commit`), so the supervisor stops editing the status file by hand (audit F03). The affected ids stay the revision's explicit list: comparing criterion text cannot find a requirement changed through a governing clause.
