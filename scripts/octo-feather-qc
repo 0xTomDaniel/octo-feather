@@ -1,0 +1,147 @@
+#!/usr/bin/env python3
+"""octo-feather-qc STATUS PR ID...   interim product QC (`just qc`, docs/adr/0022)
+
+Run in a lane worktree at its integrated head. A fresh, read-only code-reviewer
+(agents/code-reviewer.md, headless through pi-role) gets a QC brief: judge the
+whole head against each named criterion of STATUS's spec, run each criterion's
+demo path, and report one pass or fail per criterion with the command and its
+output. Then this script, not the judge, sets each passed criterion to built in
+PR and each failed one to planned, and commits only the status file. The judge
+model's family (the part before "/") must differ from the implementer's.
+
+  OCTO_FEATHER_QC_MODEL  judge model override (still checked against the family)
+  OCTO_FEATHER_QC_ARGS   extra pi args, e.g. "--thinking off" for a smoke
+Report: $(octo-feather-state)/qc/<head>.json (judge's report plus the raw run).
+Exit: 0 all passed, 1 some failed, 3 judge report unusable or the judge wrote
+files, 64 usage or same-family judge, 65 dirty worktree.
+"""
+import json, os, re, shlex, subprocess, sys, time
+from html.parser import HTMLParser
+from pathlib import Path
+
+KIT = Path(__file__).resolve().parent.parent
+STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
+
+
+def die(code, msg):
+    print(f"octo-feather-qc: {msg}", file=sys.stderr); sys.exit(code)
+
+
+def git(*a):
+    return subprocess.run(["git", *a], capture_output=True, text=True, check=True).stdout.strip()
+
+
+def front(role, key):
+    m = re.search(rf"^{key}:\s*(.+)$", (KIT / "agents" / f"{role}.md").read_text(), re.M)
+    return m.group(1).strip() if m else ""
+
+
+class _Text(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.depth = 0; self.cur = None; self.out = {}
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if self.cur is None and "data-acceptance-criterion" in a:
+            self.cur = a.get("data-anchor") or ""; self.depth = 0; self.out[self.cur] = ""
+        elif self.cur is not None:
+            self.depth += 1
+
+    def handle_endtag(self, tag):
+        if self.cur is not None:
+            if self.depth == 0:
+                self.cur = None
+            else:
+                self.depth -= 1
+
+    def handle_data(self, d):
+        if self.cur is not None:
+            self.out[self.cur] += d
+
+
+def criteria_text(spec):
+    p = _Text(); p.feed(spec.read_text(encoding="utf-8"))
+    return {k: " ".join(v.split()) for k, v in p.out.items()}
+
+
+BRIEF = """QC run (docs/adr/0022). You are the product judge for this lane head, not a code reviewer: skip the code-review skill's diff passes, message nobody (no herdr-say), and change no file (no edit, no commit, no file written in the repo; scratch only under /tmp).
+Repo: {repo}, head {head}. Spec: {spec}.
+For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
+Criteria:
+{criteria}
+Your final message is exactly one fenced json block and nothing else:
+```json
+{{"head": "{head}", "criteria": [{{"id": "<id>", "verdict": "pass" or "fail", "command": "<exact command you ran>", "output": "<its output, trimmed to what shows the outcome>", "why": "<one line>"}}]}}
+```"""
+
+
+def main(argv):
+    if len(argv) < 3 or not argv[1].isdigit():
+        print(__doc__.strip(), file=sys.stderr); return 64
+    status, pr, ids = Path(argv[0]), int(argv[1]), argv[2:]
+    if git("status", "--porcelain"):
+        die(65, "worktree is dirty; QC judges a committed head")
+    head = git("rev-parse", "HEAD")
+    data = json.loads(status.read_text(encoding="utf-8"))
+    missing = [i for i in ids if i not in data.get("criteria", {})]
+    if missing:
+        die(64, f"not in {status}: {' '.join(missing)}")
+    spec = status.with_name(data["spec"])
+    text = criteria_text(spec)
+
+    model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("code-reviewer", "model")
+    impl = front("implementer", "model")
+    if model.split("/")[0] == impl.split("/")[0]:
+        die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
+
+    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec,
+                         criteria="\n".join(f"- {i}: {text.get(i, '')}" for i in ids))
+    cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "code-reviewer.md"),
+           "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+    t0 = time.time()
+    run = subprocess.run(cmd, capture_output=True, text=True)
+    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
+    out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
+    report_path = out_dir / f"{head}.json"
+    raw = {"head": head, "model": model, "ids": ids, "exit": run.returncode, "seconds": round(time.time() - t0),
+           "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+
+    if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
+        report_path.write_text(json.dumps(raw, indent=2))
+        die(3, f"the judge changed the worktree or head; read-only was broken (report {report_path})")
+    blocks = re.findall(r"```json\s*(\{.*?\})\s*```", run.stdout, re.S)
+    try:
+        rep = json.loads(blocks[-1])
+        verdicts = {c["id"]: c for c in rep["criteria"]}
+        assert sorted(verdicts) == sorted(ids), f"ids {sorted(verdicts)} != {sorted(ids)}"
+        for c in verdicts.values():
+            assert c.get("verdict") in ("pass", "fail"), f"{c.get('id')}: verdict {c.get('verdict')!r}"
+            assert c.get("command") and "output" in c, f"{c['id']}: needs command and output"
+    except (IndexError, ValueError, KeyError, TypeError, AssertionError) as e:
+        report_path.write_text(json.dumps(raw, indent=2))
+        die(3, f"judge report unusable ({e}); raw run in {report_path}")
+    raw["report"] = rep
+    report_path.write_text(json.dumps(raw, indent=2))
+
+    passed = [i for i in ids if verdicts[i]["verdict"] == "pass"]
+    failed = [i for i in ids if i not in passed]
+    for i in passed:
+        data["criteria"][i] = {"status": "built", "pr": pr}
+    for i in failed:
+        data["criteria"][i] = {"status": "planned", "pr": None}
+    status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    chk = subprocess.run([str(STATUS_TOOL), "check", str(status.parent)], capture_output=True, text=True)
+    if chk.returncode:
+        die(3, chk.stderr.strip())
+    if git("status", "--porcelain"):
+        git("add", "--", str(status))
+        git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})")
+    for i in ids:
+        v = verdicts[i]
+        print(f"{v['verdict'].upper()} {i}: $ {v['command']}\n  {v.get('why', '')}")
+    print(f"qc: {len(passed)}/{len(ids)} passed at {head[:12]}; head now {git('rev-parse', 'HEAD')[:12]}; report {report_path}")
+    return 0 if not failed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

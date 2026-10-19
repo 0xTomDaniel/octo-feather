@@ -42,9 +42,9 @@ What it breaks for octo-feather (ADR 0021):
 
 Direction: a lane or stage should be explicit registry data supplied by the caller at `register`, not inferred from the slug's shape.
 
-## `just qc` verifies built criteria
+## Jev replaces the interim `just qc`
 
-A `built` criterion in `docs/specs/<slug>.status.json` is claimed, not proven (ADR 0021). `just qc` (Jev) must verify every `built` criterion and only those, and report any it cannot confirm.
+Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criterion's demo path (ADR 0022). Jev replaces it behind the same recipe and must verify every `built` criterion and only those, and report any it cannot confirm.
 
 ## Criterion status on the spec page
 
@@ -59,4 +59,5 @@ After Thursday 10-22, copy `octo-feather-spec-status` into each template (`templ
 Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval case that fails before it and passes after it. Its smoke run is in `evidence/`.
 
 - Director, chat acceptance (docs/adr/0021): the owner says "spec accepted" in chat; the director records nothing and sends the review link. Smoke: `evidence/2026-10-19-role-probes.md`.
+- Supervisor and code reviewer, interim QC (docs/adr/0022): a lane head where one claimed criterion's demo path fails; only the passing one is built, and the failure goes to an implementer as a `qc` finding. Smoke: `evidence/2026-10-19-qc-smoke.md`.
 <!-- owed-evals-end -->

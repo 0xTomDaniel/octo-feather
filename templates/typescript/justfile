@@ -21,3 +21,7 @@ check:
 # Integrate worker commits onto lane gh<N> (octo-feather kit script on PATH).
 integrate issue +refs:
     octo-feather-integrate {{issue}} {{refs}}
+
+# Product QC on the lane head: passed criteria become built (octo-feather kit script on PATH; never in check).
+qc status pr +ids:
+    octo-feather-qc {{status}} {{pr}} {{ids}}

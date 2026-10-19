@@ -71,7 +71,7 @@ An acceptance criterion of an accepted spec that no merged lane has built yet. E
 _Avoid_: Open, todo
 
 **Built criterion**:
-An acceptance criterion a merged lane PR claims to deliver, flipped in the same merge as its code. Claimed, not proven: `just qc` verifies it.
+An acceptance criterion a merged lane PR delivers, flipped in the same merge as its code by `just qc` after a fresh judge ran its demo path and saw it pass (ADR 0022). Judged, not yet verified by Jev.
 _Avoid_: Done, verified, accepted
 
 **Kickoff**:
