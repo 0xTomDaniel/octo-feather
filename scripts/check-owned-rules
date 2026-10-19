@@ -9,7 +9,7 @@ phrases, and names the owner to point at instead (docs/adr/0008).
 Usage: check-owned-rules [REPO]   (default: this kit). Deterministic and free;
 run by `just check`, tested by tests/check-owned-rules.sh.
 """
-import datetime, os, re, subprocess, sys
+import os, re, subprocess, sys
 
 # name: (phrases that state the rule, owner files, the pointer to write instead)
 RULES = {
@@ -34,22 +34,10 @@ MECHANISM = {
 }
 # Never checked: dated records quote rules as they stood; this check and its test name the phrases.
 SKIP = re.compile(r"^(evidence/|scripts/check-owned-rules$|tests/check-owned-rules\.sh$)")
-# File exemptions: (rule, file, reason, expiry YYYY-MM-DD, approved by). Expired ones fail.
-EXEMPT = [
-    ("merge-authority", "docs/future.md",
-     "outside correction lane #19's write scope; make lines 43 and 68 pointers", "2026-11-20", "pending owner"),
-]
 
 root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
 files = subprocess.run(["git", "-C", root, "ls-files"], capture_output=True, text=True, check=True).stdout.split()
-today = datetime.date.today().isoformat()
 errors = []
-exempt = {}
-for rule, f, reason, until, by in EXEMPT:
-    if until < today:
-        errors.append(f"scripts/check-owned-rules: exemption of {f} from {rule} expired {until} ({reason}): fix the file, then drop the exemption")
-    else:
-        exempt[(rule, f)] = True
 
 for f in files:
     if SKIP.match(f):
@@ -64,7 +52,7 @@ for f in files:
         if patch and n > 1 and not (line.startswith("+") and not line.startswith("+++")):
             continue
         for rule, (pat, owners, fix) in RULES.items():
-            if f in owners or (rule, f) in exempt:
+            if f in owners:
                 continue
             m = re.search(pat, line, re.I)
             if not m:
