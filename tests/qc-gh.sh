@@ -142,4 +142,10 @@ run 3 "$st" 5 acceptance-a
 git config --unset core.hooksPath
 grep -q "status commit failed" <<< "$out" || fail "failed commit not reported: $out"
 [[ "$(git rev-parse HEAD)" == "$base" && -z "$(git status --porcelain)" ]] || fail "status file left modified: $(git status --porcelain)"
-echo "qc-gh: ok (snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored)"
+# Kit on kit: a copy of the kit judging itself (kit inside the judged worktree) passes the proof.
+mkdir -p "$t/kc"; git -C "$kit" ls-files -z | (cd "$kit" && xargs -0 cp -P --parents -t "$t/kc" 2>/dev/null || true)
+cd "$t/kc"; git init -q -b main .; cp "$t/repo/docs/specs/demo.spec.html" docs/specs/zz-demo.spec.html
+"$S" init docs/specs/zz-demo.spec.html 0123abc >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
+Q="$t/kc/scripts/octo-feather-qc" run 0 docs/specs/zz-demo.status.json 5 acceptance-a
+grep -q "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" <<< "$out" || fail "kit-on-kit proof: $out"
+echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored)"
