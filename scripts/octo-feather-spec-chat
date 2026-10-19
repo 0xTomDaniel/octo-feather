@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# octo-feather-spec-chat REPO   (`just spec-chat REPO`, docs/adr/0001)
+#
+# Install Spec Chat's skills into REPO/.agents/skills as links into the
+# machine-local Spec Chat clone ($SPEC_CHAT_CLONE, default ~/src/spec-chat),
+# through its own installer with --agents-only (no provider links), then ignore
+# each link that points into the clone in REPO's git info/exclude, so
+# `git status` stays clean. A rerun changes nothing.
+set -euo pipefail
+me="octo-feather-spec-chat"
+[[ $# -eq 1 && "$1" != -* ]] || { echo "usage: $me REPO   (just spec-chat REPO)" >&2; exit 2; }
+
+[[ -d "$1" ]] || { echo "$me: $1 is not a directory; create the repo first (git init $1)" >&2; exit 1; }
+repo="$(cd "$1" && pwd -P)"
+[[ "$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" == true ]] \
+  || { echo "$me: $repo is not a git work tree; run git init $repo, or pass the repo's checkout" >&2; exit 1; }
+# pi-role finds repo skills only at a checkout top's .agents/skills.
+top="$(git -C "$repo" rev-parse --show-toplevel)"; top="$(cd "$top" && pwd -P)"
+[[ "$repo" == "$top" ]] \
+  || { echo "$me: $repo is below its work tree top; pi-role looks for skills only at the top, so pass $top" >&2; exit 1; }
+
+clone="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}"
+installer="$clone/scripts/install-spec-chat"
+[[ -x "$installer" ]] \
+  || { echo "$me: no Spec Chat installer at $installer; clone Spec Chat there or set SPEC_CHAT_CLONE to its clone" >&2; exit 1; }
+clone="$(cd "$clone" && pwd -P)"
+
+"$installer" --agents-only --prefix "$repo"
+
+exclude="$(git -C "$repo" rev-parse --path-format=absolute --git-path info/exclude)"
+mkdir -p "$(dirname "$exclude")"; touch "$exclude"
+n=0
+for l in "$repo"/.agents/skills/*; do
+  [[ -L "$l" ]] || continue
+  dest="$(realpath -m "$l")"
+  [[ "$dest" == "$clone"/* ]] || continue
+  line="/.agents/skills/$(basename "$l")"
+  if ! grep -qxF "$line" "$exclude"; then
+    [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
+    echo "$line" >> "$exclude"
+  fi
+  n=$((n + 1))
+done
+echo "$me: $n Spec Chat skill links in $repo/.agents/skills, ignored in $exclude"
