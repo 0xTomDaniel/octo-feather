@@ -74,6 +74,9 @@ those leave to the caller:
 - The dialog is answered at the **pane**, never blindly. The highlighted row
   may be the refusal, where a bare Enter kills the agent being spawned. The
   selection is moved onto the trust option and verified before confirming.
+- Pi's "Trust project folder?" dialog is never answered: `pi-role` launches
+  with `--approve`, so it should not open. If it does, no key is sent and the
+  spawn fails closed (exit 69, tab closed, pane text on stderr).
 
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 

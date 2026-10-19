@@ -135,14 +135,21 @@ done
 # Enter kills the agent being spawned. Read the row, move onto the affirmative,
 # verify it moved, and only then confirm.
 #
-# Three states matter: a dialog is open (0), verified clear (1), read failed
-# (2). A failed read is not evidence of clearing, so it retries and then fails
-# closed rather than reporting a session that is really still trapped.
+# Four states matter: a dialog is open (0), verified clear (1), read failed
+# (2), Pi's project trust dialog is open (3). A failed read is not evidence of
+# clearing, so it retries and then fails closed rather than reporting a session
+# that is really still trapped.
+#
+# Pi's trust dialog is never answered. pi-role launches with --approve, so it
+# should not open; if it does, every row (including "Trust parent folder")
+# would widen or persist trust, so no key is sent and the spawn fails closed
+# (issue #3).
 pane_text() { herdr pane read "$pane" --source visible --lines 60 2>/dev/null; }
 
 dialog_state() {
   local text
   text="$(pane_text)" || return 2
+  grep -qiE 'Trust project folder\?|Trust parent folder|Do not trust \(this session only\)' <<<"$text" && return 3
   grep -qiE 'Quick safety check|trust this (folder|project)|trust the contents of this directory|Trust and continue|Press t to trust' <<<"$text" && return 0
   return 1
 }
@@ -156,10 +163,19 @@ send_key() {
     close_orphan_tab; exit 69; }
 }
 
+fail_dialog() {
+  # Print what was actually on screen: an unrecognised dialog shape is a
+  # fixable report, where a bare "did not clear" is a guessing game.
+  echo "herdr-spawn: $1; failing closed. Pane showed:" >&2
+  pane_text | grep -vE '^[[:space:]]*$' | tail -12 >&2
+  close_orphan_tab; exit 69
+}
+
 cleared=0
 for _ in $(seq 1 "${HERDR_SPAWN_TRUST_RETRIES:-14}"); do
   state=0; dialog_state || state=$?
   [[ "$state" == 1 ]] && { cleared=1; break; }
+  [[ "$state" == 3 ]] && fail_dialog "Pi's project trust dialog opened (launch lacks --approve?); it is never answered"
   if [[ "$state" == 0 ]]; then
     if pane_text | grep -qiE 'Press t to trust'; then
       herdr pane send-text "$pane" "t" >/dev/null 2>&1 || send_key t
@@ -177,11 +193,8 @@ if [[ "$cleared" != 1 ]]; then
     1) : ;;
     2) echo "herdr-spawn: could not read the pane to verify the dialog; failing closed" >&2
        close_orphan_tab; exit 69 ;;
-    *) # Print what was actually on screen: an unrecognised dialog shape is a
-       # fixable report, where a bare "did not clear" is a guessing game.
-       echo "herdr-spawn: a startup dialog did not clear; failing closed. Pane showed:" >&2
-       pane_text | grep -vE '^[[:space:]]*$' | tail -12 >&2
-       close_orphan_tab; exit 69 ;;
+    3) fail_dialog "Pi's project trust dialog opened (launch lacks --approve?); it is never answered" ;;
+    *) fail_dialog "a startup dialog did not clear" ;;
   esac
 fi
 
