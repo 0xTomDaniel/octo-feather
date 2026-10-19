@@ -20,6 +20,10 @@ Role files: our own frontmatter read by `scripts/pi-role`, and every agent launc
 | 7 | Dress rehearsal | 60m+ | one tiny project per language through the full loop on the remote; fix what breaks |
 | 8 | Submission bundle | 20m | `evidence/` layout, README "How this was built" |
 
+Decided, not built (Tom, 2026-10-19):
+- A kit `just` recipe registers `herdr-wake` as Spec Chat's wake provider.
+- A kit `just` recipe creates a target repo from a template (`templates/python` or `templates/typescript`).
+
 Estimates are guesses. Block 7 is the one that matters; cut 6 before cutting 7.
 
 Sources pinned today: octo-lite `cc6fa4e` (Apache-2.0), pstack `0b8e952` (cursor/plugins, MIT), mattpocock/skills `49dd158d` (MIT).
