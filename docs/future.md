@@ -53,3 +53,9 @@ Later, not now: show each criterion's planned or built status on its spec page i
 ## Status check in target repos
 
 After Thursday 10-22, copy `octo-feather-spec-status` into each template (`templates/python`, `templates/typescript`) and call it from their `just check`, so the pre-commit hook and CI gate run it too. CI there has no kit scripts on `PATH`, so today only the kit's own `just check` checks status files (ADR 0021).
+
+## Owed eval cases
+
+Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval case that fails before it and passes after it. Its smoke run is in `evidence/`.
+
+<!-- owed-evals-end -->
