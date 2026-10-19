@@ -4,13 +4,15 @@
 Correction lane #26: finding class missing-behavior-smoke, twice (lane #8 at
 db9e290, lane #19 at af760a4). Compares the branch with its merge base:
 
-- behaviour commits: non-merge commits in BASE..HEAD touching agents/*.md,
-  .agents/skills/**.md or .skillfile/patches/**, minus those whose message
+- behaviour commits: commits in BASE..HEAD touching agents/*.md,
+  .agents/skills/**.md or .skillfile/patches/** (a merge only for what it wrote
+  itself: a file unlike a clean auto-merge and unlike every parent, e.g. a
+  conflict resolution), minus those whose message
   carries a `Behaviour-neutral: <reason>` trailer (the opt-out, printed on
   every run so review sees it);
 - they pass only if a later commit (or the uncommitted tree) changes an
   evidence/*.md whose added lines cite a commit of this branch (the role text
-  the smoke ran on), and docs/future.md's owed-evals block gains a line naming
+  the smoke ran on), still present and citing it at the checked head, and docs/future.md's owed-evals block gains a line naming
   that evidence file.
 
 Base: --base REF, else $OCTO_FEATHER_BASE, else origin/$GITHUB_BASE_REF (CI pull
@@ -74,9 +76,42 @@ def is_anc(x, y):
 revs = git("rev-list", "--topo-order", f"{mb}..{head}").split()
 inrange = set(revs)
 behaviour, neutral, evid = [], [], {}  # evid: commit (or "worktree") -> (files, cited commits)
+def blob(tree, f):
+    out = git("rev-parse", "-q", "--verify", f"{tree}:{f}", ok=True)
+    return out.strip() if out else None
+
+
+def merge_introduced(c, parents):
+    """Behaviour files a merge commit itself wrote: its blob differs from a clean
+    auto-merge of its parents and from every parent (a conflict resolution or an
+    edit in the merge). What it merely inherits from either side is not its own."""
+    auto = None
+    if len(parents) == 2:
+        r = subprocess.run(["git", "-C", root, "merge-tree", "--write-tree", *parents], capture_output=True, text=True)
+        auto = r.stdout.split("\n", 1)[0].strip() if r.returncode in (0, 1) else None
+    changed = set()
+    for p in parents:
+        changed.update(git("diff-tree", "--no-commit-id", "--name-only", "-r", p, c).split())
+    out = []
+    for f in sorted(changed):
+        if not BEHAVIOUR.match(f):
+            continue
+        b = blob(c, f)
+        if (auto is None or b != blob(auto, f)) and all(b != blob(p, f) for p in parents):
+            out.append(f)
+    return out
+
+
 for c in revs:
-    if len(git("rev-list", "--parents", "-n1", c).split()) > 2:
-        continue  # a merge (of main) brings main's own commits, not this branch's
+    parents = git("rev-list", "--parents", "-n1", c).split()[1:]
+    if len(parents) > 1:
+        # A merge (of main, or CI's PR merge ref) brings each side's own commits; only what
+        # the merge itself wrote counts, as behaviour. Its evidence is never this branch's smoke.
+        files = merge_introduced(c, parents)
+        if files:
+            m = OPT_OUT.search(git("log", "-1", "--format=%B", c))
+            (neutral if m else behaviour).append((c, m.group(1).strip() if m else files))
+        continue
     files = git("diff-tree", "--no-commit-id", "--name-only", "-r", "--root", c).split()
     if any(BEHAVIOUR.match(f) for f in files):
         m = OPT_OUT.search(git("log", "-1", "--format=%B", c))
@@ -121,8 +156,16 @@ last = behaviour[0][0]  # topo order: newest first
 smokes = {}  # evidence file -> commit that recorded it after the last behaviour commit
 for c, files in evid.items():
     after = c == "worktree" or all(c != b and is_anc(b, c) for b, _ in behaviour)
-    if after and cites(added(c, files)):
-        for f in files:
+    if not after:
+        continue
+    for f in files:
+        # The smoke must still be there, citing what it cited, at the checked head (or the tree).
+        if worktree:
+            p = os.path.join(root, f)
+            now = open(p, encoding="utf-8").read() if os.path.exists(p) else None
+        else:
+            now = git("show", f"{head}:{f}", ok=True)
+        if now is not None and cites(added(c, [f])) & cites(now.splitlines()):
             smokes.setdefault(f, c)
 
 # docs/future.md owed-evals block: the lines from the heading above END to END, at HEAD (or the worktree).
@@ -157,7 +200,7 @@ print(f"{TAG}: role behaviour changed since {mb[:7]} with no live smoke and owed
 for c, files in behaviour:
     print(f"  {c[:7]} {git('log', '-1', '--format=%s', c).strip()[:70]}: {', '.join(files)}", file=sys.stderr)
 why = ("an evidence/*.md cites a branch commit but no line above `" + END + "` in docs/future.md names it" if smokes
-       else f"no evidence/*.md changed after {last[:7]} citing a commit of this branch")
+       else f"no evidence/*.md changed after {last[:7]} and still at the checked head, citing a commit of this branch")
 print(f"  missing: {why}.", file=sys.stderr)
 print(f"Fix: run the live smoke on the changed role text, record it in evidence/<date>-<slug>.md naming the commit it ran on "
       f"(e.g. {last[:7]}), committed after {last[:7]}, and add the owed eval line naming that file above `{END}` in {FUTURE}. "
