@@ -70,7 +70,7 @@
 </table>
 </div>
 <p data-anchor="quality-reviewer">The code reviewer is QC on code: a fresh code reviewer from another model family judges every lane head, blocking only on a failed acceptance criterion, broken behavior or a hard standard, and tags every finding with a short class.</p>
-<p data-anchor="quality-corrector">The corrector is QA, not QC: no lane runs it before review. The director starts a correction lane, with one corrector running pstack <code>correct</code> against the target, when the owner corrects something at a gate or when a finding class appears two or more times across lanes' hand-off logs (ADR 0020).</p>
+<p data-anchor="quality-corrector">The corrector is QA, not QC, and runs only in a correction lane: the director starts a correction lane, with one corrector running pstack <code>correct</code> against the target, when the owner corrects something at a gate or when a finding class appears two or more times across lanes' hand-off logs (ADR 0020).</p>
 </section>
 <section data-anchor="ladder" id="ladder">
 <h2>Verification ladder</h2>

@@ -83,9 +83,7 @@
   <button type="button" data-spec-choice="Fix the printed URL in Spec Chat">Fix the printed URL in Spec Chat (recommended)</button>
   <button type="button" data-spec-choice="Rewrite the link in the kit">Rewrite the link in the kit</button></p>
 <p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's installer does not yet link its skills into <code>~/.agents/skills</code>, so that link is made by hand on the VM; the one-line upstream change is open, not merged.</p>
-<p data-anchor="tbd-slug-mismatch" data-spec-tbd>TBD: Shaping registers a spec under its own slug and a lane may register it again under <code>gh&lt;N&gt;</code>. Spec Chat's index shows lane cards only for <code>gh&lt;N&gt;</code> slugs, so the shaping row shows under Settled; a second row keeps its own threads and acceptance while the acceptance stays on the shaping row; and the cross-lane contradiction check may compare the spec with itself. Does a lane re-register the spec or reuse the shaping row?
-  <button type="button" data-spec-choice="The lane reuses the shaping row">The lane reuses the shaping row</button>
-  <button type="button" data-spec-choice="The lane re-registers under gh<N>">The lane re-registers under its lane key</button></p>
+<p data-anchor="tbd-slug-mismatch" data-spec-tbd="later">TBD: Spec Chat keys lanes to <code>gh&lt;N&gt;</code> slugs and the Herdr session, while shaping registers a spec under its own slug: the shaping row shows under Settled, a lane that registers the spec again gets a second row whose acceptance stays on the shaping row, and the cross-lane contradiction check may compare a spec with itself. How should a lane and its spec's shaping row relate? Recorded in <a href="../future.md">docs/future.md</a>.</p>
 <p data-anchor="tbd-model-key" data-spec-tbd="later">TBD: The model proxy key sits in plain text on the VM; swap it for a revocable key.</p>
 </section>
 
