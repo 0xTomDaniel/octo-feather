@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked; ADR 0004 GitHub Issues; ADR 0011/0017 Herdr workers, the supervisor runs just integrate; ADR 0019 the lane's criteria, pilot first; ADR 0007 fresh reviewer, blocking findings fixed, notes to the PR; ADR 0015 merge ask up-chain; ADR 0020 finding classes logged; ADR 0021 merge ask flips its criteria to built
+# reason: ADR 0012 model-invoked; ADR 0004 GitHub Issues; ADR 0011/0017 Herdr workers, the supervisor runs just integrate; ADR 0019 the lane's criteria, pilot first; ADR 0007 fresh reviewer, blocking findings fixed, notes to the PR; ADR 0015 merge ask up-chain; ADR 0020 finding classes logged; ADR 0021/0022 just qc flips passed criteria, then review on that head
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,14 +1,13 @@
@@ -23,7 +23,7 @@
  3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
  
 -4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch. Each implementer subagent:
-+4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7 (one implementer, `just integrate`, `just qc`, code review), then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
++4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7 (one implementer, `just integrate`, the draft PR, `just qc` on the pilot's criteria, code review of the head QC left), then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
     - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
     - calls the Skill tool with `tdd` to build the ticket;
     - merges the integration branch tip into its own branch before reporting done
@@ -34,9 +34,9 @@
  6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
  
 -7. Once all tickets are complete, call the Skill tool with `code-review` on the integration branch. Fix all issues raised by the code review in a single **implementer subagent**.
-+7. Once all tickets are complete and `just check` is green, spawn a fresh `code-reviewer` pane on the integration branch. Never review in your own context. Log each finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
++7. Once all tickets are complete and `just check` is green, run `just qc <status file> <PR> <the lane's criterion ids>` on the integration head (docs/adr/0022): it flips the passed criteria to built in a status-only commit, and a failed one is a blocking finding. Then spawn a fresh `code-reviewer` pane on the head QC left. Never review in your own context. Any code change after QC means `just qc` and a fresh review again, on the new head. Log each QC and review finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
  
 -8. If a draft PR exists, mark it ready for review. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
-+8. If a draft PR exists, flip the lane's criteria to built in its status file (`octo-feather-spec-status built`, docs/adr/0021), mark it ready for review and send the merge ask to the director with `herdr-say --parent`, listing the criterion ids it flips. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
++8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`: the head, each criterion's QC verdict, the review verdict, and the criterion ids flipped to built. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
  
  9. Clean up all **implementer subagent** worktrees.
