@@ -12,11 +12,11 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI). No unit tests of internals.
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
 - Enforce lessons in this order: architecture or types, then a lint or check whose error names the fix, then a test, then prose. Prose rules are the last resort.
-- Vendored skills keep upstream license and provenance in `skills.lock`.
+- Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `agents/skills/`, and changed only through patches in `.skillfile/patches/`.
 
 ## Layout
 
-- `agents/` role files in pi-subagents frontmatter (docs/adr/0013): meta-operator (director), supervisor, implementer, integrator, code-reviewer. One file, two launchers: `scripts/pi-role` for Herdr panes (via `herdr-spawn`), pi-subagents' `subagent` tool for children. `agents/skills/` holds the skillfile-managed upstream skills (Matt's `tdd` with its seam-gate patch).
+- `agents/` role files in pi-subagents frontmatter (docs/adr/0013): meta-operator (director), supervisor, implementer, integrator, code-reviewer. One file, two launchers: `scripts/pi-role` for Herdr panes (via `herdr-spawn`), pi-subagents' `subagent` tool for children. `agents/skills/` holds the skillfile-managed upstream skills (Matt's `tdd` and `code-review`, each with its patch).
 - `spec/` spec-chat HTML specs (`*.spec.html`). Today it holds octo-lite's own spec, kept as the format reference and for the `#anchors` the role contracts cite; it still describes Claude and Linear, so `docs/adr/` wins where they differ.
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.

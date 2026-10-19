@@ -1,3 +1,5 @@
 # Matt's workflow skills are model-invoked
 
 mattpocock/skills marks implement, implement-spec, to-spec, to-tickets, grill-with-docs, improve-codebase-architecture and handoff `disable-model-invocation: true`, so only a human slash command can start them. In octo-feather the agents run the workflow, so each of those gets a one-line patch removing that flag, recorded in `skills.lock`. Pollution is contained because every role loads only the skills its role file lists. triage stays human-invoked. Decided by Tom, 2026-10-18.
+
+Status 2026-10-18 19:44 MDT: not done yet. None of these seven skills is vendored, and there is no `skills.lock`: pins live in `Skillfile` and `Skillfile.lock`, patches in `.skillfile/patches/skills/<name>/`. Vendored from Matt today: `tdd` (at octo-lite's older pin ed37663, with the seam-gate patch) and `code-review` (49dd158, patched for the block/note rules, sequential axes and escalation). Our `implement-spec` and `grill-with-docs` are octo-lite's own versions, not Matt's. When each is rebased onto Matt's skill, its patch also removes `disable-model-invocation`.
