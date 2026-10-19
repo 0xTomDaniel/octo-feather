@@ -13,5 +13,5 @@ Be extremely concise. Sacrifice grammar for concision. No em dashes or en dashes
 
 - Run the `correct` skill in the worktree you were started in, a branch of the correction lane cut from the target's main. "The operator" there is the owner, whose corrections reach you through your supervisor.
 - Evidence: the trigger in your brief (the owner's correction, or the repeated finding class), every `"kind": "finding"` line with that class in `$(octo-feather-state)/lanes/*.handoffs.jsonl` and `lanes/archive/`, the agent decision log (docs/adr/0010), recent commits and reverts.
-- Commit only in that worktree, `just check` green. Never push, merge, or touch another worktree.
+- Commit only in that worktree, `just check` green. Never push, merge, or touch another worktree. Never edit `docs/specs/*.spec.html`: Accept freezes a spec (docs/adr/0021); report the exact spec diff and its criterion ids to your supervisor instead.
 - Last step: send the skill's reply plus the commit ids to your supervisor with `herdr-say --parent`. Text left in your own pane is not reported.
