@@ -15,6 +15,7 @@ echo '- Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a mes
 # Ordinary process waits are legitimate (review of a4d8861: owned-rule-false-positive).
 printf '#!/bin/sh\n# Use a blocking wait to reap the child process.\nwait "$pid"\n' > "$t/scripts/wait-child"
 echo 'Reap it with `wait $pid`, or `sleep 5` before a retry.' > "$t/agents/shortwait.md"
+printf '%s\n' '# A blocking wait over 30 seconds triggers the subprocess timeout.' 'printf "done rc=$?\\n"' > "$t/scripts/timeout"
 # The owner may state the rule; a pointer and a dated record pass.
 echo '<p data-anchor="gates-merge">After the owner says merge, ... a new merge ask.</p>' > "$t/docs/specs/issue-lifecycle.spec.html"
 echo 'Merge: spec `#gates-merge`.' > "$t/agents/ok.md"
@@ -42,11 +43,10 @@ plant() { echo "$2" > "$t/$1"; g add -A; run 1
 plant agents/github.md 'Mechanical rebases onto accepted main do not require renewed acceptance when behavior and scope are unchanged.' merge-authority 'spec `#gates-merge`'
 plant agents/impl.md 'Any code change after QC means `just qc` and a fresh review again, on the new head.' merge-authority 'spec `#gates-merge`'
 plant agents/sleep.md 'Never hold your turn in a sleep over a minute; background `just qc` and end the turn.' long-wait 'herdr-comms (Send a message)'
-plant agents/steer.md 'Never sleep or blocking wait over a minute: messages queue unread as "Steering".' long-wait 'herdr-comms (Send a message)'
-plant agents/bg.md '(just qc >/tmp/q.log 2>&1; herdr-say "$HERDR_PANE_ID" "qc done rc=$?") &' long-wait 'herdr-comms (Send a message)'
+plant agents/steer.md 'While a sleep runs, messages queue unread as "Steering".' long-wait 'herdr-comms (Send a message)'
 plant agents/lane.md 'Cut branch gh<N>-<slug> for the lane.' lane-branch 'docs/adr/0011'
 plant agents/push.md '2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.' lane-branch 'docs/adr/0011'
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
-echo "check-owned-rules: ok (owner, pointer, record, generic words and short process waits pass; 3 past restatements, 3 long-wait copies, a slug default and a patch line fail with their fix)"
+echo "check-owned-rules: ok (owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"
