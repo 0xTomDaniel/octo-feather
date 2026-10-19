@@ -53,6 +53,18 @@ done
 # No provider link dirs: the repo top holds only what it had.
 [[ "$(ls -A "$repo" | tr '\n' ' ')" == ".agents .git " ]] || fail "repo top changed: $(ls -A "$repo")"
 
+rm "$clone/argv"; mkdir -p "$repo/sub"
+out="$(run "$clone" repo/sub 2>&1)" && fail "subdir REPO succeeded"
+grep -q "pass $repo\$" <<<"$out" || fail "subdir error does not name the top: $out"
+[[ ! -e "$clone/argv" ]] || fail "installer ran for a subdir REPO"
+[[ -z "$(ls -A "$repo/sub")" ]] || fail "created in subdir: $(ls -A "$repo/sub")"
+
+# A linked worktree top is a checkout top: accepted, its links ignored too.
+git -C "$repo" worktree add -q "$t/work/wt" -b wt
+out="$(run "$clone" wt 2>&1)" || fail "linked worktree failed: $out"
+[[ -L "$t/work/wt/.agents/skills/spec-chat-shape" ]] || fail "no link in linked worktree"
+[[ -z "$(git -C "$t/work/wt" status --porcelain)" ]] || fail "worktree status not clean: $(git -C "$t/work/wt" status --porcelain)"
+
 mkdir -p "$t/work/plain"
 out="$(run "$clone" plain 2>&1)" && fail "non-git REPO succeeded"
 grep -q 'git init' <<<"$out" || fail "non-git error names no fix: $out"
@@ -60,4 +72,4 @@ out="$(run "$t/nope" repo 2>&1)" && fail "missing clone succeeded"
 grep -q 'SPEC_CHAT_CLONE' <<<"$out" || fail "missing-clone error names no fix: $out"
 out="$(cd "$t/work" && env -u SPEC_CHAT_CLONE just --justfile "$kit/justfile" spec-chat repo 2>&1)" && fail "default clone absent but succeeded"
 grep -q "$HOME/src/spec-chat" <<<"$out" || fail "default clone not ~/src/spec-chat: $out"
-echo "spec-chat-install: ok (agents-only links, ignored once, clean status, nothing in HOME, both errors)"
+echo "spec-chat-install: ok (agents-only links, ignored once, clean status, nothing in HOME, worktree top ok, subdir, non-git and missing-clone errors)"

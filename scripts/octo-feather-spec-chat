@@ -14,6 +14,10 @@ me="octo-feather-spec-chat"
 repo="$(cd "$1" && pwd -P)"
 [[ "$(git -C "$repo" rev-parse --is-inside-work-tree 2>/dev/null)" == true ]] \
   || { echo "$me: $repo is not a git work tree; run git init $repo, or pass the repo's checkout" >&2; exit 1; }
+# pi-role finds repo skills only at a checkout top's .agents/skills.
+top="$(git -C "$repo" rev-parse --show-toplevel)"; top="$(cd "$top" && pwd -P)"
+[[ "$repo" == "$top" ]] \
+  || { echo "$me: $repo is below its work tree top; pi-role looks for skills only at the top, so pass $top" >&2; exit 1; }
 
 clone="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}"
 installer="$clone/scripts/install-spec-chat"
@@ -23,9 +27,6 @@ clone="$(cd "$clone" && pwd -P)"
 
 "$installer" --agents-only --prefix "$repo"
 
-# Anchored paths are relative to the work tree top; REPO may sit below it.
-top="$(git -C "$repo" rev-parse --show-toplevel)"; top="$(cd "$top" && pwd -P)"
-rel="${repo#"$top"}"
 exclude="$(git -C "$repo" rev-parse --path-format=absolute --git-path info/exclude)"
 mkdir -p "$(dirname "$exclude")"; touch "$exclude"
 n=0
@@ -33,7 +34,7 @@ for l in "$repo"/.agents/skills/*; do
   [[ -L "$l" ]] || continue
   dest="$(realpath -m "$l")"
   [[ "$dest" == "$clone"/* ]] || continue
-  line="$rel/.agents/skills/$(basename "$l")"
+  line="/.agents/skills/$(basename "$l")"
   if ! grep -qxF "$line" "$exclude"; then
     [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
     echo "$line" >> "$exclude"
