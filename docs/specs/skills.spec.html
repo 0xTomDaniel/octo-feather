@@ -47,7 +47,7 @@
 <table data-anchor="skills-table"><caption>Vendored skills: upstream base, pin, licence, and the one reason each is patched</caption>
 <thead><tr><th>Skill</th><th>Upstream, pin, licence</th><th>Patch reason (first line of its patch)</th><th>Loaded by</th></tr></thead>
 <tbody>
-<tr data-anchor="skill-tdd"><td><code>tdd</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0002: seams are public surfaces only; ADR 0015: seams come from the ticket</td><td>implementer</td></tr>
+<tr data-anchor="skill-tdd"><td><code>tdd</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0002: seams are public surfaces only, taken from the ticket</td><td>implementer</td></tr>
 <tr data-anchor="skill-implement"><td><code>implement</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked; the gate is <code>just check</code>; ADR 0007 no self-review</td><td>implementer</td></tr>
 <tr data-anchor="skill-implement-spec"><td><code>implement-spec</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues; ADR 0011 and 0017 Herdr workers and <code>just integrate</code>; ADR 0007 fresh reviewer; ADR 0015 merge ask up the chain; ADR 0019 pilot first; ADR 0020 finding classes logged</td><td>supervisor</td></tr>
 <tr data-anchor="skill-to-tickets"><td><code>to-tickets</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues</td><td>supervisor</td></tr>
@@ -80,7 +80,7 @@
 <h2>Where skills live and how they load</h2>
 <p data-anchor="loading-folder">Every kit skill, vendored or local, is a folder in <code>.agents/skills/</code>; role files stay in <code>agents/</code>.</p>
 <p data-anchor="loading-listed">A role loads exactly the skills its file lists: discovery is off for every role, so neither the kit's nor a target repository's <code>.agents/skills</code> loads by itself. A target's own skills reach an implementer only when the target's <code>AGENTS.md</code> declares them on its <code>Repo skills:</code> line and the implementer loads them by name.</p>
-<p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found in the user's <code>~/.agents/skills</code>, then <code>~/.pi/agent/skills</code>. The supervisor lists Spec Chat's shaping and review skills, and uses shaping only to revise its accepted spec for re-review; shaping itself happens in the owner's chat (ADR 0021).</p>
+<p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found on <code>$OCTO_FEATHER_SKILL_PATH</code>, by default the user's <code>~/.agents/skills</code>, then <code>~/.pi/agent/skills</code> (ADR 0013). The supervisor lists Spec Chat's shaping and review skills, and uses shaping only to revise its accepted spec for re-review; shaping itself happens in the owner's chat (ADR 0021).</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
