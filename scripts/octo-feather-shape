@@ -14,6 +14,9 @@ from pathlib import Path
 KIT = Path(__file__).resolve().parent.parent
 KIT_SKILLS = ["grill-with-docs", "grilling", "domain-modeling", "improve-codebase-architecture", "codebase-design", "sharpen"]
 REPO_SKILLS = ["spec-chat-shape"]
+PROMPT = ("This is the owner's shaping chat (docs/adr/0021 in the octo-feather kit). Turn what the owner wants into an accepted spec "
+          "with your skills: sharpen the ask, grill it, shape it with spec-chat-shape. Do not implement: changes to code, "
+          "scripts or config are built by the factory after the owner accepts the spec.")
 
 
 def pi_role():
@@ -26,7 +29,7 @@ def pi_role():
 def main(argv):
     as_json = bool(argv) and argv[0] == "--json"
     argv = argv[1:] if as_json else argv
-    args = ["--no-mcp", "--no-skills"]
+    args = ["--no-mcp", "--no-skills", "--append-system-prompt", PROMPT]
     for s in KIT_SKILLS:
         d = KIT / ".agents" / "skills" / s
         if not (d / "SKILL.md").is_file():
