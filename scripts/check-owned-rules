@@ -30,9 +30,11 @@ RULES = {
         {"docs/adr/0011-herdr-layout.md"},
         "the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
     ),
-    # "sleep", "wait" and "poll" alone stay out: scripts and docs use them legitimately (issue #29).
+    # Only the agent-turn mechanism: "sleep", "wait", "poll" and a bare "blocking wait" stay out,
+    # scripts and docs use them for process waits (`wait "$pid"`; issue #29, review of a4d8861).
     "long-wait": (
-        r"hold(s|ing)? (your|its|their|the) turn|blocking wait|done rc=\$\?",
+        r"hold(s|ing)? (your|its|their) turn|sleep or (a )?blocking wait|blocking wait (over|longer than|of more than) ~?\d"
+        r"|queues? unread as \W?steering|done rc=\$\?",
         {".agents/skills/herdr-comms/SKILL.md"},
         "write only a pointer: wait only as herdr-comms (Send a message) says, .agents/skills/herdr-comms/SKILL.md",
     ),
