@@ -10,7 +10,7 @@
 #      state dir; live lanes/, sessions/, director.toml masked
 #   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
 #   5. tmpfs over the cache dir, /dev/shm and the Pi agent dir (its entries
-#      bound back read-only, auth.json the original file); then every other
+#      bound back read-only, auth.json a per-run copy on the hidden run tmpfs); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
 #      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge
 #   6. env scrubbed; herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
@@ -23,6 +23,8 @@
 #      upper dir: one JSON line {"upper": [[kind, path]...]} on QC_FD_POST,
 #      kind new, changed or deleted; octo-feather-qc classifies them. The upper
 #      dir dies with the namespace: nothing the judge wrote anywhere persists.
+#      Then the auth.json copy on QC_FD_AUTH: U if unchanged, C and its bytes if
+#      changed; octo-feather-qc decides the write-back (token refresh only).
 # Inner (PID 1 of that namespace):
 #   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
@@ -30,14 +32,13 @@
 #      other process in the PID namespace (nested ones included) and count what
 #      is left; exiting PID 1 then makes the kernel kill anything remaining.
 #      One cleanup line on stderr (offline gh refusals counted), the record on the QC_FD_POST pipe.
-# The judge has no persistent writable path but Pi's auth.json itself (the
-# credential store, bound for token refresh); the proof lists every one.
+# The judge has no persistent writable path at all; the proof lists every writable one.
 # Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
 # state dir, QC_WORKTREE, QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
 # QC_PATH_PREPEND dirs put on PATH after scripts/qc-bin, QC_GHSNAP snapshot dir and
 # QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_FD_PROOF /
-# QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
+# QC_FD_POST / QC_FD_ERR / QC_FD_AUTH pipe fds (no write fd may pin a mount being remounted).
 # Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
 set -uo pipefail
 phase=setup; [[ "${1:-}" == inner ]] && { phase=inner; shift; }
@@ -50,7 +51,7 @@ SB="$SCR/state/octo-feather/sessions/$S"
 say() { printf 'qc sandbox: %s\n' "$*" >&4; printf 'qc sandbox: %s\n' "$*" >&2; }
 
 if [[ "$phase" == setup ]]; then
-  exec 4>&"$QC_FD_PROOF" 5>&"$QC_FD_POST" 6>&"$QC_FD_ERR" {QC_FD_PROOF}>&- {QC_FD_POST}>&- {QC_FD_ERR}>&-
+  exec 4>&"$QC_FD_PROOF" 5>&"$QC_FD_POST" 6>&"$QC_FD_ERR" 11>&"$QC_FD_AUTH" {QC_FD_PROOF}>&- {QC_FD_POST}>&- {QC_FD_ERR}>&- {QC_FD_AUTH}>&-
   RS="$QC_STATE" GH="$QC_GH" WT="$QC_WORKTREE"
   GC="${GH_CONFIG_DIR:-$cfg/gh}" PI="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
   CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
@@ -114,30 +115,41 @@ if [[ "$phase" == setup ]]; then
   done <<< "${QC_RO_BINDS:-}"
 
   # 5. per-run tmpfs where tools write; everything else read-only but the worktree.
-  rw=(/tmp "$HC")
+  # The run tmpfs (masked below; fd 8 keeps it for step 10): overlay upper and work dirs, and
+  # Pi's auth.json snapshot plus the judge's per-run copy of it.
+  [[ "$WT" != *[,:]* ]] || die "worktree path $WT holds , or : (overlay options)"
+  OV="$SCR/ov"; mkdir -p "$OV"
+  mount -t tmpfs -o mode=700 tmpfs "$OV" && mkdir "$OV/u" "$OV/w" "$OV/auth" || die "run tmpfs"
+  rw=(/tmp "$HC" "$OV")
   if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi
   mount -t tmpfs tmpfs /dev/shm 2>/dev/null
-  if [[ -d "$PI" ]]; then exec 7<"$PI"; mount -t tmpfs tmpfs "$PI" || die "tmpfs $PI"; rw+=("$PI"); fi
+  if [[ -d "$PI" ]]; then
+    exec 7<"$PI"
+    if [[ -f "$PI/auth.json" ]]; then
+      (umask 077; cat "$PI/auth.json" > "$OV/auth/snap" && cp "$OV/auth/snap" "$OV/auth/auth.json") || die "copy Pi auth.json"
+    fi
+    mount -t tmpfs tmpfs "$PI" || die "tmpfs $PI"; rw+=("$PI")
+  fi
   while read -r _ _ _ _ mp _; do
     mp=$(printf '%b' "$mp")
     [[ "$mp" == /proc ]] && continue   # replaced by the judge's own /proc
     for k in "${rw[@]}" /dev/shm; do [[ "$mp" == "$k" ]] && continue 2; done
     remount ro "$mp" || die "read-only $mp"
   done < <(cat /proc/self/mountinfo)
-  if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json the original (token refresh), the rest per-run
+  if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json the per-run copy (token refresh), the rest per-run
     for e in /proc/self/fd/7/* /proc/self/fd/7/.[!.]*; do
       [[ -e "$e" ]] || continue; n="${e##*/}"; [[ "$n" == sessions ]] && continue
       if [[ -d "$e" ]]; then mkdir -p "$PI/$n"; else touch "$PI/$n"; fi
-      mount --no-canonicalize --bind "$e" "$PI/$n" || die "bind back $PI/$n"
-      if [[ "$n" == auth.json ]]; then remount rw "$PI/$n"; else remount ro "$PI/$n"; fi || die "pi $n"
+      if [[ "$n" == auth.json && -f "$OV/auth/auth.json" ]]; then
+        mount --bind "$OV/auth/auth.json" "$PI/$n" || die "bind auth.json copy"
+      else
+        mount --no-canonicalize --bind "$e" "$PI/$n" && remount ro "$PI/$n" || die "bind back $PI/$n"
+      fi
     done
     exec 7<&-
   fi
-  # The worktree: an overlay on the read-only real one; upper and work dirs on a run tmpfs that
-  # is then masked (fd 8 keeps it for step 10), so the judge's writes die with the run.
-  [[ "$WT" != *[,:]* ]] || die "worktree path $WT holds , or : (overlay options)"
-  OV="$SCR/ov"; mkdir -p "$OV"
-  mount -t tmpfs -o mode=700 tmpfs "$OV" && mkdir "$OV/u" "$OV/w" || die "overlay tmpfs"
+  # The worktree: an overlay on the read-only real one, its upper and work dirs on the run tmpfs,
+  # so the judge's writes die with the run.
   exec 9<"$WT"
   mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w" "$WT" || die "worktree overlay"
   exec 8<"$OV"; mount -t tmpfs -o ro,mode=000 tmpfs "$OV" || die "mask overlay upper"
@@ -173,7 +185,7 @@ if [[ "$phase" == setup ]]; then
   PATH="$(dirname "$0")/qc-bin:$PATH"   # the offline gh shadows every other gh
   export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/gh-miss.log"
   unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --ipc --fork --kill-child --mount-proc \
-    -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&-; rc=$?
+    -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&- 11>&-; rc=$?
   # 10. what the judge wrote into the worktree, read from the masked upper dir (real worktree at fd 9).
   python3 - /proc/self/fd/8/u /proc/self/fd/9 >&5 <<'EOF'
 import json, os, stat, sys
@@ -222,6 +234,12 @@ for root, dirs, files in os.walk(up):
             out.append(["changed", rel])
 print(json.dumps({"upper": sorted(out, key=lambda e: e[1])}))
 EOF
+  # The judge's auth.json copy, for octo-feather-qc's write-back decision (bytes over a pipe, never a file).
+  A=/proc/self/fd/8/auth
+  if [[ -f "$A/snap" ]]; then
+    if cmp -s "$A/snap" "$A/auth.json"; then printf U >&11; else { printf C; cat "$A/auth.json"; } >&11; fi
+  fi
+  exec 11>&-
   exit "$rc"
 fi
 
@@ -261,17 +279,16 @@ else rol+=("the kit"); dirs+=("$kit/scripts"); kitn=""; fi
 w=0; for d in "${dirs[@]}"; do touch "$d/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$d/.qc-ro-$S"; }; done
 check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only${kitn:+; $kitn}"
 # Every writable mount, by its own flags: tmpfs and /proc die with the run, the worktree overlay's
-# upper dir is on the run tmpfs; anything else is persistent. auth.json is named, not hidden.
+# upper dir is on the run tmpfs; anything else is persistent (Pi's auth.json is a bind of a run tmpfs file).
 ov=$(cat "$SCR/ovupper"); wt=$(git rev-parse --show-toplevel 2>/dev/null)
-mapfile -t wp < <(awk -v ov="upperdir=$ov," -v pi="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/auth.json" '
+mapfile -t pers < <(awk -v ov="upperdir=$ov," '
   { for (i = 7; $i != "-"; i++); fs = $(i+1); so = $(i+3) ","; mp = $5; gsub(/\\040/, " ", mp); w[mp] = ""
-    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && index(so, ov)))) w[mp] = (mp == pi ? "PI " : "") mp }
+    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && index(so, ov)))) w[mp] = mp }
   END { for (m in w) if (w[m] != "") print w[m] }' /proc/self/mountinfo)   # last mount on a path wins: covered ones are unreachable
-pers=(); auth=""; for m in "${wp[@]}"; do [[ "$m" == "PI "* ]] && auth="${m#PI }" || pers+=("$m"); done
 ovl=$(awk -v wt="$wt" -v ov="upperdir=$ov," '{ for (i = 7; $i != "-"; i++); mp = $5; gsub(/\\040/, " ", mp) }
   mp == wt && $(i+1) == "overlay" && index($(i+3) ",", ov) { n++ } END { print n + 0 }' /proc/self/mountinfo)
 check "$(t test "$ovl" -ge 1 -a ! -e "$ov")" "worktree $wt is an overlay, upper dir on the run tmpfs and hidden from the judge"
-check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}${auth:+ (except $auth: the Pi credential store itself, bound for token refresh)}"
+check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}"
 if [[ -n "$HERDR" ]]; then
   r=$(t "$HERDR" --session default workspace list); check $((r == 0)) "live Herdr unreachable: raw herdr --session default workspace list exits $r"
   a=$(herdr --session default --remote x --machine y workspace list 2>&1); b=$("$HERDR" --session "$S" workspace list 2>&1)
