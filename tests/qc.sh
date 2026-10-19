@@ -29,7 +29,7 @@ echo default > "$HOME/.config/herdr/herdr.sock"
 echo 'oauth_token: SECRET-gh' > "$HOME/.config/gh/hosts.yml"; echo 'https://x:SECRET-git@github.com' > "$HOME/.git-credentials"
 echo LIVE > "$live/lanes/gh9.toml"; echo ARCHIVED > "$live/lanes/archive/gh1.toml"; echo '{"director":1}' > "$live/director.handoffs.jsonl"
 echo 'pane = "LIVE"' > "$live/director.toml"
-mkdir -p "$HOME/.pi/agent"; echo '{"k": "SECRET-pi-auth-0123456789"}' > "$HOME/.pi/agent/auth.json"
+mkdir -p "$HOME/.pi/agent"; echo '{"k": "SECRET-pi-auth-0123456789", "exp": 1}' > "$HOME/.pi/agent/auth.json"; chmod 600 "$HOME/.pi/agent/auth.json"
 echo '{"providers": {"p": {"apiKey": "SECRET-pi-models-0123456789"}}}' > "$HOME/.pi/agent/models.json"
 cat > "$t/fakeherdr/herdr" <<'EOF'
 #!/usr/bin/env bash
@@ -64,10 +64,21 @@ case "$FAKE_QC" in
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
   bigcopy) mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/big; truncate -s 67108865 scratch/big; printf "$ok" ;;
   refresh)   # auth A becomes B, keep B, B becomes C (a refresh between two judge copies), and stash into HOME
-    rf() { echo "{\"k\": \"SECRET-pi-auth-$1-987654\"}" > "$HOME/.pi/agent/auth.json.new" && mv "$HOME/.pi/agent/auth.json.new" "$HOME/.pi/agent/auth.json" \
-      || echo "{\"k\": \"SECRET-pi-auth-$1-987654\"}" > "$HOME/.pi/agent/auth.json"; }
+    rf() { echo "{\"k\": \"SECRET-pi-auth-$1-987654\", \"exp\": 2}" > "$HOME/.pi/agent/auth.json.new" && mv "$HOME/.pi/agent/auth.json.new" "$HOME/.pi/agent/auth.json" \
+      || echo "{\"k\": \"SECRET-pi-auth-$1-987654\", \"exp\": 2}" > "$HOME/.pi/agent/auth.json"; }
     mkdir -p scratch; rf B; cp "$HOME/.pi/agent/auth.json" scratch/oldauth; cp "$HOME/.pi/agent/auth.json" .git/oldauth
     cp "$HOME/.pi/agent/auth.json" "$HOME/oldauth" 2>/dev/null; rf REFRESHED
+    printf "$ok" ;;
+  savedcopy)   # persist a copy inside auth.json itself: an added key
+    python3 - "$HOME/.pi/agent/auth.json" <<'P'
+import json, sys
+a = json.load(open(sys.argv[1])); a["saved_copy"] = dict(a); open(sys.argv[1], "w").write(json.dumps(a))
+P
+    printf "$ok" ;;
+  race)   # refresh in place, then wait while the box's own Pi refreshes auth.json (the test, outside)
+    echo '{"k": "SECRET-pi-auth-JUDGE-987654", "exp": 3}' > "$HOME/.pi/agent/auth.json"
+    sleep 3013@TOK@ < /dev/null > /dev/null 2>&1 &
+    for _ in $(seq 100); do [[ -e "$FAKE_GO" ]] && break; sleep 0.1; done
     printf "$ok" ;;
   token)   # only extracted values, as jq -r would print them: no whole-file match
     mkdir -p scratch; python3 -c 'import json,sys; print("x", json.load(open(sys.argv[1]))["k"], "y")' "$HOME/.pi/agent/auth.json" > scratch/tok
@@ -189,9 +200,24 @@ copycase() { run 0 "$1" $st 5 acceptance-a; local f; for f in "${@:2}"; do [[ ! 
   echo "qc test: $1: ${*:2} discarded with the run ($(report '["discarded_writes"]') writes), exit 0" >&2; }
 copycase copycreds scratch/a .git/m
 copycase bigcopy scratch/big
-copycase refresh scratch/oldauth .git/oldauth "$HOME/oldauth"
-grep -q REFRESHED "$HOME/.pi/agent/auth.json" || fail "refresh case did not replace auth.json"
-copycase token scratch/tok .git/tok2
+pa="$HOME/.pi/agent/auth.json"; orig="$(cat "$pa")"
+piok() { [[ "$(ls -A "$HOME/.pi/agent" | tr '\n' ' ')" == "auth.json models.json " && "$(stat -c %a "$pa")" == 600 ]] \
+  || fail "$1: Pi dir holds a stray file or auth.json mode changed: $(ls -lA "$HOME/.pi/agent")"
+  [[ "$(report '["sandbox"]["auth_writeback"]')" == "$2" ]] && grep -q "qc: cleanup: auth_writeback: $2" <<< "$out" \
+  || fail "$1: want auth_writeback $2, got $(report '["sandbox"]["auth_writeback"]')"; }
+# The judge stores a copy under a new key in auth.json: refused, the box file byte-identical.
+copycase savedcopy; piok savedcopy refused:keys-changed
+[[ "$(cat "$pa")" == "$orig" ]] || fail "savedcopy: box auth.json changed"
+# The box's own Pi refreshes auth.json while the judge also refreshes its copy: the box value is kept.
+(for _ in $(seq 100); do pgrep -fx "sleep 3013$tok" > /dev/null && break; sleep 0.1; done
+ echo '{"k": "SECRET-pi-auth-BOX-987654", "exp": 4}' > "$pa"; touch "$t/bin/go") &
+FAKE_GO="$t/bin/go" copycase race; wait; rm -f "$t/bin/go"; piok race refused:box-auth-changed
+[[ "$(cat "$pa")" == '{"k": "SECRET-pi-auth-BOX-987654", "exp": 4}' ]] || fail "race: box value not kept"
+# A token refresh in place (intermediate copies anywhere discarded): written back, the new value only.
+copycase refresh scratch/oldauth .git/oldauth "$HOME/oldauth"; piok refresh written
+[[ "$(cat "$pa")" == '{"k": "SECRET-pi-auth-REFRESHED-987654", "exp": 2}' ]] || fail "refresh case did not write back the new token"
+grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" || fail "proof must say writable persistent paths: none: $out"
+copycase token scratch/tok .git/tok2; piok token none
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
   || fail "judge wrote live state"
@@ -227,4 +253,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json: added key refused, refresh written, box race kept), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
