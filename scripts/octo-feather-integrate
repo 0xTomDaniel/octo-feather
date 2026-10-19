@@ -17,11 +17,13 @@ set -euo pipefail
 (($# >= 2)) && [[ "$1" =~ ^[0-9]+$ ]] || { echo "usage: octo-feather-integrate ISSUE REF..." >&2; exit 64; }
 n="$1"; shift
 
-# The lane worktree is the one whose branch names gh<N> (slug gh<issue>, docs/adr/0011).
-mapfile -t lanes < <(git worktree list --porcelain | awk -v re="(^|/)gh$n(-|\$)" '
+# The lane worktree is the one whose branch ends in the path segment gh<N> (lane key
+# gh<issue>, docs/adr/0011): gh<N> or a namespaced <prefix>/gh<N>. No suffix, so
+# worker branches gh<N>-* and lane gh<N>0 never match.
+mapfile -t lanes < <(git worktree list --porcelain | awk -v re="(^|/)gh$n\$" '
   /^worktree /{wt=substr($0, 10)} /^branch /{b=substr($0, 19); if (b ~ re) print wt "\t" b}')
 if ((${#lanes[@]} != 1)); then
-  echo "octo-feather-integrate: need exactly one worktree on a gh$n branch, found ${#lanes[@]}" >&2
+  echo "octo-feather-integrate: need exactly one worktree on branch gh$n or <prefix>/gh$n, found ${#lanes[@]}" >&2
   ((${#lanes[@]} == 0)) || printf "  %s\n" "${lanes[@]}" >&2; exit 66
 fi
 wt="${lanes[0]%%$'\t'*}"; branch="${lanes[0]#*$'\t'}"
