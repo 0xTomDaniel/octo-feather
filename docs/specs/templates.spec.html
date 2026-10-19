@@ -65,9 +65,7 @@
 <p data-anchor="tbd-integrate-in-target" data-spec-tbd>TBD: In a target repository, <code>just integrate</code> exists only because the template's justfile defines it; a target not made from a template has no such recipe. Where should the supervisor's integrate command live?
   <button type="button" data-spec-choice="The supervisor calls the kit's integrate script directly">The supervisor calls the kit's integrate script directly (recommended)</button>
   <button type="button" data-spec-choice="Every target defines the recipe">Every target defines the recipe</button></p>
-<p data-anchor="tbd-status-check-in-target" data-spec-tbd>TBD: A target repository keeps its accepted specs and their status files in its own <code>docs/specs/</code>, but the templates' <code>just check</code> does not run <code>octo-feather-spec-status check</code>; only the kit's gate does. Where is a target's status file checked?
-  <button type="button" data-spec-choice="The templates' just check runs the kit's status check">The templates' just check runs the kit's status check (recommended)</button>
-  <button type="button" data-spec-choice="Only the supervisor's self-check before the merge ask">Only the supervisor's self-check before the merge ask</button></p>
+<p data-anchor="tbd-status-check-in-target" data-spec-tbd="later">TBD: A target repository keeps its accepted specs and their status files in its own <code>docs/specs/</code>; the status check reaching the templates' <code>just check</code> is recorded in <a href="../future.md">docs/future.md</a>.</p>
 <p data-anchor="tbd-template-instantiation" data-spec-tbd>TBD: How the owner creates a repository from a template.
   <button type="button" data-spec-choice="A just recipe that copies the template">A just recipe that copies the template (recommended)</button>
   <button type="button" data-spec-choice="GitHub template repositories">GitHub template repositories</button></p>

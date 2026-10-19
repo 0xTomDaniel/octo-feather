@@ -83,7 +83,7 @@
 </svg>
 <figcaption data-anchor="org-chart-caption">Every arrow is a report or escalation path, one level up. Only the director talks to the owner. Integration is a deterministic script the supervisor runs, so it has no box in the chain.</figcaption>
 </figure>
-<p data-anchor="factory-rule-director">The director never edits code and never shapes; its only repo write is the generated status file on a spec pull request. It takes an accepted spec at kickoff, opens its spec pull request, cuts lanes once the spec is on main, files each lane's parent issue, starts one supervisor per lane, starts correction lanes on repeats, removes blockers and brings the owner only gate decisions.</p>
+<p data-anchor="factory-rule-director">The director edits no code or spec and never shapes; its only repo write is the spec pull request's generated status file (ADR 0007). It takes an accepted spec at kickoff, opens its spec pull request, cuts lanes once the spec is on main, files each lane's parent issue, starts one supervisor per lane, starts correction lanes on repeats, removes blockers and brings the owner only gate decisions.</p>
 <p data-anchor="factory-rule-shaping">Shaping and spec acceptance happen outside the factory, in the owner's own chat; the accepted spec, at an exact commit, is the only thing handed in (ADR 0021).</p>
 <p data-anchor="factory-rule-supervisor">Every lane gets a supervisor, even when it is the only one running: one lane is one merge ask on one parent issue. The supervisor files the lane's tickets, directs its workers and never does their work, reviews it, or accepts it.</p>
 </section>
