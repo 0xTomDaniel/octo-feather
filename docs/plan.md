@@ -16,7 +16,7 @@ Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatte
 | 3 | Comms smoke | 45m | `octo-lite-start --runtime pi` director spawns a Pi implementer, `herdr-say` brief, result returns to director pane |
 | 4 | Python template | 90m | uv, ruff strict, basedpyright strict, import-linter, pytest integration+E2E, app CLI `--json`, `just check`, pre-commit, GitHub Actions; target `AGENTS.md` with `Repo skills:` line |
 | 5 | TypeScript template | 90m | pnpm, tsc strictest, typescript-eslint strict-type-checked, dependency-cruiser, knip, Vitest integration, Playwright E2E if UI, app CLI `--json`, same `just check` |
-| 6 | Skill deltas | 45m | `tdd` patch: seams = integration/E2E only; pstack create-verification-skill + selected principles; `skills.lock` with SHAs + licenses |
+| 6 | Skill deltas | 45m | `tdd` patch: seams = integration/E2E only; pstack create-verification-skill + selected principles; `skills.lock` with SHAs + licenses. Rebase done 2026-10-18 20:00 MDT: implement, implement-spec, to-tickets, grill-with-docs (+ grilling, domain-modeling), tdd, code-review from Matt 49dd158 and pstack `correct`, all through `Skillfile` with reason-headed patches (docs/adr/0012); supervisor briefs use pstack orchestrate's brief format. Left: create-verification-skill |
 | 7 | Dress rehearsal | 60m+ | one tiny project per language through the full loop on the remote; fix what breaks |
 | 8 | Submission bundle | 20m | `evidence/` layout, README "How this was built" |
 

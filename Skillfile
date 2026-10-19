@@ -11,16 +11,22 @@
 
 install-path  octo-feather  skill  agents/skills
 
-# Managed upstream skills pinned at exact canonical SHAs.
-github  skill  tdd  mattpocock/skills@ed37663cc5fbef691ddfecd080dff42f7e7e350d  skills/engineering/tdd
-github  skill  code-review  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
+# Managed upstream skills pinned at exact SHAs: mattpocock/skills (MIT) and pstack
+# (cursor/plugins, MIT). Patches: .skillfile/patches/skills/<name>/, first line = reason.
+github  skill  tdd              mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/tdd
+github  skill  implement        mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/implement
+github  skill  implement-spec   mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/implement-spec
+github  skill  to-tickets       mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/to-tickets
+github  skill  grill-with-docs  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/grill-with-docs
+github  skill  grilling         mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/productivity/grilling
+github  skill  domain-modeling  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/domain-modeling
+github  skill  code-review      mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
+github  skill  correct          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/correct
 
 # octo-feather's own skills, authored locally under skills/ (most ported from octo-lite).
 local  skill  commit                  skills/commit
 local  skill  github                  skills/github
-local  skill  grill-with-docs         skills/grill-with-docs
 local  skill  herdr-comms             skills/herdr-comms
-local  skill  implement-spec          skills/implement-spec
 local  skill  nodejs                  skills/nodejs
 local  skill  pnpm                    skills/pnpm
 local  skill  pull                    skills/pull

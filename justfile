@@ -32,7 +32,8 @@ check-scripts:
 
 # No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
-# LICENSE, this justfile, and spec/ (octo-lite's spec, kept as format reference).
+# LICENSE, this justfile, spec/ (octo-lite's spec, kept as format reference) and
+# .skillfile/ patches, which quote the upstream lines they remove.
 check-refs:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -40,8 +41,8 @@ check-refs:
     bad=0
     if git ls-files | grep -E '(^|/)(CLAUDE\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex projection files above are not allowed (docs/adr/0001)" >&2; bad=1; fi
-    mapfile -t files < <(git ls-files | grep -vE '^(docs/|spec/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    if grep -nHiE '\blinear\b' "${files[@]}"; then
+    mapfile -t files < <(git ls-files | grep -vE '^(docs/|spec/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
+    if grep -nHE '\bLinear\b' "${files[@]}"; then
       echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
@@ -74,10 +75,10 @@ check-skills:
       head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
       n=$((n + 1))
     done
-    for r in meta-operator supervisor implementer integrator code-reviewer; do
+    for r in meta-operator supervisor implementer integrator code-reviewer corrector; do
       [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
     done
-    echo "skills: ok ($n skills, 5 roles)"
+    echo "skills: ok ($n skills, 6 roles)"
 
 # Role files: pi-subagents frontmatter, skills resolve, allowed models (docs/adr/0013).
 check-roles:

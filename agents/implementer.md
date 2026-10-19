@@ -4,7 +4,7 @@ description: Implement one ticket inside the worktree it was given, and return t
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
-skills: commit, github, nodejs, pnpm, pull, python, tdd, typescript
+skills: commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
 inheritSkills: false
 skillPath: ../skills, skills
 inheritProjectContext: false
@@ -38,7 +38,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 - Follow the target `AGENTS.md` for how to build, test, and validate. It outranks habit.
 - Load only the skills this ticket needs: from the kit skills you were given (available, not mandatory), and by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks a generic one. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
 - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while the behavior stays wrong.
-- Validate proportionately to the change, then commit.
+- Build the ticket with the `implement` skill. In vendored skills, "the user" is your supervisor (`herdr-say --parent`).
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; report the smoke result first.
 - One mechanism (operating model): before adding a client, format, store, config, status file, or table, find the existing one and extend it, or state in the spec why a second is needed.
 - Start any server or background process as `setsid sh -c 'echo $$ > "$(git rev-parse --git-dir)/pids/<name>"; exec cmd' &` (mkdir that `pids` dir first) and stop it before reporting, only via that file: `kill -- -<pid>`. Never `pkill -f` or `killall`.

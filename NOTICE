@@ -23,19 +23,14 @@ of docs/adr/0011):
     agents/implementer.md
     agents/integrator.md
     agents/code-reviewer.md
-    agents/skills/tdd/ (materialized from mattpocock/skills, MIT, with octo-lite's patch)
 
-Also vendored, not from octo-lite: agents/skills/code-review/ (mattpocock/skills@49dd158, MIT,
-Copyright Matt Pocock), patched in .skillfile/patches/skills/code-review/.
     skills/commit/SKILL.md
     skills/github/SKILL.md (was skills/octo-lite-github)
-    skills/grill-with-docs/SKILL.md
     skills/herdr-comms/SKILL.md
     skills/herdr-comms/assets/herdr-close
     skills/herdr-comms/assets/herdr-say
     skills/herdr-comms/assets/herdr-spawn
     skills/herdr-comms/assets/herdr-wake
-    skills/implement-spec/SKILL.md
     skills/nodejs/SKILL.md
     skills/pnpm/SKILL.md
     skills/pull/SKILL.md
@@ -52,3 +47,12 @@ Copied unmodified from octo-lite as a reference for the spec format:
     spec/ (index.spec.html, domains/octo-lite.spec.html, adr/*.spec.html,
     .style/, .viz/; .viz/vendor/echarts-5.5.1.min.js is Apache ECharts,
     Apache-2.0)
+
+Vendored, not from octo-lite, under agents/skills/ with patches in .skillfile/patches/skills/
+(pins in Skillfile.lock):
+
+    tdd, implement, implement-spec, to-tickets, grill-with-docs, grilling,
+    domain-modeling, code-review: mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
+    correct: cursor/plugins@0b8e952 (pstack), MIT, Copyright 2026 Lauren Tan
+    agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
+    (same pin and license).

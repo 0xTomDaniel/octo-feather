@@ -1,3 +1,4 @@
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalate via herdr-say --parent; block only on criteria, broken behaviour or hard standards; sequential axes (no nested children)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,6 +1,6 @@
