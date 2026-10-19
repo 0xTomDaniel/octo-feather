@@ -42,7 +42,7 @@ def main(argv):
     ok = subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{base}:{spec}"], capture_output=True).returncode == 0
     if not ok:
         print(f"not accepted: accepted commit {base[:12]} with {spec} is not in {os.path.abspath(repo)} (fetch spec/{row.get('slug', '<slug>')}?)"); return 1
-    print(f"accepted {base} slug={row.get('slug', '')} at={row.get('updated_at', '')} session={session}")
+    print(f"accepted {base} slug={row.get('slug', '')} at={row.get('updated_at', '')} session={session} id={row.get('id', '')}")
     return 0
 
 

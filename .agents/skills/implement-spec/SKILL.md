@@ -34,6 +34,6 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 7. Once all tickets are complete and `just check` is green, spawn a fresh `code-reviewer` pane on the integration branch. Never review in your own context. Log each finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix all issues raised by the code review in a single **implementer subagent**.
 
-8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
+8. If a draft PR exists, flip the lane's criteria to built in its status file (`octo-feather-spec-status built`, docs/adr/0021), mark it ready for review and send the merge ask to the director with `herdr-say --parent`, listing the criterion ids it flips. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 
 9. Clean up all **implementer subagent** worktrees.

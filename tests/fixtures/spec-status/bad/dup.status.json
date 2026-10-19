@@ -1,0 +1,8 @@
+{
+  "spec": "dup.spec.html",
+  "accepted_commit": "0123abc",
+  "criteria": {
+    "acceptance-a": {"status": "planned", "pr": null},
+    "acceptance-a": {"status": "built", "pr": 4}
+  }
+}

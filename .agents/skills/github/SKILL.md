@@ -77,7 +77,7 @@ Do not create extra workflow labels unless the owner explicitly asks.
 - The reviewer returns a clear or blocking finding set for the diff.
 - A deterministic helper creates or updates one machine-readable PR verdict
   comment for code review.
-- The comment records inputs, findings, and reviewer receipt.
+- The comment records inputs, findings, and the reviewed head.
 - Do not depend on the formal Review API, reviewer identity, checks, or labels.
 - Never merge or approve as the owner reviewer.
 
@@ -89,8 +89,7 @@ Do not create extra workflow labels unless the owner explicitly asks.
   unless the owner says otherwise. Mechanical rebases onto accepted main do not
   require renewed acceptance when behavior and scope are unchanged. A
   owner statement assigning the work item to the current supervisor is sufficient for this
-  action. Record acceptance as the receipt comment on the PR
-  (spec `#acceptance-receipt`), verify required checks, then merge. No worker merges, no agent decides acceptance, and no agent merges
+  action. Verify required checks, then merge. No worker merges, no agent decides acceptance, and no agent merges
   unaccepted work. Required failed checks remain blockers until fixed or
   durably waived through a repository-approved path.
 - The merge completes the worklane. `Closes #<n>` closes the primary GitHub

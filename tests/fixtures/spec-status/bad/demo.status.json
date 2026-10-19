@@ -1,0 +1,26 @@
+{
+  "spec": "demo.spec.html",
+  "accepted_commit": "0123abc",
+  "criteria": {
+    "acceptance-a": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-c": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-d": {
+      "status": "done",
+      "pr": 3
+    },
+    "acceptance-e": {
+      "status": "built",
+      "pr": null
+    },
+    "acceptance-z": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

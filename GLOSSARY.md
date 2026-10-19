@@ -62,6 +62,18 @@ _Avoid_: Spike, trial run
 The accepted spec, at an exact commit, passing from shaping (done with the owner, outside the factory) to the director. It is the only thing that crosses; no work item exists before it.
 _Avoid_: Spec delivery, intake
 
+**Status file**:
+`docs/specs/<slug>.status.json`, beside an accepted spec: each acceptance criterion's id (its `data-anchor`) with its status and the PR that built it. It merges with the spec, before any lane code; the spec itself never changes for status.
+_Avoid_: Receipt, tracker
+
+**Planned criterion**:
+An acceptance criterion of an accepted spec that no merged lane has built yet. Every criterion starts planned.
+_Avoid_: Open, todo
+
+**Built criterion**:
+An acceptance criterion a merged lane PR claims to deliver, flipped in the same merge as its code. Claimed, not proven: `just qc` verifies it.
+_Avoid_: Done, verified, accepted
+
 **Kickoff**:
 The owner telling the director to build one or more accepted specs. The director checks each is accepted at an exact commit, refuses any that is not, then cuts lanes.
 _Avoid_: Launch, go

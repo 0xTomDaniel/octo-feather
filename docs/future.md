@@ -12,7 +12,7 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 
 ## octo-feather's own spec
 
-`spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#acceptance-receipt`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
+`spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
 
 ## `just qc` and `just qa`
 
@@ -41,3 +41,11 @@ What it breaks for octo-feather (ADR 0021):
 - Jev's cross-lane checks pair rows with different slugs in one project, so a spec registered under both slugs may be compared with itself.
 
 Direction: a lane or stage should be explicit registry data supplied by the caller at `register`, not inferred from the slug's shape.
+
+## `just qc` verifies built criteria
+
+A `built` criterion in `docs/specs/<slug>.status.json` is claimed, not proven (ADR 0021). `just qc` (Jev) must verify every `built` criterion and only those, and report any it cannot confirm.
+
+## Criterion status on the spec page
+
+Later, not now: show each criterion's planned or built status on its spec page in Spec Chat, read from the status file, without the spec HTML or Spec Chat learning this workflow.

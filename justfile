@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-tests check-templates
+check: check-scripts check-refs check-dashes check-skills check-roles check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -19,6 +19,7 @@ check-scripts:
     cd "{{root}}"
     files=(); py=()
     for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
+      [[ -f "$f" ]] || continue   # tests/fixtures/ holds data, not scripts
       if head -1 "$f" | grep -q python; then py+=("$f"); else files+=("$f"); fi
     done
     for f in "${py[@]}"; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"; done
@@ -112,6 +113,10 @@ check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
     for t in "{{root}}"/tests/*.sh; do "$t"; done
+
+# Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
+check-spec-status:
+    @python3 "{{root}}/scripts/octo-feather-spec-status" check "{{root}}/docs/specs"
 
 # Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
 integrate issue +refs:

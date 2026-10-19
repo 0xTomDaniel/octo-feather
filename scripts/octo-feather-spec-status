@@ -1,0 +1,118 @@
+#!/usr/bin/env python3
+"""octo-feather-spec-status: the per-criterion status file beside an accepted spec (docs/adr/0021).
+
+  octo-feather-spec-status check [DIR...]          check every DIR/*.status.json (default docs/specs)
+  octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned
+  octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
+
+A status file `<slug>.status.json` sits beside `<slug>.spec.html`:
+  {"spec": "<slug>.spec.html", "accepted_commit": "<sha>",
+   "criteria": {"<id>": {"status": "planned" | "built", "pr": <N or null>}}}
+A criterion id is the `data-anchor` of each `data-acceptance-criterion` element
+(Spec Chat's shaped-sections-v1 contract). `check` fails on a missing spec, a
+missing, extra or duplicate id, a status other than planned/built, a planned
+criterion with a PR, or a built one without. The spec HTML is never edited.
+"""
+import json, re, sys
+from html.parser import HTMLParser
+from pathlib import Path
+
+STATUSES = ("planned", "built")
+
+
+class _Criteria(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.ids = []
+
+    def handle_starttag(self, tag, attrs):
+        a = dict(attrs)
+        if "data-acceptance-criterion" in a:
+            self.ids.append(a.get("data-anchor") or "")
+
+
+def criteria(spec: Path) -> list[str]:
+    p = _Criteria(); p.feed(spec.read_text(encoding="utf-8")); return p.ids
+
+
+def _pairs(pairs):
+    seen = {}
+    for k, v in pairs:
+        if k in seen:
+            raise ValueError(f"duplicate key {k!r}")
+        seen[k] = v
+    return seen
+
+
+def check_file(status: Path) -> list[str]:
+    errs, rel = [], str(status)
+    try:
+        data = json.loads(status.read_text(encoding="utf-8"), object_pairs_hook=_pairs)
+    except ValueError as e:
+        return [f"{rel}: {e}"]
+    slug = status.name.removesuffix(".status.json")
+    if data.get("spec") != f"{slug}.spec.html":
+        errs.append(f"{rel}: spec must be {slug}.spec.html, beside it")
+    spec = status.with_name(f"{slug}.spec.html")
+    if not spec.is_file():
+        return errs + [f"{rel}: no spec {spec}"]
+    if not re.fullmatch(r"[0-9a-f]{7,40}", str(data.get("accepted_commit", ""))):
+        errs.append(f"{rel}: accepted_commit must be a commit sha")
+    ids = criteria(spec)
+    if "" in ids:
+        errs.append(f"{spec}: a data-acceptance-criterion element has no data-anchor")
+    for d in sorted({i for i in ids if i and ids.count(i) > 1}):
+        errs.append(f"{spec}: duplicate criterion id {d}")
+    got = data.get("criteria")
+    if not isinstance(got, dict):
+        return errs + [f"{rel}: criteria must be an object"]
+    want = {i for i in ids if i}
+    for m in sorted(want - got.keys()):
+        errs.append(f"{rel}: missing criterion {m}")
+    for x in sorted(got.keys() - want):
+        errs.append(f"{rel}: extra criterion {x} (not in {spec.name})")
+    for k, v in sorted(got.items()):
+        st = v.get("status") if isinstance(v, dict) else None
+        pr = v.get("pr") if isinstance(v, dict) else None
+        if st not in STATUSES:
+            errs.append(f"{rel}: {k}: status must be planned or built, not {st!r}")
+        elif st == "planned" and pr is not None:
+            errs.append(f"{rel}: {k}: a planned criterion has pr null")
+        elif st == "built" and not (isinstance(pr, int) and not isinstance(pr, bool) and pr > 0):
+            errs.append(f"{rel}: {k}: a built criterion names the PR that built it")
+    return errs
+
+
+def write(path: Path, data: dict) -> None:
+    path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+
+
+def main(argv: list[str]) -> int:
+    cmd, *args = argv or ["check"]
+    if cmd == "check":
+        files = [f for d in (args or ["docs/specs"]) for f in sorted(Path(d).glob("*.status.json"))]
+        errs = [e for f in files for e in check_file(f)]
+        if errs:
+            print("\n".join(errs), file=sys.stderr); return 1
+        print(f"spec-status: ok ({len(files)} status files)"); return 0
+    if cmd == "init" and len(args) == 2:
+        spec = Path(args[0]); slug = spec.name.removesuffix(".spec.html")
+        ids = criteria(spec)
+        data = {"spec": spec.name, "accepted_commit": args[1],
+                "criteria": {i: {"status": "planned", "pr": None} for i in ids}}
+        out = spec.with_name(f"{slug}.status.json"); write(out, data)
+        errs = check_file(out)
+        if errs:
+            print("\n".join(errs), file=sys.stderr); return 1
+        print(out); return 0
+    if cmd == "built" and len(args) >= 3 and args[1].isdigit():
+        status = Path(args[0]); data = json.loads(status.read_text(encoding="utf-8"))
+        for i in args[2:]:
+            if i not in data["criteria"]:
+                print(f"no criterion {i} in {status}", file=sys.stderr); return 1
+            data["criteria"][i] = {"status": "built", "pr": int(args[1])}
+        write(status, data); return 0
+    print(__doc__.strip(), file=sys.stderr); return 64
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
