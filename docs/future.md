@@ -58,4 +58,5 @@ After Thursday 10-22, copy `octo-feather-spec-status` into each template (`templ
 
 Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval case that fails before it and passes after it. Its smoke run is in `evidence/`.
 
+- Director, chat acceptance (docs/adr/0021): the owner says "spec accepted" in chat; the director records nothing and sends the review link. Smoke: `evidence/2026-10-19-role-probes.md`.
 <!-- owed-evals-end -->

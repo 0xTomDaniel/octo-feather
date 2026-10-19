@@ -1,6 +1,6 @@
 # The accepted spec is the handoff; it merges first, with a status per criterion
 
-Brainstorming and shaping happen outside the factory. An owner chat (Exo or a fresh session) loads `spec-chat-shape` in the target repo, commits the spec on branch `spec/<slug>`, pushes it, and registers it with the review service under `--slug <spec slug>`; no issue exists yet. Gate 1 is the owner pressing Accept spec: review-host's accepted registration (row `accepted = true`, `base` = the exact commit) is the acceptance. Decided by Tom (owner), 2026-10-18.
+Brainstorming and shaping happen outside the factory. An owner chat (Exo or a fresh session) loads `spec-chat-shape` in the target repo, commits the spec on branch `spec/<slug>`, pushes it, and registers it with the review service under `--slug <spec slug>`; no issue exists yet. Gate 1 is the owner pressing Accept spec: review-host's accepted registration (row `accepted = true`, `base` = the exact commit) is the acceptance. Decided by Tom (owner), 2026-10-18. The button is the only way to accept a spec: an acceptance said in chat is not one, and no agent records one on the owner's behalf. Decided by Tom (owner), 2026-10-19.
 
 Kickoff: the owner tells the director "build <spec path>" (one spec or several). The director runs `octo-feather-accepted`, which reads every session's review-host registry and refuses any spec not accepted at a commit present in the target repo, saying why. For each accepted spec the director opens a small spec PR before any lane code: branch `spec/<slug>` at the accepted commit plus one commit adding the status file, every criterion `planned`, its body citing the Spec Chat acceptance id and commit. The owner merges it, since merges are an owner gate. Lanes are cut (ADR 0019) and branched from main once their spec is on it. Decided by Tom (owner), 2026-10-19.
 
@@ -12,6 +12,7 @@ The supervisor never shapes. A wording-only spec fix rides on the acceptance (re
 
 - The supervisor shapes inside its lane (octo-lite). Rejected: shaping is a conversation with the owner, and only the director talks to the owner (ADR 0015); a lane would exist before anyone knows how to cut it (ADR 0019).
 - The director records an acceptance receipt comment on each lane PR, and the spec reaches main with the first lane. Rejected: the acceptance is scattered across lane PRs, and main never says which criteria are built.
+- The director records an acceptance the owner gives in chat. Rejected: a second path to the same gate, and an agent writing the owner's decision.
 - Status inside the spec HTML (an attribute per criterion). Rejected: the accepted bytes would change, and Spec Chat would have to know this workflow.
 
 ## Consequences
