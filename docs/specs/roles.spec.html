@@ -78,7 +78,7 @@
 <tr data-anchor="fm-thinking"><td><code>thinking</code></td><td>Thinking level</td></tr>
 <tr data-anchor="fm-tools"><td><code>tools</code></td><td>Strict allowlist of built-in Pi tools, comma-separated</td></tr>
 <tr data-anchor="fm-skills"><td><code>skills</code></td><td>The only kit skills the role loads, by name (see <a href="./skills.spec.html">skills</a>)</td></tr>
-<tr data-anchor="fm-external-skills"><td><code>externalSkills</code></td><td>Optional: skills installed outside the kit, such as Spec Chat's, looked up on <code>$OCTO_FEATHER_SKILL_PATH</code> (default <code>~/.agents/skills:~/.pi/agent/skills</code>) at launch; a missing one is skipped with a warning</td></tr>
+<tr data-anchor="fm-external-skills"><td><code>externalSkills</code></td><td>Optional: skills installed outside the kit, such as Spec Chat's, looked up in the repository's <code>.agents/skills</code> at launch, never in the user's home folder; a missing one is skipped with a warning</td></tr>
 </tbody>
 </table>
 </div>

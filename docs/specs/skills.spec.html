@@ -38,7 +38,7 @@
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
 <h2>Modular boundaries</h2>
 <p data-modular-boundary data-anchor="boundary-skillfile"><span data-boundary-responsibility>The Skillfile owns which upstream skills are vendored, at which pin, and how patches are kept across updates.</span> <span data-boundary-seam>Caller-facing seam: <code>Skillfile</code>, <code>Skillfile.lock</code> and <code>.skillfile/patches/skills/&lt;name&gt;/</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the upstream repositories and the skillfile tool.</span> <span data-boundary-scope>Observable scope: the committed folders in <code>.agents/skills/</code>.</span></p>
-<p data-modular-boundary data-anchor="boundary-skill-loading"><span data-boundary-responsibility><code>pi-role</code> owns which skills a role gets: discovery off, one load per listed skill, external skills from the user's skill folders.</span> <span data-boundary-seam>Caller-facing seam: the role file's <code>skills</code> and <code>externalSkills</code> keys.</span> <span data-boundary-dependency>Dependency direction: self-contained over the kit checkout and the user's skill folders.</span> <span data-boundary-scope>Observable scope: the skills a started agent reports.</span></p>
+<p data-modular-boundary data-anchor="boundary-skill-loading"><span data-boundary-responsibility><code>pi-role</code> owns which skills a role gets: discovery off, one load per listed skill, external skills from the repository's <code>.agents/skills</code>.</span> <span data-boundary-seam>Caller-facing seam: the role file's <code>skills</code> and <code>externalSkills</code> keys.</span> <span data-boundary-dependency>Dependency direction: self-contained over the kit checkout and the repository's <code>.agents/skills</code>.</span> <span data-boundary-scope>Observable scope: the skills a started agent reports.</span></p>
 </section>
 
 <section data-anchor="vendored" id="vendored">
@@ -51,11 +51,15 @@
 <tr data-anchor="skill-implement"><td><code>implement</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked; the gate is <code>just check</code>; ADR 0007 no self-review</td><td>implementer</td></tr>
 <tr data-anchor="skill-implement-spec"><td><code>implement-spec</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues; ADR 0011 and 0017 Herdr workers and <code>just integrate</code>; ADR 0007 fresh reviewer; ADR 0015 merge ask up the chain; ADR 0019 pilot first; ADR 0020 finding classes logged</td><td>supervisor</td></tr>
 <tr data-anchor="skill-to-tickets"><td><code>to-tickets</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues</td><td>supervisor</td></tr>
-<tr data-anchor="skill-grill-with-docs"><td><code>grill-with-docs</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked</td><td>no role (shaping is outside the factory, ADR 0021)</td></tr>
-<tr data-anchor="skill-grilling"><td><code>grilling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>no role</td></tr>
-<tr data-anchor="skill-domain-modeling"><td><code>domain-modeling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>no role</td></tr>
+<tr data-anchor="skill-grill-with-docs"><td><code>grill-with-docs</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked</td><td><code>just shape</code>, not a factory role (ADR 0021)</td></tr>
+<tr data-anchor="skill-grilling"><td><code>grilling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>grill-with-docs</td></tr>
+<tr data-anchor="skill-domain-modeling"><td><code>domain-modeling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td>grill-with-docs</td></tr>
+<tr data-anchor="skill-improve-architecture"><td><code>improve-codebase-architecture</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none</td><td><code>just shape</code></td></tr>
 <tr data-anchor="skill-code-review"><td><code>code-review</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0007 fresh reviewer; ADR 0015 escalate with <code>--parent</code>; block only on criteria, broken behavior or hard standards; sequential axes</td><td>code reviewer</td></tr>
 <tr data-anchor="skill-correct"><td><code>correct</code></td><td>cursor/plugins@0b8e952 (pstack), MIT</td><td>ADR 0012 model-invoked</td><td>corrector, in correction lanes</td></tr>
+<tr data-anchor="skill-prove-it-works"><td><code>principle-prove-it-works</code></td><td>cursor/plugins@0b8e952 (pstack), MIT</td><td>none</td><td>implementer; the interim <code>just qc</code> reviewer</td></tr>
+<tr data-anchor="skill-blast-radius"><td><code>blast-radius</code></td><td>cursor/plugins@0b8e952 (pstack), MIT</td><td>none</td><td>code reviewer</td></tr>
+<tr data-anchor="skill-sharpen"><td><code>sharpen</code></td><td>cursor/plugins@0b8e952 (pstack), MIT</td><td>none</td><td><code>just shape</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -71,7 +75,7 @@
 <tr data-anchor="local-herdr-comms"><td><code>herdr-comms</code></td><td>Spawning, messaging, parking, waking and closing agents, with the Herdr wrappers in its assets</td></tr>
 <tr data-anchor="local-github"><td><code>github</code></td><td>Issues, pull requests and consent rules</td></tr>
 <tr data-anchor="local-git"><td><code>commit</code>, <code>pull</code>, <code>push</code></td><td>Git moves</td></tr>
-<tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers</td></tr>
+<tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers. <code>python</code> and <code>typescript</code> are the owner's scaling-octo-engine skills, ported with changes only to their unit-test, octo-workflow and command lines; the kit still has no unit tests (ADR 0002)</td></tr>
 </tbody>
 </table>
 </div>
@@ -80,12 +84,14 @@
 <h2>Where skills live and how they load</h2>
 <p data-anchor="loading-folder">Every kit skill, vendored or local, is a folder in <code>.agents/skills/</code>; role files stay in <code>agents/</code>.</p>
 <p data-anchor="loading-listed">A role has exactly the skills its file lists available: discovery is off for every role, so neither the kit's nor a target repository's <code>.agents/skills</code> loads by itself. A target's own skills reach an implementer only when the target's <code>AGENTS.md</code> declares them on its <code>Repo skills:</code> line and the implementer loads them by name.</p>
-<p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found on <code>$OCTO_FEATHER_SKILL_PATH</code>, by default the user's <code>~/.agents/skills</code>, then <code>~/.pi/agent/skills</code> (ADR 0013). The supervisor lists Spec Chat's shaping and review skills, and uses shaping only to revise its accepted spec for re-review; shaping itself happens in the owner's chat (ADR 0021).</p>
+<p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found in the repository's <code>.agents/skills</code>, never in the user's home folder (ADR 0013). The supervisor lists Spec Chat's shaping and review skills, and uses shaping only to revise its accepted spec for re-review; shaping itself happens in the owner's chat (ADR 0021).</p>
+<p data-anchor="loading-shape">Shaping is not a factory role: <code>just shape</code> starts Pi with only <code>grill-with-docs</code>, <code>improve-codebase-architecture</code>, <code>spec-chat-shape</code> and <code>sharpen</code>, and the kit's <code>AGENTS.md</code> names it in one line.</p>
+<p data-anchor="loading-pstack">From pstack the kit vendors <code>correct</code>, <code>principle-prove-it-works</code>, <code>blast-radius</code> and <code>sharpen</code>, and leaves out <code>interrogate</code>, <code>show-me-your-work</code> and <code>swarm</code>.</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
 <p data-anchor="tbd-verification-skill" data-spec-tbd="later">TBD: Vendor pstack <code>create-verification-skill</code> for the templates.</p>
-<p data-anchor="tbd-unvendored" data-spec-tbd="later">TBD: Matt's <code>handoff</code> and <code>to-spec</code> stay unvendored until a role needs them. <code>improve-codebase-architecture</code> joins the shaping stack that owner chats use outside the factory, loaded the same way as the other shaping skills.</p>
+<p data-anchor="tbd-unvendored" data-spec-tbd="later">TBD: Matt's <code>handoff</code> and <code>to-spec</code> stay unvendored until a role needs them.</p>
 </section>
 
 </article>
