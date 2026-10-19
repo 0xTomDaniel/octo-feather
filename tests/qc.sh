@@ -5,6 +5,8 @@
 # unusable report and a judge that writes are refused, reports never overwrite;
 # the sandbox (#33): a judge trying each escape fails at every one, a failed
 # proof aborts before the judge, leftovers are killed and agents counted,
+# masks cannot be unmounted, a nested-namespace survivor dies, Pi credential
+# copies cannot persist outside the worktree and fail the run inside it,
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
 set -euo pipefail
@@ -23,6 +25,8 @@ echo default > "$HOME/.config/herdr/herdr.sock"
 echo 'oauth_token: SECRET-gh' > "$HOME/.config/gh/hosts.yml"; echo 'https://x:SECRET-git@github.com' > "$HOME/.git-credentials"
 echo LIVE > "$live/lanes/gh9.toml"; echo ARCHIVED > "$live/lanes/archive/gh1.toml"; echo '{"director":1}' > "$live/director.handoffs.jsonl"
 echo 'pane = "LIVE"' > "$live/director.toml"
+mkdir -p "$HOME/.pi/agent"; echo '{"k": "SECRET-pi-auth-0123456789"}' > "$HOME/.pi/agent/auth.json"
+echo '{"providers": {"p": {"apiKey": "SECRET-pi-models-0123456789"}}}' > "$HOME/.pi/agent/models.json"
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
 # Fake Herdr: a session's socket is a file under the config dir naming the session.
@@ -47,6 +51,7 @@ case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
   writes) echo hacked > judge-was-here; printf '```json\n{"criteria": []}\n```\n' ;;
+  copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
       for flag in "--session default" "--remote live" "--machine live" ""; do
@@ -65,6 +70,13 @@ case "$FAKE_QC" in
     echo x >> "$st/director.handoffs.jsonl" 2>/dev/null && echo "ESCAPE wrote director log"
     grep -q ARCHIVED "$st/lanes/archive/gh1.toml" && grep -q director "$st/director.handoffs.jsonl" || echo "MISSING history"
     [[ "$st" == "$L" ]] && echo "ESCAPE state dir is live"
+    # Review exploits (#33 round 2): undo a mask, outlive the run, keep a credential copy.
+    for m in "$HOME/.git-credentials" "$HOME/.config/herdr" "$L/lanes"; do
+      umount "$m" 2>/dev/null; unshare -rm sh -c 'umount "$1" 2>/dev/null; cat "$1/../.git-credentials" "$1/herdr.sock" "$1/gh9.toml" 2>/dev/null' _ "$m" | grep -q 'SECRET\|default\|LIVE' && echo "ESCAPE umount $m"
+    done
+    grep -q SECRET "$HOME/.git-credentials" 2>/dev/null && echo "ESCAPE umount revealed git creds"
+    unshare -rm env -u HERDR_SESSION sh -c 'exec sleep 302921' < /dev/null > /dev/null 2>&1 &
+    mkdir -p "$HOME/qc-saved" 2>/dev/null && cp -p "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/models.json" "$HOME/qc-saved/" 2>/dev/null
     setsid sleep 3012 < /dev/null > /dev/null 2>&1 &
     pi --version
     printf "$ok" ;;
@@ -73,7 +85,7 @@ EOF
 chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/scripts:$PATH"
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
-"$S" init docs/specs/demo.spec.html 0123abc >/dev/null; git add -A; git commit -qm spec
+"$S" init docs/specs/demo.spec.html 0123abc >/dev/null; echo scratch/ > .gitignore; git add -A; git commit -qm spec
 st=docs/specs/demo.status.json
 run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" "$Q" "${@:2}" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }
@@ -114,10 +126,19 @@ run 0 escape $st 5 acceptance-a
 judge="$(report '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "sandbox escape: $judge"
 grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" || fail "no agent count: $out"
-[[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["sandbox"]["credential_copies_left"]')" == 0 \
-  && "$(report '["sandbox"]["credential_copies_removed"]')" == 2 ]] || fail "cleanup record: $(report '["sandbox"]')"
-report '["sandbox"]["killed"]' | grep -q "sleep 3012" || fail "leftover judge process not killed: $(report '["sandbox"]')"
-! pgrep -fx 'sleep 301[12]' >/dev/null || fail "sandbox processes survived the run"
+[[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["credential_copies_removed"]')" == "[]" ]] \
+  || fail "cleanup record: $(report '["sandbox"]')"
+for p in "sleep 3012" "sleep 302921"; do
+  report '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(report '["sandbox"]')"
+done
+! pgrep -fx 'sleep (301[12]|302921)' >/dev/null || fail "sandbox processes survived the run"
+[[ ! -e "$HOME/qc-saved" ]] || fail "judge wrote into HOME"
+
+# Credential copies inside the worktree (ignored file, .git) are found, removed, counted, and fail the run.
+run 3 copycreds $st 5 acceptance-a
+[[ "$(report '["credential_copies_removed"].__len__()')" == 2 ]] || fail "credential copies not counted: $(report '["credential_copies_removed"]')"
+[[ ! -e scratch/a && ! -e .git/m ]] || fail "credential copies survived"
+grep -q "copied Pi credentials" <<< "$out" || fail "credential copy not reported: $out"
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
   || fail "judge wrote live state"

@@ -21,11 +21,11 @@ killed and the agents it started are counted.
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (judge's report, raw run, proof and cleanup).
-Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable or
-the judge wrote files, 64 usage or same-family judge, 65 dirty worktree,
+Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
+the judge wrote files or copied Pi credentials into the worktree, 64 usage or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed (judge not started).
 """
-import json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, time
+import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, threading, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -86,46 +86,81 @@ Your final message is exactly one fenced json block and nothing else:
 
 
 def sandboxed(judge, session):
-    """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record) or die 66."""
+    """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started."""
     unshare = shutil.which("unshare")
     if not unshare:
         die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
-    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "octo-feather" / "qc-runs"
-    cache.mkdir(parents=True, exist_ok=True)
-    run_dir = Path(tempfile.mkdtemp(prefix=f"{session}-", dir=cache))
+    # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write
+    # fd on a file would pin its mount and the sandbox's read-only remount would fail with EBUSY.
+    names = ("proof", "post", "err", "stderr")
+    pipes = {n: os.pipe() for n in names}
+    for n in names:   # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
+        r, w = pipes[n]; pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100)); os.close(w)
+    got = {n: [] for n in names}
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
     ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p]
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
+    worktree = git("rev-parse", "--show-toplevel")
     # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
-    want = [run_dir, git("rev-parse", "--show-toplevel"), KIT, state, top, Path.home(), *ro, *pre,
-            *os.environ.get("PATH", "").split(":")]
+    want = [worktree, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
-    env = dict(os.environ, QC_RUN=str(run_dir), QC_SESSION=session, QC_STATE=str(state),
+    env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree,
+               QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
                QC_HERDR=shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
-               QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre))
-    p = subprocess.run([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
-                       env=env, stdout=subprocess.PIPE, text=True)
-    read = lambda n: (run_dir / n).read_text() if (run_dir / n).exists() else ""
-    record = {"session": session, "proof": read("proof.txt").splitlines()}
-    started = (run_dir / "started").exists()
-    if started:
-        record.update(json.loads(read("post.json") or "{}"))
-    # Belt: anything outside the namespace still carrying the sandbox session (none expected).
-    stray = []
-    for d in Path("/proc").glob("[0-9]*"):
-        try:
-            if f"HERDR_SESSION={session}".encode() in (d / "environ").read_bytes().split(b"\0"):
-                os.kill(int(d.name), 9); stray.append(int(d.name))
-        except (OSError, ValueError):
-            pass
-    record["killed_outside_namespace"] = stray
-    err = read("judge.err")
-    shutil.rmtree(run_dir, ignore_errors=True)
-    if not started:
+               QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
+               QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
+
+    def drain(n):
+        with os.fdopen(pipes[n][0], "rb") as f:
+            for chunk in iter(lambda: f.read1(65536), b""):
+                got[n].append(chunk)
+                if n == "stderr":
+                    sys.stderr.buffer.write(chunk); sys.stderr.flush()
+    threads = [threading.Thread(target=drain, args=(n,), daemon=True) for n in names]
+    for th in threads:
+        th.start()
+    p = subprocess.Popen([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
+                         env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
+                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")])
+    for n in names:
+        os.close(pipes[n][1])
+    stdout = p.stdout.read().decode(errors="replace"); p.wait()
+    for th in threads:
+        th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
+    read = lambda n: b"".join(got[n]).decode(errors="replace")
+    record = {"session": session, "proof": read("proof").splitlines()}
+    post = read("post")   # written only after the judge ran
+    record.update(json.loads(post or "{}"))
+    if not post:
         return None, record
-    return subprocess.CompletedProcess(judge, p.returncode, p.stdout, err), record
+    return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
+
+
+def credential_copies(top):
+    """Remove and return every file under TOP (ignored files and .git included) holding a Pi credential file's bytes."""
+    agent = Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent")
+    needles = []
+    for n in ("auth.json", "models.json"):
+        try:
+            b = (agent / n).read_bytes().strip()
+        except OSError:
+            continue
+        if len(b) >= 16:   # shorter holds no secret (an empty "{}") and would match anything
+            needles.append(b)
+    found = []
+    for root, _, files in os.walk(top) if needles else ():
+        for f in files:
+            q = Path(root) / f
+            try:
+                if q.is_symlink() or not q.is_file() or q.stat().st_size > 64 << 20:
+                    continue
+                if any(n in q.read_bytes() for n in needles):
+                    q.unlink(); found.append(str(q))
+            except OSError:
+                pass
+    return found
 
 
 def main(argv):
@@ -169,6 +204,12 @@ def main(argv):
     raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "sandbox": sandbox,
            "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
 
+    copies = credential_copies(git("rev-parse", "--show-toplevel"))
+    raw["credential_copies_removed"] = copies
+    print(f"qc: worktree scan: {len(copies)} Pi credential copies removed", file=sys.stderr)
+    if copies:
+        report_path.write_text(json.dumps(raw, indent=2))
+        die(3, f"the judge copied Pi credentials into the worktree: {' '.join(copies)} (removed; report {report_path})")
     if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"the judge changed the worktree or head; read-only was broken (report {report_path})")
