@@ -1,0 +1,23 @@
+# The one gate (AGENTS.md): agents, .githooks/pre-commit and CI run `just check`.
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+
+default:
+    @just --list
+
+# Install dependencies and the git hook.
+setup:
+    pnpm install --frozen-lockfile
+    git config core.hooksPath .githooks
+
+# Types, lint, architecture, dead code, integration and E2E tests.
+check:
+    pnpm exec tsc
+    pnpm exec eslint --max-warnings 0 .
+    pnpm exec depcruise src tests
+    pnpm exec knip
+    pnpm exec vitest run
+
+# Integrate worker commits onto lane gh<N> (octo-feather kit script on PATH).
+integrate issue +refs:
+    octo-feather-integrate {{issue}} {{refs}}
