@@ -18,10 +18,6 @@ Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target
 
 Tom's caution: sol models tend to over-engineer and over-correct. The code reviewer must judge only against the ticket's acceptance criteria and the spec. `agents/code-reviewer.md` already covers part of this ("judge against the shaped scope and the spec, not against preference"; "block only on broken behavior or clearly over-built work"; "a finding that cannot name a consequence is a note"). Risk: Matt's `code-review` Standards axis asks for baseline smells, which invites findings outside the criteria. To verify: a rehearsal check, plus an eval case where an out-of-criteria finding must not block. Flagged only, not fixed.
 
-## Finding lines in the specs branch
-
-ADR 0020 adds a handoffs line `{"kind": "finding", "source", "class", "blocking", "summary"}` and the code reviewer's `class` tag. `spec/` on main is octo-lite's reference spec and stays untouched; the specs-v1 rewrite should define the finding line under `#handoff-fields`.
-
 ## Spec Chat assumes a lane-key workflow
 
 Spec Chat should not be tied to one workflow; today it is. Unverified beyond reading the code, and not for Thursday. Do not patch Spec Chat from here.
