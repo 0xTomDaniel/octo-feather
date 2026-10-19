@@ -69,15 +69,16 @@ durable workflow artifacts.
 
 ## Merge And Issue Sync
 
-- Merge to the main branch is the active owning agent's mechanical execution of
-  an accepted PR, bound to explicit owner instruction. Acceptance follows the
-  worklane. An explicit instruction to merge a named PR accepts that exact head
-  unless the owner says otherwise. Mechanical rebases onto accepted main do not
-  require renewed acceptance when behavior and scope are unchanged. A
-  owner statement assigning the work item to the current supervisor is sufficient for this
-  action. Verify required checks, then merge. No worker merges, no agent decides acceptance, and no agent merges
-  unaccepted work. Required failed checks remain blockers until fixed or
-  durably waived through a repository-approved path.
+- Merge (spec `#gates-merge`): after the owner says merge, the director relays
+  it with the head the merge ask named, and the lane supervisor alone merges,
+  pinned to that head: `gh pr merge <N> --merge --match-head-commit <head>`.
+  The owner's merge accepts that exact head only. Any moved head (a rebase
+  included) or failed merge is never forced: rebase, rerun the gates, send a
+  new merge ask naming the new head. Assigning the work item to a supervisor
+  is not merge approval. Verify required checks, then merge. No worker merges,
+  no agent decides acceptance, and no agent merges unaccepted work. Required
+  failed checks remain blockers until fixed or durably waived through a
+  repository-approved path.
 - The merge completes the worklane. `Closes #<n>` closes the primary GitHub
   issue; if it is still open, close it with `gh issue close <n> --comment` and
   stop the lane. Do not assume deployment-named labels exist.
@@ -92,6 +93,7 @@ durable workflow artifacts.
 - Do not create workflow labels unless the owner explicitly asks.
 - Do not create extra PRs for the same issue.
 - No worker or reviewer role merges or approves as the owner reviewer.
-- Only the active owning agent receiving explicit owner acceptance and merge
-  instruction executes the merge, per Merge And Issue Sync above; no agent
-  merges unaccepted work or decides acceptance itself.
+- Only the lane supervisor merges, on the owner's merge relayed by the
+  director, pinned to the merge-ask head, per Merge And Issue Sync above
+  (spec `#gates-merge`); no agent merges unaccepted work, merges a moved head,
+  or decides acceptance itself.
