@@ -19,6 +19,7 @@ The supervisor never shapes. A wording-only spec fix, once the owner says yes to
 
 ## Consequences
 
+- A baseline `just qc` run against criteria already on main logs each failure as a `"kind": "gap"` line and opens a gap lane, never a correction lane (docs/adr/0020, finding 21).
 - The freeze binds every role that can edit a spec: the supervisor asks before any spec commit and scans the spool; implementers and correctors never edit `docs/specs/*.spec.html`; the code reviewer blocks a diff that edits an accepted spec with no owner yes named in the PR body.
 - The director's role file holds the kickoff check and the spec PR; the supervisor's holds the status flip and the merge ask's criteria list. No role records a receipt.
 - `octo-feather-accepted` and `octo-feather-spec-status` are tested in `just check`. `octo-feather-accepted` reads Spec Chat's registry files directly, since review-host has no query command; a registry format change breaks it loudly.
