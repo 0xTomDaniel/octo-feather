@@ -95,8 +95,8 @@
       "pr": null
     },
     "acceptance-on-main": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-repeat-lane": {
       "status": "planned",
