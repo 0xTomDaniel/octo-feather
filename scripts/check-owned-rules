@@ -1,0 +1,75 @@
+#!/usr/bin/env python3
+"""Each rule below is stated once, in its owner; everywhere else points to it.
+
+A restated copy drifts the next time the rule changes (correction lane #19:
+finding class contradictory-merge-authority, 3 times in lane #8). This check
+fails when a tracked file outside a rule's owner uses one of the rule's
+phrases, and names the owner to point at instead (docs/adr/0008).
+
+Usage: check-owned-rules [REPO]   (default: this kit). Deterministic and free;
+run by `just check`, tested by tests/check-owned-rules.sh.
+"""
+import datetime, os, re, subprocess, sys
+
+# name: (phrases that state the rule, owner files, the pointer to write instead)
+RULES = {
+    "merge-authority": (
+        r"resolved? no conflict|no conflict resolved|clean (merge of main|main merge)"
+        r"|merg\w* main in|new merge ask|main moving|does not move (the|your|its) head"
+        r"|head moved|moved head|match-head-commit|pinned to [^.]{0,30}head|says merge"
+        r"|change after (just )?qc|qc again|renewed acceptance|mechanical rebase",
+        {"docs/specs/issue-lifecycle.spec.html"},
+        "write only a pointer, spec `#gates-merge` (docs/specs/issue-lifecycle.spec.html); "
+        "the merge command itself lives once, in .agents/skills/github/SKILL.md (Merge)",
+    ),
+}
+# Lines allowed to name the rule's mechanism: (rule, file, line regex).
+MECHANISM = {
+    ("merge-authority", ".agents/skills/github/SKILL.md", r"gh pr merge <N> --merge --match-head-commit <head>"),
+}
+# Never checked: dated records quote rules as they stood; this check and its test name the phrases.
+SKIP = re.compile(r"^(evidence/|scripts/check-owned-rules$|tests/check-owned-rules\.sh$)")
+# File exemptions: (rule, file, reason, expiry YYYY-MM-DD, approved by). Expired ones fail.
+EXEMPT = [
+    ("merge-authority", "docs/future.md",
+     "outside correction lane #19's write scope; make lines 43 and 68 pointers", "2026-11-20", "pending owner"),
+]
+
+root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
+files = subprocess.run(["git", "-C", root, "ls-files"], capture_output=True, text=True, check=True).stdout.split()
+today = datetime.date.today().isoformat()
+errors = []
+exempt = {}
+for rule, f, reason, until, by in EXEMPT:
+    if until < today:
+        errors.append(f"scripts/check-owned-rules: exemption of {f} from {rule} expired {until} ({reason}): fix the file, then drop the exemption")
+    else:
+        exempt[(rule, f)] = True
+
+for f in files:
+    if SKIP.match(f):
+        continue
+    try:
+        lines = open(os.path.join(root, f), encoding="utf-8").read().splitlines()
+    except (UnicodeDecodeError, IsADirectoryError, FileNotFoundError):
+        continue
+    patch = f.startswith(".skillfile/patches/")
+    for n, line in enumerate(lines, 1):
+        # A patch's removed and context lines quote upstream; its reason line and added lines are ours.
+        if patch and n > 1 and not (line.startswith("+") and not line.startswith("+++")):
+            continue
+        for rule, (pat, owners, fix) in RULES.items():
+            if f in owners or (rule, f) in exempt:
+                continue
+            m = re.search(pat, line, re.I)
+            if not m:
+                continue
+            if any(r == rule and mf == f and re.search(lp, line) for r, mf, lp in MECHANISM):
+                continue
+            errors.append(f"{f}:{n}: restates the {rule} rule (\"{m.group(0)}\"); {fix}")
+
+for e in errors:
+    print(e, file=sys.stderr)
+if errors:
+    sys.exit(1)
+print(f"owned rules: ok ({len(RULES)} rules, {len(files)} files)")
