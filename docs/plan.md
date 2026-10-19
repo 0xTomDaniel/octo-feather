@@ -4,7 +4,7 @@ Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project 
 
 Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The email stays unopened until the kit is ready, so the kit is stack-agnostic: Python and TypeScript both prepared. Submit the method (AGENTS.md, spec, evidence) with the code if the rules allow.
 
-Base: octo-lite `cc6fa4e`. Work is deltas on it. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
+Base: skills are vendored from mattpocock/skills `49dd158` and pstack `0b8e952` (cursor/plugins) through `Skillfile`; octo-lite `cc6fa4e` supplies requirements and the wiring skeleton only. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
 
 Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatter, `scripts/pi-role` for panes, pi-subagents@0.79.1 pinned project-local); models decided by Tom 2026-10-18 18:58 MDT (opus-5-5 for director, supervisor, implementer; sol for code-reviewer). Escalation up the chain only: docs/adr/0015. Jev: nothing from Jev (capture, replay or judge) runs in `just check`, which stays deterministic; Jev QA recipe (name pending) is separate.
 
