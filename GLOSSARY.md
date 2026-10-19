@@ -47,8 +47,16 @@ A piece of a work item small enough for one worker.
 _Avoid_: Subtask, ticket
 
 **Lane**:
-The running state of one work item while its supervisor works on it: its record, its hand-off log, its workspace and its integration branch. A lane starts when a supervisor is put on a work item and closes when the result merges. Kept as a separate word because it names that state, not the work item or the role.
+The running state of one work item while its supervisor works on it: its record, its hand-off log, its workspace and its integration branch. A lane starts when a supervisor is put on a work item and closes when the result merges. One lane is one merge ask on one parent issue; its tickets are sub-issues. Kept as a separate word because it names that state, not the work item or the role.
 _Avoid_: Worklane, track
+
+**Tracer bullet**:
+A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through the app's CLI, HTTP or UI. Every ticket is one.
+_Avoid_: Layer task, horizontal slice
+
+**Pilot**:
+A lane's first ticket, run alone through the whole path before the rest fan out, to test the brief, the verification and the ticket size.
+_Avoid_: Spike, trial run
 
 **Escalation**:
 A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.

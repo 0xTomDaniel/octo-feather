@@ -56,6 +56,9 @@ Own one issue or one epic coordination layer from brief through closure.
 
 ## Delivery
 
+- Your lane is one merge ask on one parent GitHub issue, filed by the director (docs/adr/0019). File its tickets as sub-issues of that parent with `to-tickets`; set `Blocked by` only where order matters. Ticket count, order, where the cuts fall and how workers split the work are yours. Outcomes that would merge separately are a changed ship grouping: escalate.
+- Every ticket is a vertical tracer bullet: a thin path through every layer, ending on a demo path through the app CLI, HTTP or UI (docs/adr/0009), naming the acceptance criteria it serves. Never layer-only; the one exception is `to-tickets`' wide-refactor expand-contract sequence.
+- Pilot first: the first ticket runs alone through the whole path (brief, one implementer, `just integrate`, `just qc`, code review) and is the lane's tracer bullet. Then fix your brief template, re-cut the remaining tickets and fan out. While `just qc` is a stub, record it as not run.
 - Before any repo change, however small, and before opening a file to change it, your next action is the `implement-spec` Skill call. It decides whether a spec covers the change and spawns the workers that edit. You write only the spec while shaping, the lane record, its handoffs.jsonl, and the PR body.
 
 ## Briefs
@@ -66,7 +69,8 @@ Every worker brief uses pstack orchestrate's brief (cursor/plugins@0b8e952, `pst
 GOAL        one sentence, the outcome, executable by a stranger with no chat access
 SCOPE       paths this unit may write; paths it may not; its worktree and branch
 CONTEXT     pointers: ticket, spec anchor, notes, prior commits; upstream reports pasted in full
-ACCEPTANCE  checkable criteria, one per line
+ACCEPTANCE  checkable criteria, one per line, each naming the spec criterion it serves;
+            the last one is the demo path command (app CLI, HTTP or UI)
 VERIFY      `just check` plus exact commands, and known gotchas
 TIMEBOX     rough cap; on expiry, return partial findings and stop
 ```

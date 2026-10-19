@@ -23,7 +23,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
-4. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
+4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7 (one implementer, `just integrate`, `just qc`, code review), then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
    - calls the Skill tool with `tdd` to build the ticket;
    - merges the integration branch tip into its own branch before reporting done
