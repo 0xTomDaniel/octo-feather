@@ -1,0 +1,34 @@
+{
+  "spec": "quality.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-gate-green": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-gate-no-model": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-public-surfaces": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-qc-listed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-prompt-eval": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-finding-class": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-decision-log-schema": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

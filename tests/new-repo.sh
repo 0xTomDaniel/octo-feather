@@ -43,6 +43,7 @@ for lang in "${langs[@]}"; do
     else out="$(run "$lang" "$lang-$mode" --no-spec-chat 2>&1)" || fail "$lang --no-spec-chat: $out"; fi
     want="$(tracked "$kit/templates/$lang")"
     [[ "$(tracked "$d")" == "$want" ]] || fail "$lang-$mode: tracked files differ from templates/$lang"
+    [[ "$(git -C "$d" ls-tree -r --name-only HEAD | sort)" == "$want" ]] || fail "$lang-$mode: committed tree differs from templates/$lang"
     [[ "$(ondisk "$d")" == "$want" ]] || fail "$lang-$mode: files on disk differ from templates/$lang: $(diff <(ondisk "$d") <(echo "$want") || true)"
     [[ -x "$d/.githooks/pre-commit" ]] || fail "$lang-$mode: hook lost its executable mode"
     [[ "$(git -C "$d" rev-list --count --all)" == 1 ]] || fail "$lang-$mode: not exactly one commit"
@@ -94,5 +95,19 @@ git -c init.defaultBranch=main init -q "$copy"; git -C "$copy" add -A; git -C "$
     || fail "commit not by the kit identity: $(git -C "$t/work/kitid" log -1 --format='%an <%ae> %cn <%ce>')")
 grep -q 't <t@t> (your git identity)' <<<"$(run python ownid --no-spec-chat 2>&1)" || fail "caller identity not used or not printed"
 
+# The caller's ignore rules (core.excludesFile, global git/ignore) never drop a template file.
+(export HOME="$t/home-ignores" XDG_CONFIG_HOME="$t/home-ignores/.config"
+  mkdir -p "$XDG_CONFIG_HOME/git"
+  printf '[core]\n\texcludesFile = %s\n' "$HOME/excludes" > "$HOME/.gitconfig"
+  printf 'uv.lock\n*.ts\n' > "$HOME/excludes"
+  printf 'pnpm-lock.yaml\n' > "$XDG_CONFIG_HOME/git/ignore"
+  for lang in "${langs[@]}"; do
+    d="$t/work/$lang-ignores"
+    out="$(run "$lang" "$lang-ignores" --no-spec-chat 2>&1)" || fail "$lang with caller ignores: $out"
+    [[ "$(git -C "$d" ls-tree -r --name-only HEAD | sort)" == "$(tracked "$kit/templates/$lang")" ]] \
+      || fail "$lang: caller ignore rules dropped files: $(diff <(git -C "$d" ls-tree -r --name-only HEAD | sort) <(tracked "$kit/templates/$lang") || true)"
+    [[ -z "$(git -C "$d" status --porcelain)" ]] || fail "$lang with caller ignores: status not clean"
+  done)
+
 [[ -z "$(find "$HOME" -mindepth 1)" ]] || fail "created under HOME: $(find "$HOME" -mindepth 1)"
-echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; kit identity fallback; nothing in HOME)"
+echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; kit identity fallback; caller ignore rules drop nothing; nothing in HOME)"

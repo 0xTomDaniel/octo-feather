@@ -1,0 +1,22 @@
+{
+  "spec": "overview.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-owner-pr": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-retired-words": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pi-only": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-portable": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}
