@@ -16,13 +16,9 @@ killed and the agents it started are counted. The judge has no persistent
 writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
-Pi's auth.json: the judge gets a per-run copy. After it exits, a changed copy is
-written back to the box's auth.json (atomically, same mode, holding Pi's auth lock
-'<auth.json>.lock', waited for up to ~10 s, never stolen) only if the box file
-is still byte-identical to the run-start snapshot and the copy is a token refresh
-in place (same keys and value types, changed values strings or numbers of sane
-length); else discarded. Report and summary: auth_writeback none|written|refused:<why>
-(refused:auth-locked: the lock was not obtained in time).
+Pi's auth.json and models.json: the judge gets per-run copies, discarded with the
+run and never written back. If the box auth.json holds OAuth credentials, a warning
+says a token refresh during the run is discarded.
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
 the sandbox binds it read-only and the offline gh (scripts/qc-bin/gh) serves it,
@@ -44,7 +40,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 (no auth, network; rerun with --no-github to judge without it). On 64 to 67 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import contextlib, fcntl, json, os, re, secrets, shlex, shutil, stat, subprocess, sys, tempfile, threading, time
+import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, threading, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -148,78 +144,16 @@ def pi_auth():
     return Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent") / "auth.json"
 
 
-def refresh_only(old, new):
-    """Why NEW is not OLD with values refreshed in place, or None. Reasons name no key or value."""
-    kind = lambda v: "bool" if isinstance(v, bool) else "num" if isinstance(v, (int, float)) else type(v).__name__
-    if kind(old) != kind(new):
-        return "type-changed"
-    if isinstance(old, dict):
-        if set(old) != set(new):
-            return "keys-changed"
-        return next((w for k in old if (w := refresh_only(old[k], new[k]))), None)
-    if isinstance(old, list):
-        if len(old) != len(new):
-            return "shape-changed"
-        return next((w for a, b in zip(old, new) if (w := refresh_only(a, b))), None)
-    if old == new:
+def oauth_warning():
+    """The warning line if the box auth.json holds an OAuth entry (type oauth or a refresh token field), else None."""
+    try:
+        auth = json.loads(pi_auth().read_bytes())
+    except (OSError, ValueError):
         return None
-    if kind(new) not in ("str", "num"):
-        return "value-type"
-    n, o = len(new if isinstance(new, str) else json.dumps(new)), len(old if isinstance(old, str) else json.dumps(old))
-    return "value-length" if n > 8192 or n > max(4 * o, 64) else None
-
-
-def auth_writeback(snap, sent):
-    """Write the judge's auth.json copy back to the box only for a token refresh on an unchanged box file."""
-    if snap is None or sent[:1] != b"C":
-        return "none"
-    copy = sent[1:]
-    if copy == snap:
-        return "none"
-    try:
-        old, new = json.loads(snap), json.loads(copy)
-    except ValueError:
-        return "refused:not-json"
-    why = refresh_only(old, new)
-    if why:
-        return f"refused:{why}"
-    # Compare and replace under Pi's own auth lock (proper-lockfile, realpath false: the directory
-    # '<auth.json>.lock', made by mkdir). Wait up to ~10 s; never steal it, not even a stale one.
-    lock = os.path.abspath(pi_auth()) + ".lock"
-    deadline, delay = time.monotonic() + 10, 0.05
-    while True:
-        try:
-            os.mkdir(lock)
-            break
-        except FileExistsError:
-            if time.monotonic() >= deadline:
-                return "refused:auth-locked"
-            time.sleep(delay); delay = min(delay * 2, 0.5)
-        except OSError:
-            return "refused:auth-locked"
-    try:
-        real = Path(os.path.realpath(pi_auth()))
-        try:
-            if real.read_bytes() != snap:
-                return "refused:box-auth-changed"
-            mode = stat.S_IMODE(real.stat().st_mode)
-        except OSError:
-            return "refused:box-auth-gone"
-        fd, tmp = tempfile.mkstemp(prefix=".auth.json.qc-", dir=real.parent)
-        try:
-            os.fchmod(fd, mode)
-            with os.fdopen(fd, "wb") as f:
-                f.write(copy); f.flush(); os.fsync(f.fileno())
-            os.replace(tmp, real)
-            return "written"
-        except OSError:
-            return "refused:write-failed"
-        finally:
-            if os.path.lexists(tmp):
-                os.unlink(tmp)
-    finally:
-        with contextlib.suppress(OSError):
-            os.rmdir(lock)
+    entries = auth.values() if isinstance(auth, dict) else []
+    if any(isinstance(e, dict) and (e.get("type") == "oauth" or any("refresh" in str(k).lower() for k in e)) for e in entries):
+        return "qc: warning: auth.json has OAuth credentials: a token refresh during this run is discarded"
+    return None
 
 
 def sandboxed(judge, session, gh):
@@ -229,7 +163,7 @@ def sandboxed(judge, session, gh):
         die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
     # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write
     # fd on a file would pin its mount and the sandbox's read-only remount would fail with EBUSY.
-    names = ("proof", "post", "err", "stderr", "auth")
+    names = ("proof", "post", "err", "stderr")
     pipes = {n: os.pipe() for n in names}
     for n in names:   # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
         r, w = pipes[n]; pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100)); os.close(w)
@@ -248,12 +182,9 @@ def sandboxed(judge, session, gh):
                QC_HERDR=shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]),
-               QC_FD_AUTH=str(pipes["auth"][1]))
-    try:   # run-start snapshot, in memory only
-        snap = pi_auth().read_bytes()
-    except OSError:
-        snap = None
+               QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
+    if (w := oauth_warning()):
+        print(w, file=sys.stderr)
 
     def drain(n):
         with os.fdopen(pipes[n][0], "rb") as f:
@@ -266,7 +197,7 @@ def sandboxed(judge, session, gh):
         th.start()
     p = subprocess.Popen([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
-                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err", "auth")])
+                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")])
     for n in names:
         os.close(pipes[n][1])
     stdout = p.stdout.read().decode(errors="replace"); p.wait()
@@ -276,9 +207,6 @@ def sandboxed(judge, session, gh):
     record = {"session": session, "proof": read("proof").splitlines()}
     for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
         record.update(json.loads(line))
-    record["auth_writeback"] = auth_writeback(snap, b"".join(got["auth"]) if "agents_started" in record else b"")
-    got["auth"].clear()
-    print(f"qc: cleanup: auth_writeback: {record['auth_writeback']}", file=sys.stderr)
     if "agents_started" not in record:
         return None, record
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
