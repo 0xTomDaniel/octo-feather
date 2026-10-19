@@ -8,7 +8,10 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 C="$kit/scripts/check-owned-rules"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
-git init -q "$t"; mkdir -p "$t/docs/specs" "$t/agents" "$t/.skillfile/patches/skills/x" "$t/evidence"
+git init -q "$t"; mkdir -p "$t/docs/specs" "$t/agents" "$t/.skillfile/patches/skills/x" "$t/evidence" "$t/.agents/skills/herdr-comms"
+# The long-wait owner states it; the role pointer passes (issue #29).
+echo 'Never hold your turn in a shell sleep or blocking wait over ~60 s.' > "$t/.agents/skills/herdr-comms/SKILL.md"
+echo '- Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says.' > "$t/agents/wait.md"
 # The owner may state the rule; a pointer and a dated record pass.
 echo '<p data-anchor="gates-merge">After the owner says merge, ... a new merge ask.</p>' > "$t/docs/specs/issue-lifecycle.spec.html"
 echo 'Merge: spec `#gates-merge`.' > "$t/agents/ok.md"
@@ -35,9 +38,11 @@ plant() { echo "$2" > "$t/$1"; g add -A; run 1
   g rm -qf "$1"; run 0; }
 plant agents/github.md 'Mechanical rebases onto accepted main do not require renewed acceptance when behavior and scope are unchanged.' merge-authority 'spec `#gates-merge`'
 plant agents/impl.md 'Any code change after QC means `just qc` and a fresh review again, on the new head.' merge-authority 'spec `#gates-merge`'
+plant agents/sleep.md 'Never hold your turn in a sleep over a minute; background `just qc` and end the turn.' long-wait 'herdr-comms (Send a message)'
+plant agents/bg.md '(just qc >/tmp/q.log 2>&1; herdr-say "$HERDR_PANE_ID" "qc done rc=$?") &' long-wait 'herdr-comms (Send a message)'
 plant agents/lane.md 'Cut branch gh<N>-<slug> for the lane.' lane-branch 'docs/adr/0011'
 plant agents/push.md '2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.' lane-branch 'docs/adr/0011'
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
-echo "check-owned-rules: ok (owner, pointer, record, generic words pass; 3 past restatements, a slug default and a patch line fail with their fix)"
+echo "check-owned-rules: ok (owner, pointer, record, generic words pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"

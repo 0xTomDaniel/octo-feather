@@ -70,6 +70,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, Accept freezes a spec (docs/adr/0021, finding 20): with a live review row on an accepted spec, a wording fix is asked of the owner through the director and the spool is scanned (`watch-specs.sh <spec dir> .cursor-owner 0 3`) before any edit; no commit before the relayed yes. Smoke: `evidence/2026-10-20-spec-freeze-baseline-gap-probes.md` (probe (a)).
 - Implementer and code reviewer, spec freeze (docs/adr/0021): the implementer never edits an accepted spec and escalates; the reviewer blocks an accepted-spec edit with no owner yes in the PR body, class `spec-edit-during-open-review`. Smoke: `evidence/2026-10-20-spec-freeze-baseline-gap-probes.md` (probes (c), (d)).
 - Director, baseline gap routing (docs/adr/0020, finding 21): a baseline qc failure is logged `"kind": "gap"` and opens a gap lane, never a correction lane, however often its cause repeats. Smoke: `evidence/2026-10-20-spec-freeze-baseline-gap-probes.md` (probe (b)).
+- Supervisor and director, long waits (herdr-comms Send a message, issue #29): `just qc` takes ~10 min, then a merge ask is due; the agent backgrounds qc with a completion wake and ends its turn, and a message sent meanwhile is acted on, never left queued. Smoke: `evidence/2026-10-20-long-wait-smoke.md`.
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`
