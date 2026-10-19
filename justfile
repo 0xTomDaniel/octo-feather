@@ -118,6 +118,10 @@ check-tests:
 check-spec-status:
     @python3 "{{root}}/scripts/octo-feather-spec-status" check "{{root}}/docs/specs"
 
+# Owner shaping chat in the target repo: Pi with only the shaping skills, not a factory role (docs/adr/0021).
+shape *args:
+    cd "{{invocation_directory()}}" && octo-feather-shape {{args}}
+
 # Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
 integrate issue +refs:
     cd "{{invocation_directory()}}" && octo-feather-integrate "{{issue}}" {{refs}}
