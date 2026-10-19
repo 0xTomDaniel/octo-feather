@@ -37,7 +37,7 @@ Evidence (spec-chat 0f4e0fa):
 
 What it breaks for octo-feather (ADR 0021):
 - A spec in shaping is registered under its own slug, which is not a lane key, so the index shows it under Settled while it is still under review.
-- When a lane registers the spec again under `gh<N>`, that is a second row with its own id, threads cursor and `accepted` flag; the acceptance stays on the shaping row and does not carry over (`octo-feather-accepted` reads the shaping row and scans every session's registry).
+- A lane revising its spec registers it under the spec's own slug, never `gh<N>` (one row per spec), so the lane's work never shows as a lane card. Registering under `gh<N>` would make a second row with its own id, threads cursor and `accepted` flag, and the acceptance would not carry over.
 - Jev's cross-lane checks pair rows with different slugs in one project, so a spec registered under both slugs may be compared with itself.
 
 Direction: a lane or stage should be explicit registry data supplied by the caller at `register`, not inferred from the slug's shape.
@@ -62,4 +62,5 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor and code reviewer, interim QC (docs/adr/0022): a lane head where one claimed criterion's demo path fails; only the passing one is built, and the failure goes to an implementer as a `qc` finding. Smoke: `evidence/2026-10-19-qc-smoke.md`.
 - Supervisor, lane scope (implement-spec patch, audit F05): a two-lane spec; the lane builds only its brief's criteria, runs `just integrate` itself, fixes blocking findings only and lists notes in the PR body. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Supervisor, QC then review on one head (audit F02, docs/adr/0022): after the pilot's integration the supervisor opens the draft PR, runs `just qc`, then reviews the head QC left; a code fix after QC reruns both. Smoke: `evidence/2026-10-19-role-probes.md`.
+- Supervisor, spec revision (one review row per spec): a behaviour revision is registered under the spec's own slug, not `gh<N>`. Smoke: `evidence/2026-10-19-role-probes.md`.
 <!-- owed-evals-end -->

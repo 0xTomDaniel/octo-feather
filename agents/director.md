@@ -35,7 +35,7 @@ Waiting supervisors hold no memory (spec `#roles-park`): park a supervisor idle 
 
 Briefs state the outcome, done condition, owner decisions already made, exact source pointers (files and anchors), and open questions; the owning skill decides which artifact holds each answer.
 
-Brief commands verbatim: `review-host register --slug <lane slug, gh<issue number>> --owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"` (e.g. issue 336 is `gh336`, the slug Spec Chat's index shows as a lane card; the spec's shaping row keeps its own slug and is the acceptance record; the supervisor names its session, spec `#session-wake-owner`), and push as its own command, `git push -u origin <branch>`.
+Brief commands verbatim: `review-host register --slug <the spec's own slug> --owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"` (one review row per spec, under the slug it was shaped with, which is its acceptance record; a lane never registers it again under `gh<N>`; the supervisor names its session, spec `#session-wake-owner`), and push as its own command, `git push -u origin <branch>`.
 Before deleting a remote branch at teardown, retarget every open PR based on it to its merge target (`gh pr list --base <branch>`); deleting a base branch auto-closes the PRs stacked on it.
 
 You are the only role that talks to the owner (docs/adr/0015). Escalations and owner gates reach you from supervisors, never from workers directly; resolve what your authority covers first, then bring the owner what is blocked, what was tried, and the options.
