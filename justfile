@@ -117,7 +117,7 @@ check-tests:
 integrate issue +refs:
     cd "{{invocation_directory()}}" && octo-feather-integrate "{{issue}}" {{refs}}
 
-# Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0016).
+# Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:
     @python3 "{{root}}/scripts/check-roles"
 

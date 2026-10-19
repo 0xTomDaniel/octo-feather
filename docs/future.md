@@ -26,6 +26,18 @@ Tom's caution: sol models tend to over-engineer and over-correct. The code revie
 
 ADR 0020 adds a handoffs line `{"kind": "finding", "source", "class", "blocking", "summary"}` and the code reviewer's `class` tag. `spec/` on main is octo-lite's reference spec and stays untouched; the specs-v1 rewrite should define the finding line under `#handoff-fields`.
 
-## Spec Chat slugs after the spec handoff
+## Spec Chat assumes a lane-key workflow
 
-Shaping registers a spec under its own slug (not a lane key, so Spec Chat's index files it under Settled, not In progress); the lane later registers it again under `gh<N>`, a second row with its own id, threads cursor and `accepted` flag. The acceptance record is the shaping row, read by `octo-feather-accepted`. Jev's cross-lane checks pair rows of different slugs in one project, so a spec registered under both slugs may be paired with itself. Not patched (spec-chat is upstream); decide whether the lane re-registers or reuses the shaping row.
+Spec Chat should not be tied to one workflow; today it is. Unverified beyond reading the code, and not for Thursday. Do not patch Spec Chat from here.
+
+Evidence (spec-chat 0f4e0fa):
+- `skill/review-spec/assets/review-serve.py` `_lane_label` (l560) treats only issue-key slugs (`[a-z]+-?[0-9]+`) as lanes, so `gh1` shows as `GH-1`; `_index` (l944) makes only those slugs open lanes, and every other slug goes under Settled.
+- The review service and its registries are keyed by `${HERDR_SESSION:-default}` (`session_state`, l698-700), so each Herdr session has its own registry.
+- Wake goes through Herdr pane ids (`skill/review-spec/SKILL.md` l29, l76).
+
+What it breaks for octo-feather (ADR 0021):
+- A spec in shaping is registered under its own slug, which is not a lane key, so the index shows it under Settled while it is still under review.
+- When a lane registers the spec again under `gh<N>`, that is a second row with its own id, threads cursor and `accepted` flag; the acceptance stays on the shaping row and does not carry over (`octo-feather-accepted` reads the shaping row and scans every session's registry).
+- Jev's cross-lane checks pair rows with different slugs in one project, so a spec registered under both slugs may be compared with itself.
+
+Direction: a lane or stage should be explicit registry data supplied by the caller at `register`, not inferred from the slug's shape.

@@ -1,9 +1,5 @@
-# A director that never edits code, over one lane owner per issue
+# A director that never edits code, over one supervisor per lane
 
-Lane owner is octo-lite's orchestrator and Exomachina's production supervisor.
+One director owns the program: it takes kickoffs (ADR 0021), cuts lanes and files each lane's parent issue (ADR 0019), starts one supervisor per lane, handles escalations and brings the owner only gates; it writes no repo files. Each supervisor spawns its implementers and a fresh code reviewer, and integrates with `just integrate` (ADR 0017). Tom: "we MUST have the director... stands in for the owner. I expect this take home to have several issues ongoing in parallel", 2026-10-18.
 
-One director (octo-lite's meta-operator) owns the program: it files issues, starts one lane owner (orchestrator) per issue, handles escalations and asks the owner only at gates; it writes no repo files. Each lane owner spawns its own workers, integrator and reviewer. Tom: "we MUST have the director... stands in for the owner. I expect this take home to have several issues ongoing in parallel", 2026-10-18.
-
-Every issue gets a lane owner, even when it is the only one running: a fixed rule beats a judgment the director can get wrong, at the cost of one extra context per issue. Workers run `just check` and must be green before they report, but never review or accept their own work; the lane owner spawns a fresh code-reviewer for every merge, and Matt's `implement` step that calls `code-review` in the worker's own context is patched out. Approved by Tom, 2026-10-18.
-
-Renamed by ADR 0014: the lane owner (orchestrator) is now the supervisor, and its tab `lane` is now `supervisor`.
+Every lane gets a supervisor, even when it is the only one running: a fixed rule beats a judgment the director can get wrong, at the cost of one extra context per lane. Workers run `just check` and must be green before they report, but never review or accept their own work: the supervisor spawns a fresh code reviewer, from a different model family than the implementer, for every merge, and Matt's `implement` step that calls `code-review` in the worker's own context is patched out. Approved by Tom, 2026-10-18.

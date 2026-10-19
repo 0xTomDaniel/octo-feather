@@ -1,5 +1,5 @@
 # Integration and end-to-end tests only
 
-Tests drive public surfaces (the app CLI with `--json`, HTTP, UI) and never unit-test internals; the vendored `tdd` skill is patched so every spec-named seam is an integration or E2E boundary. Agents rewrite internals freely, so tests pinned to internals break on every refactor and prove little about behavior; we accept slower tests and coarser failure location. Decided by Tom, 2026-10-18.
+Tests drive public surfaces (the app CLI with `--json`, HTTP, UI) and never unit-test internals. Agents rewrite internals freely, so tests pinned to internals break on every refactor and prove little about behavior; we accept slower tests and coarser failure location. Decided by Tom, 2026-10-18.
 
-The `tdd` patch replaces Matt's "pre-agreed seams" paragraph with: "Test only at seams the spec names, never seams proposed by the user. Every seam is an integration or end-to-end boundary: the app CLI, HTTP, or UI. Write no unit tests of internal functions or modules. A pure function is tested only through the public surface that calls it." Approved by Tom, 2026-10-18.
+The vendored `tdd` skill is patched to match: before writing any test, the implementer writes down the seams under test, public surfaces only (app CLI, HTTP, UI), so every test is integration or end-to-end and never a unit test of internals; it takes them from the ticket's acceptance criteria and confirms with the user only seams the ticket does not name. Approved by Tom, 2026-10-18.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate agents/*.md role files against the fields pi-role honours (docs/adr/0016).
+"""Validate agents/*.md role files against the fields pi-role honours (docs/adr/0013).
 
 Deterministic and free: no model calls. Run by `just check`.
 """
@@ -48,7 +48,7 @@ for role in ROLES:
     for k in sorted(FIELDS - fm.keys()):
         err(f"{rel}: missing field `{k}`")
     for k in sorted(fm.keys() - FIELDS - OPTIONAL):
-        err(f"{rel}: field `{k}` is not one pi-role honours; delete it (docs/adr/0016)")
+        err(f"{rel}: field `{k}` is not one pi-role honours; delete it (docs/adr/0013)")
     if fm.get("name") not in (None, role):
         err(f"{rel}: name must be `{role}` (the file name)")
     if "model" in fm and fm["model"] not in MODELS:

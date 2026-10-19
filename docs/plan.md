@@ -6,7 +6,7 @@ Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The
 
 Base: skills are vendored from mattpocock/skills `49dd158` and pstack `0b8e952` (cursor/plugins) through `Skillfile`; octo-lite `cc6fa4e` supplies requirements and the wiring skeleton only. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
 
-Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatter, `scripts/pi-role` for panes, pi-subagents@0.79.1 pinned project-local); models decided by Tom 2026-10-18 18:58 MDT (opus-5-5 for director, supervisor, implementer; sol for code-reviewer). Escalation up the chain only: docs/adr/0015. Jev: nothing from Jev (capture, replay or judge) runs in `just check`, which stays deterministic; Jev QA recipe (name pending) is separate.
+Role files: our own frontmatter read by `scripts/pi-role`, and every agent launches through `herdr-spawn` + `pi-role` (docs/adr/0013, 0016); models decided by Tom 2026-10-18 (opus-5-5 for director, supervisor, implementer, corrector; gpt-6.1-sol for code-reviewer). Escalation up the chain only: docs/adr/0015. Jev: nothing from Jev (capture, replay or judge) runs in `just check`, which stays deterministic; the product judge is `just qc` and factory evals are `just qa`.
 
 | # | Block | Est | Output |
 |---|---|---|---|

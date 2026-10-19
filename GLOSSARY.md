@@ -9,19 +9,19 @@ The one agent that owns the whole program: it opens work items, puts a superviso
 _Avoid_: Orchestrator, manager
 
 **Supervisor**:
-The agent that owns one work item until it merges, breaking it into tasks, assigning workers, and getting every result independently reviewed. It directs the work and never does it.
+The agent that owns one work item until it merges, breaking it into tickets, assigning workers, and getting every result independently reviewed. It directs the work and never does it.
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that does one assigned task inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
+An agent that does one assigned piece of work (a ticket, a review, a correction) inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
 
 **Implementer**:
-A worker that produces the change for one task.
+A worker that produces the change for one ticket.
 _Avoid_: Developer, coder
 
 **Integration**:
-Combining the finished changes of a work item's tasks into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer.
+Combining the finished changes of a work item's tickets into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer.
 _Avoid_: Integrator, merger
 
 **Corrector**:
@@ -29,7 +29,7 @@ A fresh agent, run as its own correction lane when the owner corrects something 
 _Avoid_: Fixer
 
 **Code reviewer**:
-A fresh agent, from a different model family than the implementer, that judges one change against its task and the spec and returns a verdict, changing nothing.
+A fresh agent, from a different model family than the implementer, that judges one change against its ticket and the spec and returns a verdict, changing nothing.
 _Avoid_: Reviewer (alone), QA, approver
 
 **Owner**:
@@ -39,12 +39,12 @@ _Avoid_: Human, user, operator
 ## Work
 
 **Work item**:
-One unit of requested work with its own acceptance, tracked on its own record. On GitHub a work item is an issue.
-_Avoid_: Ticket, task (a task is a piece of a work item), lane
+One unit of requested work that ends in one merge ask: on GitHub, a lane's parent issue. Its pieces are tickets.
+_Avoid_: Task, epic, lane (the lane is its running state)
 
-**Task**:
-A piece of a work item small enough for one worker.
-_Avoid_: Subtask, ticket
+**Ticket**:
+A piece of a work item small enough for one worker, filed as a sub-issue of the lane's parent issue. Every ticket is a tracer bullet.
+_Avoid_: Task, subtask
 
 **Lane**:
 The running state of one work item while its supervisor works on it: its record, its hand-off log, its workspace and its integration branch. A lane starts when a supervisor is put on a work item and closes when the result merges. One lane is one merge ask on one parent issue; its tickets are sub-issues. Kept as a separate word because it names that state, not the work item or the role.
