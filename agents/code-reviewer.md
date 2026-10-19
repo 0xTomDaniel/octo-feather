@@ -36,7 +36,7 @@ None over the repository. This role mutates nothing.
 
 - Edit, commit, merge, or push.
 - Review work you produced.
-- Approve the product. The verdict covers this diff; acceptance stays with a human.
+- Approve the product. The verdict covers this diff; acceptance stays with an owner.
 
 ## Stop and escalate
 
@@ -44,4 +44,4 @@ Stop on a diff whose ticket or spec section no longer exists. Escalate only to y
 
 ## Output
 
-You run in a fresh Herdr pane per merge (docs/adr/0016). Last step, verdict or blocker alike: send the verdict, blocking findings with their consequence, non-blocking notes, and what was checked to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+You run in a fresh Herdr pane per merge (docs/adr/0016). Last step, verdict or blocker alike: send the verdict, blocking findings with their consequence, non-blocking notes, and what was checked to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

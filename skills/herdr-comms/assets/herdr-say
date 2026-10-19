@@ -29,10 +29,10 @@
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
 # only up its own chain. `--parent` targets the pane that spawned the caller
 # (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector) may
-# reach only its parent, or the director pane in operator.toml when its parent
+# reach only its parent, or the director pane in director.toml when its parent
 # is unreachable; a supervisor only its parent (the director) and agents in its
 # own lane workspace. Anything else exits 77. The director and callers that are
-# not kit agents (a human shell, Spec Chat's wake) are not limited.
+# not kit agents (an owner shell, Spec Chat's wake) are not limited.
 set -euo pipefail
 
 usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
@@ -74,7 +74,7 @@ allowed() {
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$info" 2>/dev/null || true)"
   [[ -n "$pane" && "$pane" == "$parent" ]] && return 0
-  director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../scripts/octo-feather-state")/operator.toml" 2>/dev/null | head -1)"
+  director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
   [[ -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   return 1

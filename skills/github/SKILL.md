@@ -26,7 +26,7 @@ Without consent, keep work in local commits and report where it is.
 - GitHub Issues is the only tracker (docs/adr/0004). The issue number is the
   unit's identity; its lane slug is `gh<number>`.
 - During shaping, `.octo-feather/drafts/<slug>.md` is canonical until the
-  operator approves the GitHub mutation; after finalization, the GitHub issue
+  owner approves the GitHub mutation; after finalization, the GitHub issue
   body and `octo-feather:ready` label are the issue source of truth.
 - The evolving draft PR is the durable shaping and delivery surface.
 - Specs under `spec/` own behavior and ADRs under `spec/adr/` own decisions;
@@ -49,7 +49,7 @@ durable workflow artifacts.
 
 ## Shaping Mutations
 
-Do not mutate GitHub issues during shaping until the operator
+Do not mutate GitHub issues during shaping until the owner
 approves the final mutation. After approval:
 
 1. Create or update exactly one GitHub issue with the approved draft body
@@ -58,7 +58,7 @@ approves the final mutation. After approval:
 3. Apply `octo-feather:ready`.
 4. Delete the local draft.
 
-Do not create extra workflow labels unless the operator explicitly asks.
+Do not create extra workflow labels unless the owner explicitly asks.
 
 ## Implementer Mutations
 
@@ -70,7 +70,7 @@ Do not create extra workflow labels unless the operator explicitly asks.
   includes `## Summary` and `## Validation`.
 - Post or update a compact `## octo-feather handoff` PR comment.
 - Do not merge.
-- Do not approve as the human reviewer.
+- Do not approve as the owner reviewer.
 
 ## Verdict Mutations
 
@@ -79,16 +79,16 @@ Do not create extra workflow labels unless the operator explicitly asks.
   comment for code review.
 - The comment records inputs, findings, and reviewer receipt.
 - Do not depend on the formal Review API, reviewer identity, checks, or labels.
-- Never merge or approve as the human reviewer.
+- Never merge or approve as the owner reviewer.
 
 ## Merge And Issue Sync
 
 - Merge to the main branch is the active owning agent's mechanical execution of
-  an accepted PR, bound to explicit human instruction. Acceptance follows the
+  an accepted PR, bound to explicit owner instruction. Acceptance follows the
   worklane. An explicit instruction to merge a named PR accepts that exact head
-  unless the human says otherwise. Mechanical rebases onto accepted main do not
+  unless the owner says otherwise. Mechanical rebases onto accepted main do not
   require renewed acceptance when behavior and scope are unchanged. A
-  human statement assigning the work item to the current supervisor is sufficient for this
+  owner statement assigning the work item to the current supervisor is sufficient for this
   action. Record acceptance as the receipt comment on the PR
   (spec `#acceptance-receipt`), verify required checks, then merge. No worker merges, no agent decides acceptance, and no agent merges
   unaccepted work. Required failed checks remain blockers until fixed or
@@ -104,10 +104,10 @@ Do not create extra workflow labels unless the operator explicitly asks.
 
 ## Boundaries
 
-- Do not create workflow labels beyond `octo-feather:ready` unless the operator
+- Do not create workflow labels beyond `octo-feather:ready` unless the owner
   explicitly asks.
 - Do not create extra PRs for the same issue.
-- No worker or reviewer role merges or approves as the human reviewer.
-- Only the active owning agent receiving explicit human acceptance and merge
+- No worker or reviewer role merges or approves as the owner reviewer.
+- Only the active owning agent receiving explicit owner acceptance and merge
   instruction executes the merge, per Merge And Issue Sync above; no agent
   merges unaccepted work or decides acceptance itself.

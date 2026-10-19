@@ -10,7 +10,7 @@ description: Create a well-formed git commit from current changes using session 
 Be extremely concise. Sacrifice grammar for the sake of concision.
 No em-dashes or en-dashes. Ever.
 
-Use this skill when the operator asks to commit durable shaping artifacts or
+Use this skill when the owner asks to commit durable shaping artifacts or
 implementation changes.
 
 ## Inputs
@@ -46,4 +46,4 @@ Validation:
 - <command or "not run (reason)">
 ```
 
-Add no co-author trailer unless the operator requests one.
+Add no co-author trailer unless the owner requests one.

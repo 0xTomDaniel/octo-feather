@@ -3,7 +3,7 @@
 # varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 #   octo-feather-start --director [--cwd DIR]
-#     the director (meta-operator) in Herdr workspace `director`, tab `director`
+#     the director in Herdr workspace `director`, tab `director`
 #   octo-feather-start --issue N [--cwd WORKTREE]
 #     one supervisor in its own workspace `gh<N>`, tab `supervisor`
 #
@@ -20,7 +20,7 @@ usage() {
 }
 while (($#)); do
   case "$1" in
-    --director) name="director"; label="director"; role="meta-operator"; shift ;;
+    --director) name="director"; label="director"; role="director"; shift ;;
     --issue) [[ "${2:?}" =~ ^[0-9]+$ ]] || usage; name="gh$2"; shift 2 ;;
     --cwd) cwd="${2:?}"; shift 2 ;;
     --name) name="${2:?}"; shift 2 ;;

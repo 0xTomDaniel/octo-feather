@@ -13,13 +13,13 @@ caller, and for parking an idle Pi agent so it holds no memory while it waits.
 Every wrapper acts only in the caller's Herdr session,
 `${HERDR_SESSION:-default}`: pane, tab, and space ids repeat across sessions.
 `octo-feather-state` prints the caller's session state directory, holding `lanes/`
-(lane records, hand-off logs, `archive/`), `operator.toml`, and
-`operator.handoffs.jsonl` (spec `#session-state`). Every spawned tab has the
+(lane records, hand-off logs, `archive/`), `director.toml`, and
+`director.handoffs.jsonl` (spec `#session-state`). Every spawned tab has the
 kit's `skills/herdr-comms/assets` and `scripts` on `PATH`.
 
 ## Layout (docs/adr/0011)
 
-- Workspace `director`, one tab `director`: the director (meta-operator),
+- Workspace `director`, one tab `director`: the director,
   started by `octo-feather-start --director` (`just start`).
 - One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
   started by `octo-feather-start --issue <n> --cwd <worktree>`.
@@ -92,7 +92,7 @@ The teardown step. An id with a colon (`w5:t2`) is a tab, one without (`w5`) is
 a space. Closes it, then sends TERM to every process of the caller's session
 whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
 catches detached children that close alone leaves running. Run it from outside
-what it closes: the spawner closes a tab, the operator closes a finished lane's
+what it closes: the spawner closes a tab, the director closes a finished lane's
 own space, or only its supervisor tab when the lane started in a shared space.
 Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=` and
 exits with the close status.
@@ -108,7 +108,7 @@ herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
 that tab is the space's only one (a supervisor in its own space), and prints
 one parked line (`at kind pane name role cwd session`) on stdout, even when the
 close fails; the close report goes to stderr. The parker appends the line: the
-operator for a supervisor, the supervisor for a worker. An agent Herdr does not report
+director for a supervisor, the supervisor for a worker. An agent Herdr does not report
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.
 
@@ -156,6 +156,6 @@ agent view for state and the pane view only for what is literally on screen.
 
 ## Never submit text you did not write
 
-A `❯` line in a pane may be the CLI's own suggestion, not something a human
-typed. Only a real message, or text the operator explicitly quoted, authorizes
+A `❯` line in a pane may be the CLI's own suggestion, not something an owner
+typed. Only a real message, or text the owner explicitly quoted, authorizes
 submitting anything on someone's behalf.

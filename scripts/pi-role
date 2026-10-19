@@ -13,7 +13,7 @@ Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
 
 Frontmatter (one `key: value` per line, lists comma-separated):
   name         must equal the file name; names the cached prompt file
-  description  one line for humans; pi-role ignores it
+  description  one line for owners; pi-role ignores it
   model        --model
   thinking     --thinking
   tools        --tools (built-in Pi tools only)

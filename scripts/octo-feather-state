@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Print octo-feather's state directory for the caller's Herdr session: the one
-# holding that session's lanes/ and operator files. The session key is
+# holding that session's lanes/ and director files. The session key is
 # ${HERDR_SESSION:-default}, as Herdr exports it to every pane of a named
 # session and to none of the default one. The default session's directory is
 # the top one, beside the box's onboarding file; a named session's is

@@ -18,7 +18,7 @@ Files derived from octo-lite, modified by Tom Daniel on 2026-10-18 (Pi as the
 only runtime, GitHub Issues instead of Linear, octo-feather names, Herdr layout
 of docs/adr/0011):
 
-    agents/meta-operator.md
+    agents/director.md (was agents/meta-operator.md)
     agents/supervisor.md (was agents/orchestrator.md)
     agents/implementer.md
     agents/code-reviewer.md

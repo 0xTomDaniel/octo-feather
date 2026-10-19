@@ -50,6 +50,11 @@ check-refs:
     # The gate and its check-* recipes never reach the product judge or factory evals.
     if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
       echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
+    # Retired words stay retired. Exempt: GLOSSARY.md (lists them), a spec anchor,
+    # the corrector quoting pstack correct, and vendored skills (upstream wording).
+    mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE '^(agents/skills/|GLOSSARY\.md$)')
+    if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"'; then
+      echo "check-refs: say director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
@@ -76,7 +81,7 @@ check-skills:
       head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
       n=$((n + 1))
     done
-    for r in meta-operator supervisor implementer code-reviewer corrector; do
+    for r in director supervisor implementer code-reviewer corrector; do
       [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
     done
     echo "skills: ok ($n skills, 5 roles)"
@@ -105,7 +110,7 @@ install-check:
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
     exit "$bad"
 
-# Start the director (meta-operator) in Herdr workspace `director` (docs/adr/0011).
+# Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():
     octo-feather-start --director --cwd "{{cwd}}"
 
