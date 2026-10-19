@@ -56,4 +56,32 @@ echo 'Supervisor: see spec #gates-merge.' > "$t/agents/supervisor.md"; g commit 
 run 1 OCTO_FEATHER_BASE=main
 g commit -q --amend -m 'role: pointer only' -m 'Behaviour-neutral: pointer to the owner, no rule changed'
 run 0 OCTO_FEATHER_BASE=main; has 'opt-out'; has 'Behaviour-neutral: pointer to the owner'
-echo "check-behavior-smoke: ok (absent base skips locally, fails in CI; lane #19 and #8 shapes, no owed line and main's smoke fail; later cited smoke with owed line, and the opt-out, pass)"
+
+# Review of 2bcd546, repro 2: a smoke deleted after it qualified no longer counts, though the owed line names it.
+g checkout -q feature; g rm -q evidence/smoke2.md; g commit -qm 'drop smoke2'
+run 1; has 'still at the checked head'
+g revert --no-edit HEAD >/dev/null; run 0
+
+# Review of 2bcd546, repro 1: a conflict resolution in a merge of main writes new role behaviour.
+g checkout -q -b conflict main
+L='\na\nb\nc\nLine five.\n'
+printf "Line one.$L" > "$t/agents/director.md"; g add -A; g commit -qm 'director file'; g branch -f main HEAD
+printf "Line one, see #gates-merge.$L" > "$t/agents/director.md"
+g commit -qam 'director: pointer only' -m 'Behaviour-neutral: pointer to the owner'
+g checkout -q main; printf "Line one, main wording.$L" > "$t/agents/director.md"; g commit -qam 'main: reword line one'
+g checkout -q conflict; g merge -q --no-edit main >/dev/null 2>&1 || true
+printf "Line one: the director now merges itself.$L" > "$t/agents/director.md"; g add -A; g commit -q --no-edit
+merge="$(sha)"
+run 1; has "$merge Merge branch 'main' into conflict: agents/director.md"
+# Resolving to one side wholesale writes nothing new: ok, the pointer commit stays an opt-out.
+g reset -q --hard HEAD^; g merge -q --no-edit -X ours main >/dev/null
+run 0; has 'opt-out'
+# A conflict-free merge of main that changed another line of the same role file is main's, not the branch's.
+g checkout -q -b clean main
+printf "Line one, main wording.\na\nb\nc\nLine five, see #gates-merge.\n" > "$t/agents/director.md"
+g commit -qam 'director: pointer line five' -m 'Behaviour-neutral: pointer to the owner'
+g checkout -q main; printf "Line one, main again.$L" > "$t/agents/director.md"; g commit -qam 'main: line one again'
+g checkout -q clean; g merge -q --no-edit main >/dev/null
+grep -qxF 'Line five, see #gates-merge.' "$t/agents/director.md" && grep -qxF 'Line one, main again.' "$t/agents/director.md"
+run 0; has '1 opted out'
+echo "check-behavior-smoke: ok (absent base skips locally, fails in CI; lane #19 and #8 shapes, no owed line and main's smoke fail; later cited smoke with owed line, and the opt-out, pass; a deleted smoke and a merge's new conflict resolution fail; a one-side resolution and a conflict-free merge of main pass)"

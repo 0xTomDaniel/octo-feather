@@ -84,3 +84,41 @@ Setup: headless, isolated from Herdr (`env -u OCTO_FEATHER_PARENT -u HERDR_PANE_
 | after 2 | "Behaviour-neutral opt-out for you to judge: 1f2e3d4 github skill: point merge text to spec #gates-merge. Reason: \"pointer to spec #gates-merge, no rule changed\"." | as designed |
 
 Limits: a weak before/after contrast (the old text already lists commits when given a log); the change is that the opt-out is singled out with its reason for the owner. A first, leading probe that pasted the check's output into the prompt listed the opt-out before and after alike, so it is not counted. Probes show how the text reads to a model, not a live chain. Cost not recorded.
+
+## Review of 2bcd546: two blocking findings fixed in f61b80a
+
+Class `missing-behavior-smoke` again, in this lane. (1) Every merge commit was skipped, so a conflict resolution could write new role behaviour unchecked. Now a merge counts for each behaviour file whose blob differs from a clean auto-merge of its parents (`git merge-tree --write-tree`) and from every parent; a clean merge of main, a one-side resolution and CI's PR merge ref add nothing. (2) A smoke deleted after it qualified still passed. Now the file must exist at the checked head (or the tree) and still cite a commit it cited. A merge's own edit is fixed the same way: a smoke after the merge, or the trailer on the merge commit.
+
+Repros in `/tmp/cg26p/r1`, `/tmp/cg26p/r2`, old = the 2bcd546 script, new = f61b80a:
+
+```
+== repro 1: lane commit pointer-only with Behaviour-neutral trailer; main rewords the same line; the merge's conflict resolution writes "Supervisor merges without asking."
+old: behavior smoke: opt-out 27b63db Behaviour-neutral: pointer to the owner
+     behavior smoke: ok (2 commits since 87f6d07, no behaviour change, 1 opted out)
+     exit 0
+new: check-behavior-smoke: role behaviour changed since 87f6d07 with no live smoke and owed eval after it (#26 missing-behavior-smoke; rule: docs/adr/0008, second paragraph):
+       02c14b9 Merge branch 'main' into lane: agents/supervisor.md
+       missing: no evidence/*.md changed after 02c14b9 and still at the checked head, citing a commit of this branch.
+     behavior smoke: opt-out 27b63db Behaviour-neutral: pointer to the owner
+     exit 1
+== repro 2: role commit ee43c9b, then evidence/smoke.md citing it plus its owed line, then the file deleted
+old: behavior smoke: ok (1 behaviour commits, smoke evidence/smoke.md)
+     exit 0
+new: check-behavior-smoke: role behaviour changed since 8000605 ...
+       ee43c9b role: agents/supervisor.md
+       missing: no evidence/*.md changed after ee43c9b and still at the checked head, citing a commit of this branch.
+     exit 1
+```
+
+`tests/check-behavior-smoke.sh` now also plants: the deleted smoke (fails, then passes once restored), the conflict resolution with new text (fails, naming the merge), the same conflict resolved to one side (passes, opt-out printed), and a clean merge of main that changed another line of the same role file (passes). Run against the 2bcd546 script, the extended test fails at both repros.
+
+History re-run at f61b80a, unchanged verdicts:
+
+```
+$ scripts/check-behavior-smoke --base ca721c5^1 --head db9e290   -> exit 1 (4df6e22 9f46d9b c1f80cc 398890d; missing: no evidence/*.md changed after 4df6e22 and still at the checked head, citing a commit of this branch.)
+$ scripts/check-behavior-smoke --base ca721c5^1 --head 975713d   -> behavior smoke: ok (5 behaviour commits, smoke evidence/2026-10-19-merge-teardown-smoke.md), exit 0
+$ scripts/check-behavior-smoke --base 275ea30^1 --head af760a4   -> exit 1 (381c1ca 639c8d9 1c6f542 eb87396; missing: no evidence/*.md changed after 381c1ca and still at the checked head, ...)
+$ scripts/check-behavior-smoke --base 275ea30^1 --head 89119f3   -> behavior smoke: ok (4 behaviour commits, smoke evidence/2026-10-20-spec-freeze-baseline-gap-probes.md), exit 0
+```
+
+89119f3 is itself a merge (corrector-gh19 into gh19) and adds nothing of its own. No role text changed in this fix, so the supervisor probes above (role text 7ac9746) still stand.
