@@ -34,5 +34,25 @@
   "github/skill/correct": {
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/correct?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/improve-codebase-architecture": {
+    "sha": "49dd158d1076134a641b33efb035946536778336",
+    "raw_url": "https://api.github.com/repos/mattpocock/skills/contents/skills/engineering/improve-codebase-architecture?ref=49dd158d1076134a641b33efb035946536778336"
+  },
+  "github/skill/codebase-design": {
+    "sha": "49dd158d1076134a641b33efb035946536778336",
+    "raw_url": "https://api.github.com/repos/mattpocock/skills/contents/skills/engineering/codebase-design?ref=49dd158d1076134a641b33efb035946536778336"
+  },
+  "github/skill/principle-prove-it-works": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-prove-it-works?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/blast-radius": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/blast-radius?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/sharpen": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/sharpen?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
   }
 }

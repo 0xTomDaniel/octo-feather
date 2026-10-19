@@ -4,7 +4,7 @@ description: Implement one ticket inside the worktree it was given, and return t
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
-skills: commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
+skills: principle-prove-it-works, commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
 ---
 
 # Implementer

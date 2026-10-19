@@ -1,0 +1,11 @@
+# reason: ADR 0012 model-invoked: `just shape` runs it
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,7 +1,6 @@
+ ---
+ name: improve-codebase-architecture
+ description: Scan a codebase for deepening opportunities, present them as a visual HTML report, then grill through whichever one you pick.
+-disable-model-invocation: true
+ ---
+ 
+ # Improve Codebase Architecture

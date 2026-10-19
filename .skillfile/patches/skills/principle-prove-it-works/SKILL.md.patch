@@ -1,0 +1,11 @@
+# reason: ADR 0012 model-invoked: the implementer and the `just qc` judge run it
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,7 +1,6 @@
+ ---
+ name: principle-prove-it-works
+ description: "Apply after completing a task, before declaring done. Verify against the real artifact (run the feature, read the actual value, inspect the diff), not a proxy, self-report, or 'it compiles.'"
+-disable-model-invocation: true
+ ---
+ 
+ # Prove It Works

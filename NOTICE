@@ -51,7 +51,9 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
 (pins in Skillfile.lock):
 
     tdd, implement, implement-spec, to-tickets, grill-with-docs, grilling,
-    domain-modeling, code-review: mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
-    correct: cursor/plugins@0b8e952 (pstack), MIT, Copyright 2026 Lauren Tan
+    domain-modeling, code-review, improve-codebase-architecture, codebase-design:
+    mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
+    correct, principle-prove-it-works, blast-radius, sharpen: cursor/plugins@0b8e952
+    (pstack), MIT, Copyright 2026 Lauren Tan
     agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
     (same pin and license).

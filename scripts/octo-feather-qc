@@ -66,7 +66,7 @@ def criteria_text(spec):
 
 BRIEF = """QC run (docs/adr/0022). You are the product judge for this lane head, not a code reviewer: skip the code-review skill's diff passes, message nobody (no herdr-say), and change no file (no edit, no commit, no file written in the repo; scratch only under /tmp).
 Repo: {repo}, head {head}. Spec: {spec}.
-For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
+For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Apply the principle-prove-it-works skill: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
 Criteria:
 {criteria}
 Your final message is exactly one fenced json block and nothing else:
@@ -97,7 +97,7 @@ def main(argv):
     brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec,
                          criteria="\n".join(f"- {i}: {text.get(i, '')}" for i in ids))
     cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "code-reviewer.md"),
-           "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+           "--skill", str(KIT / ".agents" / "skills" / "principle-prove-it-works"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
     t0 = time.time()
     run = subprocess.run(cmd, capture_output=True, text=True)
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())

@@ -66,6 +66,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, behaviour revision (audit F03): a revision changes a clause governing a built criterion; the review link lists that criterion and its acceptance resets it to planned. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Director, repeat trigger (audit F08): a class with a closed correction issue and no newer finding line starts no lane; a newer one does. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Supervisor, fan-out (Tom's spec comment): after the pilot, two independent tickets get two implementers at once. Smoke: `evidence/2026-10-19-role-probes.md`.
+- Implementer and code reviewer, new pstack skills (principle-prove-it-works, blast-radius): the implementer reports with a re-runnable proof; the reviewer names the one safety fact and how far it was proven. Smoke: `evidence/2026-10-19-role-probes.md`.
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`

@@ -4,7 +4,7 @@ description: Judge one diff against its ticket and the canonical spec, and retur
 model: openai/gpt-6.1-sol
 thinking: high
 tools: read, grep, find, ls, bash
-skills: code-review, github
+skills: blast-radius, code-review, github
 ---
 
 # Code reviewer
