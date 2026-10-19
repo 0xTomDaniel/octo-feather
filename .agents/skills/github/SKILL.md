@@ -72,9 +72,15 @@ durable workflow artifacts.
 - Merge (spec `#gates-merge`): after the owner says merge, the director relays
   it with the head the merge ask named, and the lane supervisor alone merges,
   pinned to that head: `gh pr merge <N> --merge --match-head-commit <head>`.
-  The owner's merge accepts that exact head only. Any moved head (a rebase
-  included) or failed merge is never forced: rebase, rerun the gates, send a
-  new merge ask naming the new head. Assigning the work item to a supervisor
+  The owner's merge accepts that head, or that head plus only merges of main
+  that resolved no conflict (the lane's own diff against main unchanged):
+  then, with required checks green on the new head, merge with
+  `--match-head-commit <new head>`, no new qc, no new merge ask, and name both
+  heads in the done report. Main moving does not move the head; prefer
+  merging main in over a rebase, which rewrites approved commits. Any other
+  head change (fix commit, rebase, resolved conflict) or failed merge is never
+  forced: rerun the gates, `just qc` on every affected criterion included,
+  and send a new merge ask naming the new head. Assigning the work item to a supervisor
   is not merge approval. Verify required checks, then merge. No worker merges,
   no agent decides acceptance, and no agent merges unaccepted work. Required
   failed checks remain blockers until fixed or durably waived through a
@@ -95,5 +101,5 @@ durable workflow artifacts.
 - No worker or reviewer role merges or approves as the owner reviewer.
 - Only the lane supervisor merges, on the owner's merge relayed by the
   director, pinned to the merge-ask head, per Merge And Issue Sync above
-  (spec `#gates-merge`); no agent merges unaccepted work, merges a moved head,
-  or decides acceptance itself.
+  (spec `#gates-merge`); no agent merges unaccepted work, merges a head moved by
+  anything but a clean merge of main, or decides acceptance itself.
