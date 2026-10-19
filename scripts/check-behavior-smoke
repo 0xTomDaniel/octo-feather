@@ -20,6 +20,10 @@ request), else origin/main, else main. No resolvable base or merge base: skip
 with a note locally, fail in CI ($CI or $GITHUB_ACTIONS set; checkout needs
 fetch-depth: 0). Nothing ahead of the base (on main): ok.
 
+Needs git 2.38+ (merge-tree --write-tree) when a merge on the branch
+changes a role file on more than one side; older git fails closed naming it
+(exit 2, never reported as a behaviour change).
+
 Usage: check-behavior-smoke [--base REF] [--head REF] [--repo DIR]
 --head checks a past commit (no worktree); default is HEAD plus uncommitted
 evidence/ and docs/future.md. Run by `just check`, tested by
@@ -81,25 +85,40 @@ def blob(tree, f):
     return out.strip() if out else None
 
 
+GIT_MIN = "git 2.38 (merge-tree --write-tree)"
+
+
+def auto_merge(parents):
+    """Tree of a clean auto-merge of PARENTS, octopus parents folded pairwise through
+    merge-tree (a conflicted step keeps its markers, so no resolution matches it).
+    Fails closed without merge-tree --write-tree: an unavailable comparison is never
+    labelled new behaviour."""
+    acc, tree = parents[0], None
+    for i, p in enumerate(parents[1:], 2):
+        r = subprocess.run(["git", "-C", root, "merge-tree", "--write-tree", acc, p], capture_output=True, text=True)
+        tree = r.stdout.split("\n", 1)[0].strip()
+        if r.returncode not in (0, 1) or not re.fullmatch(r"[0-9a-f]{40,64}", tree):
+            print(f"{TAG}: cannot auto-merge {', '.join(x[:7] for x in parents)} to see what the merge wrote: "
+                     f"needs {GIT_MIN}, got {(git('--version', ok=True) or '?').strip()}: {r.stderr.strip()[:200]}", file=sys.stderr)
+            sys.exit(2)
+        if i < len(parents):
+            acc = git("commit-tree", tree, "-p", acc, "-p", p, "-m", "check-behavior-smoke fold").strip()
+    return tree
+
+
 def merge_introduced(c, parents):
-    """Behaviour files a merge commit itself wrote: its blob differs from a clean
-    auto-merge of its parents and from every parent (a conflict resolution or an
-    edit in the merge). What it merely inherits from either side is not its own."""
-    auto = None
-    if len(parents) == 2:
-        r = subprocess.run(["git", "-C", root, "merge-tree", "--write-tree", *parents], capture_output=True, text=True)
-        auto = r.stdout.split("\n", 1)[0].strip() if r.returncode in (0, 1) else None
+    """Behaviour files a merge commit itself wrote: its blob differs from every parent
+    and from a clean auto-merge of its parents (a conflict resolution or an edit in
+    the merge). What it merely inherits from any side is not its own."""
     changed = set()
     for p in parents:
         changed.update(git("diff-tree", "--no-commit-id", "--name-only", "-r", p, c).split())
-    out = []
-    for f in sorted(changed):
-        if not BEHAVIOUR.match(f):
-            continue
-        b = blob(c, f)
-        if (auto is None or b != blob(auto, f)) and all(b != blob(p, f) for p in parents):
-            out.append(f)
-    return out
+    cand = [f for f in sorted(changed) if BEHAVIOUR.match(f)
+            and all(blob(c, f) != blob(p, f) for p in parents)]
+    if not cand:
+        return []  # nothing differs from every parent: no auto-merge needed
+    auto = auto_merge(parents)
+    return [f for f in cand if blob(c, f) != blob(auto, f)]
 
 
 for c in revs:

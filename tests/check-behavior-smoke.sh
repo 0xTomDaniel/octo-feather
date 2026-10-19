@@ -84,4 +84,24 @@ g checkout -q main; printf "Line one, main again.$L" > "$t/agents/director.md"; 
 g checkout -q clean; g merge -q --no-edit main >/dev/null
 grep -qxF 'Line five, see #gates-merge.' "$t/agents/director.md" && grep -qxF 'Line one, main again.' "$t/agents/director.md"
 run 0; has '1 opted out'
-echo "check-behavior-smoke: ok (absent base skips locally, fails in CI; lane #19 and #8 shapes, no owed line and main's smoke fail; later cited smoke with owed line, and the opt-out, pass; a deleted smoke and a merge's new conflict resolution fail; a one-side resolution and a conflict-free merge of main pass)"
+
+# Delta review of 739d736, repro 1: a clean octopus of pointer-only edits on separate lines of one role file, each opted out.
+g checkout -q -b octo main
+printf 'one\na\ntwo\nb\nthree\nc\nfour\n' > "$t/agents/supervisor.md"; g commit -qam 'supervisor: lines'; g branch -f main HEAD
+for k in one two three; do g checkout -q -b "o-$k" main
+  sed -i "s/^$k\$/$k, see #gates-merge/" "$t/agents/supervisor.md"; g commit -qam "pointer $k" -m 'Behaviour-neutral: pointer to the owner'; done
+g checkout -q octo; g reset -q --hard main; g merge -q --no-edit o-one o-two o-three >/dev/null
+[[ "$(git -C "$t" rev-list --parents -n1 HEAD | wc -w)" == 4 ]] || { echo "check-behavior-smoke test: octopus not made" >&2; exit 1; }
+run 0; has '3 opted out'
+# The same octopus with an edit of its own still fails, naming the merge.
+echo 'The supervisor merges without asking.' >> "$t/agents/supervisor.md"; g commit -q --amend --no-edit -a; octo="$(sha)"
+run 1; has "$octo Merge branches"
+# Repro 2: git without merge-tree --write-tree (shim exits 129) fails closed, exit 2 naming the version, never as behaviour.
+mkdir -p "$t/../shim-$$"; shim="$(cd "$t/../shim-$$" && pwd)"; trap 'rm -rf "$t" "$shim"' EXIT
+real="$(command -v git)"
+printf '#!/usr/bin/env bash\nfor a in "$@"; do [[ "$a" == merge-tree ]] && { echo "usage: git merge-tree" >&2; exit 129; }; done\nexec %q "$@"\n' "$real" > "$shim/git"; chmod +x "$shim/git"
+g checkout -q clean
+run 2 PATH="$shim:$PATH"; has 'needs git 2.38'; ! grep -qF 'missing-behavior-smoke' <<<"$out" || { echo "check-behavior-smoke test: unavailable merge-tree reported as behaviour: $out" >&2; exit 1; }
+run 0                                                     # same merge, real git: clean
+g checkout -q feature; run 0 PATH="$shim:$PATH"           # no merge touching a role file on both sides: merge-tree never needed
+echo "check-behavior-smoke: ok (absent base skips locally, fails in CI; lane #19 and #8 shapes, no owed line and main's smoke fail; later cited smoke with owed line, and the opt-out, pass; a deleted smoke and a merge's new conflict resolution fail; a one-side resolution and a conflict-free merge of main and a clean opted-out octopus pass; an octopus's own edit fails; no merge-tree fails closed, exit 2)"
