@@ -78,8 +78,21 @@ refuse "inside a work tree" "inside the git work tree $t/work/outer" "$t/work/ou
 refuse "unknown LANG" "pick one of: ${langs[*]}" "$t/work/nolang" rust nolang
 refuse "missing DEST" 'usage' "$t/work" python
 SPEC_CHAT_CLONE="$t/nope" refuse "missing Spec Chat clone" 'SPEC_CHAT_CLONE.*--no-spec-chat' "$t/work/noclone" python noclone
+
+# Identity fallback, on a throwaway kit copy (the real checkout's config is shared,
+# never written): no identity for DEST and none in the kit refuses; a kit-local one is used.
+copy="$t/kit"; mkdir -p "$copy"
+(cd "$kit" && git ls-files -z -- justfile scripts templates | tar --null -T - -cf -) | tar -xpf - -C "$copy"
+git -c init.defaultBranch=main init -q "$copy"; git -C "$copy" add -A; git -C "$copy" commit -qm copy
 (unset GIT_AUTHOR_NAME GIT_COMMITTER_NAME GIT_AUTHOR_EMAIL GIT_COMMITTER_EMAIL
-  refuse "no git identity" 'git config --global user.name' "$t/work/noid" python noid --no-spec-chat)
+  kit="$copy"
+  refuse "no git identity" 'git config --global user.name' "$t/work/noid" python noid --no-spec-chat
+  git -C "$copy" config user.name kitname; git -C "$copy" config user.email kit@example.com
+  out="$(run python kitid --no-spec-chat 2>&1)" || fail "kit identity fallback: $out"
+  grep -q "kitname <kit@example.com> (the kit checkout's" <<<"$out" || fail "identity used not printed: $out"
+  [[ "$(git -C "$t/work/kitid" log -1 --format='%an <%ae> %cn <%ce>')" == 'kitname <kit@example.com> kitname <kit@example.com>' ]] \
+    || fail "commit not by the kit identity: $(git -C "$t/work/kitid" log -1 --format='%an <%ae> %cn <%ce>')")
+grep -q 't <t@t> (your git identity)' <<<"$(run python ownid --no-spec-chat 2>&1)" || fail "caller identity not used or not printed"
 
 [[ -z "$(find "$HOME" -mindepth 1)" ]] || fail "created under HOME: $(find "$HOME" -mindepth 1)"
-echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; nothing in HOME)"
+echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; kit identity fallback; nothing in HOME)"

@@ -3,7 +3,7 @@
 #
 # Make a new target repo at DEST from the kit's templates/LANG: only the
 # template's git-tracked files (modes kept), `git init -b main`, one initial
-# commit with the caller's git identity, then Spec Chat's skills through
+# commit with the caller's git identity (else the kit checkout's), then Spec Chat's skills through
 # octo-feather-spec-chat unless --no-spec-chat. Never runs `just setup`, never
 # touches the network or creates a GitHub repo. Every refusal happens before
 # anything is created.
@@ -46,9 +46,17 @@ if [[ "$spec_chat" == 1 ]]; then
   [[ -x "$installer" ]] || { echo "$me: no Spec Chat installer at $installer; clone Spec Chat there, set SPEC_CHAT_CLONE to its clone, or pass --no-spec-chat" >&2; exit 1; }
 fi
 
-ident() { git -C "$anc" -c user.useConfigOnly=true var "$1" >/dev/null 2>&1; }
-ident GIT_AUTHOR_IDENT && ident GIT_COMMITTER_IDENT \
-  || { echo "$me: no git identity; set it with git config --global user.name 'NAME' and git config --global user.email 'EMAIL'" >&2; exit 1; }
+# Caller's identity as DEST would resolve it (env, global), else the kit checkout's.
+ident() { git -C "$anc" -c user.useConfigOnly=true var "$1" 2>/dev/null; }
+if a="$(ident GIT_AUTHOR_IDENT)" && ident GIT_COMMITTER_IDENT >/dev/null; then
+  who="${a% * *} (your git identity)"
+else
+  kname="$(git -C "$kit" config user.name || true)"; kemail="$(git -C "$kit" config user.email || true)"
+  [[ -n "$kname" && -n "$kemail" ]] \
+    || { echo "$me: no git identity, here or in the kit checkout $kit; set it with git config --global user.name 'NAME' and git config --global user.email 'EMAIL'" >&2; exit 1; }
+  export GIT_AUTHOR_NAME="$kname" GIT_AUTHOR_EMAIL="$kemail" GIT_COMMITTER_NAME="$kname" GIT_COMMITTER_EMAIL="$kemail"
+  who="$kname <$kemail> (the kit checkout's git identity; none set for DEST)"
+fi
 
 sha="$(git -C "$kit" rev-parse --short HEAD)"
 mapfile -d '' -t files < <(git -C "$kit/templates/$lang" ls-files -z)
@@ -68,7 +76,7 @@ git -C "$dest" -c core.hooksPath=/dev/null commit -q -m "Initial commit from oct
 if [[ "$spec_chat" == 1 ]]; then "$kit/scripts/octo-feather-spec-chat" "$dest"; fi
 trap - ERR
 
-echo "$me: $dest from templates/$lang @ $sha, one commit on main$([[ "$spec_chat" == 1 ]] || echo ', no Spec Chat (--no-spec-chat)')"
+echo "$me: $dest from templates/$lang @ $sha, one commit on main by $who$([[ "$spec_chat" == 1 ]] || echo ', no Spec Chat (--no-spec-chat)')"
 cat <<EOF
 Next steps:
   cd $dest
