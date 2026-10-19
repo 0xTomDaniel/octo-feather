@@ -62,6 +62,7 @@ head = commit(a.head or "HEAD") or no_base(f"no commit {a.head or 'HEAD'}")
 worktree = a.head is None
 cands = [a.base] if a.base else [os.environ.get("OCTO_FEATHER_BASE")] if os.environ.get("OCTO_FEATHER_BASE") else \
     ([f"origin/{os.environ['GITHUB_BASE_REF']}"] if os.environ.get("GITHUB_BASE_REF") else []) + ["origin/main", "main"]
+cands = list(dict.fromkeys(cands))
 base = next((c for c in cands if commit(c)), None) or no_base(f"no base ref ({', '.join(cands)})")
 mb = (git("merge-base", base, head, ok=True) or "").strip() or no_base(f"no merge base of {base} and HEAD (shallow clone?)")
 
