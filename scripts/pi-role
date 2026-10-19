@@ -18,12 +18,16 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   thinking     --thinking
   tools        --tools (built-in Pi tools only)
   skills       --skill for each, looked up in agents/skills/ then skills/
-scripts/check-roles rejects any other key.
+  externalSkills  optional: skills installed outside the kit (Spec Chat's), looked
+               up in $OCTO_FEATHER_SKILL_PATH (colon-separated, default
+               ~/.pi/agent/skills); a missing one is skipped with a warning
+scripts/check-roles rejects any other key. Pi always gets --no-skills, so a
+global skill folder never leaks into a role: only listed skills load.
 """
 import hashlib, json, os, re, sys
 
-KEYS = {"name", "description", "model", "thinking", "tools", "skills"}
-LIST_KEYS = {"tools", "skills"}
+KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
+LIST_KEYS = {"tools", "skills", "externalSkills"}
 
 
 def parse(path):
@@ -64,6 +68,13 @@ def launch(path, to_file=False):
                 break
         else:
             sys.exit(f"pi-role: skill {s} not found in {roots}")
+    ext = os.environ.get("OCTO_FEATHER_SKILL_PATH") or os.path.expanduser("~/.pi/agent/skills")
+    for s in fm.get("externalSkills", []):
+        hit = [os.path.join(d, s) for d in ext.split(":") if d and os.path.isfile(os.path.join(d, s, "SKILL.md"))]
+        if hit:
+            args += ["--skill", hit[0]]
+        else:
+            print(f"pi-role: external skill {s} not installed in {ext}; skipped", file=sys.stderr)
     if body:
         if to_file:
             # A pane launch goes through `herdr agent start`; hand Pi a file,

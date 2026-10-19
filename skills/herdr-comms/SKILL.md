@@ -128,6 +128,11 @@ Exit codes are the contract:
 | 75 | target is blocked on interactive input; retry when it frees |
 | other | anything else |
 
+After a brief, end your turn. The result arrives as a new message in your pane;
+a shell loop that waits for it holds your turn open, and the message queues
+behind it (block 3 smoke). A finished agent's `agent_status` is `done`, not
+`idle`.
+
 There is no acknowledgement step. `--wait --until` returns only on a state
 change Herdr observed itself, which is stronger evidence than an agent
 reporting on its own behalf. There is no deferred inbox and no drain: a message

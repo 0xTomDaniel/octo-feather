@@ -14,10 +14,6 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 
 `spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#acceptance-receipt`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
 
-## Spec Chat skills for the supervisor
-
-octo-lite's supervisor listed `spec-chat-shape` and `spec-chat-review`, which live in the Spec Chat peer repo. They were dropped from `agents/supervisor.md` because nothing provides them on the remote; add them to its `skills` and `skillPath` once Spec Chat is installed there.
-
 ## `just qc` and `just qa`
 
 Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target's product, `just qa` runs factory evals of the kit's own agents and loop. Both are stubs that exit 2. Neither runs inside `just check`, which stays deterministic and free; check-refs fails if a gate recipe calls them.

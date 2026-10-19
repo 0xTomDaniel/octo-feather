@@ -11,3 +11,5 @@ Every agent, children included (code reviewer, corrector, the Jev judge), starts
 
 - Supersedes the pi-subagents parts of ADR 0013 (the pin, `allowedAgents`, `maxSubagentDepth`, the `subagent` tool, `inheritProjectContext: false`, `skillPath`, `systemPromptMode`).
 - A pane cannot be limited to launching certain roles; the tool allowlist and the role contracts are the limits.
+
+Addendum (block 3): one optional key, `externalSkills`, names skills installed outside the kit (Spec Chat's `spec-chat-shape`, `spec-chat-review`), looked up in `$OCTO_FEATHER_SKILL_PATH` (default `~/.pi/agent/skills`) and skipped with a warning when absent. Pi still gets `--no-skills`, so a global skill folder loads nothing a role does not list; `check-roles` asserts that.

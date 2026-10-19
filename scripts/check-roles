@@ -3,7 +3,7 @@
 
 Deterministic and free: no model calls. Run by `just check`.
 """
-import os, re, subprocess, sys
+import json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS = os.path.join(ROOT, "agents")
@@ -15,6 +15,7 @@ THINKING = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
 TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write"}
 # Exactly the keys scripts/pi-role reads; anything else would be silently ignored.
 FIELDS = {"name", "description", "model", "thinking", "tools", "skills"}
+OPTIONAL = {"externalSkills"}  # resolved at launch; absent ones are skipped
 SKILL_ROOTS = [os.path.join(ROOT, "agents", "skills"), os.path.join(ROOT, "skills")]
 
 errors = []
@@ -46,7 +47,7 @@ for role in ROLES:
     fm, body = parse(path, rel)
     for k in sorted(FIELDS - fm.keys()):
         err(f"{rel}: missing field `{k}`")
-    for k in sorted(fm.keys() - FIELDS):
+    for k in sorted(fm.keys() - FIELDS - OPTIONAL):
         err(f"{rel}: field `{k}` is not one pi-role honours; delete it (docs/adr/0016)")
     if fm.get("name") not in (None, role):
         err(f"{rel}: name must be `{role}` (the file name)")
@@ -64,9 +65,17 @@ for role in ROLES:
         err(f"{rel}: empty body")
     if "model" in fm:
         families[role] = fm["model"].split("/")[0]
-    r = subprocess.run([os.path.join(ROOT, "scripts/pi-role"), "--json", path], capture_output=True, text=True)
+    # Skill isolation: --no-skills, and exactly the listed kit skills (externals
+    # are resolved against an empty path here, so none load).
+    env = dict(os.environ, OCTO_FEATHER_SKILL_PATH="/nonexistent")
+    r = subprocess.run([os.path.join(ROOT, "scripts/pi-role"), "--json", path], capture_output=True, text=True, env=env)
     if r.returncode != 0:
         err(f"{rel}: pi-role failed: {r.stderr.strip()}")
+    else:
+        a = json.loads(r.stdout)["args"]
+        got = [os.path.basename(a[i + 1]) for i, x in enumerate(a) if x == "--skill"]
+        if "--no-skills" not in a or sorted(got) != sorted(lst(fm.get("skills", ""))):
+            err(f"{rel}: pi-role must pass --no-skills and exactly the listed skills; got {got}")
 
 # Reviewer-same-family tripwire: the reviewer never shares a model family with
 # the implementer whose diff it judges (docs/adr/0007).

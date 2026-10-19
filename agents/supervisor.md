@@ -5,6 +5,7 @@ model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write
 skills: commit, domain-modeling, github, grill-with-docs, grilling, herdr-comms, implement-spec, push, to-tickets
+externalSkills: spec-chat-shape, spec-chat-review
 ---
 
 # Supervisor
