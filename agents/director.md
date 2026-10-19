@@ -130,8 +130,10 @@ The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
   role's output. On the owner's yes you relay the merge with the merge ask's
   head; the supervisor runs the head-pinned merge (spec `#gates-merge`).
   `just integrate` is not the merge: it lands worker branches on the lane
-  branch and never pushes. A moved head or failed merge comes back as a new
-  merge ask; relay it like any other.
+  branch and never pushes. A head moved only by a clean merge of main (no
+  conflict resolved, checks green) is merged without a new ask; its done
+  report names both heads. Any other head change or a failed merge comes back
+  as a new merge ask; relay it like any other (spec `#gates-merge`).
 - Unblocking a stranded session means giving it what it needs, not doing its
   work in its tree.
 

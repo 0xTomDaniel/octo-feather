@@ -8,6 +8,8 @@ Smoke for the owed eval cases on the supervisor's head-pinned merge and its clos
 17:53:43Z note: owner decision (Tom via Exo): after owner says merge, the lane supervisor merges with gh pr merge N --merge --match-head-commit HEAD; moved head or failure: rebase, rerun gates, new merge ask; no landing agent. Applied now.
 ```
 
+Later refined by Tom (spec `#gates-merge`, ADR 0007): a head moved only by merges of main that resolved no conflict, checks green, merges pinned to the new head with no new qc or merge ask, the done report naming both heads; any other change or a failed merge reruns the gates and sends a new merge ask. The line above is the rule as logged then.
+
 ## Lane #5 (CI lane), after the rule: pass
 
 ```
@@ -21,7 +23,7 @@ Checked at source:
 - `gh pr view 7`: `MERGED`, `headRefOid` e0843940858b, `mergeCommit` 8b4c26021a83: merged at the head the merge ask named.
 - `gh run view 39298336577`: `push` on `main`, `headSha` 8b4c26021a83, `success`.
 
-Result: the director relayed the yes with the head; the supervisor merged pinned to e084394 and reported; the director then closed space w5 and removed worktree gh5. Limits: GitHub's `mergedBy` is the shared account `0xTomDaniel`, so "merged by supervisor" rests on the director log; the close report itself went by `herdr-say` and has no log line of its own. The moved-head branch (no merge, rebase, new merge ask) was not exercised: the head did not move.
+Result: the director relayed the yes with the head; the supervisor merged pinned to e084394 and reported; the director then closed space w5 and removed worktree gh5. Limits: GitHub's `mergedBy` is the shared account `0xTomDaniel`, so "merged by supervisor" rests on the director log; the close report itself went by `herdr-say` and has no log line of its own. Neither moved-head branch (clean main merge; other change, new merge ask) was exercised: the head did not move.
 
 ## Lane #2 (Pi trust prompt fix), before the rule: fail
 
