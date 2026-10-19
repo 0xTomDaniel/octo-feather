@@ -213,6 +213,23 @@ copycase savedcopy; piok savedcopy refused:keys-changed
  echo '{"k": "SECRET-pi-auth-BOX-987654", "exp": 4}' > "$pa"; touch "$t/bin/go") &
 FAKE_GO="$t/bin/go" copycase race; wait; rm -f "$t/bin/go"; piok race refused:box-auth-changed
 [[ "$(cat "$pa")" == '{"k": "SECRET-pi-auth-BOX-987654", "exp": 4}' ]] || fail "race: box value not kept"
+# The final window: a box Pi takes '<auth>.lock' (proper-lockfile) while the judge runs, holds it as qc reaches
+# write-back, then writes in place and releases. qc waits for the lock, never writes under it, and keeps the Pi value.
+orig="$(cat "$pa")"
+(for _ in $(seq 100); do pgrep -fx "sleep 3013$tok" > /dev/null && break; sleep 0.1; done
+ mkdir "$pa.lock"; seen="$(cat "$pa")"; touch "$t/bin/go"; sleep 2
+ [[ "$(cat "$pa")" == "$seen" ]] || touch "$t/clobbered"
+ echo '{"k": "SECRET-pi-auth-LOCKED-987654", "exp": 5}' > "$pa"; rmdir "$pa.lock") &
+FAKE_GO="$t/bin/go" copycase race; wait; rm -f "$t/bin/go"; piok lockedrace refused:box-auth-changed
+[[ ! -e "$t/clobbered" && "$(cat "$pa")" == '{"k": "SECRET-pi-auth-LOCKED-987654", "exp": 5}' ]] \
+  || fail "lockedrace: qc wrote auth.json under Pi's lock or lost the Pi value"
+# A lock held past the bound (stale by mtime, too): refused:auth-locked, box and lock dir untouched.
+mkdir "$pa.lock"; touch -d '-1 hour' "$pa.lock"; lm="$(stat -c %Y "$pa.lock")"; orig="$(cat "$pa")"
+copycase refresh scratch/oldauth .git/oldauth "$HOME/oldauth"
+[[ "$(report '["sandbox"]["auth_writeback"]')" == refused:auth-locked && "$(cat "$pa")" == "$orig" && -d "$pa.lock" \
+   && "$(stat -c %Y "$pa.lock")" == "$lm" && -z "$(ls -A "$pa.lock")" ]] \
+  || fail "held lock: want refused:auth-locked, box and lock untouched, got $(report '["sandbox"]["auth_writeback"]')"
+rmdir "$pa.lock"
 # A token refresh in place (intermediate copies anywhere discarded): written back, the new value only.
 copycase refresh scratch/oldauth .git/oldauth "$HOME/oldauth"; piok refresh written
 [[ "$(cat "$pa")" == '{"k": "SECRET-pi-auth-REFRESHED-987654", "exp": 2}' ]] || fail "refresh case did not write back the new token"
@@ -253,4 +270,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json: added key refused, refresh written, box race kept), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json: added key refused, refresh written, box race kept, Pi auth lock waited for and never stolen), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
