@@ -12,7 +12,10 @@ model's family (the part before "/") must differ from the implementer's.
 The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
 which documents its mounts and checks): a pre-run proof is printed and any
 failed check aborts before the judge starts; after it exits, leftovers are
-killed and the agents it started are counted.
+killed and the agents it started are counted. The judge has no persistent
+writable path: the worktree is an overlay whose upper dir lives on the run's
+tmpfs, so every write (credential copies included) dies with the run; a write
+to a tracked file or an untracked non-ignored file is reported and fails it.
   --no-sandbox           debugging only: prints UNSANDBOXED, writes the report,
                          never changes or commits the status file
   OCTO_FEATHER_QC_MODEL  judge model override (still checked against the family)
@@ -22,7 +25,7 @@ killed and the agents it started are counted.
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (judge's report, raw run, proof and cleanup).
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
-the judge wrote files or copied Pi credentials into the worktree, 64 usage or same-family judge, 65 dirty worktree,
+the judge wrote a tracked or non-ignored file (paths listed), 64 usage or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed (judge not started).
 """
 import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, threading, time
@@ -131,63 +134,22 @@ def sandboxed(judge, session):
         th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
     read = lambda n: b"".join(got[n]).decode(errors="replace")
     record = {"session": session, "proof": read("proof").splitlines()}
-    post = read("post")   # written only after the judge ran
-    record.update(json.loads(post or "{}"))
-    if not post:
+    for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
+        record.update(json.loads(line))
+    if "agents_started" not in record:
         return None, record
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
 
 
-def credential_needles():
-    """Pi's auth.json and models.json now: each file's bytes and every string value of 16+ chars (raw and JSON-escaped)."""
-    agent = Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent")
-    out = set()
-
-    def strings(v):
-        if isinstance(v, str):
-            yield v
-        elif isinstance(v, dict):
-            for x in v.values():
-                yield from strings(x)
-        elif isinstance(v, list):
-            for x in v:
-                yield from strings(x)
-    for n in ("auth.json", "models.json"):
-        try:
-            b = (agent / n).read_bytes()
-        except OSError:
-            continue
-        out.add(b.strip())
-        try:
-            vals = list(strings(json.loads(b)))
-        except ValueError:
-            vals = []
-        for s in vals:
-            out.update({s.encode(), json.dumps(s)[1:-1].encode(), json.dumps(s, ensure_ascii=False)[1:-1].encode()})
-    return {x for x in out if len(x) >= 16}   # shorter holds no secret (an empty "{}") and would match anything
-
-
-def credential_copies(top, needles):
-    """Remove and return every file under TOP (ignored files and .git included, any size) holding a needle."""
-    found, keep = [], max(map(len, needles), default=1) - 1
-    for root, _, files in os.walk(top) if needles else ():
-        for f in files:
-            q = Path(root) / f
-            try:
-                if q.is_symlink() or not q.is_file():
-                    continue
-                hit, tail = False, b""
-                with open(q, "rb") as fh:   # streamed in chunks, overlapping by the longest needle
-                    for chunk in iter(lambda: fh.read(1 << 20), b""):
-                        buf = tail + chunk
-                        if any(n in buf for n in needles):
-                            hit = True; break
-                        tail = buf[-keep:] if keep else b""
-                if hit:
-                    q.unlink(); found.append(str(q))
-            except OSError:
-                pass
-    return found
+def worktree_writes(upper):
+    """Of the judge's writes (overlay upper entries, all discarded), the ones that broke read-only:
+    a tracked file new, changed or deleted, or an untracked file git does not ignore. .git is git's own."""
+    rel = [(k, p) for k, p in upper if p != ".git" and not p.startswith(".git/")]
+    tracked = set(git("ls-files", "-z").split("\0"))
+    cand = [p for k, p in rel if p not in tracked and k == "new"]
+    ignored = set(subprocess.run(["git", "check-ignore", "--stdin", "-z"], input="\0".join(cand), capture_output=True,
+                                 text=True).stdout.split("\0")) if cand else set()
+    return [f"{k} {p}" for k, p in rel if p in tracked or (k == "new" and p not in ignored)]
 
 
 def main(argv):
@@ -219,7 +181,6 @@ def main(argv):
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
-    needles = credential_needles()   # before the run too: the judge's Pi may refresh auth.json mid-run
     t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
@@ -232,15 +193,17 @@ def main(argv):
     raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "sandbox": sandbox,
            "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
 
-    copies = credential_copies(git("rev-parse", "--show-toplevel"), needles | credential_needles())
-    raw["credential_copies_removed"] = copies
-    print(f"qc: worktree scan: {len(copies)} Pi credential copies removed", file=sys.stderr)
-    if copies:
-        report_path.write_text(json.dumps(raw, indent=2))
-        die(3, f"the judge copied Pi credentials into the worktree: {' '.join(copies)} (removed; report {report_path})")
+    if sandbox:
+        upper = sandbox.pop("upper", [])
+        raw["discarded_writes"] = len(upper)
+        raw["worktree_writes"] = wrote = worktree_writes(upper)
+        print(f"qc: worktree overlay: {len(upper)} judge writes discarded with the run, {len(wrote)} outside ignored paths", file=sys.stderr)
+        if wrote:
+            report_path.write_text(json.dumps(raw, indent=2))
+            die(3, f"the judge wrote into the worktree (discarded; real worktree unchanged): {'; '.join(wrote)}; read-only was broken (report {report_path})")
     if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
         report_path.write_text(json.dumps(raw, indent=2))
-        die(3, f"the judge changed the worktree or head; read-only was broken (report {report_path})")
+        die(3, f"the worktree or head changed during the run; read-only was broken (report {report_path})")
     blocks = re.findall(r"```json\s*(\{.*?\})\s*```", run.stdout, re.S)
     try:
         rep = json.loads(blocks[-1])

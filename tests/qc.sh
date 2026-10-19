@@ -5,8 +5,8 @@
 # unusable report and a judge that writes are refused, reports never overwrite;
 # the sandbox (#33): a judge trying each escape fails at every one, a failed
 # proof aborts before the judge, leftovers are killed and agents counted,
-# masks cannot be unmounted, a nested-namespace survivor dies, Pi credential
-# copies cannot persist outside the worktree and fail the run inside it, a pane
+# masks cannot be unmounted, a nested-namespace survivor dies, no judge write
+# persists (the worktree is an overlay on the run tmpfs; credential copies vanish), a pane
 # the judge spawns runs in its PID namespace and dies with it (real herdr when
 # installed, else the fake; the test prints which),
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
@@ -59,13 +59,15 @@ ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass"
 case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
-  writes) echo hacked > judge-was-here; printf '```json\n{"criteria": []}\n```\n' ;;
+  writes) echo hacked > judge-was-here; mkdir -p scratch; echo ignored > scratch/fine; printf '```json\n{"criteria": []}\n```\n' ;;
+  tracked) echo hacked >> .gitignore; rm docs/specs/demo.spec.html; printf "$ok" ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
   bigcopy) mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/big; truncate -s 67108865 scratch/big; printf "$ok" ;;
-  refresh)   # keep the pre-refresh auth.json, then replace it as a token refresh does
-    mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/oldauth
-    echo '{"k": "SECRET-pi-auth-REFRESHED-987654"}' > "$HOME/.pi/agent/auth.json.new" && mv "$HOME/.pi/agent/auth.json.new" "$HOME/.pi/agent/auth.json" \
-      || echo '{"k": "SECRET-pi-auth-REFRESHED-987654"}' > "$HOME/.pi/agent/auth.json"
+  refresh)   # auth A becomes B, keep B, B becomes C (a refresh between two judge copies), and stash into HOME
+    rf() { echo "{\"k\": \"SECRET-pi-auth-$1-987654\"}" > "$HOME/.pi/agent/auth.json.new" && mv "$HOME/.pi/agent/auth.json.new" "$HOME/.pi/agent/auth.json" \
+      || echo "{\"k\": \"SECRET-pi-auth-$1-987654\"}" > "$HOME/.pi/agent/auth.json"; }
+    mkdir -p scratch; rf B; cp "$HOME/.pi/agent/auth.json" scratch/oldauth; cp "$HOME/.pi/agent/auth.json" .git/oldauth
+    cp "$HOME/.pi/agent/auth.json" "$HOME/oldauth" 2>/dev/null; rf REFRESHED
     printf "$ok" ;;
   token)   # only extracted values, as jq -r would print them: no whole-file match
     mkdir -p scratch; python3 -c 'import json,sys; print("x", json.load(open(sys.argv[1]))["k"], "y")' "$HOME/.pi/agent/auth.json" > scratch/tok
@@ -135,11 +137,15 @@ OCTO_FEATHER_QC_MODEL=anthropic/claude-opus-5-5 run 64 mixed $st 5 acceptance-a 
 echo x > dirty; run 65 mixed $st 5 acceptance-a; rm dirty                                      # dirty worktree
 before="$(git rev-parse HEAD)"
 run 3 garbage $st 5 acceptance-a acceptance-b                                                   # no json report
-run 3 writes $st 5 acceptance-a                                                                 # judge wrote a file
-[[ "$(git rev-parse HEAD)" == "$before" ]] || fail "refused run moved the head"
-git clean -qfd
-[[ "$(find "$t/reports" -name "$before-*.json" | wc -l)" == 2 ]] || fail "two runs at one head must leave two reports"
+run 3 writes $st 5 acceptance-a                                                                 # judge wrote a non-ignored file
+grep -q "new judge-was-here" <<< "$out" && ! grep -q scratch/fine <<< "$out" || fail "non-ignored write not listed alone: $out"
+run 3 tracked $st 5 acceptance-a                                                                # judge changed and deleted tracked files
+grep -q "changed .gitignore; deleted docs/specs/demo.spec.html" <<< "$out" || fail "tracked writes not listed: $out"
+[[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain --ignored)" ]] || fail "refused run changed the real worktree"
+[[ "$(find "$t/reports" -name "$before-*.json" | wc -l)" == 3 ]] || fail "three runs at one head must leave three reports"
 grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "no pre-run proof printed: $out"
+grep -q "qc sandbox: ok   worktree $PWD is an overlay" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" \
+  || fail "no overlay / persistent-writable proof: $out"
 
 # --no-sandbox: printed, report written, status never changes.
 run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
@@ -167,7 +173,7 @@ run 0 escape $st 5 acceptance-a
 judge="$(report '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "sandbox escape: $judge"
 grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" || fail "no agent count: $out"
-[[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["credential_copies_removed"]')" == "[]" ]] \
+[[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["worktree_writes"]')" == "[]" ]] \
   || fail "cleanup record: $(report '["sandbox"]')"
 for p in "sleep 3012" "sleep 302921"; do
   report '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(report '["sandbox"]')"
@@ -175,17 +181,15 @@ done
 ! pgrep -fx "sleep (301[12]|302921)$tok" >/dev/null || fail "sandbox processes survived the run"
 [[ ! -e "$HOME/qc-saved" ]] || fail "judge wrote into HOME"
 
-# Credential copies inside the worktree (ignored file, .git) are found, removed, counted, and fail the run.
-run 3 copycreds $st 5 acceptance-a
-[[ "$(report '["credential_copies_removed"].__len__()')" == 2 ]] || fail "credential copies not counted: $(report '["credential_copies_removed"]')"
-[[ ! -e scratch/a && ! -e .git/m ]] || fail "credential copies survived"
-grep -q "copied Pi credentials" <<< "$out" || fail "credential copy not reported: $out"
-# Any size, any refresh, any extract: a padded >64 MiB copy, a pre-refresh auth.json copy, token values alone.
-copycase() { run 3 "$1"  $st 5 acceptance-a; local f; for f in "${@:2}"; do
-  [[ ! -e "$f" ]] || fail "$1: credential copy $f survived"; report '["credential_copies_removed"]' | grep -q "$f" || fail "$1: $f not recorded: $out"; done
-  echo "qc test: $1: removed ${*:2}, exit 3" >&2; }
+# Credential copies cannot survive anywhere: every judge write (ignored scratch/, .git, any size, a copy of an
+# intermediate auth.json between two refreshes, token values alone) lives in the overlay and dies with the run.
+copycase() { run 0 "$1" $st 5 acceptance-a; local f; for f in "${@:2}"; do [[ ! -e "$f" ]] || fail "$1: credential copy $f survived"; done
+  [[ -z "$(git status --porcelain --ignored)" ]] || fail "$1: worktree not pristine: $(git status --porcelain --ignored)"
+  ! grep -rqa 'SECRET-pi' . "$HOME" --exclude-dir=.pi || fail "$1: a Pi credential survived: $(grep -rla 'SECRET-pi' . "$HOME" --exclude-dir=.pi)"
+  echo "qc test: $1: ${*:2} discarded with the run ($(report '["discarded_writes"]') writes), exit 0" >&2; }
+copycase copycreds scratch/a .git/m
 copycase bigcopy scratch/big
-copycase refresh scratch/oldauth
+copycase refresh scratch/oldauth .git/oldauth "$HOME/oldauth"
 grep -q REFRESHED "$HOME/.pi/agent/auth.json" || fail "refresh case did not replace auth.json"
 copycase token scratch/tok .git/tok2
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
@@ -215,7 +219,7 @@ if [[ "$mode" == real ]]; then
   "$real" --session qclive workspace list > /dev/null 2>&1 || fail "the run hurt the live Herdr session"
   [[ "$(ls "$HOME/.config/herdr/sessions")" == qclive ]] || fail "sandbox session left: $(ls "$HOME/.config/herdr/sessions")"
 fi
-rm -rf scratch
+[[ ! -e scratch ]] || fail "pane run's scratch survived"
 
 # The qc recipes pass arguments as data, never as shell source.
 for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/typescript/justfile"; do
@@ -223,4 +227,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote, unique reports, sandbox escapes, credential copies (>64 MiB, pre-refresh, token only), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
