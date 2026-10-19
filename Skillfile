@@ -13,6 +13,7 @@ install-path  octo-feather  skill  agents/skills
 
 # Managed upstream skills pinned at exact canonical SHAs.
 github  skill  tdd  mattpocock/skills@ed37663cc5fbef691ddfecd080dff42f7e7e350d  skills/engineering/tdd
+github  skill  code-review  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
 
 # octo-feather's own skills, authored locally under skills/ (most ported from octo-lite).
 local  skill  commit                  skills/commit

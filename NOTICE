@@ -24,6 +24,9 @@ of docs/adr/0011):
     agents/integrator.md
     agents/code-reviewer.md
     agents/skills/tdd/ (materialized from mattpocock/skills, MIT, with octo-lite's patch)
+
+Also vendored, not from octo-lite: agents/skills/code-review/ (mattpocock/skills@49dd158, MIT,
+Copyright Matt Pocock), patched in .skillfile/patches/skills/code-review/.
     skills/commit/SKILL.md
     skills/github/SKILL.md (was skills/octo-lite-github)
     skills/grill-with-docs/SKILL.md
