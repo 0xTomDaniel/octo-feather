@@ -14,6 +14,9 @@ echo '<p data-anchor="gates-merge">After the owner says merge, ... a new merge a
 echo 'Merge: spec `#gates-merge`.' > "$t/agents/ok.md"
 # A statement of what never matches is not a branch default (scripts/octo-feather-integrate:22).
 echo '# worker branches gh<N>-* and lane gh<N>0 never match.' > "$t/agents/never.md"
+# Generic phrases outside merge context are legitimate (code review of af760a4).
+echo 'A behavior-changing spec revision requires renewed acceptance.' > "$t/agents/revision.md"
+echo 'After the delta review the head moved, so review the delta again.' >> "$t/agents/revision.md"
 echo 'owner says merge, pinned to that head' > "$t/evidence/old.md"
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n-Any code change after QC means qc again.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"
 g add -A
@@ -25,9 +28,10 @@ plant() { echo "$2" > "$t/$1"; g add -A; run 1
   g rm -qf "$1"; run 0; }
 plant agents/github.md 'Mechanical rebases onto accepted main do not require renewed acceptance when behavior and scope are unchanged.' merge-authority 'spec `#gates-merge`'
 plant agents/impl.md 'Any code change after QC means `just qc` and a fresh review again, on the new head.' merge-authority 'spec `#gates-merge`'
+plant agents/moved.md 'A head moved by a fix commit after the merge is never merged.' merge-authority 'spec `#gates-merge`'
 plant agents/lane.md 'Cut branch gh<N>-<slug> for the lane.' lane-branch 'docs/adr/0011'
 plant agents/push.md '2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.' lane-branch 'docs/adr/0011'
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
-echo "check-owned-rules: ok (owner, pointer, record pass; 3 past restatements, a slug default and a patch line fail with their fix)"
+echo "check-owned-rules: ok (owner, pointer, record pass; 3 past restatements, a generic phrase in merge context, a slug default and a patch line fail with their fix)"

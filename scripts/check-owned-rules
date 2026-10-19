@@ -11,19 +11,24 @@ run by `just check`, tested by tests/check-owned-rules.sh.
 """
 import os, re, subprocess, sys
 
-# name: (phrases that state the rule, owner files, the pointer to write instead)
+# name: (phrases that only ever state the rule, phrases that state it only on a line
+# that also matches the context, the context, owner files, the pointer to write instead).
+# A generic phrase (head moved, renewed acceptance) belongs in the second list: alone it
+# is legitimate elsewhere, e.g. "a behavior-changing spec revision requires renewed acceptance".
 RULES = {
     "merge-authority": (
         r"resolved? no conflict|no conflict resolved|clean (merge of main|main merge)"
         r"|merg\w* main in|new merge ask|main moving|does not move (the|your|its) head"
-        r"|head moved|moved head|match-head-commit|pinned to [^.]{0,30}head|says merge"
-        r"|change after (just )?qc|qc again|renewed acceptance|mechanical rebase",
+        r"|match-head-commit|says merge|mechanical rebase|change after (just )?qc",
+        r"head moved|moved head|pinned to [^.]{0,30}head|renewed acceptance|qc again",
+        r"merg|rebas",
         {"docs/specs/issue-lifecycle.spec.html"},
-        "write only a pointer, spec `#gates-merge` (docs/specs/issue-lifecycle.spec.html); "
+        "write only a pointer, spec `#gates-merge` (qc reruns: `#lanes-one-head`; docs/specs/issue-lifecycle.spec.html); "
         "the merge command itself lives once, in .agents/skills/github/SKILL.md (Merge)",
     ),
     "lane-branch": (
         r"octo-feather/gh<|gh<[^>]*>-<",  # a slug default, not "gh<N>-* never match"
+        None, None,
         {"docs/adr/0011-herdr-layout.md"},
         "the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
     ),
@@ -51,10 +56,12 @@ for f in files:
         # A patch's removed and context lines quote upstream; its reason line and added lines are ours.
         if patch and n > 1 and not (line.startswith("+") and not line.startswith("+++")):
             continue
-        for rule, (pat, owners, fix) in RULES.items():
+        for rule, (pat, generic, context, owners, fix) in RULES.items():
             if f in owners:
                 continue
             m = re.search(pat, line, re.I)
+            if not m and generic and re.search(context, line, re.I):
+                m = re.search(generic, line, re.I)
             if not m:
                 continue
             if any(r == rule and mf == f and re.search(lp, line) for r, mf, lp in MECHANISM):
