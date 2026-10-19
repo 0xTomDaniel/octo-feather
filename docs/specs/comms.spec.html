@@ -22,7 +22,7 @@
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-one-voice">As the owner, I hear only from the director, so asks reach me filtered and in context instead of fragmented from every agent.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-no-wrong-pane">As a supervisor, a worker that follows a wrong habit cannot type into another lane or straight to the director while its supervisor is reachable.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: a worker that ends without reporting is noticed, recovered and reported up.</p>
-<p data-user-story data-user-facing="false" data-anchor="story-lane-state">As the director, I read every lane's current state and history from plain files, so I can audit lanes without asking each supervisor.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-lane-state">As the director, I read every lane's current state and history, findings included, from plain files, so I can audit lanes and count repeated finding classes without asking each supervisor.</p>
 </section>
 
 <section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
@@ -33,6 +33,7 @@
 <p data-acceptance-criterion data-anchor="acceptance-worker-ended" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor waiting on a worker that ends without reporting, needs an induced failure: the worker's session exits mid-ticket, When the supervisor's goal next checks in,</span> <span data-acceptance-observable>Then the director's tab shows a message from the supervisor naming that worker as ended without reporting and the worker started in its place.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-escalation-content" data-story="story-owner-one-voice"><span data-acceptance-scenario>Given an implementer blocked by a scope conflict its supervisor cannot settle, When the conflict reaches the owner,</span> <span data-acceptance-observable>Then it arrives from the director, naming what is blocked, what was tried, and the options.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor delivering several tickets, When a ticket changes state, then the director opens that ticket on GitHub,</span> <span data-acceptance-observable>Then GitHub shows the ticket's new state, and the lane record holds no ticket entry.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-finding-lines" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor that receives a code-review verdict with two findings, When it consumes the verdict,</span> <span data-acceptance-observable>Then the lane's hand-off log gains one finding line per finding, each naming its source, class and whether it blocks, proven by an integration test: no screen shows it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-lane-archive" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor whose pull request merged, When it closes the lane,</span> <span data-acceptance-observable>Then the lanes directory no longer lists the lane and its archive holds the lane's record and hand-off log unchanged, proven by an integration test: no screen shows it.</span></p>
 
 </section>
@@ -89,7 +90,7 @@
 <table data-anchor="lane-record-table"><caption>Lane record keys</caption>
 <thead><tr><th>Key</th><th>Value</th></tr></thead>
 <tbody>
-<tr data-anchor="octo-lane-record-key-issue"><td><code>issue</code></td><td>The work item's primary issue</td></tr>
+<tr data-anchor="octo-lane-record-key-issue"><td><code>issue</code></td><td>The lane's parent issue, filed by the director</td></tr>
 <tr data-anchor="octo-lane-record-key-repository"><td><code>repository</code></td><td><code>owner/name</code> where the pull request lives</td></tr>
 <tr data-anchor="octo-lane-record-key-goal"><td><code>goal</code></td><td>One line: the lane title</td></tr>
 <tr data-anchor="octo-lane-record-key-pr"><td><code>pr</code></td><td>Pull request number; absent until one opens</td></tr>
@@ -123,6 +124,7 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <tbody>
 <tr data-anchor="handoff-kind-attempt"><td>attempt</td><td>A worker's result is consumed</td><td>role, ticket, worker, commit, result, duration_s</td></tr>
 <tr data-anchor="handoff-kind-review"><td>review</td><td>A review verdict is consumed</td><td>ticket, commit, verdict, blockers, round</td></tr>
+<tr data-anchor="handoff-kind-finding"><td>finding</td><td>A code-review or product-judge finding is consumed, one line per finding</td><td>source (code-review or qc), class, blocking, summary</td></tr>
 <tr data-anchor="handoff-kind-integration"><td>integration</td><td>The lane branch moves</td><td>commit</td></tr>
 <tr data-anchor="handoff-kind-gate"><td>gate</td><td>An owner gate is asked or answered</td><td>gate, event, answer</td></tr>
 <tr data-anchor="handoff-kind-blocked"><td>blocked</td><td>The lane becomes blocked</td><td>reason</td></tr>

@@ -30,9 +30,9 @@
 <p data-acceptance-criterion data-anchor="acceptance-login-gate" data-story="story-private"><span data-acceptance-scenario>Given a visitor not signed in to exe.dev, When the visitor opens a spec's review link,</span> <span data-acceptance-observable>Then the browser shows the exe.dev login page and no spec content.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-signed-in" data-story="story-review-anywhere"><span data-acceptance-scenario>Given the owner signed in to exe.dev, When the owner opens a spec's review link,</span> <span data-acceptance-observable>Then the spec loads with its review controls, including Accept spec.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-stays-private" data-story="story-private" data-project-rule="Review stays private"><span data-acceptance-scenario>Given the box's owner, When any change to box setup or the review service is applied,</span> <span data-acceptance-observable>Then exe.dev still reports the VM's sharing mode as Private and no share link or added user exists.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-after-logout" data-story="story-survives"><span data-acceptance-scenario>Given a supervisor that registered a spec, When every SSH session to the VM ends, then the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-after-logout" data-story="story-survives"><span data-acceptance-scenario>Given an owner chat that registered a spec for review, When every SSH session to the VM ends, then the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-after-reboot" data-story="story-survives"><span data-acceptance-scenario>Given a registered spec, needs an induced failure: the VM restarts, When the VM is back up and the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads with no one having started the review service by hand.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-vm-only" data-story="story-dedicated"><span data-acceptance-scenario>Given the owner with a work item in progress, When the owner opens the factory's Herdr session on the VM over SSH,</span> <span data-acceptance-observable>Then it shows the director and the work item's supervisor, and the owner's laptop runs no agent of the factory.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-vm-only" data-story="story-dedicated"><span data-acceptance-scenario>Given the owner with a lane in progress, When the owner opens the factory's Herdr session on the VM over SSH,</span> <span data-acceptance-observable>Then it shows the director and the lane's supervisor, and the owner's laptop runs no agent of the factory.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-no-url-in-records" data-story="story-private" data-project-rule="No review URLs in durable records"><span data-acceptance-scenario>Given a supervisor, When any change opens or edits an issue or pull request,</span> <span data-acceptance-observable>Then it holds no review URL.</span></p>
 
 </section>
@@ -67,9 +67,10 @@
 <tr data-anchor="review-service"><td>Service</td><td>Spec Chat's review server, from a clone on the VM, runs as a systemd user service and restarts after a crash and at boot</td></tr>
 <tr data-anchor="review-bind"><td>Listening</td><td>The VM's internal address on an approved port (7400), which only exe.dev's HTTPS proxy can reach; it never listens on loopback, which the proxy cannot reach</td></tr>
 <tr data-anchor="review-proxy"><td>Exposure</td><td>exe.dev's HTTPS proxy with the VM's sharing mode Private: a request without an exe.dev login is redirected to the login page, so that login is the gate. The exe.dev share port (8000) is not used by Spec Chat</td></tr>
-<tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;lane&gt;/&lt;spec path&gt;</code></td></tr>
-<tr data-anchor="review-register"><td>A lane registers a spec</td><td><code>review-host.py register --slug &lt;lane&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill; a lane passes no exposure argument</td></tr>
-<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked for the user in <code>~/.agents/skills</code>; the supervisor loads them through <code>externalSkills</code></td></tr>
+<tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;slug&gt;/&lt;spec path&gt;</code></td></tr>
+<tr data-anchor="review-register"><td>Registering a spec</td><td><code>review-host.py register --slug &lt;slug&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill, with no exposure argument. The owner's shaping chat registers under the spec's own slug; a lane registers a spec revision under its lane key <code>gh&lt;N&gt;</code></td></tr>
+<tr data-anchor="review-accepted"><td>Acceptance record</td><td>The review host's accepted registration, at an exact commit; the director's kickoff check <code>octo-feather-accepted</code> reads it from every session's registry</td></tr>
+<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked for the user in <code>~/.agents/skills</code>; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
 </tbody>
 </table>
 </div>
@@ -82,6 +83,9 @@
   <button type="button" data-spec-choice="Fix the printed URL in Spec Chat">Fix the printed URL in Spec Chat (recommended)</button>
   <button type="button" data-spec-choice="Rewrite the link in the kit">Rewrite the link in the kit</button></p>
 <p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's installer does not yet link its skills into <code>~/.agents/skills</code>, so that link is made by hand on the VM; the one-line upstream change is open, not merged.</p>
+<p data-anchor="tbd-slug-mismatch" data-spec-tbd>TBD: Shaping registers a spec under its own slug and a lane may register it again under <code>gh&lt;N&gt;</code>. Spec Chat's index shows lane cards only for <code>gh&lt;N&gt;</code> slugs, so the shaping row shows under Settled; a second row keeps its own threads and acceptance while the acceptance stays on the shaping row; and the cross-lane contradiction check may compare the spec with itself. Does a lane re-register the spec or reuse the shaping row?
+  <button type="button" data-spec-choice="The lane reuses the shaping row">The lane reuses the shaping row</button>
+  <button type="button" data-spec-choice="The lane re-registers under gh<N>">The lane re-registers under its lane key</button></p>
 <p data-anchor="tbd-model-key" data-spec-tbd="later">TBD: The model proxy key sits in plain text on the VM; swap it for a revocable key.</p>
 </section>
 

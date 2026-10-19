@@ -14,12 +14,12 @@
 <header data-anchor="header">
 <h1 data-anchor="title">octo-feather: a light software factory kit</h1>
 <nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / overview.spec.html</nav>
-<p class="lede" data-anchor="context">octo-feather is a stack-agnostic kit that turns an accepted spec into finished, verified work on one pull request, with the owner deciding only at gates. It is lighter than octo-lite, from which it takes requirements and its Herdr wiring. Terms are defined once in <a href="../../GLOSSARY.md">GLOSSARY.md</a>; lasting decisions are the ADRs in <a href="../adr/">docs/adr/</a>, which win over this page where they differ.</p>
+<p class="lede" data-anchor="context">octo-feather is a stack-agnostic kit that turns a spec the owner shaped and accepted outside it into finished, verified work, one pull request per lane, with the owner deciding only at gates. It is lighter than octo-lite, from which it takes requirements and its Herdr wiring. Terms are defined once in <a href="../../GLOSSARY.md">GLOSSARY.md</a>; lasting decisions are the ADRs in <a href="../adr/">docs/adr/</a>, which win over this page where they differ.</p>
 </header>
 
 <section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
 <h2>User stories</h2>
-<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-gates">As the owner, I hand the factory a work item and get back one pull request with verified work, deciding only at the spec and merge gates, without writing code.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-gates">As the owner, I hand the factory an accepted spec and get back one pull request per lane with verified work, deciding only at the spec and merge gates, without writing code.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-one-vocabulary">As the owner reading any kit text, I see one vocabulary (owner, director, supervisor, worker, lane), so no retired role name hides an old behavior.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-portable">As a builder porting the kit onto Exomachina or another runtime, I swap only the launch wiring, and the role files, briefs, logs, specs and ADRs carry over unchanged.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-pi-only">As the owner, I run one agent runtime, so there is one spawn path, one set of role contracts and one model route.</p>
@@ -27,7 +27,7 @@
 
 <section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
 <h2>Acceptance criteria</h2>
-<p data-acceptance-criterion data-anchor="acceptance-owner-pr" data-story="story-owner-gates"><span data-acceptance-scenario>Given the owner with an accepted spec for a work item, When the factory finishes the item and the director relays the merge ask,</span> <span data-acceptance-observable>Then the owner sees one pull request holding every task's work, a code-review verdict and passing required checks, and the owner has edited no file.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-owner-pr" data-story="story-owner-gates"><span data-acceptance-scenario>Given the owner with an accepted spec, When the owner tells the director to build it, then the director relays a lane's merge ask,</span> <span data-acceptance-observable>Then the owner sees that lane's one pull request holding every ticket's work, a code-review verdict and passing required checks, and the owner has edited no file.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-retired-words" data-story="story-one-vocabulary" data-project-rule="Retired role words"><span data-acceptance-scenario>Given a maintainer, When any change adds kit text outside GLOSSARY.md and vendored skills that calls the top agent operator or the person human,</span> <span data-acceptance-observable>Then the gate fails and its message says to use director for the top agent and owner for the person.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-pi-only" data-story="story-pi-only" data-project-rule="Pi only"><span data-acceptance-scenario>Given a maintainer, When any change adds a Claude or Codex instruction file or projection to the kit,</span> <span data-acceptance-observable>Then the gate fails naming Pi as the only runtime.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-portable" data-story="story-portable"><span data-acceptance-scenario>Given a builder replacing the Pi and Herdr launch wiring with another runtime's launcher, When every role is started through the new launcher,</span> <span data-acceptance-observable>Then each role runs its file's model, tools, skills and contract, and no role file, brief, log, spec or ADR was edited for the port.</span></p>
@@ -45,7 +45,7 @@
 <figure data-anchor="org-chart">
 <h3 data-anchor="org-chart-heading">The factory org chart</h3>
 <svg viewBox="0 0 760 360" width="100%" role="img" aria-labelledby="org-chart-title" data-anchor="org-chart-svg">
-<title id="org-chart-title">Owner over one director, one supervisor per work item, and the workers each supervisor starts</title>
+<title id="org-chart-title">Owner over one director, one supervisor per lane, and the workers each supervisor starts</title>
 <defs><marker id="oc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#333"/></marker></defs>
 <g font-family="system-ui, sans-serif" font-size="13" fill="#333">
 <rect x="300" y="10" width="160" height="44" rx="6" fill="#fff" stroke="#333" stroke-width="2"/>
@@ -55,17 +55,17 @@
 <text x="380" y="110" text-anchor="middle" font-weight="600">Director</text>
 <text x="380" y="126" text-anchor="middle" font-size="11">owns the program; edits no code</text>
 <rect x="110" y="170" width="200" height="44" rx="6" fill="#fff" stroke="#333"/>
-<text x="210" y="190" text-anchor="middle" font-weight="600">Supervisor, work item gh&lt;N&gt;</text>
-<text x="210" y="206" text-anchor="middle" font-size="11">owns the item until it merges</text>
+<text x="210" y="190" text-anchor="middle" font-weight="600">Supervisor, lane gh&lt;N&gt;</text>
+<text x="210" y="206" text-anchor="middle" font-size="11">owns its lane until it merges</text>
 <rect x="450" y="170" width="200" height="44" rx="6" fill="#fff" stroke="#333"/>
-<text x="550" y="190" text-anchor="middle" font-weight="600">Supervisor, work item gh&lt;M&gt;</text>
-<text x="550" y="206" text-anchor="middle" font-size="11">one per work item, always</text>
+<text x="550" y="190" text-anchor="middle" font-weight="600">Supervisor, lane gh&lt;M&gt;</text>
+<text x="550" y="206" text-anchor="middle" font-size="11">one per lane, always</text>
 <rect x="10" y="260" width="130" height="44" rx="6" fill="#fff" stroke="#333"/>
 <text x="75" y="280" text-anchor="middle" font-weight="600">Implementers</text>
 <text x="75" y="296" text-anchor="middle" font-size="11">one per task</text>
 <rect x="150" y="260" width="120" height="44" rx="6" fill="#fff" stroke="#333"/>
 <text x="210" y="280" text-anchor="middle" font-weight="600">Corrector</text>
-<text x="210" y="296" text-anchor="middle" font-size="11">fresh, before review</text>
+<text x="210" y="296" text-anchor="middle" font-size="11">correction lanes only</text>
 <rect x="280" y="260" width="130" height="44" rx="6" fill="#fff" stroke="#333"/>
 <text x="345" y="280" text-anchor="middle" font-weight="600">Code reviewer</text>
 <text x="345" y="296" text-anchor="middle" font-size="11">fresh, other family</text>
@@ -83,8 +83,9 @@
 </svg>
 <figcaption data-anchor="org-chart-caption">Every arrow is a report or escalation path, one level up. Only the director talks to the owner. Integration is a deterministic script the supervisor runs, so it has no box in the chain.</figcaption>
 </figure>
-<p data-anchor="factory-rule-director">The director never edits code or repo files; it opens work items, starts one supervisor per item, removes blockers and brings the owner only gate decisions.</p>
-<p data-anchor="factory-rule-supervisor">Every work item gets a supervisor, even when it is the only one running. The supervisor directs its workers and never does their work, reviews it, or accepts it.</p>
+<p data-anchor="factory-rule-director">The director never edits code or repo files and never shapes: it takes an accepted spec at kickoff, cuts lanes, files each lane's parent issue, starts one supervisor per lane, records acceptance receipts, starts correction lanes on repeats, removes blockers and brings the owner only gate decisions.</p>
+<p data-anchor="factory-rule-shaping">Shaping and spec acceptance happen outside the factory, in the owner's own chat; the accepted spec, at an exact commit, is the only thing handed in (ADR 0021).</p>
+<p data-anchor="factory-rule-supervisor">Every lane gets a supervisor, even when it is the only one running: one lane is one merge ask on one parent issue. The supervisor files the lane's tickets, directs its workers and never does their work, reviews it, or accepts it.</p>
 </section>
 <section data-anchor="is-isnt" id="is-isnt">
 <h2>What octo-feather is and is not</h2>
@@ -120,7 +121,7 @@
 </section>
 <section data-anchor="spec-set" id="spec-set">
 <h2>Where the rest lives</h2>
-<ul data-anchor="spec-set-list"><li><a href="./issue-lifecycle.spec.html">Issue lifecycle</a>: from spec to merge, with gates.</li><li><a href="./roles.spec.html">Roles and role files</a>: models, frontmatter, launch, Herdr layout.</li><li><a href="./comms.spec.html">Comms, escalation and lane state</a>.</li><li><a href="./quality.spec.html">Quality</a>: QA of the factory, QC of the product.</li><li><a href="./skills.spec.html">Skills and sources</a>.</li><li><a href="./remote.spec.html">Remote host and review hosting</a>.</li><li><a href="./templates.spec.html">Project templates</a>.</li></ul>
+<ul data-anchor="spec-set-list"><li><a href="./issue-lifecycle.spec.html">Lifecycle</a>: accepted spec to lanes to merge, with gates.</li><li><a href="./roles.spec.html">Roles and role files</a>: models, frontmatter, launch, Herdr layout.</li><li><a href="./comms.spec.html">Comms, escalation and lane state</a>.</li><li><a href="./quality.spec.html">Quality</a>: QA of the factory, QC of the product.</li><li><a href="./skills.spec.html">Skills and sources</a>.</li><li><a href="./remote.spec.html">Remote host and review hosting</a>.</li><li><a href="./templates.spec.html">Project templates</a>.</li></ul>
 </section>
 
 </article>
