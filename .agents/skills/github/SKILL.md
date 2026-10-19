@@ -48,8 +48,7 @@ durable workflow artifacts.
 
 ## Implementer Mutations
 
-- Work on one branch for the tracked unit of work: the target repo's branch
-  convention, else `octo-feather/gh<issue-number>-<slug>`.
+- Work on the lane's one branch, named per docs/adr/0011.
 - Open one draft PR for the lane. Never create a second implementation PR for
   the unit.
 - The PR body starts with `Closes #<issue-number>` and

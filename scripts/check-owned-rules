@@ -22,6 +22,11 @@ RULES = {
         "write only a pointer, spec `#gates-merge` (docs/specs/issue-lifecycle.spec.html); "
         "the merge command itself lives once, in .agents/skills/github/SKILL.md (Merge)",
     ),
+    "lane-branch": (
+        r"octo-feather/gh<|gh<[^>]*>-",
+        {"docs/adr/0011-herdr-layout.md"},
+        "the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
+    ),
 }
 # Lines allowed to name the rule's mechanism: (rule, file, line regex).
 MECHANISM = {

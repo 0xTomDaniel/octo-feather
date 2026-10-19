@@ -71,7 +71,7 @@ Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start
 Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
 
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
-and branch (slug = `gh<issue number>`) from main, which holds the spec and its status file; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
+and branch (named per docs/adr/0011) from main, which holds the spec and its status file; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
 write the lane record below from its output; send the supervisor a lane-shaped `/goal` as its first message (agents cannot run
 slash commands themselves): "<outcome> for <issue>, delivered through
 implement-spec; done when an owner gate is pending (review link or merge ask

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Integration test for scripts/check-owned-rules in a throwaway repo, planting
 # the real restatements lane #8 logged as contradictory-merge-authority
-# (github skill before 9f46d9b, implement-spec before 278118c). Run by `just check`.
+# (github skill before 9f46d9b, implement-spec before 278118c) and the
+# lane-branch default of finding 22. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
@@ -22,7 +23,8 @@ plant() { echo "$2" > "$t/$1"; g add -A; run 1
   g rm -qf "$1"; run 0; }
 plant agents/github.md 'Mechanical rebases onto accepted main do not require renewed acceptance when behavior and scope are unchanged.' merge-authority 'spec `#gates-merge`'
 plant agents/impl.md 'Any code change after QC means `just qc` and a fresh review again, on the new head.' merge-authority 'spec `#gates-merge`'
+plant agents/push.md '2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.' lane-branch 'docs/adr/0011'
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
-echo "check-owned-rules: ok (owner, pointer, record pass; 2 past restatements and a patch line fail with their fix)"
+echo "check-owned-rules: ok (owner, pointer, record pass; 3 past restatements and a patch line fail with their fix)"
