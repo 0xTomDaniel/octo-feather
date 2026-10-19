@@ -7,9 +7,18 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 mkdir -p "$t/bin" "$t/cwd" "$t/cache"
-cp "$kit/tests/fixtures/herdr-spawn/herdr" "$kit/tests/fixtures/herdr-spawn/pi-trust-dialog.txt" "$t/bin/"
+cp "$kit/tests/fixtures/herdr-spawn/"* "$t/bin/"
 chmod +x "$t/bin/herdr"
 fail() { echo "herdr-spawn test: $*" >&2; exit 1; }
+# A failing-read case is vacuous unless herdr-spawn read up to the armed
+# boundary: fewer reads than READS_OK means the failing read was never reachable.
+# Reads past it must be recorded failures (the fake's failed-reads).
+armed() { # $1: case dir, $2: READS_OK
+  local r f=0; r="$(wc -l <"$t/$1/reads")"
+  [[ ! -f "$t/$1/failed-reads" ]] || f="$(wc -l <"$t/$1/failed-reads")"
+  ((r >= $2)) || fail "$1: $r pane reads < READS_OK=$2; the failing read was never reached, so this case proves nothing"
+  ((r == $2 || f >= 1)) || fail "$1: $r reads past READS_OK=$2 but no failed read recorded"
+}
 
 spawn() { # $1: case dir; rest: env assignments
   local c="$t/$1"; shift; mkdir -p "$c"; rc=0
@@ -35,9 +44,26 @@ spawn dialog FAKE_HERDR_FORCE_DIALOG=1
 grep -qx 'w9:t1' "$t/dialog/closed" 2>/dev/null || fail "forced dialog: tab not closed"
 grep -q 'Trust project folder?' "$t/dialog/err" || fail "forced dialog: pane text not on stderr: $(cat "$t/dialog/err")"
 
+# 2b. Same when the pane read fails after the detecting read: the report shows
+#     the text already read, and close and 69 still run.
+spawn dialog-readfail FAKE_HERDR_FORCE_DIALOG=1 FAKE_HERDR_READS_OK=1
+armed dialog-readfail 1
+[[ "$rc" == 69 ]] || fail "dialog then failed read: exit $rc, want 69: $(cat "$t/dialog-readfail/err")"
+[[ ! -s "$t/dialog-readfail/keys" ]] || fail "dialog then failed read: keys sent"
+grep -qx 'w9:t1' "$t/dialog-readfail/closed" 2>/dev/null || fail "dialog then failed read: tab not closed"
+grep -q 'Trust project folder?' "$t/dialog-readfail/err" || fail "dialog then failed read: detected text not on stderr"
+
+# 2c. The "did not clear" path (a non-Pi dialog that stays open) keeps the same
+#     guarantee when the pane read fails after the last detecting read.
+spawn stuck FAKE_HERDR_FORCE_DIALOG=other HERDR_SPAWN_TRUST_RETRIES=1 FAKE_HERDR_READS_OK=4
+armed stuck 4
+[[ "$rc" == 69 ]] || fail "stuck dialog then failed read: exit $rc, want 69: $(cat "$t/stuck/err")"
+grep -qx 'w9:t1' "$t/stuck/closed" 2>/dev/null || fail "stuck dialog then failed read: tab not closed"
+grep -q 'Quick safety check' "$t/stuck/err" || fail "stuck dialog then failed read: detected text not on stderr"
+
 # 3. Headless pi-role passes --approve too (fake pi records its argv).
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$@" >"%s/pi-argv"\n' "$t" >"$t/bin/pi"; chmod +x "$t/bin/pi"
 (cd "$t/cwd" && PATH="$t/bin:$PATH" "$kit/scripts/pi-role" "$kit/agents/implementer.md" -p brief)
 grep -qx -- --approve "$t/pi-argv" || fail "headless pi-role argv lacks --approve"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; Pi trust dialog fails closed, exit 69, no key)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read)"
