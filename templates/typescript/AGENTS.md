@@ -10,7 +10,7 @@ Repo skills: typescript, pnpm, nodejs
 - Tests are integration and end-to-end only, through the CLI: `tests/cli.test.ts` calls `main` in-process and runs `src/cli.ts` as a process. No unit tests of internals, no mocks of our own code.
 - `src/core.ts` never imports `src/cli.ts` (dependency-cruiser enforces it).
 - Only erasable TypeScript syntax (no enums, namespaces or parameter properties); `tsc` enforces it.
-- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`).
+- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`); keep the recipe, every octo-feather target must define it.
 
 ## Commands
 

@@ -9,7 +9,7 @@ Repo skills: python
 - `just check` is the only gate: lint, types, import boundaries, tests. Agents, the git hook and CI run the same command. A red gate blocks handoff.
 - Tests are integration and end-to-end only, through the CLI: `tests/test_cli.py` calls `app.cli.main` in-process and runs `app` as a subprocess. No unit tests of internals, no mocks of our own code.
 - `app.cli` may import `app.core`; `app.core` never imports `app.cli` (import-linter enforces it).
-- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`).
+- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`); keep the recipe, every octo-feather target must define it.
 
 ## Commands
 
