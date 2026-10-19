@@ -49,3 +49,7 @@ A `built` criterion in `docs/specs/<slug>.status.json` is claimed, not proven (A
 ## Criterion status on the spec page
 
 Later, not now: show each criterion's planned or built status on its spec page in Spec Chat, read from the status file, without the spec HTML or Spec Chat learning this workflow.
+
+## Status check in target repos
+
+After Thursday 10-22, copy `octo-feather-spec-status` into each template (`templates/python`, `templates/typescript`) and call it from their `just check`, so the pre-commit hook and CI gate run it too. CI there has no kit scripts on `PATH`, so today only the kit's own `just check` checks status files (ADR 0021).
