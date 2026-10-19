@@ -38,7 +38,7 @@ C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
 while (($#)); do case "$1" in --session) s="$2"; shift 2;; --remote|--machine) shift 2;; *) a+=("$1"); shift;; esac; done
 [[ "$s" == default ]] && sock="$C/herdr.sock" || sock="$C/sessions/$s/herdr.sock"
 case "${a[*]}" in
-  server) mkdir -p "${sock%/*}"; echo "$s" > "$sock"; exec sleep 3011;;
+  server) mkdir -p "${sock%/*}"; echo "$s" > "$sock"; exec sleep 3011@TOK@;;
   "session stop "*) rm -f "$C/sessions/${a[2]}/herdr.sock"; exit 0;;
   "session delete "*) rm -rf "${C:?}/sessions/${a[2]}"; exit 0;;
 esac
@@ -61,6 +61,16 @@ case "$FAKE_QC" in
   garbage) echo "I think it works." ;;
   writes) echo hacked > judge-was-here; printf '```json\n{"criteria": []}\n```\n' ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
+  bigcopy) mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/big; truncate -s 67108865 scratch/big; printf "$ok" ;;
+  refresh)   # keep the pre-refresh auth.json, then replace it as a token refresh does
+    mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/oldauth
+    echo '{"k": "SECRET-pi-auth-REFRESHED-987654"}' > "$HOME/.pi/agent/auth.json.new" && mv "$HOME/.pi/agent/auth.json.new" "$HOME/.pi/agent/auth.json" \
+      || echo '{"k": "SECRET-pi-auth-REFRESHED-987654"}' > "$HOME/.pi/agent/auth.json"
+    printf "$ok" ;;
+  token)   # only extracted values, as jq -r would print them: no whole-file match
+    mkdir -p scratch; python3 -c 'import json,sys; print("x", json.load(open(sys.argv[1]))["k"], "y")' "$HOME/.pi/agent/auth.json" > scratch/tok
+    python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["providers"]["p"]["apiKey"])' "$HOME/.pi/agent/models.json" > .git/tok2
+    printf "$ok" ;;
   pane)   # spawn a pane through the sandbox herdr; it reports what it sees, then tries to outlive the run
     mkdir -p scratch; rm -f scratch/pane.txt
     cat > scratch/pane.sh <<'P'
@@ -70,7 +80,7 @@ case "$FAKE_QC" in
   cat "$HOME/.config/herdr/herdr.sock" "$HOME/.config/gh/hosts.yml" "$HOME/.git-credentials" 2>/dev/null | grep -q 'SECRET\|default' && echo "ESCAPE pane creds or live socket"
   env | grep -q SECRET && echo "ESCAPE pane token in env"
   echo "PANE done"; } > "$1.tmp"; mv "$1.tmp" "$1"
-exec sleep 303031
+exec sleep 303031@TOK@
 P
     id=$(herdr workspace create --cwd "$PWD" --no-focus | grep -o '"pane_id":"[^"]*"' | head -1 | cut -d'"' -f4)
     herdr pane run "$id" "bash $PWD/scratch/pane.sh $PWD/scratch/pane.txt" > /dev/null
@@ -100,13 +110,15 @@ P
       umount "$m" 2>/dev/null; unshare -rm sh -c 'umount "$1" 2>/dev/null; cat "$1/../.git-credentials" "$1/herdr.sock" "$1/gh9.toml" 2>/dev/null' _ "$m" | grep -q 'SECRET\|default\|LIVE' && echo "ESCAPE umount $m"
     done
     grep -q SECRET "$HOME/.git-credentials" 2>/dev/null && echo "ESCAPE umount revealed git creds"
-    unshare -rm env -u HERDR_SESSION sh -c 'exec sleep 302921' < /dev/null > /dev/null 2>&1 &
+    unshare -rm env -u HERDR_SESSION sh -c 'exec sleep 302921@TOK@' < /dev/null > /dev/null 2>&1 &
     mkdir -p "$HOME/qc-saved" 2>/dev/null && cp -p "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/models.json" "$HOME/qc-saved/" 2>/dev/null
-    setsid sleep 3012 < /dev/null > /dev/null 2>&1 &
+    setsid sleep 3012@TOK@ < /dev/null > /dev/null 2>&1 &
     pi --version
     printf "$ok" ;;
 esac
 EOF
+# Survivor checks key on a per-run token in the sleeps' argv, so concurrent test runs never collide.
+tok="$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')$$"; sed -i "s/@TOK@/$tok/g" "$t/bin/pi" "$t/fakeherdr/herdr"
 chmod +x "$t/bin/pi" "$t/fakeherdr/herdr"; base="$t/bin:$kit/scripts:$PATH"; export PATH="$t/bin:$t/fakeherdr:$kit/scripts:$PATH"
 # Sandbox Herdr mode for the pane test: the real herdr when installed (the box), else the fake (CI).
 real="$(PATH="$base" command -v herdr || true)"; mode=fake
@@ -160,7 +172,7 @@ grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" ||
 for p in "sleep 3012" "sleep 302921"; do
   report '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(report '["sandbox"]')"
 done
-! pgrep -fx 'sleep (301[12]|302921)' >/dev/null || fail "sandbox processes survived the run"
+! pgrep -fx "sleep (301[12]|302921)$tok" >/dev/null || fail "sandbox processes survived the run"
 [[ ! -e "$HOME/qc-saved" ]] || fail "judge wrote into HOME"
 
 # Credential copies inside the worktree (ignored file, .git) are found, removed, counted, and fail the run.
@@ -168,6 +180,14 @@ run 3 copycreds $st 5 acceptance-a
 [[ "$(report '["credential_copies_removed"].__len__()')" == 2 ]] || fail "credential copies not counted: $(report '["credential_copies_removed"]')"
 [[ ! -e scratch/a && ! -e .git/m ]] || fail "credential copies survived"
 grep -q "copied Pi credentials" <<< "$out" || fail "credential copy not reported: $out"
+# Any size, any refresh, any extract: a padded >64 MiB copy, a pre-refresh auth.json copy, token values alone.
+copycase() { run 3 "$1"  $st 5 acceptance-a; local f; for f in "${@:2}"; do
+  [[ ! -e "$f" ]] || fail "$1: credential copy $f survived"; report '["credential_copies_removed"]' | grep -q "$f" || fail "$1: $f not recorded: $out"; done
+  echo "qc test: $1: removed ${*:2}, exit 3" >&2; }
+copycase bigcopy scratch/big
+copycase refresh scratch/oldauth
+grep -q REFRESHED "$HOME/.pi/agent/auth.json" || fail "refresh case did not replace auth.json"
+copycase token scratch/tok .git/tok2
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
   || fail "judge wrote live state"
@@ -190,7 +210,7 @@ grep -q "PANE done" <<< "$judge" || fail "pane never ran ($mode herdr): $judge"
   && "$(grep 'pane pidns' <<< "$judge" | cut -d' ' -f3)" != "$(readlink /proc/self/ns/pid)" ]] \
   || fail "pane not in the judge's PID namespace ($mode herdr): $judge"
 [[ "$(report '["sandbox"]["herdr_panes"]')" == 1 ]] || fail "pane not counted ($mode herdr): $(report '["sandbox"]')"
-sleep 0.3; ! pgrep -fx 'sleep 303031' > /dev/null || fail "judge's pane survived the run ($mode herdr)"
+sleep 0.3; ! pgrep -fx "sleep 303031$tok" > /dev/null || fail "judge's pane survived the run ($mode herdr)"
 if [[ "$mode" == real ]]; then
   "$real" --session qclive workspace list > /dev/null 2>&1 || fail "the run hurt the live Herdr session"
   [[ "$(ls "$HOME/.config/herdr/sessions")" == qclive ]] || fail "sandbox session left: $(ls "$HOME/.config/herdr/sessions")"
@@ -203,4 +223,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote, unique reports, sandbox escapes, proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote, unique reports, sandbox escapes, credential copies (>64 MiB, pre-refresh, token only), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"

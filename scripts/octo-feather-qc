@@ -138,25 +138,52 @@ def sandboxed(judge, session):
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
 
 
-def credential_copies(top):
-    """Remove and return every file under TOP (ignored files and .git included) holding a Pi credential file's bytes."""
+def credential_needles():
+    """Pi's auth.json and models.json now: each file's bytes and every string value of 16+ chars (raw and JSON-escaped)."""
     agent = Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent")
-    needles = []
+    out = set()
+
+    def strings(v):
+        if isinstance(v, str):
+            yield v
+        elif isinstance(v, dict):
+            for x in v.values():
+                yield from strings(x)
+        elif isinstance(v, list):
+            for x in v:
+                yield from strings(x)
     for n in ("auth.json", "models.json"):
         try:
-            b = (agent / n).read_bytes().strip()
+            b = (agent / n).read_bytes()
         except OSError:
             continue
-        if len(b) >= 16:   # shorter holds no secret (an empty "{}") and would match anything
-            needles.append(b)
-    found = []
+        out.add(b.strip())
+        try:
+            vals = list(strings(json.loads(b)))
+        except ValueError:
+            vals = []
+        for s in vals:
+            out.update({s.encode(), json.dumps(s)[1:-1].encode(), json.dumps(s, ensure_ascii=False)[1:-1].encode()})
+    return {x for x in out if len(x) >= 16}   # shorter holds no secret (an empty "{}") and would match anything
+
+
+def credential_copies(top, needles):
+    """Remove and return every file under TOP (ignored files and .git included, any size) holding a needle."""
+    found, keep = [], max(map(len, needles), default=1) - 1
     for root, _, files in os.walk(top) if needles else ():
         for f in files:
             q = Path(root) / f
             try:
-                if q.is_symlink() or not q.is_file() or q.stat().st_size > 64 << 20:
+                if q.is_symlink() or not q.is_file():
                     continue
-                if any(n in q.read_bytes() for n in needles):
+                hit, tail = False, b""
+                with open(q, "rb") as fh:   # streamed in chunks, overlapping by the longest needle
+                    for chunk in iter(lambda: fh.read(1 << 20), b""):
+                        buf = tail + chunk
+                        if any(n in buf for n in needles):
+                            hit = True; break
+                        tail = buf[-keep:] if keep else b""
+                if hit:
                     q.unlink(); found.append(str(q))
             except OSError:
                 pass
@@ -192,6 +219,7 @@ def main(argv):
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
+    needles = credential_needles()   # before the run too: the judge's Pi may refresh auth.json mid-run
     t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
@@ -204,7 +232,7 @@ def main(argv):
     raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "sandbox": sandbox,
            "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
 
-    copies = credential_copies(git("rev-parse", "--show-toplevel"))
+    copies = credential_copies(git("rev-parse", "--show-toplevel"), needles | credential_needles())
     raw["credential_copies_removed"] = copies
     print(f"qc: worktree scan: {len(copies)} Pi credential copies removed", file=sys.stderr)
     if copies:
