@@ -30,6 +30,12 @@ RULES = {
         {"docs/adr/0011-herdr-layout.md"},
         "the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
     ),
+    # "sleep", "wait" and "poll" alone stay out: scripts and docs use them legitimately (issue #29).
+    "long-wait": (
+        r"hold(s|ing)? (your|its|their|the) turn|blocking wait|done rc=\$\?",
+        {".agents/skills/herdr-comms/SKILL.md"},
+        "write only a pointer: wait only as herdr-comms (Send a message) says, .agents/skills/herdr-comms/SKILL.md",
+    ),
 }
 # Lines allowed to name the rule's mechanism: (rule, file, line regex).
 MECHANISM = {
