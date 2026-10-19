@@ -40,8 +40,8 @@ v0.79.1 is 15 MB with about 114k lines of JS, around 14 subsystems (missions, wo
 
 ## Headless children through pi-role (test after Thursday)
 
-Test whether  (or ) can stand in for pi-subagents as the launcher for headless children: the code reviewer,  and a judge. Pass if the child gets its role's model, thinking, tool allowlist and skills, its final message comes back to the supervisor intact, cost is visible, and a supervisor can run it from a pane with no extension loaded. If it passes, remove the pinned pi-subagents package (, , the  tool and  in role files) and keep the frontmatter format (docs/adr/0013).
+Test whether `pi-role AGENT_FILE -p TASK` (or `--mode json`) can stand in for pi-subagents as the launcher for headless children: the code reviewer, `correct` and a judge. Pass if the child gets its role's model, thinking, tool allowlist and skills, its final message comes back to the supervisor intact, cost is visible, and a supervisor can run it from a pane with no extension loaded. If it passes, remove the pinned pi-subagents package (`.pi/settings.json`, `just install`, the `subagent` tool and `allowedAgents` in role files) and keep the frontmatter format (docs/adr/0013).
 
 ## tdd pin bump to Matt 49dd158
 
-Blocked: octo-lite's seam-gate patch does not apply to Matt's 49dd158  (hunk 1 fails at line 19). Upstream rewrote that paragraph (asks for a note per seam and calls a design skill when the interface is in question) and replaced em dashes. The pin stays at ed37663 until the patch is rewritten against 49dd158, which belongs with the block 6 tdd patch (integration/E2E seams only).
+Blocked: octo-lite's seam-gate patch does not apply to Matt's 49dd158 `tdd` (hunk 1 fails at line 19). Upstream rewrote that paragraph (asks for a note per seam and calls a design skill when the interface is in question) and replaced em dashes. The pin stays at ed37663 until the patch is rewritten against 49dd158, which belongs with the block 6 tdd patch (integration/E2E seams only).
