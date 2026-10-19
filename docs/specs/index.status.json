@@ -1,0 +1,10 @@
+{
+  "spec": "index.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-index-links": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

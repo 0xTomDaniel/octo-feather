@@ -1,0 +1,42 @@
+{
+  "spec": "roles.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-tab-headless-same": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-family-guard": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-unknown-key": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-unresolved-skill": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-unknown-model": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-no-skill-leak": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-tools": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-supervise-layout": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-worker-in-lane": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

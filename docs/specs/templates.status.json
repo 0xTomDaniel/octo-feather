@@ -1,0 +1,30 @@
+{
+  "spec": "templates.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-fresh-green": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-type-error": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-layer-break": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-cli-json": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-same-gate": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-target-agents-md": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}

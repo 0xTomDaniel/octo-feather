@@ -1,0 +1,26 @@
+{
+  "spec": "skills.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-patch-only": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-skill-frontmatter": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-only-listed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-external-skill": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-notice": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}
