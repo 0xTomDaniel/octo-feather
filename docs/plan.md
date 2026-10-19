@@ -23,6 +23,7 @@ Role files: our own frontmatter read by `scripts/pi-role`, and every agent launc
 Decided, not built (Tom, 2026-10-19):
 - A kit `just` recipe registers `herdr-wake` as Spec Chat's wake provider.
 - A kit `just` recipe creates a target repo from a template (`templates/python` or `templates/typescript`).
+- `just spec-chat REPO` installs Spec Chat's skills into a target repo as `.agents/skills/spec-chat-*` links only, gitignored (they point into a machine-local clone); never `.claude/` or `.codex/` links (ADR 0001 unchanged). Built after spec-chat #170 merges and its installer can skip the provider links.
 
 Estimates are guesses. Block 7 is the one that matters; cut 6 before cutting 7.
 
