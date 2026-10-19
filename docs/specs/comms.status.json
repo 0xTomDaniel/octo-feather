@@ -31,8 +31,8 @@
       "pr": 24
     },
     "acceptance-lane-no-tickets": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-finding-lines": {
       "status": "built",
