@@ -33,7 +33,7 @@ check-scripts:
 
 # No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
-# LICENSE, this justfile, spec/ (octo-lite's spec, kept as format reference) and
+# LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
 check-refs:
     #!/usr/bin/env bash
@@ -42,7 +42,7 @@ check-refs:
     bad=0
     if git ls-files | grep -E '(^|/)(CLAUDE\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex projection files above are not allowed (docs/adr/0001)" >&2; bad=1; fi
-    mapfile -t files < <(git ls-files | grep -vE '^(docs/|spec/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
+    mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
     if grep -nHE '\bLinear\b' "${files[@]}"; then
       echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
@@ -62,7 +62,7 @@ check-refs:
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
-# No em or en dashes in kit text. Exempt upstream copies: spec/, LICENSE and
+# No em or en dashes in kit text. Exempt upstream copies: docs/specs/ (Spec Chat's vendored runtime), LICENSE and
 # vendored skills (the Skillfile's github entries in .agents/skills/, .skillfile/patches/),
 # which keep upstream wording.
 check-dashes:
@@ -70,7 +70,7 @@ check-dashes:
     set -euo pipefail
     cd "{{root}}"
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t files < <(git ls-files | grep -vE "^(spec/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
+    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
     if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"

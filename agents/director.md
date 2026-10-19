@@ -51,7 +51,7 @@ change. Its only state writes, outside the repository: at its own launch, write
 `$(octo-feather-state)/director.toml` with one key, `pane`,
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
 on each prod (waking or redirecting a supervisor) and note to the owner worth keeping, append one JSON line per
-spec `#handoff-operator` (`spec/domains/octo-lite.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
+spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
 After spawning a supervisor, create its lane record from the spawn output, exactly like this; at teardown of the finished
 lane and its children, derive its space id (the supervisor pane id's prefix, `w5` in
 `w5:pP8`). Close the space with `herdr-close <space id>` only when it is the lane's
@@ -96,7 +96,6 @@ every service restart, confirm it answers.
 
 After every merge, check the target's main CI; a red main gets a fix lane at once, and a merge ask always states its CI result.
 
-A `bb-plugin-watch: ` message (annotateanything's Bitbucket plugin watch, spec `#roles-watch`): red ("breaks the plugin") starts a fix lane at once, the watch's tracker issue "BB <version> breaks the plugin" as its primary issue.
 
 Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer, live install clones on main, tear a lane down after its supervisor reports done, per the teardown rule above. No re-checking a lane's merge-ask items beyond a spot check.
 

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roles, role files and launch - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Roles, role files and launch</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / roles.spec.html</nav>
+<p class="lede" data-anchor="context">Each role is one file in <code>agents/</code>: frontmatter that <code>scripts/pi-role</code> turns into Pi flags (ADR 0013) and a body that is its contract. Every agent is Pi, started through <code>herdr-spawn</code> and <code>scripts/pi-role</code> (ADR 0016). Meanings of the role names are in <a href="../../GLOSSARY.md">GLOSSARY.md</a>.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-same-everywhere">As the owner, a role runs with the same model, tools and skills whether it is in a tab or headless, so a role behaves the same wherever it runs.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-independent-review">As the owner, the code reviewer is never from the same model family as the implementer, so one family's blind spots do not pass their own review.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-director-hands-off">As the owner, the director has no edit or write tool and its contract forbids editing code, so the agent holding the whole picture never gets pulled into doing the work.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-layout">As the owner watching the factory, each lane has its own workspace with its supervisor and workers, and the director has its own.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-role-file-guard">As a maintainer, a role file the launcher cannot honour fails the gate before any agent starts with it.</p>
+</section>
+
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-tab-headless-same" data-story="story-same-everywhere"><span data-acceptance-scenario>Given a maintainer, When a code reviewer is started in a worker tab, then one is run headless on the same head,</span> <span data-acceptance-observable>Then both reviewers report the same model, thinking level, tools and skills, and both have loaded the target repository's AGENTS.md.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-family-guard" data-story="story-independent-review" data-project-rule="Reviewer family differs"><span data-acceptance-scenario>Given a maintainer, When any change sets the code reviewer's model to the implementer's model family,</span> <span data-acceptance-observable>Then the gate fails, saying the reviewer must use a different family.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-unknown-key" data-story="story-role-file-guard" data-project-rule="Role files only honoured keys"><span data-acceptance-scenario>Given a maintainer, When any change adds a frontmatter key the launcher does not honour to a role file,</span> <span data-acceptance-observable>Then the gate fails naming the file and the key.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-unresolved-skill" data-story="story-role-file-guard"><span data-acceptance-scenario>Given a maintainer, When any change lists a skill in a role file that the kit does not hold,</span> <span data-acceptance-observable>Then the gate fails naming the file and the skill.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-unknown-model" data-story="story-role-file-guard"><span data-acceptance-scenario>Given a maintainer, When any change sets a role's model to one outside the allowed list,</span> <span data-acceptance-observable>Then the gate fails naming the file and the model.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-no-skill-leak" data-story="story-same-everywhere"><span data-acceptance-scenario>Given a box whose global Pi skill folder holds skills no role file lists, When the supervisor starts an implementer,</span> <span data-acceptance-observable>Then the implementer has exactly the skills its role file lists available and none of the global ones.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-director-tools" data-story="story-director-hands-off"><span data-acceptance-scenario>Given the owner, When the owner starts the director and opens its tab,</span> <span data-acceptance-observable>Then the director's tools are read, grep, find, ls and bash, with no edit or write tool.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-supervise-layout" data-story="story-layout"><span data-acceptance-scenario>Given the director with a lane whose parent issue is 12, When it starts that lane's supervisor,</span> <span data-acceptance-observable>Then Herdr shows a workspace gh12 holding one tab, supervisor, and the director's workspace is unchanged.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-in-lane" data-story="story-layout"><span data-acceptance-scenario>Given a supervisor in workspace gh12 with two ready tickets, When it starts an implementer for each,</span> <span data-acceptance-observable>Then Herdr shows both implementers as their own tabs in gh12 and in no other workspace.</span></p>
+
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-role-files"><span data-boundary-responsibility>Role files own each role's model, thinking, tools, skills and contract, as runtime-neutral data.</span> <span data-boundary-seam>Caller-facing seam: the frontmatter keys above and the contract body.</span> <span data-boundary-dependency>Dependency direction: self-contained; launchers read role files and role files name no launcher.</span> <span data-boundary-scope>Observable scope: what each started agent reports it runs with.</span></p>
+<p data-modular-boundary data-anchor="boundary-pi-role"><span data-boundary-responsibility><code>scripts/pi-role</code> owns turning a role file into a Pi start: model, thinking, the tool allowlist, only the listed skills, no MCP, the body appended to the system prompt.</span> <span data-boundary-seam>Caller-facing seam: <code>pi-role agents/&lt;role&gt;.md</code>, with <code>-p</code> for headless runs.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on Pi. Pi loads the target's AGENTS.md from the working directory.</span> <span data-boundary-scope>Observable scope: the started Pi session.</span></p>
+<p data-modular-boundary data-anchor="boundary-herdr-spawn"><span data-boundary-responsibility><code>herdr-spawn</code> and <code>octo-feather-start</code> own placing agents in workspaces and tabs and recording each tab's parent.</span> <span data-boundary-seam>Caller-facing seam: <code>just start</code>, <code>just supervise N</code>, and <code>herdr-spawn --role ROLE</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; they depend on Herdr and call <code>pi-role</code>.</span> <span data-boundary-scope>Observable scope: Herdr workspaces and tabs.</span></p>
+</section>
+
+<section data-anchor="roles" id="roles">
+<h2>Roles</h2>
+<div class="table-scroll" data-anchor="roles-table-wrap">
+<table data-anchor="roles-table"><caption>The five roles</caption>
+<thead><tr><th>Role</th><th>Role file</th><th>Model, thinking</th><th>Writes</th><th>Started as</th></tr></thead>
+<tbody>
+<tr data-anchor="role-director"><td>Director</td><td><code>agents/director.md</code></td><td>anthropic/claude-opus-5-5, high</td><td>No code or spec; its only repo write is the spec pull request's generated status file (ADR 0007). Outside repos: lane parent issues and its own director log</td><td>Pane: tab <code>director</code> in workspace <code>director</code>, by <code>just start</code></td></tr>
+<tr data-anchor="role-supervisor"><td>Supervisor</td><td><code>agents/supervisor.md</code></td><td>anthropic/claude-opus-5-5, high</td><td>The lane's sub-issues, wording-only spec fixes or a spec revision for re-review, the lane record and hand-off log, the pull request body; never product code, and it never shapes</td><td>Pane: tab <code>supervisor</code> in workspace <code>gh&lt;N&gt;</code>, by <code>just supervise N</code></td></tr>
+<tr data-anchor="role-implementer"><td>Implementer (worker)</td><td><code>agents/implementer.md</code></td><td>anthropic/claude-opus-5-5, medium</td><td>One ticket's change, in its own worktree; never pushes, merges or reviews itself</td><td>Pane: a worker tab in <code>gh&lt;N&gt;</code></td></tr>
+<tr data-anchor="role-corrector"><td>Corrector (worker)</td><td><code>agents/corrector.md</code></td><td>anthropic/claude-opus-5-5, medium</td><td>Commits from pstack <code>correct</code>, in its own worktree off the target's main</td><td>Only in a correction lane: tab <code>corrector</code></td></tr>
+<tr data-anchor="role-code-reviewer"><td>Code reviewer (worker)</td><td><code>agents/code-reviewer.md</code></td><td>openai/gpt-6.1-sol, high</td><td>Nothing: returns a verdict with class-tagged findings</td><td>Fresh per merge: tab <code>code-reviewer</code>; headless for each <code>just qc</code> run (ADR 0022)</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="roles-integration">Integration is not a role: the supervisor runs <code>just integrate N</code>, a script (ADR 0017). The owner is the person, not an agent.</p>
+<p data-anchor="roles-supervisor-owns">The supervisor owns its lane until it merges: it files the tickets as sub-issues, runs the pilot first, then runs implementers in parallel whenever ready tickets allow and it judges it practical, runs <code>just qc</code> on the lane's criteria, which flips the ones that pass to built in the same merge as their code, never by hand, and never shapes, implements, self-reviews, accepts, or addresses the owner.</p>
+<p data-anchor="roles-corrector">The corrector is factory quality, not product quality: it runs only in a correction lane the director starts on a repeat (ADR 0020).</p>
+<p data-anchor="roles-reviewer-patch">The code reviewer loads Matt's <code>code-review</code> with a patch: it blocks only on a failed acceptance criterion, broken behavior or a hard standard; smells and scope creep are notes. Every finding carries a short <code>class</code> tag so repeats can be counted.</p>
+</section>
+<section data-anchor="role-files" id="role-files">
+<h2>Role file format</h2>
+<div class="table-scroll" data-anchor="frontmatter-table-wrap">
+<table data-anchor="frontmatter-table"><caption>Role file frontmatter: only these keys, one <code>key: value</code> per line</caption>
+<thead><tr><th>Key</th><th>Meaning</th></tr></thead>
+<tbody>
+<tr data-anchor="fm-name"><td><code>name</code></td><td>Equals the file name</td></tr>
+<tr data-anchor="fm-description"><td><code>description</code></td><td>One line for readers; not passed to the agent</td></tr>
+<tr data-anchor="fm-model"><td><code>model</code></td><td>A model the deployment's model proxy serves, from the allowed list</td></tr>
+<tr data-anchor="fm-thinking"><td><code>thinking</code></td><td>Thinking level</td></tr>
+<tr data-anchor="fm-tools"><td><code>tools</code></td><td>Strict allowlist of built-in Pi tools, comma-separated</td></tr>
+<tr data-anchor="fm-skills"><td><code>skills</code></td><td>The only kit skills the role loads, by name (see <a href="./skills.spec.html">skills</a>)</td></tr>
+<tr data-anchor="fm-external-skills"><td><code>externalSkills</code></td><td>Optional: skills installed outside the kit, such as Spec Chat's, looked up only in the target repository's <code>.agents/skills</code>, the working checkout's and then its main checkout's, never in a home folder; a missing one is skipped with a warning (ADR 0013)</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="role-files-inherit">Role files carry no repo instructions: every role inherits the target repository's <code>AGENTS.md</code>, which Pi loads from the working directory.</p>
+</section>
+<section data-anchor="launch" id="launch">
+<h2>Launch</h2>
+<p data-anchor="launch-pane">A pane: <code>herdr-spawn --role &lt;role&gt;</code> opens a tab at the given worktree and starts Pi through <code>pi-role</code>.</p>
+<p data-anchor="launch-headless">Headless: <code>pi-role agents/&lt;role&gt;.md -p "&lt;brief&gt;"</code> in the worktree, when no conversation is needed; its final message, on stdout, is the report to the agent that ran it.</p>
+<p data-anchor="launch-pi-only">Pi is the only runtime: <code>herdr-spawn</code> refuses any other agent command.</p>
+</section>
+<section data-anchor="layout" id="layout">
+<h2>Herdr layout</h2>
+<figure data-anchor="herdr-layout">
+<h3 data-anchor="herdr-layout-heading">Herdr layout: one workspace for the director, one per lane</h3>
+<svg viewBox="0 0 760 210" width="100%" role="img" aria-labelledby="herdr-layout-title" data-anchor="herdr-layout-svg">
+<title id="herdr-layout-title">Workspace director with one tab; product lane gh12 with supervisor, worker and code-reviewer tabs; correction lane gh13 with supervisor and corrector tabs</title>
+<g font-family="system-ui, sans-serif" font-size="13" fill="#333">
+<rect x="10" y="20" width="170" height="170" rx="8" fill="#fff" stroke="#333"/>
+<text x="20" y="42" font-weight="600">workspace director</text>
+<rect x="25" y="60" width="140" height="30" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><text x="95" y="80" text-anchor="middle">tab director</text>
+<rect x="200" y="20" width="270" height="170" rx="8" fill="#fff" stroke="#333"/>
+<text x="210" y="42" font-weight="600">workspace gh12 (a product lane)</text>
+<rect x="215" y="60" width="240" height="30" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><text x="335" y="80" text-anchor="middle">tab supervisor</text>
+<rect x="215" y="100" width="115" height="30" rx="4" fill="#fff" stroke="#333"/><text x="272" y="120" text-anchor="middle">tab worker-1</text>
+<rect x="340" y="100" width="115" height="30" rx="4" fill="#fff" stroke="#333"/><text x="397" y="120" text-anchor="middle">tab worker-2</text>
+<rect x="215" y="140" width="240" height="30" rx="4" fill="#fff" stroke="#333" stroke-dasharray="5 4"/><text x="335" y="160" text-anchor="middle">code-reviewer (fresh each merge)</text>
+<rect x="490" y="20" width="260" height="170" rx="8" fill="#fff" stroke="#333"/>
+<text x="500" y="42" font-weight="600">workspace gh13 (a correction lane)</text>
+<rect x="505" y="60" width="230" height="30" rx="4" fill="#fff" stroke="#333" stroke-width="2"/><text x="620" y="80" text-anchor="middle">tab supervisor</text>
+<rect x="505" y="100" width="230" height="30" rx="4" fill="#fff" stroke="#333"/><text x="620" y="120" text-anchor="middle">tab corrector</text>
+</g>
+</svg>
+<figcaption data-anchor="herdr-layout-caption">One agent per tab and one pane per tab, so a message target is never ambiguous. Bold tabs are the long-lived owners of their workspace; the dashed box is short fresh-context work.</figcaption>
+</figure>
+<p data-anchor="transport-spawn-name">Each implementer is started under the agent name <code>&lt;role&gt;-&lt;ticket&gt;</code>, lowercase, in a tab labelled <code>worker-&lt;k&gt;</code>; the code reviewer gets tab <code>code-reviewer</code>, and a correction lane's corrector tab <code>corrector</code>. A name is live at most once: the supervisor closes a worker once its result is consumed, before reusing the name.</p>
+</section>
+
+</article>
+</body>
+</html>

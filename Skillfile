@@ -1,6 +1,6 @@
 # octo-feather skill management, ported from octo-lite's Skillfile
-# (varelaseb/octo-lite@cc6fa4e, Apache-2.0; its ADR 0002, kept for reference
-# at spec/adr/0002-tdd-skill-vendoring.spec.html).
+# (varelaseb/octo-lite@cc6fa4e, Apache-2.0; its ADR 0002, in octo-lite's
+# history).
 #
 # skillfile (github.com/eljulians/skillfile) pins upstream skills at exact SHAs
 # and preserves the tdd seam-gate patch across upstream updates
