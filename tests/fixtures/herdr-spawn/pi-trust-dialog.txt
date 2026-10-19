@@ -1,0 +1,10 @@
+ Trust project folder?
+ /tmp/gh2-probe.qMml
+ This allows pi to load .pi settings and resources, install missing project
+ packages, and execute project extensions.
+ → Trust
+   Trust parent folder (/tmp)
+   Trust (this session only)
+   Do not trust
+   Do not trust (this session only)
+ ↑↓ navigate  enter select  escape/ctrl+c cancel

@@ -25,6 +25,9 @@ Frontmatter (one `key: value` per line, lists comma-separated):
                A missing one is skipped with a warning
 scripts/check-roles rejects any other key. Pi always gets --no-skills, so a
 global skill folder never leaks into a role: only listed skills load.
+Pi always gets --approve: project-local files are trusted for that one run, so
+Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
+never written (issue #3).
 """
 import hashlib, json, os, re, subprocess, sys
 
@@ -71,7 +74,7 @@ def repo_skill_roots(cwd="."):
 
 def launch(path, to_file=False):
     fm, body = parse(path)
-    args = []
+    args = ["--approve"]
     if fm.get("model"):
         args += ["--model", fm["model"]]
     if fm.get("thinking"):
