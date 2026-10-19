@@ -17,10 +17,12 @@ writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
 Pi's auth.json: the judge gets a per-run copy. After it exits, a changed copy is
-written back to the box's auth.json (atomically, same mode) only if the box file
+written back to the box's auth.json (atomically, same mode, holding Pi's auth lock
+'<auth.json>.lock', waited for up to ~10 s, never stolen) only if the box file
 is still byte-identical to the run-start snapshot and the copy is a token refresh
 in place (same keys and value types, changed values strings or numbers of sane
-length); else discarded. Report and summary: auth_writeback none|written|refused:<why>.
+length); else discarded. Report and summary: auth_writeback none|written|refused:<why>
+(refused:auth-locked: the lock was not obtained in time).
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
 the sandbox binds it read-only and the offline gh (scripts/qc-bin/gh) serves it,
@@ -42,7 +44,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 (no auth, network; rerun with --no-github to judge without it). On 64 to 67 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, json, os, re, secrets, shlex, shutil, stat, subprocess, sys, tempfile, threading, time
+import contextlib, fcntl, json, os, re, secrets, shlex, shutil, stat, subprocess, sys, tempfile, threading, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -181,27 +183,43 @@ def auth_writeback(snap, sent):
     why = refresh_only(old, new)
     if why:
         return f"refused:{why}"
-    real = Path(os.path.realpath(pi_auth()))
+    # Compare and replace under Pi's own auth lock (proper-lockfile, realpath false: the directory
+    # '<auth.json>.lock', made by mkdir). Wait up to ~10 s; never steal it, not even a stale one.
+    lock = os.path.abspath(pi_auth()) + ".lock"
+    deadline, delay = time.monotonic() + 10, 0.05
+    while True:
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            if time.monotonic() >= deadline:
+                return "refused:auth-locked"
+            time.sleep(delay); delay = min(delay * 2, 0.5)
+        except OSError:
+            return "refused:auth-locked"
     try:
-        if real.read_bytes() != snap:
-            return "refused:box-auth-changed"
-        mode = stat.S_IMODE(real.stat().st_mode)
-    except OSError:
-        return "refused:box-auth-gone"
-    fd, tmp = tempfile.mkstemp(prefix=".auth.json.qc-", dir=real.parent)
-    try:
-        os.fchmod(fd, mode)
-        with os.fdopen(fd, "wb") as f:
-            f.write(copy); f.flush(); os.fsync(f.fileno())
-        if real.read_bytes() != snap:   # compare and swap: another Pi may have refreshed meanwhile
-            return "refused:box-auth-changed"
-        os.replace(tmp, real)
-        return "written"
-    except OSError:
-        return "refused:write-failed"
+        real = Path(os.path.realpath(pi_auth()))
+        try:
+            if real.read_bytes() != snap:
+                return "refused:box-auth-changed"
+            mode = stat.S_IMODE(real.stat().st_mode)
+        except OSError:
+            return "refused:box-auth-gone"
+        fd, tmp = tempfile.mkstemp(prefix=".auth.json.qc-", dir=real.parent)
+        try:
+            os.fchmod(fd, mode)
+            with os.fdopen(fd, "wb") as f:
+                f.write(copy); f.flush(); os.fsync(f.fileno())
+            os.replace(tmp, real)
+            return "written"
+        except OSError:
+            return "refused:write-failed"
+        finally:
+            if os.path.lexists(tmp):
+                os.unlink(tmp)
     finally:
-        if os.path.lexists(tmp):
-            os.unlink(tmp)
+        with contextlib.suppress(OSError):
+            os.rmdir(lock)
 
 
 def sandboxed(judge, session, gh):
