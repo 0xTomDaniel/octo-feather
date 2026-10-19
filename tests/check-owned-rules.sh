@@ -49,6 +49,7 @@ plant agents/push.md '2. Verify the branch matches the target repo convention, e
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
+g rm -qf .skillfile/patches/skills/x/SKILL.md.patch; run 0  # clean fixture: only the planted entry can fail
 # Each RULES entry proves itself on its own examples before scanning (issue #36).
 # Plant each failure mode in a copy of the script; the error names the entry and the fix.
 selfcheck() { local name="$1" old="$2" new="$3" want="$4" c="$t/check-copy"
@@ -74,5 +75,22 @@ selfcheck 'negative matched (wait)' 'hold(s|ing)? (your|its|their) turn|' 'hold(
   "RULES['long-wait'] matches its own negative 'A blocking wait over 30 seconds triggers the subprocess timeout.'"
 selfcheck 'positive missed' '|change after (just )?qc' '' \
   "RULES['merge-authority'] misses its own positive 'Any code change after QC means \`just qc\` and a fresh review again, on the new head.': widen \`pattern\`"
+# Shape, not truthiness (review of b73b115: unvalidated-input).
+selfcheck 'bare-string negatives' 'negatives=[  # gh19 handoffs 19:17Z' 'negatives=("Mechanical rebase"), _n=[  # gh19 handoffs 19:17Z' \
+  "RULES['merge-authority']['negatives'] is a str, not a list: write \`negatives=[...]\`"
+selfcheck 'iterator positives' 'positives=[
+            "Cut branch' 'positives=iter([]), _p=[
+            "Cut branch' \
+  "RULES['lane-branch']['positives'] is a list_iterator, not a list"
+selfcheck 'iterator negatives' 'negatives=[  # gh28 handoffs' 'negatives=iter([]), _n=[  # gh28 handoffs' \
+  "RULES['long-wait']['negatives'] is a list_iterator, not a list"
+selfcheck 'empty tuple positives' 'positives=[
+            "Mechanical rebases' 'positives=(), _p=[
+            "Mechanical rebases' \
+  "RULES['merge-authority'] has no positives: add a non-empty \`positives\` list"
+selfcheck 'non-str element' '"The lane branch is `gh<N>`: see docs/adr/0011.",' '"The lane branch is `gh<N>`: see docs/adr/0011.", 42,' \
+  "RULES['lane-branch']['negatives'][3] is 42 (int), not a non-empty str"
+selfcheck 'empty-str element' '"The lane branch is `gh<N>`: see docs/adr/0011.",' '"The lane branch is `gh<N>`: see docs/adr/0011.", "",' \
+  "RULES['lane-branch']['negatives'][3] is '' (str), not a non-empty str"
 rm -f "$t/check-copy"
 echo "check-owned-rules: ok (examples gate: missing positives/negatives, a matched negative and a missed positive fail naming the entry and fix; owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"

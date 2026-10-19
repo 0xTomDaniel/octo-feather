@@ -85,14 +85,27 @@ HOW = ("each RULES entry needs `positives` (real restatements it must catch) and
 bad = []
 for rule, r in RULES.items():
     where = f"scripts/check-owned-rules: RULES[{rule!r}]"
+    ok = {}
     for key in ("positives", "negatives"):
-        if not r.get(key):
+        v, ok[key] = r.get(key), []
+        # Shape, not truthiness: a bare str iterates chars, an iterator is truthy and empty.
+        if v is None or (isinstance(v, (list, tuple)) and not v):
             bad.append(f"{where} has no {key}: add a non-empty `{key}` list; {HOW}")
-    for ex in r.get("negatives") or []:
+        elif not isinstance(v, (list, tuple)):
+            bad.append(f"{where}[{key!r}] is a {type(v).__name__}, not a list: write `{key}=[...]` "
+                       f"with one example sentence per element (a bare string iterates its characters); {HOW}")
+        else:
+            for i, ex in enumerate(v):
+                if not (isinstance(ex, str) and ex.strip()):
+                    bad.append(f"{where}[{key!r}][{i}] is {ex!r} ({type(ex).__name__}), not a non-empty str: "
+                               f"write each `{key}` element as one example sentence")
+                else:
+                    ok[key].append(ex)
+    for ex in ok["negatives"]:
         if m := re.search(r["pattern"], ex, re.I):
             bad.append(f"{where} matches its own negative {ex!r} (\"{m.group(0)}\"): "
                        "narrow `pattern` until it leaves ordinary text alone; never drop the negative")
-    for ex in r.get("positives") or []:
+    for ex in ok["positives"]:
         if not re.search(r["pattern"], ex, re.I):
             bad.append(f"{where} misses its own positive {ex!r}: widen `pattern` to catch it, "
                        "or drop the positive only if it is not a restatement")
