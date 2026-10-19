@@ -68,7 +68,7 @@ Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one
 
 Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start a correction lane against the target repo when (a) the owner corrects something at a gate (spec, QA evidence, merge), or (b) a finding class repeats: two or more `"kind": "finding"` lines with the same `class` across any lanes, found after each merge ask with
 `jq -r 'select(.kind == "finding") | .class' $(octo-feather-state)/lanes/{,archive/}*.handoffs.jsonl | sort | uniq -c | awk '$1 >= 2'`.
-It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
+Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
 
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
 and branch (slug = `gh<issue number>`) from main, which holds the spec and its status file; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
