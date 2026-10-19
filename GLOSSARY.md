@@ -21,7 +21,7 @@ A worker that produces the change for one ticket.
 _Avoid_: Developer, coder
 
 **Integration**:
-Combining the finished changes of a work item's tickets into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer. It never pushes and is not the merge: after the owner says merge, the supervisor merges the lane's pull request pinned to the head the director relayed.
+Combining the finished changes of a work item's tickets into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer. It never pushes and is not the merge (spec `#gates-merge`).
 _Avoid_: Integrator, merger
 
 **Corrector**:

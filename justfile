@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-tests check-spec-status check-templates
+check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -134,6 +134,10 @@ integrate issue +refs:
 check-roles:
     @python3 "{{root}}/scripts/check-roles"
 
+# Each owned rule (merge authority, lane branch) is stated once, in its owner; elsewhere only a pointer (correction lane #19).
+check-owned-rules:
+    @python3 "{{root}}/scripts/check-owned-rules"
+
 # Verify the runtime tools on this box (octo-lite's install --check equivalent).
 install-check:
     #!/usr/bin/env bash
@@ -165,3 +169,8 @@ qa *args:
 # Print this Herdr session's octo-feather state directory.
 state:
     @octo-feather-state
+
+# New target repo at DEST from templates/LANG: tracked files, one commit on main, Spec Chat links unless --no-spec-chat; never `just setup` or GitHub (#21).
+# Arguments reach bash as exported variables, never as interpolated source.
+new-repo $lang $dest *$flags:
+    cd "{{invocation_directory()}}" && octo-feather-new-repo "$lang" "$dest" $flags

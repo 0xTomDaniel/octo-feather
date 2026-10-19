@@ -1,0 +1,42 @@
+{
+  "spec": "roles.spec.html",
+  "accepted_commit": "bfb3a92",
+  "criteria": {
+    "acceptance-tab-headless-same": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-family-guard": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-unknown-key": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-unresolved-skill": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-unknown-model": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-no-skill-leak": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-director-tools": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-supervise-layout": {
+      "status": "built",
+      "pr": 16
+    },
+    "acceptance-worker-in-lane": {
+      "status": "built",
+      "pr": 16
+    }
+  }
+}
