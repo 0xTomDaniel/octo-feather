@@ -38,6 +38,10 @@ Direction: a lane or stage should be explicit registry data supplied by the call
 
 Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criterion's demo path (ADR 0022). Jev replaces it behind the same recipe and must verify every `built` criterion and only those, and report any it cannot confirm.
 
+## Landing agent
+
+A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the head-pinned merge itself and a moved head other than a clean merge of main becomes a new merge ask (spec `#gates-merge`, ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
+
 ## Criterion status on the spec page
 
 Later, not now: show each criterion's planned or built status on its spec page in Spec Chat, read from the status file, without the spec HTML or Spec Chat learning this workflow.
@@ -61,6 +65,8 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Implementer and code reviewer, new pstack skills (principle-prove-it-works, blast-radius): the implementer reports with a re-runnable proof; the reviewer names the one safety fact and how far it was proven. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Owner shaping chat (`just shape`): asked to change factory code, it shapes a spec instead, using only the shaping skills. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Implementer, language skills (python, typescript from scaling-octo-engine@ef11d2b9): in a template copy, a new CLI command gets integration/E2E tests only (no unit tier), `just check` as the gate, basedpyright strict in Python, Zod 4 `z.strictObject` only where a new TS repo validates wire input. Smoke: `evidence/2026-10-19-language-skills-smoke.md`.
+- Supervisor, head-pinned merge (spec `#gates-merge`, docs/adr/0007): the director relays a merge at head H. (a) With H unchanged it merges with `--match-head-commit H`. (b) Main moved and the lane took a merge of main with no conflict: it merges pinned to the new head with checks green, no new qc, no new ask, and its done report names H and the merged head (spec `#acceptance-merge-main-merged`). (c) A fix commit landed after the ask: it does not merge, reruns its gates (`just qc` on affected criteria included) and sends a new merge ask naming the new head (spec `#acceptance-merge-head-moved`). Smoke: `evidence/2026-10-19-merge-teardown-smoke.md` (lane #5 chain; role probes (a) to (c), refined merge rule).
+- Supervisor and director, close report first (spec `#transport-close-space`, docs/adr/0007): the supervisor reports with its worktree intact and never removes it; the director closes the space, then removes it. Smoke: `evidence/2026-10-19-merge-teardown-smoke.md` (lane #5 chain; role probe (d), refined merge rule).
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`

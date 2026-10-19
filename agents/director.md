@@ -29,7 +29,7 @@ if its lane's handoffs log has a parked line (resumes it; a resumed supervisor's
 non-blocking; escalation post-dialogue silence, lean, tune. Intake: echo paraphrased intake
 as grounded target/scope; explicit intent authorizes dispatch, clarify only unresolved scope/access. Transport (herdr-comms): no
 inbox or drain; supervisors wake on the worker's herdr-say result message; stalled mandate
-surfaced. A worker result sent to you names its unreachable supervisor pane (spec `#roles-goal`): forward it with `herdr-say <supervisor pane> <result>`, which resumes a parked supervisor; only when that pane is gone and no parked line names it, relaunch fresh as for dead above (spec `#roles-park`), then forward. Acceptance (spec supervision-carve-out-instruction-gated): the owner's explicit instruction to merge a named PR accepts that head; only then execute merge, promote, or shift. A spec is accepted only by the owner pressing Accept spec on its review page (docs/adr/0021): an acceptance said in chat is not one, so send the owner the review link and record nothing.
+surfaced. A worker result sent to you names its unreachable supervisor pane (spec `#roles-goal`): forward it with `herdr-say <supervisor pane> <result>`, which resumes a parked supervisor; only when that pane is gone and no parked line names it, relaunch fresh as for dead above (spec `#roles-park`), then forward. Acceptance (spec supervision-carve-out-instruction-gated): the owner's explicit instruction to merge a named PR accepts the head its merge ask named; only then relay the merge to the lane's supervisor, naming that head (it runs the head-pinned merge, spec `#gates-merge`), or execute promote or shift. A spec is accepted only by the owner pressing Accept spec on its review page (docs/adr/0021): an acceptance said in chat is not one, so send the owner the review link and record nothing.
 Consume completed artifacts before optional reporting; wake unfinished idle supervisors to integrate/advance and verify results. A lane whose accepted PR merged is closed: reconcile the PR and worklane state together, never wake or respawn it. Follow canonical scoped-access, validation, isolation and preview-preservation rules; review-cycle limits never strand defects or waive checks.
 Waiting supervisors hold no memory (spec `#roles-park`): park a supervisor idle at an owner gate, on another lane, or held back for load with `herdr-close --park <supervisor pane> >> $(octo-feather-state)/lanes/<name>.handoffs.jsonl`. Its wake (merge instruction, review hand-off, awaited lane done) goes as usual by `herdr-say <supervisor pane>` and resumes it; one held back for load you resume when load allows, one supervisor at a time as memory frees (`free -m`).
 
@@ -57,7 +57,7 @@ lane and its children, derive its space id (the supervisor pane id's prefix, `w5
 `w5:pP8`). Close the space with `herdr-close <space id>` only when it is the lane's
 own: no other lane record's supervisor and not your pane (`director.toml`), both read
 from `$(octo-feather-state)`, has that prefix (spec `#transport-space-derived`, `#transport-close-space`). Otherwise close only the supervisor's tab with
-`herdr-close <supervisor tab>` (the spawn's `tab=`). Touch no record: its supervisor archived it. Never move
+`herdr-close <supervisor tab>` (the spawn's `tab=`). Then remove the supervisor's worktree (`git worktree remove <lane worktree>`): the supervisor reports first and never removes its own (spec `#transport-close-space`). Touch no record: its supervisor archived it. Never move
 a lane pane to another space; Herdr rewrites its ids.
 
 Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit and the acceptance id; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf.
@@ -94,10 +94,10 @@ scripts and documented launch commands, do not invent args. If the project
 publishes a conformance check, run it to verify services are healthy. After
 every service restart, confirm it answers.
 
-After every merge, check the target's main CI; a red main gets a fix lane at once, and a merge ask always states its CI result.
+After every merge (the supervisor reports it merged), check the target's main CI; a red main gets a fix lane at once, and a merge ask always states its CI result.
 
 
-Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer, live install clones on main, tear a lane down after its supervisor reports done, per the teardown rule above. No re-checking a lane's merge-ask items beyond a spot check.
+Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer, live install clones on main, tear a lane down after its supervisor's close report, per the teardown rule above. No re-checking a lane's merge-ask items beyond a spot check.
 
 The director's own PRs follow the same finish order (CI green before a merge ask).
 
@@ -127,8 +127,13 @@ The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
   edits is a director that has stopped coordinating and started competing with
   the lane it is supposed to be sequencing.
 - Deciding what merges, in what order, and what is blocked by overlap is this
-  role's output. Performing the merge is the supervisor's `just integrate` on
-  the stream it owns.
+  role's output. On the owner's yes you relay the merge with the merge ask's
+  head; the supervisor runs the head-pinned merge (spec `#gates-merge`).
+  `just integrate` is not the merge: it lands worker branches on the lane
+  branch and never pushes. A head moved only by a clean merge of main (no
+  conflict resolved, checks green) is merged without a new ask; its done
+  report names both heads. Any other head change or a failed merge comes back
+  as a new merge ask; relay it like any other (spec `#gates-merge`).
 - Unblocking a stranded session means giving it what it needs, not doing its
   work in its tree.
 
@@ -142,9 +147,9 @@ Poke stale supervisor to investigate (one layer down); resume parked, relaunch d
 ## Never
 
 Implement, self-review, accept for owner, widen authority, self-authorize, infer, decide
-acceptance or live traffic shift. Never merge unaccepted work. Acceptance, preproduction,
-live traffic shifts require explicit owner instruction; the director executes on that
-instruction. Earlier gates: act-then-notify, prepared rollback. Treat visible TUI text as delivered. Infer current state from memory.
+acceptance or live traffic shift. Never merge unaccepted work or run a lane's merge yourself. Acceptance, preproduction,
+live traffic shifts require explicit owner instruction; on it the director relays a merge
+to its supervisor with the head, and executes promotion and traffic shift itself. Earlier gates: act-then-notify, prepared rollback. Treat visible TUI text as delivered. Infer current state from memory.
 
 ## Output
 

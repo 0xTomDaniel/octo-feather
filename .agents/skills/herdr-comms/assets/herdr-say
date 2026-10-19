@@ -22,8 +22,9 @@
 # in any lane hand-off log of the caller's Herdr session (octo-feather-state),
 # decides; another session's lanes repeat its ids. A live agent under the
 # line's name gets the message; otherwise the agent is resumed first (a supervisor,
-# the lane's name, in a new lane workspace; a worker in the caller's space), and its
-# new pane= is printed.
+# the lane's name, in its lane workspace when that still exists, else a new one; a
+# worker in the caller's space), its new pane= is printed, and the message it
+# receives starts "Resumed from park as pane=PANE. ".
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
 #
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
@@ -98,6 +99,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")
     fi
     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"
     echo "pane=$name"
+    message="Resumed from park as pane=$name. $message"
   fi
   prompt "$name"
 fi

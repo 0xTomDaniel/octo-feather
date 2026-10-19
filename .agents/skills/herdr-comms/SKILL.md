@@ -82,7 +82,9 @@ Any failure closes the tab, so a failed spawn never leaves an orphan.
 
 `--resume SESSION` starts a parked agent with its old `--session-id`, so Pi
 keeps its conversation. A supervisor resumes through `octo-feather-start --cwd
-WORKTREE --name LANE --resume SESSION`, in a new lane workspace. `herdr-say`
+WORKTREE --name LANE --resume SESSION`: in a new tab of workspace LANE when it
+still exists, else in a new lane workspace (without `--resume`, an existing
+workspace exits 73). `herdr-say`
 does both for you; see below.
 
 ## Close an agent or a lane space
@@ -147,9 +149,10 @@ typed into.
 
 A target Herdr does not find may be parked. The latest parked line naming it,
 by pane or name, in any lane hand-off log in `$lanes` decides: a live agent
-under the line's name gets the message; otherwise the agent is resumed (an
-supervisor, the line named after its log, in a new lane space; a worker in the
-caller's `$HERDR_WORKSPACE_ID`), gets the message, and `herdr-say` prints its
+under the line's name gets the message; otherwise the agent is resumed (a
+supervisor, the line named after its log, in its lane space when that still
+exists, else a new one; a worker in the caller's `$HERDR_WORKSPACE_ID`), gets the
+message prefixed `Resumed from park as pane=PANE. `, and `herdr-say` prints its
 new `pane=`. `herdr-say --parked TARGET` prints that line, or exits 1.
 `herdr-wake check` counts a parked supervisor as present, so a spec review hand-off
 resumes it.

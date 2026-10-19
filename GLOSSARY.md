@@ -9,7 +9,7 @@ The one agent that owns the whole program: it opens work items, puts a superviso
 _Avoid_: Orchestrator, manager
 
 **Supervisor**:
-The agent that owns one work item until it merges, breaking it into tickets, assigning workers, and getting every result independently reviewed. It directs the work and never does it.
+The agent that owns one work item until it merges, breaking it into tickets, assigning workers, getting every result independently reviewed, and running the merge the owner approved. It directs the work and never does it.
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
@@ -21,7 +21,7 @@ A worker that produces the change for one ticket.
 _Avoid_: Developer, coder
 
 **Integration**:
-Combining the finished changes of a work item's tickets into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer.
+Combining the finished changes of a work item's tickets into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer. It never pushes and is not the merge: after the owner says merge, the supervisor merges the lane's pull request pinned to the head the director relayed.
 _Avoid_: Integrator, merger
 
 **Corrector**:
