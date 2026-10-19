@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-integrate
+check: check-scripts check-refs check-dashes check-skills check-roles check-integrate check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -88,6 +88,24 @@ check-skills:
       [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
     done
     echo "skills: ok ($n skills, 5 roles)"
+
+# Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
+# justfile with `check` and `integrate`, a git hook and CI that run `just check`.
+# Structure only; each template's own `just check` runs in its repo (deterministic, no network here).
+check-templates:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "{{root}}"
+    n=0
+    for t in templates/*/; do
+      t="${t%/}"
+      grep -q '^Repo skills:' "$t/AGENTS.md" || { echo "check-templates: $t/AGENTS.md lacks a 'Repo skills:' line" >&2; exit 1; }
+      grep -q '^check:' "$t/justfile" && grep -q '^integrate ' "$t/justfile" || { echo "check-templates: $t/justfile needs check and integrate recipes" >&2; exit 1; }
+      [[ -x "$t/.githooks/pre-commit" ]] && grep -q 'just check' "$t/.githooks/pre-commit" || { echo "check-templates: $t/.githooks/pre-commit must run just check" >&2; exit 1; }
+      grep -q 'run: just check' "$t/.github/workflows/check.yml" || { echo "check-templates: $t CI must run just check" >&2; exit 1; }
+      n=$((n + 1))
+    done
+    echo "templates: ok ($n)"
 
 # Integration test of the integrate script in a throwaway repo (docs/adr/0017).
 check-integrate:
