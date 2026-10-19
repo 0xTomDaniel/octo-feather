@@ -20,7 +20,9 @@ run 0 7 w1 "$c2"                                           # merge a branch, che
 head="$(git -C ../lane rev-parse HEAD)"
 (cd ../w1 && echo x > f && g commit -qam w1f); g worktree add -q -b w3 ../w3; (cd ../w3 && echo y > f && g commit -qam w3f)
 run 0 7 w1
+before="$(git -C ../lane rev-parse HEAD)"
 run 1 7 w3                                                 # conflict on f
+[[ "$(git -C ../lane rev-parse HEAD)" == "$before" ]] || { echo "integrate test: conflict did not restore the head" >&2; exit 1; }
 [[ "$(git -C ../lane status --porcelain)" == "" ]] || { echo "integrate test: lane left dirty after conflict" >&2; exit 1; }
 g worktree add -q -b w4 ../w4; (cd ../w4 && echo r > red && g add red && g commit -qm red)
 before="$(git -C ../lane rev-parse HEAD)"
