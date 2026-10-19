@@ -122,3 +122,32 @@ $ scripts/check-behavior-smoke --base 275ea30^1 --head 89119f3   -> behavior smo
 ```
 
 89119f3 is itself a merge (corrector-gh19 into gh19) and adds nothing of its own. No role text changed in this fix, so the supervisor probes above (role text 7ac9746) still stand.
+
+## Delta review of 739d736: false positive on an unavailable auto-merge, fixed in 631d9b8
+
+Class `false-positive-behavior-smoke`: f61b80a treated a missing auto-merge result as proof the merge wrote behaviour. Now octopus parents fold pairwise through `git merge-tree --write-tree` (a `commit-tree` per step), auto-merge runs only when a role file differs from every parent, and a git without `merge-tree --write-tree` fails closed with exit 2 naming git 2.38, never the missing-behavior-smoke error (documented in the script header and the justfile recipe comment).
+
+Repros in `/tmp/cg26p/r3`, `/tmp/cg26p/r4` (old = f61b80a, new = 631d9b8; shim = a `git` on PATH exiting 129 for `merge-tree`):
+
+```
+== repro 1: clean three-parent octopus of separate-line pointer edits to agents/supervisor.md, each Behaviour-neutral
+old: d1662dc Merge branches 'o-one', 'o-two' and 'o-three' into lane: agents/supervisor.md (missing-behavior-smoke), exit 1
+new: behavior smoke: opt-out 63fc50b / 558012a / 7af75ab Behaviour-neutral: pointer to the owner
+     behavior smoke: ok (4 commits since f6bd404, no behaviour change, 3 opted out), exit 0
+== repro 2: clean two-parent merge of main, both sides edit separate lines of agents/supervisor.md, under the shim
+old: 75973ac Merge branch 'main' into lane: agents/supervisor.md (missing-behavior-smoke), exit 1
+new: check-behavior-smoke: cannot auto-merge 635f6a9, 3abfb2d to see what the merge wrote: needs git 2.38 (merge-tree --write-tree), got git version 2.43.0: usage: git merge-tree
+     exit 2
+new, real git: behavior smoke: ok (2 commits since 3abfb2d, no behaviour change, 1 opted out), exit 0
+```
+
+`tests/check-behavior-smoke.sh` adds both repros, an octopus with its own edit (fails, naming the merge) and a branch with no such merge under the shim (ok: merge-tree never needed); the extended test fails at both repros against the f61b80a script. Earlier repros (conflict resolution with new text, deleted smoke) still fail in it.
+
+History re-run at 631d9b8:
+
+```
+$ scripts/check-behavior-smoke --base ca721c5^1 --head db9e290   -> exit 1: missing: no evidence/*.md changed after 4df6e22 and still at the checked head, citing a commit of this branch.
+$ scripts/check-behavior-smoke --base ca721c5^1 --head 975713d   -> exit 0: behavior smoke: ok (5 behaviour commits, smoke evidence/2026-10-19-merge-teardown-smoke.md)
+$ scripts/check-behavior-smoke --base 275ea30^1 --head af760a4   -> exit 1: missing: no evidence/*.md changed after 381c1ca and still at the checked head, citing a commit of this branch.
+$ scripts/check-behavior-smoke --base 275ea30^1 --head 89119f3   -> exit 0: behavior smoke: ok (4 behaviour commits, smoke evidence/2026-10-20-spec-freeze-baseline-gap-probes.md)
+```
