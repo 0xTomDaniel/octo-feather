@@ -31,8 +31,8 @@
       "pr": 24
     },
     "acceptance-sub-issues": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-tracer-tickets": {
       "status": "planned",
