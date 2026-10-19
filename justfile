@@ -138,7 +138,7 @@ check-roles:
 check-owned-rules:
     @python3 "{{root}}/scripts/check-owned-rules"
 
-# A role-behaviour change on this branch ships with its smoke and owed eval (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI. Needs git 2.38+ for merges that change a role file on both sides (else exit 2).
+# A role path changed on this branch needs evidence/*.md and docs/future.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
 check-behavior-smoke:
     @python3 "{{root}}/scripts/check-behavior-smoke"
 

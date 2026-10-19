@@ -4,7 +4,7 @@ An agent mistake is fixed as high on this ladder as it will go: first the codeba
 
 Until `just qa` exists, an edit to a prompt, role file or skill patch that changes behaviour ships with a recorded live smoke run in `evidence/` (as `evidence/block3-comms-smoke.md` records a real chain), and its eval case is listed as owed in `docs/future.md`. A path repair or the deletion of a dead trigger changes no behaviour and needs only `check-refs`. Decided by Tom (owner), 2026-10-19.
 
-`just check` enforces this paragraph on a branch (`scripts/check-behavior-smoke`, correction lane #26): a commit touching a role file, a skill's markdown or a skill patch needs a later evidence/ change citing a commit of the branch and an owed-evals line in `docs/future.md` naming it. A behaviour-neutral commit says so in its message, `Behaviour-neutral: <reason>`; the check prints each one and the supervisor lists them in the merge ask, so the owner sees every opt-out.
+`just check` checks the presence half of this paragraph on a branch (`scripts/check-behavior-smoke`, correction lane #26): when the branch diff from its merge base changes a role file, a skill's markdown or a skill patch, the same diff adds or modifies an `evidence/*.md` and changes `docs/future.md`. Whether the smoke covers the change stays with review. A path is exempt when every commit touching it says `Behaviour-neutral: <reason>` in its message; the check prints each one and the supervisor lists them in the merge ask, so the owner sees every opt-out.
 
 ## Considered options
 
