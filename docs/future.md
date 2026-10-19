@@ -40,7 +40,7 @@ Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criter
 
 ## Landing agent
 
-A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the head-pinned merge itself and a moved head becomes a new merge ask (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
+A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the head-pinned merge itself and a moved head other than a clean merge of main becomes a new merge ask (spec `#gates-merge`, ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
 
 ## Criterion status on the spec page
 
