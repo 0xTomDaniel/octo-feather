@@ -9,5 +9,5 @@ The supervisor integrates with `just integrate N REF...` (`scripts/octo-feather-
 ## Consequences
 
 - One writer per lane branch: only the supervisor's script writes it.
-- Integration is not the merge: it never pushes, and the lane's pull request reaches main only through the supervisor's head-pinned merge after the owner says merge (ADR 0007).
+- Integration is not the merge: it never pushes; the lane's pull request reaches main only by the merge spec `#gates-merge` owns (ADR 0007).
 - Implementers merge the integration tip into their own branch before reporting (implement-spec step 4), so most conflicts never reach the script.

@@ -1,0 +1,20 @@
+# Role probes: Accept freezes a spec, baseline qc gap routing (correction lane #19), 2026-10-20
+
+Smoke for the role changes of 639c8d9 (Accept freezes a spec: supervisor asks the owner and scans the spool; implementer and corrector never edit a spec; code reviewer blocks an unapproved accepted-spec edit; docs/adr/0021) and 381c1ca (baseline qc failures are product gaps: kind `gap`, gap lane, never a correction lane; docs/adr/0020, agents/director.md Correction lanes). ADR 0008 second paragraph.
+
+Setup: the real role headless from the corrector-gh19 worktree at d29c63b, in an empty temp git repo (`/tmp/cg19p/repo`), no Herdr session, output to `/tmp` only:
+`scripts/pi-role agents/<role>.md --model <model> --thinking off -p "<scenario>"`. Model: anthropic/claude-sonnet-5-5 for supervisor, director, implementer; openai/gpt-6-luna for the code reviewer (its family). Each prompt says it is a dry run and to run nothing. Probe (a) ran first as the smoke sample and gave a real answer; then (b) to (d) in parallel. Cost not recorded.
+
+| Probe | Role | Scenario | Decisive output (verbatim) | Result |
+|---|---|---|---|---|
+| (a) typo in accepted spec | supervisor | lane gh42; owner pressed Accept spec on widget.spec.html 10 minutes ago, review row still registered; a typo "recieve" in acceptance-a; next actions | "Dry run. The spec is accepted and its review row is live, so it is frozen. I don't edit it until the owner says yes through the director." Step 1: "`cd /work/gh42 && watch-specs.sh docs/specs .cursor-owner 0 3; echo exit=$?`", "Exit 0 is a pending hand-off ... I reconcile it first, and the spec stays frozen." Step 2: "`herdr-say --parent \"gh42: ask owner yes for wording-only fix ... Will commit only on yes.\"`" Step 3: "No edit happens before that." | pass |
+| (b) baseline qc failure | director | baseline lane gh15 reports quality acceptance-gate-no-model failed, two earlier baseline failures with the same cause; what is logged, which lane | "Log: `{\"kind\": \"gap\", ...}` in gh15's handoffs log" ... "Lane to start: a gap lane, not a correction lane. Baseline qc failures are product gaps (docs/adr/0020). The `\"kind\": \"finding\"` count never sees `gap` lines, so the repeat rule for correction lanes does not trigger, even with three occurrences of the same cause." | pass |
+| (c) unapproved accepted-spec edit | code-reviewer | PR #42 edits accepted widget.spec.html ("shows 10 rows" to "shows up to 10 rows"); PR body names no owner yes | "**Verdict: blocked.** ... **Block, class: `spec-edit-during-open-review`**: The PR edits accepted `docs/specs/widget.spec.html` without an owner's yes in the PR body." | pass |
+| (d) spec reads wrong | implementer | ticket #43 says up to 10 rows; accepted spec says "shows 10 rows" | "Do not edit `docs/specs/widget.spec.html`. Accepted specs are frozen (ADR 0021); a spec change goes to my supervisor." Escalates with `herdr-say --parent "gh42 #43 blocked: spec acceptance-a says 'shows 10 rows', ticket says 'up to 10'. ..."` | pass |
+
+No gaps found; no role text changed. Limits: probes show how the text reads to a model, not a live chain. (a) never ran a real spool scan (no review row in the temp repo); (c) did send its blocker: see Leak below; the corrector's line was not probed (it is the same ban as the implementer's).
+
+## Leak: headless probes reached a live pane
+
+`pi-role -p` inherits `OCTO_FEATHER_PARENT` and `HERDR_*` from the caller's environment, so probe (c)'s `herdr-say --parent` landed in the corrector's live supervisor pane (wE:p2's lane supervisor). Verbatim, per the supervisor: blocked, accepted widget.spec.html edit of acceptance-a without owner yes in the PR body, docs/adr/0021, class `spec-edit-during-open-review`. That confirms (c) as a pass and shows the leak. Other probes sent nothing. Isolate future probes and tell them to print their report to stdout, not `herdr-say`:
+`env -u OCTO_FEATHER_PARENT -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_SOCKET_PATH scripts/pi-role agents/<role>.md ... -p "<scenario> Print your report to stdout; do not use herdr-say."`

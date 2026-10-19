@@ -48,8 +48,7 @@ durable workflow artifacts.
 
 ## Implementer Mutations
 
-- Work on one branch for the tracked unit of work: the target repo's branch
-  convention, else `octo-feather/gh<issue-number>-<slug>`.
+- Work on the lane's one branch, named per docs/adr/0011.
 - Open one draft PR for the lane. Never create a second implementation PR for
   the unit.
 - The PR body starts with `Closes #<issue-number>` and
@@ -69,22 +68,12 @@ durable workflow artifacts.
 
 ## Merge And Issue Sync
 
-- Merge (spec `#gates-merge`): after the owner says merge, the director relays
-  it with the head the merge ask named, and the lane supervisor alone merges,
-  pinned to that head: `gh pr merge <N> --merge --match-head-commit <head>`.
-  The owner's merge accepts that head, or that head plus only merges of main
-  that resolved no conflict (the lane's own diff against main unchanged):
-  then, with required checks green on the new head, merge with
-  `--match-head-commit <new head>`, no new qc, no new merge ask, and name both
-  heads in the done report. Main moving does not move the head; prefer
-  merging main in over a rebase, which rewrites approved commits. Any other
-  head change (fix commit, rebase, resolved conflict) or failed merge is never
-  forced: rerun the gates, `just qc` on every affected criterion included,
-  and send a new merge ask naming the new head. Assigning the work item to a supervisor
-  is not merge approval. Verify required checks, then merge. No worker merges,
-  no agent decides acceptance, and no agent merges unaccepted work. Required
-  failed checks remain blockers until fixed or durably waived through a
-  repository-approved path.
+- Merge: who merges, when, and at which head is spec `#gates-merge` alone
+  (docs/specs/issue-lifecycle.spec.html); read it there, never restate it
+  (`just check` fails a copy). The command, with the head that rule names:
+  `gh pr merge <N> --merge --match-head-commit <head>`.
+  Required failed checks remain blockers until fixed or durably waived
+  through a repository-approved path.
 - The merge completes the worklane. `Closes #<n>` closes the primary GitHub
   issue; if it is still open, close it with `gh issue close <n> --comment` and
   stop the lane. Do not assume deployment-named labels exist.
@@ -99,7 +88,4 @@ durable workflow artifacts.
 - Do not create workflow labels unless the owner explicitly asks.
 - Do not create extra PRs for the same issue.
 - No worker or reviewer role merges or approves as the owner reviewer.
-- Only the lane supervisor merges, on the owner's merge relayed by the
-  director, pinned to the merge-ask head, per Merge And Issue Sync above
-  (spec `#gates-merge`); no agent merges unaccepted work, merges a head moved by
-  anything but a clean merge of main, or decides acceptance itself.
+- Merge authority: spec `#gates-merge` (Merge And Issue Sync above).
