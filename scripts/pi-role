@@ -17,10 +17,10 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   model        --model
   thinking     --thinking
   tools        --tools (built-in Pi tools only)
-  skills       --skill for each, looked up in agents/skills/ then skills/
+  skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018)
   externalSkills  optional: skills installed outside the kit (Spec Chat's), looked
                up in $OCTO_FEATHER_SKILL_PATH (colon-separated, default
-               ~/.pi/agent/skills); a missing one is skipped with a warning
+               ~/.agents/skills:~/.pi/agent/skills); a missing one is skipped with a warning
 scripts/check-roles rejects any other key. Pi always gets --no-skills, so a
 global skill folder never leaks into a role: only listed skills load.
 """
@@ -47,7 +47,7 @@ def parse(path):
 
 def skill_roots(path):
     kit = os.path.dirname(os.path.dirname(os.path.abspath(path)))
-    return [os.path.join(kit, "agents", "skills"), os.path.join(kit, "skills")]
+    return [os.path.join(kit, ".agents", "skills")]
 
 
 def launch(path, to_file=False):
@@ -68,7 +68,7 @@ def launch(path, to_file=False):
                 break
         else:
             sys.exit(f"pi-role: skill {s} not found in {roots}")
-    ext = os.environ.get("OCTO_FEATHER_SKILL_PATH") or os.path.expanduser("~/.pi/agent/skills")
+    ext = os.environ.get("OCTO_FEATHER_SKILL_PATH") or os.path.expanduser("~/.agents/skills:~/.pi/agent/skills")
     for s in fm.get("externalSkills", []):
         hit = [os.path.join(d, s) for d in ext.split(":") if d and os.path.isfile(os.path.join(d, s, "SKILL.md"))]
         if hit:

@@ -4,12 +4,12 @@
 #
 # skillfile (github.com/eljulians/skillfile) pins upstream skills at exact SHAs
 # and preserves the tdd seam-gate patch across upstream updates
-# (.skillfile/patches). The managed tree materializes into agents/skills and is
-# committed. Pi loads it from there: herdr-spawn passes every skill directory
-# under skills/ and agents/skills/ with --skill, so there is no per-platform
-# mirror and nothing is installed into the user's Pi profile.
+# (.skillfile/patches). Every kit skill, vendored or local, lives in .agents/skills
+# (the Agent Skills convention, docs/adr/0018) and is committed. pi-role passes
+# each role's listed skills with --skill and turns discovery off, so nothing is
+# installed into the user's Pi profile.
 
-install-path  octo-feather  skill  agents/skills
+install-path  octo-feather  skill  .agents/skills
 
 # Managed upstream skills pinned at exact SHAs: mattpocock/skills (MIT) and pstack
 # (cursor/plugins, MIT). Patches: .skillfile/patches/skills/<name>/, first line = reason.
@@ -23,13 +23,13 @@ github  skill  domain-modeling  mattpocock/skills@49dd158d1076134a641b33efb03594
 github  skill  code-review      mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
 github  skill  correct          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/correct
 
-# octo-feather's own skills, authored locally under skills/ (most ported from octo-lite).
-local  skill  commit                  skills/commit
-local  skill  github                  skills/github
-local  skill  herdr-comms             skills/herdr-comms
-local  skill  nodejs                  skills/nodejs
-local  skill  pnpm                    skills/pnpm
-local  skill  pull                    skills/pull
-local  skill  push                    skills/push
-local  skill  python                  skills/python
-local  skill  typescript              skills/typescript
+# octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
+local  skill  commit                  .agents/skills/commit
+local  skill  github                  .agents/skills/github
+local  skill  herdr-comms             .agents/skills/herdr-comms
+local  skill  nodejs                  .agents/skills/nodejs
+local  skill  pnpm                    .agents/skills/pnpm
+local  skill  pull                    .agents/skills/pull
+local  skill  push                    .agents/skills/push
+local  skill  python                  .agents/skills/python
+local  skill  typescript              .agents/skills/typescript

@@ -16,7 +16,7 @@ TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write"}
 # Exactly the keys scripts/pi-role reads; anything else would be silently ignored.
 FIELDS = {"name", "description", "model", "thinking", "tools", "skills"}
 OPTIONAL = {"externalSkills"}  # resolved at launch; absent ones are skipped
-SKILL_ROOTS = [os.path.join(ROOT, "agents", "skills"), os.path.join(ROOT, "skills")]
+SKILL_ROOTS = [os.path.join(ROOT, ".agents", "skills")]
 
 errors = []
 def err(msg): errors.append(msg)
@@ -60,7 +60,7 @@ for role in ROLES:
             err(f"{rel}: unknown tool `{t}`; allowed {sorted(TOOLS)}")
     for s in lst(fm.get("skills", "")):
         if not any(os.path.isfile(os.path.join(r, s, "SKILL.md")) for r in SKILL_ROOTS):
-            err(f"{rel}: skill `{s}` not found under agents/skills/ or skills/")
+            err(f"{rel}: skill `{s}` not found under .agents/skills/")
     if not body:
         err(f"{rel}: empty body")
     if "model" in fm:

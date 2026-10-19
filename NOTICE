@@ -23,19 +23,19 @@ of docs/adr/0011):
     agents/implementer.md
     agents/code-reviewer.md
 
-    skills/commit/SKILL.md
-    skills/github/SKILL.md (was skills/octo-lite-github)
-    skills/herdr-comms/SKILL.md
-    skills/herdr-comms/assets/herdr-close
-    skills/herdr-comms/assets/herdr-say
-    skills/herdr-comms/assets/herdr-spawn
-    skills/herdr-comms/assets/herdr-wake
-    skills/nodejs/SKILL.md
-    skills/pnpm/SKILL.md
-    skills/pull/SKILL.md
-    skills/push/SKILL.md
-    skills/python/SKILL.md
-    skills/typescript/SKILL.md
+    .agents/skills/commit/SKILL.md
+    .agents/skills/github/SKILL.md (was skills/octo-lite-github)
+    .agents/skills/herdr-comms/SKILL.md
+    .agents/skills/herdr-comms/assets/herdr-close
+    .agents/skills/herdr-comms/assets/herdr-say
+    .agents/skills/herdr-comms/assets/herdr-spawn
+    .agents/skills/herdr-comms/assets/herdr-wake
+    .agents/skills/nodejs/SKILL.md
+    .agents/skills/pnpm/SKILL.md
+    .agents/skills/pull/SKILL.md
+    .agents/skills/push/SKILL.md
+    .agents/skills/python/SKILL.md
+    .agents/skills/typescript/SKILL.md
     scripts/octo-feather-start (was scripts/octo-lite-start)
     scripts/octo-feather-state (was scripts/octo-lite-state)
     Skillfile, Skillfile.lock
@@ -47,7 +47,7 @@ Copied unmodified from octo-lite as a reference for the spec format:
     .style/, .viz/; .viz/vendor/echarts-5.5.1.min.js is Apache ECharts,
     Apache-2.0)
 
-Vendored, not from octo-lite, under agents/skills/ with patches in .skillfile/patches/skills/
+Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/patches/skills/
 (pins in Skillfile.lock):
 
     tdd, implement, implement-spec, to-tickets, grill-with-docs, grilling,

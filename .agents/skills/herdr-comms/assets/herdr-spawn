@@ -15,7 +15,7 @@
 # launches this way (docs/adr/0016).
 set -euo pipefail
 
-root="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd -P)"
+root="$(cd "$(dirname "$(readlink -f "$0")")/../../../.." && pwd -P)"
 workspace=""; name=""; label=""; cwd="$PWD"; role=""; resume=""
 # The parent is the pane that spawns: the only pane this agent may report to
 # (docs/adr/0015). A resume passes the parked parent back with --parent.
@@ -91,7 +91,7 @@ launch_argv+=(--session-id "$session")
 # forwarded so the agent and every descendant keep the caller's git identity
 # and sessions; PATH gains the kit commands (herdr-say, octo-feather-state).
 tab_env=(--env "HOME=$HOME"
-  --env "PATH=$root/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
+  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")

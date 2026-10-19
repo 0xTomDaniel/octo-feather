@@ -46,7 +46,7 @@ out="$(herdr workspace create --label "$name" --cwd "$cwd" --no-focus)"
 workspace="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
 seed="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
 [[ -n "$workspace" && -n "$seed" ]] || { echo "octo-feather-start: workspace create returned no workspace or tab" >&2; exit 1; }
-spawned="$("$root/skills/herdr-comms/assets/herdr-spawn" --workspace "$workspace" --name "$name" \
+spawned="$("$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$workspace" --name "$name" \
   --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi)" || {
   rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
 # The workspace's seed tab is a bare shell; the agent's tab is the only one left.

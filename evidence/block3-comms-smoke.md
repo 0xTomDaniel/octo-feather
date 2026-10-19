@@ -11,6 +11,6 @@ Scratch target `/tmp/oft3` (AGENTS.md, `justfile` with `check` and `integrate`),
 
 Cost (Pi session logs): director $0.151, supervisor $0.169, implementer $0.052, total $0.372 (anthropic/claude-opus-5-5).
 
-Finding, fixed in `skills/herdr-comms`: the supervisor waited for the worker with a shell loop that grepped `herdr agent get` for `idle`; Herdr reports a finished agent as `done`, and the worker's result message queued behind the loop until its 300 s timeout. The skill now says to end the turn after a brief and names `done`.
+Finding, fixed in `.agents/skills/herdr-comms`: the supervisor waited for the worker with a shell loop that grepped `herdr agent get` for `idle`; Herdr reports a finished agent as `done`, and the worker's result message queued behind the loop until its 300 s timeout. The skill now says to end the turn after a brief and names `done`.
 
 Skill isolation: pi-role passes `--no-skills` and one `--skill` per listed skill, so the global `~/.pi/agent/skills` (Spec Chat) loads nothing a role does not list; `check-roles` asserts it. The supervisor lists Spec Chat's skills under `externalSkills`.

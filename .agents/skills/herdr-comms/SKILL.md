@@ -15,7 +15,7 @@ Every wrapper acts only in the caller's Herdr session,
 `octo-feather-state` prints the caller's session state directory, holding `lanes/`
 (lane records, hand-off logs, `archive/`), `director.toml`, and
 `director.handoffs.jsonl` (spec `#session-state`). Every spawned tab has the
-kit's `skills/herdr-comms/assets` and `scripts` on `PATH`.
+kit's `.agents/skills/herdr-comms/assets` and `scripts` on `PATH`.
 
 ## Layout (docs/adr/0011)
 

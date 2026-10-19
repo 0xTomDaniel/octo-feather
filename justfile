@@ -3,7 +3,7 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 root := justfile_directory()
-export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/skills/herdr-comms/assets:" + env_var('PATH')
+export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + env_var('PATH')
 
 default:
     @just --list
@@ -18,7 +18,7 @@ check-scripts:
     set -euo pipefail
     cd "{{root}}"
     files=(); py=()
-    for f in scripts/* skills/herdr-comms/assets/* tests/*; do
+    for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
       if head -1 "$f" | grep -q python; then py+=("$f"); else files+=("$f"); fi
     done
     for f in "${py[@]}"; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"; done
@@ -52,7 +52,8 @@ check-refs:
       echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
     # Retired words stay retired. Exempt: GLOSSARY.md (lists them), a spec anchor,
     # the corrector quoting pstack correct, and vendored skills (upstream wording).
-    mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE '^(agents/skills/|GLOSSARY\.md$)')
+    vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
+    mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE "^(\.agents/skills/(${vend%|})/|GLOSSARY\.md\$)")
     if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"'; then
       echo "check-refs: say director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
@@ -61,12 +62,14 @@ check-refs:
     exit "$bad"
 
 # No em or en dashes in kit text. Exempt upstream copies: spec/, LICENSE and
-# vendored skills (agents/skills/, .skillfile/patches/), which keep upstream wording.
+# vendored skills (the Skillfile's github entries in .agents/skills/, .skillfile/patches/),
+# which keep upstream wording.
 check-dashes:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "{{root}}"
-    mapfile -t files < <(git ls-files | grep -vE '^(spec/|agents/skills/|\.skillfile/|LICENSE$)')
+    vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
+    mapfile -t files < <(git ls-files | grep -vE "^(spec/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
     if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
@@ -77,7 +80,7 @@ check-skills:
     set -euo pipefail
     cd "{{root}}"
     n=0
-    for f in skills/*/SKILL.md agents/skills/*/SKILL.md; do
+    for f in .agents/skills/*/SKILL.md; do
       head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
       n=$((n + 1))
     done

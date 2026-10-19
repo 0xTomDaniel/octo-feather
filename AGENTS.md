@@ -8,17 +8,17 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 
 - Pi is the only agent runtime. No Claude/Codex config, no `CLAUDE.md`.
 - `AGENTS.md` is the only instruction file in any repo the kit touches.
-- Agents hand off to each other through Herdr (`skills/herdr-comms`). No workflow engine, no tracker, no daemon.
+- Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI). No unit tests of internals.
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
 - Enforce lessons in this order: architecture or types, then a lint or check whose error names the fix, then a test, then prose. Prose rules are the last resort.
-- Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.
+- Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.
 
 ## Layout
 
-- `agents/` role files, our frontmatter format read by `scripts/pi-role` (docs/adr/0016): director, supervisor, implementer, code-reviewer, corrector. Integration is a script, not an agent: `just integrate N REF...` (`scripts/octo-feather-integrate`, docs/adr/0017). Every agent launches through `scripts/pi-role`: in a Herdr pane via `herdr-spawn --role`, or headless with `-p`. `agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
+- `agents/` role files, our frontmatter format read by `scripts/pi-role` (docs/adr/0016): director, supervisor, implementer, code-reviewer, corrector. Integration is a script, not an agent: `just integrate N REF...` (`scripts/octo-feather-integrate`, docs/adr/0017). Every agent launches through `scripts/pi-role`: in a Herdr pane via `herdr-spawn --role`, or headless with `-p`. `.agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
 - `spec/` spec-chat HTML specs (`*.spec.html`). Today it holds octo-lite's own spec, kept as the format reference and for the `#anchors` the role contracts cite; it still describes Claude and Linear, so `docs/adr/` wins where they differ.
-- `skills/` kit skills, vendored or local.
+- `.agents/skills/` every kit skill, vendored (Skillfile `github` entries) or local (docs/adr/0018). Role files stay in `agents/`.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir).
 - `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just state`, and the stubs `just qc` (Jev product judge) and `just qa` (factory evals), which never run inside `just check`.

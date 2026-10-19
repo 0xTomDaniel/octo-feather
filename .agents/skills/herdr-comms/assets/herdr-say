@@ -41,7 +41,7 @@ here="$(dirname "$(readlink -f "$0")")"
 # The latest parked line naming TARGET by pane or name. A line without name is
 # the supervisor: the lane's name, its log's stem.
 parked() {
-  local line logs=("$("$here/../../../scripts/octo-feather-state")"/lanes/*.handoffs.jsonl)
+  local line logs=("$("$here/../../../../scripts/octo-feather-state")"/lanes/*.handoffs.jsonl)
   [[ -f "${logs[0]}" ]] || return 1
   line="$(jq -nc --arg t "$1" '[inputs | select(.kind == "parked")
     | .lane = (input_filename | split("/") | last | rtrimstr(".handoffs.jsonl"))
@@ -74,7 +74,7 @@ allowed() {
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$info" 2>/dev/null || true)"
   [[ -n "$pane" && "$pane" == "$parent" ]] && return 0
-  director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
+  director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
   [[ -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   return 1
@@ -91,7 +91,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")
     resume=(--cwd "$(jq -r .cwd <<<"$line")" --name "$name" --resume "$(jq -r .session <<<"$line")"
       --parent "$(jq -r '.parent // empty' <<<"$line")")
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
-      started="$("$here/../../../scripts/octo-feather-start" "${resume[@]}")"
+      started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
       started="$("$here/herdr-spawn" --workspace "${HERDR_WORKSPACE_ID:-}" --label "$(jq -r '.label // .name' <<<"$line")" \
         --role "$(jq -r '.role // empty' <<<"$line")" "${resume[@]}" -- pi)"
