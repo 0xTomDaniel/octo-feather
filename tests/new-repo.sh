@@ -95,6 +95,14 @@ git -c init.defaultBranch=main init -q "$copy"; git -C "$copy" add -A; git -C "$
     || fail "commit not by the kit identity: $(git -C "$t/work/kitid" log -1 --format='%an <%ae> %cn <%ce>')")
 grep -q 't <t@t> (your git identity)' <<<"$(run python ownid --no-spec-chat 2>&1)" || fail "caller identity not used or not printed"
 
+# DEST is data, never shell source: $, a space, a quote and a command substitution stay literal.
+for name in 'dollar$cash it'\''s' '$(touch marker)' '`touch marker`'; do
+  out="$(run python "$name" --no-spec-chat 2>&1)" || fail "DEST '$name': $out"
+  [[ "$(git -C "$t/work/$name" ls-tree -r --name-only HEAD | sort)" == "$(tracked "$kit/templates/python")" ]] \
+    || fail "DEST '$name': no repo at the literal path"
+done
+[[ ! -e "$t/work/marker" && ! -e "$t/marker" ]] || fail "a command in DEST was executed"
+
 # The caller's ignore rules (core.excludesFile, global git/ignore) never drop a template file.
 (export HOME="$t/home-ignores" XDG_CONFIG_HOME="$t/home-ignores/.config"
   mkdir -p "$XDG_CONFIG_HOME/git"
@@ -110,4 +118,4 @@ grep -q 't <t@t> (your git identity)' <<<"$(run python ownid --no-spec-chat 2>&1
   done)
 
 [[ -z "$(find "$HOME" -mindepth 1)" ]] || fail "created under HOME: $(find "$HOME" -mindepth 1)"
-echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; kit identity fallback; caller ignore rules drop nothing; nothing in HOME)"
+echo "new-repo: ok (${langs[*]}: tracked files only, one commit on main, clean status, links or none; 7 refusals create nothing; kit identity fallback; caller ignore rules drop nothing; DEST stays data; nothing in HOME)"
