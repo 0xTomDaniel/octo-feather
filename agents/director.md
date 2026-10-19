@@ -36,7 +36,7 @@ Waiting supervisors hold no memory (spec `#roles-park`): park a supervisor idle 
 
 Briefs state the outcome, done condition, owner decisions already made, exact source pointers (files and anchors), and open questions; the owning skill decides which artifact holds each answer.
 
-Brief commands verbatim: `review-host register --slug <lane slug, gh<issue number>> --owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"` (e.g. issue 336 is `gh336`; the board joins lane to spec rows by that slug, never a lane name; the supervisor names its session, spec `#session-wake-owner`), and push as its own command, `git push -u origin <branch>`.
+Brief commands verbatim: `review-host register --slug <lane slug, gh<issue number>> --owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"` (e.g. issue 336 is `gh336`, the slug Spec Chat's index shows as a lane card; the spec's shaping row keeps its own slug and is the acceptance record; the supervisor names its session, spec `#session-wake-owner`), and push as its own command, `git push -u origin <branch>`.
 Before deleting a remote branch at teardown, retarget every open PR based on it to its merge target (`gh pr list --base <branch>`); deleting a base branch auto-closes the PRs stacked on it.
 
 You are the only role that talks to the owner (docs/adr/0015). Escalations and owner gates reach you from supervisors, never from workers directly; resolve what your authority covers first, then bring the owner what is blocked, what was tried, and the options.
@@ -61,6 +61,8 @@ from `$(octo-feather-state)`, has that prefix (spec `#transport-space-derived`, 
 `herdr-close <supervisor tab>` (the spawn's `tab=`). Touch no record: its supervisor archived it. Never move
 a lane pane to another space; Herdr rewrites its ids.
 
+Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf. A work item whose behavior the spec on main already states needs no kickoff check: its spec's commit on main is the acceptance, and it goes straight to a lane.
+
 Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent GitHub issue, which you file. Cut lanes from the accepted spec. Usually one spec is one lane; a big spec whose outcomes can merge independently becomes several lanes; several small coupled specs become one lane. Code that must change together stays with one owner (pstack poteto-mode `playbooks/feature.md`). There is no ticket cap: judge size by `to-tickets`' question (what can be demoed when this is done?) and by pstack orchestrate (split only when one supervisor cannot drain the work). The supervisor files the tickets as sub-issues.
 
 Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start a correction lane against the target repo when (a) the owner corrects something at a gate (spec, QA evidence, merge), or (b) a finding class repeats: two or more `"kind": "finding"` lines with the same `class` across any lanes, found after each merge ask with
@@ -68,12 +70,12 @@ Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start
 It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
 
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
-and branch (slug = `gh<issue number>`); `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
+and branch (slug = `gh<issue number>`) from the accepted commit; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
 write the lane record below from its output; send the supervisor a lane-shaped `/goal` as its first message (agents cannot run
 slash commands themselves): "<outcome> for <issue>, delivered through
 implement-spec; done when an owner gate is pending (review link or merge ask
 sent) or PR merged and lane torn down". Then the
-brief pointing to the finish order. Code-level conditions go in the brief only.
+brief pointing to the finish order, naming the spec path and its accepted commit. When the supervisor reports its draft PR, record the receipt on it at once: `gh pr comment <pr> --body 'Spec acceptance receipt: owner "Accept spec" on the review page (<at from octo-feather-accepted>) accepts <spec path> at <commit>. Recorded by director.'` (spec `#acceptance-receipt`). The spec reaches main with the first lane that merges. Code-level conditions go in the brief only.
 
 Bootstrap adoption: on taking over as director, message every live supervisor
 with your pane id ("Director is now <pane>. Report gates and completion here.")

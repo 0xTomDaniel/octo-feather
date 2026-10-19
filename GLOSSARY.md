@@ -58,6 +58,14 @@ _Avoid_: Layer task, horizontal slice
 A lane's first ticket, run alone through the whole path before the rest fan out, to test the brief, the verification and the ticket size.
 _Avoid_: Spike, trial run
 
+**Spec handoff**:
+The accepted spec, at an exact commit, passing from shaping (done with the owner, outside the factory) to the director. It is the only thing that crosses; no work item exists before it.
+_Avoid_: Spec delivery, intake
+
+**Kickoff**:
+The owner telling the director to build one or more accepted specs. The director checks each is accepted at an exact commit, refuses any that is not, then cuts lanes.
+_Avoid_: Launch, go
+
 **Escalation**:
 A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up

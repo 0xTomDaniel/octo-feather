@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-integrate check-templates
+check: check-scripts check-refs check-dashes check-skills check-roles check-tests check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -107,9 +107,11 @@ check-templates:
     done
     echo "templates: ok ($n)"
 
-# Integration test of the integrate script in a throwaway repo (docs/adr/0017).
-check-integrate:
-    @"{{root}}/tests/integrate.sh"
+# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh).
+check-tests:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    for t in "{{root}}"/tests/*.sh; do "$t"; done
 
 # Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
 integrate issue +refs:

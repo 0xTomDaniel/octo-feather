@@ -25,3 +25,7 @@ Tom's caution: sol models tend to over-engineer and over-correct. The code revie
 ## Finding lines in the specs branch
 
 ADR 0020 adds a handoffs line `{"kind": "finding", "source", "class", "blocking", "summary"}` and the code reviewer's `class` tag. `spec/` on main is octo-lite's reference spec and stays untouched; the specs-v1 rewrite should define the finding line under `#handoff-fields`.
+
+## Spec Chat slugs after the spec handoff
+
+Shaping registers a spec under its own slug (not a lane key, so Spec Chat's index files it under Settled, not In progress); the lane later registers it again under `gh<N>`, a second row with its own id, threads cursor and `accepted` flag. The acceptance record is the shaping row, read by `octo-feather-accepted`. Jev's cross-lane checks pair rows of different slugs in one project, so a spec registered under both slugs may be paired with itself. Not patched (spec-chat is upstream); decide whether the lane re-registers or reuses the shaping row.

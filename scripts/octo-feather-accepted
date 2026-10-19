@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+"""octo-feather-accepted SPEC_PATH [--repo DIR]
+
+Kickoff check (docs/adr/0021): is SPEC_PATH accepted at an exact commit?
+Reads Spec Chat's review-host registries, one per Herdr session
+($SPEC_CHAT_STATE or ~/.local/state/spec-chat, then hosting/*/registry.toml):
+a row for that spec path with `accepted = true` whose `base` commit exists in
+--repo (default: cwd) and holds the spec.
+
+Prints `accepted <commit> slug=<slug> at=<updated_at> session=<dir>` and exits 0
+(the newest accepted row wins), or prints why not and exits 1. Reads only.
+"""
+import os, subprocess, sys, tomllib
+from pathlib import Path
+
+
+def main(argv):
+    args = list(argv)
+    repo = "."
+    if "--repo" in args:
+        i = args.index("--repo"); repo = args[i + 1]; del args[i:i + 2]
+    if len(args) != 1 or args[0] in ("-h", "--help"):
+        print(__doc__.strip(), file=sys.stderr); return 64
+    spec = args[0].lstrip("./")
+    state = Path(os.environ.get("SPEC_CHAT_STATE") or Path.home() / ".local/state/spec-chat")
+    rows = []
+    for reg in sorted(state.glob("hosting/*/registry.toml")):
+        try:
+            data = tomllib.loads(reg.read_text())
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            print(f"octo-feather-accepted: skipping {reg}: {e}", file=sys.stderr); continue
+        for r in data.get("resource", []):
+            if str(r.get("spec", "")).replace("\\", "/").lstrip("./") == spec and not r.get("test"):
+                rows.append((reg.parent.name, r))
+    if not rows:
+        print(f"not accepted: {spec} is not registered with the review service (register it, then Accept spec)"); return 1
+    accepted = [(s, r) for s, r in rows if r.get("accepted") is True]
+    if not accepted:
+        print(f"not accepted: {spec} is registered ({', '.join(sorted({r.get('slug', '?') for _, r in rows}))}) but no row is accepted; press Accept spec"); return 1
+    session, row = max(accepted, key=lambda sr: str(sr[1].get("updated_at", "")))
+    base = str(row.get("base", ""))
+    ok = subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{base}:{spec}"], capture_output=True).returncode == 0
+    if not ok:
+        print(f"not accepted: accepted commit {base[:12]} with {spec} is not in {os.path.abspath(repo)} (fetch spec/{row.get('slug', '<slug>')}?)"); return 1
+    print(f"accepted {base} slug={row.get('slug', '')} at={row.get('updated_at', '')} session={session}")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
