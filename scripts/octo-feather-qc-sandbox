@@ -1,0 +1,187 @@
+#!/usr/bin/env bash
+# octo-feather-qc-sandbox -- JUDGE_CMD...   the qc judge's sandbox (docs/adr/0022)
+#
+# Not run by hand: scripts/octo-feather-qc starts it as `unshare -rm
+# octo-feather-qc-sandbox -- pi-role ...`, so every mount below lives only in a
+# private mount namespace and dies with it. Order (lifted from lane #23):
+#   1. private /tmp (tmpfs); QC_KEEP paths (run dir, worktree, kit, PATH dirs) bound back
+#   2. tmpfs over the Herdr and gh config dirs; ~/.git-credentials and ~/.ssh masked
+#   3. caller's archived lanes and director log bound read-only at the scratch
+#      state dir; live lanes/, sessions/, director.toml masked
+#   4. QC_RO_BINDS bound read-only (seam for an evidence snapshot, ticket #34)
+#   5. env scrubbed, herdr shim pins a fresh per-run Herdr session, pi shim counts agents
+#   6. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66
+#   7. judge runs (stdout passes through, stderr to $QC_RUN/judge.err)
+#   8. post-run: count agents, stop and delete the sandbox session, kill every
+#      leftover process in this namespace, remove Pi credential copies; one
+#      cleanup line on stderr and $QC_RUN/post.json
+# Inputs (env, data only): QC_RUN run dir, QC_SESSION sandbox session name,
+# QC_STATE caller's state dir, QC_HERDR / QC_GH real binaries (empty: not
+# installed), QC_KEEP and QC_RO_BINDS newline-separated paths, QC_PATH_PREPEND
+# dirs put first on PATH (seam for a gh shim, ticket #34).
+# Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
+set -uo pipefail
+[[ "${1:-}" == -- ]] && shift
+R="$QC_RUN" S="$QC_SESSION" RS="$QC_STATE" HERDR="$QC_HERDR" GH="$QC_GH"
+keep="$QC_KEEP" robinds="${QC_RO_BINDS:-}" prepend="${QC_PATH_PREPEND:-}"
+unset QC_RUN QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND
+cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
+HC="$cfg/herdr" GC="${GH_CONFIG_DIR:-$cfg/gh}"
+TOP="${XDG_STATE_HOME:-$HOME/.local/state}/octo-feather"
+SB="$R/state/octo-feather/sessions/$S"
+proof="$R/proof.txt"; : > "$proof"
+say() { printf 'qc sandbox: %s\n' "$*" | tee -a "$proof" >&2; }
+me=$(readlink /proc/$$/ns/mnt)
+nsprocs() { for p in /proc/[0-9]*; do p=${p#/proc/}; [[ "$p" != "$$" && "$p" != "$BASHPID" && "$(readlink "/proc/$p/ns/mnt" 2>/dev/null)" == "$me" ]] && echo "$p"; done; }
+killed=()
+reap() {   # stop the sandbox session, then kill everything else left in this namespace
+  if [[ -n "$HERDR" ]]; then "$HERDR" session stop "$S" >/dev/null 2>&1; "$HERDR" session delete "$S" >/dev/null 2>&1; fi
+  local p c; for p in $(nsprocs); do
+    c=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null) || continue
+    killed+=("$p ${c:0:80}"); kill "$p" 2>/dev/null
+  done
+  ((${#killed[@]})) && sleep 1
+  for p in $(nsprocs); do kill -9 "$p" 2>/dev/null; done
+}
+die() { say "FAIL $*"; say "proof failed; judge not started (exit 66)"; reap; exit 66; }
+
+# 1. private /tmp, needed paths bound back from the old one (fd 3, closed before the judge).
+exec 3</tmp
+mount -t tmpfs tmpfs /tmp || die "mount tmpfs /tmp"
+chmod 1777 /tmp
+while IFS= read -r p; do
+  [[ -n "$p" && "$p" == /tmp/* ]] || continue
+  src="/proc/self/fd/3/${p#/tmp/}"; [[ -e "$src" ]] || continue
+  if [[ -d "$src" ]]; then mkdir -p "$p"; else mkdir -p "$(dirname "$p")"; touch "$p"; fi
+  mount --no-canonicalize --bind "$src" "$p" || die "bind back $p"   # canonicalizing would resolve to the new /tmp
+done <<< "$keep"
+probe="qc-tmp-probe-$S"; : > "/proc/self/fd/3/$probe"
+cd "$PWD" || die "re-enter $PWD"
+
+# 2. credentials and every live Herdr session out of reach.
+mkdir -p "$HC" && mount -t tmpfs tmpfs "$HC" && mkdir -p "$HC/sessions" || die "mask $HC"
+if [[ -d "$GC" ]]; then mount -t tmpfs tmpfs "$GC" || die "mask $GC"; fi
+for f in "$HOME/.git-credentials" "$cfg/git/credentials"; do
+  if [[ -e "$f" ]]; then mount --bind /dev/null "$f" || die "mask $f"; fi
+done
+if [[ -d "$HOME/.ssh" ]]; then mount -t tmpfs tmpfs "$HOME/.ssh" || die "mask ~/.ssh"; fi
+
+# 3. history read-only at the scratch state dir, then live records masked.
+mkdir -p "$SB/lanes" "$R/gh" "$R/bin"
+hist=0
+if [[ -d "$RS/lanes/archive" ]]; then
+  mkdir -p "$SB/lanes/archive"
+  mount --bind "$RS/lanes/archive" "$SB/lanes/archive" && mount -o remount,bind,ro "$SB/lanes/archive" || die "history archive"
+  hist=$((hist + 1))
+fi
+if [[ -f "$RS/director.handoffs.jsonl" ]]; then
+  touch "$SB/director.handoffs.jsonl"
+  mount --bind "$RS/director.handoffs.jsonl" "$SB/director.handoffs.jsonl" \
+    && mount -o remount,bind,ro "$SB/director.handoffs.jsonl" || die "history director log"
+  hist=$((hist + 1))
+fi
+masked=()
+for d in "$TOP" "$RS"; do
+  for x in lanes sessions; do
+    if [[ -d "$d/$x" ]]; then mount -t tmpfs tmpfs "$d/$x" || die "mask $d/$x"; masked+=("$d/$x"); fi
+  done
+  for x in director.toml director.handoffs.jsonl; do
+    if [[ -f "$d/$x" ]]; then mount --bind /dev/null "$d/$x" || die "mask $d/$x"; masked+=("$d/$x"); fi
+  done
+done
+
+# 4. seam: extra read-only binds (e.g. a GitHub evidence snapshot, ticket #34).
+while IFS= read -r p; do
+  [[ -n "$p" ]] || continue
+  mount --bind "$p" "$p" && mount -o remount,bind,ro "$p" || die "read-only bind $p"
+done <<< "$robinds"
+
+# 5. env and shims.
+unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE \
+  HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV \
+  GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK
+export HERDR_SESSION="$S" XDG_STATE_HOME="$R/state" SPEC_CHAT_STATE="$R/state/spec-chat" \
+  GH_CONFIG_DIR="$R/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp
+realpi=$(command -v pi || echo pi)
+{ echo '#!/usr/bin/env bash'
+  echo '# qc sandbox pi shim: log each start, one line (agents count), then run the real pi.'
+  printf 'echo "$$" >> %q\n' "$R/agents.log"
+  printf 'exec %q "$@"\n' "$realpi"
+} > "$R/bin/pi"
+if [[ -n "$HERDR" ]]; then
+  { echo '#!/usr/bin/env bash'
+    echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine.'
+    echo 'args=()'
+    echo 'while (($#)); do case "$1" in'
+    echo '  --session|--remote|--machine) shift; (($#)) && shift; continue;;'
+    echo '  --session=*|--remote=*|--machine=*) shift; continue;; esac; args+=("$1"); shift; done'
+    printf 'exec env -u HERDR_PANE_ID %q --session %q "${args[@]}"\n' "$HERDR" "$S"
+  } > "$R/bin/herdr"
+  export HERDR_BIN_PATH="$R/bin/herdr" HERDR_SOCKET_PATH="$HC/sessions/$S/herdr.sock"
+fi
+chmod +x "$R"/bin/*
+PATH="$R/bin:$PATH"
+[[ -n "$prepend" ]] && PATH="$prepend:$PATH"
+export PATH
+if [[ -n "$HERDR" ]]; then
+  setsid "$HERDR" --session "$S" server >/dev/null 2>&1 < /dev/null &
+  for _ in $(seq 50); do "$HERDR" --session "$S" workspace list >/dev/null 2>&1 && break; sleep 0.2; done
+fi
+
+# 6. pre-run proof.
+fails=0
+check() { if [[ "$1" == 0 ]]; then say "ok   $2"; else say "FAIL $2"; fails=$((fails+1)); fi; }
+t() { "$@" >/dev/null 2>&1; echo $?; }   # exit status as data
+if [[ -n "$HERDR" ]]; then
+  r=$(t "$HERDR" --session default workspace list); check $((r == 0)) "live Herdr unreachable: raw herdr --session default workspace list exits $r"
+  a=$(herdr --session default --remote x --machine y workspace list 2>&1); b=$("$HERDR" --session "$S" workspace list 2>&1)
+  check "$(t test -n "$b" -a "$a" = "$b")" "herdr shim pins sandbox session $S despite --session default --remote --machine"
+  ls_s=$(ls -A "$HC/sessions" | tr '\n' ' '); check "$(t test "$ls_s" = "$S ")" "Herdr config shows only the sandbox session: [${ls_s% }]"
+else
+  say "ok   herdr not installed: no Herdr session reachable"
+fi
+tok=$(env | grep -cE '^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN)=')
+ghls=$(ls -A "$GC" 2>/dev/null | tr '\n' ' ')
+cred=$(cat "$HOME/.git-credentials" "$cfg/git/credentials" 2>/dev/null | wc -c)
+r=1; [[ -n "$GH" ]] && r=$(t "$GH" auth status)
+check "$(t test "$tok" = 0 -a -z "$ghls" -a "$cred" = 0 -a "$r" != 0)" "no gh or git creds: tokens $tok, gh config [${ghls% }], git-credentials ${cred} bytes, gh auth status exits $r"
+route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
+check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
+st=$("$(dirname "$0")/octo-feather-state")
+check "$(t test "$st" = "$SB")" "state dir is per-run scratch: $st"
+w=0   # 1 when a history path is writable
+[[ -d "$SB/lanes/archive" ]] && touch "$SB/lanes/archive/.w" 2>/dev/null && w=1
+[[ -f "$SB/director.handoffs.jsonl" ]] && (: >> "$SB/director.handoffs.jsonl") 2>/dev/null && w=1
+live=0; for m in "${masked[@]}"; do [[ -d "$m" ]] && live=$((live + $(ls -A "$m" | wc -l))); [[ -f "$m" ]] && live=$((live + $(wc -c < "$m"))); done
+got=0; [[ -d "$SB/lanes/archive" ]] && got=$((got + 1)); [[ -f "$SB/director.handoffs.jsonl" ]] && got=$((got + 1))
+check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = "$hist")" "history read-only ($got of $hist bound: archive $(find "$SB/lanes/archive" -type f 2>/dev/null | wc -l) files, director log $(cat "$SB/director.handoffs.jsonl" 2>/dev/null | wc -l) lines); live records masked (${#masked[@]} paths, $live bytes or entries visible)"
+check "$(t test ! -e "/tmp/$probe")" "/tmp is private (Pi credential copies cannot outlive the run)"
+rm -f "/proc/self/fd/3/$probe"; exec 3<&-
+ro=0; while IFS= read -r p; do [[ -n "$p" ]] && touch "$p/.w" 2>/dev/null && ro=1; done <<< "$robinds"
+[[ -n "$robinds" ]] && check "$ro" "extra binds read-only"
+dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(t test "$(wc -l <<< "$dirty")" = 1)" "worktree clean at $dirty"
+((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; reap; exit 66; }
+
+# 7. the judge.
+touch "$R/started"
+"$@" 2> "$R/judge.err"; rc=$?
+
+# 8. post-run cleanup.
+panes=0
+[[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
+headless=$(( $(wc -l < "$R/agents.log" 2>/dev/null || echo 0) ))
+((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
+reap
+left=$(nsprocs); left=$(wc -w <<< "$left")
+mapfile -t creds < <(find /tmp "$R" \( -name auth.json -o -name models.json \) -newer "$R/started" 2>/dev/null)
+((${#creds[@]})) && rm -f "${creds[@]}"
+credsleft=$(find /tmp "$R" \( -name auth.json -o -name models.json \) -newer "$R/started" 2>/dev/null | wc -l)
+say "cleanup: agents started $((headless + panes)) (headless pi $headless, Herdr panes $panes); leftover processes killed ${#killed[@]}, left $left; Pi credential copies removed ${#creds[@]}, left $credsleft; session $S stopped and deleted"
+python3 - "$R/post.json" "$headless" "$panes" "$left" "${#creds[@]}" "$credsleft" "$S" "${killed[@]}" <<'EOF'
+import json, sys
+a = sys.argv
+json.dump({"session": a[7], "agents_started": int(a[2]) + int(a[3]), "headless_pi": int(a[2]), "herdr_panes": int(a[3]),
+           "killed": a[8:], "left_after_kill": int(a[4]), "credential_copies_removed": int(a[5]),
+           "credential_copies_left": int(a[6])}, open(a[1], "w"), indent=2)
+EOF
+exit "$rc"

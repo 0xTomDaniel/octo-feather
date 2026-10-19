@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qc STATUS PR ID...   interim product QC (`just qc`, docs/adr/0022)
+"""octo-feather-qc STATUS PR ID... [--no-sandbox]   interim product QC (`just qc`, docs/adr/0022)
 
 Run in a lane worktree at its integrated head. A fresh, read-only code-reviewer
 (agents/code-reviewer.md, headless through pi-role) gets a QC brief: judge the
@@ -9,13 +9,23 @@ output. Then this script, not the judge, sets each passed criterion to built in
 PR and each failed one to planned, and commits only the status file. The judge
 model's family (the part before "/") must differ from the implementer's.
 
+The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
+which documents its mounts and checks): a pre-run proof is printed and any
+failed check aborts before the judge starts; after it exits, leftovers are
+killed and the agents it started are counted.
+  --no-sandbox           debugging only: prints UNSANDBOXED, writes the report,
+                         never changes or commits the status file
   OCTO_FEATHER_QC_MODEL  judge model override (still checked against the family)
   OCTO_FEATHER_QC_ARGS   extra pi args, e.g. "--thinking off" for a smoke
-Report: $(octo-feather-state)/qc/<head>.json (judge's report plus the raw run).
-Exit: 0 all passed, 1 some failed, 3 judge report unusable or the judge wrote
-files, 64 usage or same-family judge, 65 dirty worktree.
+  OCTO_FEATHER_QC_RO_BINDS, OCTO_FEATHER_QC_PATH  ":"-separated paths bound
+                         read-only into the sandbox / put first on its PATH
+Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
+(judge's report, raw run, proof and cleanup).
+Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable or
+the judge wrote files, 64 usage or same-family judge, 65 dirty worktree,
+66 sandbox unavailable or a pre-run proof check failed (judge not started).
 """
-import json, os, re, shlex, subprocess, sys, time
+import json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -75,7 +85,52 @@ Your final message is exactly one fenced json block and nothing else:
 ```"""
 
 
+def sandboxed(judge, session):
+    """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record) or die 66."""
+    unshare = shutil.which("unshare")
+    if not unshare:
+        die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "octo-feather" / "qc-runs"
+    cache.mkdir(parents=True, exist_ok=True)
+    run_dir = Path(tempfile.mkdtemp(prefix=f"{session}-", dir=cache))
+    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
+    top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
+    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p]
+    pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
+    # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
+    want = [run_dir, git("rev-parse", "--show-toplevel"), KIT, state, top, Path.home(), *ro, *pre,
+            *os.environ.get("PATH", "").split(":")]
+    keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
+    keep = [p for p in keep if p.startswith("/tmp/")]
+    env = dict(os.environ, QC_RUN=str(run_dir), QC_SESSION=session, QC_STATE=str(state),
+               QC_HERDR=shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
+               QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre))
+    p = subprocess.run([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
+                       env=env, stdout=subprocess.PIPE, text=True)
+    read = lambda n: (run_dir / n).read_text() if (run_dir / n).exists() else ""
+    record = {"session": session, "proof": read("proof.txt").splitlines()}
+    started = (run_dir / "started").exists()
+    if started:
+        record.update(json.loads(read("post.json") or "{}"))
+    # Belt: anything outside the namespace still carrying the sandbox session (none expected).
+    stray = []
+    for d in Path("/proc").glob("[0-9]*"):
+        try:
+            if f"HERDR_SESSION={session}".encode() in (d / "environ").read_bytes().split(b"\0"):
+                os.kill(int(d.name), 9); stray.append(int(d.name))
+        except (OSError, ValueError):
+            pass
+    record["killed_outside_namespace"] = stray
+    err = read("judge.err")
+    shutil.rmtree(run_dir, ignore_errors=True)
+    if not started:
+        return None, record
+    return subprocess.CompletedProcess(judge, p.returncode, p.stdout, err), record
+
+
 def main(argv):
+    nosb = "--no-sandbox" in argv
+    argv = [a for a in argv if a != "--no-sandbox"]
     if len(argv) < 3 or not argv[1].isdigit():
         print(__doc__.strip(), file=sys.stderr); return 64
     status, pr, ids = Path(argv[0]), int(argv[1]), argv[2:]
@@ -98,13 +153,21 @@ def main(argv):
                          criteria="\n".join(f"- {i}: {text.get(i, '')}" for i in ids))
     cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "code-reviewer.md"),
            "--skill", str(KIT / ".agents" / "skills" / "principle-prove-it-works"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
-    t0 = time.time()
-    run = subprocess.run(cmd, capture_output=True, text=True)
+    runid = secrets.token_hex(3)
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
-    report_path = out_dir / f"{head}.json"
-    raw = {"head": head, "model": model, "ids": ids, "exit": run.returncode, "seconds": round(time.time() - t0),
-           "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
+    t0 = time.time()
+    if nosb:
+        print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
+        run, sandbox = subprocess.run(cmd, capture_output=True, text=True), False
+    else:
+        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}")
+        if run is None:
+            report_path.write_text(json.dumps({"head": head, "model": model, "ids": ids, "sandbox": sandbox}, indent=2))
+            die(66, f"sandbox proof failed or sandbox unavailable; judge not started (report {report_path})")
+    raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "sandbox": sandbox,
+           "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
 
     if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
         report_path.write_text(json.dumps(raw, indent=2))
@@ -125,6 +188,11 @@ def main(argv):
 
     passed = [i for i in ids if verdicts[i]["verdict"] == "pass"]
     failed = [i for i in ids if i not in passed]
+    if nosb:
+        for i in ids:
+            print(f"{verdicts[i]['verdict'].upper()} {i}: $ {verdicts[i]['command']}")
+        print(f"qc: UNSANDBOXED, {len(passed)}/{len(ids)} passed at {head[:12]}; status file not changed; report {report_path}")
+        return 1
     for i in passed:
         data["criteria"][i] = {"status": "built", "pr": pr}
     for i in failed:
