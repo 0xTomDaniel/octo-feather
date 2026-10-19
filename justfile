@@ -122,6 +122,10 @@ check-spec-status:
 shape *args:
     cd "{{invocation_directory()}}" && octo-feather-shape {{args}}
 
+# Spec Chat's skills into REPO/.agents/skills as git-ignored links into $SPEC_CHAT_CLONE (default ~/src/spec-chat); no provider links (docs/adr/0001).
+spec-chat repo:
+    cd "{{invocation_directory()}}" && octo-feather-spec-chat "{{repo}}"
+
 # Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
 integrate issue +refs:
     cd "{{invocation_directory()}}" && octo-feather-integrate "{{issue}}" {{refs}}
