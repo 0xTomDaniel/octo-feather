@@ -18,13 +18,15 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   thinking     --thinking
   tools        --tools (built-in Pi tools only)
   skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018)
-  externalSkills  optional: skills installed outside the kit (Spec Chat's), looked
-               up in $OCTO_FEATHER_SKILL_PATH (colon-separated, default
-               ~/.agents/skills:~/.pi/agent/skills); a missing one is skipped with a warning
+  externalSkills  optional: skills installed into the target repo, not the kit
+               (Spec Chat's), looked up in the target repo's .agents/skills: the
+               working directory's checkout, then its main checkout (a lane
+               worktree lacks the gitignored install links). Never in home.
+               A missing one is skipped with a warning
 scripts/check-roles rejects any other key. Pi always gets --no-skills, so a
 global skill folder never leaks into a role: only listed skills load.
 """
-import hashlib, json, os, re, sys
+import hashlib, json, os, re, subprocess, sys
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
 LIST_KEYS = {"tools", "skills", "externalSkills"}
@@ -50,6 +52,23 @@ def skill_roots(path):
     return [os.path.join(kit, ".agents", "skills")]
 
 
+def repo_skill_roots(cwd="."):
+    """The target repo's .agents/skills: this checkout's, then the main checkout's."""
+    def git(*a):
+        r = subprocess.run(["git", "-C", cwd, *a], capture_output=True, text=True)
+        return r.stdout.strip() if r.returncode == 0 else ""
+    tops = [git("rev-parse", "--show-toplevel") or os.path.abspath(cwd)]
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+    if common.endswith("/.git"):
+        tops.append(os.path.dirname(common))
+    roots = []
+    for t in tops:
+        r = os.path.join(t, ".agents", "skills")
+        if r not in roots:
+            roots.append(r)
+    return roots
+
+
 def launch(path, to_file=False):
     fm, body = parse(path)
     args = []
@@ -68,13 +87,13 @@ def launch(path, to_file=False):
                 break
         else:
             sys.exit(f"pi-role: skill {s} not found in {roots}")
-    ext = os.environ.get("OCTO_FEATHER_SKILL_PATH") or os.path.expanduser("~/.agents/skills:~/.pi/agent/skills")
+    ext = repo_skill_roots()
     for s in fm.get("externalSkills", []):
-        hit = [os.path.join(d, s) for d in ext.split(":") if d and os.path.isfile(os.path.join(d, s, "SKILL.md"))]
+        hit = [os.path.join(d, s) for d in ext if os.path.isfile(os.path.join(d, s, "SKILL.md"))]
         if hit:
             args += ["--skill", hit[0]]
         else:
-            print(f"pi-role: external skill {s} not installed in {ext}; skipped", file=sys.stderr)
+            print(f"pi-role: external skill {s} not installed in {' or '.join(ext)}; skipped", file=sys.stderr)
     if body:
         if to_file:
             # A pane launch goes through `herdr agent start`; hand Pi a file,
