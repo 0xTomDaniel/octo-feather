@@ -3,40 +3,40 @@
   "accepted_commit": "bfb3a92",
   "criteria": {
     "acceptance-tab-headless-same": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-family-guard": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-unknown-key": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-unresolved-skill": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-unknown-model": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-no-skill-leak": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-director-tools": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-supervise-layout": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-worker-in-lane": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     }
   }
 }
