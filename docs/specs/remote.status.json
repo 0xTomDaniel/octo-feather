@@ -3,8 +3,8 @@
   "accepted_commit": "bfb3a92",
   "criteria": {
     "acceptance-login-gate": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-signed-in": {
       "status": "planned",
