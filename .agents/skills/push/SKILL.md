@@ -23,8 +23,7 @@ update the PR for a shaped GitHub issue.
 ## Workflow
 
 1. Identify the branch with `git branch --show-current`.
-2. Verify the branch matches the target repo convention, else
-   `octo-feather/gh<issue-number>-<slug>`.
+2. Verify the branch is the lane's, named per docs/adr/0011.
 3. Push with upstream tracking, naming the branch, as its own command (never
    `HEAD`, never chained): `git push -u origin <branch>`.
 4. If push is rejected because the branch is stale, use the `pull` skill, rerun
