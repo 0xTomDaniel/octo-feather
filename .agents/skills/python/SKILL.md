@@ -1,27 +1,44 @@
 ---
 name: python
-description: Python stack policy for octo-feather implementer work when durable repo signals show Python is in scope.
+description: Python stack policy for implementer work. Use only when durable repo signals show a Python project and work touches Python code, packaging, virtual environments, type checking, testing, linting, or command execution.
 ---
 
 # Python
 
-## Communication Style
+## When To Use
 
-Be extremely concise. Sacrifice grammar for the sake of concision.
-No em-dashes or en-dashes. Ever.
+Use this skill only when the issue body, specs, ADRs, or repository files show
+that Python implementation or tooling is in scope. Durable repository signals
+include `.py` files, `pyproject.toml`, `requirements*.txt`, `uv.lock`,
+`poetry.lock`, `Pipfile`, Python test files, Python CI jobs, or Python-specific
+handoff notes.
 
-Use this skill only when the target repo contains durable Python signals such
-as `.py` files, `pyproject.toml`, requirements files, `uv.lock`,
-`poetry.lock`, `Pipfile`, Python tests, or Python CI docs.
+Do not impose Python conventions on unrelated repositories or issues. Existing
+project tooling and validation commands take precedence over defaults here.
 
-## Rules
+## Tooling Defaults
 
-- Use the environment manager and test commands already selected by the repo.
-- Do not introduce a new package manager or formatter unless the issue requires
-  it.
-- Preserve existing typing, linting, and test conventions.
-- Keep dependency changes scoped and update lockfiles when required by the repo.
-- Record validation commands and failures in the PR or handoff.
+- Use `uv` for environment management, dependency management, and command execution.
+- Prefer `pyproject.toml` as the package and tool configuration surface.
+- Use `uv add`, `uv remove`, and `uv sync` instead of editing dependency lists by hand when a managed Python project is in scope.
+- Use `uv run` for repo commands so the managed environment stays authoritative.
 
-Stop for shaping/owner clarification when Python packaging or runtime
-behavior needs a durable decision not present in specs or repo docs.
+## Type Safety
+
+- Prefer fully typed code, including function signatures, return types on public interfaces, and structured data models.
+- Avoid `Any` except at unavoidable third-party boundaries, and narrow it immediately when you must use it.
+- Prefer `Protocol`, `TypedDict`, `dataclass`, or Pydantic-style models over unstructured dictionaries for stable contracts.
+- Validate external inputs and outputs at application boundaries.
+
+## Testing And Quality
+
+- Prefer `pytest` for tests.
+- Prefer `ruff` for linting and formatting.
+- Use `basedpyright` in strict mode for static type checking, as `templates/python` does.
+- Use replay-based integration tests when realistic HTTP payloads matter.
+
+## Workflow Notes
+
+- Keep environment setup reproducible in the repo, not in ad hoc shell state.
+- Separate linting, formatting, tests, and type checking into explicit commands; `just check` runs them all (in `templates/python`: ruff check, ruff format, basedpyright, import-linter, pytest), and `just setup` installs the environment.
+- If a repo has multiple implementation languages, apply each relevant language policy before making cross-language changes.

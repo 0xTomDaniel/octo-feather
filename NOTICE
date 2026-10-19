@@ -34,8 +34,6 @@ of docs/adr/0011):
     .agents/skills/pnpm/SKILL.md
     .agents/skills/pull/SKILL.md
     .agents/skills/push/SKILL.md
-    .agents/skills/python/SKILL.md
-    .agents/skills/typescript/SKILL.md
     scripts/octo-feather-start (was scripts/octo-lite-start)
     scripts/octo-feather-state (was scripts/octo-lite-state)
     Skillfile, Skillfile.lock
@@ -55,5 +53,9 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
     correct, principle-prove-it-works, blast-radius, sharpen: cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan
+    .agents/skills/python, .agents/skills/typescript: ported from
+    EmberAGI/scaling-octo-engine@ef11d2b9 at Tom's direction, with the unit-test
+    content, the Octo workflow paragraphs and the pnpm build commands removed
+    (local skills, edited in place)
     agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
     (same pin and license).

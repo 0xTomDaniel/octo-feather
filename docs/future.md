@@ -68,6 +68,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, fan-out (Tom's spec comment): after the pilot, two independent tickets get two implementers at once. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Implementer and code reviewer, new pstack skills (principle-prove-it-works, blast-radius): the implementer reports with a re-runnable proof; the reviewer names the one safety fact and how far it was proven. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Owner shaping chat (`just shape`): asked to change factory code, it shapes a spec instead, using only the shaping skills. Smoke: `evidence/2026-10-19-role-probes.md`.
+- Implementer, language skills (python, typescript from scaling-octo-engine@ef11d2b9): in a template copy, a new CLI command gets integration/E2E tests only (no unit tier), `just check` as the gate, basedpyright strict in Python, Zod 4 `z.strictObject` only where a new TS repo validates wire input. Smoke: `evidence/2026-10-19-language-skills-smoke.md`.
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`
@@ -77,3 +78,11 @@ After Thursday 10-22: `octo-feather-spec-status reaccept STATUS COMMIT --reset I
 ## Status file deleted beside its spec
 
 After Thursday 10-22, with the target wiring above: `octo-feather-spec-status check` fails when `<slug>.status.json` exists at the merge-base with main (`git ls-tree`) but is missing from the work tree while `<slug>.spec.html` remains, naming the file. A draft spec without a status file stays legal; retiring a spec deletes both files. One test case (audit F04).
+
+## Effect pilot
+
+Effect pilot after Thu 10-22: one small project tries Effect v4 (Schema in core `effect`); decide on adoption from the result. Not for the first factory run. Until then the typescript skill says: the repo's existing schema library, Zod 4 in a new repo (Tom, 2026-10-19).
+
+## TypeScript 7 in templates/typescript
+
+Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API and typescript-eslint, knip and dependency-cruiser support it (7.0 GA 2026-07-08 has no API; the npm-alias bridge was rejected because it puts two compilers in every repo). Until then it stays on `typescript ~6.0.3` (Tom, 2026-10-19).
