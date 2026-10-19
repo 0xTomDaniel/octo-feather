@@ -3,28 +3,28 @@
   "accepted_commit": "bfb3a92",
   "criteria": {
     "acceptance-fresh-green": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-type-error": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-layer-break": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-cli-json": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-same-gate": {
       "status": "planned",
       "pr": null
     },
     "acceptance-target-agents-md": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     }
   }
 }
