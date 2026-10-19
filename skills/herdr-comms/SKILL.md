@@ -45,12 +45,12 @@ One tab, one pane, one agent, at an explicit worktree. Prints:
 name= role= tab= pane= cwd= contract= provider_session_id=
 ```
 
-The model and thinking level come from Pi's own settings. This pins no model.
-
-`--role` is not just a label: `herdr-spawn` appends this kit's
-`agents/ROLE.md` to Pi's system prompt (`--append-system-prompt FILE`) and
-fails when it is missing. Every kit skill under `skills/` loads with
-`--skill DIR`, so nothing is installed into the user's Pi profile. Each agent
+`--role` is not just a label: `herdr-spawn` launches Pi through
+`scripts/pi-role agents/ROLE.md` (docs/adr/0016): the role's model, thinking,
+tool allowlist and listed skills (`--skill DIR`), and its body appended to Pi's
+system prompt. Pi loads the target's `AGENTS.md` from `--cwd`. Nothing is
+installed into the user's Pi profile. A one-shot run with no pane is
+`pi-role agents/ROLE.md -p "<brief>"` in the worktree; its stdout is the report. Each agent
 gets a fresh `--session-id`, reported as `provider_session_id=`.
 
 `--operating-model FILE` is optional. It is appended to Pi's system prompt

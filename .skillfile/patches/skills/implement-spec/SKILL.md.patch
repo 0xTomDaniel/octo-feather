@@ -31,7 +31,7 @@
  6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
  
 -7. Once all tickets are complete, call the Skill tool with `code-review` on the integration branch. Fix all issues raised by the code review in a single **implementer subagent**.
-+7. Once all tickets are complete and `just check` is green, run a fresh `corrector` child (`subagent`, own worktree off the integration head; integrate its commits like a ticket), then a fresh `code-reviewer` child on the integration branch. Never review in your own context. Fix all issues raised by the code review in a single **implementer subagent**.
++7. Once all tickets are complete and `just check` is green, spawn a fresh `corrector` (`herdr-spawn --role corrector`, own worktree off the integration head; integrate its commits like a ticket), then a fresh `code-reviewer` pane on the integration branch. Never review in your own context. Fix all issues raised by the code review in a single **implementer subagent**.
  
 -8. If a draft PR exists, mark it ready for review. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 +8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.

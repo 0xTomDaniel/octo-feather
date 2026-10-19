@@ -10,10 +10,9 @@
 # freshly created pane is not yet at a shell prompt, and the agent may open a
 # trust dialog that traps the session. Both are handled and verified.
 #
-# The role is this kit's agents/<role>.md, a pi-subagents agent file. pi-role
-# turns its frontmatter into Pi flags (model, thinking, tool allowlist, skills,
-# system prompt), so a role gets the same capabilities in a pane as it does as
-# a pi-subagents child (docs/adr/0013).
+# The role is this kit's agents/<role>.md. pi-role turns its frontmatter into
+# Pi flags (model, thinking, tool allowlist, skills, system prompt); every agent
+# launches this way (docs/adr/0016).
 set -euo pipefail
 
 root="$(cd "$(dirname "$(readlink -f "$0")")/../../.." && pwd -P)"
@@ -95,7 +94,6 @@ tab_env=(--env "HOME=$HOME"
   --env "PATH=$root/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
-while IFS= read -r kv; do tab_env+=(--env "$kv"); done < <(jq -r '.env | to_entries[] | "\(.key)=\(.value)"' <<<"$role_json")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")
 out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
 tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"

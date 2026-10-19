@@ -8,9 +8,9 @@ Two-axis review of the diff between `HEAD` and a fixed point the user supplies:
 - **Standards**: does the code conform to this repo's documented coding standards?
 - **Spec**: does the code faithfully implement the originating issue / spec?
 
-The two axes run as **separate sequential passes** so one doesn't color the other: finish and write down the Spec report, then start the Standards pass from the diff alone, and never revise one report during the other. (octo-feather: a pi-subagents child reviewer has no sub-agents of its own, docs/adr/0013.) Then aggregate.
+The two axes run as **separate sequential passes** so one doesn't color the other: finish and write down the Spec report, then start the Standards pass from the diff alone, and never revise one report during the other. (octo-feather: the reviewer is one Pi pane with no children, docs/adr/0016.) Then aggregate.
 
-The tracker is GitHub Issues (`gh issue view`). Anything you would ask the user, escalate instead with `herdr-say --parent` (or, as a pi-subagents child, put it in your final message): what is blocked, what you tried, what you need (docs/adr/0015).
+The tracker is GitHub Issues (`gh issue view`). Anything you would ask the user, escalate instead with `herdr-say --parent`: what is blocked, what you tried, what you need (docs/adr/0015).
 
 ## Process
 

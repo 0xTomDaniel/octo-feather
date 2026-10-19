@@ -14,10 +14,6 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 
 `spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#acceptance-receipt`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
 
-## Hard limit on which agents a supervisor pane may launch
-
-`allowedAgents: code-reviewer` binds only when a role runs as a pi-subagents child. In a pane the supervisor could launch a builtin (scout, worker, delegate, the claude/codex runners). Options: a pi-subagents setting such as `subagents.disableBuiltins` passed to pane sessions, or a small patch. See docs/adr/0013.
-
 ## Spec Chat skills for the supervisor
 
 octo-lite's supervisor listed `spec-chat-shape` and `spec-chat-review`, which live in the Spec Chat peer repo. They were dropped from `agents/supervisor.md` because nothing provides them on the remote; add them to its `skills` and `skillPath` once Spec Chat is installed there.
@@ -33,11 +29,3 @@ Tom has not chosen the integrator's model yet; `agents/integrator.md` still carr
 ## Reviewer scope drift (gpt-6.1-sol)
 
 Tom's caution: sol models tend to over-engineer and over-correct. The code reviewer must judge only against the ticket's acceptance criteria and the spec. `agents/code-reviewer.md` already covers part of this ("judge against the shaped scope and the spec, not against preference"; "block only on broken behavior or clearly over-built work"; "a finding that cannot name a consequence is a note"). Risk: Matt's `code-review` Standards axis asks for baseline smells, which invites findings outside the criteria. To verify: a rehearsal check, plus an eval case where an out-of-criteria finding must not block. Flagged only, not fixed.
-
-## pi-subagents weight
-
-v0.79.1 is 15 MB with about 114k lines of JS, around 14 subsystems (missions, workflows, watchdog, intercom, tui, inspectors, policy, profiles and others) and 5 runtime dependencies. It released 0.57 to 0.79 in about 7 weeks (two releases on 10-17). It runs in-process, adds 2 skills and 6 prompts to every session that loads it, and ships claude/codex/cursor runner agents. Its Herdr placement cannot target our workspaces or tabs. Option: keep the frontmatter format (docs/adr/0013) and replace the package with `pi-role` plus a small child launcher. Revisit after Thursday.
-
-## Headless children through pi-role (test after Thursday)
-
-Test whether `pi-role AGENT_FILE -p TASK` (or `--mode json`) can stand in for pi-subagents as the launcher for headless children: the code reviewer, `correct` and a judge. Pass if the child gets its role's model, thinking, tool allowlist and skills, its final message comes back to the supervisor intact, cost is visible, and a supervisor can run it from a pane with no extension loaded. If it passes, remove the pinned pi-subagents package (`.pi/settings.json`, `just install`, the `subagent` tool and `allowedAgents` in role files) and keep the frontmatter format (docs/adr/0013).

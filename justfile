@@ -80,13 +80,9 @@ check-skills:
     done
     echo "skills: ok ($n skills, 6 roles)"
 
-# Role files: pi-subagents frontmatter, skills resolve, allowed models (docs/adr/0013).
+# Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0016).
 check-roles:
     @python3 "{{root}}/scripts/check-roles"
-
-# Install the pinned project-local pi-subagents (.pi/settings.json) into .pi/npm.
-install:
-    cd "{{root}}" && pi install -l "$(jq -r '.packages[] | select(startswith("npm:pi-subagents@"))' .pi/settings.json)"
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent).
 install-check:
@@ -98,9 +94,6 @@ install-check:
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
-    pin="$(jq -r '.packages[] | select(startswith("npm:pi-subagents@"))' "{{root}}/.pi/settings.json")"
-    v="$(jq -r .version "{{root}}/.pi/npm/node_modules/pi-subagents/package.json" 2>/dev/null)"
-    [[ "npm:pi-subagents@$v" == "$pin" ]] && echo "pi-subagents ok  $v (project-local)" || { echo "pi-subagents MISSING or not $pin (just install)"; bad=1; }
     exit "$bad"
 
 # Start the director (meta-operator) in Herdr workspace `director` (docs/adr/0011).

@@ -16,12 +16,11 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 
 ## Layout
 
-- `agents/` role files in pi-subagents frontmatter (docs/adr/0013): meta-operator (director), supervisor, implementer, integrator, code-reviewer, corrector. One file, two launchers: `scripts/pi-role` for Herdr panes (via `herdr-spawn`), pi-subagents' `subagent` tool for children. `agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
+- `agents/` role files, our frontmatter format read by `scripts/pi-role` (docs/adr/0016): meta-operator (director), supervisor, implementer, integrator, code-reviewer, corrector. Every agent launches through `scripts/pi-role`: in a Herdr pane via `herdr-spawn --role`, or headless with `-p`. `agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
 - `spec/` spec-chat HTML specs (`*.spec.html`). Today it holds octo-lite's own spec, kept as the format reference and for the `#anchors` the role contracts cite; it still describes Claude and Linear, so `docs/adr/` wins where they differ.
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir).
-- `.pi/settings.json` pins pi-subagents project-local; `just install` fetches it into ignored `.pi/npm`. Pi loads it inside this checkout only after project trust (`pi -a`).
-- `justfile` kit commands: `just check` (the gate), `just install`, `just install-check`, `just start`, `just supervise N`, `just state`.
+- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just state`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.

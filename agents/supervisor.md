@@ -1,16 +1,10 @@
 ---
 name: supervisor
-description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers and integrator in Herdr tabs and a fresh code-reviewer child per merge.
+description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers and integrator in Herdr tabs and a fresh corrector and code-reviewer pane per merge.
 model: anthropic/claude-opus-5-5
 thinking: high
-tools: read, grep, find, ls, bash, edit, write, subagent
+tools: read, grep, find, ls, bash, edit, write
 skills: commit, domain-modeling, github, grill-with-docs, grilling, herdr-comms, implement-spec, push, to-tickets
-allowedAgents: code-reviewer, corrector
-maxSubagentDepth: 1
-inheritSkills: false
-skillPath: ../skills, skills
-inheritProjectContext: false
-systemPromptMode: append
 ---
 
 # Supervisor
@@ -65,7 +59,7 @@ Own one issue or one epic coordination layer from brief through closure.
 
 ## Briefs
 
-Every worker or child brief uses pstack orchestrate's brief (cursor/plugins@0b8e952, `pstack/skills/poteto-mode/playbooks/orchestrate.md`, MIT), sized to the unit. A field you cannot fill is a unit not yet scoped.
+Every worker brief uses pstack orchestrate's brief (cursor/plugins@0b8e952, `pstack/skills/poteto-mode/playbooks/orchestrate.md`, MIT), sized to the unit. A field you cannot fill is a unit not yet scoped.
 
 ```
 GOAL        one sentence, the outcome, executable by a stranger with no chat access
@@ -86,7 +80,6 @@ Bans and the report shape live in the worker's role file (Never, Output); do not
 
 ## Rules
 
-- Your harness loads no `AGENTS.md`: read the target repo's `AGENTS.md` yourself before anything else.
 - In vendored skills, "the user" is your director: ask it with `herdr-say --parent`.
 - Use the operator's current Herdr session, your space, and Pi at its
   default; give one concise context pointer. You face the director, never the human (docs/adr/0015).

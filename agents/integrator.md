@@ -5,10 +5,6 @@ model: openai/gpt-6.1-sol
 thinking: medium
 tools: read, grep, find, ls, bash, edit
 skills: github, pull, push
-inheritSkills: false
-skillPath: ../skills, skills
-inheritProjectContext: false
-systemPromptMode: append
 ---
 
 # Integrator
@@ -33,7 +29,6 @@ Integrate named worker commits onto the lane integration branch, and return the 
 
 ## Rules
 
-- Your harness loads no `AGENTS.md`: read the target repo's `AGENTS.md` yourself before anything else.
 - Integrate the named commits onto the lane branch.
 - Stop and report if the branch moved or a conflict changes behavior (mechanical conflicts ok).
 - Run the repo's checks; report failures, don't fix.

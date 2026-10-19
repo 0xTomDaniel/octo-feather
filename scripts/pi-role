@@ -1,19 +1,29 @@
 #!/usr/bin/env python3
 """pi-role [--json] AGENT_FILE [extra pi args...]
 
-Start a top-level Pi session (a Herdr pane) with the model, thinking, tools,
-skills and system prompt of a pi-subagents agent file, so a role gets the same
-capabilities in a pane as it gets as a pi-subagents child (docs/adr/0013).
+Start Pi under one of this kit's role files (agents/<role>.md, docs/adr/0016):
+the frontmatter's model, thinking and tool allowlist, only the listed skills,
+and the body appended to Pi's system prompt. Pi still loads the target repo's
+AGENTS.md from the working directory, so roles never read it by hand.
 
---json prints {"args": [...], "env": {...}} instead of exec'ing pi; herdr-spawn
-uses it to hand the same launch to `herdr agent start --kind pi`.
+Pane:      herdr-spawn --role <role> (calls `pi-role --json` and hands the args
+           to `herdr agent start`).
+Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
+           message is on stdout.
 
-Handles the frontmatter subset octo-feather uses; `just check` (scripts/check-roles)
-rejects anything outside it. From the pi-subagents spike, 2026-10-18.
+Frontmatter (one `key: value` per line, lists comma-separated):
+  name         must equal the file name; names the cached prompt file
+  description  one line for humans; pi-role ignores it
+  model        --model
+  thinking     --thinking
+  tools        --tools (built-in Pi tools only)
+  skills       --skill for each, looked up in agents/skills/ then skills/
+scripts/check-roles rejects any other key.
 """
 import hashlib, json, os, re, sys
 
-LIST_KEYS = {"tools", "skills", "skillPath", "allowedAgents"}
+KEYS = {"name", "description", "model", "thinking", "tools", "skills"}
+LIST_KEYS = {"tools", "skills"}
 
 
 def parse(path):
@@ -21,73 +31,41 @@ def parse(path):
     m = re.match(r"---\n(.*?)\n---\n?(.*)", text, re.S)
     if not m:
         sys.exit(f"pi-role: {path} has no frontmatter")
-    fm, key = {}, None
+    fm = {}
     for line in m.group(1).splitlines():
-        if not line.strip() or line.lstrip().startswith("#"):
-            continue
-        item = re.match(r"\s+-\s+(.*)", line)
-        if item and key in LIST_KEYS:
-            fm.setdefault(key, []).append(item.group(1).strip())
-            continue
         k, sep, v = line.partition(":")
-        if not sep:
-            sys.exit(f"pi-role: {path}: bad frontmatter line {line!r}")
-        key, v = k.strip(), v.strip()
-        if key in LIST_KEYS:
-            fm[key] = [x.strip() for x in v.split(",") if x.strip()]
-        else:
-            fm[key] = v.strip('"')
+        k, v = k.strip(), v.strip()
+        if not sep or k not in KEYS:
+            sys.exit(f"pi-role: {path}: unsupported frontmatter line {line!r}; keys: {sorted(KEYS)}")
+        fm[k] = [x.strip() for x in v.split(",") if x.strip()] if k in LIST_KEYS else v.strip('"')
     return fm, m.group(2).strip()
 
 
+def skill_roots(path):
+    kit = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+    return [os.path.join(kit, "agents", "skills"), os.path.join(kit, "skills")]
+
+
 def launch(path, to_file=False):
-    path = os.path.abspath(path)
-    base = os.path.dirname(path)
-    root = os.path.dirname(base)
     fm, body = parse(path)
-    args, env = [], {}
+    args = []
     if fm.get("model"):
         args += ["--model", fm["model"]]
     if fm.get("thinking"):
         args += ["--thinking", fm["thinking"]]
-    tools = fm.get("tools")
-    if tools is not None:
-        names = []
-        for t in tools:
-            if t.startswith("mcp:"):
-                srv, _, tool = t[4:].partition("/")
-                names.append(f"mcp__{srv.replace('-', '_')}__{tool.replace('-', '_') if tool else '*'}")
-            else:
-                names.append(t)
-        args += ["--tools", ",".join(names)] if names else ["--no-tools"]
-        if not any(t.startswith("mcp:") for t in tools):
-            args.append("--no-mcp")
-        if "subagent" in tools:
-            # pi-subagents is pinned project-local in the kit (.pi/settings.json)
-            # and loaded explicitly, so it never loads in unrelated Pi sessions.
-            ext = os.environ.get("OCTO_FEATHER_PI_SUBAGENTS") or os.path.join(root, ".pi/npm/node_modules/pi-subagents")
-            if not os.path.isfile(os.path.join(ext, "package.json")):
-                sys.exit(f"pi-role: pi-subagents not installed at {ext}; run `just install`")
-            args += ["-e", ext]
-            env["PI_SUBAGENT_EXTRA_AGENT_DIRS"] = base
-            if fm.get("maxSubagentDepth"):
-                env["PI_SUBAGENT_MAX_DEPTH"] = fm["maxSubagentDepth"]
-    if fm.get("inheritSkills", "true") == "false":
-        args.append("--no-skills")
-    roots = [os.path.normpath(os.path.join(base, p)) for p in fm.get("skillPath", [])] or [base]
+    if "tools" in fm:
+        args += ["--tools", ",".join(fm["tools"])] if fm["tools"] else ["--no-tools"]
+    args += ["--no-mcp", "--no-skills"]
+    roots = skill_roots(path)
     for s in fm.get("skills", []):
         for r in roots:
-            p = os.path.join(r, s)
-            if os.path.isfile(os.path.join(p, "SKILL.md")):
-                args += ["--skill", p]
+            if os.path.isfile(os.path.join(r, s, "SKILL.md")):
+                args += ["--skill", os.path.join(r, s)]
                 break
         else:
             sys.exit(f"pi-role: skill {s} not found in {roots}")
-    if fm.get("inheritProjectContext") == "false":
-        args.append("--no-context-files")
     if body:
-        mode = fm.get("systemPromptMode", "replace")
-        if mode == "append" and to_file:
+        if to_file:
             # A pane launch goes through `herdr agent start`; hand Pi a file,
             # not a 100-line argv string.
             d = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "octo-feather", "roles")
@@ -98,13 +76,9 @@ def launch(path, to_file=False):
                     h.write(body + "\n")
                 os.replace(f + ".tmp", f)
             args += ["--append-system-prompt", f]
-        elif mode == "append":
-            args += ["--append-system-prompt", body]
-        elif to_file:
-            sys.exit("pi-role: --json needs systemPromptMode: append (Pi reads --system-prompt as text only)")
         else:
-            args += ["--system-prompt", body]
-    return args, env
+            args += ["--append-system-prompt", body]
+    return args
 
 
 def main(argv):
@@ -114,12 +88,10 @@ def main(argv):
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip(), file=sys.stderr)
         sys.exit(64)
-    args, env = launch(argv[0], to_file=as_json)
-    args += argv[1:]
+    args = launch(argv[0], to_file=as_json) + argv[1:]
     if as_json:
-        print(json.dumps({"args": args, "env": env}))
+        print(json.dumps({"args": args}))
         return
-    os.environ.update(env)
     os.execvp("pi", ["pi", *args])
 
 

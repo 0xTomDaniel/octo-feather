@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Validate agents/*.md role files (pi-subagents frontmatter, docs/adr/0013).
+"""Validate agents/*.md role files against the fields pi-role honours (docs/adr/0016).
 
 Deterministic and free: no model calls. Run by `just check`.
 """
-import os, re, subprocess, sys, json
+import os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS = os.path.join(ROOT, "agents")
@@ -12,68 +12,54 @@ ROLES = ["meta-operator", "supervisor", "implementer", "integrator", "code-revie
 MODELS = {"openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-6-astra",
           "anthropic/claude-opus-5-5", "anthropic/claude-sonnet-5-5"}
 THINKING = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
-TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write", "subagent"}
-REQUIRED = {"name", "description", "model", "thinking", "tools", "inheritSkills",
-            "skills", "skillPath", "inheritProjectContext", "systemPromptMode"}
-OPTIONAL = {"allowedAgents", "maxSubagentDepth"}
-FIXED = {"inheritSkills": "false", "inheritProjectContext": "false", "systemPromptMode": "append"}
-PIN = "npm:pi-subagents@0.79.1"
+TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write"}
+# Exactly the keys scripts/pi-role reads; anything else would be silently ignored.
+FIELDS = {"name", "description", "model", "thinking", "tools", "skills"}
+SKILL_ROOTS = [os.path.join(ROOT, "agents", "skills"), os.path.join(ROOT, "skills")]
 
 errors = []
 def err(msg): errors.append(msg)
 
-def parse(path):
+def parse(path, rel):
     text = open(path, encoding="utf-8").read()
     m = re.match(r"---\n(.*?)\n---\n(.*)", text, re.S)
     if not m:
-        err(f"{path}: no frontmatter"); return {}, ""
+        err(f"{rel}: no frontmatter"); return {}, ""
     fm = {}
     for n, line in enumerate(m.group(1).splitlines(), 2):
         mm = re.fullmatch(r"([A-Za-z]+): (\S.*)", line)
         if not mm:
-            err(f"{path}:{n}: use one `key: value` per line, lists comma-separated (pi-role reads only that)"); continue
+            err(f"{rel}:{n}: use one `key: value` per line, lists comma-separated"); continue
         fm[mm.group(1)] = mm.group(2).strip()
     return fm, m.group(2).strip()
 
 lst = lambda v: [x.strip() for x in v.split(",") if x.strip()]
+extra = sorted(set(f[:-3] for f in os.listdir(AGENTS) if f.endswith(".md")) - set(ROLES))
+if extra:
+    err(f"agents/: role files {extra} are not in ROLES in scripts/check-roles")
 families = {}
 for role in ROLES:
     path = os.path.join(AGENTS, f"{role}.md")
     rel = os.path.relpath(path, ROOT)
     if not os.path.isfile(path):
         err(f"{rel}: missing role file"); continue
-    fm, body = parse(path)
-    for k in REQUIRED - fm.keys():
-        err(f"{rel}: missing required field `{k}`")
-    for k in fm.keys() - REQUIRED - OPTIONAL:
-        err(f"{rel}: field `{k}` is outside the subset pi-role supports (docs/adr/0013)")
+    fm, body = parse(path, rel)
+    for k in sorted(FIELDS - fm.keys()):
+        err(f"{rel}: missing field `{k}`")
+    for k in sorted(fm.keys() - FIELDS):
+        err(f"{rel}: field `{k}` is not one pi-role honours; delete it (docs/adr/0016)")
     if fm.get("name") not in (None, role):
         err(f"{rel}: name must be `{role}` (the file name)")
-    for k, v in FIXED.items():
-        if k in fm and fm[k] != v:
-            err(f"{rel}: `{k}` must be `{v}` (docs/adr/0013)")
     if "model" in fm and fm["model"] not in MODELS:
         err(f"{rel}: model `{fm['model']}` not in the allowed list in scripts/check-roles: {sorted(MODELS)}")
     if "thinking" in fm and fm["thinking"] not in THINKING:
         err(f"{rel}: thinking `{fm['thinking']}` not one of {sorted(THINKING)}")
-    tools = lst(fm.get("tools", ""))
-    for t in tools:
-        if t not in TOOLS and not re.fullmatch(r"mcp:[\w-]+(/[\w-]+)?", t):
-            err(f"{rel}: unknown tool `{t}`; allowed {sorted(TOOLS)} or mcp:server/tool")
-    roots = [os.path.normpath(os.path.join(AGENTS, p)) for p in lst(fm.get("skillPath", ""))]
+    for t in lst(fm.get("tools", "")):
+        if t not in TOOLS:
+            err(f"{rel}: unknown tool `{t}`; allowed {sorted(TOOLS)}")
     for s in lst(fm.get("skills", "")):
-        if not any(os.path.isfile(os.path.join(r, s, "SKILL.md")) for r in roots):
-            err(f"{rel}: skill `{s}` not found under skillPath {[os.path.relpath(r, ROOT) for r in roots]}")
-    delegates = "subagent" in tools
-    if delegates != ("allowedAgents" in fm):
-        err(f"{rel}: a role with the `subagent` tool needs `allowedAgents`, and only such a role has it")
-    for a in lst(fm.get("allowedAgents", "")):
-        if a not in ROLES:
-            err(f"{rel}: allowedAgents names `{a}`, which is not a role file")
-    if "maxSubagentDepth" in fm and not fm["maxSubagentDepth"].isdigit():
-        err(f"{rel}: maxSubagentDepth must be a non-negative integer")
-    if delegates and "maxSubagentDepth" not in fm:
-        err(f"{rel}: a role with the `subagent` tool needs `maxSubagentDepth`")
+        if not any(os.path.isfile(os.path.join(r, s, "SKILL.md")) for r in SKILL_ROOTS):
+            err(f"{rel}: skill `{s}` not found under agents/skills/ or skills/")
     if not body:
         err(f"{rel}: empty body")
     if "model" in fm:
@@ -82,17 +68,12 @@ for role in ROLES:
     if r.returncode != 0:
         err(f"{rel}: pi-role failed: {r.stderr.strip()}")
 
-# scaling-octo-engine reviewer-same-family tripwire: the reviewer never shares
-# a model family with the implementer whose diff it judges.
+# Reviewer-same-family tripwire: the reviewer never shares a model family with
+# the implementer whose diff it judges (docs/adr/0007).
 if families.get("code-reviewer") and families.get("code-reviewer") == families.get("implementer"):
     err("agents/code-reviewer.md: model family equals implementer's; the reviewer must use a different family")
-
-try:
-    pkgs = json.load(open(os.path.join(ROOT, ".pi/settings.json"))).get("packages", [])
-    if PIN not in pkgs:
-        err(f".pi/settings.json: packages must pin {PIN} project-local (docs/adr/0013)")
-except FileNotFoundError:
-    err(".pi/settings.json: missing; pi-subagents is pinned project-local there (docs/adr/0013)")
+if os.path.exists(os.path.join(ROOT, ".pi/settings.json")):
+    err(".pi/settings.json: no Pi packages; every agent launches through pi-role (docs/adr/0016)")
 
 if errors:
     print("\n".join(errors), file=sys.stderr)

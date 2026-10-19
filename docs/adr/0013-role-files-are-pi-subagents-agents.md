@@ -21,3 +21,5 @@ The model choices are proposals awaiting Tom's sign-off: director `openai/gpt-6.
 Renamed by ADR 0014: lane owner is now supervisor.
 
 Launcher chosen by Tom, 2026-10-18 19:45 MDT: panes start through `herdr-spawn` plus `pi-role`. pi-subagents stays pinned only to launch headless children (code reviewer, `correct`, judge). If `pi-role` can start those children with `pi -p` (test after Thursday, docs/future.md), the package goes and its frontmatter format stays.
+
+Superseded in part by ADR 0016 (2026-10-18 20:04 MDT): pi-subagents is removed; the frontmatter stays as our own format, trimmed to the keys pi-role honours.

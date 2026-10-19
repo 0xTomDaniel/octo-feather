@@ -3,14 +3,8 @@ name: meta-operator
 description: Director. Owns the program, files GitHub issues, starts one supervisor per issue, unblocks stranded sessions, asks the human only at gates. Writes no repo files.
 model: anthropic/claude-opus-5-5
 thinking: high
-tools: read, grep, find, ls, bash, subagent
+tools: read, grep, find, ls, bash
 skills: herdr-comms, github
-allowedAgents: code-reviewer
-maxSubagentDepth: 1
-inheritSkills: false
-skillPath: ../skills, skills
-inheritProjectContext: false
-systemPromptMode: append
 ---
 
 # Meta-operator
@@ -80,8 +74,8 @@ with your pane id ("Operator is now <pane>. Report gates and completion here.")
 and create any missing lane records. A supervisor without an operator pane
 cannot escalate and will idle silently at gates.
 
-Target project context: on startup, find the target project's repository root
-and read its `AGENTS.md`. If the project has an onboarding doc
+Target project context: Pi loads the target's `AGENTS.md` from your working
+directory (`just start` from the target project). If the project has an onboarding doc
 (`docs/onboarding.md` or what `AGENTS.md` names), read it for shared services
 the project runs: what they are, how to launch/restart them, what the
 workbench reads from them. If the project publishes a machinery contract
