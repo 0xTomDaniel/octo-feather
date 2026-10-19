@@ -11,32 +11,66 @@ run by `just check`, tested by tests/check-owned-rules.sh.
 """
 import os, re, subprocess, sys
 
-# name: (phrases that name the rule's own mechanism, owner files, the pointer to write instead).
-# Biased to under-catch: only phrases with no other legitimate use. Generic words
-# (renewed acceptance, head moved, qc again, pinned to a head, merging main into) stay
-# out even though a restatement may use them: "a behavior-changing spec revision
-# requires renewed acceptance before merging" is legitimate (reviews of af760a4, 014156b).
+# Each entry: the phrases that name the rule's own mechanism, its owner files, the pointer
+# to write instead, and its own examples. Biased to under-catch: only phrases with no other
+# legitimate use. `negatives` are ordinary sentences that must never match (seed them with
+# every false positive a review or CI ever logged); `positives` are real restatements that
+# must. Both are required and checked first, so a phrase list cannot land unproven (issue #36).
 RULES = {
-    "merge-authority": (
-        r"resolved? no conflict|no conflict resolved|clean (merge of main|main merge)"
+    "merge-authority": dict(
+        pattern=r"resolved? no conflict|no conflict resolved|clean (merge of main|main merge)"
         r"|new merge ask|main moving|does not move (the|your|its) head"
         r"|match-head-commit|says merge|mechanical rebase|change after (just )?qc",
-        {"docs/specs/issue-lifecycle.spec.html"},
-        "write only a pointer, spec `#gates-merge` (qc reruns: `#lanes-one-head`; docs/specs/issue-lifecycle.spec.html); "
+        owners={"docs/specs/issue-lifecycle.spec.html"},
+        fix="write only a pointer, spec `#gates-merge` (qc reruns: `#lanes-one-head`; docs/specs/issue-lifecycle.spec.html); "
         "the merge command itself lives once, in .agents/skills/github/SKILL.md (Merge)",
+        positives=[
+            "Mechanical rebases onto accepted main do not require renewed acceptance when behavior and scope are unchanged.",
+            "Any code change after QC means `just qc` and a fresh review again, on the new head.",
+            "Main moving does not move the head.",
+            "After the owner says merge, a clean main merge with no conflict resolved needs no new merge ask.",
+        ],
+        negatives=[  # gh19 handoffs 19:17Z, 19:22Z (check-false-positive); reviews of af760a4, 014156b
+            "A behavior-changing spec revision requires renewed acceptance.",
+            "A behavior-changing spec revision requires renewed acceptance before merging.",
+            "After the delta review the head moved, so review the delta again.",
+            "A failed criterion goes to an implementer; then integrate and run qc again.",
+            "The smoke log is pinned to the head it ran on.",
+            "To update a worker branch, merging main into it is fine.",
+        ],
     ),
-    "lane-branch": (
-        r"octo-feather/gh<|gh<[^>]*>-<",  # a slug default, not "gh<N>-* never match"
-        {"docs/adr/0011-herdr-layout.md"},
-        "the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
+    "lane-branch": dict(
+        pattern=r"octo-feather/gh<|gh<[^>]*>-<",  # a slug default, not "gh<N>-* never match"
+        owners={"docs/adr/0011-herdr-layout.md"},
+        fix="the lane branch is `gh<N>`: write only a pointer, docs/adr/0011",
+        positives=[
+            "Cut branch gh<N>-<slug> for the lane.",
+            "2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.",
+        ],
+        negatives=[  # gh19 handoffs 19:12Z (check-false-positive): scripts/octo-feather-integrate:22
+            "# worker branches gh<N>-* never match",
+            "# worker branches gh<N>-* and lane gh<N>0 never match.",
+            "The lane branch is `gh<N>`: see docs/adr/0011.",
+        ],
     ),
-    # Only phrases naming the agent turn itself. Any wording of a wait ("blocking wait over 30 s",
-    # `done rc=$?`, `wait "$pid"`) stays out: scripts and docs use it for process waits
-    # (issue #29, reviews of a4d8861 and d7c7005).
-    "long-wait": (
-        r"hold(s|ing)? (your|its|their) turn|queues? unread as \W?steering",
-        {".agents/skills/herdr-comms/SKILL.md"},
-        "write only a pointer: wait only as herdr-comms (Send a message) says, .agents/skills/herdr-comms/SKILL.md",
+    # Only phrases naming the agent turn itself; any wording of a process wait stays out.
+    "long-wait": dict(
+        pattern=r"hold(s|ing)? (your|its|their) turn|queues? unread as \W?steering",
+        owners={".agents/skills/herdr-comms/SKILL.md"},
+        fix="write only a pointer: wait only as herdr-comms (Send a message) says, .agents/skills/herdr-comms/SKILL.md",
+        positives=[
+            "Never hold your turn in a sleep over a minute; background `just qc` and end the turn.",
+            'While a sleep runs, messages queue unread as "Steering".',
+        ],
+        negatives=[  # gh28 handoffs 21:00Z, 21:03Z (owned-rule-false-positive); reviews of a4d8861, d7c7005
+            "# Use a blocking wait to reap the child process.",
+            "Use a blocking wait to reap the child",
+            "A blocking wait over 30 seconds triggers the subprocess timeout.",
+            'printf "done rc=$?\\n"',
+            'wait "$pid"',
+            "Reap it with `wait $pid`, or `sleep 5` before a retry.",
+            "- Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says.",
+        ],
     ),
 }
 # Lines allowed to name the rule's mechanism: (rule, file, line regex).
@@ -45,6 +79,26 @@ MECHANISM = {
 }
 # Never checked: dated records quote rules as they stood; this check and its test name the phrases.
 SKIP = re.compile(r"^(evidence/|scripts/check-owned-rules$|tests/check-owned-rules\.sh$)")
+
+HOW = ("each RULES entry needs `positives` (real restatements it must catch) and `negatives` "
+       "(ordinary sentences, incl. every logged false positive, it must leave alone)")
+bad = []
+for rule, r in RULES.items():
+    where = f"scripts/check-owned-rules: RULES[{rule!r}]"
+    for key in ("positives", "negatives"):
+        if not r.get(key):
+            bad.append(f"{where} has no {key}: add a non-empty `{key}` list; {HOW}")
+    for ex in r.get("negatives") or []:
+        if m := re.search(r["pattern"], ex, re.I):
+            bad.append(f"{where} matches its own negative {ex!r} (\"{m.group(0)}\"): "
+                       "narrow `pattern` until it leaves ordinary text alone; never drop the negative")
+    for ex in r.get("positives") or []:
+        if not re.search(r["pattern"], ex, re.I):
+            bad.append(f"{where} misses its own positive {ex!r}: widen `pattern` to catch it, "
+                       "or drop the positive only if it is not a restatement")
+if bad:
+    print("\n".join(bad), file=sys.stderr)
+    sys.exit(1)
 
 root = os.path.abspath(sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), ".."))
 files = subprocess.run(["git", "-C", root, "ls-files"], capture_output=True, text=True, check=True).stdout.split()
@@ -62,15 +116,15 @@ for f in files:
         # A patch's removed and context lines quote upstream; its reason line and added lines are ours.
         if patch and n > 1 and not (line.startswith("+") and not line.startswith("+++")):
             continue
-        for rule, (pat, owners, fix) in RULES.items():
-            if f in owners:
+        for rule, r in RULES.items():
+            if f in r["owners"]:
                 continue
-            m = re.search(pat, line, re.I)
+            m = re.search(r["pattern"], line, re.I)
             if not m:
                 continue
             if any(r == rule and mf == f and re.search(lp, line) for r, mf, lp in MECHANISM):
                 continue
-            errors.append(f"{f}:{n}: restates the {rule} rule (\"{m.group(0)}\"); {fix}")
+            errors.append(f"{f}:{n}: restates the {rule} rule (\"{m.group(0)}\"); {r['fix']}")
 
 for e in errors:
     print(e, file=sys.stderr)

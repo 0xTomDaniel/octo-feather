@@ -49,4 +49,30 @@ plant agents/push.md '2. Verify the branch matches the target repo convention, e
 # A patch's added line is ours, so it is checked.
 printf '# reason: x\n--- a/SKILL.md\n+++ b/SKILL.md\n+Main moving does not move the head.\n' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; g add -A; run 1
 grep -qF 'SKILL.md.patch:4: restates the merge-authority rule' <<<"$out" || { echo "check-owned-rules test: patch line not named: $out" >&2; exit 1; }
-echo "check-owned-rules: ok (owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"
+# Each RULES entry proves itself on its own examples before scanning (issue #36).
+# Plant each failure mode in a copy of the script; the error names the entry and the fix.
+selfcheck() { local name="$1" old="$2" new="$3" want="$4" c="$t/check-copy"
+  python3 - "$C" "$c" "$old" "$new" <<'PY'
+import sys
+src, dst, old, new = sys.argv[1:]
+s = open(src).read()
+assert s.count(old) == 1, f"selfcheck anchor not unique in check-owned-rules: {old!r}"
+open(dst, "w").write(s.replace(old, new))
+PY
+  set +e; out="$(python3 "$c" "$t" 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 1 ]] && grep -qF "$want" <<<"$out" && ! grep -q 'owned rules: ok' <<<"$out" \
+    || { echo "check-owned-rules test: $name: want exit 1 and '$want', got $rc: $out" >&2; exit 1; }; }
+selfcheck 'missing negatives' 'negatives=[  # gh19 handoffs 19:12Z' 'negatives_=[  # gh19 handoffs 19:12Z' \
+  "RULES['lane-branch'] has no negatives: add a non-empty \`negatives\` list"
+selfcheck 'missing positives' 'positives=[
+            "Never hold' 'positives=[] and [
+            "Never hold' \
+  "RULES['long-wait'] has no positives: add a non-empty \`positives\` list"
+selfcheck 'negative matched' '|mechanical rebase|' '|mechanical rebase|renewed acceptance|' \
+  "RULES['merge-authority'] matches its own negative 'A behavior-changing spec revision requires renewed acceptance.' (\"renewed acceptance\"): narrow \`pattern\`"
+selfcheck 'negative matched (wait)' 'hold(s|ing)? (your|its|their) turn|' 'hold(s|ing)? (your|its|their) turn|blocking wait|done rc|' \
+  "RULES['long-wait'] matches its own negative 'A blocking wait over 30 seconds triggers the subprocess timeout.'"
+selfcheck 'positive missed' '|change after (just )?qc' '' \
+  "RULES['merge-authority'] misses its own positive 'Any code change after QC means \`just qc\` and a fresh review again, on the new head.': widen \`pattern\`"
+rm -f "$t/check-copy"
+echo "check-owned-rules: ok (examples gate: missing positives/negatives, a matched negative and a missed positive fail naming the entry and fix; owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"
