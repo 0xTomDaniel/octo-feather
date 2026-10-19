@@ -21,7 +21,6 @@ of docs/adr/0011):
     agents/meta-operator.md
     agents/supervisor.md (was agents/orchestrator.md)
     agents/implementer.md
-    agents/integrator.md
     agents/code-reviewer.md
 
     skills/commit/SKILL.md

@@ -28,7 +28,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
    - calls the Skill tool with `tdd` to build the ticket;
    - merges the integration branch tip into its own branch before reporting done
 
-5. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**: the one integrator worker, `herdr-spawn --role integrator` in tab `integrator`.
+5. Once an **implementer subagent** completes, merge its work to the integration branch with a **merger subagent**: run `just integrate <issue> <worker branch or commit>` (docs/adr/0017). It exits non-zero on a conflict or a red `just check` and leaves the branch as it was; hand that to an implementer, then integrate its result.
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 

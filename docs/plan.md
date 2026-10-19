@@ -6,7 +6,7 @@ Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The
 
 Base: octo-lite `cc6fa4e`. Work is deltas on it. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
 
-Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatter, `scripts/pi-role` for panes, pi-subagents@0.79.1 pinned project-local); models decided by Tom 2026-10-18 18:58 MDT (opus-5-5 for director, supervisor, implementer; sol for code-reviewer; integrator open). Escalation up the chain only: docs/adr/0015. Jev: nothing from Jev (capture, replay or judge) runs in `just check`, which stays deterministic; Jev QA recipe (name pending) is separate.
+Role files: settled 2026-10-18 17:45 MDT, docs/adr/0013 (pi-subagents frontmatter, `scripts/pi-role` for panes, pi-subagents@0.79.1 pinned project-local); models decided by Tom 2026-10-18 18:58 MDT (opus-5-5 for director, supervisor, implementer; sol for code-reviewer). Escalation up the chain only: docs/adr/0015. Jev: nothing from Jev (capture, replay or judge) runs in `just check`, which stays deterministic; Jev QA recipe (name pending) is separate.
 
 | # | Block | Est | Output |
 |---|---|---|---|

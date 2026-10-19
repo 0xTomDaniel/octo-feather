@@ -13,16 +13,20 @@ The agent that owns one work item until it merges, breaking it into tasks, assig
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor, owner
 
 **Worker**:
-An agent that does one assigned task inside its own isolated copy of the work and reports the result to its supervisor. Implementers and integrators are workers.
+An agent that does one assigned task inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are workers.
 _Avoid_: Agent (too broad), subagent
 
 **Implementer**:
 A worker that produces the change for one task.
 _Avoid_: Developer, coder
 
-**Integrator**:
-A worker that combines the finished changes of several tasks into the one result for a work item.
-_Avoid_: Merger
+**Integration**:
+Combining the finished changes of a work item's tasks into its one result. A script the supervisor runs (`just integrate`), not an agent: it stops on any conflict, which goes to an implementer.
+_Avoid_: Integrator, merger
+
+**Corrector**:
+A fresh agent that, before review, finds the mistakes agents keep repeating and makes each one impossible to repeat.
+_Avoid_: Fixer
 
 **Code reviewer**:
 A fresh agent, from a different model family than the implementer, that judges one change against its task and the spec and returns a verdict, changing nothing.
@@ -61,5 +65,5 @@ The Herdr space that holds one lane's agents, or the director's. The director ha
 _Avoid_: Space, session
 
 **Tab**:
-One agent's place inside a workspace, one agent per tab: `director`, `supervisor`, `worker-<k>`, `integrator`.
+One agent's place inside a workspace, one agent per tab: `director`, `supervisor`, `worker-<k>`, `corrector`, `code-reviewer`.
 _Avoid_: Pane (a tab holds exactly one pane), window

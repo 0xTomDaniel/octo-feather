@@ -23,8 +23,8 @@ kit's `skills/herdr-comms/assets` and `scripts` on `PATH`.
   started by `octo-feather-start --director` (`just start`).
 - One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
   started by `octo-feather-start --issue <n> --cwd <worktree>`.
-- In that workspace, one tab per worker and for the integrator: `worker-1`,
-  `worker-2`, `integrator`. One agent per tab, one pane per tab.
+- In that workspace, one tab per worker: `worker-1`, `worker-2`, and the
+  per-merge `corrector` and `code-reviewer`. One agent per tab, one pane per tab.
 
 ## Spawn an agent
 
@@ -34,7 +34,7 @@ herdr-spawn --workspace ID --name NAME --label LABEL --cwd DIR --role ROLE [-- p
 
 A lane worker spawns into its lane workspace, `--workspace "$HERDR_WORKSPACE_ID"`,
 named `<role>-<ticket>` lowercase (`implementer-gh64`), labelled `worker-<k>`
-or `integrator`. A pane never moves between spaces: Herdr rewrites its ids.
+or the role name. A pane never moves between spaces: Herdr rewrites its ids.
 
 Spawn bare, then send the brief with `herdr-say`. Nothing follows the runtime:
 with an inline prompt, `herdr agent start` times out waiting for readiness.

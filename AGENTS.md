@@ -16,11 +16,11 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 
 ## Layout
 
-- `agents/` role files, our frontmatter format read by `scripts/pi-role` (docs/adr/0016): meta-operator (director), supervisor, implementer, integrator, code-reviewer, corrector. Every agent launches through `scripts/pi-role`: in a Herdr pane via `herdr-spawn --role`, or headless with `-p`. `agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
+- `agents/` role files, our frontmatter format read by `scripts/pi-role` (docs/adr/0016): meta-operator (director), supervisor, implementer, code-reviewer, corrector. Integration is a script, not an agent: `just integrate N REF...` (`scripts/octo-feather-integrate`, docs/adr/0017). Every agent launches through `scripts/pi-role`: in a Herdr pane via `herdr-spawn --role`, or headless with `-p`. `agents/skills/` holds the skillfile-managed upstream skills (mattpocock/skills and pstack; each patch's first line gives its reason).
 - `spec/` spec-chat HTML specs (`*.spec.html`). Today it holds octo-lite's own spec, kept as the format reference and for the `#anchors` the role contracts cite; it still describes Claude and Linear, so `docs/adr/` wins where they differ.
 - `skills/` kit skills, vendored or local.
 - `templates/python`, `templates/typescript` starter repos with gate, app CLI and verification skill wired.
 - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir).
-- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just state`.
+- `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just state`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.

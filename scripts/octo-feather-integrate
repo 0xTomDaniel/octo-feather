@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+# octo-feather-integrate N REF...   (also: just integrate N REF...)
+#
+# Integrate named worker commits onto lane gh<N>'s integration branch, then run
+# that worktree's `just check` (docs/adr/0017). Run from anywhere in the target
+# repo. A branch REF is merged (--no-ff); any other REF is a commit and is
+# cherry-picked (-x), in the order given.
+#
+# All or nothing: on a conflict or a red gate the lane branch is reset to where
+# it started, and the supervisor hands the problem to an implementer.
+#
+# Exit: 0 integrated and green; 1 conflict; 2 `just check` red; 64 usage;
+#       65 lane worktree not clean; 66 no single lane worktree for gh<N>.
+# Does not push.
+set -euo pipefail
+
+(($# >= 2)) && [[ "$1" =~ ^[0-9]+$ ]] || { echo "usage: octo-feather-integrate ISSUE REF..." >&2; exit 64; }
+n="$1"; shift
+
+# The lane worktree is the one whose branch names gh<N> (slug gh<issue>, docs/adr/0011).
+mapfile -t lanes < <(git worktree list --porcelain | awk -v re="(^|/)gh$n(-|\$)" '
+  /^worktree /{wt=substr($0, 10)} /^branch /{b=substr($0, 19); if (b ~ re) print wt "\t" b}')
+if ((${#lanes[@]} != 1)); then
+  echo "octo-feather-integrate: need exactly one worktree on a gh$n branch, found ${#lanes[@]}" >&2
+  ((${#lanes[@]} == 0)) || printf "  %s\n" "${lanes[@]}" >&2; exit 66
+fi
+wt="${lanes[0]%%$'\t'*}"; branch="${lanes[0]#*$'\t'}"
+cd "$wt"
+[[ -z "$(git status --porcelain)" ]] || { echo "octo-feather-integrate: $wt has uncommitted changes" >&2; exit 65; }
+start="$(git rev-parse HEAD)"
+
+rollback() { git reset -q --hard "$start"; echo "octo-feather-integrate: $branch reset to ${start:0:12}" >&2; }
+
+for ref in "$@"; do
+  if git show-ref -q --verify "refs/heads/$ref"; then
+    op=(merge --no-ff --no-edit "$ref"); abort=(merge --abort)
+  else
+    git rev-parse -q --verify "$ref^{commit}" >/dev/null || { rollback; echo "octo-feather-integrate: $ref is not a branch or commit" >&2; exit 64; }
+    op=(cherry-pick -x "$ref"); abort=(cherry-pick --abort)
+  fi
+  if ! git "${op[@]}" >/dev/null 2>&1; then
+    files="$(git diff --name-only --diff-filter=U | paste -sd' ' -)"
+    git "${abort[@]}" >/dev/null 2>&1 || true
+    rollback
+    echo "conflict: $ref in ${files:-(no conflicted paths; see git ${op[0]})}" >&2
+    exit 1
+  fi
+done
+
+if ! just check; then
+  rollback
+  echo "red: just check failed after integrating $*" >&2
+  exit 2
+fi
+echo "integrated=$# branch=$branch head=$(git rev-parse --short=12 HEAD)"

@@ -40,7 +40,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 
 ## Never
 
-- Push, merge, or write the integration branch. An integrator does that, and only one at a time.
+- Push, merge, or write the integration branch. Your supervisor integrates with `just integrate` (docs/adr/0017).
 - Touch another ticket, widen scope, or reshape what was shaped.
 - Review your own work or declare it accepted.
 

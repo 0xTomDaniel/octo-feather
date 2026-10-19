@@ -121,8 +121,8 @@ The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
   edits is an operator that has stopped coordinating and started competing with
   the lane it is supposed to be sequencing.
 - Deciding what merges, in what order, and what is blocked by overlap is this
-  role's output. Performing the merge is the integrator's, under the supervisor
-  that owns that stream.
+  role's output. Performing the merge is the supervisor's `just integrate` on
+  the stream it owns.
 - Unblocking a stranded session means giving it what it needs, not doing its
   work in its tree.
 

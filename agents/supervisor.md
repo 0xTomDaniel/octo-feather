@@ -1,6 +1,6 @@
 ---
 name: supervisor
-description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers and integrator in Herdr tabs and a fresh corrector and code-reviewer pane per merge.
+description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers in Herdr tabs, integrates with `just integrate`, and a fresh corrector and code-reviewer pane per merge.
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write

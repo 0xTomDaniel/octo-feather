@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles
+check: check-scripts check-refs check-dashes check-skills check-roles check-integrate
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -18,7 +18,7 @@ check-scripts:
     set -euo pipefail
     cd "{{root}}"
     files=(); py=()
-    for f in scripts/* skills/herdr-comms/assets/*; do
+    for f in scripts/* skills/herdr-comms/assets/* tests/*; do
       if head -1 "$f" | grep -q python; then py+=("$f"); else files+=("$f"); fi
     done
     for f in "${py[@]}"; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"; done
@@ -75,10 +75,18 @@ check-skills:
       head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
       n=$((n + 1))
     done
-    for r in meta-operator supervisor implementer integrator code-reviewer corrector; do
+    for r in meta-operator supervisor implementer code-reviewer corrector; do
       [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
     done
-    echo "skills: ok ($n skills, 6 roles)"
+    echo "skills: ok ($n skills, 5 roles)"
+
+# Integration test of the integrate script in a throwaway repo (docs/adr/0017).
+check-integrate:
+    @"{{root}}/tests/integrate.sh"
+
+# Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
+integrate issue +refs:
+    cd "{{invocation_directory()}}" && octo-feather-integrate "{{issue}}" {{refs}}
 
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0016).
 check-roles:

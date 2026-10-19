@@ -22,10 +22,6 @@ octo-lite's supervisor listed `spec-chat-shape` and `spec-chat-review`, which li
 
 Jev capture, replay and judging stay out of `just check`, which runs only deterministic checks (Tom, 2026-10-18). They get their own `just` recipe, name not chosen yet, run by the supervisor before a merge ask. `just check` fails if the justfile mentions it.
 
-## Integrator model
-
-Tom has not chosen the integrator's model yet; `agents/integrator.md` still carries the earlier proposal (gpt-6.1-sol medium).
-
 ## Reviewer scope drift (gpt-6.1-sol)
 
 Tom's caution: sol models tend to over-engineer and over-correct. The code reviewer must judge only against the ticket's acceptance criteria and the spec. `agents/code-reviewer.md` already covers part of this ("judge against the shaped scope and the spec, not against preference"; "block only on broken behavior or clearly over-built work"; "a finding that cannot name a consequence is a note"). Risk: Matt's `code-review` Standards axis asks for baseline smells, which invites findings outside the criteria. To verify: a rehearsal check, plus an eval case where an out-of-criteria finding must not block. Flagged only, not fixed.

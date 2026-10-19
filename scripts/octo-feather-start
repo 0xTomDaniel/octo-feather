@@ -7,7 +7,7 @@
 #   octo-feather-start --issue N [--cwd WORKTREE]
 #     one supervisor in its own workspace `gh<N>`, tab `supervisor`
 #
-# Layout per docs/adr/0011. Workers and the integrator later get their own tab
+# Layout per docs/adr/0011. Workers later get their own tab
 # in the lane workspace, spawned by the supervisor with herdr-spawn.
 # --name and --resume SESSION continue a parked supervisor in a new lane workspace.
 set -euo pipefail
