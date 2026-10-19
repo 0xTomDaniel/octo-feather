@@ -70,7 +70,7 @@
 <tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;slug&gt;/&lt;spec path&gt;</code></td></tr>
 <tr data-anchor="review-register"><td>Registering a spec</td><td><code>review-host.py register --slug &lt;spec slug&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill, with no exposure argument. A spec has one review row, under its own spec slug, made when it is shaped; lanes link to that row and never register the spec again</td></tr>
 <tr data-anchor="review-accepted"><td>Acceptance record</td><td>The review host's accepted registration, at an exact commit; the director's kickoff check <code>octo-feather-accepted</code> reads it from every session's registry</td></tr>
-<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Installed by Spec Chat's installer; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
+<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked into each target repository's <code>.agents/skills</code> only, never as <code>.claude/</code> or <code>.codex/</code> links (ADR 0001), and never in a home folder; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
 </tbody>
 </table>
 </div>
@@ -82,7 +82,7 @@
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
 <p data-anchor="tbd-printed-url" data-spec-tbd="later">TBD: Spec Chat should print a configured public base address in its review links and fall back to the local one, so it works the same with or without this kit's workflow.</p>
-<p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's skills belong in each repository's <code>.agents/skills</code>, with relative links for other agent runtimes, never in the user's home folder. The fix is in progress in Spec Chat <a href="https://github.com/0xTomDaniel/spec-chat/pull/170">#170</a>, which replaces #164; installing Spec Chat's skills into target repositories waits on it.</p>
+<p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: A kit recipe <code>just spec-chat REPO</code> links Spec Chat's skills into a target repository's <code>.agents/skills</code>. It waits on Spec Chat <a href="https://github.com/0xTomDaniel/spec-chat/pull/170">#170</a>, which replaces #164, so that Spec Chat's installer can skip its <code>.claude/</code> and <code>.codex/</code> provider links.</p>
 <p data-anchor="tbd-slug-mismatch" data-spec-tbd="later">TBD: Spec Chat infers lanes from slug shape, so its index files a spec slug under Settled; a lane that the caller supplies at registration is recorded in <a href="../future.md">docs/future.md</a>.</p>
 <p data-anchor="tbd-model-key" data-spec-tbd="later">TBD: The model proxy key sits in plain text on the VM; swap it for a revocable key.</p>
 </section>
