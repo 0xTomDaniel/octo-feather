@@ -21,7 +21,7 @@
 # A target Herdr does not find may be parked: the latest parked line naming it,
 # in any lane hand-off log of the caller's Herdr session (octo-feather-state),
 # decides; another session's lanes repeat its ids. A live agent under the
-# line's name gets the message; otherwise the agent is resumed first (an owner,
+# line's name gets the message; otherwise the agent is resumed first (a supervisor,
 # the lane's name, in a new lane workspace; a worker in the caller's space), and its
 # new pane= is printed.
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
@@ -31,7 +31,7 @@ usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] TARGET MESSAGE |
 here="$(dirname "$(readlink -f "$0")")"
 
 # The latest parked line naming TARGET by pane or name. A line without name is
-# the lane owner: the lane's name, its log's stem.
+# the supervisor: the lane's name, its log's stem.
 parked() {
   local line logs=("$("$here/../../../scripts/octo-feather-state")"/lanes/*.handoffs.jsonl)
   [[ -f "${logs[0]}" ]] || return 1

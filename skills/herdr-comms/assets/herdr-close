@@ -15,7 +15,7 @@
 #
 # --park PANE reads the Pi session id and role herdr-spawn exported into PANE's
 # tab (OCTO_FEATHER_SESSION_ID, OCTO_FEATHER_ROLE), closes its tab, or its
-# space when that tab is the space's only one (a lane owner in its own space),
+# space when that tab is the space's only one (a supervisor in its own space),
 # and prints one parked hand-off line, even when the close fails. An agent Herdr
 # does not report idle or done, or one not spawned by herdr-spawn, is refused
 # with nothing closed.

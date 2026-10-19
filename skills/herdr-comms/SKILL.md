@@ -21,8 +21,8 @@ kit's `skills/herdr-comms/assets` and `scripts` on `PATH`.
 
 - Workspace `director`, one tab `director`: the director (meta-operator),
   started by `octo-feather-start --director` (`just start`).
-- One workspace per issue, `gh<n>`: tab `lane` is the lane owner
-  (orchestrator), started by `octo-feather-start --issue <n> --cwd <worktree>`.
+- One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
+  started by `octo-feather-start --issue <n> --cwd <worktree>`.
 - In that workspace, one tab per worker and for the integrator: `worker-1`,
   `worker-2`, `integrator`. One agent per tab, one pane per tab.
 
@@ -77,7 +77,7 @@ those leave to the caller:
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 
 `--resume SESSION` starts a parked agent with its old `--session-id`, so Pi
-keeps its conversation. An owner resumes through `octo-feather-start --cwd
+keeps its conversation. A supervisor resumes through `octo-feather-start --cwd
 WORKTREE --name LANE --resume SESSION`, in a new lane workspace. `herdr-say`
 does both for you; see below.
 
@@ -93,7 +93,7 @@ a space. Closes it, then sends TERM to every process of the caller's session
 whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
 catches detached children that close alone leaves running. Run it from outside
 what it closes: the spawner closes a tab, the operator closes a finished lane's
-own space, or only its owner tab when the lane started in a shared space.
+own space, or only its supervisor tab when the lane started in a shared space.
 Prints `tab= tab_close_rc= killed=` or `space= space_close_rc= killed=` and
 exits with the close status.
 
@@ -105,10 +105,10 @@ herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
 
 `$lanes` is `$(octo-feather-state)/lanes`. Reads the Pi session id and role
 `herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
-that tab is the space's only one (a lane owner in its own space), and prints
+that tab is the space's only one (a supervisor in its own space), and prints
 one parked line (`at kind pane name role cwd session`) on stdout, even when the
 close fails; the close report goes to stderr. The parker appends the line: the
-operator for an owner, the owner for a worker. An agent Herdr does not report
+operator for a supervisor, the supervisor for a worker. An agent Herdr does not report
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.
 
@@ -139,15 +139,15 @@ typed into.
 A target Herdr does not find may be parked. The latest parked line naming it,
 by pane or name, in any lane hand-off log in `$lanes` decides: a live agent
 under the line's name gets the message; otherwise the agent is resumed (an
-owner, the line named after its log, in a new lane space; a worker in the
+supervisor, the line named after its log, in a new lane space; a worker in the
 caller's `$HERDR_WORKSPACE_ID`), gets the message, and `herdr-say` prints its
 new `pane=`. `herdr-say --parked TARGET` prints that line, or exits 1.
-`herdr-wake check` counts a parked owner as present, so a spec review hand-off
+`herdr-wake check` counts a parked supervisor as present, so a spec review hand-off
 resumes it.
 
 The review service may run in another Herdr session, so register a review row
 with `--owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"`: `herdr-wake` checks
-and wakes a `SESSION/PANE` owner in that session, a bare pane in its caller's.
+and wakes a `SESSION/PANE` supervisor in that session, a bare pane in its caller's.
 
 ## Reading a pane
 

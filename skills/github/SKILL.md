@@ -88,7 +88,7 @@ Do not create extra workflow labels unless the operator explicitly asks.
   worklane. An explicit instruction to merge a named PR accepts that exact head
   unless the human says otherwise. Mechanical rebases onto accepted main do not
   require renewed acceptance when behavior and scope are unchanged. A
-  human statement assigning the current lane ownership is sufficient for this
+  human statement assigning the work item to the current supervisor is sufficient for this
   action. Record acceptance as the receipt comment on the PR
   (spec `#acceptance-receipt`), verify required checks, then merge. No worker merges, no agent decides acceptance, and no agent merges
   unaccepted work. Required failed checks remain blockers until fixed or

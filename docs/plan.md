@@ -1,6 +1,6 @@
 # Build plan, Sun 2026-10-18
 
-Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project per language went spec-chat HTML spec, accepted, director (orchestrator) dispatch, Pi implementer, integrator, code-reviewer, green `just check`, evidence bundle, without Tom touching code.
+Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project per language went spec-chat HTML spec, accepted, director dispatch, supervisor, Pi implementer, integrator, code-reviewer, green `just check`, evidence bundle, without Tom touching code.
 
 Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The email stays unopened until the kit is ready, so the kit is stack-agnostic: Python and TypeScript both prepared. Submit the method (AGENTS.md, spec, evidence) with the code if the rules allow.
 

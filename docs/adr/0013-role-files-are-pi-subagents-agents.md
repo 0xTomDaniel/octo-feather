@@ -17,3 +17,5 @@ The model choices are proposals awaiting Tom's sign-off: director `openai/gpt-6.
 - `inheritProjectContext: false` means no `AGENTS.md` is auto-loaded, so each role body tells the agent to read the target repo's `AGENTS.md` first.
 - pi-subagents is large, third-party, fast-moving and runs in-process. It still adds its `council-mode` and `pi-subagents` skills and six prompts to delegating roles even with `--no-skills`. Bump the pin on purpose, then rerun the smoke test.
 - `pi-role` supports only the frontmatter subset above: one `key: value` per line, with comma lists. `check-roles` rejects anything else.
+
+Renamed by ADR 0014: lane owner is now supervisor.

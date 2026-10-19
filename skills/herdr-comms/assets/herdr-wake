@@ -2,15 +2,15 @@
 # Spec Chat's `wake` provider over Herdr, registered in Spec Chat's
 # providers/wake.toml (not yet automated in octo-feather; see docs/plan.md); Spec Chat owns that format and names no
 # pane tool. Exit codes are Spec Chat's wake protocol:
-#   herdr-wake check OWNER                  0 owner pane resolves, 1 not
+#   herdr-wake check OWNER                  0 supervisor pane resolves, 1 not
 #   herdr-wake send OWNER ARTIFACT MESSAGE  0 sent, 75 deferred, other failed
-# send keeps host-wake's states: a working owner defers; a prompt Herdr typed
+# send keeps host-wake's states: a working supervisor defers; a prompt Herdr typed
 # but did not see land (agent_prompt_stalled) counts as sent so the same batch
 # is never retyped. Spec Chat bounds send and treats its timeout as sent.
-# A parked owner counts as present. Its resume outlasts that bound, so send
+# A parked supervisor counts as present. Its resume outlasts that bound, so send
 # starts herdr-say detached in its own session and counts it as sent.
 # OWNER is a pane of the caller's Herdr session, or SESSION/PANE: a pane of
-# Herdr session SESSION, so a review service of one session wakes an owner in
+# Herdr session SESSION, so a review service of one session wakes a supervisor in
 # another. Herdr selects the session by HERDR_SESSION unless HERDR_SOCKET_PATH
 # pins one, so the socket is dropped.
 # Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
@@ -18,7 +18,7 @@ set -uo pipefail
 
 usage() { echo "usage: herdr-wake check OWNER | send OWNER ARTIFACT MESSAGE" >&2; exit 64; }
 
-# Print the owner's agent_status; fail when the pane does not resolve.
+# Print the supervisor's agent_status; fail when the pane does not resolve.
 status() {
   local out
   out="$(timeout -k 1 5 herdr agent get "$1" 2>/dev/null)" || return 1

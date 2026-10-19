@@ -72,7 +72,7 @@ check-skills:
       head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
       n=$((n + 1))
     done
-    for r in meta-operator orchestrator implementer integrator code-reviewer; do
+    for r in meta-operator supervisor implementer integrator code-reviewer; do
       [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
     done
     echo "skills: ok ($n skills, 5 roles)"
@@ -104,8 +104,8 @@ install-check:
 start cwd=invocation_directory():
     octo-feather-start --director --cwd "{{cwd}}"
 
-# Start one lane owner for GitHub issue N in workspace gh<N>, tab `lane`.
-lane issue cwd=invocation_directory():
+# Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
+supervise issue cwd=invocation_directory():
     octo-feather-start --issue "{{issue}}" --cwd "{{cwd}}"
 
 # Print this Herdr session's octo-feather state directory.

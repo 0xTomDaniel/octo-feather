@@ -1,6 +1,6 @@
 ---
 name: implement-spec
-description: Dispatch delivery of an accepted spec, or one ticket the existing spec already states, through Herdr workers to one PR. The lane owner's route for every repo change.
+description: Dispatch delivery of an accepted spec, or one ticket the existing spec already states, through Herdr workers to one PR. The supervisor's route for every repo change.
 disable-model-invocation: false
 ---
 
@@ -9,7 +9,7 @@ disable-model-invocation: false
 Be extremely concise. Sacrifice grammar for the sake of concision.
 No em-dashes or en-dashes. Ever.
 
-The owner dispatches; it never edits repo files itself. Deliver the complete
+The supervisor dispatches; it never edits repo files itself. Deliver the complete
 spec or ticket on one branch and leave one PR ready for human review. Workers
 load their `agents/*.md` role contracts and use octo-feather skills as guidance.
 Workers are the whole mechanism: no role resolver, loop workflow, journal, or
@@ -43,7 +43,7 @@ descriptions, relations, assignees, and states aligned with reality throughout.
 Do not copy ticket or spec prose into agent messages. Send essential absolute
 source paths in the message body; artifact metadata alone is insufficient.
 
-The lane owner keeps its lane record current as the lane-record hook in `agents/orchestrator.md` and `spec/domains/octo-lite.spec.html#lane-record` define.
+The supervisor keeps its lane record current as the lane-record hook in `agents/supervisor.md` and `spec/domains/octo-lite.spec.html#lane-record` define.
 
 Record the requested handoff in the existing brief. Manual QA readiness means
 a usable feature deployment, required dependencies, working account roles and
@@ -63,7 +63,7 @@ evidence still applies; human QA, code readiness and acceptance are separate.
    optional exploration agent through `herdr-comms`. Give it write access only
    to a shared directory outside the repo. Its deliverable is concise Markdown
    notes linked from the relevant tickets.
-4. Continue the draft PR the orchestrator opened while shaping, else create the
+4. Continue the draft PR the supervisor opened while shaping, else create the
    integration branch from the target base and open one draft PR.
    Push, open PRs, and file issues only as
    [consent](../github/SKILL.md#consent) allows; otherwise the lane stays on local
@@ -81,7 +81,7 @@ invocation is unknown or changed. Spawn every exploration,
 implementation, merge, review-fix worker through Herdr. Prefer background tabs
 and fill available capacity from the current frontier.
 
-Spawn every worker into the owner's space, `--workspace "$HERDR_WORKSPACE_ID"`,
+Spawn every worker into the supervisor's space, `--workspace "$HERDR_WORKSPACE_ID"`,
 named `<role>-<ticket>` lowercase (`implementer-gh64`; a lane-wide worker such
 as the integrator carries the primary issue key), per spec
 `#transport-spawn-name`, each in its own tab labelled `worker-<k>` or
@@ -119,7 +119,7 @@ When an implementer completes:
 3. Have it merge or cherry-pick the worker commit, resolve only integration
    conflicts, run proportionate validation, push the integration branch as
    [consent](../github/SKILL.md#consent) allows, and `herdr-say`
-   the resulting commit to the owner pane.
+   the resulting commit to the supervisor pane.
 4. Mark the ticket Done only after its change is integrated (and pushed when
    consent allows). If the merge fails or validation is red, reflect that
    truth in the GitHub issue and return the ticket to active work.
@@ -131,11 +131,11 @@ Each writer has a distinct worktree, including the integrator; a separate tab in
 the same checkout is not isolation. Read-only explorers may share source only
 when they do not install dependencies, change branches or generate files there.
 
-Consume completed results at the next owner wake, before optional status work,
+Consume completed results at the next supervisor wake, before optional status work,
 and continue integration or the next ready task in that turn. Keep one integrator
-owner for the lane's integration branch. Every worker brief names the owner pane.
-The owner waits for the worker's result message; between messages, each goal
-check-in reads the awaited workers' Herdr state (`agents/orchestrator.md`).
+supervisor for the lane's integration branch. Every worker brief names the supervisor pane.
+The supervisor waits for the worker's result message; between messages, each goal
+check-in reads the awaited workers' Herdr state (`agents/supervisor.md`).
 Record one truthful current state, next action and dependency.
 Do not end delivery at startup, dispatch, worker completion or review forwarding.
 
@@ -153,12 +153,12 @@ when target rules permit; final-head required checks and integration-sensitive
 tests remain required. Repeat or broaden tests only for a change, failure,
 unresolved risk or explicit required check, not because a handoff occurred.
 
-Use one preview deployment/fork owner. Its current receipt in existing control
+Use one preview deployment/fork supervisor. Its current receipt in existing control
 state binds feature SHA, revision, DB fork/schema, scoped access, fixture
 namespace and secure credential pointer. A base-only healthy preview is not the
 feature. Share the receipt and setup window; do not infer access from another
 identity's grants. Before recreation, preserve fixtures/paid progress and agree
-closure with affected owners; restore and verify after the new receipt. Keep
+closure with affected supervisors; restore and verify after the new receipt. Keep
 rollback and target safety checks. No new receipt framework is required.
 Stop watching an operation after its terminal outcome is consumed. Retry a
 known deployment/access blocker only after a relevant state change; continue
@@ -166,7 +166,7 @@ independent work and report the exact remaining dependency.
 
 ## Review and finish
 
-Order, every lane: build only after the spec acceptance receipt; integrate every ticket; code review clear; the target's required validation; any evidence the target's AGENTS.md requires before a merge ask (for example a QA evidence bundle for changes a person can observe); every failed QA criterion triaged by annotateanything's owner triage rule (`docs/specs/jev-capture.spec.html#qa-rules-owner-triage`), a failure carried from an older head first recaptured at the merge ask's head; then one merge ask that carries the review result and that evidence. A merge ask never goes out ahead of a step it needs.
+Order, every lane: build only after the spec acceptance receipt; integrate every ticket; code review clear; the target's required validation; any evidence the target's AGENTS.md requires before a merge ask (for example a QA evidence bundle for changes a person can observe); every failed QA criterion triaged by annotateanything's supervisor triage rule (`docs/specs/jev-capture.spec.html#qa-rules-owner-triage`), a failure carried from an older head first recaptured at the merge ask's head; then one merge ask that carries the review result and that evidence. A merge ask never goes out ahead of a step it needs.
 
 The merge ask lists each failed criterion as judged at the merge ask's head, never as carried, with the bundle row's `evidence_state`, its `decision_source` and judged head, its triage, its cause or reason, and its outcome. A failure whose `evidence_state` is `complete` is listed as a code fault unless a specific capture cause is named, such as a wrong fixture, a wrong page reached, or the criterion's shape (spec `spec/domains/octo-lite.spec.html#delivery-qa-triage`).
 
@@ -175,7 +175,7 @@ After every ticket is integrated:
 1. Spawn a fresh reviewer through `herdr-comms` with `--role code-reviewer`
    and brief it to run `/code-review` on the integration branch, the lane's one
    full review of the integration head, then `herdr-say` its verdict to the
-   owner pane, since `/code-review` ends in its own pane. The verdict policy
+   supervisor pane, since `/code-review` ends in its own pane. The verdict policy
    is the `agents/code-reviewer.md` contract. If unsupported,
    use the available independent review mechanism with the provided diff, base,
    spec and scope. Verify acknowledgment and actual review work once;
@@ -231,5 +231,5 @@ a repository-approved path.
 
 The merge completes the worklane: reconcile the PR and worklane state together,
 reconcile the primary GitHub issue to closed, tear down in the close order of
-`agents/orchestrator.md` (review rows before any worktree, lane record archived
+`agents/supervisor.md` (review rows before any worktree, lane record archived
 last), and stop.

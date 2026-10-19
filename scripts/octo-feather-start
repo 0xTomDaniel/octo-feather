@@ -5,14 +5,14 @@
 #   octo-feather-start --director [--cwd DIR]
 #     the director (meta-operator) in Herdr workspace `director`, tab `director`
 #   octo-feather-start --issue N [--cwd WORKTREE]
-#     one lane owner (orchestrator) in its own workspace `gh<N>`, tab `lane`
+#     one supervisor in its own workspace `gh<N>`, tab `supervisor`
 #
 # Layout per docs/adr/0011. Workers and the integrator later get their own tab
-# in the lane workspace, spawned by the lane owner with herdr-spawn.
-# --name and --resume SESSION continue a parked owner in a new lane workspace.
+# in the lane workspace, spawned by the supervisor with herdr-spawn.
+# --name and --resume SESSION continue a parked supervisor in a new lane workspace.
 set -euo pipefail
 
-cwd="$PWD"; name=""; label=""; role="orchestrator"; model=(); resume=()
+cwd="$PWD"; name=""; label=""; role="supervisor"; model=(); resume=()
 usage() {
   echo "usage: octo-feather-start (--director | --issue N | --name LANE) [--cwd DIR]" \
        "[--label LABEL] [--operating-model FILE] [--resume SESSION]" >&2
@@ -32,7 +32,7 @@ while (($#)); do
   esac
 done
 [[ -n "$name" ]] || usage
-[[ -n "$label" ]] || label="lane"
+[[ -n "$label" ]] || label="supervisor"
 
 # One workspace per name: refuse a second director or a second lane gh<N>.
 if herdr workspace list 2>/dev/null | jq -e --arg n "$name" \
