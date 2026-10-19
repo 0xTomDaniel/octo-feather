@@ -59,20 +59,20 @@
       "pr": null
     },
     "acceptance-integrate-conflict": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-integrate-red": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-merge-ask-evidence": {
       "status": "planned",
       "pr": null
     },
     "acceptance-merge-approved-head": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 24
     },
     "acceptance-merge-main-merged": {
       "status": "planned",
