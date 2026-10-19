@@ -1,0 +1,122 @@
+#!/usr/bin/env python3
+"""octo-feather-qc-ghsnap REPO DIR   read-only GitHub snapshot for the qc judge (docs/adr/0022)
+
+Not run by hand: octo-feather-qc runs it before every judge, outside the sandbox,
+with the caller's gh auth, into a new per-run DIR that the sandbox binds
+read-only and scripts/qc-bin/gh (the offline gh) serves. REPO is owner/name.
+Lists, all states: issues (500), PRs (500), workflow runs (200). Full views for
+the DETAIL_CAP most recently updated issues and PRs, fetched in parallel:
+`gh issue view`/`gh pr view --json` (comments, reviews, commits, files, closing
+issues, sub-issues, blocked-by), the diff, the timeline, sub-issues and
+blocked-by links, and the head's check runs; older items are list-only and
+named in meta.json. Repo, branches, labels, origin refs (refs.txt from branches).
+Layout: issue/N.json pr/N.json diff/N.diff api/<path, "/" as "__">.json
+issue-list.json pr-list.json run-list.json repo.json refs.txt meta.json.
+Stdout: one summary line. Exit 0, or 1 when any read failed (no auth, network):
+an api 404 or 410 is recorded as absent, every other failure is fatal.
+"""
+import json, os, re, subprocess, sys, time
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+
+LIMITS = {"issue": 500, "pr": 500, "run": 200}
+DETAIL_CAP = 200
+IF = ("assignees,author,blockedBy,blocking,body,closed,closedAt,closedByPullRequestsReferences,comments,createdAt,id,"
+      "labels,milestone,number,parent,state,stateReason,subIssues,subIssuesSummary,title,updatedAt,url")
+PL = ("additions,assignees,author,baseRefName,baseRefOid,body,changedFiles,closed,closedAt,closingIssuesReferences,createdAt,"
+      "deletions,headRefName,headRefOid,id,isDraft,labels,mergeCommit,mergedAt,mergedBy,number,reviewDecision,state,title,updatedAt,url")
+PF = PL + (",autoMergeRequest,comments,commits,files,headRepository,headRepositoryOwner,isCrossRepository,latestReviews,"
+           "mergeStateStatus,mergeable,milestone,reviewRequests,reviews,statusCheckRollup")
+RUN = ("attempt,conclusion,createdAt,databaseId,displayTitle,event,headBranch,headSha,name,number,startedAt,status,"
+       "updatedAt,url,workflowDatabaseId,workflowName")
+
+
+class Fatal(Exception):
+    pass
+
+
+def gh(*a):
+    p = subprocess.run(["gh", *a], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if p.returncode:
+        raise Fatal(f"gh {' '.join(a[:3])}: {(p.stderr or p.stdout).strip()[:300]}")
+    return p.stdout
+
+
+def api_name(path):
+    return re.sub(r"[?&=]", "_", path.lstrip("/").replace("/", "__"))
+
+
+def main(repo, out):
+    out = Path(out)
+    for d in ("issue", "pr", "diff", "api"):
+        (out / d).mkdir(parents=True)
+    absent = []
+
+    def api(path):
+        p = subprocess.run(["gh", "api", "--paginate", "--slurp", path], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        if p.returncode:
+            err = (p.stderr or p.stdout).strip()
+            if re.search(r"HTTP (404|410)", err):
+                absent.append(path); return None
+            raise Fatal(f"gh api {path}: {err[:300]}")
+        d = json.loads(p.stdout or "null")
+        if isinstance(d, list) and d and all(isinstance(x, list) for x in d):
+            d = [y for x in d for y in x]
+        elif isinstance(d, list) and len(d) == 1 and isinstance(d[0], dict):
+            d = d[0]
+        (out / "api" / f"{api_name(path)}.json").write_text(json.dumps(d))
+        return d
+
+    def save(name, text):
+        (out / name).write_text(text)
+        return json.loads(text) if name.endswith(".json") else text
+
+    t0 = time.time()
+    repo_d = save("repo.json", gh("repo", "view", repo, "--json", "name,owner,nameWithOwner,visibility,defaultBranchRef,url,description"))
+    repo = repo_d.get("nameWithOwner") or repo   # canonical name (renames)
+    R = f"repos/{repo}"
+    issues = save("issue-list.json", gh("issue", "list", "-R", repo, "--state", "all", "--limit", str(LIMITS["issue"]), "--json", IF))
+    prs = save("pr-list.json", gh("pr", "list", "-R", repo, "--state", "all", "--limit", str(LIMITS["pr"]), "--json", PL))
+    runs = save("run-list.json", gh("run", "list", "-R", repo, "--limit", str(LIMITS["run"]), "--json", RUN))
+    api(R); api(f"{R}/labels")
+    branches = api(f"{R}/branches") or []
+    (out / "refs.txt").write_text("".join(f"{b['name']} {b['commit']['sha']}\n" for b in branches))
+
+    items = sorted([("issue", i) for i in issues] + [("pr", p) for p in prs], key=lambda x: x[1].get("updatedAt") or "", reverse=True)
+    detail, capped = items[:DETAIL_CAP], items[DETAIL_CAP:]
+
+    def fetch(kind, row):
+        n = str(row["number"])
+        if kind == "issue":
+            save(f"issue/{n}.json", gh("issue", "view", n, "-R", repo, "--json", IF))
+            for s in ("sub_issues", "dependencies/blocked_by"):
+                api(f"{R}/issues/{n}/{s}")
+        else:
+            save(f"pr/{n}.json", gh("pr", "view", n, "-R", repo, "--json", PF))
+            save(f"diff/{n}.diff", gh("pr", "diff", n, "-R", repo))
+            if row.get("headRefOid"):
+                api(f"{R}/commits/{row['headRefOid']}/check-runs")
+        api(f"{R}/issues/{n}/timeline")
+
+    with ThreadPoolExecutor(max_workers=16) as ex:
+        for f in [ex.submit(fetch, k, r) for k, r in detail]:
+            f.result()   # re-raises the first Fatal
+    at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+    meta = {"repo": repo, "fetched_at": at, "seconds": round(time.time() - t0, 1),
+            "counts": {"issues": len(issues), "prs": len(prs), "runs": len(runs), "branches": len(branches), "detail": len(detail)},
+            "limits": {**LIMITS, "detail": DETAIL_CAP},
+            "capped": [f"{'#'}{r['number']}" for _, r in capped], "absent": sorted(absent)}
+    (out / "meta.json").write_text(json.dumps(meta, indent=2))
+    (out / "fetched_at").write_text(at + "\n")
+    cap = f"; detail capped at {DETAIL_CAP}, list-only: {' '.join(meta['capped'])}" if capped else ""
+    print(f"snapshot of {repo} at {at} ({meta['seconds']} s): issues {len(issues)}, prs {len(prs)}, runs {len(runs)}, "
+          f"branches {len(branches)}, full views {len(detail)}{cap}")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print(__doc__.strip(), file=sys.stderr); sys.exit(64)
+    try:
+        main(*sys.argv[1:])
+    except (Fatal, ValueError, KeyError, OSError) as e:
+        print(f"octo-feather-qc-ghsnap: {e}", file=sys.stderr); sys.exit(1)
