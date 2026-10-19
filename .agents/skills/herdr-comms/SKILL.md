@@ -139,7 +139,8 @@ runs, every message sent to you queues unread as "Steering" (issue #29, block 3
 smoke). After a brief, end your turn: the result arrives as a new message in
 your pane. Run any long job (`just qc`, a CI watch, a worker) in the background
 or in a pane, end your turn, and resume on its completion message or a
-`herdr-say` wake. A background job wakes you itself:
+`herdr-say` wake. A supervisor's or the director's background job wakes it
+itself (the up-chain guard refuses a worker's message to its own pane):
 
 ```
 (just qc ... >/tmp/qc.log 2>&1; herdr-say "$HERDR_PANE_ID" "qc done rc=$? log /tmp/qc.log") >/dev/null 2>&1 &
