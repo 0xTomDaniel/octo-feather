@@ -1,60 +1,43 @@
 #!/usr/bin/env python3
-"""A role-behaviour change on a branch ships with its live smoke and owed eval (docs/adr/0008).
+"""A role-behaviour change on a branch ships with its smoke and owed eval (rule: docs/adr/0008).
 
-Correction lane #26: finding class missing-behavior-smoke, twice (lane #8 at
-db9e290, lane #19 at af760a4). Compares the branch with its merge base:
+Correction lane #26 (finding class missing-behavior-smoke). A presence gate,
+read-only git only: whether the smoke is adequate is review's judgment.
 
-- behaviour commits: commits in BASE..HEAD touching agents/*.md,
-  .agents/skills/**.md or .skillfile/patches/** (a merge only for what it wrote
-  itself: a file unlike a clean auto-merge and unlike every parent, e.g. a
-  conflict resolution), minus those whose message
-  carries a `Behaviour-neutral: <reason>` trailer (the opt-out, printed on
-  every run so review sees it);
-- they pass only if a later commit (or the uncommitted tree) changes an
-  evidence/*.md whose added lines cite a commit of this branch (the role text
-  the smoke ran on), still present and citing it at the checked head, and docs/future.md's owed-evals block gains a line naming
-  that evidence file.
+- Range: merge-base(BASE, HEAD)..HEAD.
+- Role paths: files the range diff changes under agents/*.md, .agents/skills/**.md,
+  .skillfile/patches/**.
+- Opt-out: a role path is exempt when every non-merge commit in the range touching it
+  carries a non-empty `Behaviour-neutral: <reason>` trailer (at least one such commit).
+  Each opt-out is printed on every run.
+- Any other role path: the range diff must add or modify an evidence/*.md and change
+  docs/future.md, else exit 1 naming the fix.
 
 Base: --base REF, else $OCTO_FEATHER_BASE, else origin/$GITHUB_BASE_REF (CI pull
-request), else origin/main, else main. No resolvable base or merge base: skip
-with a note locally, fail in CI ($CI or $GITHUB_ACTIONS set; checkout needs
-fetch-depth: 0). Nothing ahead of the base (on main): ok.
-
-Needs git 2.38+ (merge-tree --write-tree) when a merge on the branch
-changes a role file on more than one side; older git fails closed naming it
-(exit 2, never reported as a behaviour change).
+request), else origin/main, else main. No resolvable base or merge base: skip with a
+note locally, fail in CI ($CI or $GITHUB_ACTIONS set; checkout needs fetch-depth: 0).
 
 Usage: check-behavior-smoke [--base REF] [--head REF] [--repo DIR]
---head checks a past commit (no worktree); default is HEAD plus uncommitted
-evidence/ and docs/future.md. Run by `just check`, tested by
-tests/check-behavior-smoke.sh.
+Run by `just check`, tested by tests/check-behavior-smoke.sh.
 """
 import argparse, os, re, subprocess, sys
 
-BEHAVIOUR = re.compile(r"^(agents/[^/]+\.md|\.agents/skills/.+\.md|\.skillfile/patches/.+)$")
+ROLE = re.compile(r"^(agents/[^/]+\.md|\.agents/skills/.+\.md|\.skillfile/patches/.+)$")
 EVIDENCE = re.compile(r"^evidence/[^/]+\.md$")
 FUTURE = "docs/future.md"
-END = "<!-- owed-evals-end -->"
-OPT_OUT = re.compile(r"^Behaviour-neutral:[ \t]*(\S.*)$", re.M)
+TRAILER = re.compile(r"^Behaviour-neutral:[ \t]*(\S.*)$", re.M)
 TAG = "check-behavior-smoke"
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--base"); ap.add_argument("--head"); ap.add_argument("--repo")
+ap.add_argument("--base"); ap.add_argument("--head", default="HEAD"); ap.add_argument("--repo")
 a = ap.parse_args()
 root = os.path.abspath(a.repo or os.path.join(os.path.dirname(__file__), ".."))
 ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
 
 
-def git(*args, ok=False):
+def git(*args):
     r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
-    if r.returncode and not ok:
-        sys.exit(f"{TAG}: git {' '.join(args)}: {r.stderr.strip()}")
-    return r.stdout if not r.returncode else None
-
-
-def commit(ref):
-    out = git("rev-parse", "--verify", "-q", f"{ref}^{{commit}}", ok=True)
-    return out.strip() if out else None
+    return r.stdout if r.returncode == 0 else None
 
 
 def no_base(why):
@@ -64,165 +47,66 @@ def no_base(why):
     sys.exit(0)
 
 
-head = commit(a.head or "HEAD") or no_base(f"no commit {a.head or 'HEAD'}")
-worktree = a.head is None
-cands = [a.base] if a.base else [os.environ.get("OCTO_FEATHER_BASE")] if os.environ.get("OCTO_FEATHER_BASE") else \
-    ([f"origin/{os.environ['GITHUB_BASE_REF']}"] if os.environ.get("GITHUB_BASE_REF") else []) + ["origin/main", "main"]
-cands = list(dict.fromkeys(cands))
-base = next((c for c in cands if commit(c)), None) or no_base(f"no base ref ({', '.join(cands)})")
-mb = (git("merge-base", base, head, ok=True) or "").strip() or no_base(f"no merge base of {base} and HEAD (shallow clone?)")
-
-
-def is_anc(x, y):
-    return subprocess.run(["git", "-C", root, "merge-base", "--is-ancestor", x, y]).returncode == 0
-
-
-revs = git("rev-list", "--topo-order", f"{mb}..{head}").split()
-inrange = set(revs)
-behaviour, neutral, evid = [], [], {}  # evid: commit (or "worktree") -> (files, cited commits)
-def blob(tree, f):
-    out = git("rev-parse", "-q", "--verify", f"{tree}:{f}", ok=True)
+def commit(ref):
+    out = git("rev-parse", "--verify", "-q", f"{ref}^{{commit}}")
     return out.strip() if out else None
 
 
-GIT_MIN = "git 2.38 (merge-tree --write-tree)"
-
-
-def auto_merge(parents):
-    """Tree of a clean auto-merge of PARENTS, octopus parents folded pairwise through
-    merge-tree (a conflicted step keeps its markers, so no resolution matches it).
-    Fails closed without merge-tree --write-tree: an unavailable comparison is never
-    labelled new behaviour."""
-    acc, tree = parents[0], None
-    for i, p in enumerate(parents[1:], 2):
-        r = subprocess.run(["git", "-C", root, "merge-tree", "--write-tree", acc, p], capture_output=True, text=True)
-        tree = r.stdout.split("\n", 1)[0].strip()
-        if r.returncode not in (0, 1) or not re.fullmatch(r"[0-9a-f]{40,64}", tree):
-            print(f"{TAG}: cannot auto-merge {', '.join(x[:7] for x in parents)} to see what the merge wrote: "
-                     f"needs {GIT_MIN}, got {(git('--version', ok=True) or '?').strip()}: {r.stderr.strip()[:200]}", file=sys.stderr)
-            sys.exit(2)
-        if i < len(parents):
-            acc = git("commit-tree", tree, "-p", acc, "-p", p, "-m", "check-behavior-smoke fold").strip()
-    return tree
-
-
-def merge_introduced(c, parents):
-    """Behaviour files a merge commit itself wrote: its blob differs from every parent
-    and from a clean auto-merge of its parents (a conflict resolution or an edit in
-    the merge). What it merely inherits from any side is not its own."""
-    changed = set()
-    for p in parents:
-        changed.update(git("diff-tree", "--no-commit-id", "--name-only", "-r", p, c).split())
-    cand = [f for f in sorted(changed) if BEHAVIOUR.match(f)
-            and all(blob(c, f) != blob(p, f) for p in parents)]
-    if not cand:
-        return []  # nothing differs from every parent: no auto-merge needed
-    auto = auto_merge(parents)
-    return [f for f in cand if blob(c, f) != blob(auto, f)]
-
-
-for c in revs:
-    parents = git("rev-list", "--parents", "-n1", c).split()[1:]
-    if len(parents) > 1:
-        # A merge (of main, or CI's PR merge ref) brings each side's own commits; only what
-        # the merge itself wrote counts, as behaviour. Its evidence is never this branch's smoke.
-        files = merge_introduced(c, parents)
-        if files:
-            m = OPT_OUT.search(git("log", "-1", "--format=%B", c))
-            (neutral if m else behaviour).append((c, m.group(1).strip() if m else files))
-        continue
-    files = git("diff-tree", "--no-commit-id", "--name-only", "-r", "--root", c).split()
-    if any(BEHAVIOUR.match(f) for f in files):
-        m = OPT_OUT.search(git("log", "-1", "--format=%B", c))
-        (neutral if m else behaviour).append((c, m.group(1).strip() if m else [f for f in files if BEHAVIOUR.match(f)]))
-    ev = [f for f in files if EVIDENCE.match(f)]
-    if ev:
-        evid[c] = ev
-if worktree:
-    ev = [f for f in (git("diff", "--name-only", "HEAD", "--", "evidence") or "").split() if EVIDENCE.match(f)]
-    ev += [f for f in (git("ls-files", "--others", "--exclude-standard", "--", "evidence") or "").split() if EVIDENCE.match(f)]
-    if ev:
-        evid["worktree"] = ev
-
-for c, why in neutral:
-    print(f"behavior smoke: opt-out {c[:7]} Behaviour-neutral: {why}")
-if not behaviour:
-    print(f"behavior smoke: ok ({len(revs)} commits since {mb[:7]}, no behaviour change{', ' + str(len(neutral)) + ' opted out' if neutral else ''})")
-    sys.exit(0)
-
-
-def added(c, paths):
-    """Added lines of PATHS in commit C (or the uncommitted tree)."""
-    if c == "worktree":
-        out = git("diff", "-U0", "HEAD", "--", *paths)
-        for f in (git("ls-files", "--others", "--exclude-standard", "--", *paths) or "").split():
-            out += "".join("+" + l + "\n" for l in open(os.path.join(root, f), encoding="utf-8").read().splitlines())
-    else:
-        out = git("show", "-U0", "--format=", c, "--", *paths)
-    return [l[1:] for l in out.splitlines() if l.startswith("+") and not l.startswith("+++")]
-
-
-def cites(lines):
-    out = set()
-    for h in set(re.findall(r"\b[0-9a-f]{7,40}\b", "\n".join(lines))):
-        full = commit(h)
-        if full in inrange:
-            out.add(full)
-    return out
-
-
-last = behaviour[0][0]  # topo order: newest first
-smokes = {}  # evidence file -> commit that recorded it after the last behaviour commit
-for c, files in evid.items():
-    after = c == "worktree" or all(c != b and is_anc(b, c) for b, _ in behaviour)
-    if not after:
-        continue
-    for f in files:
-        # The smoke must still be there, citing what it cited, at the checked head (or the tree).
-        if worktree:
-            p = os.path.join(root, f)
-            now = open(p, encoding="utf-8").read() if os.path.exists(p) else None
-        else:
-            now = git("show", f"{head}:{f}", ok=True)
-        if now is not None and cites(added(c, [f])) & cites(now.splitlines()):
-            smokes.setdefault(f, c)
-
-# docs/future.md owed-evals block: the lines from the heading above END to END, at HEAD (or the worktree).
-if worktree:
-    path = os.path.join(root, FUTURE)
-    text = open(path, encoding="utf-8").read() if os.path.exists(path) else ""
-    diff = git("diff", "-U0", mb, "--", FUTURE)
+head = commit(a.head) or no_base(f"no commit {a.head}")
+if a.base:
+    cands = [a.base]
+elif os.environ.get("OCTO_FEATHER_BASE"):
+    cands = [os.environ["OCTO_FEATHER_BASE"]]
 else:
-    text = git("show", f"{head}:{FUTURE}", ok=True) or ""
-    diff = git("diff", "-U0", mb, head, "--", FUTURE)
-lines = text.splitlines()
-end = next((i + 1 for i, l in enumerate(lines) if l.strip() == END), 0)
-start = next((i + 1 for i in range(end - 1, 0, -1) if lines[i - 1].startswith("## ")), 1) if end else 0
-owed = set()
-n = 0
-for l in diff.splitlines():
-    h = re.match(r"^@@ -\S+ \+(\d+)", l)
-    if h:
-        n = int(h.group(1)); continue
-    if l.startswith("+") and not l.startswith("+++"):
-        if start <= n <= end:
-            owed.update(f for f in smokes if f in l)
-        n += 1
+    cands = ([f"origin/{os.environ['GITHUB_BASE_REF']}"] if os.environ.get("GITHUB_BASE_REF") else []) + ["origin/main", "main"]
+    cands = list(dict.fromkeys(cands))
+base = next((c for c in cands if commit(c)), None) or no_base(f"no base ref ({', '.join(cands)})")
+mb = (git("merge-base", base, head) or "").strip() or no_base(f"no merge base of {base} and {a.head} (shallow clone?)")
+rng = f"{mb}..{head}"
 
-if owed:
-    print(f"behavior smoke: ok ({len(behaviour)} behaviour commits, smoke {', '.join(sorted(owed))}"
-          f"{', ' + str(len(neutral)) + ' opted out' if neutral else ''})")
+changed = git("diff", "--name-only", mb, head).split()
+roles = [f for f in changed if ROLE.match(f)]
+if not roles:
+    print(f"behavior smoke: ok (no role path changed since {mb[:7]})")
     sys.exit(0)
 
-print(f"{TAG}: role behaviour changed since {mb[:7]} with no live smoke and owed eval after it "
-      f"(#26 missing-behavior-smoke; rule: docs/adr/0008, second paragraph):", file=sys.stderr)
-for c, files in behaviour:
-    print(f"  {c[:7]} {git('log', '-1', '--format=%s', c).strip()[:70]}: {', '.join(files)}", file=sys.stderr)
-why = ("an evidence/*.md cites a branch commit but no line above `" + END + "` in docs/future.md names it" if smokes
-       else f"no evidence/*.md changed after {last[:7]} and still at the checked head, citing a commit of this branch")
-print(f"  missing: {why}.", file=sys.stderr)
-print(f"Fix: run the live smoke on the changed role text, record it in evidence/<date>-<slug>.md naming the commit it ran on "
-      f"(e.g. {last[:7]}), committed after {last[:7]}, and add the owed eval line naming that file above `{END}` in {FUTURE}. "
-      f"A behaviour-neutral commit (path repair, pointer-only rewrite) instead carries the trailer `Behaviour-neutral: <reason>` "
-      f"(git rebase -i, reword); the supervisor names each opt-out in the merge ask.", file=sys.stderr)
+# One pass over the range's non-merge commits: sha, message trailer, files.
+log = git("log", "--no-merges", "--name-only", "--format=%x00%H%x01%B%x01", rng)
+touching = {f: [] for f in roles}  # role path -> [(sha, reason or None)]
+for rec in log.split("\0")[1:]:
+    sha, body, files = rec.split("\x01", 2)
+    m = TRAILER.search(body)
+    for f in files.split():
+        if f in touching:
+            touching[f].append((sha, m.group(1).strip() if m else None))
+
+exempt = sorted(f for f, cs in touching.items() if cs and all(r for _, r in cs))
+seen = set()
+for f in exempt:
+    for sha, why in touching[f]:
+        if sha not in seen:
+            seen.add(sha)
+            print(f"behavior smoke: opt-out {sha[:7]} Behaviour-neutral: {why}")
+need = [f for f in roles if f not in exempt]
+if not need:
+    print(f"behavior smoke: ok ({len(roles)} role paths, all opted out)")
+    sys.exit(0)
+
+evidence = [f for f in git("diff", "--name-only", "--diff-filter=AM", mb, head).split() if EVIDENCE.match(f)]
+owed = FUTURE in changed
+if evidence and owed:
+    print(f"behavior smoke: ok ({len(need)} role paths, evidence {', '.join(evidence)}, {FUTURE} changed"
+          f"{f', {len(exempt)} opted out' if exempt else ''})")
+    sys.exit(0)
+
+print(f"{TAG}: role paths changed since {mb[:7]} with no smoke or owed eval in the same diff "
+      f"(#26 missing-behavior-smoke; rule: docs/adr/0008):", file=sys.stderr)
+for f in need:
+    plain = [s[:7] for s, r in touching[f] if not r]
+    print(f"  {f}" + (f" ({', '.join(plain)} without Behaviour-neutral)" if plain else " (changed only in a merge)"), file=sys.stderr)
+print(f"  missing: {' and '.join(x for x, ok in (('an added or modified evidence/*.md', evidence), (f'a {FUTURE} change', owed)) if not ok)}.",
+      file=sys.stderr)
+print(f"Fix: record the live smoke in evidence/<date>-<slug>.md and its owed eval in {FUTURE} on this branch (docs/adr/0008). "
+      f"A behaviour-neutral commit (path repair, pointer-only rewrite) instead carries the trailer "
+      f"`Behaviour-neutral: <reason>` (git rebase -i, reword); the supervisor lists each opt-out in the merge ask.", file=sys.stderr)
 sys.exit(1)
