@@ -21,7 +21,7 @@
 <h2>User stories</h2>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-gates">As the owner, I hand the factory an accepted spec and get back one pull request per lane with verified work, deciding only at the spec and merge gates, without writing code.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-one-vocabulary">As the owner reading any kit text, I see one vocabulary (owner, director, supervisor, worker, lane), so no retired role name hides an old behavior.</p>
-<p data-user-story data-user-facing="false" data-anchor="story-portable">As a builder porting the kit onto Exomachina or another runtime, I swap only the launch wiring, and the role files, briefs, logs, specs and ADRs carry over unchanged.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-portable">As a builder porting the kit onto Exomachina or another runtime, I replace the launch scripts and the herdr-comms skill and edit only the transport commands named in role files; role responsibilities, briefs, log formats, specs and ADRs carry over unchanged.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-pi-only">As the owner, I run one agent runtime, so there is one spawn path, one set of role contracts and one model route.</p>
 </section>
 
@@ -30,7 +30,7 @@
 <p data-acceptance-criterion data-anchor="acceptance-owner-pr" data-story="story-owner-gates"><span data-acceptance-scenario>Given the owner with an accepted spec, When the owner tells the director to build it, then the director relays a lane's merge ask,</span> <span data-acceptance-observable>Then the owner sees that lane's one pull request holding every ticket's work, a code-review verdict and passing required checks, and the owner has edited no file.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-retired-words" data-story="story-one-vocabulary" data-project-rule="Retired role words"><span data-acceptance-scenario>Given a maintainer, When any change adds kit text outside GLOSSARY.md and vendored skills that calls the top agent operator or the person human,</span> <span data-acceptance-observable>Then the gate fails and its message says to use director for the top agent and owner for the person.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-pi-only" data-story="story-pi-only" data-project-rule="Pi only"><span data-acceptance-scenario>Given a maintainer, When any change adds a Claude or Codex instruction file or projection to the kit,</span> <span data-acceptance-observable>Then the gate fails naming Pi as the only runtime.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-portable" data-story="story-portable"><span data-acceptance-scenario>Given a builder replacing the Pi and Herdr launch wiring with another runtime's launcher, When every role is started through the new launcher,</span> <span data-acceptance-observable>Then each role runs its file's model, tools, skills and contract, and no role file, brief, log, spec or ADR was edited for the port.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-portable" data-story="story-portable"><span data-acceptance-scenario>Given a builder replacing the Pi and Herdr launch wiring with another runtime's launcher, When every role is started through the new launcher,</span> <span data-acceptance-observable>Then each role runs its file's model, tools, skills and contract, the only role-file edits are to the transport commands they name, and no brief, log format, spec or ADR was edited for the port.</span></p>
 
 </section>
 
@@ -62,7 +62,7 @@
 <text x="550" y="206" text-anchor="middle" font-size="11">one per lane, always</text>
 <rect x="10" y="260" width="130" height="44" rx="6" fill="#fff" stroke="#333"/>
 <text x="75" y="280" text-anchor="middle" font-weight="600">Implementers</text>
-<text x="75" y="296" text-anchor="middle" font-size="11">one per ticket</text>
+<text x="75" y="296" text-anchor="middle" font-size="11">parallel, one per ticket</text>
 <rect x="150" y="260" width="120" height="44" rx="6" fill="#fff" stroke="#333"/>
 <text x="210" y="280" text-anchor="middle" font-weight="600">Corrector</text>
 <text x="210" y="296" text-anchor="middle" font-size="11">correction lanes only</text>
@@ -85,7 +85,7 @@
 </figure>
 <p data-anchor="factory-rule-director">The director edits no code or spec and never shapes; its only repo write is the spec pull request's generated status file (ADR 0007). It takes an accepted spec at kickoff, opens its spec pull request, cuts lanes once the spec is on main, files each lane's parent issue, starts one supervisor per lane, starts correction lanes on repeats, removes blockers and brings the owner only gate decisions.</p>
 <p data-anchor="factory-rule-shaping">Shaping and spec acceptance happen outside the factory, in the owner's own chat; the accepted spec, at an exact commit, is the only thing handed in (ADR 0021).</p>
-<p data-anchor="factory-rule-supervisor">Every lane gets a supervisor, even when it is the only one running: one lane is one merge ask on one parent issue. The supervisor files the lane's tickets, directs its workers and never does their work, reviews it, or accepts it.</p>
+<p data-anchor="factory-rule-supervisor">Every lane gets a supervisor, even when it is the only one running: one lane is one merge ask on one parent issue. The supervisor files the lane's tickets, directs its workers, runs implementers in parallel whenever ready tickets allow and it judges it practical, and never does their work, reviews it, or accepts it.</p>
 </section>
 <section data-anchor="is-isnt" id="is-isnt">
 <h2>What octo-feather is and is not</h2>
@@ -106,12 +106,12 @@
 </section>
 <section data-anchor="portability" id="portability">
 <h2>Runtime-neutral data, isolated launch wiring</h2>
-<p data-anchor="portability-rule">The kit keeps everything an agent needs as plain data, and keeps every Pi or Herdr specific step in a few launch scripts, so a port to Exomachina swaps those scripts only.</p>
+<p data-anchor="portability-rule">The kit keeps everything an agent needs as plain data, and keeps every Pi or Herdr specific step in a few launch scripts and the herdr-comms skill, so a port to Exomachina swaps those and edits only the transport commands role files name.</p>
 <div class="table-scroll" data-anchor="portability-table-wrap">
 <table data-anchor="portability-table">
 <thead><tr><th>Runtime-neutral data</th><th>Pi and Herdr specific wiring</th></tr></thead>
 <tbody>
-<tr data-anchor="portability-roles"><td>Role files <code>agents/*.md</code> (frontmatter and contract)</td><td><code>scripts/pi-role</code> (frontmatter to Pi flags)</td></tr>
+<tr data-anchor="portability-roles"><td>Role files <code>agents/*.md</code> (frontmatter and contract), apart from the transport commands they name</td><td><code>scripts/pi-role</code> (frontmatter to Pi flags)</td></tr>
 <tr data-anchor="portability-briefs"><td>Briefs in the pstack format, GOAL to TIMEBOX</td><td><code>herdr-spawn</code>, <code>herdr-say</code>, <code>herdr-close</code>, <code>herdr-wake</code></td></tr>
 <tr data-anchor="portability-logs"><td>Lane records, hand-off logs and the decision log (JSONL)</td><td><code>octo-feather-start</code>, <code>octo-feather-state</code></td></tr>
 <tr data-anchor="portability-docs"><td>Specs, ADRs, GLOSSARY.md, skills</td><td>Herdr workspace and tab names</td></tr>

@@ -68,22 +68,22 @@
 <tr data-anchor="review-bind"><td>Listening</td><td>The VM's internal address on an approved port (7400), which only exe.dev's HTTPS proxy can reach; it never listens on loopback, which the proxy cannot reach</td></tr>
 <tr data-anchor="review-proxy"><td>Exposure</td><td>exe.dev's HTTPS proxy with the VM's sharing mode Private: a request without an exe.dev login is redirected to the login page, so that login is the gate. The exe.dev share port (8000) is not used by Spec Chat</td></tr>
 <tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;slug&gt;/&lt;spec path&gt;</code></td></tr>
-<tr data-anchor="review-register"><td>Registering a spec</td><td><code>review-host.py register --slug &lt;slug&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill, with no exposure argument. The owner's shaping chat registers under the spec's own slug; a lane registers a spec revision under its lane key <code>gh&lt;N&gt;</code></td></tr>
+<tr data-anchor="review-register"><td>Registering a spec</td><td><code>review-host.py register --slug &lt;spec slug&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill, with no exposure argument. A spec has one review row, under its own spec slug, made when it is shaped; lanes link to that row and never register the spec again</td></tr>
 <tr data-anchor="review-accepted"><td>Acceptance record</td><td>The review host's accepted registration, at an exact commit; the director's kickoff check <code>octo-feather-accepted</code> reads it from every session's registry</td></tr>
-<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked for the user in <code>~/.agents/skills</code>; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
+<tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Installed by Spec Chat's installer; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
 </tbody>
 </table>
 </div>
 <p data-anchor="review-setup">Box setup installs the service once with Spec Chat's installer, passing <code>--public &lt;vm&gt;.exe.xyz --service</code>. Spec Chat's word <q>public</q> only means it binds an address other than loopback; exposure stays private because the exe.dev proxy and its login sit in front.</p>
+<p data-anchor="review-one-row">A spec has one review row, under its own spec slug: shaping makes it, acceptance is recorded on it, and a spec revision is reviewed on it. Lanes link to that row and never register the spec under a lane key.</p>
+<p data-anchor="review-link-rewrite">A supervisor sends the owner review links of the form <code>https://&lt;vm&gt;.exe.xyz:7400/&lt;slug&gt;/&lt;spec path&gt;</code>, rewriting the internal link the review service prints until Spec Chat prints the configured public address.</p>
 <p data-anchor="review-never-public">Never make the VM's exe.dev sharing public: a public share has no login and anyone with the link reads the spec.</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
-<p data-anchor="tbd-printed-url" data-spec-tbd>TBD: The review service prints links on the VM's internal address over plain HTTP, not the working <code>https://&lt;vm&gt;.exe.xyz:7400/&lt;lane&gt;/&lt;spec path&gt;</code> form, so a supervisor must rewrite the link before sending it up. Fix in Spec Chat, or rewrite in the kit?
-  <button type="button" data-spec-choice="Fix the printed URL in Spec Chat">Fix the printed URL in Spec Chat (recommended)</button>
-  <button type="button" data-spec-choice="Rewrite the link in the kit">Rewrite the link in the kit</button></p>
-<p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's installer does not yet link its skills into <code>~/.agents/skills</code>, so that link is made by hand on the VM; the one-line upstream change is open, not merged.</p>
-<p data-anchor="tbd-slug-mismatch" data-spec-tbd="later">TBD: Spec Chat keys lanes to <code>gh&lt;N&gt;</code> slugs and the Herdr session, while shaping registers a spec under its own slug: the shaping row shows under Settled, a lane that registers the spec again gets a second row whose acceptance stays on the shaping row, and the cross-lane contradiction check may compare a spec with itself. How should a lane and its spec's shaping row relate? Recorded in <a href="../future.md">docs/future.md</a>.</p>
+<p data-anchor="tbd-printed-url" data-spec-tbd="later">TBD: Spec Chat should print a configured public base address in its review links and fall back to the local one, so it works the same with or without this kit's workflow.</p>
+<p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's skills belong in each repository's <code>.agents/skills</code>, with relative links for other agent runtimes, never in the user's home folder. The fix is in progress in Spec Chat (<a href="https://github.com/0xTomDaniel/spec-chat/pulls">pull requests</a>) and supersedes #164, which links them into <code>~/.agents/skills</code> and was rejected by the owner.</p>
+<p data-anchor="tbd-slug-mismatch" data-spec-tbd="later">TBD: Spec Chat infers lanes from slug shape, so its index files a spec slug under Settled; a lane that the caller supplies at registration is recorded in <a href="../future.md">docs/future.md</a>.</p>
 <p data-anchor="tbd-model-key" data-spec-tbd="later">TBD: The model proxy key sits in plain text on the VM; swap it for a revocable key.</p>
 </section>
 

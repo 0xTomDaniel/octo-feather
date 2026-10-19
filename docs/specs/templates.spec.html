@@ -50,7 +50,7 @@
 <tr data-anchor="tpl-lint"><td>Lint</td><td>ruff, every rule enabled, plus ruff format</td><td>typescript-eslint strict-type-checked</td></tr>
 <tr data-anchor="tpl-types"><td>Types</td><td>basedpyright, strict</td><td>tsc, strictest settings</td></tr>
 <tr data-anchor="tpl-structure"><td>Structure</td><td>import-linter: the core never imports the CLI</td><td>dependency-cruiser: the core never imports the CLI, no cycles; knip for dead code</td></tr>
-<tr data-anchor="tpl-tests"><td>Tests</td><td>pytest, integration and end-to-end only</td><td>Vitest, integration and end-to-end through the app CLI; Playwright end-to-end when the app has a UI <span class="k" data-build="decided-not-built">decided, not yet built</span></td></tr>
+<tr data-anchor="tpl-tests"><td>Tests</td><td>pytest, integration and end-to-end only</td><td>Vitest, integration and end-to-end through the app CLI; Playwright end-to-end when the app has a UI</td></tr>
 <tr data-anchor="tpl-cli"><td>App surface</td><td>An app CLI whose commands print <code>--json</code></td><td>An app CLI whose commands print <code>--json</code></td></tr>
 <tr data-anchor="tpl-gate"><td>Gate</td><td><code>just check</code></td><td><code>just check</code></td></tr>
 <tr data-anchor="tpl-hooks"><td>Wiring</td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td></tr>
@@ -59,16 +59,12 @@
 </div>
 <p data-anchor="templates-tests-rule">Tests drive only public surfaces, the app CLI, HTTP or UI; there are no unit tests of internals (ADR 0002).</p>
 <p data-anchor="templates-location">Templates live in the kit at <code>templates/python</code> and <code>templates/typescript</code>; the kit's own gate checks each template's wiring.</p>
+<p data-anchor="templates-integrate-rule">Every target defines a <code>just integrate</code> recipe that calls the kit's integrate script; both templates ship one.</p>
+<p data-anchor="templates-instantiate-rule">The owner creates a repository from a template with a just recipe in the kit that copies the template.</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
-<p data-anchor="tbd-integrate-in-target" data-spec-tbd>TBD: In a target repository, <code>just integrate</code> exists only because the template's justfile defines it; a target not made from a template has no such recipe. Where should the supervisor's integrate command live?
-  <button type="button" data-spec-choice="The supervisor calls the kit's integrate script directly">The supervisor calls the kit's integrate script directly (recommended)</button>
-  <button type="button" data-spec-choice="Every target defines the recipe">Every target defines the recipe</button></p>
 <p data-anchor="tbd-status-check-in-target" data-spec-tbd="later">TBD: A target repository keeps its accepted specs and their status files in its own <code>docs/specs/</code>; the status check reaching the templates' <code>just check</code> is recorded in <a href="../future.md">docs/future.md</a>.</p>
-<p data-anchor="tbd-template-instantiation" data-spec-tbd>TBD: How the owner creates a repository from a template.
-  <button type="button" data-spec-choice="A just recipe that copies the template">A just recipe that copies the template (recommended)</button>
-  <button type="button" data-spec-choice="GitHub template repositories">GitHub template repositories</button></p>
 </section>
 
 </article>

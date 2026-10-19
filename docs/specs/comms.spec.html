@@ -147,14 +147,12 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <h2>Workspaces and teardown</h2>
 <p data-anchor="transport-space-derived">A lane's workspace id is the prefix of its supervisor's pane id, so no record key holds it. That workspace is the lane's own when no other lane's supervisor and not the director carries the same prefix.</p>
 <p data-anchor="transport-close-space">At teardown the director closes a lane's own workspace with <code>herdr-close</code>, which stops every process started in it. A lane started in a shared workspace ends at its supervisor tab, and the close report names that tab, never the workspace.</p>
-<p data-anchor="session-wake-owner">Spec Chat's review service may run in another Herdr session, so a supervisor registers each review row with an owner value naming its session and pane; a review hand-off wakes that supervisor in its own session.</p>
+<p data-anchor="session-wake-owner">Spec Chat's review service may run in another Herdr session, so each review row carries an owner value naming its session and pane; a review hand-off wakes that pane in its own session.</p>
+<p data-anchor="wake-provider-rule">A just recipe in the kit registers <code>herdr-wake</code> as Spec Chat's wake provider on the remote, so a review hand-off wakes the parked pane its row names.</p>
 <p data-anchor="transport-restart-risk">Risk: whether Herdr keeps workspace and pane ids across a Herdr server restart is unproven; if not, a restart breaks every lane record's supervisor pane.</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
-<p data-anchor="tbd-wake-provider" data-spec-tbd>TBD: Spec Chat's review service wakes a parked supervisor only once <code>herdr-wake</code> is registered as its wake provider on the remote, and nothing registers it yet. Who registers it?
-  <button type="button" data-spec-choice="A just recipe in the kit">A just recipe in the kit (recommended)</button>
-  <button type="button" data-spec-choice="A one-time manual step in box setup">A one-time manual step in box setup</button></p>
 <p data-anchor="tbd-a2a" data-spec-tbd="later">TBD: A2A may later replace lane records, hand-off logs and Herdr messages (ADR 0003); not before the spec is checked against A2A.</p>
 </section>
 

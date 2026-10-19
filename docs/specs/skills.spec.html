@@ -29,7 +29,7 @@
 <h2>Acceptance criteria</h2>
 <p data-acceptance-criterion data-anchor="acceptance-patch-only" data-story="story-upstream-base story-patch-reason" data-project-rule="Vendored skills change only by patch"><span data-acceptance-scenario>Given a maintainer, When any change edits the text of a vendored skill,</span> <span data-acceptance-observable>Then the edit lands as a patch in the skill's patch folder whose first line names the ADR it serves, and re-applying the pinned upstream with its patches reproduces the committed skill.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-skill-frontmatter" data-story="story-role-skills"><span data-acceptance-scenario>Given a maintainer, When any change adds a skill without a name or description in its frontmatter,</span> <span data-acceptance-observable>Then the gate fails naming the skill.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-only-listed" data-story="story-role-skills"><span data-acceptance-scenario>Given a supervisor in a target repository that has its own skills folder, When it starts an implementer there,</span> <span data-acceptance-observable>Then the implementer has loaded exactly the skills its role file lists, and none from the target's folder or the kit's by discovery.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-only-listed" data-story="story-role-skills"><span data-acceptance-scenario>Given a supervisor in a target repository that has its own skills folder, When it starts an implementer there,</span> <span data-acceptance-observable>Then the implementer has exactly the skills its role file lists available, and none from the target's folder or the kit's by discovery.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-external-skill" data-story="story-role-skills"><span data-acceptance-scenario>Given a box with Spec Chat's skills installed for the user, When the director starts a supervisor, then the supervisor needs a behavior change to its accepted spec,</span> <span data-acceptance-observable>Then the director's tab shows a review link for the revised spec from that supervisor, and the supervisor has shaped nothing else.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-notice" data-story="story-licences" data-project-rule="Vendored skills credited in NOTICE"><span data-acceptance-scenario>Given a maintainer, When any change vendors a new upstream skill,</span> <span data-acceptance-observable>Then NOTICE names that skill with its upstream, pin, licence and author.</span></p>
 
@@ -79,13 +79,13 @@
 <section data-anchor="loading" id="loading">
 <h2>Where skills live and how they load</h2>
 <p data-anchor="loading-folder">Every kit skill, vendored or local, is a folder in <code>.agents/skills/</code>; role files stay in <code>agents/</code>.</p>
-<p data-anchor="loading-listed">A role loads exactly the skills its file lists: discovery is off for every role, so neither the kit's nor a target repository's <code>.agents/skills</code> loads by itself. A target's own skills reach an implementer only when the target's <code>AGENTS.md</code> declares them on its <code>Repo skills:</code> line and the implementer loads them by name.</p>
+<p data-anchor="loading-listed">A role has exactly the skills its file lists available: discovery is off for every role, so neither the kit's nor a target repository's <code>.agents/skills</code> loads by itself. A target's own skills reach an implementer only when the target's <code>AGENTS.md</code> declares them on its <code>Repo skills:</code> line and the implementer loads them by name.</p>
 <p data-anchor="loading-external">Skills installed outside the kit, such as Spec Chat's, are named under <code>externalSkills</code> and found on <code>$OCTO_FEATHER_SKILL_PATH</code>, by default the user's <code>~/.agents/skills</code>, then <code>~/.pi/agent/skills</code> (ADR 0013). The supervisor lists Spec Chat's shaping and review skills, and uses shaping only to revise its accepted spec for re-review; shaping itself happens in the owner's chat (ADR 0021).</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
 <p data-anchor="tbd-verification-skill" data-spec-tbd="later">TBD: Vendor pstack <code>create-verification-skill</code> for the templates.</p>
-<p data-anchor="tbd-unvendored" data-spec-tbd="later">TBD: Matt's <code>handoff</code>, <code>to-spec</code> and <code>improve-codebase-architecture</code> stay unvendored until a role needs them.</p>
+<p data-anchor="tbd-unvendored" data-spec-tbd="later">TBD: Matt's <code>handoff</code> and <code>to-spec</code> stay unvendored until a role needs them. <code>improve-codebase-architecture</code> joins the shaping stack that owner chats use outside the factory, loaded the same way as the other shaping skills.</p>
 </section>
 
 </article>
