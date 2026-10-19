@@ -63,6 +63,10 @@ a lane pane to another space; Herdr rewrites its ids.
 
 Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent GitHub issue, which you file. Cut lanes from the accepted spec. Usually one spec is one lane; a big spec whose outcomes can merge independently becomes several lanes; several small coupled specs become one lane. Code that must change together stays with one owner (pstack poteto-mode `playbooks/feature.md`). There is no ticket cap: judge size by `to-tickets`' question (what can be demoed when this is done?) and by pstack orchestrate (split only when one supervisor cannot drain the work). The supervisor files the tickets as sub-issues.
 
+Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start a correction lane against the target repo when (a) the owner corrects something at a gate (spec, QA evidence, merge), or (b) a finding class repeats: two or more `"kind": "finding"` lines with the same `class` across any lanes, found after each merge ask with
+`jq -r 'select(.kind == "finding") | .class' $(octo-feather-state)/lanes/{,archive/}*.handoffs.jsonl | sort | uniq -c | awk '$1 >= 2'`.
+It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
+
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
 and branch (slug = `gh<issue number>`); `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
 write the lane record below from its output; send the supervisor a lane-shaped `/goal` as its first message (agents cannot run

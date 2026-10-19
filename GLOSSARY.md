@@ -13,7 +13,7 @@ The agent that owns one work item until it merges, breaking it into tasks, assig
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that does one assigned task inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are workers.
+An agent that does one assigned task inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
 
 **Implementer**:
@@ -25,7 +25,7 @@ Combining the finished changes of a work item's tasks into its one result. A scr
 _Avoid_: Integrator, merger
 
 **Corrector**:
-A fresh agent that, before review, finds the mistakes agents keep repeating and makes each one impossible to repeat.
+A fresh agent, run as its own correction lane when the owner corrects something at a gate or a finding class repeats, that finds the mistakes agents keep repeating and makes each one impossible to repeat. Factory quality, not product quality.
 _Avoid_: Fixer
 
 **Code reviewer**:
@@ -73,5 +73,5 @@ The Herdr space that holds one lane's agents, or the director's. The director ha
 _Avoid_: Space, session
 
 **Tab**:
-One agent's place inside a workspace, one agent per tab: `director`, `supervisor`, `worker-<k>`, `corrector`, `code-reviewer`.
+One agent's place inside a workspace, one agent per tab: `director`, `supervisor`, `worker-<k>`, `code-reviewer`, and `corrector` in a correction lane.
 _Avoid_: Pane (a tab holds exactly one pane), window

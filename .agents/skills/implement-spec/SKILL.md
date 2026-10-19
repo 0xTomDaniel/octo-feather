@@ -32,7 +32,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
-7. Once all tickets are complete and `just check` is green, spawn a fresh `corrector` (`herdr-spawn --role corrector`, own worktree off the integration head; integrate its commits like a ticket), then a fresh `code-reviewer` pane on the integration branch. Never review in your own context. Fix all issues raised by the code review in a single **implementer subagent**.
+7. Once all tickets are complete and `just check` is green, spawn a fresh `code-reviewer` pane on the integration branch. Never review in your own context. Log each finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix all issues raised by the code review in a single **implementer subagent**.
 
 8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 

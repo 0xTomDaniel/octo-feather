@@ -24,7 +24,8 @@ kit's `.agents/skills/herdr-comms/assets` and `scripts` on `PATH`.
 - One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
   started by `octo-feather-start --issue <n> --cwd <worktree>`.
 - In that workspace, one tab per worker: `worker-1`, `worker-2`, and the
-  per-merge `corrector` and `code-reviewer`. One agent per tab, one pane per tab.
+  per-merge `code-reviewer`; a correction lane has a `corrector` tab instead of
+  workers. One agent per tab, one pane per tab.
 
 ## Spawn an agent
 

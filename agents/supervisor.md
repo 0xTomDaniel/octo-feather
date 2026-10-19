@@ -1,6 +1,6 @@
 ---
 name: supervisor
-description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers in Herdr tabs, integrates with `just integrate`, and a fresh corrector and code-reviewer pane per merge.
+description: Supervisor. Owns one work item (a GitHub issue) from brief until it merges, spawns its workers in Herdr tabs, integrates with `just integrate`, and a fresh code-reviewer pane per merge.
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write
@@ -52,7 +52,9 @@ Own one issue or one epic coordination layer from brief through closure.
   Only the supervisor updates the lane record, and keeps it current as things change;
   a stale record misleads the board, the owner, and cross-lane sequencing.
   At each hand-off moment, append one line to `<lane record name>.handoffs.jsonl`
-  beside it, per spec `#handoff-fields`.
+  beside it, per spec `#handoff-fields`. Each code-review or QC finding gets its own
+  line: `{"at": ..., "kind": "finding", "source": "code-review" or "qc", "class": <its class tag>,
+  "blocking": true or false, "summary": ...}`; the director reads these to spot repeats (docs/adr/0020).
 
 ## Delivery
 
