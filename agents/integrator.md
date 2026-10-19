@@ -41,6 +41,10 @@ Integrate named worker commits onto the lane integration branch, and return the 
 - Never touch main, PR state, issue state, or others' branches.
 - Never update a branch checked out in another worktree; push the lane branch and let its supervisor pull.
 
+## Stop and escalate
+
+Stop on a moved branch, a conflict that changes behavior, or failing checks. Escalate only to your supervisor with `herdr-say --parent`, never to the director or the human: try first within your own authority; then send what is blocked, what you tried, and the options or what you need (docs/adr/0015).
+
 ## Output
 
-Last step, result or blocker alike: send the head commit, commits integrated, checks run and their result, and blockers to the supervisor pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the supervisor pane, to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the head commit, commits integrated, checks run and their result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

@@ -32,13 +32,14 @@ ours() {
 line=""
 if [[ "${1:-}" == --park ]]; then
   (($# == 2)) && [[ "$2" == *:* ]] || usage
-  pane="$2"; session=""; role=""; cwd=""
+  pane="$2"; session=""; role=""; cwd=""; parent=""
   for env in /proc/[0-9]*/environ; do
     ours "$env" "HERDR_PANE_ID=$pane" || continue
     vars="$(tr '\0' '\n' 2>/dev/null <"$env")" || continue
     session="$(sed -n 's/^OCTO_FEATHER_SESSION_ID=//p' <<<"$vars")"
     [[ -n "$session" ]] || continue
     role="$(sed -n 's/^OCTO_FEATHER_ROLE=//p' <<<"$vars")"
+    parent="$(sed -n 's/^OCTO_FEATHER_PARENT=//p' <<<"$vars")"
     pid="${env#/proc/}"; cwd="$(readlink "/proc/${pid%/environ}/cwd" 2>/dev/null || true)"
     break
   done
@@ -51,8 +52,8 @@ if [[ "${1:-}" == --park ]]; then
   label="$(herdr tab get "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")" 2>/dev/null | jq -r '.result.tab.label // empty')"
   [[ "$tabs" == 1 ]] && set -- "$space" || set -- "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")"
   line="$(jq -nc --arg at "$(date -u +%FT%TZ)" --arg pane "$pane" --arg name "$name" \
-    --arg role "$role" --arg cwd "$cwd" --arg session "$session" --arg label "$label" \
-    '{at: $at, kind: "parked", pane: $pane, name: $name, label: $label, role: $role, cwd: $cwd, session: $session}')"
+    --arg role "$role" --arg cwd "$cwd" --arg session "$session" --arg label "$label" --arg parent "$parent" \
+    '{at: $at, kind: "parked", pane: $pane, name: $name, label: $label, role: $role, parent: $parent, cwd: $cwd, session: $session}')"
 fi
 
 id="${1:-}"

@@ -46,6 +46,10 @@ _Avoid_: Subtask, ticket
 The running state of one work item while its supervisor works on it: its record, its hand-off log, its workspace and its integration branch. A lane starts when a supervisor is put on a work item and closes when the result merges. Kept as a separate word because it names that state, not the work item or the role.
 _Avoid_: Worklane, track
 
+**Escalation**:
+A problem passed one level up the chain (worker, supervisor, director, human) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the human.
+_Avoid_: Ping, flag, bubbling up
+
 **Gate**:
 A point where work stops until the human decides, such as accepting a spec or a merge.
 _Avoid_: Checkpoint, approval step

@@ -21,3 +21,11 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 ## Spec Chat skills for the supervisor
 
 octo-lite's supervisor listed `spec-chat-shape` and `spec-chat-review`, which live in the Spec Chat peer repo. They were dropped from `agents/supervisor.md` because nothing provides them on the remote; add them to its `skills` and `skillPath` once Spec Chat is installed there.
+
+## Jev QA recipe (name pending)
+
+Jev capture, replay and judging stay out of `just check`, which runs only deterministic checks (Tom, 2026-10-18). They get their own `just` recipe, name not chosen yet, run by the supervisor before a merge ask. `just check` fails if the justfile mentions it.
+
+## Integrator model
+
+Tom has not chosen the integrator's model yet; `agents/integrator.md` still carries the earlier proposal (gpt-6.1-sol medium).

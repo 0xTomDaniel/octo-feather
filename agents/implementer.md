@@ -1,7 +1,7 @@
 ---
 name: implementer
 description: Implement one ticket inside the worktree it was given, and return the commit.
-model: openai/gpt-6.1-sol
+model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
 skills: commit, github, nodejs, pnpm, pull, python, tdd, typescript
@@ -51,8 +51,8 @@ Implement one ticket inside the worktree it was given, and return the commit.
 
 ## Stop and escalate
 
-Stop on a ticket that contradicts the spec, a missing environment, or work that cannot be done without leaving the worktree.
+Stop on a ticket that contradicts the spec, a missing environment, or work that cannot be done without leaving the worktree. Escalate only to your supervisor with `herdr-say --parent`, never to the director or the human: try first within your own authority; then send what is blocked, what you tried, and the options or what you need (docs/adr/0015).
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, declared repo skills loaded, validation run and its result, and blockers to the supervisor pane your brief names with `herdr-say`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, send it once, naming the supervisor pane, to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, declared repo skills loaded, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the operator pane (`pane` in `$(octo-feather-state)/operator.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

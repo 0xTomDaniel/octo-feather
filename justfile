@@ -46,6 +46,8 @@ check-refs:
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
+    if grep -nHi 'j[e]v' justfile; then
+      echo "check-refs: the QA judge above stays out of the justfile gate; just check is deterministic only (docs/future.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"

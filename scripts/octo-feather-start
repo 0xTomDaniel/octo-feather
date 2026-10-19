@@ -12,10 +12,10 @@
 # --name and --resume SESSION continue a parked supervisor in a new lane workspace.
 set -euo pipefail
 
-cwd="$PWD"; name=""; label=""; role="supervisor"; model=(); resume=()
+cwd="$PWD"; name=""; label=""; role="supervisor"; model=(); resume=(); parent=()
 usage() {
   echo "usage: octo-feather-start (--director | --issue N | --name LANE) [--cwd DIR]" \
-       "[--label LABEL] [--operating-model FILE] [--resume SESSION]" >&2
+       "[--label LABEL] [--operating-model FILE] [--resume SESSION] [--parent PANE]" >&2
   exit 64
 }
 while (($#)); do
@@ -28,6 +28,7 @@ while (($#)); do
     --runtime) [[ "${2:?}" == pi ]] || usage; shift 2 ;;   # pi only, kept for callers
     --operating-model) model=(--operating-model "${2:?}"); shift 2 ;;
     --resume) resume=(--resume "${2:?}"); shift 2 ;;
+    --parent) parent=(--parent "$2"); shift 2 ;;
     *) usage ;;
   esac
 done
@@ -46,7 +47,7 @@ workspace="$(jq -r '.result.workspace.workspace_id // empty' <<<"$out")"
 seed="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
 [[ -n "$workspace" && -n "$seed" ]] || { echo "octo-feather-start: workspace create returned no workspace or tab" >&2; exit 1; }
 spawned="$("$root/skills/herdr-comms/assets/herdr-spawn" --workspace "$workspace" --name "$name" \
-  --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" -- pi)" || {
+  --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi)" || {
   rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
 # The workspace's seed tab is a bare shell; the agent's tab is the only one left.
 herdr tab close "$seed" >/dev/null
