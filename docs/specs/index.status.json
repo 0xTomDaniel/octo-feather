@@ -3,8 +3,8 @@
   "accepted_commit": "bfb3a92",
   "criteria": {
     "acceptance-index-links": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     }
   }
 }
