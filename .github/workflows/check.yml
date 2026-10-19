@@ -1,5 +1,5 @@
 # The kit gate in CI: the same `just check` agents and git hooks run
-# (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs;
+# — (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs;
 # ubuntu-latest already ships bash, git, python3 and shellcheck.
 name: check
 on:
