@@ -11,16 +11,16 @@
       "pr": null
     },
     "acceptance-only-listed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     },
     "acceptance-external-skill": {
       "status": "planned",
       "pr": null
     },
     "acceptance-notice": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 16
     }
   }
 }
