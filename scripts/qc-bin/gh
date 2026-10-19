@@ -1,0 +1,263 @@
+#!/usr/bin/env python3
+"""gh: the qc judge's offline, read-only gh (docs/adr/0022).
+scripts/octo-feather-qc-sandbox puts this dir first on the judge's PATH. It answers reads from the
+snapshot scripts/octo-feather-qc-ghsnap fetched before the run (read-only bind, never the network):
+issue view|list, pr view|list|diff|checks, run view|list, repo view, api GET, --json/-q/--jq.
+It refuses every write and every call the snapshot cannot answer (exit 1) and logs each refusal.
+Env: OCTO_FEATHER_GHSNAP snapshot dir; OCTO_FEATHER_GHSNAP_OFF why there is none (then every call
+is refused with it); OCTO_FEATHER_GHSNAP_MISS the refusal log. File contents and commits come from
+the git repo of the current directory."""
+import json, os, re, subprocess, sys, base64
+SNAP = os.environ.get("OCTO_FEATHER_GHSNAP", "")
+MISS = os.environ.get("OCTO_FEATHER_GHSNAP_MISS", "")
+GIT = os.getcwd()
+REPO = ""
+
+
+def select_repo(argv):
+    """Refuse a repo other than the snapshot's, named by -R/--repo, a github.com URL, or an api repos/<o>/<n> path."""
+    want = None
+    for i, a in enumerate(argv):
+        if a in ("-R", "--repo") and i + 1 < len(argv): want = argv[i + 1]
+        elif a.startswith("--repo="): want = a[7:]
+        else:
+            m = re.search(r"github\.com/([^/\s]+/[^/\s#?]+)", a) or re.match(r"/?repos/([^/]+/[^/?]+)", a)
+            if m and want is None: want = m.group(1)
+    if not want: return
+    want = want.split("github.com/")[-1].strip("/").removesuffix(".git")
+    if want.lower() == REPO.lower(): return
+    miss(f"repo {want} not in read-only snapshot (have {REPO})")
+
+
+def miss(why, code=1):
+    if MISS:
+        try:
+            with open(MISS, "a") as f: f.write(json.dumps({"argv": sys.argv[1:], "why": why}) + "\n")
+        except OSError: pass
+    try: at = open(os.path.join(SNAP, "fetched_at")).read().strip()
+    except OSError: at = "none"
+    print(f"gh (offline read-only snapshot, fetched {at}): {why}", file=sys.stderr); sys.exit(code)
+
+
+def load(p):
+    try: return json.load(open(os.path.join(SNAP, p)))
+    except (OSError, ValueError): return None
+
+
+def emit(obj, jq):
+    if jq:
+        r = subprocess.run(["jq", "-r", jq], input=json.dumps(obj), capture_output=True, text=True)
+        sys.stdout.write(r.stdout); sys.stderr.write(r.stderr); sys.exit(r.returncode)
+    print(json.dumps(obj, indent=2)); sys.exit(0)
+
+
+def parse(args, flags, bools=()):
+    """flags: {alias: name}; returns (opts, positionals)."""
+    o, pos, i = {}, [], 0
+    while i < len(args):
+        a = args[i]; k, eq, v = a.partition("=")
+        if k in flags and flags[k] not in bools:
+            if not eq: i += 1; v = args[i] if i < len(args) else miss(f"flag {k} needs a value")
+            o.setdefault(flags[k], []).append(v)
+        elif a in flags: o[flags[a]] = [True]
+        elif a.startswith("-"): miss(f"unsupported flag {a} in read-only snapshot")
+        else: pos.append(a)
+        i += 1
+    return {k: (v if k in ("field", "rawfield", "header") else v[-1]) for k, v in o.items()}, pos
+
+
+def pick(obj, fields):
+    return {f: obj.get(f) for f in fields.split(",")} if fields else obj
+
+
+def check_repo(o):
+    r = o.get("repo")
+    if r and r.split("github.com/")[-1].strip("/").removesuffix(".git").lower() != REPO.lower(): miss(f"repo {r} not in snapshot")
+
+
+def num(ref):
+    m = re.search(r"(\d+)$", str(ref).rstrip("/"))
+    return int(m.group(1)) if m else None
+
+
+COMMON = {"-R": "repo", "--repo": "repo", "--json": "json", "-q": "jq", "--jq": "jq", "-t": "template", "--template": "template"}
+
+
+def item_view(kind, args):
+    o, pos = parse(args, {**COMMON, "-c": "comments", "--comments": "comments", "-w": "web", "--web": "web"}, ("comments", "web"))
+    check_repo(o)
+    if o.get("web"): miss("--web not available")
+    if o.get("template"): miss("--template not supported by the snapshot shim; use --json/--jq")
+    if kind == "pr":
+        ref = pos[0] if pos else subprocess.run(["git", "-C", os.getcwd(), "branch", "--show-current"], capture_output=True, text=True).stdout.strip()
+        n = num(ref) if pos and num(ref) is not None and not re.search(r"[A-Za-z]", ref.split("/")[-1]) else None
+        if n is None:
+            hits = [p for p in (load("pr-list.json") or []) if p["headRefName"] == ref]
+            if not hits: miss(f"no pull requests found for branch \"{ref}\"")
+            n = hits[0]["number"]
+        d = load(f"pr/{n}.json")
+    else:
+        if not pos: miss("issue number required")
+        n = num(pos[0]); d = load(f"issue/{n}.json") or load(f"pr/{n}.json")
+    if d is None:   # beyond the detail cap: the list row answers if it has every asked field
+        rows = [r for f in (("pr-list.json",) if kind == "pr" else ("issue-list.json", "pr-list.json")) for r in (load(f) or []) if r["number"] == n]
+        if rows and o.get("json") and all(f in rows[0] for f in o["json"].split(",")): d = rows[0]
+        elif rows: miss(f"{kind} #{n} is list-only in the snapshot (beyond its detail cap); ask --json with list fields: {','.join(rows[0])}")
+    if d is None: miss(f"{kind} #{pos[0] if pos else ''} not in snapshot")
+    if o.get("json"): emit(pick(d, o["json"]), o.get("jq"))
+    print(f"title:\t{d['title']}\nstate:\t{d['state']}\nauthor:\t{d['author']['login']}\nlabels:\t{', '.join(l['name'] for l in d.get('labels', []))}\nnumber:\t{d['number']}\nurl:\t{d['url']}")
+    if kind == "pr": print(f"base:\t{d['baseRefName']}\nhead:\t{d['headRefName']} {d['headRefOid']}\ndraft:\t{d['isDraft']}\nmerged:\t{d.get('mergedAt')}")
+    print("--\n" + (d.get("body") or ""))
+    if o.get("comments"):
+        for c in d.get("comments", []): print(f"--\n{c['author']['login']} ({c['createdAt']}):\n{c['body']}")
+    sys.exit(0)
+
+
+def item_list(kind, args):
+    o, pos = parse(args, {**COMMON, "-s": "state", "--state": "state", "-L": "limit", "--limit": "limit", "-l": "label", "--label": "label",
+                          "-H": "head", "--head": "head", "-B": "base", "--base": "base", "-d": "draft", "--draft": "draft",
+                          "-A": "author", "--author": "author"}, ("draft",))
+    check_repo(o)
+    if pos: miss(f"unexpected argument {pos[0]}")
+    if o.get("template"): miss("--template not supported by the snapshot shim; use --json/--jq")
+    if kind == "pr": rows = [load(f"pr/{p['number']}.json") or p for p in load("pr-list.json")]
+    else: rows = load("issue-list.json")
+    st = o.get("state", "open").lower()
+    want = {"open": ["OPEN"], "closed": ["CLOSED", "MERGED"], "merged": ["MERGED"], "all": None}.get(st, "bad")
+    if want == "bad": miss(f"bad state {st}")
+    rows = [r for r in rows if want is None or r["state"] in want]
+    for key, f in (("head", lambda r, v: r["headRefName"] == v), ("base", lambda r, v: r["baseRefName"] == v),
+                   ("label", lambda r, v: v in [l["name"] for l in r.get("labels", [])]), ("author", lambda r, v: r["author"]["login"] == v)):
+        if key in o: rows = [r for r in rows if f(r, o[key])]
+    if o.get("draft"): rows = [r for r in rows if r.get("isDraft")]
+    rows = sorted(rows, key=lambda r: -r["number"])[: int(o.get("limit", 30))]
+    if o.get("json"): emit([pick(r, o["json"]) for r in rows], o.get("jq"))
+    for r in rows:
+        print("\t".join(map(str, [r["number"], r["title"], r.get("headRefName", ", ".join(l["name"] for l in r.get("labels", []))), r["state"], r["updatedAt"]])))
+    sys.exit(0)
+
+
+def contents(path, ref):
+    ref = ref or ((load("repo.json") or {}).get("defaultBranchRef") or {}).get("name") or "main"
+    for rev in (f"origin/{ref}", ref):
+        t = subprocess.run(["git", "-C", GIT, "cat-file", "-t", f"{rev}:{path}"], capture_output=True, text=True).stdout.strip()
+        if t: break
+    else: miss(f"contents {path}@{ref}: not found (HTTP 404)")
+    oid = subprocess.run(["git", "-C", GIT, "rev-parse", f"{rev}:{path}"], capture_output=True, text=True).stdout.strip()
+    if t == "tree":
+        out = subprocess.run(["git", "-C", GIT, "ls-tree", "-l", f"{rev}:{path}"], capture_output=True, text=True).stdout
+        return [{"name": l.split("\t")[1], "path": f"{path.rstrip('/')}/{l.split(chr(9))[1]}".lstrip("/"), "sha": l.split()[2],
+                 "size": 0 if l.split()[3] == "-" else int(l.split()[3]), "type": "dir" if l.split()[1] == "tree" else "file"} for l in out.splitlines()]
+    raw = subprocess.run(["git", "-C", GIT, "cat-file", "blob", oid], capture_output=True).stdout
+    return {"type": "file", "name": path.split("/")[-1], "path": path, "sha": oid, "size": len(raw), "encoding": "base64",
+            "content": base64.encodebytes(raw).decode()}
+
+
+def commit_obj(sha, git_style):
+    g = lambda *a: subprocess.run(["git", "-C", GIT, *a], capture_output=True, text=True).stdout
+    full = g("rev-parse", "--verify", "--quiet", f"{sha}^{{commit}}").strip()
+    if not full: miss(f"commit {sha}: No commit found for SHA (HTTP 422)")
+    f = g("show", "-s", "--format=%P%n%T%n%an%n%ae%n%aI%n%cn%n%ce%n%cI%n%B", full).split("\n", 8)
+    parents = [{"sha": x} for x in f[0].split()]
+    au = {"name": f[2], "email": f[3], "date": f[4]}; co = {"name": f[5], "email": f[6], "date": f[7]}
+    if git_style: return {"sha": full, "parents": parents, "tree": {"sha": f[1]}, "author": au, "committer": co, "message": f[8].rstrip("\n")}
+    files = []
+    for l in g("diff-tree", "--no-commit-id", "-r", "--root", "-m", "--first-parent", "--numstat", full).splitlines():
+        a, d, name = l.split("\t", 2); files.append({"filename": name, "additions": int(a) if a.isdigit() else 0, "deletions": int(d) if d.isdigit() else 0})
+    return {"sha": full, "parents": parents, "commit": {"message": f[8].rstrip("\n"), "author": au, "committer": co, "tree": {"sha": f[1]}}, "files": files}
+
+
+def api(args):
+    o, pos = parse(args, {"-X": "method", "--method": "method", "-q": "jq", "--jq": "jq", "-H": "header", "--header": "header",
+                          "--paginate": "paginate", "-f": "rawfield", "--raw-field": "rawfield", "-F": "field", "--field": "field",
+                          "--input": "input", "-i": "include", "--include": "include", "--slurp": "slurp", "-t": "template", "--template": "template",
+                          "--cache": "cache", "--hostname": "hostname"}, ("paginate", "include", "slurp"))
+    if pos and pos[0].lstrip("/").startswith("graphql"): miss("graphql not in read-only snapshot; use REST paths or gh issue/pr view --json")
+    m = o.get("method", "GET").upper()
+    if m != "GET" or o.get("input"): miss(f"write refused: read-only snapshot (method {m})")
+    fields = (o.get("field") or []) + (o.get("rawfield") or [])
+    if fields and "method" not in o: miss("write refused: -f/-F fields without -X GET make gh api POST; use -X GET or a ?query string")
+    if not pos: miss("api path required")
+    p = pos[0] + (("&" if "?" in pos[0] else "?") + "&".join(fields) if fields else "")
+    p = p.replace("{owner}", REPO.split("/")[0]).replace("{repo}", REPO.split("/")[1]).lstrip("/")
+    p = re.sub(r"^https://api\.github\.com/", "", p)
+    if p == "graphql" or p.startswith("graphql"): miss("graphql not in read-only snapshot; use REST paths or gh issue/pr view --json")
+    if p == "user": miss("no authenticated user in the read-only snapshot (HTTP 401)")
+    base, _, q = p.partition("?"); qs = dict(kv.partition("=")[::2] for kv in q.split("&") if kv)
+    if base.startswith(f"repos/{REPO}/contents"):
+        emit(contents(base[len(f"repos/{REPO}/contents"):].lstrip("/"), qs.get("ref")), o.get("jq"))
+    m = re.fullmatch(rf"repos/{re.escape(REPO)}/(git/)?commits/([0-9a-fA-F]{{7,40}}|[\w./-]+)", base)
+    if m and not base.endswith(("/check-runs", "/status")): emit(commit_obj(m.group(2), bool(m.group(1))), o.get("jq"))
+    name = re.sub(r"[?&=]", "_", p.replace("/", "__"))
+    d = load(f"api/{name}.json")
+    if d is None and q:  # query only paginates/filters: fall back to the unfiltered path
+        b = base.replace('/', '__')
+        d = load(f"api/{b}.json")
+        d = load(f"api/{b}_state_all.json") if d is None else d
+        if d is not None and isinstance(d, list) and qs.get("state") in ("open", "closed"):
+            d = [x for x in d if x.get("state") == qs["state"]]
+    if d is None:
+        err = os.path.join(SNAP, "api", base.replace("/", "__") + ".err")
+        if os.path.exists(err): sys.stderr.write(open(err).read()); sys.exit(1)
+        miss(f"api {p} not in read-only snapshot")
+    emit(d, o.get("jq"))
+
+
+def run_cmd(sub, args):
+    o, pos = parse(args, {**COMMON, "-L": "limit", "--limit": "limit", "-b": "branch", "--branch": "branch", "-w": "workflow",
+                          "--workflow": "workflow", "-s": "status", "--status": "status", "-c": "commit", "--commit": "commit",
+                          "--log": "log", "--log-failed": "log", "-v": "verbose", "--verbose": "verbose"}, ("log", "verbose"))
+    check_repo(o)
+    if o.get("log"): miss("run logs not in read-only snapshot")
+    rows = load("run-list.json") or []
+    if sub == "view":
+        if not pos: miss("run id required")
+        rows = [r for r in rows if str(r["databaseId"]) == pos[0]]
+        if not rows: miss(f"run {pos[0]} not in snapshot")
+        if o.get("json"): emit(pick(rows[0], o["json"]), o.get("jq"))
+        print(json.dumps(rows[0], indent=2)); sys.exit(0)
+    for k, f in (("branch", "headBranch"), ("workflow", "workflowName"), ("status", "conclusion"), ("commit", "headSha")):
+        if k in o: rows = [r for r in rows if r.get(f) == o[k] or (k == "status" and r.get("status") == o[k])]
+    rows = rows[: int(o.get("limit", 20))]
+    if o.get("json"): emit([pick(r, o["json"]) for r in rows], o.get("jq"))
+    for r in rows: print("\t".join(map(str, [r["status"], r["conclusion"], r["displayTitle"], r["workflowName"], r["headBranch"], r["event"], r["databaseId"], r["createdAt"]])))
+    sys.exit(0)
+
+
+def main(a):
+    global REPO
+    if not SNAP:
+        miss(os.environ.get("OCTO_FEATHER_GHSNAP_OFF") or "no GitHub snapshot in this run (OCTO_FEATHER_GHSNAP unset)")
+    REPO = (load("meta.json") or {}).get("repo") or miss(f"snapshot {SNAP} unreadable (no meta.json)")
+    select_repo(a)
+    while a and a[0] in ("-R", "--repo"): a = a[2:]  # tolerate leading global repo flag
+    if not a or a[0] in ("-h", "--help", "help"):
+        m = load("meta.json"); print(__doc__ + f"\nsnapshot: {REPO} at {m['fetched_at']}, counts {json.dumps(m['counts'])}, list-only (beyond detail cap): {' '.join(m['capped']) or 'none'}"); sys.exit(0)
+    c, s, rest = a[0], (a[1] if len(a) > 1 else ""), a[2:]
+    if c == "auth": miss("You are not logged into any GitHub hosts. Read-only snapshot shim: no credentials, no writes.")
+    if c in ("issue", "pr") and s == "view": item_view(c, rest)
+    if c in ("issue", "pr") and s in ("list", "ls"): item_list(c, rest)
+    if c == "pr" and s == "diff":
+        o, pos = parse(rest, {"-R": "repo", "--repo": "repo", "--name-only": "names", "--patch": "patch", "--color": "color"}, ("names", "patch"))
+        n = num(pos[0]) if pos else None
+        try: t = open(f"{SNAP}/diff/{n}.diff").read()
+        except OSError: miss(f"diff for pr {pos[0] if pos else '(current branch)'} not in snapshot")
+        if o.get("names"): t = "\n".join(sorted({l[6:] for l in t.splitlines() if l.startswith("+++ b/")})) + "\n"
+        sys.stdout.write(t); sys.exit(0)
+    if c == "pr" and s == "checks":
+        o, pos = parse(rest, {"-R": "repo", "--repo": "repo", "--json": "json", "-q": "jq", "--jq": "jq", "--required": "req"}, ("req",))
+        d = load(f"pr/{num(pos[0]) if pos else 0}.json") or miss("pr not in snapshot")
+        rows = d.get("statusCheckRollup") or []
+        if o.get("json"): emit([pick({**r, "state": r.get("conclusion") or r.get("state"), "bucket": (r.get("conclusion") or r.get("state") or "").lower()}, o["json"]) for r in rows], o.get("jq"))
+        for r in rows: print(f"{r.get('name') or r.get('context')}\t{(r.get('conclusion') or r.get('state') or r.get('status') or '').lower()}\t{r.get('detailsUrl') or r.get('targetUrl') or ''}")
+        sys.exit(0 if all((r.get("conclusion") or r.get("state")) in ("SUCCESS", "NEUTRAL", "SKIPPED") for r in rows) else 8)
+    if c == "api": api(a[1:])
+    if c == "run" and s in ("view", "list", "ls"): run_cmd("view" if s == "view" else "list", rest)
+    if c == "repo" and s == "view":
+        o, pos = parse(rest, COMMON); d = load("repo.json")
+        if o.get("json"): emit(pick(d, o["json"]), o.get("jq"))
+        print(json.dumps(d, indent=2)); sys.exit(0)
+    miss(f"'gh {' '.join(a[:2])}' is not in the read-only snapshot (reads only: issue/pr view|list, pr diff|checks, api GET, run view|list, repo view); no writes")
+
+
+main(sys.argv[1:])

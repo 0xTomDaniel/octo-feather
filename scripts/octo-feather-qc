@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qc STATUS PR ID... [--no-sandbox]   interim product QC (`just qc`, docs/adr/0022)
+"""octo-feather-qc STATUS PR ID... [--no-sandbox] [--no-github]   interim product QC (`just qc`, docs/adr/0022)
 
 Run in a lane worktree at its integrated head. A fresh, read-only code-reviewer
 (agents/code-reviewer.md, headless through pi-role) gets a QC brief: judge the
@@ -13,6 +13,12 @@ The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
 which documents its mounts and checks): a pre-run proof is printed and any
 failed check aborts before the judge starts; after it exits, leftovers are
 killed and the agents it started are counted.
+GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
+fresh snapshot with this shell's gh auth into per-run scratch before every run;
+the sandbox binds it read-only and the offline gh (scripts/qc-bin/gh) serves it,
+refusing writes. No GitHub remote: no snapshot, and that gh refuses every call.
+  --no-github            skip the snapshot (printed in the proof) instead of
+                         aborting when the fetch fails
   --no-sandbox           debugging only: prints UNSANDBOXED, writes the report,
                          never changes or commits the status file
   OCTO_FEATHER_QC_MODEL  judge model override (still checked against the family)
@@ -22,10 +28,13 @@ killed and the agents it started are counted.
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (judge's report, raw run, proof and cleanup).
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
-the judge wrote files or copied Pi credentials into the worktree, 64 usage or same-family judge, 65 dirty worktree,
-66 sandbox unavailable or a pre-run proof check failed (judge not started).
+the judge wrote files or copied Pi credentials into the worktree, 64 usage (PR not a
+positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
+66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
+(no auth, network; rerun with --no-github to judge without it). On 64 to 67 the judge never
+started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, threading, time
+import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, threading, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -77,6 +86,10 @@ def criteria_text(spec):
 BRIEF = """QC run (docs/adr/0022). You are the product judge for this lane head, not a code reviewer: skip the code-review skill's diff passes, message nobody (no herdr-say), and change no file (no edit, no commit, no file written in the repo; scratch only under /tmp).
 Repo: {repo}, head {head}. Spec: {spec}.
 For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Apply the principle-prove-it-works skill: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
+Evidence besides the repo:
+- GitHub: {github}
+- Lane and director history: $(octo-feather-state)/lanes/archive/ holds closed lanes' records and hand-off logs, and $(octo-feather-state)/director.handoffs.jsonl the director's log; both read-only, either may be absent.
+When you judge a criterion only from this history (GitHub snapshot, lane records, logs) rather than by exercising it, its why starts "history only:" and it passes only if the history shows the exact required behavior. If neither exercising nor history shows it, fail it and say what was missing.
 Criteria:
 {criteria}
 Your final message is exactly one fenced json block and nothing else:
@@ -85,7 +98,43 @@ Your final message is exactly one fenced json block and nothing else:
 ```"""
 
 
-def sandboxed(judge, session):
+def github_snapshot(skip, runid):
+    """Fetch this run's GitHub snapshot outside the sandbox; return {dir, line, repo, meta} or {off}."""
+    url = subprocess.run(["git", "remote", "get-url", "origin"], capture_output=True, text=True).stdout.strip()
+    m = re.search(r"github\.com[:/]+([^/\s]+/[^/\s]+?)(?:\.git)?/?$", url)
+    if not m:
+        return {"off": "github: none (no GitHub remote)"}
+    if skip:
+        return {"off": f"github: SKIPPED (--no-github; {m.group(1)} not fetched, the judge has no GitHub evidence)"}
+    snap = Path(tempfile.mkdtemp(prefix=f"qc-ghsnap-{runid}-"))
+    p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
+    if p.returncode:
+        drop(snap)
+        die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
+                f"{p.stderr.strip() or p.stdout.strip()}")
+    subprocess.run(["chmod", "-R", "a-w", str(snap)], check=True)
+    meta = json.loads((snap / "meta.json").read_text())
+    return {"dir": str(snap), "line": p.stdout.strip(), "repo": meta["repo"], "meta": meta}
+
+
+def drop(path):
+    subprocess.run(["chmod", "-R", "u+w", str(path)], capture_output=True)
+    shutil.rmtree(path, ignore_errors=True)
+
+
+def evidence(gh):
+    if "off" in gh:
+        return f"{gh['off']}. `gh` here is the offline gh and refuses every call."
+    m = gh["meta"]
+    cap = f" Older items, list rows only: {' '.join(m['capped'])}." if m["capped"] else ""
+    return (f"`gh` is an offline, read-only {gh['line']}, fetched before this run. Full views (comments, reviews, commits, "
+            f"files, closing issues, sub-issues, blocked-by, timeline, head check runs) for the {m['counts']['detail']} most "
+            f"recently updated issues and PRs.{cap} It answers `gh issue view|list`, `gh pr view|list|diff|checks`, "
+            f"`gh run view|list`, `gh repo view` and `gh api` GET paths of {m['repo']} (--json, -q/--jq); it refuses every write "
+            f"and anything not in the snapshot, and each refusal is counted in the report.")
+
+
+def sandboxed(judge, session, gh):
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started."""
     unshare = shutil.which("unshare")
     if not unshare:
@@ -99,7 +148,7 @@ def sandboxed(judge, session):
     got = {n: [] for n in names}
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
-    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p]
+    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else [])
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
     worktree = git("rev-parse", "--show-toplevel")
     # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
@@ -110,6 +159,7 @@ def sandboxed(judge, session):
                QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
                QC_HERDR=shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
+               QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
 
     def drain(n):
@@ -191,47 +241,81 @@ def credential_copies(top, needles):
 
 
 def main(argv):
-    nosb = "--no-sandbox" in argv
-    argv = [a for a in argv if a != "--no-sandbox"]
-    if len(argv) < 3 or not argv[1].isdigit():
+    flags = {"--no-sandbox", "--no-github"}
+    nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
+    argv = [a for a in argv if a not in flags]
+    if len(argv) < 3:
         print(__doc__.strip(), file=sys.stderr); return 64
+    if not re.fullmatch(r"[1-9][0-9]*", argv[1]):
+        die(64, f"PR must be a positive integer, got {argv[1]!r}")
     status, pr, ids = Path(argv[0]), int(argv[1]), argv[2:]
     if git("status", "--porcelain"):
         die(65, "worktree is dirty; QC judges a committed head")
     head = git("rev-parse", "HEAD")
     data = json.loads(status.read_text(encoding="utf-8"))
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if dup:
+        die(64, f"ids given twice: {' '.join(dup)}")
     missing = [i for i in ids if i not in data.get("criteria", {})]
     if missing:
         die(64, f"not in {status}: {' '.join(missing)}")
     spec = status.with_name(data["spec"])
     text = criteria_text(spec)
+    missing = [i for i in ids if not text.get(i)]
+    if missing:
+        die(64, f"no criterion text in {spec}: {' '.join(missing)}")
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("code-reviewer", "model")
     impl = front("implementer", "model")
     if model.split("/")[0] == impl.split("/")[0]:
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
-    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec,
-                         criteria="\n".join(f"- {i}: {text.get(i, '')}" for i in ids))
+    runid = secrets.token_hex(3)
+    gh = github_snapshot(nogh, runid)
+    print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
+    try:
+        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb)
+    finally:
+        if "dir" in gh:
+            drop(gh["dir"])
+
+
+def judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb):
+    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh),
+                         criteria="\n".join(f"- {i}: {text[i]}" for i in ids))
     cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "code-reviewer.md"),
            "--skill", str(KIT / ".agents" / "skills" / "principle-prove-it-works"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
-    runid = secrets.token_hex(3)
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
+    ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     needles = credential_needles()   # before the run too: the judge's Pi may refresh auth.json mid-run
     t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
-        run, sandbox = subprocess.run(cmd, capture_output=True, text=True), False
+        miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
+        env = dict(os.environ, PATH=f"{KIT / 'scripts' / 'qc-bin'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
+                   OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
+        run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
+        ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]; miss.unlink()
     else:
-        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}")
+        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}", gh)
         if run is None:
-            report_path.write_text(json.dumps({"head": head, "model": model, "ids": ids, "sandbox": sandbox}, indent=2))
+            report_path.write_text(json.dumps({"head": head, "model": model, "ids": ids, "github": ghrec, "sandbox": sandbox}, indent=2))
             die(66, f"sandbox proof failed or sandbox unavailable; judge not started (report {report_path})")
-    raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "sandbox": sandbox,
+        ghrec["misses"] = sandbox.get("gh_miss_log", [])
+    nmiss = len(ghrec["misses"])
+    raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "gh_misses": nmiss, "sandbox": sandbox,
            "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    try:   # from here on the judge has run: never leave the status file modified and uncommitted
+        return verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss, needles)
+    finally:
+        if git("status", "--porcelain", "--", str(status)):
+            git("checkout", "HEAD", "--", str(status))
+            print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
 
+
+def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss, needles):
     copies = credential_copies(git("rev-parse", "--show-toplevel"), needles | credential_needles())
     raw["credential_copies_removed"] = copies
     print(f"qc: worktree scan: {len(copies)} Pi credential copies removed", file=sys.stderr)
@@ -260,7 +344,7 @@ def main(argv):
     if nosb:
         for i in ids:
             print(f"{verdicts[i]['verdict'].upper()} {i}: $ {verdicts[i]['command']}")
-        print(f"qc: UNSANDBOXED, {len(passed)}/{len(ids)} passed at {head[:12]}; status file not changed; report {report_path}")
+        print(f"qc: UNSANDBOXED, {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; status file not changed; report {report_path}")
         return 1
     for i in passed:
         data["criteria"][i] = {"status": "built", "pr": pr}
@@ -271,12 +355,15 @@ def main(argv):
     if chk.returncode:
         die(3, chk.stderr.strip())
     if git("status", "--porcelain"):
-        git("add", "--", str(status))
-        git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})")
+        try:
+            git("add", "--", str(status))
+            git("commit", "-q", "-m", f"qc: built {' '.join(passed) or '(none)'} (judged {head[:12]})")
+        except subprocess.CalledProcessError as e:
+            die(3, f"status commit failed ({(e.stderr or '').strip()[:300]}); report {report_path}")
     for i in ids:
         v = verdicts[i]
         print(f"{v['verdict'].upper()} {i}: $ {v['command']}\n  {v.get('why', '')}")
-    print(f"qc: {len(passed)}/{len(ids)} passed at {head[:12]}; head now {git('rev-parse', 'HEAD')[:12]}; report {report_path}")
+    print(f"qc: {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; head now {git('rev-parse', 'HEAD')[:12]}; report {report_path}")
     return 0 if not failed else 1
 
 

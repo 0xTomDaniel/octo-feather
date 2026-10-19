@@ -8,11 +8,13 @@
 #   2. tmpfs over the Herdr and gh config dirs; ~/.git-credentials and ~/.ssh masked
 #   3. caller's archived lanes and director log bound read-only at a scratch
 #      state dir; live lanes/, sessions/, director.toml masked
-#   4. QC_RO_BINDS bound read-only (seam for an evidence snapshot, ticket #34)
+#   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
 #   5. tmpfs over the cache dir, /dev/shm and the Pi agent dir (its entries bound
 #      back read-only, auth.json the original file); then every other mount is
 #      remounted read-only and only the worktree is bound back writable
-#   6. env scrubbed; herdr shim pins a fresh per-run Herdr session; pi shim counts agents
+#   6. env scrubbed; herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
+#      scripts/qc-bin first on PATH: its gh is the offline gh serving QC_GHSNAP (or
+#      refusing every call with QC_GHSNAP_OFF), each refusal logged in scratch
 #   then exec: a nested user+mount+PID namespace mapped to the caller's uid/gid
 #   with no_new_privs, so every mount above is locked (umount fails, also after
 #   the judge's own `unshare -rm`) and the judge holds no capabilities.
@@ -22,13 +24,14 @@
 #   9. post-run: count agents, stop and delete the sandbox session, kill every
 #      other process in the PID namespace (nested ones included) and count what
 #      is left; exiting PID 1 then makes the kernel kill anything remaining.
-#      One cleanup line on stderr, the record on the QC_FD_POST pipe.
+#      One cleanup line on stderr (offline gh refusals counted), the record on the QC_FD_POST pipe.
 # The judge's only persistent writable path is the worktree; octo-feather-qc
 # scans it for Pi credential copies afterwards.
 # Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
 # state dir, QC_WORKTREE, QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
-# QC_PATH_PREPEND dirs put first on PATH (gh shim seam, ticket #34), QC_FD_PROOF /
+# QC_PATH_PREPEND dirs put on PATH after scripts/qc-bin, QC_GHSNAP snapshot dir and
+# QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_FD_PROOF /
 # QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
 # Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
 set -uo pipefail
@@ -154,14 +157,16 @@ if [[ "$phase" == setup ]]; then
   chmod +x "$SCR"/bin/*
   PATH="$SCR/bin:$PATH"
   [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
-  export PATH
+  PATH="$(dirname "$0")/qc-bin:$PATH"   # the offline gh shadows every other gh
+  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/gh-miss.log"
   exec unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --fork --kill-child --mount-proc \
     -- setpriv --no-new-privs -- "$0" inner -- "$@"
 fi
 
 # Inner: PID 1 of the judge's namespace, the caller's uid, no capabilities.
-GH="$QC_GH"; GC="$GH_CONFIG_DIR"
-unset QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR
+GH="$QC_GH"; GC="$GH_CONFIG_DIR"; GHLINE="${QC_GHSNAP_LINE:-}"; WT="$QC_WORKTREE"
+unset QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
+  QC_GHSNAP QC_GHSNAP_OFF QC_GHSNAP_LINE
 nsprocs() {   # every live process in this PID namespace but PID 1 and the caller
   local p s; for p in /proc/[0-9]*; do p=${p#/proc/}
     [[ "$p" == 1 || "$p" == "$BASHPID" ]] && continue
@@ -188,8 +193,11 @@ caps=$(awk '/^CapEff/ {print $2}' /proc/self/status); nnp=$(awk '/^NoNewPrivs/ {
 check "$(t test "$caps" = 0000000000000000 -a "$nnp" = 1)" "judge holds no capabilities (CapEff $caps), no_new_privs $nnp, uid $(id -u)"
 r1=$(t umount "$HC"); r2=$(t unshare -rm umount "$HC")
 check "$(t test "$r1" != 0 -a "$r2" != 0)" "masks locked: umount of the Herdr mask exits $r1, after its own unshare -rm $r2"
-w=0; for d in "$HOME" /var/tmp "$(dirname "$0")"; do touch "$d/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$d/.qc-ro-$S"; }; done
-check "$w" "HOME, /var/tmp and the kit read-only; the worktree is the only persistent writable path"
+kit=$(cd "$(dirname "$0")/.." && pwd -P); rol=(HOME /var/tmp); dirs=("$HOME" /var/tmp)
+if [[ "$kit/" == "$(cd "$WT" && pwd -P)/"* ]]; then kitn="the kit is the judged worktree (writable; any change fails the run)"
+else rol+=("the kit"); dirs+=("$kit/scripts"); kitn="the worktree is the only persistent writable path"; fi
+w=0; for d in "${dirs[@]}"; do touch "$d/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$d/.qc-ro-$S"; }; done
+check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only; $kitn"
 if [[ -n "$HERDR" ]]; then
   r=$(t "$HERDR" --session default workspace list); check $((r == 0)) "live Herdr unreachable: raw herdr --session default workspace list exits $r"
   a=$(herdr --session default --remote x --machine y workspace list 2>&1); b=$("$HERDR" --session "$S" workspace list 2>&1)
@@ -221,6 +229,17 @@ got=0; [[ -d "$SB/lanes/archive" ]] && got=$((got + 1)); [[ -f "$SB/director.han
 check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = "$hist")" "history read-only ($got of $hist bound: archive $(find "$SB/lanes/archive" -type f 2>/dev/null | wc -l) files, director log $(cat "$SB/director.handoffs.jsonl" 2>/dev/null | wc -l) lines); live records masked ($nmask paths, $live bytes or entries visible)"
 ro=0; while IFS= read -r p; do [[ -n "$p" ]] && touch "$p/.w" 2>/dev/null && ro=1; done < "$SCR/robinds"
 [[ -n "$(tr -d '\n' < "$SCR/robinds")" ]] && check "$ro" "extra binds read-only"
+offgh="$(dirname "$0")/qc-bin/gh"
+if [[ -n "$OCTO_FEATHER_GHSNAP" ]]; then
+  w=0; touch "$OCTO_FEATHER_GHSNAP/.w" 2>/dev/null && w=1
+  r=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>&1)
+  check "$(t test "$(command -v gh)" = "$offgh" -a "$w" = 0 -a -n "$r" -a "$r" = "$(jq -r .repo "$OCTO_FEATHER_GHSNAP/meta.json")")" \
+    "github: $GHLINE; read-only, served by the offline gh ($(command -v gh)), which refuses writes"
+else
+  r=$(t gh issue list)
+  check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
+fi
+: > "$OCTO_FEATHER_GHSNAP_MISS"   # proof calls are not the judge's misses
 dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(t test "$(wc -l <<< "$dirty")" = 1)" "worktree clean at $dirty"
 ((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; reap; exit 66; }
 
@@ -234,11 +253,14 @@ headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))
 ((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
 reap
 left=$(nsprocs); left=$(wc -w <<< "$left")
-say "cleanup: agents started $((headless + panes)) (headless pi $headless, Herdr panes $panes); leftover processes killed ${#killed[@]}, left $left (the kernel kills those as PID 1 exits); session $S stopped and deleted"
-python3 - "$headless" "$panes" "$left" "$S" "${killed[@]}" >&5 <<'EOF'
+misses=$(( $(wc -l < "$OCTO_FEATHER_GHSNAP_MISS" 2>/dev/null || echo 0) ))
+say "cleanup: agents started $((headless + panes)) (headless pi $headless, Herdr panes $panes); leftover processes killed ${#killed[@]}, left $left (the kernel kills those as PID 1 exits); session $S stopped and deleted; offline gh refusals $misses"
+python3 - "$headless" "$panes" "$left" "$S" "$OCTO_FEATHER_GHSNAP_MISS" "${killed[@]}" >&5 <<'EOF'
 import json, sys
 a = sys.argv
+try: m = [json.loads(l) for l in open(a[5]) if l.strip()]
+except (OSError, ValueError): m = []
 print(json.dumps({"session": a[4], "agents_started": int(a[1]) + int(a[2]), "headless_pi": int(a[1]), "herdr_panes": int(a[2]),
-                  "killed": a[5:], "left_after_kill": int(a[3])}, indent=2))
+                  "killed": a[6:], "left_after_kill": int(a[3]), "gh_misses": len(m), "gh_miss_log": m[:200]}, indent=2))
 EOF
 exit "$rc"
