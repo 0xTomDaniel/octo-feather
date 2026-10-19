@@ -67,7 +67,7 @@
 <tr data-anchor="review-service"><td>Service</td><td>Spec Chat's review server, from a clone on the VM, runs as a systemd user service and restarts after a crash and at boot</td></tr>
 <tr data-anchor="review-bind"><td>Listening</td><td>The VM's internal address on an approved port (7400), which only exe.dev's HTTPS proxy can reach; it never listens on loopback, which the proxy cannot reach</td></tr>
 <tr data-anchor="review-proxy"><td>Exposure</td><td>exe.dev's HTTPS proxy with the VM's sharing mode Private: a request without an exe.dev login is redirected to the login page, so that login is the gate. The exe.dev share port (8000) is not used by Spec Chat</td></tr>
-<tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/spec-chat/&lt;spec path&gt;</code></td></tr>
+<tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;lane&gt;/&lt;spec path&gt;</code></td></tr>
 <tr data-anchor="review-register"><td>A lane registers a spec</td><td><code>review-host.py register --slug &lt;lane&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill; a lane passes no exposure argument</td></tr>
 <tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked for the user in <code>~/.agents/skills</code>; the supervisor loads them through <code>externalSkills</code></td></tr>
 </tbody>
@@ -78,7 +78,7 @@
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>
-<p data-anchor="tbd-printed-url" data-spec-tbd>TBD: The review service prints links on the VM's internal address over plain HTTP, not the working <code>https://&lt;vm&gt;.exe.xyz:7400/spec-chat/&lt;spec path&gt;</code> form, so a supervisor must rewrite the link before sending it up. Fix in Spec Chat, or rewrite in the kit?
+<p data-anchor="tbd-printed-url" data-spec-tbd>TBD: The review service prints links on the VM's internal address over plain HTTP, not the working <code>https://&lt;vm&gt;.exe.xyz:7400/&lt;lane&gt;/&lt;spec path&gt;</code> form, so a supervisor must rewrite the link before sending it up. Fix in Spec Chat, or rewrite in the kit?
   <button type="button" data-spec-choice="Fix the printed URL in Spec Chat">Fix the printed URL in Spec Chat (recommended)</button>
   <button type="button" data-spec-choice="Rewrite the link in the kit">Rewrite the link in the kit</button></p>
 <p data-anchor="tbd-installer-skill-dirs" data-spec-tbd="later">TBD: Spec Chat's installer does not yet link its skills into <code>~/.agents/skills</code>, so that link is made by hand on the VM; the one-line upstream change is open, not merged.</p>
