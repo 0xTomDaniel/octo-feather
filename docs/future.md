@@ -38,6 +38,10 @@ Direction: a lane or stage should be explicit registry data supplied by the call
 
 Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criterion's demo path (ADR 0022). Jev replaces it behind the same recipe and must verify every `built` criterion and only those, and report any it cannot confirm.
 
+## Landing agent
+
+A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the head-pinned merge itself and a moved head becomes a new merge ask (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
+
 ## Criterion status on the spec page
 
 Later, not now: show each criterion's planned or built status on its spec page in Spec Chat, read from the status file, without the spec HTML or Spec Chat learning this workflow.
