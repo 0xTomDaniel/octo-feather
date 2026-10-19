@@ -22,10 +22,10 @@ Role files: our own frontmatter read by `scripts/pi-role`, and every agent launc
 
 Decided, not built (Tom, 2026-10-19):
 - A kit `just` recipe registers `herdr-wake` as Spec Chat's wake provider.
-- A kit `just` recipe creates a target repo from a template (`templates/python` or `templates/typescript`).
 
 Built (from the list above):
 - `just spec-chat REPO` (`scripts/octo-feather-spec-chat`, #12) runs `$SPEC_CHAT_CLONE/scripts/install-spec-chat --agents-only --prefix REPO` (default clone `~/src/spec-chat`), so REPO's `.agents/skills` gets spec-chat-shape, spec-chat-review and repair-specs as links into the clone, each ignored by an anchored line in REPO's git `info/exclude`; never `.claude/` or `.codex/` links (ADR 0001 unchanged). Test: `tests/spec-chat-install.sh`.
+- `just new-repo LANG DEST [--no-spec-chat]` (`scripts/octo-feather-new-repo`, #21) creates a target repo at DEST from `templates/LANG` (python or typescript): only the template's git-tracked files, modes kept, `git init -b main` and one commit with the caller's git identity, then Spec Chat's skills through `just spec-chat`'s script unless `--no-spec-chat`. Never runs `just setup` or creates the GitHub repo; prints those next steps. Refuses, creating nothing, a non-empty DEST, HOME, DEST inside a git work tree, an unknown LANG, a missing Spec Chat clone and a missing git identity (the caller's, else the kit checkout's, printed). Test: `tests/new-repo.sh`.
 
 Estimates are guesses. Block 7 is the one that matters; cut 6 before cutting 7.
 

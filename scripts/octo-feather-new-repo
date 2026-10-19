@@ -1,0 +1,86 @@
+#!/usr/bin/env bash
+# octo-feather-new-repo LANG DEST [--no-spec-chat]   (`just new-repo`, #21)
+#
+# Make a new target repo at DEST from the kit's templates/LANG: only the
+# template's git-tracked files (modes kept), `git init -b main`, one initial
+# commit with the caller's git identity (else the kit checkout's), then Spec Chat's skills through
+# octo-feather-spec-chat unless --no-spec-chat. Never runs `just setup`, never
+# touches the network or creates a GitHub repo. Every refusal happens before
+# anything is created.
+set -euo pipefail
+me="octo-feather-new-repo"
+kit="$(cd "$(dirname "$0")/.." && pwd -P)"
+mapfile -t langs < <(git -C "$kit" ls-files -- templates | cut -d/ -f2 | sort -u)
+usage() { echo "usage: $me LANG DEST [--no-spec-chat]   (just new-repo LANG DEST); LANG is one of: ${langs[*]}" >&2; exit 2; }
+
+spec_chat=1; pos=()
+for a in "$@"; do
+  case "$a" in
+    --no-spec-chat) spec_chat=0 ;;
+    -h|--help) usage ;;
+    -*) echo "$me: unknown flag $a; the only flag is --no-spec-chat" >&2; usage ;;
+    *) pos+=("$a") ;;
+  esac
+done
+[[ ${#pos[@]} -eq 2 && -n "${pos[0]}" && -n "${pos[1]}" ]] || usage
+lang="${pos[0]}"; dest_arg="${pos[1]}"
+
+known=0; for l in "${langs[@]}"; do [[ "$l" == "$lang" ]] && known=1; done
+[[ "$known" == 1 ]] || { echo "$me: unknown LANG '$lang'; pick one of: ${langs[*]} (dirs under $kit/templates)" >&2; exit 1; }
+
+dest="$(realpath -m -- "$dest_arg")"
+home="$(realpath -m -- "$HOME")"
+[[ "$dest" != "$home" && "$dest" != / ]] \
+  || { echo "$me: DEST $dest is your HOME or /; pass a new directory for the repo, e.g. $home/src/NAME" >&2; exit 1; }
+[[ ! -e "$dest" || -d "$dest" ]] || { echo "$me: DEST $dest exists and is not a directory; pass a new path" >&2; exit 1; }
+if [[ -d "$dest" && -n "$(ls -A "$dest")" ]]; then
+  echo "$me: DEST $dest exists and is not empty; pass a new or empty directory" >&2; exit 1
+fi
+anc="$dest"; while [[ ! -d "$anc" ]]; do anc="$(dirname "$anc")"; done
+if top="$(git -C "$anc" rev-parse --show-toplevel 2>/dev/null)"; then
+  echo "$me: DEST $dest is inside the git work tree $top; a nested repo is not allowed, pass a path outside it" >&2; exit 1
+fi
+
+if [[ "$spec_chat" == 1 ]]; then
+  installer="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat"
+  [[ -x "$installer" ]] || { echo "$me: no Spec Chat installer at $installer; clone Spec Chat there, set SPEC_CHAT_CLONE to its clone, or pass --no-spec-chat" >&2; exit 1; }
+fi
+
+# Caller's identity as DEST would resolve it (env, global), else the kit checkout's.
+ident() { git -C "$anc" -c user.useConfigOnly=true var "$1" 2>/dev/null; }
+if a="$(ident GIT_AUTHOR_IDENT)" && ident GIT_COMMITTER_IDENT >/dev/null; then
+  who="${a% * *} (your git identity)"
+else
+  kname="$(git -C "$kit" config user.name || true)"; kemail="$(git -C "$kit" config user.email || true)"
+  [[ -n "$kname" && -n "$kemail" ]] \
+    || { echo "$me: no git identity, here or in the kit checkout $kit; set it with git config --global user.name 'NAME' and git config --global user.email 'EMAIL'" >&2; exit 1; }
+  export GIT_AUTHOR_NAME="$kname" GIT_AUTHOR_EMAIL="$kemail" GIT_COMMITTER_NAME="$kname" GIT_COMMITTER_EMAIL="$kemail"
+  who="$kname <$kemail> (the kit checkout's git identity; none set for DEST)"
+fi
+
+sha="$(git -C "$kit" rev-parse --short HEAD)"
+mapfile -d '' -t files < <(git -C "$kit/templates/$lang" ls-files -z)
+[[ ${#files[@]} -gt 0 ]] || { echo "$me: templates/$lang has no tracked files" >&2; exit 1; }
+
+created=0; [[ -d "$dest" ]] || created=1
+undo() {
+  if [[ "$created" == 1 ]]; then rm -rf -- "$dest"; else find "$dest" -mindepth 1 -delete; fi
+  echo "$me: failed; removed what it made in $dest" >&2
+}
+trap undo ERR
+mkdir -p "$dest"
+(cd "$kit/templates/$lang" && printf '%s\0' "${files[@]}" | tar --null -T - -cf -) | tar -xpf - -C "$dest"
+git -C "$dest" init -q -b main
+git -C "$dest" add -A
+git -C "$dest" -c core.hooksPath=/dev/null commit -q -m "Initial commit from octo-feather templates/$lang @ $sha"
+if [[ "$spec_chat" == 1 ]]; then "$kit/scripts/octo-feather-spec-chat" "$dest"; fi
+trap - ERR
+
+echo "$me: $dest from templates/$lang @ $sha, one commit on main by $who$([[ "$spec_chat" == 1 ]] || echo ', no Spec Chat (--no-spec-chat)')"
+cat <<EOF
+Next steps:
+  cd $dest
+  just setup
+  just check
+Creating the GitHub repo is yours, e.g. gh repo create NAME --source $dest --private --push
+EOF
