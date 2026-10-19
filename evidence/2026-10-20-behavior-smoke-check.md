@@ -151,3 +151,58 @@ $ scripts/check-behavior-smoke --base ca721c5^1 --head 975713d   -> exit 0: beha
 $ scripts/check-behavior-smoke --base 275ea30^1 --head af760a4   -> exit 1: missing: no evidence/*.md changed after 381c1ca and still at the checked head, citing a commit of this branch.
 $ scripts/check-behavior-smoke --base 275ea30^1 --head 89119f3   -> exit 0: behavior smoke: ok (4 behaviour commits, smoke evidence/2026-10-20-spec-freeze-baseline-gap-probes.md)
 ```
+
+## Director ruling, design A: a read-only presence gate, at dc477de (supersedes the sections above where they differ)
+
+The director replaced the order, citation, owed-line and merge rules (and the 3eaa440 identity fix, dropped) with a presence gate: role paths from the range diff `merge-base(base, HEAD)..HEAD`; a path is exempt when every non-merge commit in the range touching it carries a non-empty `Behaviour-neutral: <reason>` trailer (each printed every run); any other role path needs the same diff to add or modify an `evidence/*.md` (`--diff-filter=AM`) and change `docs/future.md`. Read-only git, no identity, no git version floor. Whether a smoke covers the change, and conflict resolutions in merges, stay with review. A role path changed only by a merge has no touching commit, so it is not exempt and needs the smoke.
+
+db9e290 now passes by design: its smoke was present but did not cover the refined rule, a content judgment the lane #8 review made (`lanes/archive/gh8.handoffs.jsonl` 18:45:34Z). Deleted evidence is no net change in the range diff, so it fails. All runs below with `GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1` (no git config at all); `Fix:` lines elided after the first.
+
+```
+$ scripts/check-behavior-smoke --base 275ea30^1 --head af760a4
+check-behavior-smoke: role paths changed since f99279b with no smoke or owed eval in the same diff (#26 missing-behavior-smoke; rule: docs/adr/0008):
+  .agents/skills/github/SKILL.md (1c6f542, eb87396 without Behaviour-neutral)
+  .agents/skills/implement-spec/SKILL.md (eb87396 without Behaviour-neutral)
+  .agents/skills/push/SKILL.md (1c6f542 without Behaviour-neutral)
+  .skillfile/patches/skills/implement-spec/SKILL.md.patch (eb87396 without Behaviour-neutral)
+  agents/code-reviewer.md (639c8d9 without Behaviour-neutral)
+  agents/corrector.md (639c8d9 without Behaviour-neutral)
+  agents/director.md (381c1ca, 1c6f542, eb87396 without Behaviour-neutral)
+  agents/implementer.md (639c8d9 without Behaviour-neutral)
+  agents/supervisor.md (639c8d9, eb87396 without Behaviour-neutral)
+  missing: an added or modified evidence/*.md.
+Fix: record the live smoke in evidence/<date>-<slug>.md and its owed eval in docs/future.md on this branch (docs/adr/0008). A behaviour-neutral commit (path repair, pointer-only rewrite) instead carries the trailer `Behaviour-neutral: <reason>` (git rebase -i, reword); the supervisor lists each opt-out in the merge ask.
+exit 1
+$ scripts/check-behavior-smoke --base ca721c5^1 --head 975713d
+behavior smoke: ok (6 role paths, evidence evidence/2026-10-19-merge-teardown-smoke.md, docs/future.md changed)
+exit 0
+$ scripts/check-behavior-smoke --base 275ea30^1 --head 89119f3
+behavior smoke: ok (9 role paths, evidence evidence/2026-10-20-spec-freeze-baseline-gap-probes.md, docs/future.md changed)
+exit 0
+$ scripts/check-behavior-smoke --base ca721c5^1 --head db9e290
+behavior smoke: ok (4 role paths, evidence evidence/2026-10-19-merge-teardown-smoke.md, docs/future.md changed)
+exit 0
+$ scripts/check-behavior-smoke --base f99279b --head 1c6f542      # #20 pointer-only eb87396, 1c6f542 as committed
+check-behavior-smoke: role paths changed since ca721c5 with no smoke or owed eval in the same diff (#26 missing-behavior-smoke; rule: docs/adr/0008):
+  .agents/skills/github/SKILL.md (1c6f542, eb87396 without Behaviour-neutral)
+  .agents/skills/implement-spec/SKILL.md (eb87396 without Behaviour-neutral)
+  .agents/skills/push/SKILL.md (1c6f542 without Behaviour-neutral)
+  .skillfile/patches/skills/implement-spec/SKILL.md.patch (eb87396 without Behaviour-neutral)
+  agents/director.md (1c6f542, eb87396 without Behaviour-neutral)
+  agents/supervisor.md (eb87396 without Behaviour-neutral)
+  missing: an added or modified evidence/*.md and a docs/future.md change.
+exit 1
+$ scripts/check-behavior-smoke --base f99279b --head pointers     # same two commits reworded with the trailer
+behavior smoke: opt-out 23369e3 Behaviour-neutral: pointer-only rewrite to the rule owner (#20)
+behavior smoke: opt-out b1ab08d Behaviour-neutral: pointer-only rewrite to the rule owner (#20)
+behavior smoke: ok (6 role paths, all opted out)
+exit 0
+$ check-behavior-smoke --repo shallow                      # git clone --depth 1, local
+behavior smoke: skipped, no base ref (origin/main, main) (CI checks it against the PR base; locally: git fetch origin main, or --base REF)
+exit 0
+$ CI=true GITHUB_BASE_REF=main check-behavior-smoke --repo shallow
+check-behavior-smoke: no base ref (origin/main, main); CI needs the PR base: actions/checkout with fetch-depth: 0 (.github/workflows/check.yml)
+exit 1
+```
+
+`tests/check-behavior-smoke.sh` (runs the check with no git config; fixture commits set identity by env, the repo has `user.useConfigOnly=true`): absent base skips locally and fails in CI; role change with no evidence fails; evidence without `docs/future.md` fails; both pass; evidence deleted again fails; a pointer-only commit fails without the trailer, passes with it (opt-out printed), fails again once a later untagged commit touches the path, and an empty reason is no opt-out. The supervisor's merge-ask step (7ac9746) still holds: it lists the opt-outs the check prints.
