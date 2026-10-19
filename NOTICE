@@ -39,15 +39,15 @@ of docs/adr/0011):
     Skillfile, Skillfile.lock
     .skillfile/patches/skills/tdd/SKILL.md.patch
 
-Specs (spec/*.spec.html) are octo-feather's own. They replace octo-lite's
+Specs (docs/specs/*.spec.html) are octo-feather's own. They replace octo-lite's
 specs (index.spec.html, domains/octo-lite.spec.html, adr/0002, adr/0005), which
-were retired on 2026-10-19 and remain in git history; spec/comms.spec.html,
-spec/issue-lifecycle.spec.html and spec/roles.spec.html adapt contract text and
+were retired on 2026-10-19 and remain in git history; docs/specs/comms.spec.html,
+docs/specs/issue-lifecycle.spec.html and docs/specs/roles.spec.html adapt contract text and
 keep anchor names from octo-lite's domains/octo-lite.spec.html.
 
 Copied unmodified from Spec Chat (commit 0f4e0fa), licensed under the Apache
-License, Version 2.0: spec/.viz/runtime.js and spec/.style/spec.css (Spec Chat's
-page runtime and fallback style). spec/.viz/vendor/echarts-5.5.1.min.js is
+License, Version 2.0: docs/specs/.viz/runtime.js and docs/specs/.style/spec.css (Spec Chat's
+page runtime and fallback style). docs/specs/.viz/vendor/echarts-5.5.1.min.js is
 Apache ECharts, Apache-2.0.
 
 Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/patches/skills/

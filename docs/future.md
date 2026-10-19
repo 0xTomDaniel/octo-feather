@@ -10,10 +10,6 @@ Replace octo-lite's lane record plus `<lane>.handoffs.jsonl` and the `herdr-say`
 
 octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`providers/wake.toml`). The port dropped the installer, so a spec review hand-off cannot wake a supervisor until that registration is done by hand or by a `just` recipe. Needed once spec-chat review hosting runs on the remote.
 
-## octo-feather's own spec
-
-`spec/domains/octo-lite.spec.html` is octo-lite's spec, still Claude and Linear. The role contracts cite its anchors (`#lane-record`, `#transport-*`). Rewrite it as `octo-feather.spec.html` once the rehearsal shows which parts survive.
-
 ## `just qc` and `just qa`
 
 Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target's product, `just qa` runs factory evals of the kit's own agents and loop. Both are stubs that exit 2. Neither runs inside `just check`, which stays deterministic and free; check-refs fails if a gate recipe calls them.

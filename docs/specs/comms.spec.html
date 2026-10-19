@@ -13,7 +13,7 @@
 
 <header data-anchor="header">
 <h1 data-anchor="title">Comms, escalation and lane state</h1>
-<nav data-anchor="breadcrumbs"><a href="./index.spec.html">spec</a> / comms.spec.html</nav>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / comms.spec.html</nav>
 <p class="lede" data-anchor="context">How agents talk, how problems go up the chain, and the plain files that hold each lane's state. Agents hand off through Herdr messages; there is no workflow engine, inbox or daemon (ADR 0003).</p>
 </header>
 
@@ -100,6 +100,19 @@
 </tbody>
 </table>
 </div>
+<figure data-anchor="octo-lane-record">
+<h3 data-anchor="octo-lane-record-heading">A lane record</h3>
+<pre data-anchor="octo-lane-record-example"># $(octo-feather-state)/lanes/supervisor-gh12.toml
+supervisor = "w7:p2"                  # pane id; its prefix w7 is the lane's workspace
+repository = "owner/name"
+issue = "gh12"
+goal = "Export the weekly report as CSV"
+pr = 30                                # set when the draft pull request opens
+started_at = "2026-10-19T17:02:00Z"    # written once, at launch
+last_handoff_at = "2026-10-19T18:24:09Z"
+waiting_on = ""                        # "", "blocked", "director", or another lane's issue</pre>
+<figcaption data-anchor="octo-lane-record-caption">Current control state, so TOML; what happened goes in the hand-off log.</figcaption>
+</figure>
 <p data-anchor="octo-lane-record-tickets">The record holds no ticket state: tickets live in GitHub Issues only.</p>
 <p data-anchor="octo-lane-record-workers">The record lists no workers: a lane's workers are the agents in its workspace other than the supervisor, with role and ticket read from their names.</p>
 <p data-anchor="octo-lane-record-life-audit">When the director audits lanes it reads every record and writes none: a record is stale when its <code>waiting_on</code> names no listed lane, its supervisor pane is neither live nor named by the latest parked line, or its goal no longer names the lane's scope; the director wakes that supervisor to fix it.</p>
