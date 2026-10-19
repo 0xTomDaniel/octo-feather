@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked: the corrector child runs it
+# reason: ADR 0012 model-invoked: the corrector runs it in a correction lane (ADR 0020)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,7 +1,6 @@

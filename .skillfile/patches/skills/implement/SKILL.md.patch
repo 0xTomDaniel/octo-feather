@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh child reviews)
+# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,7 +1,6 @@

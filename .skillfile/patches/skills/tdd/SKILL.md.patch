@@ -1,4 +1,4 @@
-# reason: ADR 0002 integration/e2e only: seams are public surfaces; ADR 0015 no per-ticket human loop: seams come from the ticket
+# reason: ADR 0002 integration/e2e only: seams are public surfaces, taken from the ticket's acceptance criteria
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -19,7 +19,7 @@
