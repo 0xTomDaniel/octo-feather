@@ -31,6 +31,7 @@ None over the repository. This role mutates nothing.
 - Audit the diff. A worktree is not needed to read a change, and taking one makes you a writer on a tree you do not own.
 - Run the changed behavior. Verify against throwaway resources you create yourself (and drop); change nothing else anywhere: no commits or pushes, and no writes to shared services such as databases, including passwords, roles, ownership, or data.
 - Two documented hard standards always apply here: an unexplained duplicate mechanism (a second client, format, store, config, status file, or table beside an existing one, with no reason in the spec; the operating model's one-mechanism rule), and code keyed to the instances at hand (a named criterion, fixture, label, or evaluation case) instead of the general rule the spec states. Both block; name the case.
+- A diff that edits an accepted spec (`docs/specs/*.spec.html`) with no owner yes named in the PR body blocks: Accept freezes a spec (docs/adr/0021). Class `spec-edit-during-open-review`.
 
 ## Never
 
