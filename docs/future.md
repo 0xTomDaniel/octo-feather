@@ -29,3 +29,11 @@ Jev capture, replay and judging stay out of `just check`, which runs only determ
 ## Integrator model
 
 Tom has not chosen the integrator's model yet; `agents/integrator.md` still carries the earlier proposal (gpt-6.1-sol medium).
+
+## Reviewer scope drift (gpt-6.1-sol)
+
+Tom's caution: sol models tend to over-engineer and over-correct. The code reviewer must judge only against the ticket's acceptance criteria and the spec. `agents/code-reviewer.md` already covers part of this ("judge against the shaped scope and the spec, not against preference"; "block only on broken behavior or clearly over-built work"; "a finding that cannot name a consequence is a note"). Risk: Matt's `code-review` Standards axis asks for baseline smells, which invites findings outside the criteria. To verify: a rehearsal check, plus an eval case where an out-of-criteria finding must not block. Flagged only, not fixed.
+
+## pi-subagents weight
+
+v0.79.1 is 15 MB with about 114k lines of JS, around 14 subsystems (missions, workflows, watchdog, intercom, tui, inspectors, policy, profiles and others) and 5 runtime dependencies. It released 0.57 to 0.79 in about 7 weeks (two releases on 10-17). It runs in-process, adds 2 skills and 6 prompts to every session that loads it, and ships claude/codex/cursor runner agents. Its Herdr placement cannot target our workspaces or tabs. Option: keep the frontmatter format (docs/adr/0013) and replace the package with `pi-role` plus a small child launcher. Revisit after Thursday.

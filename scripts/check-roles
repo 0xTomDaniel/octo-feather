@@ -8,7 +8,7 @@ import os, re, subprocess, sys, json
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS = os.path.join(ROOT, "agents")
 ROLES = ["meta-operator", "supervisor", "implementer", "integrator", "code-reviewer"]
-# Models reachable through cliproxy. Add one here, on purpose, to allow it.
+# Models the deployment can reach. Add one here, on purpose, to allow it.
 MODELS = {"openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-6-astra",
           "anthropic/claude-opus-5-5", "anthropic/claude-sonnet-5-5"}
 THINKING = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
