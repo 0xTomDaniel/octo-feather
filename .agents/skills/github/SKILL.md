@@ -25,12 +25,11 @@ Without consent, keep work in local commits and report where it is.
 
 - GitHub Issues is the only tracker (docs/adr/0004). The issue number is the
   unit's identity; its lane slug is `gh<number>`.
-- During shaping, `.octo-feather/drafts/<slug>.md` is canonical until the
-  owner approves the GitHub mutation; after finalization, the GitHub issue
-  body and `octo-feather:ready` label are the issue source of truth.
-- The evolving draft PR is the durable shaping and delivery surface.
-- Specs under `spec/` own behavior and ADRs under `spec/adr/` own decisions;
-  both outrank stale GitHub issue or PR text.
+- Shaping happens outside the factory (docs/adr/0021): the director files lane
+  parent issues, supervisors file their sub-issues, and the lane opens its own
+  draft PR.
+- Specs under `docs/specs/` own behavior and ADRs under `docs/adr/` own
+  decisions; both outrank stale GitHub issue or PR text.
 
 ## Required Reads
 
@@ -47,25 +46,12 @@ Read target repo `AGENTS.md`, its declared canonical index (`spec/index.md` or
 `spec/index.spec.html`), relevant specs, ADRs, and repo docs before changing
 durable workflow artifacts.
 
-## Shaping Mutations
-
-Do not mutate GitHub issues during shaping until the owner
-approves the final mutation. After approval:
-
-1. Create or update exactly one GitHub issue with the approved draft body
-   (`gh issue create` / `gh issue edit`).
-2. Create `octo-feather:ready` if missing.
-3. Apply `octo-feather:ready`.
-4. Delete the local draft.
-
-Do not create extra workflow labels unless the owner explicitly asks.
-
 ## Implementer Mutations
 
 - Work on one branch for the tracked unit of work: the target repo's branch
   convention, else `octo-feather/gh<issue-number>-<slug>`.
-- Continue the shaped unit's existing draft PR. Open it only when shaping did
-  not already create it. Never create a second implementation PR for the unit.
+- Open one draft PR for the lane. Never create a second implementation PR for
+  the unit.
 - The PR body starts with `Closes #<issue-number>` and
   includes `## Summary` and `## Validation`.
 - Post or update a compact `## octo-feather handoff` PR comment.
@@ -103,8 +89,7 @@ Do not create extra workflow labels unless the owner explicitly asks.
 
 ## Boundaries
 
-- Do not create workflow labels beyond `octo-feather:ready` unless the owner
-  explicitly asks.
+- Do not create workflow labels unless the owner explicitly asks.
 - Do not create extra PRs for the same issue.
 - No worker or reviewer role merges or approves as the owner reviewer.
 - Only the active owning agent receiving explicit owner acceptance and merge

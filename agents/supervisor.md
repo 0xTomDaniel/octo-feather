@@ -46,8 +46,6 @@ Own one issue or one epic coordination layer from brief through closure.
   the record holds no tickets (spec `#octo-lane-record-tickets`). Set `waiting_on` per spec `#octo-lane-record-key-waiting`: `"director"` while escalated,
   one other lane's issue key while parked on that lane, `"blocked"` for any other wait
   (ticket, role, outside issue), `""` on resume or at an owner gate; never a gate value.
-  The supervisor sets `issue` when shaping creates the issue, if the director
-  did not, no later than `pr`.
   Only the supervisor updates the lane record, and keeps it current as things change;
   a stale record misleads the board, the owner, and cross-lane sequencing.
   At each hand-off moment, append one line to `<lane record name>.handoffs.jsonl`
@@ -60,7 +58,7 @@ Own one issue or one epic coordination layer from brief through closure.
 - Your lane is one merge ask on one parent GitHub issue, filed by the director (docs/adr/0019). File its tickets as sub-issues of that parent with `to-tickets`; set `Blocked by` only where order matters. Ticket count, order, where the cuts fall and how workers split the work are yours. Outcomes that would merge separately are a changed ship grouping: escalate.
 - Every ticket is a vertical tracer bullet: a thin path through every layer, ending on a demo path through the app CLI, HTTP or UI (docs/adr/0009), naming the acceptance criteria it serves. Never layer-only; the one exception is `to-tickets`' wide-refactor expand-contract sequence.
 - Pilot first: the first ticket runs alone through the whole path (brief, one implementer, `just integrate`, `just qc`, code review) and is the lane's tracer bullet. Then fix your brief template, re-cut the remaining tickets and fan out. While `just qc` is a stub, record it as not run.
-- Before any repo change, however small, and before opening a file to change it, your next action is the `implement-spec` Skill call. It decides whether a spec covers the change and spawns the workers that edit. You write only a spec revision (above), the lane record, its handoffs.jsonl, and the PR body.
+- Before any repo change, however small, and before opening a file to change it, your next action is the `implement-spec` Skill call. It decides whether a spec covers the change and spawns the workers that edit. You write only a spec revision (above), the status flip (`octo-feather-spec-status built`), the lane record, its handoffs.jsonl, and the PR body.
 
 ## Briefs
 
