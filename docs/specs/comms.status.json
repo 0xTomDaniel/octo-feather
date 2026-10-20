@@ -39,8 +39,8 @@
       "pr": 24
     },
     "acceptance-lane-archive": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 49
     }
   }
 }
