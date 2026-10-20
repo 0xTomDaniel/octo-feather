@@ -10,9 +10,25 @@ and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log
 archives its record alone and says so. It refuses, non-zero with every file left in
 place, when the record is missing or either archive target already exists.
 
+  octo-feather-lane tickets PARENT [--repo OWNER/NAME]
+                                   check every sub-issue of issue PARENT as a tracer bullet
+  octo-feather-lane ticket FILE|-  check one ticket draft (a file, or stdin) before publishing
+
+`tickets` and `ticket` (spec issue-lifecycle #acceptance-tracer-tickets) read a ticket's
+`## Acceptance criteria` list. A ticket passes when it names at least one criterion id
+`<spec slug>#<anchor>` whose anchor is in docs/specs/<slug>.spec.html (of the git repo
+at the current directory), and its last item is `demo: ` with a backticked command other
+than the gate alone (`just check`), or it carries the wide-refactor line
+`Expand-contract: expand|migrate|contract`, which waives the demo. Each failure prints
+`<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
+2 nothing could be checked (gh, file or specs error; nothing printed as passed).
+`tickets` reads issues through `gh issue view --json` (works with the qc judge's offline gh);
+the repo is --repo, else gh's default for the current directory.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys
+from html.parser import HTMLParser
 from pathlib import Path
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -87,8 +103,189 @@ def rollback(created: list[Path], archive: Path) -> None:
             print(f"rollback failed for {dest} ({e}): move it back to {f} by hand", file=sys.stderr)
 
 
+class Unchecked(Refuse):
+    """Nothing could be checked (gh, file or specs error): exit 2, no ticket reported as passed."""
+
+
+GATE = re.compile(r"just\s+check(-[a-z-]+)?")
+ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
+CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
+EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
+DEMO = re.compile(r"^\**demo:\**\s*", re.I)
+
+
+class Anchors(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.ids = set()
+
+    def handle_starttag(self, tag, attrs):
+        self.ids.update(v for k, v in attrs if k in ("id", "data-anchor") and v)
+
+
+def specs_dir() -> Path:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    root = Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()
+    d = root / "docs" / "specs"
+    if not d.is_dir():
+        raise Unchecked(f"no spec dir {d}: run this inside the target repo, whose docs/specs/<slug>.spec.html the criterion ids name")
+    return d
+
+
+def spec_anchors(specs: Path, slug: str, cache: dict) -> set | None:
+    if slug not in cache:
+        f = specs / f"{slug}.spec.html"
+        if not f.is_file():
+            cache[slug] = None
+        else:
+            p = Anchors()
+            try:
+                p.feed(f.read_text(encoding="utf-8")); p.close()
+            except (OSError, UnicodeDecodeError) as e:
+                raise Unchecked(f"cannot read spec {f} ({e}): fix or restore the file, then rerun") from e
+            cache[slug] = p.ids
+    return cache[slug]
+
+
+def criteria_items(body: str) -> list[str] | None:
+    """The `## Acceptance criteria` list items (continuation lines joined); None if no such section."""
+    lines, items, inside = body.replace("\r\n", "\n").split("\n"), [], False
+    found = False
+    for line in lines:
+        if re.match(r"^#{1,6}\s", line):
+            inside = bool(re.match(r"^#{1,6}\s+acceptance criteria\s*$", line.strip(), re.I)); found |= inside
+            continue
+        if not inside or not line.strip():
+            continue
+        m = ITEM.match(line)
+        if m and len(line) - len(line.lstrip()) < 2:
+            items.append(m.group(1).strip())
+        elif items:
+            items[-1] += " " + line.strip()
+    return items if found else None
+
+
+def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
+    """Failures of one ticket body, each `<name>: class: <class>: <problem>; fix: <fix>`."""
+    out = []
+    fail = lambda cls, problem, fix: out.append(f"{name}: class: {cls}: {problem}; fix: {fix}")
+    items = criteria_items(body); section = items is not None
+    if not section:
+        fail("no-criterion", "no `## Acceptance criteria` section",
+             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` and the last `demo: ` with a backticked command")
+        items = []
+    ids = list(dict.fromkeys((m.group(1), m.group(2)) for m in (CRITERION.match(i) for i in items) if m))
+    if section and not ids:
+        fail("no-criterion", "no acceptance item names a criterion id",
+             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html")
+    for slug, anchor in ids:
+        have = spec_anchors(specs, slug, cache)
+        if have is None:
+            fail("unknown-criterion", f"{slug}#{anchor}: no spec {specs / (slug + '.spec.html')}",
+                 f"use a spec slug from {specs} (file stem before .spec.html)")
+        elif anchor not in have:
+            fail("unknown-criterion", f"{slug}#{anchor}: no anchor {anchor} in {specs / (slug + '.spec.html')}",
+                 "name an existing data-anchor of that spec (an acceptance criterion's), or get the spec changed first")
+    ec = EXPAND.search(body)
+    if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
+        return out
+    if ec:
+        fail("layer-only-ticket", f"Expand-contract line names `{ec.group(1)}`",
+             "write `Expand-contract: expand`, `migrate` or `contract` (the wide refactor's step), or drop it and end on a demo")
+        return out
+    last = items[-1] if items else ""
+    fix = ("end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI "
+           "(e.g. demo: `app cmd ARGS` prints X), not the gate alone; or, for one step of a wide refactor, add the line "
+           "`Expand-contract: expand|migrate|contract`")
+    if not DEMO.match(last):
+        fail("layer-only-ticket", "last acceptance item is not a `demo: ` line", fix)
+    else:
+        cmds = re.findall(r"`([^`]+)`", last)
+        if not cmds:
+            fail("layer-only-ticket", f"demo names no backticked command ({last[:80]})", fix)
+        elif all(GATE.fullmatch(" ".join(c.split())) for c in cmds):
+            fail("layer-only-ticket", f"demo is the gate alone (`{cmds[0]}`)", fix)
+    return out
+
+
+def gh_json(args: list[str], what: str) -> dict:
+    try:
+        p = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=120)
+    except FileNotFoundError as e:
+        raise Unchecked("gh not found on PATH: install GitHub CLI (gh) or put it on PATH, then rerun") from e
+    except subprocess.TimeoutExpired as e:
+        raise Unchecked(f"gh timed out reading {what}: check the network and gh auth status, then rerun") from e
+    if p.returncode != 0:
+        err = " ".join(p.stderr.split())[:400] or f"exit {p.returncode}"
+        raise Unchecked(f"gh could not read {what} ({err}): check the issue number, --repo, network and `gh auth status`, then rerun")
+    try:
+        d = json.loads(p.stdout)
+        if not isinstance(d, dict):
+            raise ValueError("not an object")
+        return d
+    except ValueError as e:
+        raise Unchecked(f"gh returned unreadable JSON for {what} ({e}): check gh's version supports `issue view --json`, then rerun") from e
+
+
+def cmd_tickets(args: list[str]) -> int:
+    repo, rest, i = [], [], 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--repo", "-R") and i + 1 < len(args):
+            repo = ["--repo", args[i + 1]]; i += 2; continue
+        if a.startswith("--repo="):
+            repo = ["--repo", a[7:]]; i += 1; continue
+        rest.append(a); i += 1
+    if len(rest) != 1 or not re.fullmatch(r"#?\d+", rest[0]) or (repo and not re.fullmatch(r"[\w.-]+/[\w.-]+", repo[1])):
+        raise Unchecked(f"usage: octo-feather-lane tickets PARENT [--repo OWNER/NAME] (PARENT the lane's parent issue number, e.g. 40; got {' '.join(args) or 'nothing'})")
+    parent = rest[0].lstrip("#")
+    specs = specs_dir()
+    d = gh_json(["issue", "view", parent, *repo, "--json", "number,subIssues"], f"parent #{parent}")
+    sub = d.get("subIssues") or {}
+    nodes = sub.get("nodes") if isinstance(sub, dict) else sub
+    if not isinstance(nodes, list) or any(not isinstance(n, dict) or not isinstance(n.get("number"), int) for n in nodes):
+        raise Unchecked(f"gh returned no subIssues list for #{parent}: check gh's version supports `issue view --json subIssues`, then rerun")
+    total = sub.get("totalCount", len(nodes)) if isinstance(sub, dict) else len(nodes)
+    if total != len(nodes):
+        raise Unchecked(f"#{parent} has {total} sub-issues but gh returned {len(nodes)}: check them by hand with `octo-feather-lane ticket`, or split the parent")
+    if not nodes:
+        print(f"#{parent}: class: no-sub-issues: the parent lists no sub-issues; fix: file each lane ticket as a sub-issue of #{parent} (to-tickets publish step, spec issue-lifecycle #acceptance-sub-issues)")
+        return 1
+    bodies = []   # fetch every ticket first: a gh failure midway reports nothing as passed
+    for n in sorted(x["number"] for x in nodes):
+        t = gh_json(["issue", "view", str(n), *repo, "--json", "number,body"], f"ticket #{n}")
+        if not isinstance(t.get("body"), str):
+            raise Unchecked(f"gh returned no body for ticket #{n}: check gh's version supports `issue view --json body`, then rerun")
+        bodies.append((n, t["body"]))
+    cache, bad = {}, 0
+    for n, body in bodies:
+        fails = check_body(f"#{n}", body, specs, cache)
+        print("\n".join(fails) if fails else f"#{n}: ok")
+        bad += bool(fails)
+    print(f"#{parent}: {len(bodies) - bad} of {len(bodies)} tickets pass" + (f", {bad} fail" if bad else ""))
+    return 1 if bad else 0
+
+
+def cmd_ticket(args: list[str]) -> int:
+    if len(args) != 1:
+        raise Unchecked(f"usage: octo-feather-lane ticket FILE|- (a ticket draft in the to-tickets issue template; - reads stdin; got {' '.join(args) or 'nothing'})")
+    src = args[0]
+    specs = specs_dir()
+    try:
+        body = sys.stdin.read() if src == "-" else Path(src).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise Unchecked(f"cannot read draft {src} ({e}): pass a readable UTF-8 file, or - with the draft on stdin") from e
+    if not body.strip():
+        raise Unchecked(f"draft {src} is empty: pass the drafted ticket body (the to-tickets issue template)")
+    name = "stdin" if src == "-" else src
+    fails = check_body(name, body, specs, {})
+    print("\n".join(fails) if fails else f"{name}: ok")
+    return 1 if fails else 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
+    "tickets": cmd_tickets,
+    "ticket": cmd_ticket,
 }
 
 
@@ -98,7 +295,7 @@ def main(argv: list[str]) -> int:
     try:
         return COMMANDS[argv[0]](argv[1:])
     except Refuse as e:
-        print(f"octo-feather-lane {argv[0]}: {e}", file=sys.stderr); return 1
+        print(f"octo-feather-lane {argv[0]}: {e}", file=sys.stderr); return 2 if isinstance(e, Unchecked) else 1
 
 
 if __name__ == "__main__":
