@@ -119,9 +119,13 @@ check-spec-status:
     @python3 "{{root}}/scripts/octo-feather-spec-status" check "{{root}}/docs/specs"
 
 # Each vendored skill folder equals upstream at its Skillfile pin plus its patches (skills spec #acceptance-patch-only).
-# Pinned skillfile in a throwaway copy; upstream cached by pin SHA under XDG cache: offline when warm, cold+offline fails naming the pins.
+# No network: reads the authenticated pin-SHA cache `just vendored-fetch` fills; a missing cache fails naming it.
 check-vendored:
     @python3 "{{root}}/scripts/check-vendored"
+
+# Fill the check-vendored cache: pinned skillfile binary and each pin commit, every call time-bounded. Never inside `just check`.
+vendored-fetch:
+    @python3 "{{root}}/scripts/check-vendored" --fetch
 
 # Owner shaping chat in the target repo: Pi with only the shaping skills, not a factory role (docs/adr/0021).
 shape *args:
