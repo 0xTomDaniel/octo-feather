@@ -57,3 +57,15 @@ After (this branch; 32 s): its command table lists `octo-feather-lane ticket - <
 Checked by hand afterwards: `octo-feather-lane ticket /tmp/gh47p/draft.md` in the scratch repo prints `/tmp/gh47p/draft.md: ok`, rc=0 (sha256 `a1532b38...c7c4e7`). Result: pass. Both runs also flagged the missing `docs/specs/greet.status.json` (the scratch spec has none); not in scope here.
 
 Teardown: `rm -rf /tmp/gh47p`.
+
+## (d) Demo through the repo's own surface (qc FAIL at 294ac1d, class layer-only-ticket)
+
+The qc judge passed a draft whose demo was `printf "schema ready\n"` and whose What to build said "no externally visible behavior". New rule (ADR 0009): the demo command, after env assignments and runners (`uv run`, `npx`, `pnpm exec`...), must run a program the repo declares (a tracked executable outside tests/, a justfile recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject [project.scripts] name), curl/http to an http(s) URL, or playwright; and a ticket that says it has no externally or user visible behaviour, or is internal only, fails. `Expand-contract:` waives both. The to-tickets patch states the same rule in its check sentence and template demo line.
+
+Rerun on this branch, 2026-10-20, `scripts/` on PATH:
+
+- The judge's draft, verbatim on stdin (`octo-feather-lane ticket -`), in a scratch copy of templates/python: rc=1, two lines, `stdin: class: layer-only-ticket: demo runs no surface the repo declares (\`printf "schema ready\n"\`: printf is not a program the repo declares); fix: make the demo a backticked command through the repo's own public surface (ADR 0009): ...` and `stdin: class: layer-only-ticket: the ticket says it has 'no externally visible behavior'; fix: ...`.
+- The (c) after-draft (demo `uv run app hello Ada --shout --json`) in the same scratch repo: `ok`, rc=0 (`app` is templates/python's pyproject [project.scripts] entry).
+- `octo-feather-lane tickets 40`: rc=0, `#46: ok`, `#47: ok`, `#48: ok` (their demos run `octo-feather-lane`, tracked as scripts/octo-feather-lane). `octo-feather-lane tickets 8`: rc=1, #9 and #10 with the same lines as (a).
+
+`tests/lane-tickets.sh` now builds its own PATH (fake gh plus symlinked tools), so no host gh is reachable (CI run 39352240961 had failed on the runner's gh asking for GH_TOKEN); it passed with a stub gh that exits 4 with that message placed first on the host PATH.

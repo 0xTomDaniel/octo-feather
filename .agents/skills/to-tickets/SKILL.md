@@ -56,7 +56,7 @@ Iterate until the user approves the breakdown.
 
 ### 5. Publish the tickets to the configured tracker
 
-Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that names no criterion id, names an anchor missing from its spec, or ends on no demo (or on the gate alone) without an `Expand-contract:` line, printing the class and the fix. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
+Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that names no criterion id, names an anchor missing from its spec, says it has no user-visible behaviour, or ends on no demo through the repo's own surface (its declared CLI, script or recipe, an HTTP request, a UI driver; not the gate, not `printf` or another generic tool), unless it carries an `Expand-contract:` line, printing the class and the fix. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
 
 Publish the approved tickets. **How** depends on the tracker; the tickets are the same either way, only the shape of the blocking edges changes:
 
@@ -98,7 +98,7 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 
 - [ ] <spec slug>#<anchor>: what proves the criterion this ticket serves (the anchor from the accepted spec, docs/specs/<spec slug>.spec.html)
 - [ ] <spec slug>#<anchor>: another criterion it serves, if any
-- [ ] demo: `<command>` and what it shows: the behaviour run through the app's CLI, HTTP or UI, never the gate alone (`just check`)
+- [ ] demo: `<command>` and what it shows: the behaviour run through the app's own CLI (a program the repo declares), HTTP or UI, never the gate alone (`just check`) or a generic tool (`printf`, `echo`)
 
 For one step of a wide refactor, replace the demo item with the line `Expand-contract: expand`, `migrate` or `contract`.
 
