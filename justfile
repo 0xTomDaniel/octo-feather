@@ -163,8 +163,9 @@ supervise issue cwd=invocation_directory():
     octo-feather-start --issue "{{issue}}" --cwd "{{cwd}}"
 
 # Product QC: a fresh cross-family judge runs each claimed criterion; passed ones become built (docs/adr/0022). Never inside `just check`.
-qc status pr +ids:
-    cd "{{invocation_directory()}}" && octo-feather-qc "{{status}}" "{{pr}}" {{ids}}
+# Arguments reach bash as exported variables, never as interpolated source (#30).
+qc $status $pr +$ids:
+    cd "{{invocation_directory()}}" && octo-feather-qc "$status" "$pr" $ids
 
 # Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
 qa *args:

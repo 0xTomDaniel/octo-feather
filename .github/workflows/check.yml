@@ -14,4 +14,6 @@ jobs:
         with:
           fetch-depth: 0 # check-behavior-smoke compares the PR with its base (origin/$GITHUB_BASE_REF)
       - uses: extractions/setup-just@v2
+      # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
+      - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       - run: just check
