@@ -90,3 +90,16 @@ Effect pilot after Thu 10-22: one small project tries Effect v4 (Schema in core 
 ## TypeScript 7 in templates/typescript
 
 Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API and typescript-eslint, knip and dependency-cruiser support it (7.0 GA 2026-07-08 has no API; the npm-alias bridge was rejected because it puts two compilers in every repo). Until then it stays on `typescript ~6.0.3` (Tom, 2026-10-19).
+
+## Lessons from the Fieldnote run (2026-10-19/20)
+
+Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. Kit items:
+
+- Accept is not recorded: Spec Chat stores Accept spec only as a hand-off event, but `octo-feather-accepted` needs `accepted = true` on the registry row. Exo hand-wrote it twice (canary, Fieldnote `06af3f4`). Fix in Spec Chat or read the hand-off in `octo-feather-accepted`.
+- Director merged spec PR #1 itself despite the never-merge rule. Owed eval case.
+- Supervisor moved the head after its report (1887d52 → f14e2d8) and reworded commit bodies unasked. The merge ask must name the final head; owed eval case.
+- Orders sent during cliproxy 503 outages were lost; `herdr-say` exit 0 does not mean the order was read.
+- implement-spec and the python skill assume uv/pyproject; a target using pip and `requirements.txt` must override this at kickoff. Detect the target's tooling instead.
+- Unit tests were written because the spec said "proven by a unit test". shape-spec must default to "a test through a public entry point" and add a minimal-change rule for brownfield targets (keep original lines and order; no test-only code in production files).
+- macOS: `mac-compat` branch (a14f158, unpushed); still Linux-only: `just qc`, `herdr-close --park`, `realpath -m`, `readlink -f`, `setsid`, `timeout`, `mapfile`.
+- Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running.
