@@ -6,7 +6,7 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"; trap 'chmod -R u+w "$t"; rm -rf "$t"' EXIT
 export HOME="$t/home" XDG_STATE_HOME="$t/state"   # never the real state dir
 fail() { echo "lane-archive test: $*" >&2; exit 1; }
 sums() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0r sha256sum); }
@@ -64,4 +64,28 @@ seed "$top" gh5; printf 'old\n' >"$top/archive/gh5.handoffs.jsonl"
 refuse "archive target exists: $top/archive/gh5.handoffs.jsonl" gh5
 # Bad name.
 refuse "usage" ../gh1
-echo "lane-archive: ok (default + named session, sha256 before = after; record alone; refusals: missing record, archived record, archived log, bad name)"
+
+# Execution failure (read-only lanes/: link into archive/ works, unlink of the source fails):
+# no partial archive, no hard link left behind; a retry after restoring permissions succeeds.
+ro="read-only lanes/: skipped (uid 0 ignores chmod)"
+if [[ "$(id -u)" != 0 ]]; then
+  ro_lanes="$XDG_STATE_HOME/octo-feather/sessions/ro/lanes"
+  seed "$ro_lanes" gh6; mkdir -p "$ro_lanes/archive"
+  chmod 555 "$ro_lanes"
+  before="$(sums "$ro_lanes")"
+  set +e; out="$(HERDR_SESSION=ro "$L" archive gh6 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 1 ]] || fail "read-only lanes/: exit $rc, want 1: $out"
+  grep -qF "move failed" <<<"$out" || fail "read-only lanes/: no move-failed message: $out"
+  [[ "$(sums "$ro_lanes")" == "$before" ]] || fail "read-only lanes/: partial archive: $(sums "$ro_lanes")"
+  [[ -z "$(ls -A "$ro_lanes/archive")" ]] || fail "read-only lanes/: archive/ not empty"
+  [[ "$(stat -c %h "$ro_lanes/gh6.toml")" == 1 ]] || fail "read-only lanes/: record still hard-linked"
+  # No archive/ yet and lanes/ read-only: mkdir fails, refused cleanly, nothing created.
+  chmod 755 "$ro_lanes"; rmdir "$ro_lanes/archive"; chmod 555 "$ro_lanes"
+  set +e; out="$(HERDR_SESSION=ro "$L" archive gh6 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 1 ]] && grep -qF "move failed" <<<"$out" || fail "read-only lanes/, no archive/: $rc $out"
+  [[ ! -e "$ro_lanes/archive" && "$(sums "$ro_lanes")" == "$before" ]] || fail "read-only lanes/, no archive/: files changed"
+  chmod 755 "$ro_lanes"
+  archive_ok "$ro_lanes" gh6 ro
+  ro="read-only lanes/ rolls back, retry succeeds"
+fi
+echo "lane-archive: ok (default + named session, sha256 before = after; record alone; refusals: missing record, archived record, archived log, bad name; $ro)"
