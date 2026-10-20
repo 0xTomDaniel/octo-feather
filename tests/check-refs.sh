@@ -16,24 +16,41 @@ g init -q; g add -A; g commit -qm base
 op="op""erator"; hu="hu""man"; cl="CLA""UDE.md"; cx=".co""dex/AGENTS.md"
 words='use director for the top agent and owner for the person'
 pi='Pi is the only runtime'
-# expect FILE CONTENT MESSAGE: tracked FILE makes `just check` fail naming MESSAGE.
+# expect FILE CONTENT MESSAGE: FILE (new, or a tracked file CONTENT is appended to)
+# makes `just check` fail naming MESSAGE; the copy is restored after.
 expect() {
-  mkdir -p "$t/$(dirname "$1")"; printf '%s' "$2" > "$t/$1"; g add -f "$1"
+  local old=""; [[ -e "$t/$1" ]] && { old="$t/.expect-old"; cp "$t/$1" "$old"; printf '\n' >> "$t/$1"; }
+  mkdir -p "$t/$(dirname "$1")"; printf '%s\n' "$2" >> "$t/$1"; g add -f "$1"
   set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
-  g rm -qf --cached "$1"; rm -rf "${t:?}/$1"; [[ "$1" == */* ]] && rmdir "$t/$(dirname "$1")" 2>/dev/null || true
-  [[ "$rc" != 0 ]] || { echo "check-refs test: tracked $1 passed just check" >&2; exit 1; }
+  if [[ -n "$old" ]]; then mv "$old" "$t/$1"; g add "$1"
+  else g rm -qf --cached "$1"; rm -rf "${t:?}/$1"; [[ "$1" == */* ]] && rmdir "$t/$(dirname "$1")" 2>/dev/null || true; fi
+  [[ "$rc" != 0 ]] || { echo "check-refs test: $1 with '$2' passed just check" >&2; exit 1; }
   grep -qF "$3" <<<"$out" || { echo "check-refs test: $1 did not report: $3" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$1" <<<"$out" || { echo "check-refs test: $1 not named in the output" >&2; exit 1; }
 }
 expect docs/x.md "The $op spawns one supervisor per lane." "$words"
 expect docs/x.md "Ask the $hu before merging." "$words"
 expect README.notes.md "${hu^}s review it." "$words"
-# Allowed quotes are exempt token by token: a retired word beside one still fails (QC retired-word-line-exemption).
-expect docs/qc-probe.md "See #handoff-$op: the $op spawns supervisors and the $hu approves merges." "$words"
-expect docs/x.md "<p data-anchor=\"acceptance-retired-words\">calls the top agent $op or the person $hu; ask the $hu.</p>" "$words"
-expect agents/x.md "\"The $op\" there is the owner; the $op spawns lanes." "$words"
-expect NOTICE.x "agents/director.md (was agents/meta-$op.md), written by the $op" "$words"
+# Each exemption is a (file, exact quote) pair (QC unscoped-quote-exemption):
+# the same quote in any other kit file fails (QC repro first).
+expect docs/x.md "The $op spawns supervisors." "$words"
+expect agents/x.md "\"The $op\" spawns lanes." "$words"
+expect docs/x.md "\"The $op\" there is the owner" "$words"
+expect agents/director.md "\"The $op\" there is the owner" "$words"
+expect docs/x.md "agents/director.md (was agents/meta-$op.md)" "$words"
+expect docs/x.md "calls the top agent $op or the person $hu" "$words"
+expect docs/specs/comms.spec.html "calls the top agent $op or the person $hu" "$words"
+expect docs/x.md "<table data-anchor=\"handoff-$op\">" "$words"
+expect docs/x.md "<tr data-anchor=\"map-handoff-$op\"><td><code>#handoff-$op</code></td></tr>" "$words"
+expect agents/x.md "spec \`#handoff-$op\`" "$words"
+# In its own file only the exact quote is exempt: a retired word beside it fails (QC retired-word-line-exemption).
+expect agents/director.md "See spec \`#handoff-$op\`: the $op spawns supervisors and the $hu approves merges." "$words"
+expect docs/specs/comms.spec.html "<div data-anchor=\"handoff-$op-wrap\">the $op</div>" "$words"
+expect docs/specs/index.spec.html "<a href=\"./comms.spec.html#handoff-$op\">the $hu</a>" "$words"
+expect docs/specs/overview.spec.html "calls the top agent $op or the person $hu; ask the $hu." "$words"
+expect agents/corrector.md "\"The $op\" there is the owner; the $op spawns lanes." "$words"
+expect NOTICE "agents/director.md (was agents/meta-$op.md), written by the $op" "$words"
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
-(cd "$t" && git ls-files | grep -qx docs/x.md) && { echo "check-refs test: cleanup left docs/x.md tracked" >&2; exit 1; }
-echo "check-refs: ok (retired words in docs/ and root; root and nested projection files name Pi)"
+[[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
+echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi)"
