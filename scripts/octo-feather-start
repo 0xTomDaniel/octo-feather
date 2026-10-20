@@ -12,7 +12,7 @@
 # On macOS, started outside Herdr with no HERDR_SESSION, the session is the
 # project's: the basename of the target's git top (one Herdr server per project).
 # It must already run (`herdr --session <name>` in a terminal). A director start
-# prints the kickoff brief template to fill and send (templates/kickoff-brief.md).
+# prints the kickoff brief template to fill and send (docs/kickoff-brief.md).
 # --name and --resume SESSION continue a parked supervisor: in a new tab of the
 # workspace labelled --name when it still exists (a worker tab kept it open),
 # else in a new lane workspace (comms spec #roles-park).
@@ -75,4 +75,4 @@ spawned="$(spawn "$workspace")" || {
 # The workspace's seed tab is a bare shell; the agent's tab is the only one left.
 herdr tab close "$seed" >/dev/null
 echo "workspace=$workspace $spawned"
-[[ "$role" != director ]] || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/templates/kickoff-brief.md" >&2
+[[ "$role" != director ]] || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2

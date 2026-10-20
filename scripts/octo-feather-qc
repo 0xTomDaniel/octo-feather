@@ -158,9 +158,9 @@ def oauth_warning():
 
 def sandboxed(judge, session, gh):
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started."""
-    if sys.platform == "darwin":
-        die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
     unshare = shutil.which("unshare")
+    if not unshare and sys.platform == "darwin":
+        die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
     if not unshare:
         die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
     # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write
