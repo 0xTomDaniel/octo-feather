@@ -32,6 +32,6 @@ Third-party services (Stripe, Twilio, etc.) you don't control. The deepened modu
 ## Testing strategy: replace, don't layer
 
 - Old unit tests on shallow modules become waste once tests through the public surface cover the deepened module; delete them.
-- Write new tests through the public surface (app CLI, HTTP, UI, or the public entry point the spec names) that reaches the deepened module; when the module's interface is that public entry point, the **interface is the test surface**.
+- Write new tests through the public surface (app CLI, HTTP, UI, or a public library function) that reaches the deepened module; when the module's interface is itself a public library function, the **interface is the test surface**.
 - Tests assert on observable outcomes through the interface, not internal state.
 - Tests should survive internal refactors, since they describe behaviour, not implementation. If a test has to change when the implementation changes, it's testing past the interface.

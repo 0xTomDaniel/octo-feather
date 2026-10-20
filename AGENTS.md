@@ -9,7 +9,7 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - Pi is the only agent runtime. No Claude/Codex config, no `CLAUDE.md`.
 - `AGENTS.md` is the only instruction file in any repo the kit touches.
 - Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
-- Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI). No unit tests of internals.
+- Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals.
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
 - Enforce lessons in this order: architecture or types, then a lint or check whose error names the fix, then a test, then prose. Prose rules are the last resort.
 - Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.

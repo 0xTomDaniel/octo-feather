@@ -59,7 +59,8 @@ new TypeScript surfaces.
 
 - Use Vitest for new tests.
 - Tests are integration and end-to-end only, through public surfaces (the app
-  CLI, HTTP, UI). Follow the target repo's documented test placement
+  CLI, HTTP, UI; an integration test may also enter through a public library
+  function, docs/adr/0002). Follow the target repo's documented test placement
   (`templates/typescript`: `tests/*.test.ts`).
 - Keep shared test infrastructure in the repo's established shared test-support location.
 - If the behavior under test needs an end-to-end surface and one does not exist yet, set one up instead of pretending the coverage is optional.
