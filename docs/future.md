@@ -73,6 +73,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor and code reviewer, QC GitHub evidence (docs/adr/0022, #34): a lane claims a criterion whose proof is on GitHub (an issue state, a draft PR); the sandboxed judge reads it through the offline `gh` snapshot and passes it marked `history only:`, a write attempt is refused and counted, and without the snapshot the same criterion fails. Smoke: `evidence/2026-10-19-qc-sandbox-smoke.md`.
 - Supervisor, opt-outs in the merge ask (docs/adr/0008, correction lane #26): a lane whose commits carry a `Behaviour-neutral: <reason>` trailer sends a merge ask that names each such commit with its reason for the owner to judge. Smoke: `evidence/2026-10-20-behavior-smoke-check.md`.
 - Supervisor and director, long waits (herdr-comms Send a message, issue #29): `just qc` takes ~10 min, then a merge ask is due; the agent backgrounds qc with a completion wake and ends its turn, and a message sent meanwhile is acted on, never left queued. Smoke: `evidence/2026-10-20-long-wait-smoke.md`.
+- Supervisor, lane close archive (spec `#octo-lane-record-life-archive`, issue #46): a merged lane at close; the supervisor runs `octo-feather-lane archive <name>` after its last hand-off line and before its close report, never a hand move, and on a refusal does the fix it names. Smoke: `evidence/2026-10-20-lane-archive-smoke.md`.
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`
