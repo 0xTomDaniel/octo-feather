@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+"""octo-feather-lane: lane bookkeeping in this Herdr session's state dir (spec comms #lane-record).
+
+  octo-feather-lane archive NAME   close lane NAME: move lanes/NAME.toml and
+                                   lanes/NAME.handoffs.jsonl into lanes/archive/
+
+The state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).
+`archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged
+and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log
+archives its record alone and says so. It refuses, non-zero with every file left in
+place, when the record is missing or either archive target already exists.
+
+One subcommand per function, listed in COMMANDS; add a subcommand there.
+"""
+import hashlib, os, re, subprocess, sys
+from pathlib import Path
+
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+
+
+class Refuse(Exception):
+    """A refusal: message names the fix, exit 1, nothing moved."""
+
+
+def lanes_dir() -> Path:
+    state = Path(__file__).resolve().with_name("octo-feather-state")
+    out = subprocess.run([str(state)], capture_output=True, text=True, check=True).stdout
+    return Path(out.strip()) / "lanes"
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def lane_name(args: list[str]) -> str:
+    if len(args) != 1 or not NAME.fullmatch(args[0]) or args[0].endswith((".toml", ".jsonl")):
+        raise Refuse(f"usage: octo-feather-lane archive NAME (the lane record's name without .toml, e.g. supervisor-gh12; got {' '.join(args) or 'nothing'})")
+    return args[0]
+
+
+def cmd_archive(args: list[str]) -> int:
+    name = lane_name(args)
+    lanes = lanes_dir(); archive = lanes / "archive"
+    record, log = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl"
+    if not record.is_file():
+        raise Refuse(f"no lane record {record}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+    for f in (record, log):
+        if (archive / f.name).exists() or (archive / f.name).is_symlink():
+            raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
+    files = [f for f in (record, log) if f.is_file()]
+    before = {f.name: sha256(f) for f in files}
+    archive.mkdir(parents=True, exist_ok=True)
+    moved = []
+    try:
+        for f in files:
+            # link then unlink: never overwrites a target that appeared meanwhile.
+            os.link(f, archive / f.name); f.unlink(); moved.append(f)
+    except OSError as e:
+        for f in moved:
+            os.link(archive / f.name, f); (archive / f.name).unlink()
+        raise Refuse(f"move failed ({e}); every file left in {lanes}") from e
+    for f in files:
+        after = sha256(archive / f.name)
+        if after != before[f.name]:
+            print(f"changed in move: {archive / f.name} sha256 {before[f.name]} -> {after}", file=sys.stderr); return 1
+        print(f"archived: {archive / f.name} sha256={after}")
+    if log not in files:
+        print(f"no hand-off log: {log}; archived the record alone")
+    return 0
+
+
+COMMANDS = {
+    "archive": cmd_archive,
+}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in COMMANDS:
+        print(__doc__.strip(), file=sys.stderr); return 64
+    try:
+        return COMMANDS[argv[0]](argv[1:])
+    except Refuse as e:
+        print(f"octo-feather-lane {argv[0]}: {e}", file=sys.stderr); return 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
