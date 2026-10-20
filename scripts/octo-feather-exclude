@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# octo-feather-exclude [REPO]   (default: the current repo)
+#
+# Keep Spec Chat's review state out of a target repo's tracked tree: add
+# `*.review/` (each spec's spool, versions/ and cursors; the specs themselves
+# stay tracked) to REPO's git info/exclude, never to a tracked .gitignore, so a
+# hand-in repo gains no file. A rerun changes nothing. Then warn about review
+# state an earlier commit already tracks (git rm -r --cached removes it).
+# Run by octo-feather-start, octo-feather-shape and octo-feather-spec-chat.
+set -euo pipefail
+me="octo-feather-exclude"
+repo="${1:-.}"
+top="$(git -C "$repo" rev-parse --show-toplevel 2>/dev/null)" \
+  || { echo "$me: $repo is not in a git work tree" >&2; exit 1; }
+exclude="$(git -C "$top" rev-parse --path-format=absolute --git-path info/exclude)"
+mkdir -p "$(dirname "$exclude")"; touch "$exclude"
+line='*.review/'
+if ! grep -qxF "$line" "$exclude"; then
+  [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
+  printf '%s\n' "# Spec Chat review state, kept out of git by octo-feather (specs stay tracked)" "$line" >> "$exclude"
+fi
+tracked="$(git -C "$top" ls-files -- ':(glob)**/*.review/**' | head -5)"
+if [[ -n "$tracked" ]]; then
+  echo "$me: warning: $top already tracks Spec Chat review state; untrack it with git rm -r --cached <spec>.review:" >&2
+  printf '  %s\n' $tracked >&2
+fi
+echo "$me: review state ignored in $exclude"

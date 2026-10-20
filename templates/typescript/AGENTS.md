@@ -11,7 +11,7 @@ Repo skills: typescript, pnpm, nodejs
 - No test detail in production code: no test-only flags, env vars, hooks, parameters or branches. Reach the state from the test, mocking at the boundary.
 - `src/core.ts` never imports `src/cli.ts` (dependency-cruiser enforces it).
 - Only erasable TypeScript syntax (no enums, namespaces or parameter properties); `tsc` enforces it.
-- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`); keep the recipe, every octo-feather target must define it.
+- Integrate worker commits with `just integrate N REF...` (the kit's `octo-feather-integrate`); keep the recipe.
 
 ## Commands
 
