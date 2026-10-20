@@ -49,16 +49,21 @@ def cmd_archive(args: list[str]) -> int:
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
     files = [f for f in (record, log) if f.is_file()]
     before = {f.name: sha256(f) for f in files}
-    archive.mkdir(parents=True, exist_ok=True)
-    moved = []
+    made_dir = not archive.is_dir()
+    created = []  # destinations this run linked, recorded before the source is unlinked
     try:
+        archive.mkdir(exist_ok=True)
         for f in files:
             # link then unlink: never overwrites a target that appeared meanwhile.
-            os.link(f, archive / f.name); f.unlink(); moved.append(f)
+            os.link(f, archive / f.name); created.append(f); f.unlink()
     except OSError as e:
-        for f in moved:
-            os.link(archive / f.name, f); (archive / f.name).unlink()
-        raise Refuse(f"move failed ({e}); every file left in {lanes}") from e
+        rollback(created, archive)
+        if made_dir:
+            try:
+                archive.rmdir()
+            except OSError:
+                pass
+        raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
     for f in files:
         after = sha256(archive / f.name)
         if after != before[f.name]:
@@ -67,6 +72,19 @@ def cmd_archive(args: list[str]) -> int:
     if log not in files:
         print(f"no hand-off log: {log}; archived the record alone")
     return 0
+
+
+def rollback(created: list[Path], archive: Path) -> None:
+    """Undo a failed archive: restore each source, then drop each destination this run made.
+    A destination whose source cannot be restored is kept (the only copy) and named."""
+    for f in reversed(created):
+        dest = archive / f.name
+        try:
+            if not f.exists():
+                os.link(dest, f)
+            dest.unlink()
+        except OSError as e:
+            print(f"rollback failed for {dest} ({e}): move it back to {f} by hand", file=sys.stderr)
 
 
 COMMANDS = {
