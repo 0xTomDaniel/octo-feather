@@ -9,7 +9,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-tests check-spec-status check-templates
+check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-behavior-smoke check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -137,6 +137,10 @@ check-roles:
 # Each owned rule (merge authority, lane branch) is stated once, in its owner; elsewhere only a pointer (correction lane #19).
 check-owned-rules:
     @python3 "{{root}}/scripts/check-owned-rules"
+
+# A role path changed on this branch needs evidence/*.md and docs/future.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
+check-behavior-smoke:
+    @python3 "{{root}}/scripts/check-behavior-smoke"
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent).
 install-check:
