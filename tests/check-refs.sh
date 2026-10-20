@@ -4,6 +4,8 @@
 # planted bad file makes `just check` fail with the message naming the fix.
 # check-refs runs before check-tests, so a red copy never recurses. Run by `just check`.
 set -euo pipefail
+# A bad file the gate misses would reach check-tests in the copy and rerun this test: stop there.
+[[ -z "${CHECK_REFS_TEST_COPY:-}" ]] || { echo "check-refs test: nested run in a copy (a planted file passed check-refs)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
@@ -17,7 +19,7 @@ pi='Pi is the only runtime'
 # expect FILE CONTENT MESSAGE: tracked FILE makes `just check` fail naming MESSAGE.
 expect() {
   mkdir -p "$t/$(dirname "$1")"; printf '%s' "$2" > "$t/$1"; g add -f "$1"
-  set +e; out="$(cd "$t" && env -u CI just check 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
   g rm -qf --cached "$1"; rm -rf "${t:?}/$1"; [[ "$1" == */* ]] && rmdir "$t/$(dirname "$1")" 2>/dev/null || true
   [[ "$rc" != 0 ]] || { echo "check-refs test: tracked $1 passed just check" >&2; exit 1; }
   grep -qF "$3" <<<"$out" || { echo "check-refs test: $1 did not report: $3" >&2; echo "$out" >&2; exit 1; }
@@ -26,6 +28,11 @@ expect() {
 expect docs/x.md "The $op spawns one supervisor per lane." "$words"
 expect docs/x.md "Ask the $hu before merging." "$words"
 expect README.notes.md "${hu^}s review it." "$words"
+# Allowed quotes are exempt token by token: a retired word beside one still fails (QC retired-word-line-exemption).
+expect docs/qc-probe.md "See #handoff-$op: the $op spawns supervisors and the $hu approves merges." "$words"
+expect docs/x.md "<p data-anchor=\"acceptance-retired-words\">calls the top agent $op or the person $hu; ask the $hu.</p>" "$words"
+expect agents/x.md "\"The $op\" there is the owner; the $op spawns lanes." "$words"
+expect NOTICE.x "agents/director.md (was agents/meta-$op.md), written by the $op" "$words"
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 (cd "$t" && git ls-files | grep -qx docs/x.md) && { echo "check-refs test: cleanup left docs/x.md tracked" >&2; exit 1; }
