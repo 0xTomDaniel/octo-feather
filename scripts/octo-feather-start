@@ -38,6 +38,8 @@ done
 [[ -n "$label" ]] || label="supervisor"
 
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+# Review state never lands in the target's tracked tree (docs/adr/0017).
+! git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || "$root/scripts/octo-feather-exclude" "$cwd" >&2
 spawn() { # $1: workspace id
   "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
