@@ -10,9 +10,36 @@ and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log
 archives its record alone and says so. It refuses, non-zero with every file left in
 place, when the record is missing or either archive target already exists.
 
+  octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
+                                   create, or update in place, the PR's one review verdict
+                                   comment (marker, head, verdict, findings); prints its URL
+  octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--repo O/R]
+                                   check the PR body's `## Merge ask` section; print it on pass
+
+`verdict` writes through gh (never under the qc judge). REPORT is the code review's
+report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
+HEAD must be the PR's current head (7+ hex prefix).
+
+`merge-ask` only reads, through `gh pr view --json` (also under the qc judge's offline gh).
+The section, up to the next `## ` heading:
+
+  ## Merge ask
+  Head: <sha>                     the PR's head (7+ hex prefix)
+  Checks: <summary>               verified: every check on that head SUCCESS, none pending
+  | criterion | qc verdict | evidence |
+  |---|---|---|
+  | <spec>#<id> | pass | <report path, command> |   one row per claimed criterion
+  Review verdict: <comment URL>   this PR's verdict comment: same head, verdict clear
+  Built: <id> <id>                = status entries built with this PR = ids in its `qc: built` commits
+  Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
+
+Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Pass: the section on stdout (send it with herdr-say --parent). Failure: each missing item
+with its fix on stderr, exit 1.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tempfile
 from pathlib import Path
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -87,8 +114,332 @@ def rollback(created: list[Path], archive: Path) -> None:
             print(f"rollback failed for {dest} ({e}): move it back to {f} by hand", file=sys.stderr)
 
 
+# --- verdict and merge-ask (issue #48, spec issue-lifecycle #acceptance-merge-ask-evidence) ---
+
+MARKER = "<!-- octo-feather-review-verdict -->"
+SHA = re.compile(r"[0-9a-fA-F]{7,40}")
+COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
+VERDICT_LINE = re.compile(r"^\W*verdict\W*:\W*(clear|blocking|blocked)\b", re.I | re.M)
+HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.M)
+QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged [0-9a-f]+\))?\s*$")
+
+
+def gh(args: list[str], fix: str) -> str:
+    try:
+        p = subprocess.run(["gh", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"gh {' '.join(args[:3])} failed ({err[-1][:300] if err else f'exit {p.returncode}'}): {fix}")
+    return p.stdout
+
+
+def pr_view(pr: int, fields: str, repo: str | None) -> dict:
+    out = gh(["pr", "view", str(pr), "--json", fields, *(["-R", repo] if repo else [])],
+             f"check PR #{pr} exists in {repo or 'this repo'}, and gh auth status")
+    try:
+        d = json.loads(out)
+    except ValueError:
+        raise Refuse(f"gh pr view {pr} printed no JSON: check the gh on PATH ({out[:100]!r})")
+    if not isinstance(d, dict) or any(f not in d for f in fields.split(",")):
+        raise Refuse(f"gh pr view {pr} lacks fields {fields}: update gh (2.40 or later)")
+    return d
+
+
+def pr_number(s: str) -> int:
+    if not re.fullmatch(r"[1-9][0-9]*", s or ""):
+        raise Refuse(f"PR must be a positive integer, got {s!r}")
+    return int(s)
+
+
+def take_repo(args: list[str]) -> tuple[list[str], str | None]:
+    if "--repo" not in args:
+        return args, None
+    i = args.index("--repo")
+    if i + 1 >= len(args) or not re.fullmatch(r"[\w.-]+/[\w.-]+", args[i + 1]):
+        raise Refuse("--repo needs OWNER/NAME")
+    return args[:i] + args[i + 2:], args[i + 1]
+
+
+def head_matches(named: str, head: str) -> bool:
+    return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
+
+
+def subject(c: dict) -> str:
+    """A commit's full subject: GitHub cuts messageHeadline at ~70 chars with an ellipsis and starts messageBody with the rest."""
+    h, body = c.get("messageHeadline") or "", c.get("messageBody") or ""
+    if h.endswith("\u2026") and body.startswith("\u2026"):
+        return h[:-1] + body[1:].split("\n", 1)[0]
+    return h
+
+
+def no_traceback(fn):
+    """Malformed PR data from gh is a refusal naming the fix, never a traceback."""
+    def run(args: list[str]) -> int:
+        try:
+            return fn(args)
+        except (KeyError, TypeError, AttributeError, ValueError, IndexError) as e:
+            raise Refuse(f"unexpected PR data from gh ({type(e).__name__}: {e}): check the gh on PATH (gh --version), then rerun") from e
+    return run
+
+
+@no_traceback
+def cmd_verdict(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    if len(args) != 3:
+        raise Refuse(f"usage: octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(args[0]); want = args[1]
+    if not SHA.fullmatch(want):
+        raise Refuse(f"HEAD must be a commit sha (7 to 40 hex), got {want!r}")
+    try:
+        report = sys.stdin.read() if args[2] == "-" else Path(args[2]).read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read report {args[2]} ({e}): pass the code review's report file, or - for stdin")
+    if not report.strip():
+        raise Refuse(f"report {args[2]} is empty: pass the code review's report")
+    m = VERDICT_LINE.search(report)
+    if not m:
+        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` (the code-review skill's verdict)")
+    verdict = "clear" if m.group(1).lower() == "clear" else "blocking"
+    d = pr_view(pr, "headRefOid,comments", repo)
+    head = d["headRefOid"]
+    if not head_matches(want, head):
+        raise Refuse(f"HEAD {want} is not PR #{pr}'s head {head}: push the reviewed head, or review {head[:12]}")
+    mine = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
+    if len(mine) > 1:
+        raise Refuse(f"PR #{pr} has {len(mine)} verdict comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
+    body = f"{MARKER}\n## Code review verdict\n\nHead: {head}\nVerdict: {verdict}\n\n### Findings\n\n{report.strip()}\n"
+    api = f"repos/{repo or '{owner}/{repo}'}"
+    if mine:
+        m = COMMENT_URL.fullmatch(mine[0].get("url") or "")
+        if not m:
+            raise Refuse(f"verdict comment has no issuecomment URL ({mine[0].get('url')!r}): delete it, then rerun")
+        if mine[0]["body"].strip() == body.strip():
+            print(f"verdict: unchanged ({verdict}, head {head[:12]})", file=sys.stderr); print(mine[0]["url"]); return 0
+        call, said = ["-X", "PATCH", f"{api}/issues/comments/{m.group(3)}"], "updated"
+    else:
+        call, said = ["-X", "POST", f"{api}/issues/{pr}/comments"], "created"
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
+        json.dump({"body": body}, f); f.flush()
+        out = gh(["api", *call, "--input", f.name, "--jq", ".html_url"],
+                 f"the verdict comment was not {said}; fix the cause (gh auth status, network), then rerun").strip()
+    if not COMMENT_URL.fullmatch(out):
+        raise Refuse(f"comment {said} but gh printed no comment URL ({out[:100]!r}): rerun to print it")
+    print(f"verdict: {said} ({verdict}, head {head[:12]})", file=sys.stderr)
+    print(out)
+    return 0
+
+
+def load_specs(files: list[str]) -> dict[str, dict]:
+    """{spec slug: criteria} from each --status file."""
+    if not files:
+        raise Refuse("name the lane's status file: --status docs/specs/<slug>.status.json (once per spec)")
+    specs = {}
+    for f in files:
+        try:
+            d = json.loads(Path(f).read_text())
+            slug = re.sub(r"\.spec\.html$", "", Path(d["spec"]).name); crit = d["criteria"]
+            assert isinstance(crit, dict) and all(isinstance(v, dict) for v in crit.values())
+        except (OSError, ValueError, KeyError, TypeError, AssertionError) as e:
+            raise Refuse(f"--status {f} is not a readable status file ({type(e).__name__}: {e}): name docs/specs/<slug>.status.json")
+        specs[slug] = crit
+    return specs
+
+
+def resolve(tok: str, specs: dict[str, dict]) -> tuple[str | None, str | None]:
+    """(spec#id, None) or (None, why)."""
+    tok = tok.strip().strip("`*")
+    if "#" in tok:
+        slug, cid = tok.split("#", 1); slug = re.sub(r"\.spec\.html$", "", slug.split("/")[-1])
+        if slug not in specs:
+            return None, f"{tok}: spec {slug} has no --status file (pass --status docs/specs/{slug}.status.json)"
+        return (f"{slug}#{cid}", None) if cid in specs[slug] else (None, f"{tok}: no criterion {cid} in {slug}'s status file")
+    hits = [s for s in specs if tok in specs[s]]
+    if len(hits) == 1:
+        return f"{hits[0]}#{tok}", None
+    return None, (f"{tok}: in {' and '.join(hits)}; write <spec>#{tok}" if hits else f"{tok}: no such criterion in the --status files")
+
+
+def section(body: str) -> list[str] | None:
+    lines = (body or "").replace("\r\n", "\n").split("\n")
+    for i, l in enumerate(lines):
+        if re.fullmatch(r"##\s+merge ask\s*", l.strip(), re.I):
+            end = next((j for j in range(i + 1, len(lines)) if re.match(r"#{1,2}\s", lines[j])), len(lines))
+            return [x.rstrip() for x in lines[i:end]]
+    return None
+
+
+def field(lines: list[str], name: str) -> tuple[int, str] | None:
+    for i, l in enumerate(lines):
+        m = re.match(rf"\s*{name}:\s*(.*)$", l, re.I)
+        if m:
+            return i, m.group(1).strip()
+    return None
+
+
+def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
+    failed, pending = [], []
+    for c in rollup:
+        name = c.get("name") or c.get("context") or "?"
+        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
+            s = (c.get("state") or "").upper()
+            (pending if s in ("PENDING", "EXPECTED", "") else failed if s != "SUCCESS" else []).append(f"{name} {s.lower() or 'pending'}")
+        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+            pending.append(f"{name} {(c.get('status') or 'pending').lower()}")
+        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+            failed.append(f"{name} {c['conclusion'].lower()}")
+    return failed, pending
+
+
+@no_traceback
+def cmd_merge_ask(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    files, rest, i = [], [], 0
+    while i < len(args):
+        if args[i] == "--status" and i + 1 < len(args):
+            files.append(args[i + 1]); i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if len(rest) != 1:
+        raise Refuse(f"usage: octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0]); specs = load_specs(files)
+    d = pr_view(pr, "body,headRefOid,statusCheckRollup,comments,commits", repo)
+    head = d["headRefOid"]; miss: list[str] = []
+    sec = section(d["body"])
+    if sec is None:
+        miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
+    lines = sec or []
+
+    h = field(lines, "Head")
+    if not h or not h[1]:
+        miss.append(f"Head: missing; add `Head: {head}`")
+    elif not head_matches(h[1].strip("`"), head):
+        miss.append(f"Head: names {h[1]}, the PR's head is {head[:12]} (stale): judge {head[:12]} (qc, review) and rewrite the section for it")
+
+    if not field(lines, "Checks"):
+        miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
+    rollup = d["statusCheckRollup"] or []
+    failed, pending = bad_checks(rollup)
+    if not rollup:
+        miss.append(f"Checks: none reported on head {head[:12]}; push the head and wait for CI")
+    if failed:
+        miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
+    if pending:
+        miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
+
+    rows: dict[str, str] = {}
+    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
+    if t is None:
+        miss.append("criterion table: missing; add `| criterion | qc verdict | evidence |` with one row per claimed criterion")
+    else:
+        for l in lines[t + 1:]:
+            if not l.strip().startswith("|"):
+                break
+            cells = [c.strip() for c in l.strip().strip("|").split("|")]
+            if all(re.fullmatch(r":?-+:?", c) for c in cells):
+                continue
+            if len(cells) != 3:
+                miss.append(f"criterion row `{l.strip()}`: needs 3 cells, criterion | qc verdict | evidence"); continue
+            cid, why = resolve(cells[0], specs); v = cells[1].strip("`*").lower()
+            if not cid:
+                miss.append(f"criterion row: {why}"); continue
+            if cid in rows:
+                miss.append(f"criterion row {cid}: listed twice; keep one")
+            if v not in ("pass", "fail"):
+                miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
+            if not cells[2]:
+                miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
+            rows[cid] = v
+        if not rows:
+            miss.append("criterion table: no rows; add one per claimed criterion")
+
+    rv = field(lines, "Review verdict")
+    url = (rv[1].strip("<>` ") if rv else "")
+    m = COMMENT_URL.fullmatch(url)
+    if not rv:
+        miss.append(f"Review verdict: missing; run `octo-feather-lane verdict {pr} {head[:12]} <report>` and add `Review verdict: <the URL it prints>`")
+    elif not m or int(m.group(2)) != pr:
+        miss.append(f"Review verdict: {url or 'empty'} is not a comment on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
+    else:
+        c = next((c for c in d["comments"] or [] if (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
+        cb = (c or {}).get("body") or ""
+        ch = HEAD_LINE.search(cb); cv = VERDICT_LINE.search(cb)
+        if c is None:
+            miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
+        elif not cb.lstrip().startswith(MARKER):
+            miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
+        elif not ch or not head.lower().startswith(ch.group(1).lower()):
+            miss.append(f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not {head[:12]}; review {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
+        elif not cv or cv.group(1).lower() != "clear":
+            miss.append(f"Review verdict: {cv.group(1).lower() if cv else 'none'}, not clear; fix the blocking findings, qc and review again")
+
+    built = set()
+    b = field(lines, "Built")
+    if not b:
+        miss.append("Built: missing; add `Built: <ids qc flipped to built>` (or `Built: none`)")
+    elif b[1].strip("`").lower() != "none":
+        for tok in filter(None, re.split(r"[\s,]+", b[1])):
+            cid, why = resolve(tok, specs)
+            (built.add(cid) if cid else miss.append(f"Built: {why}"))
+    status = {f"{s}#{k}" for s, cr in specs.items() for k, v in cr.items() if v.get("status") == "built" and v.get("pr") == pr}
+    if b and built != status:
+        miss.append(f"Built: lists {' '.join(sorted(built)) or 'none'}, the status files hold built with PR #{pr}: "
+                    f"{' '.join(sorted(status)) or 'none'}; list exactly those (never edit the status file by hand)")
+    qc = [QC_COMMIT.match(subject(c)) for c in d["commits"] or []]
+    qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
+    unknown = sorted(x for x in qc_ids if not any(x in cr for cr in specs.values()))
+    if not any(qc):
+        miss.append(f"Built: no `qc: built` commit on PR #{pr}; run just qc on the lane head (docs/adr/0022)")
+    elif b and {c.split("#", 1)[1] for c in built} != qc_ids:
+        miss.append(f"Built: lists {' '.join(sorted(c.split('#', 1)[1] for c in built)) or 'none'}, the PR's `qc: built` commits passed "
+                    f"{' '.join(sorted(qc_ids)) or 'none'}; list exactly those, or run just qc again on the claimed criteria"
+                    + (f" ({' '.join(unknown)} in no --status file: pass --status for its spec)" if unknown else ""))
+
+    fails: dict[str, str] = {}
+    f = field(lines, "Failed")
+    if not f:
+        miss.append("Failed: missing; add `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
+    elif f[1].lower() not in ("none", ""):
+        miss.append(f"Failed: {f[1]!r}; write `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
+    elif f[1] == "":
+        for l in lines[f[0] + 1:]:
+            fm = re.match(r"\s*[-*]\s+([^:\s]+):?\s*(.*)$", l)
+            if not fm:
+                break
+            cid, why = resolve(fm.group(1), specs)
+            if not cid:
+                miss.append(f"Failed: {why}"); continue
+            fails[cid] = fm.group(2).strip()
+            if not fails[cid]:
+                miss.append(f"Failed: {cid} has no triage; add `- {cid}: <repair ticket, judging fix, or outside the lane and why>` (spec #delivery-qa-triage)")
+        if not fails:
+            miss.append("Failed: empty list; write `Failed: none` or one `- <id>: <triage>` line per failed criterion")
+
+    if t is not None:
+        for cid in sorted(built - rows.keys()):
+            miss.append(f"criterion row {cid}: missing (it is in Built); add `| {cid} | pass | <evidence> |`")
+        for cid in sorted(fails.keys() - rows.keys()):
+            miss.append(f"criterion row {cid}: missing (it is in Failed); add `| {cid} | fail | <evidence> |`")
+        for cid, v in sorted(rows.items()):
+            if v == "pass" and cid not in built:
+                miss.append(f"criterion row {cid}: pass but not in Built; qc flips each pass to built, so rerun just qc or correct the row")
+            if v == "fail" and cid not in fails:
+                miss.append(f"criterion row {cid}: fail with no triage; add `- {cid}: <triage>` under Failed (spec #delivery-qa-triage)")
+            if v == "fail" and cid in built:
+                miss.append(f"criterion row {cid}: fail but in Built; rerun just qc on it")
+
+    if miss:
+        raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
+                     + "\n".join(f"  - {x}" for x in miss))
+    print("\n".join(lines).strip())
+    return 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
+    "verdict": cmd_verdict,
+    "merge-ask": cmd_merge_ask,
 }
 
 
