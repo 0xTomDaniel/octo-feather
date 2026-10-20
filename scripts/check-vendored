@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Every vendored skill folder equals upstream at its pin plus its patches (skills spec #acceptance-patch-only).
+
+For each Skillfile `github` entry, .agents/skills/<name>/ must be byte-identical
+to what `skillfile install` produces from Skillfile, Skillfile.lock and
+.skillfile/patches/ (skillfile's generated .meta aside). Exit 1 names skill and file.
+
+- Tool: skillfile, pinned below by version and sha256, downloaded once into the cache.
+- Upstream: skillfile's fetched folders, cached per immutable pin SHA under
+  ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/upstream/<owner>/<repo>/<sha>/<path>/.
+  A warm cache runs fully offline; a cold one fetches (GitHub API; GH_TOKEN or
+  GITHUB_TOKEN is used when set, else `gh auth token`). Cold and offline: exit 1
+  naming the pins it could not fetch. Never skips.
+- skillfile runs only in a throwaway copy: install rewrites patches and strips
+  their reason lines, so it never runs in the repo.
+
+Usage: check-vendored [--repo DIR]
+Run by `just check` (check-vendored), tested by tests/check-vendored.sh.
+"""
+import argparse, difflib, hashlib, os, platform, shutil, subprocess, sys, tempfile, urllib.request
+
+TAG = "check-vendored"
+VERSION = "v1.9.2"
+SHA256 = {  # checksums-sha256.txt of eljulians/skillfile release v1.9.2
+    "x86_64-linux": "a4af5a4cd6f7082ba1593d73015fd0b67cb34647cee0380429edd2ff804bc4a2",
+    "aarch64-linux": "d3509576c590b88e9a3c2d7b9bba9b9e44a94ff540fd4f6a1ab046d4075a1651",
+    "x86_64-macos": "321739270421b5f4c7a1e08c3a235f7280bc5007fdf5c1f5f75e90b2d29d3ceb",
+    "aarch64-macos": "e1e98e87dfc1b19897b36ee6dcb491b4361206a06a05825d68645d544473d895",
+}
+SKILLS = ".agents/skills"
+GENERATED = {".meta"}  # skillfile's source metadata, not committed
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--repo")
+a = ap.parse_args()
+root = os.path.abspath(a.repo or os.path.join(os.path.dirname(__file__), ".."))
+cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "octo-feather", "skillfile")
+
+
+def die(msg):
+    sys.exit(f"{TAG}: {msg}")
+
+
+def entries():
+    """Skillfile lines: (kind, name, source, path)."""
+    out = []
+    for line in open(os.path.join(root, "Skillfile")):
+        f = line.split()
+        if f and f[0] in ("github", "local") and len(f) >= 4:
+            out.append((f[0], f[2], f[3], f[4] if len(f) > 4 else f[3]))
+    return out
+
+
+def tool():
+    """The pinned skillfile binary, downloaded and sha256-checked once."""
+    m = {"amd64": "x86_64", "arm64": "aarch64"}.get(platform.machine().lower(), platform.machine().lower())
+    s = {"linux": "linux", "darwin": "macos"}.get(sys.platform, sys.platform)
+    asset = f"skillfile-{m}-{s}"
+    want = SHA256.get(f"{m}-{s}") or die(f"no pinned skillfile {VERSION} build for {m}-{s}")
+    path = os.path.join(cache, "bin", f"{asset}-{VERSION}")
+    if not os.path.exists(path):
+        url = f"https://github.com/eljulians/skillfile/releases/download/{VERSION}/{asset}"
+        try:
+            data = urllib.request.urlopen(url, timeout=60).read()
+        except Exception as e:
+            die(f"skillfile {VERSION} is not cached at {path} and the download failed ({e}); "
+                f"run `just check-vendored` once online (fetches {url})")
+        got = hashlib.sha256(data).hexdigest()
+        if got != want:
+            die(f"skillfile {VERSION} download {url} has sha256 {got}, pinned {want}; refusing to run it")
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = path + f".{os.getpid()}"
+        with open(tmp, "wb") as fh:
+            fh.write(data)
+        os.chmod(tmp, 0o755); os.replace(tmp, path)
+    if hashlib.sha256(open(path, "rb").read()).hexdigest() != want:
+        die(f"cached {path} does not match the pinned sha256 {want}; delete it and rerun")
+    return path
+
+
+def pin_cache(source, path):
+    repo, sha = source.split("@", 1)
+    return os.path.join(cache, "upstream", repo, sha, path)
+
+
+def files(d):
+    """Relative path -> bytes for every file under d, skillfile's generated files aside."""
+    out = {}
+    for base, dirs, names in os.walk(d):
+        dirs.sort()
+        for n in names:
+            p = os.path.join(base, n)
+            rel = os.path.relpath(p, d)
+            if rel not in GENERATED:
+                out[rel] = open(p, "rb").read()
+    return out
+
+
+ents = entries()
+vendored = [e for e in ents if e[0] == "github"]
+if not vendored:
+    die("no github entries in Skillfile")
+binary = tool()
+work = tempfile.mkdtemp(prefix="check-vendored-")
+try:
+    for f in ("Skillfile", "Skillfile.lock"):
+        shutil.copy2(os.path.join(root, f), work)
+    shutil.copytree(os.path.join(root, ".skillfile", "patches"), os.path.join(work, ".skillfile", "patches"))
+    for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
+        if kind == "local" and os.path.isdir(os.path.join(root, src)):
+            shutil.copytree(os.path.join(root, src), os.path.join(work, src))
+    missing = []
+    for _, name, source, path in vendored:
+        c = pin_cache(source, path)
+        if os.path.isfile(os.path.join(c, ".meta")):
+            shutil.copytree(c, os.path.join(work, ".skillfile", "cache", "skills", name))
+        else:
+            missing.append((name, source, path))
+    env = dict(os.environ, HOME=os.path.join(work, ".home"), SKILLFILE_QUIET="1")
+    if not (env.get("GH_TOKEN") or env.get("GITHUB_TOKEN")) and missing and shutil.which("gh"):
+        tok = subprocess.run(["gh", "auth", "token"], capture_output=True, text=True).stdout.strip()
+        if tok:
+            env["GH_TOKEN"] = tok
+    r = subprocess.run([binary, "install"], cwd=work, env=env, capture_output=True, text=True)
+    if r.returncode != 0:
+        if missing:
+            pins = ", ".join(f"{n} ({s} {p})" for n, s, p in missing)
+            die(f"upstream not cached for {pins}, and skillfile could not fetch it (offline?): "
+                f"{r.stderr.strip().splitlines()[-1] if r.stderr.strip() else 'no output'}\nrun `just check-vendored` once online; the cache is {os.path.join(cache, 'upstream')}, keyed by pin SHA")
+        die(f"skillfile {VERSION} install failed in a throwaway copy:\n{r.stdout}{r.stderr}")
+    for name, source, path in missing:  # keep what was fetched, keyed by pin SHA
+        c = pin_cache(source, path)
+        tmp = f"{c}.{os.getpid()}"
+        shutil.copytree(os.path.join(work, ".skillfile", "cache", "skills", name), tmp)
+        os.makedirs(os.path.dirname(c), exist_ok=True)
+        try:
+            os.rename(tmp, c)
+        except OSError:
+            shutil.rmtree(tmp)  # a concurrent run cached it first
+    bad = 0
+    for _, name, source, path in vendored:
+        want = files(os.path.join(work, SKILLS, name))
+        have = files(os.path.join(root, SKILLS, name))
+        origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus .skillfile/patches/skills/{name}/"
+        for rel in sorted(set(want) | set(have)):
+            shown = f"{SKILLS}/{name}/{rel}"
+            if rel not in have:
+                print(f"{TAG}: {name}: {shown} is missing; upstream {origin} has it", file=sys.stderr)
+            elif rel not in want:
+                print(f"{TAG}: {name}: {shown} is not in upstream {origin}", file=sys.stderr)
+            elif have[rel] != want[rel]:
+                print(f"{TAG}: {name}: {shown} differs from upstream {origin}", file=sys.stderr)
+                d = difflib.unified_diff(want[rel].decode(errors="replace").splitlines(),
+                                         have[rel].decode(errors="replace").splitlines(),
+                                         "upstream+patch", "committed", lineterm="", n=1)
+                for line in list(d)[:20]:
+                    print(f"    {line}", file=sys.stderr)
+            else:
+                continue
+            bad += 1
+    if bad:
+        die(f"{bad} vendored file(s) drift from pin plus patch: change vendored text only through "
+            f".skillfile/patches/skills/<name>/<file>.patch (first line names its ADR), else revert the file")
+    print(f"vendored: ok ({len(vendored)} skills equal upstream at pin plus patches; skillfile {VERSION})")
+finally:
+    shutil.rmtree(work, ignore_errors=True)
