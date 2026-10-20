@@ -57,15 +57,18 @@ check-refs:
     #   vendored skills (Skillfile github entries) and .skillfile/: upstream wording and quotes of it.
     #   docs/specs/.viz/, docs/specs/.style/: Spec Chat's vendored runtime and style (NOTICE).
     #   LICENSE: the upstream Apache-2.0 text.
-    # Exempt quotes of frozen or upstream text, not kit naming:
+    # Exempt quotes of frozen or upstream text, not kit naming, removed token by token
+    # (only the exact quote, so a retired word beside it on the same line still fails):
     #   handoff-operator: frozen spec anchor kept from octo-lite (docs/adr/0021).
-    #   acceptance-retired-words: the frozen criterion that names the words.
+    #   calls the top agent [o]perator or the person [h]uman: the frozen #acceptance-retired-words criterion.
     #   "The operator": the corrector quoting vendored pstack correct.
-    #   was agents/meta-[o]perator.md: octo-lite's file name in NOTICE attribution.
+    #   was agents/meta-[o]perator.md): octo-lite's file name in NOTICE attribution.
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
     mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$)")
-    if grep -nHiE '\b(meta-)?[o]perators?\b|\b[h]umans?\b' "${own[@]}" \
-        | grep -vE 'handoff-[o]perator|data-anchor="acceptance-retired-words"|"The [o]perator"|was agents/meta-[o]perator\.md\)'; then
+    retired='\b(meta-)?[o]perators?\b|\b[h]umans?\b'
+    if grep -nHiE "$retired" "${own[@]}" | RETIRED="$retired" perl -ne '
+        ($s = $_) =~ s/handoff-[o]perator|calls the top agent [o]perator or the person [h]uman|"The [o]perator"|was agents\/meta-[o]perator\.md\)//g;
+        if ($s =~ /$ENV{RETIRED}/i) { print; $n++ } END { exit($n ? 0 : 1) }'; then
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
