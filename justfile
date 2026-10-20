@@ -117,6 +117,8 @@ check-templates:
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
+    # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
+    TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "{{root}}"/tests/*.sh; do "$t"; done
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
