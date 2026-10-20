@@ -43,7 +43,7 @@ g -C "$r" add -A; g -C "$r" commit -qm spec; c1="$(git -C "$r" rev-parse HEAD)"
 cp "$fx/a-edited.spec.html" "$r/$s"; g -C "$r" commit -qam edit; c2="$(git -C "$r" rev-parse HEAD)"
 
 export SPEC_CHAT_STATE="$t/state"; mkdir -p "$t/state/hosting/default" "$t/state/hosting/other"
-spool="$r/$s.review/human"
+SPOOL_SIDE=human; spool="$r/$s.review/$SPOOL_SIDE"   # Spec Chat's owner side of the spool
 row() { # base updated_at [extra line]
   printf '[[resource]]\nid = "spec:a-flow:p::%s"\nslug = "a-flow"\nroot = "%s"\nspec = "%s"\nbase = "%s"\nupdated_at = "%s"\n%s\n' \
     "$s" "$r" "$s" "$1" "$2" "${3:-}"; }
@@ -51,8 +51,8 @@ row() { # base updated_at [extra line]
 handoff() { # stamp id version [events-json]
   mkdir -p "$spool"
   local ev=""; [[ -z "${4:-}" ]] || ev=", \"events\": $4"
-  printf '{"id": "%s", "event": "handoff", "anchorId": "", "actor": "human", "createdAt": "2026-10-20T15:%02d:00.000Z", "schemaVersion": 1, "version": "%s"%s}\n' \
-    "$2" "$(( ${1: -2} % 60 ))" "$3" "$ev" > "$spool/$1-handoff-$2.json"; }
+  printf '{"id": "%s", "event": "handoff", "anchorId": "", "actor": "%s", "createdAt": "2026-10-20T15:%02d:00.000Z", "schemaVersion": 1, "version": "%s"%s}\n' \
+    "$2" "$SPOOL_SIDE" "$(( ${1: -2} % 60 ))" "$3" "$ev" > "$spool/$1-handoff-$2.json"; }
 A="$kit/scripts/octo-feather-accepted"
 run() { local want="$1"; shift; set +e; out="$("$A" "$@" --repo "$r" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }

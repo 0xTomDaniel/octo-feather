@@ -30,8 +30,11 @@ ours() {
     [[ "$(sed -n 's/^HERDR_SESSION=//p' <<<"$vars")" == "${HERDR_SESSION:-}" ]]
 }
 line=""
+# Finding a pane's processes reads /proc, which macOS lacks.
+procfs=1; [[ -d /proc/self ]] || procfs=0
 if [[ "${1:-}" == --park ]]; then
   (($# == 2)) && [[ "$2" == *:* ]] || usage
+  ((procfs)) || { echo "herdr-close --park: not on macOS (it reads the pane's Pi session from /proc); not parked. Leave the agent running, or close its tab with herdr-close and relaunch it fresh when needed" >&2; exit 69; }
   pane="$2"; session=""; role=""; cwd=""; parent=""
   for env in /proc/[0-9]*/environ; do
     ours "$env" "HERDR_PANE_ID=$pane" || continue
@@ -65,8 +68,8 @@ else kind=space; tag=HERDR_WORKSPACE_ID; cmd=(workspace close); fi
 rc=0
 herdr "${cmd[@]}" "$id" >/dev/null 2>&1 || rc=$?
 
-killed=0
-for env in /proc/[0-9]*/environ; do
+killed=0; ((procfs)) || killed="skipped-no-proc"   # macOS: detached children of the closed tab are not swept
+((procfs)) && for env in /proc/[0-9]*/environ; do
   pid="${env#/proc/}"; pid="${pid%/environ}"
   ours "$env" "$tag=$id" || continue
   kill -TERM "$pid" 2>/dev/null && killed=$((killed + 1))
