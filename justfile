@@ -40,8 +40,8 @@ check-refs:
     set -euo pipefail
     cd "{{root}}"
     bad=0
-    if git ls-files | grep -E '(^|/)(CLAUDE\.md|\.claude|\.codex)(/|$)'; then
-      echo "check-refs: Claude/Codex projection files above are not allowed (docs/adr/0001)" >&2; bad=1; fi
+    if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
+      echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
     if grep -nHE '\bLinear\b' "${files[@]}"; then
       echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
@@ -51,12 +51,22 @@ check-refs:
     # The gate and its check-* recipes never reach the product judge or factory evals.
     if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
       echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
-    # Retired words stay retired. Exempt: GLOSSARY.md (lists them), a spec anchor,
-    # the corrector quoting pstack correct, and vendored skills (upstream wording).
+    # Retired words stay retired in all kit text, docs/ and this justfile included
+    # (the pattern brackets a letter so it does not match itself). Exempt files:
+    #   GLOSSARY.md: lists the retired words.
+    #   vendored skills (Skillfile github entries) and .skillfile/: upstream wording and quotes of it.
+    #   docs/specs/.viz/, docs/specs/.style/: Spec Chat's vendored runtime and style (NOTICE).
+    #   LICENSE: the upstream Apache-2.0 text.
+    # Exempt quotes of frozen or upstream text, not kit naming:
+    #   handoff-operator: frozen spec anchor kept from octo-lite (docs/adr/0021).
+    #   acceptance-retired-words: the frozen criterion that names the words.
+    #   "The operator": the corrector quoting vendored pstack correct.
+    #   was agents/meta-[o]perator.md: octo-lite's file name in NOTICE attribution.
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE "^(\.agents/skills/(${vend%|})/|GLOSSARY\.md\$)")
-    if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"'; then
-      echo "check-refs: say director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
+    mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$)")
+    if grep -nHiE '\b(meta-)?[o]perators?\b|\b[h]umans?\b' "${own[@]}" \
+        | grep -vE 'handoff-[o]perator|data-anchor="acceptance-retired-words"|"The [o]perator"|was agents/meta-[o]perator\.md\)'; then
+      echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
