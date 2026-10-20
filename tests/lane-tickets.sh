@@ -25,15 +25,11 @@ git -C "$t/repo" init -q -b main .
 
 # The snapshot: parent -> sub-issues ([total] when gh would page); ticket N's body from bodies/.
 python3 - "$F" "$t/snap" <<'EOF'
-import base64, hashlib, json, sys, pathlib
+import json, sys, pathlib
 F, snap = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
-# 10.json: #10's real body, base64 (its "why_base64" says why), checked against its sha256.
-def b64(p):
-    d = json.loads(p.read_text()); b = base64.b64decode(d["body_base64"])
-    assert hashlib.sha256(b).hexdigest() == d["sha256"], f"{p}: body does not match its sha256"
-    return b.decode()
-bodies |= {int(p.stem): b64(p) for p in F.glob("*.json")}
+# 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
+bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
 parents = {100: [101, 102, 103], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 def save(n, d): (snap / "issue" / f"{n}.json").write_text(json.dumps({"number": n, "title": f"t{n}", "state": "OPEN", **d}))
@@ -100,7 +96,7 @@ run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane tick
 run 0 ticket "$F/101.md"; has "$F/101.md: ok"
 set +e; out="$("$L" ticket - <"$F/101.md" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 0 && "$out" == "stdin: ok" ]] || fail "ticket - on a good draft: exit $rc: $out"
-python3 -c 'import base64,json,sys; sys.stdout.buffer.write(base64.b64decode(json.load(open(sys.argv[1]))["body_base64"]))' "$F/10.json" >"$t/10.md"
+python3 -c 'import json,sys; sys.stdout.write(json.load(open(sys.argv[1]))["body"])' "$F/10.json" >"$t/10.md"
 set +e; out="$("$L" ticket - <"$t/10.md" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] || fail "ticket - on #10: exit $rc: $out"; has "stdin: class: layer-only-ticket"
 run 0 ticket "$F/102.md"
