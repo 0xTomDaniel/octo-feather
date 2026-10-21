@@ -113,20 +113,9 @@ check-dashes:
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
 
-# Every skill has name and description frontmatter; every role file exists.
+# Every skill opens with a --- frontmatter block with non-empty name and description; every role file exists.
 check-skills:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "{{root}}"
-    n=0
-    for f in .agents/skills/*/SKILL.md; do
-      head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
-      n=$((n + 1))
-    done
-    for r in director supervisor implementer code-reviewer corrector; do
-      [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
-    done
-    echo "skills: ok ($n skills, 5 roles)"
+    @python3 "{{root}}/scripts/check-skills"
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
