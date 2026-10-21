@@ -35,6 +35,7 @@ cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 # tests/demo.sh is tracked and executable but a test, not the app's surface.
 mkdir -p "$t/repo/bin" "$t/repo/tests"
 printf '#!/bin/sh\necho ok\n' >"$t/repo/bin/demo"; cp "$t/repo/bin/demo" "$t/repo/tests/demo.sh"
+printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not executable (ADR 0002)
 mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
 chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
@@ -48,7 +49,7 @@ F, snap = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39, 40], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 def save(n, d): (snap / "issue" / f"{n}.json").write_text(json.dumps({"number": n, "title": f"t{n}", "state": "OPEN", **d}))
 for p, subs in parents.items():
@@ -87,7 +88,7 @@ hasnt() { ! grep -qF -- "$1" <<<"$out" || fail "${2:-output} has '$1': $out"; }
 # assignment with $(...), `uv run app` from pyproject, a justfile recipe plus curl to a URL,
 # pnpm exec playwright), and Expand-contract tickets without a demo (one says internal only).
 run 0 tickets 100
-for n in 101 102 103 104 105 106 107 108 109; do has "#$n: ok"; done; has "#100: 9 of 9 tickets pass"
+for n in 101 102 103 104 105 106 107 108 109 110; do has "#$n: ok"; done; has "#100: 10 of 10 tickets pass"
 run 0 tickets '#100' --repo o/r
 
 # #10's real body: layer-only-ticket and the fix; its sibling passes; exit 1.
@@ -125,7 +126,8 @@ has "#37: class: layer-only-ticket: demo runs \`demo b\`, which What to build do
 has "#38: class: layer-only-ticket: demo runs \`demo a\`, which What to build (missing) cannot name"
 has "#39: class: layer-only-ticket: the ticket says 'only the storage layer'"
 hasnt "#39: class: layer-only-ticket: demo"
-has "#20: 0 of 15 tickets pass, 15 fail"
+has "#40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
+has "#20: 0 of 16 tickets pass, 16 fail"
 run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of #30"
 
 # One draft: a file, stdin passing, stdin failing (#10), the waiver.
@@ -173,4 +175,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"

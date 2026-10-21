@@ -48,7 +48,8 @@ at the current directory), and its last item is `demo: ` with a backticked comma
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
-[project.scripts] name), curl/http to an http(s) URL, or playwright; never the gate alone
+[project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
+for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The demo's invocation (program plus first subcommand word,
 the URL path for curl, the test file for playwright) must be named in What to build. A ticket
 that says it has no externally or user visible behavior, is internal only, delivers one layer
@@ -585,7 +586,8 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 # an HTTP request, or a UI driver run. Generic tools and builtins (printf, echo, cat) are not one.
 SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
-               "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`), "
+               "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
+               "script run by its interpreter, e.g. `python harness.py`), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 INTERNAL = re.compile(r"\bno (?:externally|user)[- ]visible(?: behaviou?r| change)?|\b(?:not|never) (?:externally|user)[- ]visible"
@@ -601,6 +603,8 @@ def names(what: str, inv: str) -> bool:
     return bool(words) and re.search(r"(?<![\w-])(?:[\w./-]*/)?" + r"\s+".join(words) + r"(?![\w-])", what.replace("`", " "), re.I) is not None
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
            ("npx",), ("pnpx",), ("bunx",), ("pnpm",), ("yarn",), ("env",), ("exec",), ("command",), ("time",), ("sudo",)}
+# A target with no CLI, HTTP or UI demos through its runnable script (ADR 0002), e.g. `python harness.py`.
+INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno", "bun", "Rscript"}
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
 TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
@@ -622,9 +626,12 @@ class Surface:
 
     def __init__(self, root: Path):
         self.root, self.exec_paths, self.exec_names, self.recipes, self.bins = root, set(), set(), set(), set()
+        self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
         ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
         for line in ls.stdout.splitlines():
             meta, _, path = line.partition("\t")
+            if not TEST_DIR.search(path):
+                self.files.add(path)
             # A test or hook is the gate's, not the app's surface.
             if meta.startswith("100755") and not TEST_DIR.search(path):
                 self.exec_paths.add(path); self.exec_names.add(path.rsplit("/", 1)[-1])
@@ -670,6 +677,14 @@ class Surface:
         if not words:
             return "no program"
         prog, args = words[0], words[1:]
+        if prog.rsplit("/", 1)[-1] in INTERPRETERS:
+            script = script_arg(words)
+            if not script:
+                return f"{prog} runs no script"
+            rel = os.path.normpath(script[2:] if script.startswith("./") else script)
+            if TEST_DIR.search(rel):
+                return f"{script} is a test or hook, not the app's surface"
+            return None if rel in self.files else f"{script} is not a script the repo tracks"
         if prog in HTTP:
             return None if any(re.match(r"https?://", a) for a in args) else f"{prog} without an http(s) URL"
         if prog == "playwright" or prog.endswith("/playwright"):
@@ -716,9 +731,21 @@ def program_words(stage: str) -> list[str]:
     return words
 
 
+def script_arg(words: list[str]) -> str:
+    """The script an interpreter runs: its first argument after flags (`deno run`/`bun run` skip `run`)."""
+    if any(w in ("-c", "-m", "-e", "--eval") for w in words[1:]):
+        return ""   # inline code or a module, not a script file
+    args = [a for a in words[1:] if not a.startswith("-")]
+    if args and args[0] == "run" and words[0].rsplit("/", 1)[-1] in ("deno", "bun"):
+        args = args[1:]
+    return args[0] if args else ""
+
+
 def invocation(words: list[str]) -> str:
     """The behavior a demo stage runs: program (basename) plus its first subcommand word;
     for curl/http the URL path; for playwright its first test file."""
+    if words[0].rsplit("/", 1)[-1] in INTERPRETERS:   # the script stands for the program
+        words = words[words.index(script_arg(words)):]
     prog, args = words[0], [a for a in words[1:] if not a.startswith("-")]
     name = prog.rsplit("/", 1)[-1]
     if name in HTTP:
