@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-lane tickets|ticket (spec issue-lifecycle
-# #acceptance-tracer-tickets), no network: GitHub is a snapshot served by the qc judge's
+# #acceptance-tracer-tickets), no network: GitHub is a snapshot, taken by octo-feather-qc-ghsnap
+# from a fake GitHub gh and served by the qc judge's
 # offline gh (scripts/qc-bin/gh), so the check is proven to work under it and to ask only
 # fields octo-feather-qc-ghsnap stores. Proves: a parent whose tickets all name criteria
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
@@ -20,7 +21,7 @@ t="$(mktemp -d)"; trap 'chmod -R u+w "$t"; rm -rf "$t"' EXIT
 fail() { echo "lane-tickets test: $*" >&2; exit 1; }
 export HOME="$t/home" GH_LOG="$t/gh.log" OCTO_FEATHER_GHSNAP="$t/snap" OCTO_FEATHER_GHSNAP_MISS="$t/miss.log"
 unset GH_REPO GH_TOKEN FAKE_GH
-mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs" "$t/snap/issue"
+mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs"
 # The only PATH: $t/bin (the fake gh) and $t/sys (the tools this test and the scripts run).
 # No host directory is on it, so a host gh (a CI runner's, asking for GH_TOKEN) is never reached.
 for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname; do
@@ -42,23 +43,48 @@ printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"
 printf 'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n' >"$t/repo/justfile"
 git -C "$t/repo" init -q -b main . && git -C "$t/repo" add -A
 
-# The snapshot: parent -> sub-issues ([total] when gh would page); ticket N's body from bodies/.
-python3 - "$F" "$t/snap" <<'EOF'
+# GitHub for repo o/r: parent -> sub-issues ([total] when gh would page); ticket N's body from bodies/.
+python3 - "$F" "$t/github.json" <<'EOF'
 import json, sys, pathlib
-F, snap = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+F = pathlib.Path(sys.argv[1])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
 parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
-def save(n, d): (snap / "issue" / f"{n}.json").write_text(json.dumps({"number": n, "title": f"t{n}", "state": "OPEN", **d}))
+iss = {}
 for p, subs in parents.items():
     subs, total = subs if isinstance(subs, tuple) else (subs, len(subs))
-    save(p, {"body": "parent", "subIssues": {"nodes": [node(n) for n in subs], "totalCount": total}})
+    iss[p] = {"body": "parent", "subIssues": {"nodes": [node(n) for n in subs], "totalCount": total}}
 for n, b in bodies.items():
-    save(n, {"body": b, "subIssues": {"nodes": [], "totalCount": 0}})
-(snap / "meta.json").write_text(json.dumps({"repo": "o/r", "fetched_at": "2026-10-20T00:00:00Z", "counts": {}, "capped": []}))
+    iss[n] = {"body": b, "subIssues": {"nodes": [], "totalCount": 0}}
+iss = {n: {"number": n, "title": f"t{n}", "state": "OPEN", "updatedAt": "2026-10-20T00:00:00Z", **d} for n, d in iss.items()}
+pathlib.Path(sys.argv[2]).write_text(json.dumps(iss))
 EOF
+# A fake GitHub gh, used only to take the snapshot: like real gh it answers every --json field
+# asked (stored value or null), so the snapshot holds exactly the fields the snapshot CLI asks for.
+mkdir -p "$t/github"
+cat > "$t/github/gh" <<'EOF'
+#!/usr/bin/env python3
+import json, os, sys
+a = sys.argv[1:]
+iss = {int(k): v for k, v in json.load(open(os.environ["FAKE_GITHUB"])).items()}
+def out(x): print(json.dumps(x)); sys.exit(0)
+def pick(d): return {f: d.get(f) for f in a[a.index("--json") + 1].split(",")}
+c = a[:2]
+if c == ["repo", "view"]: out(pick({"nameWithOwner": "o/r", "name": "r", "owner": {"login": "o"}, "defaultBranchRef": {"name": "main"}}))
+if c == ["issue", "list"]: out([pick(d) for d in iss.values()])
+if c in (["pr", "list"], ["run", "list"]): out([])
+if c == ["issue", "view"]: out(pick(iss[int(a[2])]))
+if a[0] == "api":
+    p = a[-1]
+    if "sub_issues" in p or "dependencies" in p: sys.exit(print("gh: Not Found (HTTP 404)", file=sys.stderr) or 1)
+    out([[]] if p.endswith(("/branches", "/labels", "/timeline")) else [{"full_name": "o/r"}])
+sys.exit(print(f"fake github gh: unexpected {a}", file=sys.stderr) or 2)
+EOF
+chmod +x "$t/github/gh"
+FAKE_GITHUB="$t/github.json" PATH="$t/github:$t/sys" "$kit/scripts/octo-feather-qc-ghsnap" o/r "$t/snap" >/dev/null \
+  || fail "octo-feather-qc-ghsnap could not snapshot the fake GitHub"
 cat > "$t/bin/gh" <<EOF
 #!/usr/bin/env bash
 # Logs argv, then serves the offline gh; FAKE_GH=down|garbage stand for execution failures.
@@ -149,13 +175,9 @@ printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] 
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 1 ticket - <"$F/36-judge-persistence.md"; [[ "$(grep -c '^stdin: class: layer-only-ticket' <<<"$out")" == 2 ]] || fail "judge persistence draft on stdin: $out"
 
-# The offline gh refused nothing (only snapshotted fields were asked), and every field asked
-# is one octo-feather-qc-ghsnap fetches.
-[[ ! -s "$t/miss.log" ]] || fail "offline gh refused calls: $(cat "$t/miss.log")"
-IF="$(sed -n '/^IF = (/,/)/p' "$kit/scripts/octo-feather-qc-ghsnap" | tr -d ' "()\n' | sed 's/^IF=//')"
-grep -o -- '--json [^ ]*' "$GH_LOG" | cut -d' ' -f2 | tr , '\n' | sort -u | while read -r f; do
-  [[ ",$IF," == *",$f,"* ]] || fail "asks gh field $f, which octo-feather-qc-ghsnap does not snapshot"
-done
+# The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
+# asked is one the snapshot CLI fetches.
+[[ ! -s "$t/miss.log" ]] || fail "offline gh refused calls (a field the snapshot lacks?): $(cat "$t/miss.log")"
 
 # Execution failures: exit 2, the fix named, no ticket reported as passed.
 err() { # WANT_MSG ARGS...
@@ -182,4 +204,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, story or section anchor as criterion, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, story or section anchor as criterion, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
