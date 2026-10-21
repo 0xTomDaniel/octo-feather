@@ -1,0 +1,149 @@
+#!/usr/bin/env python3
+"""The gate never reaches the product judge (qc, octo-feather-qc, Jev) or the
+factory evals (qa): quality spec #acceptance-gate-no-model.
+
+Run by the justfile's top-level guard assignment, which just evaluates before
+any recipe runs, so a gate that would reach them fails before running one.
+Reads the parsed justfile (`just --dump --dump-format json`), takes every
+recipe named check or check-* plus everything they reach (dependencies before
+and after `&&`, and any recipe or alias name a body names, as in `just NAME`),
+and fails when that closure holds qa or qc, or when any of its bodies,
+parameter defaults or dependency arguments (interpolations and the variables
+they read resolved, shell quotes removed) name qa, qc or jev as a word.
+
+The justfile: the one beside this script's scripts/ dir, or, where /proc shows
+the parent just's argv, the --justfile/-f it was given (`just --justfile X
+--working-directory Y` runs backticks in Y, not beside X).
+
+Stdout is exactly `gate-free: ok` on pass; the justfile treats anything else
+as failure. Fails closed: a just error, unparsable dump or unexpected shape
+exits 2 with a message, never ok. Stdlib only.
+"""
+import json, os, re, subprocess, sys
+
+FORBIDDEN_RECIPES = ("qa", "qc")
+FORBIDDEN = re.compile(r"\b(qa|qc|jev)\b", re.I)
+TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
+FIX = "just check stays deterministic and free: the gate never runs the product judge or the factory evals (docs/future.md)"
+
+
+def die(msg):
+    print(f"check-gate-free: error: {msg}; the gate cannot pass", file=sys.stderr)
+    sys.exit(2)
+
+
+def render(node, assigns, seen=()):
+    """Text of a just expression: literals, resolved variables, backtick commands."""
+    if isinstance(node, str):
+        return node
+    if not isinstance(node, list) or not node:
+        return ""
+    op, args = node[0], node[1:]
+    if op == "variable" and len(args) == 1 and isinstance(args[0], str):
+        name = args[0]
+        if name in assigns and name not in seen:
+            return render(assigns[name]["value"], assigns, seen + (name,))
+        return name
+    parts = [render(a, assigns, seen) for a in args]
+    return ("" if op == "concatenate" else " ").join(parts)
+
+
+def fragment(frag, assigns):
+    if isinstance(frag, str):
+        return frag
+    return "".join(render(e, assigns) for e in frag)  # an interpolation: [expr]
+
+
+def parent_justfile():
+    """The --justfile/-f of the just that ran this backtick, when /proc shows it; else None."""
+    ppid = os.getppid()
+    try:
+        argv = open(f"/proc/{ppid}/cmdline", "rb").read().decode().split("\0")[:-1]
+        cwd = os.readlink(f"/proc/{ppid}/cwd")
+    except OSError:
+        return None
+    if not argv or not os.path.basename(argv[0]).startswith("just"):
+        return None
+    for i, a in enumerate(argv[1:], 1):
+        if a == "--":
+            break
+        if a in ("--justfile", "-f") and i + 1 < len(argv):
+            return os.path.join(cwd, argv[i + 1])
+        if a.startswith("--justfile="):
+            return os.path.join(cwd, a.split("=", 1)[1])
+        if a.startswith("-f") and len(a) > 2:
+            return os.path.join(cwd, a[2:])
+    return None
+
+
+def main():
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    path = sys.argv[1] if len(sys.argv) > 1 else parent_justfile() or os.path.join(root, "justfile")
+    try:
+        p = subprocess.run(["just", "--justfile", path, "--dump", "--dump-format", "json"],
+                           capture_output=True, text=True)
+    except OSError as e:
+        die(f"cannot run just: {e}")
+    if p.returncode != 0:
+        sys.stderr.write(p.stderr)
+        die(f"just --dump exited {p.returncode}")
+    try:
+        dump = json.loads(p.stdout)
+        recipes, assigns = dump["recipes"], dump["assignments"]
+        aliases = {a: v["target"] for a, v in dump.get("aliases", {}).items()}
+        texts, edges = {}, {}
+        for name, r in recipes.items():
+            lines = ["".join(fragment(f, assigns) for f in line) for line in r["body"]]
+            for prm in r["parameters"]:
+                if prm["default"] is not None:
+                    lines.append(render(prm["default"], assigns))
+            deps = []
+            for d in r["dependencies"]:
+                deps.append(d["recipe"])
+                lines.extend(render(a, assigns) for a in d["arguments"])
+            text = "\n".join(lines)
+            texts[name] = text
+            named = set(TOKEN.findall(re.sub(r"[\"'\\]", "", text)))
+            edges[name] = deps + sorted((named & set(recipes)) | {aliases[n] for n in named & set(aliases)})
+    except (ValueError, KeyError, TypeError, AttributeError) as e:
+        die(f"unexpected just --dump JSON ({type(e).__name__}: {e})")
+
+    roots = sorted(n for n in recipes if n == "check" or n.startswith("check-"))
+    if "check" not in recipes:
+        die("no check recipe in the justfile")
+    via = {r: [r] for r in roots}
+    queue = list(roots)
+    while queue:
+        n = queue.pop(0)
+        for m in edges.get(n, []):
+            if m not in via:
+                via[m] = via[n] + [m]
+                queue.append(m)
+    bad = []
+    for n in sorted(via):
+        chain = " -> ".join(via[n])
+        if n in FORBIDDEN_RECIPES:
+            bad.append(f"recipe {chain} reaches `{n}`")
+            continue
+        text = texts.get(n, "")
+        for raw in text.split("\n"):
+            for line in {raw, re.sub(r"[\"'\\]", "", raw)}:
+                hit = FORBIDDEN.search(line)
+                if hit:
+                    bad.append(f"recipe {chain} names `{hit.group(0)}` in: {raw.strip()}")
+                    break
+    if bad:
+        for b in dict.fromkeys(bad):
+            print(f"check-gate-free: {b}", file=sys.stderr)
+        print(f"check-gate-free: the gate recipes above reach the product judge or factory evals; {FIX}", file=sys.stderr)
+        sys.exit(1)
+    print("gate-free: ok")
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except SystemExit:
+        raise
+    except Exception as e:  # noqa: BLE001  fail closed on any internal error
+        die(f"{type(e).__name__}: {e}")
