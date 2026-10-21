@@ -49,7 +49,7 @@ F, snap = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39, 40], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 def save(n, d): (snap / "issue" / f"{n}.json").write_text(json.dumps({"number": n, "title": f"t{n}", "state": "OPEN", **d}))
 for p, subs in parents.items():
@@ -127,7 +127,11 @@ has "#38: class: layer-only-ticket: demo runs \`demo a\`, which What to build (m
 has "#39: class: layer-only-ticket: the ticket says 'only the storage layer'"
 hasnt "#39: class: layer-only-ticket: demo"
 has "#40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
-has "#20: 0 of 16 tickets pass, 16 fail"
+# The qc judge's third draft (gh47 qc at 23f1a7a), verbatim: #47's body with a user-story anchor
+# for the criterion id; only a data-acceptance-criterion anchor counts.
+has "#41: class: no-criterion: no acceptance item names an acceptance criterion: issue-lifecycle#story-tracer-tickets is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. issue-lifecycle#acceptance-"
+hasnt "#41: class: layer-only"
+has "#20: 0 of 17 tickets pass, 17 fail"
 run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of #30"
 
 # One draft: a file, stdin passing, stdin failing (#10), the waiver.
@@ -140,6 +144,9 @@ set +e; out="$("$L" ticket - <"$t/10.md" 2>&1)"; rc=$?; set -e
 run 0 ticket "$F/102.md"
 run 1 ticket - <"$F/28-judge-printf.md"; [[ "$(grep -c '^stdin: class: layer-only-ticket' <<<"$out")" == 2 ]] || fail "judge draft on stdin: $out"
 run 0 ticket "$F/104-uv-app.md"
+run 1 ticket - <"$F/41-judge-story-anchor.md"; has "stdin: class: no-criterion: no acceptance item names an acceptance criterion"
+printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section anchor\n- [ ] demo: `demo a` prints ok\n' >"$t/section.md"
+run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 1 ticket - <"$F/36-judge-persistence.md"; [[ "$(grep -c '^stdin: class: layer-only-ticket' <<<"$out")" == 2 ]] || fail "judge persistence draft on stdin: $out"
 
 # The offline gh refused nothing (only snapshotted fields were asked), and every field asked
@@ -175,4 +182,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, story or section anchor as criterion, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
