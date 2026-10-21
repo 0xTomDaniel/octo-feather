@@ -18,7 +18,8 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-HEAD must be the PR's current head (7+ hex prefix).
+Only lines outside fenced code blocks and blockquotes count; the last such line is the
+verdict, and lines that disagree are refused. HEAD must be the PR's current head (7+ hex prefix).
 
 `merge-ask` only reads, through `gh pr view --json` (also under the qc judge's offline gh).
 The section, up to the next `## ` heading:
@@ -26,13 +27,16 @@ The section, up to the next `## ` heading:
   ## Merge ask
   Head: <sha>                     the PR's head (7+ hex prefix)
   Checks: <summary>               verified: every check on that head SUCCESS, none pending
-  | criterion | qc verdict | evidence |
-  |---|---|---|
-  | <spec>#<id> | pass | <report path, command> |   one row per claimed criterion
+  | criterion | qc verdict | judged | evidence |
+  |---|---|---|---|
+  | <spec>#<id> | pass | judged <sha> | <report path, command> |   one row per claimed criterion
   Review verdict: <comment URL>   this PR's verdict comment: same head, verdict clear
   Built: <id> <id>                = status entries built with this PR = ids in its `qc: built` commits
   Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
 
+`judged <sha>` is the head just qc judged for that row (7+ hex): a commit of the PR, with
+only `qc: built ... (judged <sha>)` status commits after it (spec #lanes-one-head). It is the
+sha in the `(judged ...)` of the qc commit, or the PR head when qc reran there with nothing to flip.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Pass: the section on stdout (send it with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
@@ -145,9 +149,27 @@ def rollback(created: list[Path], archive: Path) -> None:
 MARKER = "<!-- octo-feather-review-verdict -->"
 SHA = re.compile(r"[0-9a-fA-F]{7,40}")
 COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
-VERDICT_LINE = re.compile(r"^\W*verdict\W*:\W*(clear|blocking|blocked)\b", re.I | re.M)
+VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
 HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.M)
-QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged [0-9a-f]+\))?\s*$")
+QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged ([0-9a-f]+)\))?\s*$")
+JUDGED = re.compile(r"`?(?:judged\s+)?`?([0-9a-fA-F]{7,40})`?", re.I)
+
+
+def verdicts(text: str) -> list[str]:
+    """Every `Verdict: clear|blocking` line outside fenced code blocks and blockquotes, in order."""
+    found, fence = [], None
+    for l in text.replace("\r\n", "\n").split("\n"):
+        f = re.match(r"\s{0,3}(`{3,}|~{3,})", l)
+        if fence:
+            if f and f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence) and not l.strip().strip(fence[0]):
+                fence = None
+            continue
+        if f:
+            fence = f.group(1); continue
+        m = VERDICT_LINE.match(l)   # anchored at column 0: a blockquote's `> Verdict:` never matches
+        if m:
+            found.append(m.group(1))
+    return found
 
 
 def gh(args: list[str], fix: str) -> str:
@@ -192,6 +214,24 @@ def head_matches(named: str, head: str) -> bool:
     return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
 
 
+def judged_check(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> str | None:
+    """Why a row's judged head does not stand for the PR head, or None (spec #lanes-one-head)."""
+    m = JUDGED.fullmatch(cell.strip())
+    if not m:
+        return f"judged {cell or 'empty'!r}; write `judged <sha>`, the head just qc judged (7+ hex)"
+    sha = m.group(1).lower()
+    at = [i for i, (oid, _) in enumerate(commits) if oid.lower().startswith(sha)]
+    if len(at) != 1:
+        return (f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; "
+                f"name the head just qc judged (the sha in its `qc: built ... (judged <sha>)` commit, or the PR head {head[:12]})")
+    after = [(oid, s) for oid, s in commits[at[0] + 1:] if not ((q := QC_COMMIT.match(s)) and q.group(2))]
+    if after:
+        oid, s = after[0]
+        return (f"judged {sha}, but {len(after)} non-qc commit{'s' * (len(after) > 1)} came after it ({oid[:12]} {s[:60]!r}): "
+                f"stale; rerun just qc on the head {head[:12]}, then update the row")
+    return None
+
+
 def subject(c: dict) -> str:
     """A commit's full subject: GitHub cuts messageHeadline at ~70 chars with an ellipsis and starts messageBody with the rest."""
     h, body = c.get("messageHeadline") or "", c.get("messageBody") or ""
@@ -224,10 +264,12 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"cannot read report {args[2]} ({e}): pass the code review's report file, or - for stdin")
     if not report.strip():
         raise Refuse(f"report {args[2]} is empty: pass the code review's report")
-    m = VERDICT_LINE.search(report)
-    if not m:
-        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` (the code-review skill's verdict)")
-    verdict = "clear" if m.group(1).lower() == "clear" else "blocking"
+    vs = verdicts(report)
+    if not vs:
+        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` outside code blocks and quotes (the code-review skill's verdict)")
+    if len(set(vs)) > 1:
+        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line outside code blocks and quotes, the reviewer's final verdict, then rerun")
+    verdict = vs[-1]
     d = pr_view(pr, "headRefOid,comments", repo)
     head = d["headRefOid"]
     if not head_matches(want, head):
@@ -354,10 +396,13 @@ def cmd_merge_ask(args: list[str]) -> int:
     if pending:
         miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
 
+    commits = [(c.get("oid") or "", subject(c)) for c in d["commits"] or []]
     rows: dict[str, str] = {}
-    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
+    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
     if t is None:
-        miss.append("criterion table: missing; add `| criterion | qc verdict | evidence |` with one row per claimed criterion")
+        old = any(re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I) for l in lines)
+        miss.append(f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion | qc verdict | judged | evidence |` "
+                    "with one row per claimed criterion, judged naming the head just qc judged")
     else:
         for l in lines[t + 1:]:
             if not l.strip().startswith("|"):
@@ -365,8 +410,8 @@ def cmd_merge_ask(args: list[str]) -> int:
             cells = [c.strip() for c in l.strip().strip("|").split("|")]
             if all(re.fullmatch(r":?-+:?", c) for c in cells):
                 continue
-            if len(cells) != 3:
-                miss.append(f"criterion row `{l.strip()}`: needs 3 cells, criterion | qc verdict | evidence"); continue
+            if len(cells) != 4:
+                miss.append(f"criterion row `{l.strip()}`: needs 4 cells, criterion | qc verdict | judged <sha> | evidence"); continue
             cid, why = resolve(cells[0], specs); v = cells[1].strip("`*").lower()
             if not cid:
                 miss.append(f"criterion row: {why}"); continue
@@ -374,8 +419,11 @@ def cmd_merge_ask(args: list[str]) -> int:
                 miss.append(f"criterion row {cid}: listed twice; keep one")
             if v not in ("pass", "fail"):
                 miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
-            if not cells[2]:
+            if not cells[3]:
                 miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
+            judged_problem = judged_check(cells[2], commits, head, pr)
+            if judged_problem:
+                miss.append(f"criterion row {cid}: {judged_problem}")
             rows[cid] = v
         if not rows:
             miss.append("criterion table: no rows; add one per claimed criterion")
@@ -390,15 +438,17 @@ def cmd_merge_ask(args: list[str]) -> int:
     else:
         c = next((c for c in d["comments"] or [] if (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
         cb = (c or {}).get("body") or ""
-        ch = HEAD_LINE.search(cb); cv = VERDICT_LINE.search(cb)
+        hdr = cb.split("\n### Findings", 1)[0]   # the helper's own header, never the quoted report
+        ch = HEAD_LINE.search(hdr); cvs = verdicts(hdr)
+        cv = cvs[-1] if len(set(cvs)) == 1 else None
         if c is None:
             miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
         elif not cb.lstrip().startswith(MARKER):
             miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
         elif not ch or not head.lower().startswith(ch.group(1).lower()):
             miss.append(f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not {head[:12]}; review {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
-        elif not cv or cv.group(1).lower() != "clear":
-            miss.append(f"Review verdict: {cv.group(1).lower() if cv else 'none'}, not clear; fix the blocking findings, qc and review again")
+        elif cv != "clear":
+            miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
 
     built = set()
     b = field(lines, "Built")
@@ -412,7 +462,7 @@ def cmd_merge_ask(args: list[str]) -> int:
     if b and built != status:
         miss.append(f"Built: lists {' '.join(sorted(built)) or 'none'}, the status files hold built with PR #{pr}: "
                     f"{' '.join(sorted(status)) or 'none'}; list exactly those (never edit the status file by hand)")
-    qc = [QC_COMMIT.match(subject(c)) for c in d["commits"] or []]
+    qc = [QC_COMMIT.match(s) for _, s in commits]
     qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
     unknown = sorted(x for x in qc_ids if not any(x in cr for cr in specs.values()))
     if not any(qc):
@@ -444,9 +494,9 @@ def cmd_merge_ask(args: list[str]) -> int:
 
     if t is not None:
         for cid in sorted(built - rows.keys()):
-            miss.append(f"criterion row {cid}: missing (it is in Built); add `| {cid} | pass | <evidence> |`")
+            miss.append(f"criterion row {cid}: missing (it is in Built); add `| {cid} | pass | judged <sha> | <evidence> |`")
         for cid in sorted(fails.keys() - rows.keys()):
-            miss.append(f"criterion row {cid}: missing (it is in Failed); add `| {cid} | fail | <evidence> |`")
+            miss.append(f"criterion row {cid}: missing (it is in Failed); add `| {cid} | fail | judged <sha> | <evidence> |`")
         for cid, v in sorted(rows.items()):
             if v == "pass" and cid not in built:
                 miss.append(f"criterion row {cid}: pass but not in Built; qc flips each pass to built, so rerun just qc or correct the row")

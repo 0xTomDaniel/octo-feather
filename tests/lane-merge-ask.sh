@@ -62,9 +62,9 @@ cat > "$t/other.status.json" <<'EOF'
 EOF
 ST=(--status "$t/demo.status.json")
 check_ok='[{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}, {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"}]'
-commits='[{"oid": "1", "messageHeadline": "feat: x", "messageBody": ""},
-  {"oid": "2", "messageHeadline": "qc: built acceptance-a acceptance-b (judged 0123456789ab)", "messageBody": ""}]'
-printf '{"number": 7, "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
+commits='[{"oid": "0123456789ab0000000000000000000000000000", "messageHeadline": "feat: x", "messageBody": ""},
+  {"oid": "HEADSHA", "messageHeadline": "qc: built acceptance-a acceptance-b (judged 0123456789ab)", "messageBody": ""}]'
+printf '{"number": 7, "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "${commits//HEADSHA/$H}" > "$FAKE_GH/pr/7.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"
@@ -79,7 +79,7 @@ run 0 verdict 7 "${H:0:7}" "$t/report"
 url="$out"; [[ "$url" == "https://github.com/o/r/pull/7#issuecomment-1001" ]] || fail "verdict printed $url"
 grep -q '^api -X POST repos/{owner}/{repo}/issues/7/comments ' "$FAKE_GH_LOG" || fail "no POST: $(cat "$FAKE_GH_LOG")"
 [[ "$(comments)" == 1 ]] || fail "create made $(comments) comments"
-printf 'Note: a nit.\n**Verdict:** blocking\n' > "$t/report2"
+printf 'Note: a nit.\nVerdict: blocking\n' > "$t/report2"
 run 0 verdict 7 "$H" "$t/report2"
 [[ "$out" == "$url" && "$(comments)" == 1 ]] || fail "rerun did not update in place: $out, $(comments) comments"
 grep -q '^api -X PATCH repos/{owner}/{repo}/issues/comments/1001 ' "$FAKE_GH_LOG" || fail "no PATCH of 1001: $(cat "$FAKE_GH_LOG")"
@@ -91,10 +91,18 @@ run 0 verdict 7 "$H" - < "$t/report"   # stdin, back to clear
 [[ "$(writes)" == 3 && "$(comments)" == 1 ]] || fail "third run: $(writes) writes, $(comments) comments"
 run 0 verdict 7 "$H" "$t/report"; [[ "$(writes)" == 3 ]] || fail "unchanged rerun wrote"
 grep -q unchanged <<<"$err" || fail "unchanged rerun not said: $err"
+# the verdict is the last line outside fences and quotes (review of 39515df, class verdict-parsing)
+printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\nThe quoted run predates the fix commit.\nVerdict: blocking\n' > "$t/fenced"
+run 0 verdict 7 "$H" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
+python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
+  || fail "fenced report posted the wrong verdict"
+run 0 verdict 7 "$H" "$t/report"   # back to clear
 # refusals: each non-zero, fix named, no write
 n="$(writes)"
 run 1 verdict 7 "$OTHER" "$t/report"; grep -q "is not PR #7's head.*push the reviewed head" <<<"$err" || fail "wrong head: $err"
 printf 'looks fine\n' > "$t/nov"; run 1 verdict 7 "$H" "$t/nov"; grep -q 'add a line `Verdict: clear`' <<<"$err" || fail "no verdict: $err"
+printf 'Verdict: clear\nmore\nVerdict: blocking\n' > "$t/both"; run 1 verdict 7 "$H" "$t/both"
+grep -q "verdicts that disagree (clear, blocking): keep one" <<<"$err" || fail "disagreeing verdicts: $err"
 run 1 verdict 7 "$H" "$t/missing"; grep -q "cannot read report" <<<"$err" || fail "missing report: $err"
 : > "$t/empty"; run 1 verdict 7 "$H" "$t/empty"; grep -q "is empty" <<<"$err" || fail "empty report: $err"
 run 1 verdict 7 xyz "$t/report"; grep -q "commit sha" <<<"$err" || fail "bad head: $err"
@@ -131,10 +139,10 @@ Lane work.
 
 Head: ${HEADL-${H:0:12}}
 Checks: check, ci/x pass on ${H:0:12}
-| criterion | qc verdict | evidence |
-|---|---|---|
-${ROWS-| demo#acceptance-a | pass | qc report a1b2.json, cmd ok |
-| acceptance-b | pass | qc report a1b2.json, cmd ok |}
+| criterion | qc verdict | judged | evidence |
+|---|---|---|---|
+${ROWS-| demo#acceptance-a | pass | judged 0123456 | qc report a1b2.json, cmd ok |
+| acceptance-b | pass | judged 0123456 | qc report a1b2.json, cmd ok |}
 Review verdict: ${REVIEW-$url}
 Built: ${BUILT-demo#acceptance-a acceptance-b}
 ${FAILED-Failed: none}
@@ -168,7 +176,7 @@ set +e; err="$(cd "$t" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:
 [[ "$rc" == 1 ]] && grep -q "was not updated.*offline read-only snapshot\|offline read-only snapshot.*was not updated" <<<"$err" || fail "verdict under the offline gh: $rc $err"
 # a failed criterion with triage passes; Failed bullet forms
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \
-  ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | r |\n| demo#acceptance-c | fail | r, output x |' setpr
+  ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r, output x |' setpr
 run 0 merge-ask 7 "${ST[@]}"; grep -q "^- acceptance-c: outside" <<<"$out" || fail "triaged fail: $out"
 
 # PR #16's real body: no section, each item named
@@ -186,10 +194,10 @@ bad "Checks: pending on head .*: check in_progress" 'd["statusCheckRollup"][0].u
 bad "Checks: pending on head .*: ci/x pending" 'd["statusCheckRollup"][1]["state"] = "PENDING"'
 bad "Checks: failing on head .*: ci/x error" 'd["statusCheckRollup"][1]["state"] = "ERROR"'
 bad "Checks: none reported" 'd["statusCheckRollup"] = []'
-ROWS='| demo#acceptance-a | pass | r |' bad "criterion row demo#acceptance-b: missing (it is in Built)"
-ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | |' bad "criterion row demo#acceptance-b: no evidence"
-ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | ok | r |' bad "qc verdict 'ok'; write pass or fail"
-ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | r |\n| demo#acceptance-zz | pass | r |' bad "acceptance-zz: no criterion"
+ROWS='| demo#acceptance-a | pass | judged 0123456 | r |' bad "criterion row demo#acceptance-b: missing (it is in Built)"
+ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | |' bad "criterion row demo#acceptance-b: no evidence"
+ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | ok | judged 0123456 | r |' bad "qc verdict 'ok'; write pass or fail"
+ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-zz | pass | judged 0123456 | r |' bad "acceptance-zz: no criterion"
 BUILT='demo#acceptance-a' bad "Built: lists demo#acceptance-a, the status files hold built with PR #7: demo#acceptance-a demo#acceptance-b"
 bad "the PR's .qc: built. commits passed acceptance-a; list exactly those" \
   'd["commits"][1]["messageHeadline"] = "qc: built acceptance-a (judged 0123456789ab)"'
@@ -203,18 +211,31 @@ REVIEW="${url%1001}4242" bad "comment 4242 not on PR #7"
 bad "the comment names head $OTHER, not ${H:0:12}" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('$H', '$OTHER')"
 bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Verdict: clear', 'Verdict: blocking')"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
-ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | r |\n| demo#acceptance-c | fail | r |' bad "criterion row demo#acceptance-c: fail with no triage"
-FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | r |\n| demo#acceptance-c | fail | r |' \
+ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r |' bad "criterion row demo#acceptance-c: fail with no triage"
+FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r |' \
   bad "Failed: demo#acceptance-c has no triage"
 FAILED=$'Failed:\n- acceptance-c: repair ticket #9' bad "criterion row demo#acceptance-c: missing (it is in Failed)"
 FAILED='Failed: some' bad "Failed: 'some'; write"
+# qc must have judged the head (spec #lanes-one-head; review of 39515df, class unverified-merge-ask)
+F="$(printf 'f00d%.0s' 1 2 3 4 5 6 7 8 9 10)"
+newhead="d['headRefOid'] = '$F'; d['commits'].append({'oid': '$F', 'messageHeadline': 'feat: after qc', 'messageBody': ''}); d['comments'][0]['body'] = d['comments'][0]['body'].replace('$H', '$F')"
+HEADL="${F:0:12}" bad "criterion row demo#acceptance-a: judged 0123456, but 1 non-qc commit came after it (${F:0:12} 'feat: after qc'): stale; rerun just qc on the head ${F:0:12}" "$newhead"
+grep -q "criterion row demo#acceptance-b: judged 0123456, but" <<<"$err" || fail "stale b not named: $err"
+HEADL="${F:0:12}" ROWS=$'| demo#acceptance-a | pass | judged '"${F:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${F:0:9}"' | r |' setpr "$newhead"
+run 0 merge-ask 7 "${ST[@]}"   # qc reran at the exact head, nothing to flip: no status commit, passes
+ROWS=$'| demo#acceptance-a | pass | judged deadbee | r |\n| demo#acceptance-b | pass | judged 0123456 | r |' bad "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head just qc judged"
+ROWS=$'| demo#acceptance-a | pass | yesterday | r |\n| demo#acceptance-b | pass | judged 0123456 | r |' bad "judged 'yesterday'; write .judged <sha>."
+python3 - "$t/pr7.keep" "$(body)" <<'PY' > "$t/old.body"
+import sys; print(sys.argv[2].replace("| criterion | qc verdict | judged | evidence |", "| criterion | qc verdict | evidence |"))
+PY
+bad "criterion table: no judged column" "d['body'] = open('$t/old.body').read()"
 # multi-spec lane: --status once per spec; a qc id with no --status file is named
 python3 - "$t/pr7.keep" <<'EOF'
-import json, sys; d = json.load(open(sys.argv[1])); d["commits"].append({"oid": "3", "messageHeadline": "qc: built acceptance-x (judged 0123456789ab)", "messageBody": ""})
+import json, sys; d = json.load(open(sys.argv[1])); d["commits"].append({"oid": "3333333333333333333333333333333333333333", "messageHeadline": "qc: built acceptance-x (judged 0123456789ab)", "messageBody": ""})
 json.dump(d, open(sys.argv[1], "w"))
 EOF
 bad "acceptance-x in no --status file: pass --status for its spec"
-ROWS=$'| demo#acceptance-a | pass | r |\n| demo#acceptance-b | pass | r |\n| other#acceptance-x | pass | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
+ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| other#acceptance-x | pass | judged 0123456 | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
 run 0 merge-ask 7 "${ST[@]}" --status "$t/other.status.json"
 # usage and execution failures
 run 1 merge-ask 7; grep -q "name the lane's status file" <<<"$err" || fail "no --status: $err"
@@ -225,4 +246,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built vs status and qc commits, verdict link head/blocking/marker, untriaged fail, multi-spec)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built vs status and qc commits, verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; rows name the judged head: a code commit after qc, a sha not in the PR and an old table fail, exact-head rerun passes)"
