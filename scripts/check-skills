@@ -1,0 +1,106 @@
+#!/usr/bin/env python3
+"""Every .agents/skills/*/SKILL.md opens with a frontmatter block (a `---` first
+line, a closing `---` line) holding a non-empty `name` and `description`
+(skills spec #acceptance-skill-frontmatter); the five role contracts exist.
+
+Stdlib only. Fails closed: an unreadable skill or an internal error fails the
+gate, never reads as ok. Run by `just check`.
+"""
+import glob, os, re, sys
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
+REQUIRED = ("name", "description")
+KEY = re.compile(r"([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$")
+BLOCK = re.compile(r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$")
+NULLS = {"", "~", "null", "Null", "NULL"}
+
+
+def scalar_empty(inline, cont):
+    """True when a YAML scalar (inline text plus indented continuation lines) is empty."""
+    if BLOCK.match(inline):  # `|`, `>-`, `|2` ...: the indented lines are the value
+        return not any(c.strip() for c in cont)
+    whole = " ".join([inline] + [c.strip() for c in cont]).strip()
+    if whole[:1] in ("'", '"'):
+        q = whole[0]
+        end = whole.rfind(q)
+        if end == 0:
+            raise ValueError("unterminated quoted value")
+        rest = whole[end + 1:].strip()
+        if rest and not rest.startswith("#"):
+            raise ValueError("text after the closing quote")
+        return not whole[1:end].strip()
+    if whole[:1] in ("[", "{"):
+        raise ValueError("not a string")
+    whole = re.sub(r"(?:^|[ \t])#.*$", "", whole).strip()  # a trailing comment
+    return whole in NULLS
+
+
+def problems(path):
+    with open(path, encoding="utf-8") as fh:
+        lines = [ln[:-1] if ln.endswith("\r") else ln for ln in fh.read().split("\n")]
+    if lines[0] != "---":
+        return ["no frontmatter block: the first line must be ---"]
+    try:
+        close = lines.index("---", 1)
+    except ValueError:
+        return ["frontmatter block has no closing --- line"]
+    block = lines[1:close]
+    found = {}
+    for i, line in enumerate(block):
+        m = KEY.match(line)
+        if not m or m.group(1) not in REQUIRED:
+            continue
+        key = m.group(1)
+        if key in found:
+            return [f"duplicate {key}"]
+        cont = []
+        for nxt in block[i + 1:]:
+            if nxt.strip() and not nxt[:1].isspace():
+                break
+            cont.append(nxt)
+        found[key] = ((m.group(2) or "").strip(), cont)
+    out = []
+    for key in REQUIRED:
+        if key not in found:
+            out.append(f"missing {key} in the frontmatter block")
+            continue
+        try:
+            if scalar_empty(*found[key]):
+                out.append(f"empty {key}")
+        except ValueError as e:
+            out.append(f"{key} unreadable: {e}")
+    return out
+
+
+def main():
+    os.chdir(ROOT)
+    bad, n = 0, 0
+    for path in sorted(glob.glob(".agents/skills/*/SKILL.md")):
+        n += 1
+        try:
+            found = problems(path)
+        except (OSError, UnicodeDecodeError) as e:
+            found = [f"cannot read: {e}"]
+        for p in found:
+            print(f"check-skills: {path}: {p} (needs a --- frontmatter block with non-empty name and description)", file=sys.stderr)
+            bad += 1
+    if n == 0:
+        print("check-skills: no .agents/skills/*/SKILL.md found", file=sys.stderr)
+        return 1
+    for r in ROLES:
+        if not os.path.isfile(f"agents/{r}.md"):
+            print(f"check-skills: missing role contract agents/{r}.md", file=sys.stderr)
+            bad += 1
+    if bad:
+        return 1
+    print(f"skills: ok ({n} skills, {len(ROLES)} roles)")
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except Exception as e:  # fail closed: an internal error is never ok
+        print(f"check-skills: error: {type(e).__name__}: {e}", file=sys.stderr)
+        sys.exit(2)
