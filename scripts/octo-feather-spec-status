@@ -12,8 +12,26 @@ A criterion id is the `data-anchor` of each `data-acceptance-criterion` element
 (Spec Chat's shaped-sections-v1 contract). `check` fails on a missing spec, a
 missing, extra or duplicate id, a status other than planned/built, a planned
 criterion with a PR, or a built one without. The spec HTML is never edited.
+
+A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
+append-only, one judgement call per line:
+  {"at": "<UTC ISO, Z>", "lane": "gh<N>", "role": "supervisor",
+   "kind": "clarifies" | "adds" | "weakens", "anchors": ["<data-anchor>"...],
+   "criteria": ["<criterion id>"...], "what": "...", "why": "...",
+   "passes_as_written": false, "evidence": "<failing command, error, or two
+   contradicting spec lines>", "commit": "<optional sha>",
+   "denied": {"at": "...", "note": "..."} (optional, written when the owner denies)}
+`check` fails on a line that is not JSON, a missing or empty field, a role other
+than supervisor, passes_as_written not false, an unknown kind, or a criterion id
+in neither the spec nor the spec at accepted_commit. It then compares the spec
+at accepted_commit (git show, from the spec's own repo, so a shallow clone needs
+full history) with the working tree, element by data-anchor: each element's own
+content, nested anchored elements cut out, whitespace normalized; content outside
+any anchored element is anchor "(page)". Every added, removed or changed anchor
+must be named in `anchors` by a call without `denied`; a removed criterion needs
+such a call of kind weakens, an added one of kind adds.
 """
-import json, re, sys
+import json, re, subprocess, sys
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -82,6 +100,159 @@ def check_file(status: Path) -> list[str]:
     return errs
 
 
+VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
+        "source", "track", "wbr"}
+KINDS = ("clarifies", "adds", "weakens")
+FIELDS = ("at", "lane", "role", "kind", "anchors", "criteria", "what", "why",
+          "passes_as_written", "evidence")
+PAGE = "(page)"
+
+
+class _Anchors(HTMLParser):
+    """Each data-anchor element's own content, nested anchored elements cut out."""
+
+    def __init__(self):
+        super().__init__(convert_charrefs=True); self.stack = []; self.parts = {PAGE: []}
+
+    def _owner(self):
+        return next((a for _, a in reversed(self.stack) if a is not None), PAGE)
+
+    def _tag(self, tag, attrs, close=""):
+        a = " ".join(f'{k}="{v}"' if v is not None else k for k, v in attrs)
+        return f"<{tag}{' ' + a if a else ''}{close}>"
+
+    def handle_starttag(self, tag, attrs):
+        anchor = dict(attrs).get("data-anchor")
+        if tag in VOID:
+            self.parts.setdefault(anchor or self._owner(), []).append(self._tag(tag, attrs)); return
+        self.stack.append((tag, anchor))
+        self.parts.setdefault(self._owner(), []).append(self._tag(tag, attrs))
+
+    def handle_startendtag(self, tag, attrs):
+        anchor = dict(attrs).get("data-anchor")
+        self.parts.setdefault(anchor or self._owner(), []).append(self._tag(tag, attrs, "/"))
+
+    def handle_endtag(self, tag):
+        if not any(t == tag for t, _ in self.stack):
+            return
+        owner = self._owner()
+        while self.stack:
+            t, a = self.stack.pop()
+            if t == tag:
+                self.parts.setdefault(a or owner, []).append(f"</{tag}>"); return
+
+    def handle_data(self, data):
+        self.parts[self._owner()].append(data)
+
+
+def anchors(html: str) -> dict[str, str]:
+    p = _Anchors(); p.feed(html); p.close()
+    return {k: " ".join("".join(v).split()) for k, v in p.parts.items()}
+
+
+def criteria_of(html: str) -> set[str]:
+    p = _Criteria(); p.feed(html); return {i for i in p.ids if i}
+
+
+def _git(cwd: Path, *args) -> subprocess.CompletedProcess:
+    return subprocess.run(["git", "-C", str(cwd), *args], capture_output=True, text=True)
+
+
+def accepted_html(spec: Path, commit: str) -> tuple[str | None, str | None]:
+    """The spec's HTML at commit, from the spec's own repo, or (None, error)."""
+    top = _git(spec.parent, "rev-parse", "--show-toplevel")
+    if top.returncode:
+        return None, f"{spec}: not in a git repo, so the change since accepted_commit {commit} cannot be checked"
+    if _git(spec.parent, "cat-file", "-e", f"{commit}^{{commit}}").returncode:
+        return None, (f"{spec}: accepted_commit {commit} is not in this repo; fix: fetch full history "
+                      f"(git fetch --unshallow, or CI checkout fetch-depth: 0)")
+    rel = spec.resolve().relative_to(Path(top.stdout.strip()).resolve()).as_posix()
+    shown = _git(spec.parent, "show", f"{commit}:{rel}")
+    if shown.returncode:
+        return None, f"{spec}: not in accepted_commit {commit} as {rel}"
+    return shown.stdout, None
+
+
+def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
+    """The valid calls in log, and an error per bad line naming file, line and fix."""
+    calls, errs = [], []
+    if not log.is_file():
+        return calls, errs
+    fix = "fix: the supervisor rewrites the call (issue-lifecycle #gates-spec-calls)"
+    for n, line in enumerate(log.read_text(encoding="utf-8").splitlines(), 1):
+        where = f"{log}:{n}"
+        try:
+            c = json.loads(line, object_pairs_hook=_pairs)
+        except ValueError as e:
+            errs.append(f"{where}: not a JSON object ({e}); fix: one JSON call per line"); continue
+        if not isinstance(c, dict):
+            errs.append(f"{where}: not a JSON object; fix: one JSON call per line"); continue
+        bad = [f for f in FIELDS if f not in c or c[f] in (None, "", [])]
+        bad += [f for f in ("anchors", "criteria") if f not in bad and not (
+            isinstance(c[f], list) and all(isinstance(x, str) and x for x in c[f]))]
+        bad += [f for f in FIELDS if f not in bad and f not in ("anchors", "criteria", "passes_as_written")
+                and not isinstance(c[f], str)]
+        if bad:
+            errs.append(f"{where}: missing or empty field {', '.join(bad)}; fix: every field but commit "
+                        f"and denied is set, anchors and criteria are non-empty lists of ids"); continue
+        line_errs = []
+        if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?Z", c["at"]):
+            line_errs.append(f"at {c['at']!r} is not a UTC ISO time ending in Z")
+        if not re.fullmatch(r"gh\d+", c["lane"]):
+            line_errs.append(f"lane {c['lane']!r} is not gh<N>")
+        if c["role"] != "supervisor":
+            line_errs.append(f"role {c['role']!r}: only the supervisor edits a spec and logs its call")
+        if c["passes_as_written"] is not False:
+            line_errs.append("passes_as_written must be false: if the criteria pass as written there is no edit")
+        if c["kind"] not in KINDS:
+            line_errs.append(f"kind {c['kind']!r} is not one of {', '.join(KINDS)}")
+        for i in c["criteria"]:
+            if i not in known:
+                line_errs.append(f"criterion {i} is in neither the spec nor its accepted commit")
+        if "commit" in c and not (isinstance(c["commit"], str) and re.fullmatch(r"[0-9a-f]{7,40}", c["commit"])):
+            line_errs.append("commit, when set, is a commit sha")
+        d = c.get("denied")
+        if d is not None and not (isinstance(d, dict) and d.get("at") and d.get("note")):
+            line_errs.append('denied, when set, is {"at": ..., "note": ...}')
+        if line_errs:
+            errs.extend(f"{where}: {e}; {fix}" for e in line_errs); continue
+        calls.append(c)
+    return calls, errs
+
+
+def check_calls(status: Path) -> list[str]:
+    """The call log is valid and names every change to the spec since accepted_commit."""
+    try:
+        commit = str(json.loads(status.read_text(encoding="utf-8")).get("accepted_commit", ""))
+    except (ValueError, AttributeError):
+        return []
+    slug = status.name.removesuffix(".status.json")
+    spec, log = status.with_name(f"{slug}.spec.html"), status.with_name(f"{slug}.calls.jsonl")
+    if not spec.is_file() or not re.fullmatch(r"[0-9a-f]{7,40}", commit):
+        return []
+    old, err = accepted_html(spec, commit)
+    if err:
+        return [err]
+    new = spec.read_text(encoding="utf-8")
+    was, now = criteria_of(old), criteria_of(new)
+    calls, errs = read_calls(log, was | now)
+    live = [c for c in calls if not c.get("denied")]
+    a, b = anchors(old), anchors(new)
+    changed = sorted(k for k in a.keys() | b.keys() if a.get(k) != b.get(k))
+    named = {x for c in live for x in c["anchors"]}
+    for k in changed:
+        if k not in named:
+            how = "added" if k not in a else "removed" if k not in b else "changed"
+            errs.append(f"{spec}: anchor {k} {how} since accepted_commit {commit} and no call names it; fix: "
+                        f"the supervisor logs a call naming it in {log.name} (issue-lifecycle #gates-spec-calls)")
+    for ids, kind, how in ((was - now, "weakens", "removed"), (now - was, "adds", "added")):
+        for i in sorted(ids):
+            if not any(c["kind"] == kind and (i in c["anchors"] or i in c["criteria"]) for c in live):
+                errs.append(f"{spec}: criterion {i} {how} since accepted_commit {commit} needs a call of kind "
+                            f"{kind} naming it; fix: log one in {log.name} (issue-lifecycle #gates-spec-calls)")
+    return errs
+
+
 def write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -90,7 +261,7 @@ def main(argv: list[str]) -> int:
     cmd, *args = argv or ["check"]
     if cmd == "check":
         files = [f for d in (args or ["docs/specs"]) for f in sorted(Path(d).glob("*.status.json"))]
-        errs = [e for f in files for e in check_file(f)]
+        errs = [e for f in files for e in check_file(f) + check_calls(f)]
         if errs:
             print("\n".join(errs), file=sys.stderr); return 1
         print(f"spec-status: ok ({len(files)} status files)"); return 0
