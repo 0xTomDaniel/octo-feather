@@ -1,6 +1,6 @@
 ## What to build
 
-Tidy the docs.
+Tidy the docs that `demo a` prints.
 
 ## Acceptance criteria
 

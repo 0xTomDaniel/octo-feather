@@ -69,3 +69,12 @@ Rerun on this branch, 2026-10-20, `scripts/` on PATH:
 - `octo-feather-lane tickets 40`: rc=0, `#46: ok`, `#47: ok`, `#48: ok` (their demos run `octo-feather-lane`, tracked as scripts/octo-feather-lane). `octo-feather-lane tickets 8`: rc=1, #9 and #10 with the same lines as (a).
 
 `tests/lane-tickets.sh` now builds its own PATH (fake gh plus symlinked tools), so no host gh is reachable (CI run 39352240961 had failed on the runner's gh asking for GH_TOKEN); it passed with a stub gh that exits 4 with that message placed first on the host PATH.
+
+## (e) Demo bound to What to build; one-layer wording (qc FAIL at 4a95d10, class layer-only-ticket)
+
+The qc judge passed a draft whose What to build said "this ticket delivers the persistence layer only" and "A follow-up ticket will wire the archive command", with demo `octo-feather-lane tickets 40` (another ticket's command). New rule: the demo's surface invocation (program basename plus its first subcommand word, e.g. `octo-feather-lane archive`, `app hello`; the URL path for curl; the test file for playwright) must be named in the ticket's own What to build, else layer-only-ticket with the fix "the demo must run the behavior this ticket builds, named in What to build". What to build or criteria saying `<word> layer only`, `only the <word> layer`, `(schema|persistence|storage|adapter|backend|frontend|API|UI) only`, `a follow-up|later|subsequent|next ticket (will) wire|expose|connect|hook` or `wired (up) later` fail as layer-only-ticket. `Expand-contract:` waives both. The to-tickets patch states it in its check sentence, and its template's What to build asks to name the command, URL or page the demo runs.
+
+Rerun on this branch, 2026-10-21, in the kit worktree, `scripts/` on PATH:
+
+- The judge's draft, verbatim on stdin (fixture `36-judge-persistence.md`): rc=1, `stdin: class: layer-only-ticket: demo runs \`octo-feather-lane tickets\`, which What to build does not name; fix: the demo must run the behavior this ticket builds, named in What to build ...` and `stdin: class: layer-only-ticket: the ticket says 'A follow-up ticket will wire': one layer, or no behavior a user sees; fix: ...`.
+- `octo-feather-lane tickets 40`: rc=0, #46, #47, #48 ok (their What to build names `octo-feather-lane archive`, `tickets`/`ticket`, `verdict`/`merge-ask`). `octo-feather-lane tickets 8`: rc=1, #9 and #10 with the same lines as (a).

@@ -1,6 +1,6 @@
 ## What to build
 
-Refactor the storage module; internal-only, no user-visible change.
+Refactor the storage module behind `demo a`; internal-only, no user-visible change.
 
 ## Acceptance criteria
 
