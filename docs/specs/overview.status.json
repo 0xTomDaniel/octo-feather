@@ -7,8 +7,8 @@
       "pr": null
     },
     "acceptance-retired-words": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 50
     },
     "acceptance-pi-only": {
       "status": "built",
