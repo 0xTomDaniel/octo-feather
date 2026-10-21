@@ -7,8 +7,8 @@
       "pr": 16
     },
     "acceptance-gate-no-model": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 50
     },
     "acceptance-public-surfaces": {
       "status": "built",
