@@ -106,3 +106,11 @@ Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. 
 - Unit tests were written because the spec said "proven by a unit test". shape-spec must default to "a test through a public entry point" and add a minimal-change rule for brownfield targets (keep original lines and order; no test-only code in production files).
 - macOS: `just start` works without a hand-patched PATH: the kit justfile puts GNU coreutils and util-linux (`realpath -m`, `readlink -f`, `setsid`, `timeout`), Homebrew's bash 5 (`mapfile`) and mise ahead of the system's, panes inherit it, and octo-feather-start sets HERDR_SESSION from the project. Still Linux-only, and saying so: `just qc` (exit 69) and `herdr-close --park` (exit 69); a closed tab's detached children are not swept on macOS.
 - Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running.
+
+## Lessons from the Quorum run (2026-10-20/21)
+
+- Accept went stale twice: amending the spec after registration (rich output 51d4fa7; B2 amend) moved its hash, so `octo-feather-accepted` rejected Tom's real Accept ("Accept spec pressed on version …, not on spec at registered commit …"). Re-register and re-press each time. A spec edit after Accept should re-register automatically and tell Tom.
+- `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.
+- `herdr-say` and `octo-feather-accepted` aren't on PATH on the Mac (`herdr-say` lives in `.agents/skills/herdr-comms/assets/`).
+- Registering on macOS reports wake=unavailable, so the director can't be woken; orders went through herdr-say by hand.
+- A spec without the `.viz` assets and `<script>` renders no Spec Chat UI. Preflight should fail on that.
