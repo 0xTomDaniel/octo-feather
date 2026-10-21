@@ -43,8 +43,9 @@ with its fix on stderr, exit 1.
 
 `tickets` and `ticket` (spec issue-lifecycle #acceptance-tracer-tickets) read a ticket's
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
-`<spec slug>#<anchor>` whose anchor is in docs/specs/<slug>.spec.html (of the git repo
-at the current directory), and its last item is `demo: ` with a backticked command that runs
+`<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
+element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
+section or table anchor is no criterion), and its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
@@ -474,10 +475,13 @@ DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 
 class Anchors(HTMLParser):
     def __init__(self):
-        super().__init__(); self.ids = set()
+        super().__init__(); self.ids = set(); self.criteria = set()
 
     def handle_starttag(self, tag, attrs):
         self.ids.update(v for k, v in attrs if k in ("id", "data-anchor") and v)
+        a = dict(attrs)
+        if "data-acceptance-criterion" in a and a.get("data-anchor"):
+            self.criteria.add(a["data-anchor"])   # a criterion id: the data-anchor of a criterion element
 
 
 def specs_dir() -> Path:
@@ -489,7 +493,7 @@ def specs_dir() -> Path:
     return d
 
 
-def spec_anchors(specs: Path, slug: str, cache: dict) -> set | None:
+def spec_anchors(specs: Path, slug: str, cache: dict) -> "Anchors | None":
     if slug not in cache:
         f = specs / f"{slug}.spec.html"
         if not f.is_file():
@@ -500,7 +504,7 @@ def spec_anchors(specs: Path, slug: str, cache: dict) -> set | None:
                 p.feed(f.read_text(encoding="utf-8")); p.close()
             except (OSError, UnicodeDecodeError) as e:
                 raise Unchecked(f"cannot read spec {f} ({e}): fix or restore the file, then rerun") from e
-            cache[slug] = p.ids
+            cache[slug] = p
     return cache[slug]
 
 
@@ -535,14 +539,24 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
     if section and not ids:
         fail("no-criterion", "no acceptance item names a criterion id",
              "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html")
+    crit, other = [], []
     for slug, anchor in ids:
         have = spec_anchors(specs, slug, cache)
         if have is None:
             fail("unknown-criterion", f"{slug}#{anchor}: no spec {specs / (slug + '.spec.html')}",
                  f"use a spec slug from {specs} (file stem before .spec.html)")
-        elif anchor not in have:
+        elif anchor not in have.ids:
             fail("unknown-criterion", f"{slug}#{anchor}: no anchor {anchor} in {specs / (slug + '.spec.html')}",
-                 "name an existing data-anchor of that spec (an acceptance criterion's), or get the spec changed first")
+                 f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}, or get the spec changed first")
+        elif anchor in have.criteria:
+            crit.append(f"{slug}#{anchor}")
+        else:
+            other.append((slug, anchor, have))
+    if ids and not crit and other:   # only section, story or table anchors: no criterion served
+        slug, _, have = other[0]
+        fail("no-criterion", "no acceptance item names an acceptance criterion: "
+             + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
+             f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
     ec = EXPAND.search(body)
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
         return out
