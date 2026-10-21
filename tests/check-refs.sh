@@ -65,7 +65,24 @@ expect agents/x.md "SPOOL_SIDE=$hu" "$words"
 expect tests/accepted.sh "SPOOL_SIDE=$hu # SPOOL_SIDE: the $hu approves" "$words"
 expect scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # the $hu approves" "$words"
 expect scripts/octo-feather-accepted "# SPOOL_SIDE ... the $hu approves" "$words"
+# A broken retired-words scanner fails closed, never refs: ok (match, no match and error are distinct).
+# broken RECIPE SED: SED applied to the copy's justfile makes `just RECIPE` fail naming a scanner error.
+broken() {
+  cp "$t/justfile" "$t/.broken-old"; sed -i "$2" "$t/justfile"
+  cmp -s "$t/justfile" "$t/.broken-old" && { echo "check-refs test: '$2' did not change the justfile" >&2; exit 1; }
+  set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
+  mv "$t/.broken-old" "$t/justfile"
+  [[ "$rc" != 0 ]] || { echo "check-refs test: broken scanner ($2) passed just $1" >&2; exit 1; }
+  grep -qF 'retired-words scanner error' <<<"$out" || { echo "check-refs test: broken scanner ($2) not reported" >&2; echo "$out" >&2; exit 1; }
+  ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: broken scanner ($2) printed refs: ok" >&2; exit 1; }
+}
+broken check 's/my (\$f, \$s) = /my ((\$f, \$s) = /'
+# A grep error (a tracked file it cannot read) is a scanner error too, not no match.
+ln -s missing "$t/agents/x.md"; g add -f agents/x.md
+set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
+g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
+[[ "$rc" != 0 ]] && grep -qF 'retired-words scanner error: grep exited 2' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: grep error not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi)"
+echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi; a broken scanner fails closed)"
