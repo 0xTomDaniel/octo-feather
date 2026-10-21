@@ -53,6 +53,8 @@ expect "$z" $'check-zz:\n    just qa'
 expect "$c" $'check-zz:\n    @just --justfile "{{justfile()}}" qa --all'
 expect "$c" $'check-zz:\n    octo-feather-qc x 1 a'
 expect "$c" $'check-zz:\n    "{{root}}/scripts/octo-feather-qc" x 1 a'
+expect "$c" $'check-zz:\n    "$root"/scripts/octo-feather-qc x 1 a'
+expect "$c" $'check-zz:\n    @python3 "$root/scripts/octo-feather-qc" x 1 a'
 expect "$c" $'check-zz:\n    #!/usr/bin/env bash\n    set -e\n    jev judge .'
 expect "$z" $'check-zz:\n    just helper-zz\nhelper-zz:\n    octo-feather-qc x 1 a'
 expect "$z" $'check-zz: helper-zz\nhelper-zz:\n    @echo hi; just qa'
@@ -83,22 +85,26 @@ printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
 sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
 # script_form BODY [BODY2]: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
 # With BODY2, the justfile also has check-probe, which runs scripts/quality-probe2 (BODY2).
+# Each recipe reaches its script both relative and through the exported "$root" (#61's convention).
 # The test's own boundary: the copy's check run starts outside the kit's (marker cleared), so its refusal stops the copy's just only.
 script_form() {
-  local extra=""
-  printf '#!/usr/bin/env bash\n%s\n' "$1" > "$t/scripts/quality-probe"; chmod +x "$t/scripts/quality-probe"
-  if [[ -n "${2:-}" ]]; then
-    printf '#!/usr/bin/env bash\n%s\n' "$2" > "$t/scripts/quality-probe2"; chmod +x "$t/scripts/quality-probe2"
-    extra=$'\ncheck-probe:\n    @scripts/quality-probe2'
-  fi
-  plant "${c/check:/check: probe}" $'probe:\n    @scripts/quality-probe'"$extra"
-  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
-  printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
-  [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: script $1" >&2; echo "$out" >&2; exit 1; }
-  grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: script $1" >&2; echo "$out" >&2; exit 1; }
-  ! grep -qE 'not implemented yet|just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: script $1" >&2; echo "$out" >&2; exit 1; }
-  # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
-  ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
+  local extra probe
+  for probe in scripts/quality-probe '"$root"/scripts/quality-probe'; do
+    extra=""
+    printf '#!/usr/bin/env bash\n%s\n' "$1" > "$t/scripts/quality-probe"; chmod +x "$t/scripts/quality-probe"
+    if [[ -n "${2:-}" ]]; then
+      printf '#!/usr/bin/env bash\n%s\n' "$2" > "$t/scripts/quality-probe2"; chmod +x "$t/scripts/quality-probe2"
+      extra=$'\ncheck-probe:\n    @'"${probe}2"
+    fi
+    plant "${c/check:/check: probe}" $'probe:\n    @'"$probe$extra"
+    set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
+    printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
+    [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+    grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+    ! grep -qE 'not implemented yet|just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+    # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
+    ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: $probe: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
+  done
 }
 script_form 'exec just qa'
 script_form 'just qc x 1 a'

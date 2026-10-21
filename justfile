@@ -1,8 +1,11 @@
 # octo-feather kit commands. `just check` is the one gate (AGENTS.md).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
+# Recipe arguments reach the shell as "$@"/"$1", never as pasted text (#61).
+set positional-arguments
 
-root := justfile_directory()
+# Exported so recipes use "$root" as data, never pasted text (#61).
+export root := justfile_directory()
 # macOS: GNU coreutils and util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen),
 # Homebrew's bash 5 and python3, and mise's shims, ahead of the system's; missing dirs are skipped by the shell.
 # The running just's own dir comes first so recipes and tests find it without a mise shim.
@@ -22,15 +25,15 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-owned-rules check-behavior-smoke check-tests check-spec-status check-templates
+# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-owned-rules check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
 check-scripts:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "{{root}}"
+    cd "$root"
     files=(); py=()
     for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
       [[ -f "$f" ]] || continue   # tests/fixtures/ holds data, not scripts
@@ -52,7 +55,7 @@ check-scripts:
 check-refs:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "{{root}}"
+    cd "$root"
     bad=0
     if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
@@ -113,7 +116,7 @@ check-refs:
 check-dashes:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "{{root}}"
+    cd "$root"
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
     mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
     if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
@@ -122,11 +125,11 @@ check-dashes:
 
 # Every skill opens with a --- frontmatter block with non-empty name and description; every role file exists.
 check-skills:
-    @python3 "{{root}}/scripts/check-skills"
+    @python3 "$root/scripts/check-skills"
 
 # Every tracked decisions.jsonl, anywhere in the repo: each line one JSON object matching schemas/decision-log.schema.json (quality #decision-log, docs/adr/0010).
 check-decision-log:
-    @python3 "{{root}}/scripts/check-decision-log"
+    @python3 "$root/scripts/check-decision-log"
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
@@ -134,7 +137,7 @@ check-decision-log:
 check-templates:
     #!/usr/bin/env bash
     set -euo pipefail
-    cd "{{root}}"
+    cd "$root"
     n=0
     for t in templates/*/; do
       t="${t%/}"
@@ -152,35 +155,47 @@ check-tests:
     set -euo pipefail
     # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
     TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
-    for t in "{{root}}"/tests/*.sh; do "$t"; done
+    for t in "$root"/tests/*.sh; do "$t"; done
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
 check-spec-status:
-    @python3 "{{root}}/scripts/octo-feather-spec-status" check "{{root}}/docs/specs"
+    @python3 "$root/scripts/octo-feather-spec-status" check "$root/docs/specs"
+
+# Each vendored skill folder equals upstream at its Skillfile pin plus its patches (skills spec #acceptance-patch-only).
+# No network: reads the authenticated pin-SHA cache `just vendored-fetch` fills; a missing cache fails naming it.
+check-vendored:
+    @python3 "{{root}}/scripts/check-vendored"
+
+# Fill the check-vendored cache: pinned skillfile binary and each pin commit, every call time-bounded. Never inside `just check`.
+vendored-fetch:
+    @python3 "{{root}}/scripts/check-vendored" --fetch
 
 # Owner shaping chat in the target repo: Pi with only the shaping skills, not a factory role (docs/adr/0021).
+[no-cd]
 shape *args:
-    cd "{{invocation_directory()}}" && octo-feather-shape {{args}}
+    octo-feather-shape "$@"
 
 # Spec Chat's skills into REPO/.agents/skills as git-ignored links into $SPEC_CHAT_CLONE (default ~/src/spec-chat); no provider links (docs/adr/0001).
+[no-cd]
 spec-chat repo:
-    cd "{{invocation_directory()}}" && octo-feather-spec-chat "{{repo}}"
+    octo-feather-spec-chat "$1"
 
 # Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
+[no-cd]
 integrate issue +refs:
-    cd "{{invocation_directory()}}" && octo-feather-integrate "{{issue}}" {{refs}}
+    octo-feather-integrate "$@"
 
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:
-    @python3 "{{root}}/scripts/check-roles"
+    @python3 "$root/scripts/check-roles"
 
 # Each owned rule (merge authority, lane branch) is stated once, in its owner; elsewhere only a pointer (correction lane #19).
 check-owned-rules:
-    @python3 "{{root}}/scripts/check-owned-rules"
+    @python3 "$root/scripts/check-owned-rules"
 
 # A role path changed on this branch needs evidence/*.md and docs/future.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
 check-behavior-smoke:
-    @python3 "{{root}}/scripts/check-behavior-smoke"
+    @python3 "$root/scripts/check-behavior-smoke"
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent).
 install-check:
@@ -196,16 +211,17 @@ install-check:
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():
-    octo-feather-start --director --cwd "{{cwd}}"
+    octo-feather-start --director --cwd "$1"
 
 # Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
 supervise issue cwd=invocation_directory():
-    octo-feather-start --issue "{{issue}}" --cwd "{{cwd}}"
+    octo-feather-start --issue "$1" --cwd "$2"
 
 # Product QC: a fresh cross-family judge runs each claimed criterion; passed ones become built (docs/adr/0022). Never inside `just check`.
-# Arguments reach bash as exported variables, never as interpolated source (#30).
+# Arguments reach bash as "$@" and exported variables, never as interpolated source (#30, #61).
+[no-cd]
 qc $status $pr +$ids:
-    cd "{{invocation_directory()}}" && octo-feather-qc "$status" "$pr" $ids
+    octo-feather-qc "$@"
 
 # Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
 qa *args:
@@ -217,6 +233,7 @@ state:
     @octo-feather-state
 
 # New target repo at DEST from templates/LANG: tracked files, one commit on main, Spec Chat links unless --no-spec-chat; never `just setup` or GitHub (#21).
-# Arguments reach bash as exported variables, never as interpolated source.
+# Arguments reach bash as "$@" and exported variables, never as interpolated source (#61).
+[no-cd]
 new-repo $lang $dest *$flags:
-    cd "{{invocation_directory()}}" && octo-feather-new-repo "$lang" "$dest" $flags
+    octo-feather-new-repo "$@"
