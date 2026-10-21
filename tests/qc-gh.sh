@@ -35,7 +35,14 @@ EOF
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
-trap 'chmod -R u+w "$t"; rm -rf "$t"' EXIT
+# timeout gives each qc run its own process group, so a killed test reaches the in-flight run only here (run.pid):
+# it reclaims its scratch before $t goes.
+stop() { local p; [[ "$BASHPID" == "$$" ]] || return 0   # the test shell only, never a killed command substitution
+  if [[ -f "$t/run.pid" ]]; then p="$(cat "$t/run.pid")"; kill -- -"$p" 2>/dev/null || true
+    for _ in $(seq 50); do kill -0 -- -"$p" 2>/dev/null || break; sleep 0.1; done; kill -9 -- -"$p" 2>/dev/null || true; fi
+  chmod -R u+w "$t"; rm -rf "$t"; }
+trap stop EXIT; trap 'trap "" TERM; exit 143' TERM   # timeout signals twice (child, group): the 2nd must not cut stop short
+export TMPDIR="$t/tmp"; mkdir "$TMPDIR"   # qc's scratch (snapshots) lives under $t: a killed test leaves nothing
 lim="${QC_TEST_RUN_TIMEOUT:-90}"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports" GH_TOKEN=SECRET-token FAKE_GH_LOG="$t/gh.log"
@@ -78,6 +85,7 @@ cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env bash
 # Fake judge: reads GitHub evidence through whatever `gh` the sandbox gives it, then tries two writes.
 [[ "${1:-}" == --version ]] && exit 0
+[[ -n "${FAKE_PI_HANG:-}" ]] && exec sleep "$FAKE_PI_HANG"
 brief="${*: -1}"
 echo "gh is $(command -v gh)"
 grep -q 'history only:' <<< "$brief" && grep -q "GitHub: ${FAKE_BRIEF:-x}" <<< "$brief" && echo "BRIEF ok"
@@ -113,7 +121,8 @@ cd "$t/repo"; git init -q -b main .
 "$S" init docs/specs/demo.spec.html 0123abc >/dev/null; git add -A; git commit -qm spec
 git remote add origin https://github.com/o/r.git   # never contacted: only the fake gh is
 st=docs/specs/demo.status.json
-run() { local want="$1"; shift; set +e; out="$(timeout -k 5 "$lim" "$Q" "$@" 2>&1)"; rc=$?; set -e
+bounded() { timeout -k 5 "$lim" "$@" & echo $! > "$t/run.pid"; wait $!; set -- $?; rm -f "$t/run.pid"; return "$1"; }
+run() { local want="$1"; shift; set +e; out="$(bounded "$Q" "$@" 2>&1)"; rc=$?; set -e
   [[ "$rc" != 124 && "$rc" != 137 ]] || fail "'$*' hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: $out"
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
@@ -150,9 +159,19 @@ grep -q "offline gh refusals 2" <<< "$out" || fail "refusals not in the cleanup 
 compgen -G "${TMPDIR:-/tmp}/qc-ghsnap-$(report '["run_id"]')-*" > /dev/null && fail "snapshot scratch left after the run"
 reset
 
+# A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no snapshot behind.
+FAKE_PI_HANG=30$$ timeout -k 5 "$lim" "$Q" "$st" 5 acceptance-a > /dev/null 2> "$t/hang.err" & hp=$!; echo "$hp" > "$t/run.pid"
+for _ in $(seq 100); do grep -q 'qc sandbox: ok   github: snapshot' "$t/hang.err" && break; sleep 0.1; done
+grep -q 'qc sandbox: ok   github: snapshot' "$t/hang.err" || fail "hang run: judge never started: $(cat "$t/hang.err")"
+kill -TERM "$hp"; set +e; wait "$hp"; rc=$?; set -e; rm -f "$t/run.pid"
+[[ "$rc" != 0 ]] || fail "hang run exited 0"
+sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls -A "$TMPDIR")"
+! pgrep -fx "sleep 30$$" > /dev/null || fail "killed run's judge survived"
+reset
+
 # Refetched per run.
 run 0 "$st" 5 acceptance-a
-[[ "$(grep -c '^repo view' "$t/gh.log")" == 2 ]] || fail "snapshot not refetched per run: $(cat "$t/gh.log")"
+[[ "$(grep -c '^repo view' "$t/gh.log")" == 3 ]] || fail "snapshot not refetched per run: $(cat "$t/gh.log")"
 reset
 
 # Fetch failure aborts before the judge; --no-github skips it, printed.
@@ -210,4 +229,4 @@ cd "$t/kc"; git init -q -b main .; cp "$t/repo/docs/specs/demo.spec.html" docs/s
 "$S" init docs/specs/zz-demo.spec.html 0123abc >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
 Q="$t/kc/scripts/octo-feather-qc" run 0 docs/specs/zz-demo.status.json 5 acceptance-a
 grep -q "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" <<< "$out" || fail "kit-on-kit proof: $out"
-echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, --json fields absent from the snapshot refused and counted, stored nulls kept; offline, fake herdr, runs bounded)"
+echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, killed run leaves no snapshot, --json fields absent from the snapshot refused and counted, stored nulls kept; offline, fake herdr, runs bounded)"
