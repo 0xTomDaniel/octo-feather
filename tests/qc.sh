@@ -40,12 +40,16 @@ echo "qc test: offline: no route to any network (user+network namespace)" >&2
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
-stop() { local f p; for f in "$t"/pids/*; do [[ -f "$f" ]] || continue; p="$(cat "$f")"; kill -- -"$p" 2>/dev/null
-    for _ in $(seq 50); do kill -0 -- -"$p" 2>/dev/null || break; sleep 0.1; done; done   # a Herdr server writes its snapshot as it exits
+stop() { local f p; [[ "$BASHPID" == "$$" ]] || return 0   # the test shell only, never a killed command substitution
+  for f in "$t"/pids/*; do [[ -f "$f" ]] || continue; p="$(cat "$f")"; kill -- -"$p" 2>/dev/null || true
+    for _ in $(seq 50); do kill -0 -- -"$p" 2>/dev/null || break; sleep 0.1; done; kill -9 -- -"$p" 2>/dev/null || true; done   # a Herdr server writes its snapshot as it exits
   rm -rf "$t"; }
-trap stop EXIT
+trap stop EXIT; trap 'trap "" TERM; exit 143' TERM   # timeout signals twice (child, group): the 2nd must not cut stop short
+export TMPDIR="$t/tmp"; mkdir "$TMPDIR"   # qc's scratch (miss logs) lives under $t: a killed test leaves nothing
 lim="${QC_TEST_RUN_TIMEOUT:-90}"
-bounded() { timeout -k 5 "$lim" "$@"; }   # one qc run; 124/137: it hung and was killed
+# One qc run; 124/137: it hung and was killed. timeout gives the run its own process group, so a killed test
+# reaches it only through stop (pids/run): the run reclaims its scratch before $t goes.
+bounded() { timeout -k 5 "$lim" "$@" & echo $! > "$t/pids/run"; wait $!; set -- $?; rm -f "$t/pids/run"; return "$1"; }
 hung() { [[ "$1" != 124 && "$1" != 137 ]] || fail "$2 hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: ${3:-}"; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
@@ -88,6 +92,7 @@ ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass"
 case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
+  hang) exec sleep 3040@TOK@ ;;
   writes) echo hacked > judge-was-here; mkdir -p scratch; echo ignored > scratch/fine; printf '```json\n{"criteria": []}\n```\n' ;;
   tracked) echo hacked >> .gitignore; rm docs/specs/demo.spec.html; printf "$ok" ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
@@ -191,6 +196,14 @@ run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
 grep -q UNSANDBOXED <<< "$out" || fail "--no-sandbox not printed: $out"
 [[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain)" ]] || fail "--no-sandbox changed the status file"
 [[ "$(report '["sandbox"]')" == False ]] || fail "--no-sandbox report must record sandbox false"
+# A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no scratch behind.
+FAKE_QC=hang timeout -k 5 "$lim" "$Q" $st 5 acceptance-a --no-sandbox > /dev/null 2>&1 & hp=$!; echo "$hp" > "$t/pids/run"
+for _ in $(seq 100); do compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null && break; sleep 0.1; done
+compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null || fail "hang run: no scratch before the judge (nothing to prove)"
+kill -TERM "$hp"; set +e; wait "$hp"; rc=$?; set -e; rm -f "$t/pids/run"
+[[ "$rc" != 0 ]] || fail "hang run exited 0"
+sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls -A "$TMPDIR")"
+! pgrep -fx "sleep 3040$tok" > /dev/null || fail "killed run's judge survived"
 
 run 1 mixed $st 5 acceptance-a acceptance-b                                                     # a passes, b fails
 python3 - "$st" <<'EOF'
@@ -286,4 +299,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
