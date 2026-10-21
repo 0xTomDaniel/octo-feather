@@ -8,7 +8,7 @@ codebase-design skills they call. From the target repo's .agents/skills (never
 home, as pi-role looks up externalSkills): spec-chat-shape, skipped with a
 warning until Spec Chat is installed there. --json prints the pi args.
 """
-import importlib.machinery, importlib.util, json, os, sys
+import importlib.machinery, importlib.util, json, os, subprocess, sys
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
@@ -35,6 +35,9 @@ def main(argv):
         if not (d / "SKILL.md").is_file():
             sys.exit(f"octo-feather-shape: kit skill {s} missing at {d}")
         args += ["--skill", str(d)]
+    # Review state never lands in the target's tracked tree (octo-feather-exclude).
+    if subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True).returncode == 0:
+        subprocess.run([str(KIT / "scripts" / "octo-feather-exclude")], stdout=sys.stderr, check=False)
     roots = pi_role().repo_skill_roots()
     for s in REPO_SKILLS:
         hit = [os.path.join(r, s) for r in roots if os.path.isfile(os.path.join(r, s, "SKILL.md"))]

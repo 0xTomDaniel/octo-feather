@@ -7,7 +7,8 @@
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
 # class; a demo passes only through a surface the repo declares (tracked executable, justfile
 # recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
-# a test script fail; an internal-only ticket fails; an Expand-contract ticket passes without a
+# a test script fail; the demo must run what What to build names (program plus first subcommand,
+# URL path, test file); an internal-only, one-layer or surface-deferred ticket fails; an Expand-contract ticket passes without a
 # demo; `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, wrong repo, no specs, unreadable
 # draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
@@ -34,7 +35,9 @@ cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 # tests/demo.sh is tracked and executable but a test, not the app's surface.
 mkdir -p "$t/repo/bin" "$t/repo/tests"
 printf '#!/bin/sh\necho ok\n' >"$t/repo/bin/demo"; cp "$t/repo/bin/demo" "$t/repo/tests/demo.sh"
-chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh"
+printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not executable (ADR 0002)
+mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
+chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
 printf 'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n' >"$t/repo/justfile"
 git -C "$t/repo" init -q -b main . && git -C "$t/repo" add -A
@@ -46,7 +49,7 @@ F, snap = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107, 108], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107, 108, 109, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 34, 35, 36, 37, 38, 39, 40], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 def save(n, d): (snap / "issue" / f"{n}.json").write_text(json.dumps({"number": n, "title": f"t{n}", "state": "OPEN", **d}))
 for p, subs in parents.items():
@@ -85,7 +88,7 @@ hasnt() { ! grep -qF -- "$1" <<<"$out" || fail "${2:-output} has '$1': $out"; }
 # assignment with $(...), `uv run app` from pyproject, a justfile recipe plus curl to a URL,
 # pnpm exec playwright), and Expand-contract tickets without a demo (one says internal only).
 run 0 tickets 100
-for n in 101 102 103 104 105 106 107 108; do has "#$n: ok"; done; has "#100: 8 of 8 tickets pass"
+for n in 101 102 103 104 105 106 107 108 109 110; do has "#$n: ok"; done; has "#100: 10 of 10 tickets pass"
 run 0 tickets '#100' --repo o/r
 
 # #10's real body: layer-only-ticket and the fix; its sibling passes; exit 1.
@@ -110,12 +113,21 @@ has "#27: class: layer-only-ticket: Expand-contract line names \`maybe\`"
 # The qc judge's draft (gh47 qc at 294ac1d), verbatim: a printf demo and "no externally visible".
 has "#28: class: layer-only-ticket: demo runs no surface the repo declares (\`printf \"schema ready\\n\"\`: printf is not a program the repo declares)"
 has "fix: make the demo a backticked command through the repo's own public surface (ADR 0009)"
-has "#28: class: layer-only-ticket: the ticket says it has 'no externally visible behavior'"
+has "#28: class: layer-only-ticket: the ticket says 'no externally visible behavior'"
 has "#33: class: layer-only-ticket: demo runs no surface the repo declares (\`tests/demo.sh\`: tests/demo.sh is a test or hook"
-has "#34: class: layer-only-ticket: the ticket says it has 'internal-only'"
+has "#34: class: layer-only-ticket: the ticket says 'internal-only'"
 hasnt "#34: class: layer-only-ticket: demo"
 has "#35: class: layer-only-ticket: demo runs no surface the repo declares (\`just qc\`: just qc is a gate or factory recipe, not the app; \`echo done\`: echo is not a program the repo declares)"
-has "#20: 0 of 11 tickets pass, 11 fail"
+# The qc judge's second draft (gh47 qc at 4a95d10), verbatim: persistence only, surface deferred,
+# demo runs another ticket's command.
+has "#36: class: layer-only-ticket: demo runs \`octo-feather-lane tickets\`, which What to build does not name; fix: the demo must run the behavior this ticket builds, named in What to build"
+has "#36: class: layer-only-ticket: the ticket says 'A follow-up ticket will wire'"
+has "#37: class: layer-only-ticket: demo runs \`demo b\`, which What to build does not name"
+has "#38: class: layer-only-ticket: demo runs \`demo a\`, which What to build (missing) cannot name"
+has "#39: class: layer-only-ticket: the ticket says 'only the storage layer'"
+hasnt "#39: class: layer-only-ticket: demo"
+has "#40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
+has "#20: 0 of 16 tickets pass, 16 fail"
 run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of #30"
 
 # One draft: a file, stdin passing, stdin failing (#10), the waiver.
@@ -128,6 +140,7 @@ set +e; out="$("$L" ticket - <"$t/10.md" 2>&1)"; rc=$?; set -e
 run 0 ticket "$F/102.md"
 run 1 ticket - <"$F/28-judge-printf.md"; [[ "$(grep -c '^stdin: class: layer-only-ticket' <<<"$out")" == 2 ]] || fail "judge draft on stdin: $out"
 run 0 ticket "$F/104-uv-app.md"
+run 1 ticket - <"$F/36-judge-persistence.md"; [[ "$(grep -c '^stdin: class: layer-only-ticket' <<<"$out")" == 2 ]] || fail "judge persistence draft on stdin: $out"
 
 # The offline gh refused nothing (only snapshotted fields were asked), and every field asked
 # is one octo-feather-qc-ghsnap fetches.
@@ -162,4 +175,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; offline gh snapshot, only snapshotted fields; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, layer-only wording, inline python, internal-only, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
