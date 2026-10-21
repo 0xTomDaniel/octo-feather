@@ -23,7 +23,7 @@ Cache: ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/{bin/,git/<owner>/<rep
 Usage: check-vendored [--repo DIR] [--fetch]
 Tested by tests/check-vendored.sh.
 """
-import argparse, difflib, hashlib, json, os, platform, shutil, subprocess, sys, tempfile, time, urllib.request
+import argparse, difflib, hashlib, json, os, platform, shutil, signal, stat, subprocess, sys, tempfile
 
 TAG = "check-vendored"
 VERSION = "v1.9.2"
@@ -155,15 +155,50 @@ def upstream(source, path):
 
 
 def files(d):
-    """Relative path -> bytes for every file under d, skillfile's generated files aside."""
-    out = {}
-    for base, dirs, names in os.walk(d):
-        for n in names:
+    """(rel path -> bytes of every regular file under d, skillfile's generated files aside;
+    rel path -> why, for anything else: a symlink (file or folder), a special file, an empty folder).
+    Vendored folders hold regular files only, as skillfile writes them and git trees give them."""
+    out, odd = {}, {}
+    if os.path.islink(d):
+        return out, {".": "is a symlink"}
+    for base, dirs, names in os.walk(d):  # followlinks=False: a folder symlink is reported, never entered
+        if base != d and not dirs and not names:
+            odd[os.path.relpath(base, d)] = "is an empty folder"
+        for n in dirs + names:
             p = os.path.join(base, n)
             rel = os.path.relpath(p, d)
-            if rel not in GENERATED:
+            st = os.lstat(p)
+            if stat.S_ISLNK(st.st_mode):
+                odd[rel] = f"is a symlink (to {os.readlink(p)})"
+            elif stat.S_ISDIR(st.st_mode):
+                continue
+            elif not stat.S_ISREG(st.st_mode):
+                odd[rel] = "is a special file"
+            elif rel not in GENERATED:
                 out[rel] = open(p, "rb").read()
-    return out
+    return out, odd
+
+
+def bounded(cmd, timeout=None, **kw):
+    """Run cmd under one wall-clock bound, TIMEOUT, in its own process group: on expiry the whole
+    group (git's remote helpers included) is killed. timeout overrides TIMEOUT. Returns the CompletedProcess or None on timeout."""
+    p = subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kw)
+    try:
+        out, err = p.communicate(timeout=timeout or TIMEOUT)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        return None
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+
+# Child for the binary download, so headers and body share bounded()'s one total deadline.
+DOWNLOAD = """
+import sys, urllib.request
+with urllib.request.urlopen(sys.argv[1], timeout=float(sys.argv[3])) as r, open(sys.argv[2], "wb") as fh:
+    while chunk := r.read(65536):
+        fh.write(chunk)
+"""
 
 
 def fetch(ents):
@@ -171,23 +206,19 @@ def fetch(ents):
     asset, path, want = binary_path()
     if not sha256_ok(path, want):
         url = f"https://github.com/eljulians/skillfile/releases/download/{VERSION}/{asset}"
-        deadline, data = time.monotonic() + TIMEOUT, b""
-        try:
-            with urllib.request.urlopen(url, timeout=TIMEOUT) as r:
-                while chunk := r.read(65536):
-                    data += chunk
-                    if time.monotonic() > deadline:
-                        raise TimeoutError("timed out")
-        except Exception as e:
-            die(f"downloading skillfile {VERSION} from {url} failed after at most {TIMEOUT:g}s ({e}); "
-                f"check network and proxy (HTTPS_PROXY), then rerun `just vendored-fetch`")
-        got = hashlib.sha256(data).hexdigest()
-        if got != want:
-            die(f"skillfile {VERSION} download {url} has sha256 {got}, pinned {want}; refusing to cache it")
         os.makedirs(os.path.dirname(path), exist_ok=True)
         tmp = f"{path}.{os.getpid()}"
-        with open(tmp, "wb") as fh:
-            fh.write(data)
+        r = bounded([sys.executable, "-c", DOWNLOAD, url, tmp, str(TIMEOUT)])
+        if r is None or r.returncode != 0:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            why = f"timed out after {TIMEOUT:g}s" if r is None else f"failed: {(r.stderr.strip().splitlines() or ['?'])[-1]}"
+            die(f"downloading skillfile {VERSION} from {url} {why}; "
+                f"check network and proxy (HTTPS_PROXY), then rerun `just vendored-fetch`")
+        got = hashlib.sha256(open(tmp, "rb").read()).hexdigest()
+        if got != want:
+            os.remove(tmp)
+            die(f"skillfile {VERSION} download {url} has sha256 {got}, pinned {want}; refusing to cache it")
         os.chmod(tmp, 0o755); os.replace(tmp, path)
     pins = {}
     for _, name, source, p in ents:
@@ -208,9 +239,8 @@ def fetch(ents):
         env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
         cmd = ["git", "--git-dir", tmp, "-c", "http.lowSpeedLimit=1", "-c", f"http.lowSpeedTime={int(TIMEOUT)}",
                "fetch", "-q", "--depth", "1", "--no-tags", f"https://github.com/{repo}.git", sha]
-        try:
-            r = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=TIMEOUT)
-        except subprocess.TimeoutExpired:
+        r = bounded(cmd, env=env)
+        if r is None:
             shutil.rmtree(tmp, ignore_errors=True)
             die(f"git fetch of {source} timed out after {TIMEOUT:g}s; check network and proxy (HTTPS_PROXY), "
                 f"then rerun `just vendored-fetch`")
@@ -245,10 +275,10 @@ def gate(ents, vendored):
         for f in ("Skillfile", "Skillfile.lock"):
             shutil.copy2(os.path.join(root, f), work)
         lock = json.load(open(os.path.join(root, "Skillfile.lock")))
-        shutil.copytree(os.path.join(root, ".skillfile", "patches"), os.path.join(work, ".skillfile", "patches"))
+        shutil.copytree(os.path.join(root, ".skillfile", "patches"), os.path.join(work, ".skillfile", "patches"), symlinks=True)
         for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
             if kind == "local" and os.path.isdir(os.path.join(root, src)):
-                shutil.copytree(os.path.join(root, src), os.path.join(work, src))
+                shutil.copytree(os.path.join(root, src), os.path.join(work, src), symlinks=True)
         for _, name, source, path in vendored:
             if not os.path.isdir(gitdir(source)):
                 die(f"{name}: upstream {source} is not cached at {gitdir(source)}; {FETCH}")
@@ -269,19 +299,22 @@ def gate(ents, vendored):
         env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN") and "proxy" not in k.lower()}
         env.update(HOME=os.path.join(work, ".home"), SKILLFILE_QUIET="1", NO_PROXY="", no_proxy="",
                    **{k: DEAD for k in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")})
-        try:
-            r = subprocess.run(offline_prefix() + [binary, "install"], cwd=work, env=env,
-                               capture_output=True, text=True, timeout=INSTALL_TIMEOUT)
-        except subprocess.TimeoutExpired:
+        r = bounded(offline_prefix() + [binary, "install"], timeout=INSTALL_TIMEOUT, cwd=work, env=env)
+        if r is None:
             die(f"skillfile install did not finish within {INSTALL_TIMEOUT}s offline; {FETCH}")
         if r.returncode != 0:
             die(f"skillfile {VERSION} install (offline, throwaway copy) failed:\n{r.stdout}{r.stderr}"
                 f"a patch that no longer applies names its skill above; else {FETCH}")
         bad = 0
         for _, name, source, path in vendored:
-            want_files = files(os.path.join(work, SKILLS, name))
-            have = files(os.path.join(root, SKILLS, name))
+            want_files, made_odd = files(os.path.join(work, SKILLS, name))
+            have, odd = files(os.path.join(root, SKILLS, name))
             origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus .skillfile/patches/skills/{name}/"
+            for rel, why in sorted(made_odd.items()):
+                print(f"{TAG}: {name}: skillfile's install of {origin} has {rel}, which {why}", file=sys.stderr); bad += 1
+            for rel, why in sorted(odd.items()):
+                shown = f"{SKILLS}/{name}" + ("" if rel == "." else f"/{rel}")
+                print(f"{TAG}: {name}: {shown} {why}; vendored folders hold only upstream's regular files", file=sys.stderr); bad += 1
             for rel in sorted(set(want_files) | set(have)):
                 shown = f"{SKILLS}/{name}/{rel}"
                 if rel not in have:
