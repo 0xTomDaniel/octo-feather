@@ -27,8 +27,8 @@
       "pr": null
     },
     "acceptance-decision-log-schema": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 50
     }
   }
 }
