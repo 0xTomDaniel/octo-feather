@@ -40,6 +40,22 @@ rm "$r/.agents/skills/sharpen/EXTRA.md"; mv "$t/mocking.md" "$r/.agents/skills/t
 sed -i 's/^-disable-model/ disable-model/' "$r/.skillfile/patches/skills/sharpen/SKILL.md.patch"
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen/SKILL.md differs"
 cp "$kit/.skillfile/patches/skills/sharpen/SKILL.md.patch" "$r/.skillfile/patches/skills/sharpen/"; run 0
+# Vendored folders hold regular files only: a folder symlink, a file symlink, a FIFO, an empty folder,
+# and the skill folder itself as a symlink each fail naming skill and path.
+ln -s ../grilling "$r/.agents/skills/tdd/EXTRA"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/EXTRA is a symlink (to ../grilling)"
+rm "$r/.agents/skills/tdd/EXTRA"; ln -s SKILL.md "$r/.agents/skills/tdd/LINK.md"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/LINK.md is a symlink (to SKILL.md)"
+rm "$r/.agents/skills/tdd/LINK.md"; mv "$r/.agents/skills/tdd/tests.md" "$t/"; ln -s "$t/tests.md" "$r/.agents/skills/tdd/tests.md"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/tests.md is a symlink"
+rm "$r/.agents/skills/tdd/tests.md"; mv "$t/tests.md" "$r/.agents/skills/tdd/"
+mkfifo "$r/.agents/skills/tdd/PIPE"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/PIPE is a special file"
+rm "$r/.agents/skills/tdd/PIPE"; mkdir -p "$r/.agents/skills/tdd/empty/deeper"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/empty/deeper is an empty folder"
+rm -r "$r/.agents/skills/tdd/empty"; mv "$r/.agents/skills/sharpen" "$t/sharpen"; ln -s "$t/sharpen" "$r/.agents/skills/sharpen"
+run 1; has "check-vendored: sharpen: .agents/skills/sharpen is a symlink"
+rm "$r/.agents/skills/sharpen"; mv "$t/sharpen" "$r/.agents/skills/"; run 0
 # Poisoned cache: grilling's upstream blob rewritten to match an edited vendored file.
 g="$t/c/octo-feather/skillfile/git/mattpocock/skills/49dd158d1076134a641b33efb035946536778336.git"
 mkdir "$t/pack"; mv "$g"/objects/pack/* "$t/pack/"
@@ -57,24 +73,34 @@ has "just vendored-fetch"
 # Missing cache: fails fast naming the fetch step, never a skip.
 rm -rf "$t/c/octo-feather/skillfile/git"
 run 1 unshare -Un --map-current-user; has "is not cached at"; has "run \`just vendored-fetch\`"
-# Stalled network: a proxy that accepts and never answers; the fetch gives up within its bound.
-# Own network namespace with only loopback up, so it never reaches the real network, online or not.
+# Stalled network, two ways: a proxy that accepts and never answers (silent), and one that
+# drips CONNECT response headers every 0.2 s forever (slow progress). Either way the fetch
+# gives up within one total bound. Own network namespace with only loopback up, so it never
+# reaches the real network, online or not.
 cat > "$t/stall.sh" <<'SH'
 ip link set lo up
 python3 -c '
-import socket, sys
+import socket, sys, threading, time
 s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(16)
 open(sys.argv[1], "w").write(str(s.getsockname()[1])); held = []
-while True: held.append(s.accept()[0])
-' "$1/port" & lp=$!
+def drip(c):
+    try:
+        c.recv(65536); c.sendall(b"HTTP/1.1 200 Connection established\r\n")
+        while True: c.sendall(b"X-Drip: 1\r\n"); time.sleep(0.2)
+    except OSError: pass
+while True:
+    c = s.accept()[0]; held.append(c)
+    if sys.argv[2] == "drip": threading.Thread(target=drip, args=(c,), daemon=True).start()
+' "$1/port" "$3" & lp=$!
 for _ in $(seq 50); do [[ -s "$1/port" ]] && break; sleep 0.1; done
 p="http://127.0.0.1:$(cat "$1/port")"
 HTTPS_PROXY="$p" https_proxy="$p" OCTO_FEATHER_FETCH_TIMEOUT=2 just -f "$2/justfile" vendored-fetch; rc=$?
 kill "$lp"; rm -f "$1/port"; exit "$rc"
 SH
-stall() { local s; s=$SECONDS; set +e; out="$(unshare -rn bash "$t/stall.sh" "$t" "$r" 2>&1)"; rc=$?; set -e
-  [[ "$rc" == 1 && $((SECONDS - s)) -le 15 ]] || { echo "check-vendored test: stalled fetch want exit 1 within 15s, got $rc after $((SECONDS - s))s: $out" >&2; exit 1; }; }
-stall; has "git fetch of mattpocock/skills@49dd158d1076134a641b33efb035946536778336 timed out after 2s"; has "rerun \`just vendored-fetch\`"
+stall() { local s; s=$SECONDS; set +e; out="$(unshare -rn bash "$t/stall.sh" "$t" "$r" "$1" 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 1 && $((SECONDS - s)) -le 10 ]] || { echo "check-vendored test: $1 proxy fetch want exit 1 within 10s, got $rc after $((SECONDS - s))s: $out" >&2; exit 1; }
+  has "rerun \`just vendored-fetch\`"; }
+for mode in silent drip; do stall "$mode"; has "git fetch of mattpocock/skills@49dd158d1076134a641b33efb035946536778336 timed out after 2s"; done
 rm -rf "$t/c/octo-feather/skillfile/bin"
-stall; has "downloading skillfile v1.9.2"; has "failed after at most 2s"; has "rerun \`just vendored-fetch\`"
-echo "check-vendored test: ok (offline gate, drift, poisoned and missing cache, stalled fetch)"
+for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
+echo "check-vendored test: ok (offline gate, drift, symlinks, special files, empty folders, poisoned and missing cache, silent and dripping proxy)"

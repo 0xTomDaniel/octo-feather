@@ -69,7 +69,7 @@
 <tr data-anchor="review-proxy"><td>Exposure</td><td>exe.dev's HTTPS proxy with the VM's sharing mode Private: a request without an exe.dev login is redirected to the login page, so that login is the gate. The exe.dev share port (8000) is not used by Spec Chat</td></tr>
 <tr data-anchor="review-url"><td>Review URL</td><td><code>https://&lt;vm&gt;.exe.xyz:7400/&lt;slug&gt;/&lt;spec path&gt;</code></td></tr>
 <tr data-anchor="review-register"><td>Registering a spec</td><td><code>review-host.py register --slug &lt;spec slug&gt; --owner &lt;session&gt;/&lt;pane&gt; &lt;spec path&gt;</code>, from Spec Chat's review skill, with no exposure argument. A spec has one review row, under its own spec slug, made when it is shaped; lanes link to that row and never register the spec again</td></tr>
-<tr data-anchor="review-accepted"><td>Acceptance record</td><td>The review host's accepted registration, at an exact commit; the director's kickoff check <code>octo-feather-accepted</code> reads it from every session's registry</td></tr>
+<tr data-anchor="review-accepted"><td>Acceptance record</td><td>The review page's Accept hand-off, for the spec at the registered commit; the director's kickoff check <code>octo-feather-accepted</code> reads every session's registry rows and their spools</td></tr>
 <tr data-anchor="review-skills"><td>Spec Chat skills</td><td>Linked into each target repository's <code>.agents/skills</code> only, never as <code>.claude/</code> or <code>.codex/</code> links (ADR 0001), and never in a home folder; owner chats use them to shape, and the supervisor loads them through <code>externalSkills</code> for spec revisions</td></tr>
 </tbody>
 </table>

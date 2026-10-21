@@ -42,3 +42,4 @@ for l in "$repo"/.agents/skills/*; do
   n=$((n + 1))
 done
 echo "$me: $n Spec Chat skill links in $repo/.agents/skills, ignored in $exclude"
+"$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/octo-feather-exclude" "$repo"

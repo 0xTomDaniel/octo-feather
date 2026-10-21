@@ -79,7 +79,7 @@ contract="pi-role"
 # A known session id makes the agent parkable: herdr-close --park records it
 # and a resume passes it back.
 session="$resume"
-[[ -n "$session" ]] || session="$(cat /proc/sys/kernel/random/uuid)"
+[[ -n "$session" ]] || session="$(cat /proc/sys/kernel/random/uuid 2>/dev/null || uuidgen | tr "[:upper:]" "[:lower:]")"
 
 # pi-role --json puts the role prompt in a file, so every arg is one line.
 mapfile -t launch_argv < <(jq -r '.args[]' <<<"$role_json")

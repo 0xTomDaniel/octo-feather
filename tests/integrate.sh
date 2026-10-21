@@ -39,4 +39,16 @@ run 66 7 w1                                                # gh7-demo alone is n
 g worktree remove ../suf; g worktree add -q -b octo-feather/gh7 ../pre main
 run 0 7 w1                                                 # namespaced lane octo-feather/gh7 integrates
 [[ "$out" == *"branch=octo-feather/gh7 "* && -e ../pre/b ]] || { echo "integrate test: prefixed lane not integrated: $out" >&2; exit 1; }
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>)"
+# Hand-in hygiene (Fieldnote, 2026-10-20): review state and factory recipes never land on the lane.
+"$kit/scripts/octo-feather-exclude" . >/dev/null
+mkdir -p docs/specs/a.spec.html.review/versions; echo v > docs/specs/a.spec.html.review/versions/1.html
+[[ -z "$(git status --porcelain)" ]] || { echo "integrate test: excluded review state shows in git status" >&2; exit 1; }
+g worktree add -q -b w5 ../w5; (cd ../w5 && mkdir -p docs/specs/a.spec.html.review/versions && echo v > docs/specs/a.spec.html.review/versions/1.html \
+  && echo s > docs/specs/a.spec.html && g add docs/specs/a.spec.html && g add -f docs/specs/a.spec.html.review && g commit -qm review-state)
+before="$(git -C ../pre rev-parse HEAD)"
+run 3 7 w5; [[ "$out" == *"review state"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: tracked review state not refused: $out" >&2; exit 1; }
+g worktree add -q -b w6 ../w6; (cd ../w6 && printf '\nintegrate issue +refs:\n    octo-feather-integrate {{issue}} {{refs}}\n' >> justfile && g commit -qam recipes)
+run 3 7 w6; [[ "$out" == *"factory recipes"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: factory recipe not refused: $out" >&2; exit 1; }
+g worktree add -q -b w7 ../w7; (cd ../w7 && mkdir -p docs/specs && echo s > docs/specs/a.spec.html && g add docs/specs/a.spec.html && g commit -qm spec)
+run 0 7 w7                                                 # a spec alone stays tracked and integrates
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused, spec kept)"
