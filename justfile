@@ -14,8 +14,8 @@ export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/
 # backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
 # Backticks run in --working-directory when given: there the guard is the published command on PATH.
 gate_free_out := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f"`
-# The scan cannot see into the repo scripts a recipe runs: a check run also exports a marker (its just pid and model
-# runtimes) that nested just runs and tools inherit; qa and octo-feather-qc refuse under it (check-gate-free --refuse).
+# The scan cannot see into the repo scripts a recipe runs: a check run also exports a marker (the outermost check
+# run's just pid) that nested just runs and tools inherit; qa and octo-feather-qc refuse under it (check-gate-free --refuse).
 export OCTO_FEATHER_CHECK_RUN := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f" --run`
 gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out == "`f=scripts/check-gate-free; [[ -x \"$f\" ]] || f=check-gate-free; exec \"$f\"`" { "dry run" } else { error("check-gate-free did not pass (message above); just check stays deterministic and free") }
 

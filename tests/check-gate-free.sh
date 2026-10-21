@@ -79,17 +79,26 @@ set +e; out="$(cd "$w" && PATH="$t/scripts:$PATH" CHECK_GATE_FREE_TEST_COPY=1 ju
 printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
 [[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'not implemented yet' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
 # Script forms: a repo script a gate recipe runs reaches qa or the judge at run time, through just or directly.
-# A stand-in `pi` first on the check run's PATH is the box's model runtime (HOME moved: no ~/.local/bin ahead of it); it logs any launch.
+# A fake `pi` first on the check run's PATH (HOME moved: no ~/.local/bin ahead of it) logs any launch.
 sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
-# script_form BODY: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
+# script_form BODY [BODY2]: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
+# With BODY2, the justfile also has check-probe, which runs scripts/quality-probe2 (BODY2).
+# The test's own boundary: the copy's check run starts outside the kit's (marker cleared), so its refusal stops the copy's just only.
 script_form() {
+  local extra=""
   printf '#!/usr/bin/env bash\n%s\n' "$1" > "$t/scripts/quality-probe"; chmod +x "$t/scripts/quality-probe"
-  plant "${c/check:/check: probe}" $'probe:\n    @scripts/quality-probe'
+  if [[ -n "${2:-}" ]]; then
+    printf '#!/usr/bin/env bash\n%s\n' "$2" > "$t/scripts/quality-probe2"; chmod +x "$t/scripts/quality-probe2"
+    extra=$'\ncheck-probe:\n    @scripts/quality-probe2'
+  fi
+  plant "${c/check:/check: probe}" $'probe:\n    @scripts/quality-probe'"$extra"
   set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
-  printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe"
+  printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
   [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: script $1" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: script $1" >&2; echo "$out" >&2; exit 1; }
   ! grep -qE 'not implemented yet|just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: script $1" >&2; echo "$out" >&2; exit 1; }
+  # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
+  ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
 }
 script_form 'exec just qa'
 script_form 'just qc x 1 a'
@@ -98,7 +107,19 @@ script_form '"$(dirname "$0")/octo-feather-qc" x 1 a'
 script_form 'PATH="$(dirname "$(command -v pi)"):$PATH" octo-feather-qc x 1 a'
 # A script that swallows the refusal still fails the gate.
 script_form 'just qa || true; octo-feather-qc x 1 a || true; exit 0'
+# A nested just asking for a check-* recipe keeps the outer check run's marker: the refusal deep inside fails the outer just check.
+script_form 'just check-probe || true' 'just qa || true'
+script_form 'just check-probe || true' 'octo-feather-qc x 1 a || true'
+# Under the marker the judge refuses whatever pi it would launch: one the check run never saw, on PATH or in OCTO_FEATHER_QC_PATH.
+script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; PATH="$d:$PATH" octo-feather-qc x 1 a || true; rm -rf "$d"'
+script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; OCTO_FEATHER_QC_PATH="$d" octo-feather-qc x 1 a || true; rm -rf "$d"'
 rm -rf "$sb"
+# Only its owner files name the marker: any other file that could clear or forge it fails the gate, naming the file.
+printf '#!/usr/bin/env bash\nenv -u OCTO_FEATHER_CHECK_RUN just qa\n' > "$t/scripts/quality-probe"
+set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
+rm -f "$t/scripts/quality-probe"
+[[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && grep -qF 'scripts/quality-probe' <<<"$out" && ! grep -qE 'python: ok|just check: ok' <<<"$out" \
+  || { echo "check-gate-free test: a non-owner file naming the marker passed" >&2; echo "$out" >&2; exit 1; }
 # Fails closed: a broken just (error exit, bad JSON) or a silent guard interpreter never reads as ok.
 # stub NAME BODY: an executable NAME first on the PATH the guard runs with; the outer just is the real one.
 stub() {
@@ -114,4 +135,4 @@ stub just 'echo "{}"' 'check-gate-free: error: unexpected just --dump JSON'
 stub just 'echo "not json"' 'check-gate-free: error: unexpected just --dump JSON'
 stub python3 'exit 0' "$msg"
 [[ "$(cat "$t/justfile")" == "$orig" && -z "$(g status --porcelain)" ]] || { echo "check-gate-free test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; spelling and evasion variants; mixed inputs; fails closed)"
+echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; spelling and evasion variants; mixed inputs; script, nested check-* and any-pi forms; marker named outside its owners; fails closed)"
