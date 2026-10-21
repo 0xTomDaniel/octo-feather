@@ -7,8 +7,8 @@
       "pr": null
     },
     "acceptance-skill-frontmatter": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 50
     },
     "acceptance-only-listed": {
       "status": "built",
