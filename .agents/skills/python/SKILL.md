@@ -18,6 +18,8 @@ project tooling and validation commands take precedence over defaults here.
 
 ## Tooling Defaults
 
+The project's own tooling wins. A project on pip and `requirements*.txt` stays on it: a `.venv` from `pip install -r requirements.txt`, its existing test runner (stdlib `unittest` when it has none), and no `pyproject.toml`, `uv.lock`, formatter or linter it does not already have. The defaults below are for new projects (`templates/python`) and projects already on `uv`.
+
 - Use `uv` for environment management, dependency management, and command execution.
 - Prefer `pyproject.toml` as the package and tool configuration surface.
 - Use `uv add`, `uv remove`, and `uv sync` instead of editing dependency lists by hand when a managed Python project is in scope.
@@ -32,8 +34,8 @@ project tooling and validation commands take precedence over defaults here.
 
 ## Testing And Quality
 
-- Prefer `pytest` for tests.
-- Prefer `ruff` for linting and formatting.
+- Prefer `pytest` for tests in new projects; otherwise keep the project's own runner.
+- Prefer `ruff` for linting and formatting. Never reformat lines a ticket does not change.
 - Use `basedpyright` in strict mode for static type checking, as `templates/python` does.
 - Use replay-based integration tests when realistic HTTP payloads matter.
 

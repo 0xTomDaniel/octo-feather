@@ -3,7 +3,11 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 root := justfile_directory()
-export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + env_var('PATH')
+# macOS: GNU coreutils and util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen),
+# Homebrew's bash 5 and python3, and mise's shims, ahead of the system's; missing dirs are skipped by the shell.
+# The running just's own dir comes first so recipes and tests find it without a mise shim.
+mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
+export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 
 default:
     @just --list
@@ -74,6 +78,9 @@ check-refs:
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
           # NOTICE attribution names the octo-lite file the director came from.
           "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
+          # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
+          "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
+          "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
@@ -134,6 +141,8 @@ check-templates:
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
+    # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
+    TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "{{root}}"/tests/*.sh; do "$t"; done
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
