@@ -8,6 +8,13 @@ root := justfile_directory()
 # The running just's own dir comes first so recipes and tests find it without a mise shim.
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
 export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
+# The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
+# this before any recipe runs, so a check or check-* recipe reaching qa, qc or Jev, by dependency or body, fails
+# every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
+# backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
+# Backticks run in --working-directory when given: there the guard is the published command on PATH.
+gate_free_out := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f"`
+gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out == "`f=scripts/check-gate-free; [[ -x \"$f\" ]] || f=check-gate-free; exec \"$f\"`" { "dry run" } else { error("check-gate-free did not pass (message above); just check stays deterministic and free") }
 
 default:
     @just --list
@@ -52,9 +59,6 @@ check-refs:
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
-    # The gate and its check-* recipes never reach the product judge or factory evals.
-    if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
-      echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
     # Retired words stay retired in all kit text, docs/ and this justfile included
     # (the pattern brackets a letter so it does not match itself). Exempt files:
     #   GLOSSARY.md: lists the retired words.
