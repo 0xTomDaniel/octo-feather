@@ -86,11 +86,31 @@
       "status": "planned",
       "pr": null
     },
-    "acceptance-wording-only": {
+    "acceptance-call-listed": {
       "status": "planned",
       "pr": null
     },
-    "acceptance-wording-behavior": {
+    "acceptance-call-added": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-weakens": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-many": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-review": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-denied": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-guard": {
       "status": "planned",
       "pr": null
     },
