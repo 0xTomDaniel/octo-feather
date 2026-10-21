@@ -1,17 +1,89 @@
 #!/usr/bin/env python3
 """octo-feather-accepted SPEC_PATH [--repo DIR]
 
-Kickoff check (docs/adr/0021): is SPEC_PATH accepted at an exact commit?
-Reads Spec Chat's review-host registries, one per Herdr session
-($SPEC_CHAT_STATE or ~/.local/state/spec-chat, then hosting/*/registry.toml):
-a row for that spec path with `accepted = true` whose `base` commit exists in
---repo (default: cwd) and holds the spec.
+Kickoff check (docs/adr/0021): did the owner press Accept spec on SPEC_PATH at
+an exact commit?
 
-Prints `accepted <commit> slug=<slug> at=<updated_at> session=<dir>` and exits 0
-(the newest accepted row wins), or prints why not and exits 1. Reads only.
+Reads Spec Chat's review-host registries, one per Herdr session
+($SPEC_CHAT_STATE or ~/.local/state/spec-chat, then hosting/*/registry.toml),
+for the rows of that spec path. For each row it reads the hand-offs the review
+page wrote into the owner's side of the row's spool (<root>/<spec>.review/, the
+SPOOL_SIDE directory, *-handoff-*.json). The row is accepted when the newest
+owner hand-off is Accept spec (a hand-off
+with no `events` list) and the version it accepted is the spec at the row's
+`base` commit: the SHA-256 of the page Spec Chat serves for that file, which is
+the version every review event records. A newer comment hand-off, or an Accept
+of any other text (an earlier or later edit of the spec), does not count. The
+base commit must exist in --repo (default: cwd) and hold the spec.
+
+A registry `accepted` key is ignored: only the page's Accept counts.
+
+This is an accident guard, not a security boundary. Spec Chat refuses agent
+writes to the owner's side of a spool over HTTP, and no kit role or skill writes there,
+but any local process can write a file into it.
+
+Prints `accepted <commit> slug=<slug> at=<accept time> session=<dir> id=<row id>
+handoff=<event id>` and exits 0 (the newest Accept wins), or prints why not and
+exits 1. Reads only.
 """
-import os, subprocess, sys, tomllib
+import hashlib, html, json, os, re, subprocess, sys, tomllib
+from html.parser import HTMLParser
 from pathlib import Path
+
+# Spec Chat's served page (skill/review-spec/assets/review-serve.py, _share_meta and
+# _spec_page): the file with any missing description and Open Graph meta added
+# before </head>. Its SHA-256 is the version a review event records. Pinned by
+# tests/accepted.sh against a hash Spec Chat itself computed.
+HEAD_END_RE = re.compile(rb"</head\s*>", re.IGNORECASE)
+SPOOL_SIDE = "human"  # Spec Chat's name for the owner's side of a spool: its directory and event actor
+SHARE_META = (("name", "description"), ("property", "og:type"), ("property", "og:title"), ("property", "og:description"))
+
+
+class _Head(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.in_title, self.parts, self.meta = False, [], set()
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "title":
+            self.in_title = True
+        elif tag == "meta":
+            self.meta.update(v.lower() for k, v in attrs if k in ("name", "property") and v)
+
+    def handle_endtag(self, tag):
+        if tag == "title":
+            self.in_title = False
+
+    def handle_data(self, data):
+        if self.in_title:
+            self.parts.append(data)
+
+
+def served_version(body: bytes, path: str) -> str:
+    end = HEAD_END_RE.search(body)
+    if end:
+        head = _Head()
+        head.feed(body[:end.start()].decode("utf-8", errors="replace"))
+        title = " ".join("".join(head.parts).split())
+        title = html.escape(title or os.path.splitext(os.path.basename(path))[0])
+        added = "".join('<meta %s="%s" content="%s">\n' % (key, name, "article" if name == "og:type" else title)
+                        for key, name in SHARE_META if name not in head.meta)
+        if added:
+            body = body[:end.start()] + added.encode("utf-8") + body[end.start():]
+    return hashlib.sha256(body).hexdigest()
+
+
+def newest_handoff(spool: Path):
+    """(file name, event) of the newest owner hand-off in a spool side, or None."""
+    found = []
+    for f in spool.glob("*-handoff-*.json"):
+        try:
+            event = json.loads(f.read_text())
+        except (OSError, ValueError):
+            continue
+        if isinstance(event, dict) and event.get("event") == "handoff" and event.get("actor", SPOOL_SIDE) == SPOOL_SIDE:
+            found.append((f.name, event))
+    return max(found, key=lambda fe: fe[0], default=None)
 
 
 def main(argv):
@@ -33,16 +105,29 @@ def main(argv):
             if str(r.get("spec", "")).replace("\\", "/").lstrip("./") == spec and not r.get("test"):
                 rows.append((reg.parent.name, r))
     if not rows:
-        print(f"not accepted: {spec} is not registered with the review service (register it, then Accept spec)"); return 1
-    accepted = [(s, r) for s, r in rows if r.get("accepted") is True]
+        print(f"not accepted: {spec} is not registered with the review service (register it, then press Accept spec)"); return 1
+    accepted, why = [], []
+    for session, row in rows:
+        slug, base = row.get("slug", "?"), str(row.get("base", ""))
+        spool = Path(str(row.get("root") or repo)) / f"{spec}.review" / SPOOL_SIDE
+        newest = newest_handoff(spool)
+        if newest is None:
+            why.append(f"{slug}: no hand-off from the review page yet; press Accept spec"); continue
+        name, event = newest
+        if isinstance(event.get("events"), list):
+            why.append(f"{slug}: the newest hand-off sends comments, not Accept spec; answer them, then press Accept spec"); continue
+        blob = subprocess.run(["git", "-C", repo, "show", f"{base}:{spec}"], capture_output=True)
+        if blob.returncode != 0:
+            why.append(f"{slug}: registered commit {base[:12]} with {spec} is not in {os.path.abspath(repo)} (fetch spec/{slug}?)"); continue
+        version = str(event.get("version", ""))
+        if version != served_version(blob.stdout, spec):
+            why.append(f"{slug}: Accept spec was pressed on version {version[:12] or '?'}, not on the spec at registered commit {base[:12]}; "
+                       "re-register the spec at its commit and press Accept spec again"); continue
+        accepted.append((str(event.get("createdAt", "")), name, session, row, event))
     if not accepted:
-        print(f"not accepted: {spec} is registered ({', '.join(sorted({r.get('slug', '?') for _, r in rows}))}) but no row is accepted; press Accept spec"); return 1
-    session, row = max(accepted, key=lambda sr: str(sr[1].get("updated_at", "")))
-    base = str(row.get("base", ""))
-    ok = subprocess.run(["git", "-C", repo, "cat-file", "-e", f"{base}:{spec}"], capture_output=True).returncode == 0
-    if not ok:
-        print(f"not accepted: accepted commit {base[:12]} with {spec} is not in {os.path.abspath(repo)} (fetch spec/{row.get('slug', '<slug>')}?)"); return 1
-    print(f"accepted {base} slug={row.get('slug', '')} at={row.get('updated_at', '')} session={session} id={row.get('id', '')}")
+        print(f"not accepted: {spec}: " + "; ".join(why)); return 1
+    at, _, session, row, event = max(accepted, key=lambda a: (a[0], a[1]))
+    print(f"accepted {row.get('base', '')} slug={row.get('slug', '')} at={at} session={session} id={row.get('id', '')} handoff={event.get('id', '')}")
     return 0
 
 
