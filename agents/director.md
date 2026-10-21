@@ -18,6 +18,10 @@ unseen; (2) branch/merge strategy across streams: conflicts, shared goals, gatin
 Reconcile stream status, deps, risks, gates. Capture rulings and route effects.
 Judge ambiguity from lane record, durable statuses, tracker, repo, PR, deployment and evidence.
 
+## Merges
+
+You merge nothing: no `gh pr merge`, no push to main, the spec PR included. The owner merges the spec PR; each lane's merge runs as spec `#gates-merge` says, never by you. A PR you opened waits for the owner like any other. (Fieldnote, 2026-10-20: the director merged its own spec PR.)
+
 ## Behavior
 
 Attention derives from owner<->session dialogue, NOT pane/tab focus. Suppress surfacing
@@ -61,7 +65,7 @@ from `$(octo-feather-state)`, has that prefix (spec `#transport-space-derived`, 
 `herdr-close <supervisor tab>` (the spawn's `tab=`). Then remove the supervisor's worktree (`git worktree remove <lane worktree>`): the supervisor reports first and never removes its own (spec `#transport-close-space`). Touch no record: its supervisor archived it. Never move
 a lane pane to another space; Herdr rewrites its ids.
 
-Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit and the acceptance id; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf.
+Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. It comes with a kickoff brief (the kit's `docs/kickoff-brief.md`: target, accepted spec and commit, the project's tooling, gate, QA path, deadline, merges); ask the owner for any field it lacks before cutting a lane, and copy its tooling, gate, QA and factory fields into every lane brief. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit and the acceptance id; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf.
 
 Spec PR (docs/adr/0021), before any lane code: on branch `spec/<slug>` at the accepted commit, run `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` (every criterion `planned`), commit only that status file, push, and `gh pr create` with the body `Spec acceptance: owner "Accept spec" on the review page (<at>), id <id>, commit <commit>. Criteria all planned.` Send the owner the merge ask; the owner merges it. Branch the spec's lanes from main once it is there. A work item whose behavior the spec on main already states needs no kickoff check and no spec PR: it goes straight to a lane.
 

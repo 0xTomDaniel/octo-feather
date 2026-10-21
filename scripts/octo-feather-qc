@@ -37,7 +37,7 @@ Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
-(no auth, network; rerun with --no-github to judge without it). On 64 to 67 the judge never
+(no auth, network; rerun with --no-github to judge without it), 69 on macOS (no sandbox there). On 64 to 67 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
 import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, threading, time
@@ -91,7 +91,7 @@ def criteria_text(spec):
 
 BRIEF = """QC run (docs/adr/0022). You are the product judge for this lane head, not a code reviewer: skip the code-review skill's diff passes, message nobody (no herdr-say), and change no file (no edit, no commit, no file written in the repo; scratch only under /tmp).
 Repo: {repo}, head {head}. Spec: {spec}.
-For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Apply the principle-prove-it-works skill: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
+For each criterion below: find its demo path through the app's public surface (CLI, HTTP or UI, or the repo's runnable script when it has none, docs/adr/0002; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output. Apply the principle-prove-it-works skill: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
 Evidence besides the repo:
 - GitHub: {github}
 - Lane and director history: $(octo-feather-state)/lanes/archive/ holds closed lanes' records and hand-off logs, and $(octo-feather-state)/director.handoffs.jsonl the director's log; both read-only, either may be absent.
@@ -159,6 +159,8 @@ def oauth_warning():
 def sandboxed(judge, session, gh):
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started."""
     unshare = shutil.which("unshare")
+    if not unshare and sys.platform == "darwin":
+        die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
     if not unshare:
         die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
     # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write

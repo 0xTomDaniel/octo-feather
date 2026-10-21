@@ -28,6 +28,13 @@ expect() {
   grep -qF "$3" <<<"$out" || { echo "check-refs test: $1 did not report: $3" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$1" <<<"$out" || { echo "check-refs test: $1 not named in the output" >&2; exit 1; }
 }
+# allow FILE CONTENT: appending CONTENT to tracked FILE keeps check-refs green; the copy is restored after.
+allow() {
+  cp "$t/$1" "$t/.allow-old"; printf '%s\n' "$2" >> "$t/$1"
+  set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
+  mv "$t/.allow-old" "$t/$1"
+  [[ "$rc" == 0 ]] || { echo "check-refs test: $1 with '$2' failed check-refs" >&2; echo "$out" >&2; exit 1; }
+}
 expect docs/x.md "The $op spawns one supervisor per lane." "$words"
 expect docs/x.md "Ask the $hu before merging." "$words"
 expect README.notes.md "${hu^}s review it." "$words"
@@ -50,6 +57,14 @@ expect docs/specs/index.spec.html "<a href=\"./comms.spec.html#handoff-$op\">the
 expect docs/specs/overview.spec.html "calls the top agent $op or the person $hu; ask the $hu." "$words"
 expect agents/corrector.md "\"The $op\" there is the owner; the $op spawns lanes." "$words"
 expect NOTICE "agents/director.md (was agents/meta-$op.md), written by the $op" "$words"
+# Spec Chat's on-disk spool side name is exempt only as the SPOOL_SIDE value in the two files that set it.
+allow scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # Spec Chat's owner side"
+allow tests/accepted.sh "SPOOL_SIDE=$hu; spool=x"
+expect docs/x.md "SPOOL_SIDE = \"$hu\"" "$words"
+expect agents/x.md "SPOOL_SIDE=$hu" "$words"
+expect tests/accepted.sh "SPOOL_SIDE=$hu # SPOOL_SIDE: the $hu approves" "$words"
+expect scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # the $hu approves" "$words"
+expect scripts/octo-feather-accepted "# SPOOL_SIDE ... the $hu approves" "$words"
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
