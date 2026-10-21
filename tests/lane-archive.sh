@@ -45,14 +45,16 @@ out="$(HERDR_SESSION='' "$L" archive gh3)" || fail "archive without a log failed
 grep -qF "archived: $top/archive/gh3.toml sha256=" <<<"$out" && grep -qF "no hand-off log" <<<"$out" || fail "record-alone output: $out"
 [[ ! -e "$top/gh3.toml" && ! -e "$top/archive/gh3.handoffs.jsonl" ]] || fail "record-alone move wrong"
 
-refuse() { # WANT NAME: non-zero, message, every file under the state dir unchanged
+tree() { (cd "$1" && find . -printf '%p %y %n %l\n' | sort); sums "$1"; }   # entries, types, link counts, symlink targets, bytes
+refuse() { # WANT NAME: non-zero, message, every entry under the state dir unchanged
   local before after out rc
-  before="$(sums "$XDG_STATE_HOME")"
+  before="$(tree "$XDG_STATE_HOME")"
   set +e; out="$(HERDR_SESSION='' "$L" archive "$2" 2>&1)"; rc=$?; set -e
   [[ "$rc" != 0 ]] || fail "archive $2 did not refuse"
   grep -qF "$1" <<<"$out" || fail "refusal for $2 did not say '$1': $out"
-  after="$(sums "$XDG_STATE_HOME")"
-  [[ "$before" == "$after" ]] || fail "refusal for $2 moved or changed files"
+  after="$(tree "$XDG_STATE_HOME")"
+  [[ "$before" == "$after" ]] || fail "refusal for $2 moved or changed files: $(diff <(echo "$before") <(echo "$after"))"
+  grep -q Traceback <<<"$out" && fail "refusal for $2 printed a traceback: $out"; :
 }
 # Missing record (a stray log of that name stays).
 printf '{}\n' >"$top/gh4.handoffs.jsonl"
@@ -64,6 +66,16 @@ seed "$top" gh5; printf 'old\n' >"$top/archive/gh5.handoffs.jsonl"
 refuse "archive target exists: $top/archive/gh5.handoffs.jsonl" gh5
 # Bad name.
 refuse "usage" ../gh1
+# Non-regular sources are refused before any move: symlinked record (review of a80d7b6),
+# symlinked log, directory record, directory log.
+printf 'issue = 0\n' >"$top/seed.toml"; ln -s seed.toml "$top/gh7.toml"; printf '{}\n' >"$top/gh7.handoffs.jsonl"
+refuse "not a regular file: $top/gh7.toml" gh7
+printf 'issue = 0\n' >"$top/gh8.toml"; printf '{}\n' >"$top/seed.jsonl"; ln -s seed.jsonl "$top/gh8.handoffs.jsonl"
+refuse "not a regular file: $top/gh8.handoffs.jsonl" gh8
+mkdir "$top/gh9.toml"; printf '{}\n' >"$top/gh9.handoffs.jsonl"
+refuse "not a regular file: $top/gh9.toml" gh9
+printf 'issue = 0\n' >"$top/gh10.toml"; mkdir "$top/gh10.handoffs.jsonl"
+refuse "not a regular file: $top/gh10.handoffs.jsonl" gh10
 
 # Execution failure (read-only lanes/: link into archive/ works, unlink of the source fails):
 # no partial archive, no hard link left behind; a retry after restoring permissions succeeds.
@@ -88,4 +100,4 @@ if [[ "$(id -u)" != 0 ]]; then
   archive_ok "$ro_lanes" gh6 ro
   ro="read-only lanes/ rolls back, retry succeeds"
 fi
-echo "lane-archive: ok (default + named session, sha256 before = after; record alone; refusals: missing record, archived record, archived log, bad name; $ro)"
+echo "lane-archive: ok (default + named session, sha256 before = after; record alone; refusals: missing record, archived record, archived log, bad name, symlinked record, symlinked log, directory record, directory log; $ro)"

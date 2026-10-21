@@ -99,21 +99,39 @@ def cmd_archive(args: list[str]) -> int:
     name = lane_name(args)
     lanes = lanes_dir(); archive = lanes / "archive"
     record, log = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl"
-    if not record.is_file():
-        raise Refuse(f"no lane record {record}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+    import stat
+    files = []  # regular sources, checked with lstat so a symlink is never followed
+    for f in (record, log):
+        try:
+            mode = os.lstat(f).st_mode
+        except FileNotFoundError:
+            if f == record:
+                raise Refuse(f"no lane record {record}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+            continue
+        except OSError as e:
+            raise Refuse(f"cannot read {f} ({e}): fix its permissions, then rerun") from e
+        if not stat.S_ISREG(mode):
+            raise Refuse(f"not a regular file: {f}; replace it with the real file (a lane's record and hand-off log are plain files), then rerun")
+        files.append(f)
     for f in (record, log):
         if (archive / f.name).exists() or (archive / f.name).is_symlink():
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
-    files = [f for f in (record, log) if f.is_file()]
-    before = {f.name: sha256(f) for f in files}
+    try:
+        before = {f.name: sha256(f) for f in files}
+    except OSError as e:
+        raise Refuse(f"cannot read a lane file ({e}): fix its permissions, then rerun") from e
     made_dir = not archive.is_dir()
     created = []  # destinations this run linked, recorded before the source is unlinked
     try:
         archive.mkdir(exist_ok=True)
         for f in files:
             # link then unlink: never overwrites a target that appeared meanwhile.
-            os.link(f, archive / f.name); created.append(f); f.unlink()
-    except OSError as e:
+            os.link(f, archive / f.name, follow_symlinks=False); created.append(f)
+            got = sha256(archive / f.name)
+            if got != before[f.name]:
+                raise ValueError(f"{f} changed before the move: sha256 {before[f.name]} -> {got}")
+            f.unlink()
+    except Exception as e:
         rollback(created, archive)
         if made_dir:
             try:
@@ -122,10 +140,7 @@ def cmd_archive(args: list[str]) -> int:
                 pass
         raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
     for f in files:
-        after = sha256(archive / f.name)
-        if after != before[f.name]:
-            print(f"changed in move: {archive / f.name} sha256 {before[f.name]} -> {after}", file=sys.stderr); return 1
-        print(f"archived: {archive / f.name} sha256={after}")
+        print(f"archived: {archive / f.name} sha256={before[f.name]}")
     if log not in files:
         print(f"no hand-off log: {log}; archived the record alone")
     return 0
@@ -137,8 +152,8 @@ def rollback(created: list[Path], archive: Path) -> None:
     for f in reversed(created):
         dest = archive / f.name
         try:
-            if not f.exists():
-                os.link(dest, f)
+            if not os.path.lexists(f):
+                os.link(dest, f, follow_symlinks=False)
             dest.unlink()
         except OSError as e:
             print(f"rollback failed for {dest} ({e}): move it back to {f} by hand", file=sys.stderr)
