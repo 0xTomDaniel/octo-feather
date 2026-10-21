@@ -68,6 +68,20 @@ octo-feather-lane merge-ask: PR #49 merge ask incomplete (4 items), head c281ed9
 rc=1
 ```
 
+### (b2) Judged column, after review of 39515df
+
+Code review of gh40 39515df found two blocking defects, which this branch fixes. (1) class verdict-parsing: `verdict` took the first `Verdict:` line anywhere, so a fenced, quoted `Verdict: clear` beat a final `Verdict: blocking`. Now only `^Verdict: (clear|blocking)$` lines outside fenced blocks count, and lines that disagree are refused. (2) class unverified-merge-ask: any historical `qc: built` commit satisfied the check, so a code commit after qc still passed. Now each criterion row has a `judged <sha>` cell (`| criterion | qc verdict | judged | evidence |`). That sha must be a commit of the PR, and only `qc: built ... (judged <sha>)` commits may follow it (spec `#lanes-one-head`). The (b) run above predates this format.
+
+Same method as (b), on PR #49's real data at head 39515df (`gh pr view 49 --json ...`, offline gh, scratch verdict comment naming 39515df clear). Its only qc commit is 21566b5 `qc: built acceptance-lane-archive (judged 241fd3ee875f)`, and code commits followed it. A scratch section whose row names that judged head:
+
+```
+octo-feather-lane merge-ask: PR #49 merge ask incomplete (1 item), head 39515dfea54f:
+  - criterion row comms#acceptance-lane-archive: judged 241fd3ee875f, but 18 non-qc commits came after it (259ad4b85354 'fix(lane): a failed archive leaves no partial archive'): stale; rerun just qc on the head 39515dfea54f, then update the row
+rc=1
+```
+
+The same row with `judged 39515dfea54f` stands for a qc rerun at the exact head with nothing to flip. It passes and prints the section (rc=0). It is scratch: no such qc run exists yet. Before this fix, the stale variant passed.
+
 Found on the way: GitHub cuts `messageHeadline` at about 70 characters with an ellipsis and starts `messageBody` with the rest (4 of PR #16's 6 qc commits). `merge-ask` joins them; the test covers it. `verdict` was not run against GitHub: it writes, and no scratch PR was opened (the test's fake gh records its create and update calls).
 
 ## (c) Headless supervisor probe, before and after
