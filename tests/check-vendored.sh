@@ -21,14 +21,23 @@ cp -r "$kit/.skillfile/patches" "$r/.skillfile/"
 cp -r "$kit/.agents/skills" "$r/.agents/"
 cp -r "$src" "$t/c/octo-feather/"; chmod -R u+w "$t/c"
 export XDG_CACHE_HOME="$t/c"
+# Network-namespace proofs (gate never dials out; stalled proxy) need Linux user namespaces:
+# run them where `unshare` works, else name the skip. Every other case runs everywhere.
+skipped=()
+ns=(); if unshare -Un --map-current-user true 2>/dev/null; then ns=(unshare -Un --map-current-user)
+  else skipped+=("offline-namespace gate runs (unshare -Un unavailable)"); fi
+stallok=0; if unshare -rn sh -c 'ip link set lo up' 2>/dev/null; then stallok=1
+  else skipped+=("stalled and dripping proxy fetch (needs unshare -rn and ip)"); fi
+# Portable in-place edit: edit FILE PYTHON-EXPR-ON-s (no sed -i).
+edit() { python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); s = eval(sys.argv[2]); open(p, "w").write(s)' "$1" "$2"; }
 run() { local want="$1"; shift; set +e; out="$("$@" just -f "$r/justfile" check-vendored 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || { echo "check-vendored test: want exit $want, got $rc: $out" >&2; exit 1; }; }
 has() { grep -qF -- "$1" <<<"$out" || { echo "check-vendored test: output lacks '$1': $out" >&2; exit 1; }; }
 # Clean copy, no network at all: passes.
-run 0 unshare -Un --map-current-user; has "vendored: ok"
+run 0 ${ns[@]+"${ns[@]}"}; has "vendored: ok"
 # One drifted line in a patched file.
 cp "$r/.agents/skills/tdd/SKILL.md" "$t/keep"
-sed -i '0,/^$/s//drift/' "$r/.agents/skills/tdd/SKILL.md"
+edit "$r/.agents/skills/tdd/SKILL.md" 's.replace("\n\n", "\ndrift\n", 1)'
 run 1; has "check-vendored: tdd: .agents/skills/tdd/SKILL.md differs from upstream mattpocock/skills@49dd158"
 cp "$t/keep" "$r/.agents/skills/tdd/SKILL.md"; run 0
 # An extra file and a missing upstream file.
@@ -37,7 +46,7 @@ run 1; has "check-vendored: sharpen: .agents/skills/sharpen/EXTRA.md is not in u
 has "check-vendored: tdd: .agents/skills/tdd/mocking.md is missing"
 rm "$r/.agents/skills/sharpen/EXTRA.md"; mv "$t/mocking.md" "$r/.agents/skills/tdd/"; run 0
 # A patch that no longer matches its committed file.
-sed -i 's/^-disable-model/ disable-model/' "$r/.skillfile/patches/skills/sharpen/SKILL.md.patch"
+edit "$r/.skillfile/patches/skills/sharpen/SKILL.md.patch" 's.replace("\n-disable-model", "\n disable-model", 1)'
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen/SKILL.md differs"
 cp "$kit/.skillfile/patches/skills/sharpen/SKILL.md.patch" "$r/.skillfile/patches/skills/sharpen/"; run 0
 # Vendored folders hold regular files only: a folder symlink, a file symlink, a FIFO, an empty folder,
@@ -72,7 +81,8 @@ run 1; has "check-vendored: grilling: cached upstream mattpocock/skills@49dd158d
 has "just vendored-fetch"
 # Missing cache: fails fast naming the fetch step, never a skip.
 rm -rf "$t/c/octo-feather/skillfile/git"
-run 1 unshare -Un --map-current-user; has "is not cached at"; has "run \`just vendored-fetch\`"
+run 1 ${ns[@]+"${ns[@]}"}; has "is not cached at"; has "run \`just vendored-fetch\`"
+if [[ $stallok == 1 ]]; then
 # Stalled network, two ways: a proxy that accepts and never answers (silent), and one that
 # drips CONNECT response headers every 0.2 s forever (slow progress). Either way the fetch
 # gives up within one total bound. Own network namespace with only loopback up, so it never
@@ -103,4 +113,9 @@ stall() { local s; s=$SECONDS; set +e; out="$(unshare -rn bash "$t/stall.sh" "$t
 for mode in silent drip; do stall "$mode"; has "git fetch of mattpocock/skills@49dd158d1076134a641b33efb035946536778336 timed out after 2s"; done
 rm -rf "$t/c/octo-feather/skillfile/bin"
 for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
-echo "check-vendored test: ok (offline gate, drift, symlinks, special files, empty folders, poisoned and missing cache, silent and dripping proxy)"
+fi
+for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
+ran="drift, symlinks, special files, empty folders, poisoned and missing cache"
+[[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
+[[ $stallok == 1 ]] && ran="$ran, silent and dripping proxy"
+echo "check-vendored test: ok ($ran)"
