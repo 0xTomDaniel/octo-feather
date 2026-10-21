@@ -65,6 +65,8 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Implementer and code reviewer, new pstack skills (principle-prove-it-works, blast-radius): the implementer reports with a re-runnable proof; the reviewer names the one safety fact and how far it was proven. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Owner shaping chat (`just shape`): asked to change factory code, it shapes a spec instead, using only the shaping skills. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Implementer, language skills (python, typescript from scaling-octo-engine@ef11d2b9): in a template copy, a new CLI command gets integration/E2E tests only (no unit tier), `just check` as the gate, basedpyright strict in Python, Zod 4 `z.strictObject` only where a new TS repo validates wire input. Smoke: `evidence/2026-10-19-language-skills-smoke.md`.
+- Director, kickoff brief and merges (agents/director.md Merges, `docs/kickoff-brief.md`): a kickoff whose brief lacks TOOLING; the director asks the owner before cutting a lane, copies TOOLING, GATE, QA PATH and FACTORY into the lane brief, and merges neither its spec PR nor a lane PR. Smoke: `evidence/2026-10-20-kit-polish.md` (no model run yet).
+- Supervisor, hand-in repo (docs/adr/0017): a target the kit did not create, whose justfile has only `check`; the supervisor integrates with `octo-feather-integrate`, adds no `integrate` or `qc` recipe and commits no `*.review/` state. Smoke: `evidence/2026-10-20-kit-polish.md` (deterministic part only).
 - Supervisor, head-pinned merge (spec `#gates-merge`, docs/adr/0007): one eval per case the rule names, each judged against its criterion: (a) head unchanged (spec `#acceptance-merge-approved-head`), (b) lane head took a merge of main after the ask (spec `#acceptance-merge-main-merged`), (c) a fix commit after the ask (spec `#acceptance-merge-head-moved`). Smoke: `evidence/2026-10-19-merge-teardown-smoke.md` (lane #5 chain; role probes (a) to (c), refined merge rule).
 - Supervisor and director, close report first (spec `#transport-close-space`, docs/adr/0007): the supervisor reports with its worktree intact and never removes it; the director closes the space, then removes it. Smoke: `evidence/2026-10-19-merge-teardown-smoke.md` (lane #5 chain; role probe (d), refined merge rule).
 - Supervisor, Accept freezes a spec (docs/adr/0021, finding 20): with a live review row on an accepted spec, a wording fix is asked of the owner through the director and the spool is scanned (`watch-specs.sh <spec dir> .cursor-owner 0 3`) before any edit; no commit before the relayed yes. Smoke: `evidence/2026-10-20-spec-freeze-baseline-gap-probes.md` (probe (a)).
@@ -76,6 +78,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, lane close archive (spec `#octo-lane-record-life-archive`, issue #46): a merged lane at close; the supervisor runs `octo-feather-lane archive <name>` after its last hand-off line and before its close report, never a hand move, and on a refusal does the fix it names. Smoke: `evidence/2026-10-20-lane-archive-smoke.md`.
 - Supervisor, merge ask evidence (spec `#acceptance-merge-ask-evidence`, issue #48): a lane at its merge ask with one failed criterion; the supervisor posts the verdict with `octo-feather-lane verdict`, writes the PR body's `## Merge ask` section, runs `octo-feather-lane merge-ask` until it passes (doing each fix it names, the failed criterion triaged), and sends only the printed section; judged against the criterion. Smoke: `evidence/2026-10-20-merge-ask-smoke.md`.
 - Supervisor, tracer tickets (to-tickets patch, spec `#acceptance-tracer-tickets`, issue #47): an approved breakdown with one product ticket and one wide-refactor step; each drafted issue names `<spec slug>#<anchor>` criteria and ends on `demo: ` with a backticked command through the repo's own declared surface that runs what its What to build names, never `printf`, the gate or another ticket's command, and no ticket delivers one layer or defers its surface (the refactor step on `Expand-contract: <step>`), passes `octo-feather-lane ticket -` before it is published, and a draft that fails is fixed, never published as is; after publishing, `octo-feather-lane tickets <parent>` exits 0. Smoke: `evidence/2026-10-20-tracer-tickets-smoke.md`.
+- Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, Fieldnote run): a brownfield ticket with several criteria on a library-shaped repo (pip, `requirements.txt`, no pytest); the implementer writes one or two tests per criterion through a public surface (a public library function for integration tests, ADR 0002) with the real data files, keeps the project's runner, adds no test-only flag, env var, hook, parameter or branch, and leaves untouched lines as they were; the reviewer blocks each of those when planted. Smoke: `evidence/2026-10-20-no-unit-tests-smoke.md`.
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`
@@ -93,3 +96,24 @@ Effect pilot after Thu 10-22: one small project tries Effect v4 (Schema in core 
 ## TypeScript 7 in templates/typescript
 
 Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API and typescript-eslint, knip and dependency-cruiser support it (7.0 GA 2026-07-08 has no API; the npm-alias bridge was rejected because it puts two compilers in every repo). Until then it stays on `typescript ~6.0.3` (Tom, 2026-10-19).
+
+## Lessons from the Fieldnote run (2026-10-19/20)
+
+Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. Kit items:
+
+- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, Fieldnote `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
+- Director merged spec PR #1 itself despite the never-merge rule. Now a Merges section at the top of agents/director.md and the MERGES field of the kickoff brief (`docs/kickoff-brief.md`); owed eval case below.
+- Supervisor moved the head after its report (1887d52 → f14e2d8) and reworded commit bodies unasked. The merge ask must name the final head; owed eval case.
+- Orders sent during cliproxy 503 outages were lost; `herdr-say` exit 0 does not mean the order was read.
+- implement-spec and the python skill assumed uv/pyproject. The python skill now follows the project's own tooling, and the kickoff brief's TOOLING field names it for every lane.
+- Unit tests were written because the spec said "proven by a unit test". shape-spec must default to "a test through a public entry point" and add a minimal-change rule for brownfield targets (keep original lines and order; no test-only code in production files).
+- macOS: `just start` works without a hand-patched PATH: the kit justfile puts GNU coreutils and util-linux (`realpath -m`, `readlink -f`, `setsid`, `timeout`), Homebrew's bash 5 (`mapfile`) and mise ahead of the system's, panes inherit it, and octo-feather-start sets HERDR_SESSION from the project. Still Linux-only, and saying so: `just qc` (exit 69) and `herdr-close --park` (exit 69); a closed tab's detached children are not swept on macOS.
+- Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running.
+
+## Lessons from the Quorum run (2026-10-20/21)
+
+- Accept went stale twice: amending the spec after registration (rich output 51d4fa7; B2 amend) moved its hash, so `octo-feather-accepted` rejected Tom's real Accept ("Accept spec pressed on version …, not on spec at registered commit …"). Re-register and re-press each time. A spec edit after Accept should re-register automatically and tell Tom.
+- `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.
+- `herdr-say` and `octo-feather-accepted` aren't on PATH on the Mac (`herdr-say` lives in `.agents/skills/herdr-comms/assets/`).
+- Registering on macOS reports wake=unavailable, so the director can't be woken; orders went through herdr-say by hand.
+- A spec without the `.viz` assets and `<script>` renders no Spec Chat UI. Preflight should fail on that.

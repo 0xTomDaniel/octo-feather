@@ -3,7 +3,11 @@
 set shell := ["bash", "-euo", "pipefail", "-c"]
 
 root := justfile_directory()
-export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + env_var('PATH')
+# macOS: GNU coreutils and util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen),
+# Homebrew's bash 5 and python3, and mise's shims, ahead of the system's; missing dirs are skipped by the shell.
+# The running just's own dir comes first so recipes and tests find it without a mise shim.
+mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
+export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 
 default:
     @just --list
@@ -52,10 +56,11 @@ check-refs:
     if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
       echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
     # Retired words stay retired. Exempt: GLOSSARY.md (lists them), a spec anchor,
-    # the corrector quoting pstack correct, and vendored skills (upstream wording).
+    # the corrector quoting pstack correct, vendored skills (upstream wording), and a
+    # SPOOL_SIDE line naming Spec Chat's owner side of a spool (its on-disk word).
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
     mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE "^(\.agents/skills/(${vend%|})/|GLOSSARY\.md\$)")
-    if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"'; then
+    if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"|SPOOL_SIDE'; then
       echo "check-refs: say director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
@@ -112,6 +117,8 @@ check-templates:
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
+    # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
+    TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "{{root}}"/tests/*.sh; do "$t"; done
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).

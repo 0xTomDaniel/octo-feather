@@ -9,6 +9,8 @@
 # aborts before the judge (67) unless --no-github; PR 0 is refused before the judge; a
 # failed status commit leaves the status file unmodified. Run by `just check`.
 set -euo pipefail
+# The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
+[[ "$(uname -s)" != Darwin ]] || { echo "qc-gh: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
