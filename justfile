@@ -65,8 +65,13 @@ check-refs:
     # pair in the table below, removed only in that file, then the rest of its line is scanned.
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
     mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$)")
+    # Fails closed: grep exit 0 or 1 and perl exit 0 are the only scans; match is perl output, no match none,
+    # any other exit a scanner error that fails the check.
     retired='\b(meta-)?[o]perators?\b|\b[h]umans?\b'
-    if grep -nHiE "$retired" "${own[@]}" | RETIRED="$retired" perl -ne '
+    rc=0; hits="$(grep -nHiE "$retired" "${own[@]}")" || rc=$?
+    if (( rc > 1 )); then
+      echo "check-refs: retired-words scanner error: grep exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1; hits=""; fi
+    rc=0; found="$(RETIRED="$retired" perl -ne '
         BEGIN { %ok = (
           # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its one citer.
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
@@ -84,7 +89,11 @@ check-refs:
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
-        if ($s =~ /$ENV{RETIRED}/i) { print; $n++ } END { exit($n ? 0 : 1) }'; then
+        if ($s =~ /$ENV{RETIRED}/i) { print }' <<<"$hits")" || rc=$?
+    if (( rc != 0 )); then
+      echo "check-refs: retired-words scanner error: perl exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1
+    elif [[ -n "$found" ]]; then
+      printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
