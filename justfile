@@ -186,3 +186,9 @@ state:
 # Arguments reach bash as exported variables, never as interpolated source.
 new-repo $lang $dest *$flags:
     cd "{{invocation_directory()}}" && octo-feather-new-repo "$lang" "$dest" $flags
+
+# Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+# sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
+# Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
+qc-real-herdr:
+    QC_TEST_HERDR=real "{{root}}/tests/qc.sh"

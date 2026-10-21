@@ -8,17 +8,39 @@
 # refetched per run and removed after; no GitHub remote skips cleanly; a failed fetch
 # aborts before the judge (67) unless --no-github; PR 0 is refused before the judge; a
 # failed status commit leaves the status file unmodified. Run by `just check`.
+# Offline and bounded (#55), like tests/qc.sh: re-runs itself under `unshare -cn` (no route,
+# proved), a fake herdr stands in for the box's (the sandbox's Herdr checks run against it),
+# each qc run killed after QC_TEST_RUN_TIMEOUT s (default 90), the whole test after QC_TEST_TIMEOUT s (600).
 set -euo pipefail
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc-gh: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
+if [[ -z "${QC_TEST_NETNS:-}" ]]; then
+  unshare -cn true 2>/dev/null || { echo "qc-gh test: unshare -cn failed: the test runs offline in a user+network namespace (enable unprivileged user namespaces)" >&2; exit 1; }
+  set +e; QC_TEST_NETNS=1 timeout -k 10 "${QC_TEST_TIMEOUT:-600}" unshare -cn "$0" "$@"; rc=$?; set -e
+  [[ "$rc" != 124 && "$rc" != 137 ]] || echo "qc-gh test: timed out after ${QC_TEST_TIMEOUT:-600} s (QC_TEST_TIMEOUT), killed" >&2
+  exit "$rc"
+fi
+fail() { echo "qc-gh test: $*" >&2; exit 1; }
+python3 - <<'EOF' || fail "network reachable: the test must run with no route (unshare -cn)"
+import errno, socket, sys
+for fam, addr in ((socket.AF_INET, ("192.0.2.1", 9)), (socket.AF_INET6, ("2001:db8::1", 9))):
+    try:
+        s = socket.socket(fam, socket.SOCK_STREAM); s.settimeout(2); s.connect(addr)
+    except OSError as e:
+        if e.errno in (errno.ENETUNREACH, errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL):
+            continue
+        sys.exit(f"{addr[0]}: {e}")
+    sys.exit(f"{addr[0]}: connected")
+EOF
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
 trap 'chmod -R u+w "$t"; rm -rf "$t"' EXIT
-fail() { echo "qc-gh test: $*" >&2; exit 1; }
+lim="${QC_TEST_RUN_TIMEOUT:-90}"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports" GH_TOKEN=SECRET-token FAKE_GH_LOG="$t/gh.log"
-unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION OCTO_FEATHER_PARENT HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION OCTO_FEATHER_PARENT HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID \
+  HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
 mkdir -p "$HOME" "$t/bin" "$t/repo/docs/specs"
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -70,13 +92,29 @@ if [[ -n "${OCTO_FEATHER_GHSNAP:-}" ]]; then
 fi
 printf '```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "gh issue view 1", "output": "ok", "why": "history only: shown"}]}\n```\n'
 EOF
-chmod +x "$t/bin/gh" "$t/bin/pi"; export PATH="$t/bin:$kit/scripts:$PATH"
+cat > "$t/bin/herdr" <<'EOF'
+#!/usr/bin/env bash
+# Fake Herdr (never the box's): a session's socket is a file under the config dir naming the session.
+C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
+while (($#)); do case "$1" in --session) s="$2"; shift 2;; --remote|--machine) shift 2;; *) a+=("$1"); shift;; esac; done
+[[ "$s" == default ]] && sock="$C/herdr.sock" || sock="$C/sessions/$s/herdr.sock"
+case "${a[*]}" in
+  server) mkdir -p "${sock%/*}"; echo "$s" > "$sock"; exec sleep 3600;;
+  "session stop "*) rm -f "$C/sessions/${a[2]}/herdr.sock"; exit 0;;
+  "session delete "*) rm -rf "${C:?}/sessions/${a[2]}"; exit 0;;
+esac
+[[ -f "$sock" ]] || { echo server_not_running >&2; exit 1; }
+[[ "${a[*]}" == "pane list" ]] && exit 0
+echo "{\"session\":\"$(cat "$sock")\"}"
+EOF
+chmod +x "$t/bin/gh" "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/scripts:$PATH"
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
 "$S" init docs/specs/demo.spec.html 0123abc >/dev/null; git add -A; git commit -qm spec
 git remote add origin https://github.com/o/r.git   # never contacted: only the fake gh is
 st=docs/specs/demo.status.json
-run() { local want="$1"; shift; set +e; out="$("$Q" "$@" 2>&1)"; rc=$?; set -e
+run() { local want="$1"; shift; set +e; out="$(timeout -k 5 "$lim" "$Q" "$@" 2>&1)"; rc=$?; set -e
+  [[ "$rc" != 124 && "$rc" != 137 ]] || fail "'$*' hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: $out"
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
 judged() { report '["stdout"]'; }
@@ -172,4 +210,4 @@ cd "$t/kc"; git init -q -b main .; cp "$t/repo/docs/specs/demo.spec.html" docs/s
 "$S" init docs/specs/zz-demo.spec.html 0123abc >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
 Q="$t/kc/scripts/octo-feather-qc" run 0 docs/specs/zz-demo.status.json 5 acceptance-a
 grep -q "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" <<< "$out" || fail "kit-on-kit proof: $out"
-echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, --json fields absent from the snapshot refused and counted, stored nulls kept)"
+echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, --json fields absent from the snapshot refused and counted, stored nulls kept; offline, fake herdr, runs bounded)"
