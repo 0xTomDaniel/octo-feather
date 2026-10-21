@@ -12,8 +12,8 @@ export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-behavior-smoke check-tests check-spec-status check-templates
+# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs.
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-owned-rules check-behavior-smoke check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -116,6 +116,10 @@ check-dashes:
 # Every skill opens with a --- frontmatter block with non-empty name and description; every role file exists.
 check-skills:
     @python3 "{{root}}/scripts/check-skills"
+
+# Every tracked decisions.jsonl, anywhere in the repo: each line one JSON object matching schemas/decision-log.schema.json (quality #decision-log, docs/adr/0010).
+check-decision-log:
+    @python3 "{{root}}/scripts/check-decision-log"
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
