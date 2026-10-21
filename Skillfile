@@ -8,6 +8,11 @@
 # (the Agent Skills convention, docs/adr/0018) and is committed. pi-role passes
 # each role's listed skills with --skill and turns discovery off, so nothing is
 # installed into the user's Pi profile.
+#
+# Never run `skillfile install` in the repo: it rewrites the patches and strips
+# their reason lines. `just check-vendored` (in `just check`, offline) runs the
+# pinned skillfile in a throwaway copy and fails when a committed folder drifts
+# from pin plus patches; `just vendored-fetch` fills its cache (once per pin).
 
 install-path  octo-feather  skill  .agents/skills
 

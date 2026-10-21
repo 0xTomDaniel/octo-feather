@@ -13,7 +13,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-behavior-smoke check-tests check-spec-status check-templates
+check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -124,6 +124,15 @@ check-tests:
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
 check-spec-status:
     @python3 "{{root}}/scripts/octo-feather-spec-status" check "{{root}}/docs/specs"
+
+# Each vendored skill folder equals upstream at its Skillfile pin plus its patches (skills spec #acceptance-patch-only).
+# No network: reads the authenticated pin-SHA cache `just vendored-fetch` fills; a missing cache fails naming it.
+check-vendored:
+    @python3 "{{root}}/scripts/check-vendored"
+
+# Fill the check-vendored cache: pinned skillfile binary and each pin commit, every call time-bounded. Never inside `just check`.
+vendored-fetch:
+    @python3 "{{root}}/scripts/check-vendored" --fetch
 
 # Owner shaping chat in the target repo: Pi with only the shaping skills, not a factory role (docs/adr/0021).
 shape *args:

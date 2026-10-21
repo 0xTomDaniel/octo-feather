@@ -3,8 +3,8 @@
   "accepted_commit": "bfb3a92",
   "criteria": {
     "acceptance-patch-only": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 51
     },
     "acceptance-skill-frontmatter": {
       "status": "planned",
