@@ -37,7 +37,8 @@ Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
-(no auth, network; rerun with --no-github to judge without it), 69 on macOS (no sandbox there). On 64 to 67 the judge never
+(no auth, network; rerun with --no-github to judge without it), 69 on macOS (no sandbox there), 70 inside a `just check`
+run with a model runtime the check run has (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
 import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, threading, time
@@ -225,7 +226,19 @@ def worktree_writes(upper):
     return [f"{k} {p}" for k, p in rel if p in tracked or (k == "new" and p not in ignored)]
 
 
+def gate_free():
+    """Never inside a check run with its model runtime: the pi the judge would launch (qc-bin, OCTO_FEATHER_QC_PATH, PATH)."""
+    dirs = [str(KIT / "scripts" / "qc-bin"), *os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":"), *os.environ.get("PATH", "").split(":")]
+    path = ":".join(d for d in dirs if d)
+    pi = shutil.which("pi", path=path)
+    p = subprocess.run([str(KIT / "scripts" / "check-gate-free"), "--refuse", f"the product judge (octo-feather-qc, pi {pi})",
+                        *(["--pi", pi] if pi else [])], stdout=subprocess.PIPE, text=True)
+    if p.stdout.strip() != "gate-free: ok":
+        die(70, "refused inside just check, which stays deterministic and free (message above)")
+
+
 def main(argv):
+    gate_free()
     flags = {"--no-sandbox", "--no-github"}
     nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
     argv = [a for a in argv if a not in flags]

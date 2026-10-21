@@ -18,8 +18,24 @@ the parent just's argv, the --justfile/-f it was given (`just --justfile X
 Stdout is exactly `gate-free: ok` on pass; the justfile treats anything else
 as failure. Fails closed: a just error, unparsable dump or unexpected shape
 exits 2 with a message, never ok. Stdlib only.
+
+The static scan cannot see what a repo script a gate recipe runs does, so a
+check run also carries a runtime marker:
+
+  check-gate-free --run   prints OCTO_FEATHER_CHECK_RUN for this just run,
+      which the justfile exports to every recipe (and so to any nested just,
+      script or tool they start): when the just that ran this backtick was
+      asked for a check or check-* recipe, a new marker naming that just's pid
+      and every `pi` (the model runtime) on its PATH and in ~/.local/bin; else
+      the inherited marker, if any.
+  check-gate-free --refuse WHAT [--pi PATH]   run where qa or the judge would
+      start: outside a check run, or when PATH (the pi the judge would launch)
+      is none of the check run's pi, prints `gate-free: ok`; else names WHAT
+      on stderr, stops the check run (SIGTERM to its just, so a script that
+      swallows the refusal still fails the gate) and exits 1. A caller treats
+      anything but the ok line as refusal.
 """
-import json, os, re, subprocess, sys
+import json, os, re, shutil, signal, subprocess, sys
 
 FORBIDDEN_RECIPES = ("qa", "qc")
 FORBIDDEN = re.compile(r"\b(qa|qc|jev)\b", re.I)
@@ -54,6 +70,95 @@ def fragment(frag, assigns):
     return "".join(render(e, assigns) for e in frag)  # an interpolation: [expr]
 
 
+MARKER = "OCTO_FEATHER_CHECK_RUN"
+# just options that take a value (--set takes two); everything else before a recipe is a flag.
+VALUE_OPTS = {"-f", "--justfile", "-d", "--working-directory", "--chooser", "--color", "--command-color",
+              "--completions", "--dotenv-filename", "--dotenv-path", "--dump-format", "--list-heading",
+              "--list-prefix", "--shell", "--shell-arg", "-s", "--show"}
+CHECK_RECIPE = re.compile(r"check(-[A-Za-z0-9_-]+)?")
+
+
+def argv_of(pid):
+    """A process's argv: /proc where there is one, else ps (macOS: split on whitespace); None if gone."""
+    try:
+        return open(f"/proc/{pid}/cmdline", "rb").read().decode(errors="replace").split("\0")[:-1]
+    except FileNotFoundError:
+        if os.path.isdir("/proc/self"):
+            return None
+    except OSError:
+        return None
+    p = subprocess.run(["ps", "-o", "args=", "-p", str(pid)], capture_output=True, text=True)
+    return p.stdout.split() if p.returncode == 0 and p.stdout.strip() else None
+
+
+def is_just(argv):
+    return bool(argv) and os.path.basename(argv[0]).startswith("just")
+
+
+def asks_check(argv):
+    """True when a just argv asks for a check or check-* recipe (any recipe position; qa and qc arguments are data)."""
+    pos, i = [], 1
+    while i < len(argv):
+        a = argv[i]
+        if a in ("-c", "--command"):
+            return False   # runs a command, no recipe
+        if a == "--":
+            pos += argv[i + 1:]; break
+        if a == "--set":
+            i += 3; continue
+        if a in VALUE_OPTS:
+            i += 2; continue
+        if not a.startswith("-") and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*=.*", a, re.S):
+            pos.append(a)
+        i += 1
+    names = [re.split(r"/|::", p)[-1] for p in pos]
+    if names and names[0] in ("qa", "qc"):
+        return False
+    return any(CHECK_RECIPE.fullmatch(n) for n in names)
+
+
+def box_pis():
+    """Every `pi` executable this check run could launch: on PATH and in ~/.local/bin (the justfile puts it first), resolved."""
+    dirs = os.environ.get("PATH", "").split(":") + [os.path.expanduser("~/.local/bin")]
+    found = (shutil.which("pi", path=d) for d in dirs if d)
+    return sorted({os.path.realpath(p) for p in found if p})
+
+
+def run_marker():
+    ppid = os.getppid()
+    argv = argv_of(ppid)
+    if is_just(argv) and asks_check(argv):
+        print(json.dumps({"just": ppid, "pi": box_pis()}, separators=(",", ":")))
+    else:
+        print(os.environ.get(MARKER, ""))
+
+
+def refuse(args):
+    what, pi = args[0] if args else "", None
+    if len(args) == 3 and args[1] == "--pi":
+        pi = args[2]
+    elif len(args) != 1 or not what:
+        die("usage: check-gate-free --refuse WHAT [--pi PATH]")
+    raw = os.environ.get(MARKER, "")
+    if not raw:
+        print("gate-free: ok"); return
+    try:
+        run = json.loads(raw)
+        root, pis = int(run["just"]), list(run["pi"])
+    except (ValueError, KeyError, TypeError) as e:
+        print(f"check-gate-free: unreadable {MARKER} ({type(e).__name__}); refusing {what}", file=sys.stderr)
+        root, pis = None, None
+    if pis is not None and pi is not None and os.path.realpath(pi) not in pis:
+        print("gate-free: ok"); return   # not the box's model runtime: a stand-in, no model call
+    print(f"check-gate-free: a check run (just pid {root}) reached {what}; {FIX}", file=sys.stderr)
+    if root and is_just(argv_of(root)):
+        try:
+            os.kill(root, signal.SIGTERM)   # just finishes the running recipe, then exits non-zero
+        except OSError:
+            pass
+    sys.exit(1)
+
+
 def parent_justfile():
     """The --justfile/-f of the just that ran this backtick, when /proc shows it; else None."""
     ppid = os.getppid()
@@ -77,6 +182,10 @@ def parent_justfile():
 
 
 def main():
+    if sys.argv[1:2] == ["--run"]:
+        return run_marker()
+    if sys.argv[1:2] == ["--refuse"]:
+        return refuse(sys.argv[2:])
     root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     path = sys.argv[1] if len(sys.argv) > 1 else parent_justfile() or os.path.join(root, "justfile")
     try:
