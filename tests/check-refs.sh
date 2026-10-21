@@ -7,7 +7,7 @@ set -euo pipefail
 # A bad file the gate misses would reach check-tests in the copy and rerun this test: stop there.
 [[ -z "${CHECK_REFS_TEST_COPY:-}" ]] || { echo "check-refs test: nested run in a copy (a planted file passed check-refs)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
 g init -q; g add -A; g commit -qm base
@@ -66,17 +66,19 @@ expect tests/accepted.sh "SPOOL_SIDE=$hu # SPOOL_SIDE: the $hu approves" "$words
 expect scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # the $hu approves" "$words"
 expect scripts/octo-feather-accepted "# SPOOL_SIDE ... the $hu approves" "$words"
 # A broken retired-words scanner fails closed, never refs: ok (match, no match and error are distinct).
-# broken RECIPE SED: SED applied to the copy's justfile makes `just RECIPE` fail naming a scanner error.
+# broken TOOL: a TOOL executable that fails (a stub first on the justfile's PATH, $HOME/.local/bin,
+# via a throwaway HOME) makes `just check-refs` fail naming a scanner error.
 broken() {
-  cp "$t/justfile" "$t/.broken-old"; sed -i "$2" "$t/justfile"
-  cmp -s "$t/justfile" "$t/.broken-old" && { echo "check-refs test: '$2' did not change the justfile" >&2; exit 1; }
-  set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
-  mv "$t/.broken-old" "$t/justfile"
-  [[ "$rc" != 0 ]] || { echo "check-refs test: broken scanner ($2) passed just $1" >&2; exit 1; }
-  grep -qF 'retired-words scanner error' <<<"$out" || { echo "check-refs test: broken scanner ($2) not reported" >&2; echo "$out" >&2; exit 1; }
-  ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: broken scanner ($2) printed refs: ok" >&2; exit 1; }
+  local h="$t.home"; mkdir -p "$h/.local/bin"
+  printf '#!/bin/sh\necho "%s: broken (check-refs test stub)" >&2\nexit 2\n' "$1" > "$h/.local/bin/$1"; chmod +x "$h/.local/bin/$1"
+  set +e; out="$(cd "$t" && HOME="$h" just check-refs 2>&1)"; rc=$?; set -e
+  rm -rf "$h"
+  [[ "$rc" != 0 ]] || { echo "check-refs test: broken $1 passed just check-refs" >&2; exit 1; }
+  grep -qF "retired-words scanner error: $1 exited" <<<"$out" || { echo "check-refs test: broken $1 not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
+  ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: broken $1 printed refs: ok" >&2; exit 1; }
 }
-broken check 's/my (\$f, \$s) = /my ((\$f, \$s) = /'
+broken perl
+broken grep
 # A grep error (a tracked file it cannot read) is a scanner error too, not no match.
 ln -s missing "$t/agents/x.md"; g add -f agents/x.md
 set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
