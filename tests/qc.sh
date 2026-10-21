@@ -12,6 +12,8 @@
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
 set -euo pipefail
+# The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
+[[ "$(uname -s)" != Darwin ]] || { echo "qc: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"

@@ -9,6 +9,10 @@
 #
 # Layout per docs/adr/0011. Workers later get their own tab
 # in the lane workspace, spawned by the supervisor with herdr-spawn.
+# On macOS, started outside Herdr with no HERDR_SESSION, the session is the
+# project's: the basename of the target's git top (one Herdr server per project).
+# It must already run (`herdr --session <name>` in a terminal). A director start
+# prints the kickoff brief template to fill and send (docs/kickoff-brief.md).
 # --name and --resume SESSION continue a parked supervisor: in a new tab of the
 # workspace labelled --name when it still exists (a worker tab kept it open),
 # else in a new lane workspace (comms spec #roles-park).
@@ -38,6 +42,15 @@ done
 [[ -n "$label" ]] || label="supervisor"
 
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+# Review state never lands in the target's tracked tree (docs/adr/0017).
+! git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || "$root/scripts/octo-feather-exclude" "$cwd" >&2
+if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:-}" ]]; then
+  top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || (cd "$cwd" && pwd -P))"
+  export HERDR_SESSION="${top##*/}"
+  echo "octo-feather-start: HERDR_SESSION=$HERDR_SESSION (the project's; set HERDR_SESSION to choose another)" >&2
+  herdr session list 2>/dev/null | awk -v s="$HERDR_SESSION" '$1 == s && $2 == "running" {f=1} END {exit !f}' \
+    || { echo "octo-feather-start: Herdr session $HERDR_SESSION is not running; start it in a terminal with: herdr --session $HERDR_SESSION" >&2; exit 69; }
+fi
 spawn() { # $1: workspace id
   "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
@@ -62,3 +75,4 @@ spawned="$(spawn "$workspace")" || {
 # The workspace's seed tab is a bare shell; the agent's tab is the only one left.
 herdr tab close "$seed" >/dev/null
 echo "workspace=$workspace $spawned"
+[[ "$role" != director ]] || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2
