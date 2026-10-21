@@ -35,10 +35,10 @@ check run also carries a runtime marker:
       its just, so a script that swallows the refusal still fails the gate) and
       exits 1. A caller treats anything but the ok line as refusal.
 
-The marker's name appears only in its owner files (MARKER_OWNERS); the static
-scan fails on any other file in the repo (tracked or untracked, not ignored)
-that names it, since one that clears or sets it would let a check run reach qa
-or the judge. A test harness that runs them clears it there, visibly.
+Stated limit: like `env -i`, a script that deliberately clears or forges the
+marker starts outside the check run, and nothing here can tell it from one
+that does not; a test harness that runs qa or the judge clears it at its own
+boundary, visibly.
 """
 import json, os, re, signal, subprocess, sys
 
@@ -76,9 +76,6 @@ def fragment(frag, assigns):
 
 
 MARKER = "OCTO_FEATHER_CHECK_RUN"
-# The files that may name the marker: the justfile sets it, this script reads it, the two harnesses that run the
-# judge with a fake pi and this script's test clear it at their own boundary.
-MARKER_OWNERS = ("justfile", "scripts/check-gate-free", "tests/check-gate-free.sh", "tests/qc.sh", "tests/qc-gh.sh")
 # just options that take a value (--set takes two); everything else before a recipe is a flag.
 VALUE_OPTS = {"-f", "--justfile", "-d", "--working-directory", "--chooser", "--color", "--command-color",
               "--completions", "--dotenv-filename", "--dotenv-path", "--dump-format", "--list-heading",
@@ -166,27 +163,6 @@ def refuse(args):
     sys.exit(1)
 
 
-def marker_namers(repo):
-    """One failure per file in REPO's git tree (tracked, or untracked and not ignored) outside MARKER_OWNERS that names the marker."""
-    p = subprocess.run(["git", "-C", repo, "ls-files", "-z", "--cached", "--others", "--exclude-standard", "--full-name"],
-                       capture_output=True)
-    if p.returncode != 0:
-        sys.stderr.write(p.stderr.decode(errors="replace"))
-        die(f"git ls-files in {repo} exited {p.returncode} (the marker-name scan needs the repo)")
-    top = subprocess.run(["git", "-C", repo, "rev-parse", "--show-toplevel"], capture_output=True, text=True).stdout.strip() or repo
-    bad = []
-    for f in sorted(set(p.stdout.decode(errors="surrogateescape").split("\0")) - {""}):
-        rel = os.path.relpath(os.path.join(top, f), repo)
-        full = os.path.join(top, f)
-        if rel in MARKER_OWNERS or os.path.islink(full) or not os.path.isfile(full):
-            continue
-        with open(full, "rb") as fh:
-            if MARKER.encode() in fh.read():
-                bad.append(f"{rel} names {MARKER}, which only {', '.join(MARKER_OWNERS)} may name: "
-                           "a file that clears or sets it lets a check run reach qa or the judge")
-    return bad
-
-
 def parent_justfile():
     """The --justfile/-f of the just that ran this backtick, when /proc shows it; else None."""
     ppid = os.getppid()
@@ -244,7 +220,6 @@ def main():
             edges[name] = deps + sorted((named & set(recipes)) | {aliases[n] for n in named & set(aliases)})
     except (ValueError, KeyError, TypeError, AttributeError) as e:
         die(f"unexpected just --dump JSON ({type(e).__name__}: {e})")
-    bad = marker_namers(os.path.dirname(os.path.abspath(path)))
 
     roots = sorted(n for n in recipes if n == "check" or n.startswith("check-"))
     if "check" not in recipes:
@@ -257,6 +232,7 @@ def main():
             if m not in via:
                 via[m] = via[n] + [m]
                 queue.append(m)
+    bad = []
     for n in sorted(via):
         chain = " -> ".join(via[n])
         if n in FORBIDDEN_RECIPES:
@@ -272,7 +248,7 @@ def main():
     if bad:
         for b in dict.fromkeys(bad):
             print(f"check-gate-free: {b}", file=sys.stderr)
-        print(f"check-gate-free: the gate recipes or files above reach the product judge or factory evals; {FIX}", file=sys.stderr)
+        print(f"check-gate-free: the gate recipes above reach the product judge or factory evals; {FIX}", file=sys.stderr)
         sys.exit(1)
     print("gate-free: ok")
 

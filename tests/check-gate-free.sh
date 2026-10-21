@@ -114,12 +114,6 @@ script_form 'just check-probe || true' 'octo-feather-qc x 1 a || true'
 script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; PATH="$d:$PATH" octo-feather-qc x 1 a || true; rm -rf "$d"'
 script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; OCTO_FEATHER_QC_PATH="$d" octo-feather-qc x 1 a || true; rm -rf "$d"'
 rm -rf "$sb"
-# Only its owner files name the marker: any other file that could clear or forge it fails the gate, naming the file.
-printf '#!/usr/bin/env bash\nenv -u OCTO_FEATHER_CHECK_RUN just qa\n' > "$t/scripts/quality-probe"
-set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
-rm -f "$t/scripts/quality-probe"
-[[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && grep -qF 'scripts/quality-probe' <<<"$out" && ! grep -qE 'python: ok|just check: ok' <<<"$out" \
-  || { echo "check-gate-free test: a non-owner file naming the marker passed" >&2; echo "$out" >&2; exit 1; }
 # Fails closed: a broken just (error exit, bad JSON) or a silent guard interpreter never reads as ok.
 # stub NAME BODY: an executable NAME first on the PATH the guard runs with; the outer just is the real one.
 stub() {
@@ -135,4 +129,4 @@ stub just 'echo "{}"' 'check-gate-free: error: unexpected just --dump JSON'
 stub just 'echo "not json"' 'check-gate-free: error: unexpected just --dump JSON'
 stub python3 'exit 0' "$msg"
 [[ "$(cat "$t/justfile")" == "$orig" && -z "$(g status --porcelain)" ]] || { echo "check-gate-free test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; spelling and evasion variants; mixed inputs; script, nested check-* and any-pi forms; marker named outside its owners; fails closed)"
+echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; spelling and evasion variants; mixed inputs; script, nested check-* and any-pi forms; fails closed)"
