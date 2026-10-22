@@ -3,7 +3,7 @@
 # #acceptance-merge-ask-evidence, issue #48), no network: a fake `gh` holds PR #7 of o/r and logs
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
 # wrong head, a report with no verdict and a failed write, leaving no comment behind. `merge-ask`
-# passes a complete section and prints it (also through the qc judge's offline gh, scripts/qc-bin/gh),
+# passes a complete section and prints it (also through the qc judge's offline gh, github-pr/scripts/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: stale head,
 # failing or pending check, missing row, Built unequal to the status file or to the qc commits,
 # verdict link to another head or a blocking verdict, untriaged failed criterion. One judged head (spec
@@ -180,9 +180,9 @@ grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out"
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
 snap="$t/snap"; mkdir -p "$snap/pr"; echo '{"repo": "o/r", "counts": {}, "capped": []}' > "$snap/meta.json"; echo x > "$snap/fetched_at"
 cp "$FAKE_GH/pr/7.json" "$snap/pr/7.json"
-out="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" merge-ask 7 "${ST[@]}")" || fail "merge-ask under the offline gh failed"
+out="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/.agents/skills/github-pr/scripts:$PATH" "$L" merge-ask 7 "${ST[@]}")" || fail "merge-ask under the offline gh failed"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] || fail "offline gh pass: $out"
-set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" verdict 7 "$H" "$t/report2" 2>&1)"; rc=$?; set -e
+set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/.agents/skills/github-pr/scripts:$PATH" "$L" verdict 7 "$H" "$t/report2" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] && grep -q "was not updated.*offline read-only snapshot\|offline read-only snapshot.*was not updated" <<<"$err" || fail "verdict under the offline gh: $rc $err"
 # a failed criterion with triage passes; Failed bullet forms
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \

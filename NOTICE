@@ -24,7 +24,7 @@ of docs/adr/0011):
     agents/code-reviewer.md
 
     .agents/skills/commit/SKILL.md
-    .agents/skills/github/SKILL.md (was skills/octo-lite-github)
+    .agents/skills/github-pr/SKILL.md (was skills/octo-lite-github)
     .agents/skills/herdr-comms/SKILL.md
     .agents/skills/herdr-comms/assets/herdr-close
     .agents/skills/herdr-comms/assets/herdr-say

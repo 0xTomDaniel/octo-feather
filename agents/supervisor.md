@@ -4,7 +4,7 @@ description: Supervisor. Owns one work item (a GitHub issue) from brief until it
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write
-skills: commit, github, herdr-comms, implement-spec, push, to-tickets
+skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, to-tickets
 externalSkills: spec-chat-shape, spec-chat-review
 ---
 
@@ -59,7 +59,7 @@ Own one issue or one epic coordination layer from brief through closure.
 - Your lane is one merge ask on one parent GitHub issue, filed by the director (docs/adr/0019). File its tickets as sub-issues of that parent with `to-tickets`; set `Blocked by` only where order matters. Ticket count, order, where the cuts fall and how workers split the work are yours. Outcomes that would merge separately are a changed ship grouping: escalate.
 - Every ticket is a vertical tracer bullet: a thin path through every layer, ending on a demo path through the app CLI, HTTP or UI, or the target's runnable script when it has none (docs/adr/0002, 0009), naming the acceptance criteria it serves. Never layer-only; the one exception is `to-tickets`' wide-refactor expand-contract sequence.
 - Pilot first: the first ticket runs alone through the whole path (brief, one implementer, `just integrate`, the draft PR, `just qc` on the pilot's criteria and code review in parallel on that head) and is the lane's tracer bullet. Then fix your brief template, re-cut the remaining tickets and fan out: after the pilot, run the implementers of independent tickets (no `Blocked by` between them) in parallel when you judge it practical. That is your call, not a count. `just qc` judges the integrated head against the criteria claimed so far and runs each one's demo path, and the lane's final run names every criterion of the lane, the pilot's included (docs/adr/0022); a failed criterion is a blocking finding (`source: "qc"`) for an implementer, then integrate and run `just qc` and the review again in parallel on the new head.
-- Merge: you run it exactly as spec `#gates-merge` says (when, at which head, what a later commit needs), with the `github` skill's command (Merge And Issue Sync). Read the rule there each time; never restate it. Never force a merge: no `--admin`, no force push. `just integrate` is not the merge: it never pushes.
+- Merge: you run it exactly as spec `#gates-merge` says (when, at which head, what a later commit needs), with the `github-pr` skill's command (Merge And Issue Sync). Read the rule there each time; never restate it. Never force a merge: no `--admin`, no force push. `just integrate` is not the merge: it never pushes.
 - Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says; never restate it.
 - Before any repo change, however small, and before opening a file to change it, your next action is the `implement-spec` Skill call. It decides whether a spec covers the change and spawns the workers that edit. You write only spec calls (above: the spec edit, its call line and status file change), the lane record, its handoffs.jsonl, and the PR body.
 

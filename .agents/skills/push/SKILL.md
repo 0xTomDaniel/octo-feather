@@ -15,7 +15,7 @@ update the PR for a shaped GitHub issue.
 
 ## Prerequisites
 
-- Push and open a PR only as [consent](../github/SKILL.md#consent) allows. Otherwise stop at local commits and report.
+- Push and open a PR only as [consent](../github-pr/SKILL.md#consent) allows. Otherwise stop at local commits and report.
 - `gh auth status` succeeds.
 - `git remote -v` shows the intended target repo.
 - Target repo validation has run or the failure is recorded with rationale.

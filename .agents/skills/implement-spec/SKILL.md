@@ -5,7 +5,7 @@ description: "Implement the result of /to-spec and /to-tickets in code."
 
 You have been provided a spec. This spec should have tickets associated with it, describing how to implement the spec.
 
-The issue tracker is GitHub Issues, through the `github` skill.
+The issue tracker is GitHub Issues, through the tracker skill.
 
 The goal is the lane's criteria of the spec (your brief names them) implemented on a single **integration branch**, with every ticket resolved the way the issue tracker closes work.
 

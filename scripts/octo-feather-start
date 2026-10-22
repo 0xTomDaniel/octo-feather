@@ -42,6 +42,12 @@ done
 [[ -n "$label" ]] || label="supervisor"
 
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+[[ -d "$cwd" ]] || { echo "octo-feather-start: no such directory: $cwd" >&2; exit 66; }
+cwd="$(cd "$cwd" && pwd -P)"
+# The role must start in the target at --cwd: pi-role resolves its {tracker} skill there, and an unknown
+# tracker refuses here, before any workspace exists (spec skills#acceptance-tracker-unknown).
+(cd "$cwd" && "$root/scripts/pi-role" --json "$root/agents/$role.md" >/dev/null) \
+  || { echo "octo-feather-start: $role not started: pi-role refused its role file in $cwd (reason above)" >&2; exit 65; }
 # Review state never lands in the target's tracked tree (docs/adr/0017).
 ! git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || "$root/scripts/octo-feather-exclude" "$cwd" >&2
 if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:-}" ]]; then
@@ -51,8 +57,8 @@ if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:
   herdr session list 2>/dev/null | awk -v s="$HERDR_SESSION" '$1 == s && $2 == "running" {f=1} END {exit !f}' \
     || { echo "octo-feather-start: Herdr session $HERDR_SESSION is not running; start it in a terminal with: herdr --session $HERDR_SESSION" >&2; exit 69; }
 fi
-spawn() { # $1: workspace id
-  "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
+spawn() { # $1: workspace id; run in the target, where pi-role resolves {tracker}
+  cd "$cwd" && "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
 }
 
