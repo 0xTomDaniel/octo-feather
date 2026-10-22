@@ -67,8 +67,8 @@
       "pr": 24
     },
     "acceptance-merge-ask-evidence": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 49
     },
     "acceptance-merge-approved-head": {
       "status": "built",
