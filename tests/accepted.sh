@@ -7,14 +7,14 @@
 # for a registry `accepted = true` that nothing writes. Here Accept is the
 # hand-off alone, exactly as the review page writes it.
 #
-# Spec Chat is read only at its pin (spec-chat.pin, `just vendored-fetch`), never
-# the box's clone (#96: a clone behind origin failed this test locally while CI,
-# with no clone, skipped the cross-check). With pinned Spec Chat the test checks:
+# Spec Chat is read only at its pin (the Skillfile fetch-only entry, `just
+# vendored-fetch`), never the box's clone (#96: a clone behind origin failed this
+# test locally while CI, with no clone, skipped the cross-check). With it the test checks:
 # - the versions: review-serve.py `_spec_page` computes V1 and V2 below for
 #   tests/fixtures/accepted/*.spec.html, so a change in its version rule fails here;
-# - the state dir: review-serve.py `session_state()` under the XDG_STATE_HOME this
-#   test sets is where the registry rows go, so octo-feather-accepted reads the
-#   registry review-host writes (#96, director finding 47).
+# - the registry: pinned Spec Chat's review-host CLI registers a spec under an
+#   isolated XDG_STATE_HOME, and octo-feather-accepted finds that row and its Accept
+#   (#96, director finding 47: it once read an env var Spec Chat never reads).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 fx="$kit/tests/fixtures/accepted"
@@ -23,8 +23,7 @@ V2=9beb7ff92e817947ef4b7a4241d7cddf36d24f84c00cbe00058240d1610c7a86   # a-edited
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
-sc="$("$kit/scripts/check-vendored" --spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
-export XDG_STATE_HOME="$t/xdg"
+sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
 got="$(python3 - "$sc/review-spec/assets" "$fx" "$t/x" <<'EOF2'
 import importlib.util, os, shutil, sys
 assets, fx, scratch = sys.argv[1:]
@@ -34,12 +33,9 @@ m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
 os.makedirs(scratch)
 for f in ("a.spec.html", "a-edited.spec.html"):
     p = os.path.join(scratch, f); shutil.copy(os.path.join(fx, f), p); print(m._spec_page(p)[2])
-print(m.session_state("default").parent.parent)
 EOF2
 )" || fail "could not run pinned Spec Chat at $sc"
-[[ "$(head -2 <<<"$got")" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
-state="$(tail -1 <<<"$got")"
-[[ "$state" == "$t/xdg/spec-chat" ]] || fail "Spec Chat's state dir is $state under XDG_STATE_HOME=$XDG_STATE_HOME; update scripts/octo-feather-accepted spec_chat_state"
+[[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
 
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 r="$t/repo"; s=docs/specs/a.spec.html
@@ -47,6 +43,7 @@ g init -q "$r"; mkdir -p "$r/docs/specs"; cp "$fx/a.spec.html" "$r/$s"
 g -C "$r" add -A; g -C "$r" commit -qm spec; c1="$(git -C "$r" rev-parse HEAD)"
 cp "$fx/a-edited.spec.html" "$r/$s"; g -C "$r" commit -qam edit; c2="$(git -C "$r" rev-parse HEAD)"
 
+export XDG_STATE_HOME="$t/xdg"; state="$t/xdg/spec-chat"   # fixture rows; the real registry case is last
 mkdir -p "$state/hosting/default" "$state/hosting/other"
 SPOOL_SIDE=human; spool="$r/$s.review/$SPOOL_SIDE"   # Spec Chat's owner side of the spool
 row() { # base updated_at [extra line]
@@ -94,4 +91,17 @@ row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/host
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"session=default"* ]] || fail "a missing commit in another session hid the accepted row: $out"
 row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"is not in"* ]] || fail "registered commit missing from the repo: $out"
-echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit, versions and state dir crossed with pinned Spec Chat)"
+# The registry pinned Spec Chat's review-host writes (no --state-dir, no Herdr session),
+# under its own XDG_STATE_HOME: octo-feather-accepted finds the row, then its Accept.
+host="$sc/review-spec/scripts/review-host.py"; r0="$t/r0"
+g init -q "$r0"; mkdir -p "$r0/docs/specs"; cp "$fx/a.spec.html" "$r0/$s"
+g -C "$r0" add -A; g -C "$r0" commit -qm spec; c0="$(git -C "$r0" rev-parse HEAD)"
+export XDG_STATE_HOME="$t/xdg-host" SPEC_CHAT_APPROVED_INGRESS_PORTS=""; unset HERDR_SESSION
+trap '(cd "$r0" && python3 "$host" stop >/dev/null 2>&1) || true; rm -rf "$t"' EXIT
+out="$(cd "$r0" && python3 "$host" register --owner t --slug a-flow --base "$c0" "$s" 2>&1)" || fail "pinned review-host register: $out"
+real() { set +e; out="$("$A" "$s" --repo "$r0" 2>&1)"; rc=$?; set -e; }
+real; [[ "$rc" == 1 && "$out" == *"a-flow: no hand-off"* ]] || fail "row review-host wrote not found: rc=$rc $out"
+spool="$r0/$s.review/$SPOOL_SIDE"; handoff 1792509686764211301 real1 "$V1"
+real; [[ "$rc" == 0 && "$out" == "accepted $c0 slug=a-flow "*" session=default "*"handoff=real1" ]] || fail "Accept on the registered row: rc=$rc $out"
+(cd "$r0" && python3 "$host" stop >/dev/null) || fail "pinned review-host stop"
+echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit; versions and registry from pinned Spec Chat: review-host register, then Accept)"

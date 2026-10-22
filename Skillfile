@@ -38,6 +38,12 @@ github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d4
 # reviewer reads only references/code-quality-review.md and references/lead-judgment.md (roles spec #roles-reviewer-patch).
 github  skill  interrogate      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/interrogate
 
+# Fetch-only (#96): pinned and fetched like the entries above, never installed or vendored
+# (a comment to skillfile). The kit's tests run Spec Chat only from here, written out by
+# `scripts/check-vendored --extract spec-chat DEST`, never from the box's clone. To move it:
+# change the sha, `just vendored-fetch`, `just check`.
+#fetch-only  github  skill  spec-chat  0xTomDaniel/spec-chat@077c6b9030dfc6d0fc4f82b902dc2c4a5f7e899b  skill
+
 # octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
 local  skill  commit                  .agents/skills/commit
 local  skill  github                  .agents/skills/github
