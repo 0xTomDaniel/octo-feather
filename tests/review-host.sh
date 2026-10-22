@@ -4,18 +4,23 @@
 # pane's PATH, --help passes through, register refuses a page with no Spec Chat
 # runtime, and re-registering at a new commit keeps the link and leaves only the
 # registry's own review-serve, also where review-host.py cannot see the live
-# server (macOS has no /proc: a test copy of the clone stands in). Only --test
-# rows in a temp state dir on loopback; every server it starts is stopped.
-# Run by `just check`.
+# server (no /proc, as on macOS: register runs in a user+mount namespace with
+# /proc covered, `ps` reading the real one, as macOS ps reads the kernel), and a
+# process that only names the registry is never stopped. Only --test rows in a
+# temp state dir with a space in its path, on loopback; every process it starts
+# is stopped. No Spec Chat file is copied or changed. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 clone="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}"
 if [[ ! -f "$clone/skill/review-spec/scripts/review-host.py" ]]; then
   echo "review-host: skipped (no Spec Chat clone at $clone)"; exit 0
 fi
+clone="$(cd "$clone" && pwd -P)"; server="$clone/skill/review-spec/assets/review-serve.py"
 t="$(mktemp -d)"
-state="$t/state"; registry="$state/registry.toml"
-serve_pids() { ps -Ao pid=,args= | awk -v r="$registry" '/review-serve\.py/ && index($0, "--registry " r) {print $1}' | sort; }
+state="$t/state space"; registry="$state/registry.toml"
+# Real review-serve processes on this registry: a python whose argv runs $server on it.
+serve_pids() { ps -Aww -o pid=,args= | awk -v s="$server --registry $registry --bind " \
+  '{p=index($0, s)} p && substr($0, 1, p-1) ~ /^ *[0-9]+ [^ ]*python[0-9.]* $/ {print $1}' | sort; }
 cleanup() {
   local p
   for p in $(serve_pids); do kill "$p" 2>/dev/null || true; done
@@ -83,27 +88,74 @@ check_link() { # $1: version
 }
 check_link v2
 
-# 4. A review-serve on this registry that the registry does not own is stopped by the next register.
-mkdir -p "$t/pids"
-setsid sh -c 'echo $$ > "$1"; shift; exec "$@"' sh "$t/pids/stray" python3 "$clone/skill/review-spec/assets/review-serve.py" \
-  --registry "$registry" --bind 127.0.0.1 --port 0 --host 127.0.0.1 >/dev/null 2>&1 &
-for _ in $(seq 50); do [[ "$(serve_pids | wc -l)" == 2 ]] && break; sleep 0.1; done
-[[ "$(serve_pids | wc -l)" == 2 ]] || fail "stray review-serve did not start"
+# 4. A process that only names this registry is never stopped, even by a register that then fails:
+#    the reviewed repro, one passing the real script path as a plain argument, one running another review-serve.py.
+mkdir -p "$t/pids" "$t/other"
+bg() { local name="$1"; shift; setsid sh -c 'echo $$ > "$1"; shift; exec "$@"' sh "$t/pids/$name" "$@" >/dev/null 2>&1 & }
+printf 'import time\ntime.sleep(90)\n' > "$t/other/review-serve.py"
+bg sleeper python3 -c "import time; time.sleep(90)" review-serve.py --registry "$registry"
+bg lookalike python3 -c "import time; time.sleep(90)" "$server" --registry "$registry" --bind 127.0.0.1 --port 1 --host 127.0.0.1
+bg otherscript python3 "$t/other/review-serve.py" --registry "$registry" --bind 127.0.0.1 --port 1 --host 127.0.0.1
+plain="$t/plain"  # the reviewed repro word for word: a state path without a space
+bg plainsleeper python3 -c "import time; time.sleep(90)" review-serve.py --registry "$plain/registry.toml"
+for _ in $(seq 50); do [[ -s "$t/pids/sleeper" && -s "$t/pids/lookalike" && -s "$t/pids/otherscript" && -s "$t/pids/plainsleeper" ]] && break; sleep 0.1; done
+set +e; out="$("$kit/scripts/review-host" register --state-dir "$plain" --test --slug w65 --owner test/w65 \
+  --base HEAD docs/specs/missing.spec.html 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] || fail "register of a missing spec passed: $out"
+kill -0 "$(cat "$t/pids/plainsleeper")" 2>/dev/null || fail "failing register stopped the repro sleeper: $out"
+kill -- "-$(cat "$t/pids/plainsleeper")"; rm "$t/pids/plainsleeper"
+alive() { local n; for n in sleeper lookalike otherscript; do kill -0 "$(cat "$t/pids/$n")" 2>/dev/null || fail "$1: $n was stopped: $out"; done; }
+set +e; out="$("$kit/scripts/review-host" register --state-dir "$state" --test --slug w65 --owner test/w65 \
+  --base HEAD docs/specs/missing.spec.html 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] || fail "register of a missing spec passed: $out"
+alive "failing register"
 page v3 "$script"; reg; [[ "$rc" == 0 && "$(link)" == "$first" ]] || fail "register v3: $out"
+alive "register"
+[[ "$(grep -c 'left pid .* running: it names' <<<"$out")" == 3 ]] || fail "lookalikes not reported: $out"
+for n in sleeper lookalike otherscript; do kill -- "-$(cat "$t/pids/$n")"; rm "$t/pids/$n"; done
 check_link v3
 
-# 5. Where review-host.py cannot see its live server (no /proc, as on macOS), the link still holds and the
-#    old server is gone. A copy of the clone whose process_cmdline finds nothing stands in.
-mkdir -p "$t/mac/skill"; cp -r "$clone/skill/review-spec" "$t/mac/skill/"
-python3 - "$t/mac/skill/review-spec/scripts/review-host.py" <<'EOF'
-import sys; p = sys.argv[1]; s = open(p).read()
-assert "def process_cmdline(pid: int) -> list[str] | None:\n" in s, "Spec Chat's process_cmdline changed; update this stand-in"
-s = s.replace("def process_cmdline(pid: int) -> list[str] | None:\n", "def process_cmdline(pid: int) -> list[str] | None:\n    return None\n", 1)
-open(p, "w").write(s)
-EOF
-before="$(serve_pids)"
-page v4 "$script"; SPEC_CHAT_CLONE="$t/mac" reg; [[ "$rc" == 0 ]] || fail "register v4 without /proc: $out"
-[[ "$(link)" == "$first" ]] || fail "without /proc the link moved: $first -> $(link)"
-[[ "$(serve_pids)" != "$before" ]] || fail "without /proc the old server was not replaced"
+# 5. A real review-serve on this registry that the registry does not own is stopped by the next register.
+bg stray python3 "$server" --registry "$registry" --bind 127.0.0.1 --port 0 --host 127.0.0.1
+for _ in $(seq 50); do [[ "$(serve_pids | wc -l)" == 2 ]] && break; sleep 0.1; done
+[[ "$(serve_pids | wc -l)" == 2 ]] || fail "stray review-serve did not start"
+stray="$(cat "$t/pids/stray")"
+page v4 "$script"; reg; [[ "$rc" == 0 && "$(link)" == "$first" ]] || fail "register v4: $out"
+[[ "$out" == *"stopped review-serve pid $stray,"* ]] || fail "stray $stray not reported stopped: $out"
 check_link v4
-echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, re-register keeps link and only the owned server, stray stopped, no-/proc link kept)"
+
+# 6. Where review-host.py cannot see its live server (no /proc, as on macOS), the link holds and the old server
+#    is gone: register runs in a user+mount namespace with tmpfs over /proc; `ps` (macOS-style, args joined by
+#    spaces) reads the real /proc, bound aside before it is covered. It also prints the odd lines a busy box
+#    yields (a blank line, a pid and uid with no args): register skips them, never crashes or kills on them.
+mkdir -p "$t/realproc" "$t/psbin"
+cat > "$t/psbin/ps" <<'PY'
+#!/usr/bin/env python3
+import os
+proc = os.environ["FAKE_PS_PROC"]
+print()
+print(os.getpid(), os.getuid())
+for pid in filter(str.isdigit, os.listdir(proc)):
+    try:
+        argv = open(f"{proc}/{pid}/cmdline", "rb").read().rstrip(b"\0").split(b"\0")
+        uid = os.stat(f"{proc}/{pid}").st_uid
+    except OSError:
+        continue
+    if argv != [b""]:
+        print(pid, uid, b" ".join(argv).decode(errors="replace"))
+PY
+chmod +x "$t/psbin/ps"
+noproc() { unshare -rm sh -c 'mount --rbind /proc "$1" && mount -t tmpfs none /proc && shift && exec "$@"' sh "$t/realproc" "$@"; }
+if ! noproc sh -c '! test -e /proc/self' 2>/dev/null; then
+  echo "review-host: ok (no-/proc case skipped: unshare -rm cannot cover /proc here)"
+else
+  before="$(serve_pids)"
+  page v5 "$script"
+  set +e; out="$(FAKE_PS_PROC="$t/realproc" PATH="$t/psbin:$PATH" noproc "$kit/scripts/review-host" register \
+    --state-dir "$state" --test --slug w65 --owner test/w65 --base HEAD docs/specs/x.spec.html 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 0 ]] || fail "register v5 without /proc: $out"
+  [[ "$(link)" == "$first" ]] || fail "without /proc the link moved: $first -> $(link)"
+  [[ "$(serve_pids)" != "$before" ]] || fail "without /proc the old server was not replaced"
+  check_link v5
+fi
+echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, re-register keeps link and only the owned server, lookalikes left running and reported, stray stopped, no-/proc link kept; state path with a space)"
