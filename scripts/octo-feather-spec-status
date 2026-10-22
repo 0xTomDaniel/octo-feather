@@ -21,13 +21,14 @@ append-only, one judgement call per line:
    "passes_as_written": false, "evidence": "<failing command, error, or two
    contradicting spec lines>", "commit": "<optional sha>",
    "denied": {"at": "...", "note": "..."} (optional, written when the owner denies)}
-`check` fails on a line that is not JSON, a missing or empty field, a role other
+`check` fails on a line that is not JSON, a missing, empty or whitespace-only field, a role other
 than supervisor, passes_as_written not false, an unknown kind, or a criterion id
 in neither the spec nor the spec at accepted_commit. It then compares the spec
 at accepted_commit (git show, from the spec's own repo, so a shallow clone needs
 full history) with the working tree, element by data-anchor: each element's own
-content, nested anchored elements cut out, whitespace normalized; content outside
-any anchored element is anchor "(page)". Every added, removed or changed anchor
+content, each nested anchored element cut out and replaced by a placeholder naming
+it (so moving or reordering a child changes its parents), whitespace normalized;
+content outside any anchored element is anchor "(page)". Every added, removed or changed anchor
 must be named in `anchors` by a call without `denied`; a removed criterion needs
 such a call of kind weakens, an added one of kind adds.
 """
@@ -109,7 +110,7 @@ PAGE = "(page)"
 
 
 class _Anchors(HTMLParser):
-    """Each data-anchor element's own content, nested anchored elements cut out."""
+    """Each data-anchor element's own content, each nested anchored element replaced by a placeholder naming it."""
 
     def __init__(self):
         super().__init__(convert_charrefs=True); self.stack = []; self.parts = {PAGE: []}
@@ -121,8 +122,14 @@ class _Anchors(HTMLParser):
         a = " ".join(f'{k}="{v}"' if v is not None else k for k, v in attrs)
         return f"<{tag}{' ' + a if a else ''}{close}>"
 
+    def _child(self, anchor):
+        """Mark an anchored child's place in its parent's own content: identity, order, parentage."""
+        if anchor is not None:
+            self.parts.setdefault(self._owner(), []).append(f"<{{anchor {anchor}}}>")
+
     def handle_starttag(self, tag, attrs):
         anchor = dict(attrs).get("data-anchor")
+        self._child(anchor)
         if tag in VOID:
             self.parts.setdefault(anchor or self._owner(), []).append(self._tag(tag, attrs)); return
         self.stack.append((tag, anchor))
@@ -130,6 +137,7 @@ class _Anchors(HTMLParser):
 
     def handle_startendtag(self, tag, attrs):
         anchor = dict(attrs).get("data-anchor")
+        self._child(anchor)
         self.parts.setdefault(anchor or self._owner(), []).append(self._tag(tag, attrs, "/"))
 
     def handle_endtag(self, tag):
@@ -201,9 +209,10 @@ def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
         if not isinstance(c, dict):
             errs.append(f"{where}: not a JSON object; fix: one JSON call per line"); continue
         where = f"{where}: {call_name(c)}"
-        bad = [f for f in FIELDS if f not in c or c[f] in (None, "", [])]
+        bad = [f for f in FIELDS if f not in c or c[f] in (None, "", [])
+               or (isinstance(c[f], str) and not c[f].strip())]
         bad += [f for f in ("anchors", "criteria") if f not in bad and not (
-            isinstance(c[f], list) and all(isinstance(x, str) and x for x in c[f]))]
+            isinstance(c[f], list) and all(isinstance(x, str) and x.strip() for x in c[f]))]
         bad += [f for f in FIELDS if f not in bad and f not in ("anchors", "criteria", "passes_as_written")
                 and not isinstance(c[f], str)]
         if bad:

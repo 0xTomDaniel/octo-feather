@@ -49,20 +49,20 @@ run "$r"; want 0 "logged change"
 call clarifies acceptance-a acceptance-a ', "denied": {"at": "2026-10-21T11:00:00Z", "note": "no"}' >"$L"
 run "$r"; want 1 "denied call" "anchor acceptance-a changed"
 
-# A removed criterion needs a weakens call, an added one an adds call.
+# A removed criterion needs a weakens call, an added one an adds call; its parent section changed too.
 git -C "$r" checkout -q -- docs/specs; rm -f "$L"
 perl -ni -e 'print unless /data-anchor="acceptance-b"/' "$d/demo.spec.html"
 perl -0pi -e 's/,\s*"acceptance-b": \{[^}]*\}//' "$d/demo.status.json"
 call clarifies acceptance-b acceptance-b >"$L"
 run "$r"; want 1 "removed criterion, clarifies" "criterion acceptance-b removed since accepted_commit" "kind weakens"
-call weakens acceptance-b acceptance-b >"$L"
+call weakens 'acceptance-b", "acceptance' acceptance-b >"$L"
 run "$r"; want 0 "removed criterion, weakens"
 git -C "$r" checkout -q -- docs/specs; rm -f "$L"
 perl -pi -e 'print s/acceptance-b/acceptance-c/gr if /data-anchor="acceptance-b"/' "$d/demo.spec.html"
 perl -0pi -e 's/("acceptance-b": \{[^}]*\})/$1, "acceptance-c": {"status": "planned", "pr": null}/' "$d/demo.status.json"
 call clarifies acceptance-c acceptance-c >"$L"
 run "$r"; want 1 "added criterion, clarifies" "criterion acceptance-c added since accepted_commit" "kind adds"
-call adds acceptance-c acceptance-c >"$L"
+call adds 'acceptance-c", "acceptance' acceptance-c >"$L"
 run "$r"; want 0 "added criterion, adds"
 
 # Each log rule fails naming file, line and fix.
@@ -75,12 +75,44 @@ bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/gh77/; s/"evi
   "empty evidence" "demo.calls.jsonl:2: call (lane gh77; anchors acceptance-a): missing or empty field evidence"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/gh77/; s/, "evidence": "e"//')" \
   "missing evidence" "demo.calls.jsonl:2: call (lane gh77; anchors acceptance-a): missing or empty field evidence"
+# Whitespace-only counts as empty, for evidence and every other required string.
+bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/gh77/; s/"evidence": "e"/"evidence": "  \\n\\t"/')" \
+  "blank evidence" "demo.calls.jsonl:2: call (lane gh77; anchors acceptance-a): missing or empty field evidence"
+bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/"what": "w"/"what": " \\t"/')" "blank what" "missing or empty field what"
+bad "$(call clarifies ' ' acceptance-a)" "blank anchor" "missing or empty field anchors"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/"supervisor"/"implementer"/')" "role" "role 'implementer'"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/: false/: true/')" "passes_as_written" "passes_as_written must be false"
 bad "$(call tweaks acceptance-a acceptance-a)" "kind" "kind 'tweaks' is not one of"
 bad "$(call clarifies acceptance-a acceptance-q)" "unknown criterion" "criterion acceptance-q is in neither"
 
+# #acceptance-call-guard, structure: moving an unchanged criterion between anchored sections, or
+# reordering two anchored siblings, changes the parents, so it needs a call naming them.
+m="$t/move"; mkdir -p "$m/docs/specs"; md="$m/docs/specs"; ML="$md/demo.calls.jsonl"
+crit() { printf '<p data-acceptance-criterion data-anchor="%s">Given a user, When %s runs, then it prints ok.</p>\n' "$1" "$1"; }
+mspec() { # mspec REQUIRED_CRITERIA... -- OPTIONAL_CRITERIA...
+  printf '<!doctype html>\n<html><body><article data-spec-contract="shaped-sections-v1">\n'
+  printf '<section data-anchor="acceptance-required"><h2>Required</h2>\n'
+  while [[ $# -gt 0 && "$1" != -- ]]; do crit "$1"; shift; done; shift
+  printf '</section>\n<section data-anchor="acceptance-optional"><h2>Optional</h2>\n'
+  for c in "$@"; do crit "$c"; done
+  printf '</section>\n</article></body></html>\n'; }
+mspec acceptance-a acceptance-b -- >"$md/demo.spec.html"
+git init -q "$m"; git -C "$m" add -A; git -C "$m" commit -qm accepted
+printf '{"spec": "demo.spec.html", "accepted_commit": "%s", "criteria": {"acceptance-a": {"status": "planned", "pr": null}, "acceptance-b": {"status": "planned", "pr": null}}}\n' \
+  "$(git -C "$m" rev-parse --short HEAD)" >"$md/demo.status.json"; git -C "$m" add -A; git -C "$m" commit -qm status
+run "$m"; want 0 "structured spec unchanged"
+mspec acceptance-b -- acceptance-a >"$md/demo.spec.html"
+run "$m"; want 1 "moved criterion, no call" "anchor acceptance-optional changed since accepted_commit" \
+  "anchor acceptance-required changed since accepted_commit"
+grep -qF "anchor acceptance-a " <<<"$out" && fail "unchanged moved criterion reported as changed: $out"
+call clarifies 'acceptance-required", "acceptance-optional' acceptance-a >"$ML"
+run "$m"; want 0 "moved criterion, call names both sections"
+rm -f "$ML"; mspec acceptance-b acceptance-a -- >"$md/demo.spec.html"
+run "$m"; want 1 "reordered siblings, no call" "anchor acceptance-required changed since accepted_commit"
+call clarifies acceptance-required acceptance-a >"$ML"
+run "$m"; want 0 "reordered siblings, call names the parent"
+
 # An accepted_commit missing from the repo is named.
 perl -pi -e 's/"accepted_commit": "[0-9a-f]+"/"accepted_commit": "deadbee"/' "$d/demo.status.json"; rm -f "$L"
 run "$r"; want 1 "missing accepted_commit" "accepted_commit deadbee is not in this repo" "fetch full history"
-echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, missing commit)"
+echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, blank fields, move, reorder, missing commit)"
