@@ -4,11 +4,11 @@ Not for the first pilot project. Each item names what it would replace and what 
 
 ## A2A instead of lane records and handoffs.jsonl
 
-Replace octo-lite's lane record plus `<lane>.handoffs.jsonl` and the `herdr-say` text protocol with the A2A (Agent2Agent) protocol. Exo's working assumption, from memory of the spec and not checked on 2026-10-18: an A2A Task (id, status history, messages, artifacts) is roughly a lane record and its handoff log done properly, and A2A messages replace `herdr-say`. Verify against the current spec before designing. See ADR 0003.
+Replace the lane record plus `<lane>.handoffs.jsonl` and the `herdr-say` text protocol with the A2A (Agent2Agent) protocol. Exo's working assumption, from memory of the spec and not checked on 2026-10-18: an A2A Task (id, status history, messages, artifacts) is roughly a lane record and its handoff log done properly, and A2A messages replace `herdr-say`. Verify against the current spec before designing. See ADR 0003.
 
 ## Spec Chat wake provider registration
 
-octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`providers/wake.toml`). The port dropped the installer, so a spec review hand-off cannot wake a supervisor until that registration is done by hand or by a `just` recipe. Needed once spec-chat review hosting runs on the remote.
+Nothing registers `herdr-wake` as Spec Chat's `wake` provider (`providers/wake.toml`), so a spec review hand-off cannot wake a supervisor until that registration is done by hand or by a `just` recipe. Needed once spec-chat review hosting runs on the remote.
 
 ## `just qc` and `just qa`
 
@@ -48,7 +48,7 @@ Jev shadow on one question, "Does this ticket change something a user can see or
 
 ## Landing agent
 
-A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the merge itself, per spec `#gates-merge` (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
+A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes. Today the lane's supervisor runs the merge itself, per spec `#gates-merge` (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
 
 ## Criterion status on the spec page
 
@@ -70,7 +70,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor, fan-out (Tom's spec comment): after the pilot, two independent tickets get two implementers at once. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Implementer and code reviewer, new pstack skills (principle-prove-it-works, blast-radius): the implementer reports with a re-runnable proof; the reviewer names the one safety fact and how far it was proven. Smoke: `evidence/2026-10-19-role-probes.md`.
 - Owner shaping chat (`just shape`): asked to change factory code, it shapes a spec instead, using only the shaping skills. Smoke: `evidence/2026-10-19-role-probes.md`.
-- Implementer, language skills (python, typescript from scaling-octo-engine@ef11d2b9): in a template copy, a new CLI command gets integration/E2E tests only (no unit tier), `just check` as the gate, basedpyright strict in Python, Zod 4 `z.strictObject` only where a new TS repo validates wire input. Smoke: `evidence/2026-10-19-language-skills-smoke.md`.
+- Implementer, language skills (python, typescript): in a template copy, a new CLI command gets integration/E2E tests only (no unit tier), `just check` as the gate, basedpyright strict in Python, Zod 4 `z.strictObject` only where a new TS repo validates wire input. Smoke: `evidence/2026-10-19-language-skills-smoke.md`.
 - Director, kickoff brief and merges (agents/director.md Merges, `docs/kickoff-brief.md`): a kickoff whose brief lacks TOOLING; the director asks the owner before cutting a lane, copies TOOLING, GATE, QA PATH and FACTORY into the lane brief, and merges neither its spec PR nor a lane PR. Smoke: `evidence/2026-10-20-kit-polish.md` (no model run yet).
 - Supervisor, hand-in repo (docs/adr/0017): a target the kit did not create, whose justfile has only `check`; the supervisor integrates with `octo-feather-integrate`, adds no `integrate` or `qc` recipe and commits no `*.review/` state. Smoke: `evidence/2026-10-20-kit-polish.md` (deterministic part only).
 - Supervisor, head-pinned merge (spec `#gates-merge`, docs/adr/0007): one eval per case the rule names, each judged against its criterion: (a) head unchanged (spec `#acceptance-merge-approved-head`), (b) lane head took a merge of main after the ask (spec `#acceptance-merge-main-merged`), (c) a fix commit after the ask (spec `#acceptance-merge-head-moved`). Smoke: `evidence/2026-10-19-merge-teardown-smoke.md` (lane #5 chain; role probes (a) to (c), refined merge rule).

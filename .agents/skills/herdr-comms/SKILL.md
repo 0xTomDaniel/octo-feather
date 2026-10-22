@@ -5,8 +5,7 @@ description: Spawn Herdr agents and send them messages, over native Herdr.
 
 # herdr-comms
 
-Thin wrappers over native Herdr, ported from octo-lite
-(`varelaseb/octo-lite@cc6fa4e`, Apache-2.0) and cut to Pi only. Herdr itself
+Thin wrappers over native Herdr, for Pi agents only. Herdr itself
 owns the transport; these exist only for the failure modes it leaves to the
 caller, and for parking an idle Pi agent so it holds no memory while it waits.
 

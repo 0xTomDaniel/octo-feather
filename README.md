@@ -10,4 +10,4 @@ just start [DIR]          # director in Herdr workspace `director`
 just supervise N [WORKTREE]  # supervisor for GitHub issue N in workspace `gh<N>`, tab `supervisor`
 ```
 
-Derived in part from octo-lite (Sebastian Varela, Apache-2.0); see NOTICE.
+Apache-2.0 (LICENSE). Third-party notices: NOTICE and LICENSES/.

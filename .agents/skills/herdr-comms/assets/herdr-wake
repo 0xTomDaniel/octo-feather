@@ -13,7 +13,6 @@
 # Herdr session SESSION, so a review service of one session wakes a supervisor in
 # another. Herdr selects the session by HERDR_SESSION unless HERDR_SOCKET_PATH
 # pins one, so the socket is dropped.
-# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 set -uo pipefail
 
 usage() { echo "usage: herdr-wake check OWNER | send OWNER ARTIFACT MESSAGE" >&2; exit 64; }

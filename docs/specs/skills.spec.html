@@ -14,12 +14,12 @@
 <header data-anchor="header">
 <h1 data-anchor="title">Skills and their sources</h1>
 <nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / skills.spec.html</nav>
-<p class="lede" data-anchor="context">Skills are plain folders in <code>.agents/skills/</code>, the cross-client Agent Skills location (ADR 0018). Skills with an upstream in Matt Pocock's skills or pstack are vendored from it and patched only where a decided ADR needs it; octo-lite supplies requirements, not skill text.</p>
+<p class="lede" data-anchor="context">Skills are plain folders in <code>.agents/skills/</code>, the cross-client Agent Skills location (ADR 0018). Skills with an upstream in Matt Pocock's skills or pstack are vendored from it and patched only where a decided ADR needs it.</p>
 </header>
 
 <section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
 <h2>User stories</h2>
-<p data-user-story data-user-facing="false" data-anchor="story-upstream-base">As a maintainer, every skill with a Matt or pstack equivalent uses that upstream text plus a small patch, so the kit stays lighter than octo-lite and picks up upstream fixes.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-upstream-base">As a maintainer, every skill with a Matt or pstack equivalent uses that upstream text plus a small patch, so the kit stays light and picks up upstream fixes.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-patch-reason">As a maintainer, every patch says on its first line which decision it serves, so I can tell whether it is still needed.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-role-skills">As the owner, each role loads only the skills its role file lists, so one role's instructions never leak into another.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-licences">As the owner, every vendored skill's licence and author is credited, so the kit can be shared.</p>
@@ -76,7 +76,7 @@
 <tr data-anchor="local-herdr-comms"><td><code>herdr-comms</code></td><td>Spawning, messaging, parking, waking and closing agents, with the Herdr wrappers in its assets</td></tr>
 <tr data-anchor="local-github"><td><code>github</code></td><td>Issues, pull requests and consent rules</td></tr>
 <tr data-anchor="local-git"><td><code>commit</code>, <code>pull</code>, <code>push</code></td><td>Git moves</td></tr>
-<tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers. <code>python</code> and <code>typescript</code> are the owner's scaling-octo-engine skills, ported with changes only to their unit-test, octo-workflow and command lines; the kit still has no unit tests (ADR 0002)</td></tr>
+<tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers. <code>python</code> and <code>typescript</code> are the kit's own; the kit has no unit tests (ADR 0002)</td></tr>
 </tbody>
 </table>
 </div>

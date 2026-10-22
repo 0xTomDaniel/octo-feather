@@ -4,4 +4,4 @@ Work items are GitHub issues: each lane has one parent issue, and its tickets ar
 
 ## Considered options
 
-- Linear, which octo-lite and scaling-octo-engine both assume. Rejected: a second account and API for one person's work.
+- Linear. Rejected: a second account and API for one person's work.

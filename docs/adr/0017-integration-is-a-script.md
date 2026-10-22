@@ -4,7 +4,7 @@ The supervisor integrates with `just integrate N REF...` (`scripts/octo-feather-
 
 ## Considered options
 
-- An integrator agent (octo-lite's role). Rejected: a model call per merge for work git does deterministically, and a second writer with judgement over conflicts that an implementer resolves better in its own worktree.
+- An integrator agent. Rejected: a model call per merge for work git does deterministically, and a second writer with judgement over conflicts that an implementer resolves better in its own worktree.
 
 ## Consequences
 

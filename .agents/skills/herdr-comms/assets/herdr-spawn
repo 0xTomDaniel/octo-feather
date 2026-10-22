@@ -1,8 +1,6 @@
 #!/usr/bin/env bash
 # Spawn one Pi agent in its own Herdr tab, at a given worktree, under a role.
 #
-# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0); Pi only.
-#
 # This is a thin wrapper over two native Herdr commands:
 #   herdr tab create   -> a tab and root pane at the worktree
 #   herdr agent start  -> the agent adopts that pane

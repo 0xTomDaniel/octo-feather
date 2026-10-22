@@ -5,7 +5,7 @@ The agent that owns one lane under the director is called the **supervisor**: th
 ## Considered options
 
 - **Lane owner**: describes plumbing (a lane is state, not a job) and reads as a component, not an accountable role.
-- **Orchestrator** (octo-lite's name): describes plumbing too, and invites the agent to do the work itself, which ADR 0007 forbids.
+- **Orchestrator**: describes plumbing too, and invites the agent to do the work itself, which ADR 0007 forbids.
 - **Production supervisor** (Exomachina) and **issue supervisor**: tied to software production and to GitHub's word for a work item.
 
 ## Consequences
