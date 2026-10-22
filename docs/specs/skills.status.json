@@ -1,6 +1,6 @@
 {
   "spec": "skills.spec.html",
-  "accepted_commit": "72c31e1277fd05290d24ad9c39b353bffe361cc1",
+  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
   "criteria": {
     "acceptance-patch-only": {
       "status": "built",

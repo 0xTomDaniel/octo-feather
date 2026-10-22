@@ -1,6 +1,6 @@
 {
   "spec": "remote.spec.html",
-  "accepted_commit": "bfb3a92",
+  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
   "criteria": {
     "acceptance-login-gate": {
       "status": "built",
