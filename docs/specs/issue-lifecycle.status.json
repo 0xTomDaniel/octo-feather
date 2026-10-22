@@ -47,8 +47,8 @@
       "pr": null
     },
     "acceptance-one-head": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 91
     },
     "acceptance-qc-interim": {
       "status": "built",
