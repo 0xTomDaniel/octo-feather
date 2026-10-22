@@ -7,22 +7,53 @@
 # proof aborts before the judge, leftovers are killed and agents counted,
 # masks cannot be unmounted, a nested-namespace survivor dies, no judge write
 # persists (the worktree is an overlay on the run tmpfs; credential copies vanish), a pane
-# the judge spawns runs in its PID namespace and dies with it (real herdr when
-# installed, else the fake; the test prints which),
+# the judge spawns runs in its PID namespace and dies with it (the fake herdr; the box's
+# real herdr only with QC_TEST_HERDR=real, `just qc-real-herdr`; the test prints which),
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
+# Offline and bounded (#55): the test re-runs itself in a fresh user+network namespace
+# (`unshare -cn`, no route anywhere, proved below), each qc run is killed after
+# QC_TEST_RUN_TIMEOUT s (default 90) and the whole test after QC_TEST_TIMEOUT s (default 600),
+# failing with a message naming what hung.
 set -euo pipefail
 # A test harness, not a gate recipe reaching the judge: its fake-pi runs start outside any check run (the one
 # boundary; octo-feather-qc refuses under the marker, whatever pi it would launch).
 unset OCTO_FEATHER_CHECK_RUN
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
+if [[ -z "${QC_TEST_NETNS:-}" ]]; then
+  unshare -cn true 2>/dev/null || { echo "qc test: unshare -cn failed: the test runs offline in a user+network namespace (enable unprivileged user namespaces)" >&2; exit 1; }
+  set +e; QC_TEST_NETNS=1 timeout -k 10 "${QC_TEST_TIMEOUT:-600}" unshare -cn "$0" "$@"; rc=$?; set -e
+  [[ "$rc" != 124 && "$rc" != 137 ]] || echo "qc test: timed out after ${QC_TEST_TIMEOUT:-600} s (QC_TEST_TIMEOUT), killed" >&2
+  exit "$rc"
+fi
+fail() { echo "qc test: $*" >&2; exit 1; }
+python3 - <<'EOF' || fail "network reachable: the test must run with no route (unshare -cn)"
+import errno, socket, sys
+for fam, addr in ((socket.AF_INET, ("192.0.2.1", 9)), (socket.AF_INET6, ("2001:db8::1", 9))):
+    try:
+        s = socket.socket(fam, socket.SOCK_STREAM); s.settimeout(2); s.connect(addr)
+    except OSError as e:
+        if e.errno in (errno.ENETUNREACH, errno.EAFNOSUPPORT, errno.EADDRNOTAVAIL):
+            continue
+        sys.exit(f"{addr[0]}: {e}")
+    sys.exit(f"{addr[0]}: connected")
+EOF
+echo "qc test: offline: no route to any network (user+network namespace)" >&2
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
-stop() { local f; for f in "$t"/pids/*; do [[ -f "$f" ]] && kill -- -"$(cat "$f")" 2>/dev/null; done; rm -rf "$t"; }
-trap stop EXIT
-fail() { echo "qc test: $*" >&2; exit 1; }
+stop() { local f p; [[ "$BASHPID" == "$$" ]] || return 0   # the test shell only, never a killed command substitution
+  for f in "$t"/pids/*; do [[ -f "$f" ]] || continue; p="$(cat "$f")"; kill -- -"$p" 2>/dev/null || true
+    for _ in $(seq 50); do kill -0 -- -"$p" 2>/dev/null || break; sleep 0.1; done; kill -9 -- -"$p" 2>/dev/null || true; done   # a Herdr server writes its snapshot as it exits
+  rm -rf "$t"; }
+trap stop EXIT; trap 'trap "" TERM; exit 143' TERM   # timeout signals twice (child, group): the 2nd must not cut stop short
+export TMPDIR="$t/tmp"; mkdir "$TMPDIR"   # qc's scratch (miss logs) lives under $t: a killed test leaves nothing
+lim="${QC_TEST_RUN_TIMEOUT:-90}"
+# One qc run; 124/137: it hung and was killed. timeout gives the run its own process group, so a killed test
+# reaches it only through stop (pids/run): the run reclaims its scratch before $t goes.
+bounded() { timeout -k 5 "$lim" "$@" & echo $! > "$t/pids/run"; wait $!; set -- $?; rm -f "$t/pids/run"; return "$1"; }
+hung() { [[ "$1" != 124 && "$1" != 137 ]] || fail "$2 hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: ${3:-}"; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 vc0="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"   # the caller's warm check-vendored cache (#69)
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
@@ -65,6 +96,7 @@ ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass"
 case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
+  hang) exec sleep 3040@TOK@ ;;
   writes) echo hacked > judge-was-here; mkdir -p scratch; echo ignored > scratch/fine; printf '```json\n{"criteria": []}\n```\n' ;;
   tracked) echo hacked >> .gitignore; rm docs/specs/demo.spec.html; printf "$ok" ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
@@ -147,16 +179,22 @@ EOF
 # Survivor checks key on a per-run token in the sleeps' argv, so concurrent test runs never collide.
 tok="$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')$$"; sed -i "s/@TOK@/$tok/g" "$t/bin/pi" "$t/fakeherdr/herdr"
 chmod +x "$t/bin/pi" "$t/fakeherdr/herdr"; base="$t/bin:$kit/scripts:$PATH"; export PATH="$t/bin:$t/fakeherdr:$kit/scripts:$PATH"
-# Sandbox Herdr mode for the pane test: the real herdr when installed (the box), else the fake (CI).
-real="$(PATH="$base" command -v herdr || true)"; mode=fake
-[[ -n "$real" && "${QC_TEST_HERDR:-}" != fake ]] && mode=real
+# Sandbox Herdr mode for the pane test: the fake, on every box and in CI; the box's real herdr
+# only on explicit opt-in (QC_TEST_HERDR=real, `just qc-real-herdr`), never by presence on PATH.
+mode="${QC_TEST_HERDR:-fake}"; real=""
+case "$mode" in
+  fake) ;;
+  real) real="$(PATH="$base" command -v herdr)" || fail "QC_TEST_HERDR=real but no herdr on PATH";;
+  *) fail "QC_TEST_HERDR must be fake or real, got '$mode'";;
+esac
 echo "qc test: sandbox Herdr mode: $mode${real:+ ($real)}" >&2
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
 git add -A; git commit -qm accepted; "$S" init docs/specs/demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null
 echo scratch/ > .gitignore; git add -A; git commit -qm spec
 st=docs/specs/demo.status.json
-run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" "$Q" "${@:2}" 2>&1)"; rc=$?; set -e
+run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" bounded "$Q" "${@:2}" 2>&1)"; rc=$?; set -e
+  hung "$rc" "FAKE_QC=$1 '${*:2}'" "$out"
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
 OCTO_FEATHER_QC_MODEL=anthropic/claude-opus-5-5 run 64 mixed $st 5 acceptance-a acceptance-b   # judge of the implementer's family
@@ -179,6 +217,14 @@ run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
 grep -q UNSANDBOXED <<< "$out" || fail "--no-sandbox not printed: $out"
 [[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain)" ]] || fail "--no-sandbox changed the status file"
 [[ "$(report '["sandbox"]')" == False ]] || fail "--no-sandbox report must record sandbox false"
+# A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no scratch behind.
+FAKE_QC=hang timeout -k 5 "$lim" "$Q" $st 5 acceptance-a --no-sandbox > /dev/null 2>&1 & hp=$!; echo "$hp" > "$t/pids/run"
+for _ in $(seq 100); do compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null && break; sleep 0.1; done
+compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null || fail "hang run: no scratch before the judge (nothing to prove)"
+kill -TERM "$hp"; set +e; wait "$hp"; rc=$?; set -e; rm -f "$t/pids/run"
+[[ "$rc" != 0 ]] || fail "hang run exited 0"
+sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls -A "$TMPDIR")"
+! pgrep -fx "sleep 3040$tok" > /dev/null || fail "killed run's judge survived"
 
 run 1 mixed $st 5 acceptance-a acceptance-b                                                     # a passes, b fails
 python3 - "$st" <<'EOF'
@@ -288,8 +334,8 @@ grep -q "NESTED exit 3" <<< "$judge" || fail "nested qc: want the inner judge to
 
 # The qc recipes pass arguments as data, never as shell source.
 for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/typescript/justfile"; do
-  set +e; o="$(just --justfile "$jf" --working-directory "$t/repo" qc "$st" 5 'acceptance-a$(touch pwned)' 'x;touch pwned2' 2>&1)"; rc=$?; set -e
+  set +e; o="$(bounded just --justfile "$jf" --working-directory "$t/repo" qc "$st" 5 'acceptance-a$(touch pwned)' 'x;touch pwned2' 2>&1)"; rc=$?; set -e; hung "$rc" "$jf qc" "$o"
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"

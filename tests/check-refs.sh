@@ -84,6 +84,10 @@ ln -s missing "$t/agents/x.md"; g add -f agents/x.md
 set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
 g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
 [[ "$rc" != 0 ]] && grep -qF 'retired-words scanner error: grep exited 2' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: grep error not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
+# The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
+expect agents/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
+expect agents/x.md "else \`octo-feather/""gh<issue-number>-<slug>\`." "docs/adr/0011"
+allow agents/supervisor.md "The lane branch is \`gh<N>\`: see docs/adr/0011. Worker branches gh<N>-* never match."
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }

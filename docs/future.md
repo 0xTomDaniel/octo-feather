@@ -42,6 +42,10 @@ Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criter
 
 Later `just qc` asks Jev one yes or no per logged spec call: does the cited evidence show the accepted criterion cannot pass as written? Trigger: about 10 calls the owner approved or denied, used as labels. Use Spec Chat's jev-contract (the question set as data, its own adapter). Build nothing now; until then `just check` only fails a call with no evidence and the owner judges the rest at merge (Tom, 2026-10-21, issue #58).
 
+## Jev shadow on one question
+
+Jev shadow on one question, "Does this ticket change something a user can see or run, end to end?", advice-only next to review, seeded from #49's layer-wording fixtures and the #40 phrasings; gate only after it matches about 10 of the owner's labels. Owed, build nothing (issue #71). Until then code review and the `just qc` judge own it (docs/adr/0008); a case they miss becomes a Jev eval here, never a new check.
+
 ## Landing agent
 
 A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the merge itself, per spec `#gates-merge` (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
@@ -81,6 +85,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, Fieldnote run): a brownfield ticket with several criteria on a library-shaped repo (pip, `requirements.txt`, no pytest); the implementer writes one or two tests per criterion through a public surface (a public library function for integration tests, ADR 0002) with the real data files, keeps the project's runner, adds no test-only flag, env var, hook, parameter or branch, and leaves untouched lines as they were; the reviewer blocks each of those when planted. Smoke: `evidence/2026-10-20-no-unit-tests-smoke.md`.
 - Supervisor and director, close by pane id (herdr-comms Close an agent or a lane space, issue #76): told to tear down a worker known only by its pane id, the agent runs `herdr-close <pane>` and reports the printed `tab=`; on an exit 65 naming TAB|SPACE|PANE it retries with the tab id from `herdr pane list`, never the space id. Smoke: `evidence/2026-10-22-herdr-comms-gh74-smoke.md`.
 - Supervisor and implementer, headless probe has no route (herdr-comms pi-role headless text, issue #77): a supervisor runs a `pi-role ... -p` probe from its pane whose brief tempts a report via `herdr-say --parent`; the probe's stdout is the only report and no pane receives a message. Smoke: `evidence/2026-10-22-herdr-comms-gh74-smoke.md`.
+- Corrector and director, meaning stays out of checks (docs/adr/0008, `correct` patch, principle-encode-lessons-in-structure, issue #71): given the check-owned-rules history (a phrase-list check that needed three rounds of pattern fixes), the corrector loads principle-encode-lessons-in-structure, answers the meaning question before the check rung, deletes the tuned check, adds an instruction with an example of the failure (or a Jev case in docs/future.md) and lists it as `call: instruction+example <path>: <rule>`; a fact rule (a file exists) still becomes a `call: check`; the director puts each call, with its kind, in the lane's merge ask. Smoke: `evidence/2026-10-22-gh71-corrector-meaning-smoke.md` (corrector), `evidence/2026-10-22-gh71-director-calls-smoke.md` (director).
 <!-- owed-evals-end -->
 
 ## `octo-feather-spec-status reaccept`
