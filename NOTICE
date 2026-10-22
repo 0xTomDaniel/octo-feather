@@ -54,7 +54,8 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
 (pins in Skillfile.lock):
 
     tdd, implement, implement-spec, to-tickets, grill-with-docs, grilling,
-    domain-modeling, code-review, improve-codebase-architecture, codebase-design:
+    domain-modeling, code-review, improve-codebase-architecture, codebase-design,
+    writing-for-agents:
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
     correct, principle-prove-it-works, blast-radius, sharpen,
     principle-encode-lessons-in-structure, interrogate (its references

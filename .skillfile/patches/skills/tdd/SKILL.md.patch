@@ -1,4 +1,4 @@
-# reason: ADR 0002 integration/e2e only: seams are public surfaces (CLI, HTTP, UI, or a public library function for integration tests) with real data, taken from the ticket's acceptance criteria, one or two tests each; no test leak into production code
+# reason: ADR 0002: seams are public surfaces only, taken from the ticket's acceptance criteria, one or two tests each; no test leak into production code
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -19,7 +19,7 @@
@@ -6,7 +6,7 @@
  A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
  
 -**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
-+**Test only at pre-agreed seams.** Before writing any test, write down the seams under test: public surfaces only (app CLI, HTTP, UI, or, for an integration test, a public library function; end-to-end tests go through the CLI, HTTP or UI, or, in a target with none, its runnable script), driven with the repo's real data files where they exist, so every test is integration or end-to-end, never a unit test of internals. Take them from the ticket's acceptance criteria, one or two tests per criterion, so the suite stays small; confirm with the user only seams the ticket does not name. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
++**Test only at pre-agreed seams.** Before writing any test, write down the seams under test: public surfaces only (docs/adr/0002), taken from the ticket's acceptance criteria, one or two tests per criterion; confirm with the user only seams the ticket does not name. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
  
  Ask: "What's the public interface, and which seams should we test?" Give each proposed seam a one-line note on what it catches and what it misses.
  

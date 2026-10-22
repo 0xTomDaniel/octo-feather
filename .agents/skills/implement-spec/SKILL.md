@@ -23,7 +23,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 3. Create the integration branch. If the issue tracker closes work through PRs, or the user asks for one, open a draft PR after the first merge in step 5 (a branch with no commits ahead of main can't open one), marked as closing the spec and tickets.
 
-4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7 (one implementer, `just integrate`, the draft PR, `just qc` on the pilot's criteria, code review of the head QC left), then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
+4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7, then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
    - calls the Skill tool with `tdd` to build the ticket;
    - merges the integration branch tip into its own branch before reporting done
@@ -32,7 +32,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
-7. Once all tickets are complete and `just check` is green, run `just qc <status file> <PR> <the lane's criterion ids>` on the integration head (docs/adr/0022): it flips the passed criteria to built in a status-only commit, and a failed one is a blocking finding. Then spawn a fresh `code-reviewer` pane on the head QC left. Never review in your own context. Which later changes to the head need `just qc` and a fresh review again is spec `#lanes-one-head` and `#gates-merge` (docs/adr/0022); read it there, never restate it. Log each QC and review finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
+7. Once all tickets are complete and `just check` is green, run `just qc` and a fresh `code-reviewer` pane as spec `#lanes-one-head` and `#gates-merge` say (docs/adr/0022); read them there, never restate them. Log each QC and review finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
 
 8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`: post the review verdict with `octo-feather-lane verdict <PR> <head> <report>`, write the merge ask (the head, each criterion's QC verdict, the review verdict link, the criterion ids flipped to built, each failed criterion with its triage) as the PR body's `## Merge ask` section, and send what `octo-feather-lane merge-ask <PR> --status <status file>` prints once it passes. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 
