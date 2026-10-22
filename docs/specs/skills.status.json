@@ -27,16 +27,16 @@
       "pr": null
     },
     "acceptance-tracker-default": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     },
     "acceptance-tracker-unknown": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     },
     "acceptance-tracker-scripts": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     }
   }
 }
