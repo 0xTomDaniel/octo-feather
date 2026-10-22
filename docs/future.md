@@ -108,7 +108,7 @@ Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. 
 - implement-spec and the python skill assumed uv/pyproject. The python skill now follows the project's own tooling, and the kickoff brief's TOOLING field names it for every lane.
 - Unit tests were written because the spec said "proven by a unit test". shape-spec must default to "a test through a public entry point" and add a minimal-change rule for brownfield targets (keep original lines and order; no test-only code in production files).
 - macOS: `just start` works without a hand-patched PATH: the kit justfile puts GNU coreutils and util-linux (`realpath -m`, `readlink -f`, `setsid`, `timeout`), Homebrew's bash 5 (`mapfile`) and mise ahead of the system's, panes inherit it, and octo-feather-start sets HERDR_SESSION from the project. Still Linux-only, and saying so: `just qc` (exit 69) and `herdr-close --park` (exit 69); a closed tab's detached children are not swept on macOS.
-- Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running.
+- Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running. Resolved by `review-host` (issue #65, `tests/review-host.sh`): the cause was review-host.py reading liveness from `/proc`, which macOS lacks, so it never saw its own server and started another on a new port. The kit command stops this state's review-serve processes that review-host.py would not see as its own before `register` (so the recorded port is reused) and any the registry does not own after it. Not reproduced on Linux, service or loopback. The lasting fix is in Spec Chat: `process_cmdline` falling back to `ps -o command= -p PID` where there is no `/proc`.
 
 ## Lessons from the Quorum run (2026-10-20/21)
 
@@ -116,4 +116,4 @@ Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. 
 - `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.
 - `herdr-say` and `octo-feather-accepted` aren't on PATH on the Mac (`herdr-say` lives in `.agents/skills/herdr-comms/assets/`).
 - Registering on macOS reports wake=unavailable, so the director can't be woken; orders went through herdr-say by hand.
-- A spec without the `.viz` assets and `<script>` renders no Spec Chat UI. Preflight should fail on that.
+- A spec without the `.viz` assets and `<script>` renders no Spec Chat UI. Preflight should fail on that. Resolved: `review-host register` refuses such a page, naming the missing `<script>` or `runtime.js` and the fix (Spec Chat's `preflight.py`); nothing is registered (issue #65).
