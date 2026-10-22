@@ -7,7 +7,7 @@
 # for a registry `accepted = true` that nothing writes. Here Accept is the
 # hand-off alone, exactly as the review page writes it.
 #
-# Spec Chat is read only at its pin (spec-chat.pin, `just vendored-fetch`), never
+# Spec Chat is read only at its pin (Skillfile fetch-only entry, `just vendored-fetch`), never
 # the box's clone (#96: a clone behind origin failed this test locally while CI,
 # with no clone, skipped the cross-check). With pinned Spec Chat the test checks:
 # - the versions: review-serve.py `_spec_page` computes V1 and V2 below for
@@ -23,7 +23,7 @@ V2=9beb7ff92e817947ef4b7a4241d7cddf36d24f84c00cbe00058240d1610c7a86   # a-edited
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
-sc="$("$kit/scripts/check-vendored" --spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
+sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
 export XDG_STATE_HOME="$t/xdg"
 got="$(python3 - "$sc/review-spec/assets" "$fx" "$t/x" <<'EOF2'
 import importlib.util, os, shutil, sys

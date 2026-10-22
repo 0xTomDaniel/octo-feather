@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Integration test for scripts/review-host (issue #65) through its CLI, over the
-# Spec Chat at its pin (spec-chat.pin, written out by `check-vendored --spec-chat`,
+# Spec Chat at its pin (the Skillfile fetch-only entry, `check-vendored --extract spec-chat`,
 # given to review-host as $SPEC_CHAT_CLONE; never the box's clone, #96): on a spawned
 # pane's PATH, --help passes through, register refuses a page with no Spec Chat
 # runtime, and re-registering at a new commit keeps the link and leaves only the
@@ -13,7 +13,7 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"
-"$kit/scripts/check-vendored" --spec-chat "$t/sc" > /dev/null || { rm -rf "$t"; echo "review-host test: no pinned Spec Chat (message above)" >&2; exit 1; }
+"$kit/scripts/check-vendored" --extract spec-chat "$t/sc" > /dev/null || { rm -rf "$t"; echo "review-host test: no pinned Spec Chat (message above)" >&2; exit 1; }
 clone="$(cd "$t/sc" && pwd -P)"; server="$clone/skill/review-spec/assets/review-serve.py"
 export SPEC_CHAT_CLONE="$clone"
 state="$t/state space"; registry="$state/registry.toml"

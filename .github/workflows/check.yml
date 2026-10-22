@@ -18,6 +18,6 @@ jobs:
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       # The gate calls no network service (docs/specs/quality.spec.html#boundary-gate), so the one
       # network step runs first, on its own: the pinned skillfile binary (sha256-checked) and each
-      # Skillfile pin commit and the spec-chat.pin commit from github.com, every call time-bounded. The gate then reads them offline.
+      # Skillfile pin commit (fetch-only entries included) from github.com, every call time-bounded. The gate then reads them offline.
       - run: just vendored-fetch
       - run: just check
