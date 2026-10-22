@@ -92,10 +92,14 @@ does both for you; see below.
 ```
 herdr-close TAB
 herdr-close SPACE
+herdr-close PANE
 ```
 
 The teardown step. An id with a colon (`w5:t2`) is a tab, one without (`w5`) is
-a space. Closes it, then sends TERM to every process of the caller's session
+a space. A pane id (`w5:p3`) is mapped to its tab through `herdr agent get`
+(as `--park` does) and closed as that tab; a pane with no Herdr agent cannot be
+mapped and fails with exit 65 naming the `TAB|SPACE|PANE` form, nothing closed.
+Closes it, then sends TERM to every process of the caller's session
 whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
 catches detached children that close alone leaves running. Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's

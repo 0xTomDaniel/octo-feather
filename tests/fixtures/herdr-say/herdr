@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Fake herdr for tests/herdr-spawn.sh and tests/herdr-say.sh. State lives in $FAKE_HERDR_DIR:
+# Fake herdr for tests/herdr-spawn.sh, tests/herdr-say.sh and tests/herdr-close.sh. State lives in $FAKE_HERDR_DIR:
 #   argv     one line per call
 #   spaces   existing workspaces, one "LABEL ID" per line
-#   agents   started agents, one "NAME PANE" per line
+#   agents   started agents, one "NAME PANE [TAB]" per line; agent get reports TAB as tab_id
 #   prompts  every delivered prompt, "TARGET<TAB>MESSAGE"
 #   closed   tab ids closed
 # A workspace create makes w8 with seed tab w8:t1; a tab create in workspace W
@@ -33,7 +33,8 @@ case "$1 $2" in
   "agent get")
     p="$(live "$3")"
     [[ -n "$p" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
-    printf '{"result":{"agent":{"agent_status":"idle","name":"%s","pane_id":"%s","workspace_id":"%s"}}}\n' "$(named "$3")" "$p" "${p%%:*}" ;;
+    printf '{"result":{"agent":{"agent_status":"idle","name":"%s","pane_id":"%s","workspace_id":"%s","tab_id":"%s"}}}\n' \
+      "$(named "$3")" "$p" "${p%%:*}" "$(awk -v t="$3" '$1 == t || $2 == t {print $3; exit}' "$d/agents")" ;;
   "agent prompt")
     [[ -n "$(live "$3")" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
     printf '%s\t%s\n' "$3" "$4" >>"$d/prompts"; echo '{"result":{}}' ;;
