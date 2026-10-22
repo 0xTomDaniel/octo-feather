@@ -96,6 +96,7 @@ ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass"
 case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
+  argv) python3 -c 'import json, sys; print("ARGV", json.dumps(sys.argv[1:]))' "$@"; printf "$ok" ;;
   hang) exec sleep 3040@TOK@ ;;
   writes) echo hacked > judge-was-here; mkdir -p scratch; echo ignored > scratch/fine; printf '```json\n{"criteria": []}\n```\n' ;;
   tracked) echo hacked >> .gitignore; rm docs/specs/demo.spec.html; printf "$ok" ;;
@@ -236,6 +237,20 @@ EOF
 [[ "$(git diff --name-only "$before" HEAD)" == "$st" && "$(git rev-list --count "$before"..HEAD)" == 1 ]] \
   || fail "expected one commit touching only the status file"
 
+# The judge launches from its own role file (agents/qc-judge.md), its model read from there: never code-reviewer.md.
+run 0 argv $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+python3 - "$kit/agents/qc-judge.md" "$judge" <<'EOF' || fail "judge not launched from agents/qc-judge.md: ${judge:0:600}"
+import json, os, re, sys
+fm, body = re.match(r"---\n(.*?)\n---\n?(.*)", open(sys.argv[1]).read(), re.S).groups()
+fm = dict(l.split(": ", 1) for l in fm.splitlines())
+a = json.loads(next(l for l in sys.argv[2].splitlines() if l.startswith("ARGV "))[5:])
+val = lambda f: [a[i + 1] for i, x in enumerate(a) if x == f]
+assert val("--append-system-prompt") == [body.strip()], "role prompt is not qc-judge.md's body"
+assert set(val("--model")) == {fm["model"]}, f"model {val('--model')} != {fm['model']}"
+assert sorted(os.path.basename(s) for s in val("--skill")) == sorted(s.strip() for s in fm["skills"].split(",")), val("--skill")
+EOF
+
 # A failed proof check aborts before the judge: here raw herdr still reaches a live session.
 FAKE_HERDR_LEAK=1 run 66 escape $st 5 acceptance-a
 grep -q "FAIL live Herdr unreachable" <<< "$out" || fail "leaking Herdr not caught by the proof: $out"
@@ -338,4 +353,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, judge from agents/qc-judge.md, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"

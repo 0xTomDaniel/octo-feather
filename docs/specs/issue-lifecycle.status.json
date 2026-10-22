@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "e3237b63efb7cb5ab90c941c086c9bb67f80cd61",
+  "accepted_commit": "175aaef2efd1e1d960b318cd0feb9830e4331259",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
@@ -47,12 +47,12 @@
       "pr": null
     },
     "acceptance-one-head": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 91
     },
     "acceptance-qc-interim": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 91
     },
     "acceptance-parallel": {
       "status": "planned",
