@@ -10,8 +10,8 @@ read-only git only: whether the smoke is adequate is review's judgment.
 - Opt-out: a role path is exempt when every non-merge commit in the range touching it
   carries a non-empty `Behaviour-neutral: <reason>` trailer (at least one such commit).
   Each opt-out is printed on every run.
-- Any other role path: the range diff must add or modify an evidence/*.md and change
-  docs/future.md, else exit 1 naming the fix.
+- Any other role path: the range diff must add or modify an evidence/*.md and a
+  docs/owed-evals/*.md (one file per issue, #80), else exit 1 naming the fix.
 
 Base: --base REF, else $OCTO_FEATHER_BASE, else origin/$GITHUB_BASE_REF (CI pull
 request), else origin/main, else main. No resolvable base or merge base: skip with a
@@ -24,7 +24,8 @@ import argparse, os, re, subprocess, sys
 
 ROLE = re.compile(r"^(agents/[^/]+\.md|\.agents/skills/.+\.md|\.skillfile/patches/.+)$")
 EVIDENCE = re.compile(r"^evidence/[^/]+\.md$")
-FUTURE = "docs/future.md"
+OWED = re.compile(r"^docs/owed-evals/[^/]+\.md$")
+OWED_FIX = "docs/owed-evals/<issue>.md"
 TRAILER = re.compile(r"^Behaviour-neutral:[ \t]*(\S.*)$", re.M)
 TAG = "check-behavior-smoke"
 
@@ -92,10 +93,11 @@ if not need:
     print(f"behavior smoke: ok ({len(roles)} role paths, all opted out)")
     sys.exit(0)
 
-evidence = [f for f in git("diff", "--name-only", "--diff-filter=AM", mb, head).split() if EVIDENCE.match(f)]
-owed = FUTURE in changed
+am = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", mb, head).split()
+evidence = [f for f in am if EVIDENCE.match(f)]
+owed = [f for f in am if OWED.match(f)]
 if evidence and owed:
-    print(f"behavior smoke: ok ({len(need)} role paths, evidence {', '.join(evidence)}, {FUTURE} changed"
+    print(f"behavior smoke: ok ({len(need)} role paths, evidence {', '.join(evidence)}, owed evals {', '.join(owed)}"
           f"{f', {len(exempt)} opted out' if exempt else ''})")
     sys.exit(0)
 
@@ -104,9 +106,9 @@ print(f"{TAG}: role paths changed since {mb[:7]} with no smoke or owed eval in t
 for f in need:
     plain = [s[:7] for s, r in touching[f] if not r]
     print(f"  {f}" + (f" ({', '.join(plain)} without Behaviour-neutral)" if plain else " (changed only in a merge)"), file=sys.stderr)
-print(f"  missing: {' and '.join(x for x, ok in (('an added or modified evidence/*.md', evidence), (f'a {FUTURE} change', owed)) if not ok)}.",
+print(f"  missing: {' and '.join(x for x, ok in (('an added or modified evidence/*.md', evidence), (f'an added or modified {OWED_FIX}', owed)) if not ok)}.",
       file=sys.stderr)
-print(f"Fix: record the live smoke in evidence/<date>-<slug>.md and its owed eval in {FUTURE} on this branch (docs/adr/0008). "
+print(f"Fix: record the live smoke in evidence/<date>-<slug>.md and its owed eval in {OWED_FIX} on this branch (docs/adr/0008). "
       f"A behaviour-neutral commit (path repair, pointer-only rewrite) instead carries the trailer "
       f"`Behaviour-neutral: <reason>` (git rebase -i, reword); the supervisor lists each opt-out in the merge ask.", file=sys.stderr)
 sys.exit(1)

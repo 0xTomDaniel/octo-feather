@@ -1,6 +1,6 @@
 # Lane archive smoke: `octo-feather-lane archive` at lane close (issue #46), 2026-10-20
 
-Smoke for the lane-close pointer in agents/supervisor.md (spec comms `#octo-lane-record-life-archive`) and the new `scripts/octo-feather-lane` (branch implementer-gh46, from gh40). ADR 0008 second paragraph; the owed eval is listed in docs/future.md (Owed eval cases). The command itself is proven by `tests/lane-archive.sh` in `just check`.
+Smoke for the lane-close pointer in agents/supervisor.md (spec comms `#octo-lane-record-life-archive`) and the new `scripts/octo-feather-lane` (branch implementer-gh46, from gh40). ADR 0008 second paragraph; the owed eval is listed in docs/owed-evals/46.md. The command itself is proven by `tests/lane-archive.sh` in `just check`.
 
 ## (a) The ticket demo, on a scratch state dir
 

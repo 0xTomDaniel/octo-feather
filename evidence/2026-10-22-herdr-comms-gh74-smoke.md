@@ -1,6 +1,6 @@
 # herdr-comms smoke, lane gh74 (issues #76, #77), 2026-10-22
 
-One file for the lane; #77 appends its section. ADR 0008 second paragraph; the owed eval is listed in docs/future.md (Owed eval cases).
+One file for the lane; #77 appends its section. ADR 0008 second paragraph; the owed eval is listed in docs/owed-evals/76.md and docs/owed-evals/77.md.
 
 ## #76 herdr-close accepts a pane id (gh76 head 6353b32)
 

@@ -1,6 +1,6 @@
 # Long-wait smoke: no shell sleep or blocking wait over ~60 s (issue #29), 2026-10-20
 
-Smoke for the herdr-comms rule (Send a message) and the one-line pointers in agents/supervisor.md and agents/director.md (implementer-gh29 head, branch implementer-gh29, from gh28). ADR 0008 second paragraph; the owed eval is listed in docs/future.md (Owed eval cases).
+Smoke for the herdr-comms rule (Send a message) and the one-line pointers in agents/supervisor.md and agents/director.md (implementer-gh29 head, branch implementer-gh29, from gh28). ADR 0008 second paragraph; the owed eval is listed in docs/owed-evals/29.md.
 
 ## (a) Headless before/after probes
 

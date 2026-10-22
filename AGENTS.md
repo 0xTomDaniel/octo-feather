@@ -24,4 +24,4 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just shape` (run in a target repo: the owner's shaping chat, Pi with only the shaping skills, not a factory role), `just state`, `just qc STATUS PR ID...` (interim product judge, docs/adr/0022) and the stub `just qa` (factory evals); neither runs inside `just check`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
-- `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.
+- `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas; `docs/owed-evals/<issue>.md` owed eval cases (docs/adr/0008).
