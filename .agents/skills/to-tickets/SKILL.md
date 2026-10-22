@@ -7,7 +7,7 @@ description: Break a plan, spec, or the current conversation into a set of trace
 
 Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-The issue tracker is GitHub Issues, through the `github` skill.
+The issue tracker is GitHub Issues, through the tracker skill.
 
 ## Process
 

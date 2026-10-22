@@ -99,3 +99,21 @@ rc=1
 - Every changed role reports `github-pr`; director, supervisor and implementer also report `github-issues`; none reports `github` or `linear`.
 
 Removed: the `github` skill (`.agents/skills/github/SKILL.md`), now `github-pr` (PRs, merge, consent) plus `github-issues` (tickets through seven scripts); its `gh issue view` and `gh issue close` lines, and "GitHub Issues is the only tracker". From the role files: `github` on each changed `skills:` line.
+
+## Follow-up run: renamed references (same fixture, rebuilt fresh)
+
+After the dangling references to the old `github` skill were renamed (supervisor merge line, push's consent link, the implement-spec and to-tickets tracker line and their patches) and `issue-view` state became `open` or `done`. Supervisor, headless, `--thinking off`, tools allowed: "You may read your skill files; change nothing and message nobody. Answer in four short lines: (1) follow the consent link in the push skill: which file and section does it open, and does that file exist? (2) per the to-tickets skill, through which skill are tickets filed? (3) per the implement-spec skill, the same question. (4) which skill's command does your role file say you merge with, and what is that command? Then (5) run the issue-view script of the tracker skill on issue 1 and give its exact output or error."
+
+Smoke: agents/supervisor.md .agents/skills/push/SKILL.md .agents/skills/to-tickets/SKILL.md .agents/skills/implement-spec/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch .skillfile/patches/skills/implement-spec/SKILL.md.patch .agents/skills/github-issues/SKILL.md
+
+```
+1. The consent link opens `../github-pr/SKILL.md#consent`, which is the `## Consent` section of `github-pr/SKILL.md`. The file exists.
+2. to-tickets files tickets through the tracker skill (GitHub Issues, which is `github-issues`).
+3. implement-spec says the same: through the tracker skill (GitHub Issues, `github-issues`).
+4. My role file says to merge with the `github-pr` skill's command: `gh pr merge <N> --merge --match-head-commit <head>`.
+5. `github-issues/scripts/issue-view 1` printed `no git remotes found` and exited with code 1.
+```
+
+(5) is the real `gh` in a target with no remote: a non-zero exit with the reason, as spec skills#tracker-scripts says.
+
+Removed: "the `github` skill" from the supervisor's merge line, the implement-spec and to-tickets tracker line (and their patches), and push's `../github/SKILL.md` consent link; `issue-view`'s raw `OPEN`/`CLOSED` state.

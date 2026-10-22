@@ -73,7 +73,7 @@ fi
 # The role file lives in this kit, never in a per-user profile.
 contract_file="$root/agents/$role.md"
 [[ -f "$contract_file" ]] || { echo "herdr-spawn: no $role role file at $contract_file" >&2; exit 66; }
-role_json="$("$root/scripts/pi-role" --json "$contract_file")" || { echo "herdr-spawn: pi-role rejected $contract_file" >&2; exit 65; }
+role_json="$(cd "$cwd" && "$root/scripts/pi-role" --json "$contract_file")" || { echo "herdr-spawn: pi-role rejected $contract_file" >&2; exit 65; }
 contract="pi-role"
 
 # A known session id makes the agent parkable: herdr-close --park records it

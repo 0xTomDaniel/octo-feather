@@ -69,14 +69,14 @@ set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
 GI="$kit/.agents/skills/github-issues/scripts"
 sn="$t/snap"; mkdir -p "$sn/issue" "$t/fake" "$t/rec"
 echo '{"repo": "o/r", "fetched_at": "2026-10-22T00:00:00Z", "counts": {}, "capped": []}' > "$sn/meta.json"
-issue() { # N PARENT BLOCKERS(json list of numbers)
+issue() { # N PARENT BLOCKERS(json list of numbers) [STATE]
   cat > "$sn/issue/$1.json" <<EOF
-{"number": $1, "title": "Issue $1", "body": "body $1", "state": "OPEN", "url": "https://github.com/o/r/issues/$1",
+{"number": $1, "title": "Issue $1", "body": "body $1", "state": "${4:-OPEN}", "url": "https://github.com/o/r/issues/$1",
  "parent": $2, "blockedBy": {"nodes": $(jq -c 'map({number: .})' <<<"$3"), "totalCount": $(jq length <<<"$3")}}
 EOF
 }
 issue 7 '{"number": 3, "title": "Parent", "url": "https://github.com/o/r/issues/3"}' '[4, 5]'
-issue 8 null '[]'
+issue 8 null '[]' CLOSED
 ln -s "$kit/.agents/skills/github-pr/scripts/gh" "$t/fake/gh"
 ghdir="$t/fake"
 off() { # WANT SCRIPT ARGS...: run with $ghdir's gh first on PATH; stdout in $out, stderr in $err
@@ -85,10 +85,10 @@ off() { # WANT SCRIPT ARGS...: run with $ghdir's gh first on PATH; stdout in $ou
   [[ "$rc" == "$want" ]] || fail "${script##*/} $* under $ghdir/gh: want exit $want, got $rc: $out $err"
 }
 off 0 issue-view 7
-[[ "$(jq -c . <<<"$out")" == '{"key":"7","title":"Issue 7","body":"body 7","state":"OPEN","url":"https://github.com/o/r/issues/7","parent":"3","blocked_by":["4","5"]}' ]] \
+[[ "$(jq -c . <<<"$out")" == '{"key":"7","title":"Issue 7","body":"body 7","state":"open","url":"https://github.com/o/r/issues/7","parent":"3","blocked_by":["4","5"]}' ]] \
   || fail "issue-view 7: $out"
 off 0 issue-view '#8'
-[[ "$(jq -c '[.key, .parent, .blocked_by]' <<<"$out")" == '["8",null,[]]' ]] || fail "issue-view 8: $out"
+[[ "$(jq -c '[.key, .state, .parent, .blocked_by]' <<<"$out")" == '["8","done",null,[]]' ]] || fail "issue-view 8: $out"
 off 1 issue-view 9; [[ -z "$out" && "$err" == *"not in snapshot"* ]] || fail "issue-view 9 reason: $out $err"
 off 1 issue-view ENG-1; [[ "$err" == *"not a GitHub issue key"* ]] || fail "issue-view ENG-1: $err"
 for k in 82 '#82' gh82 https://github.com/o/r/issues/82; do off 0 lane-key "$k"; [[ "$out" == gh82 ]] || fail "lane-key $k: $out"; done
