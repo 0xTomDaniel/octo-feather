@@ -1,8 +1,10 @@
 # Role smokes: implementer safety-fact hand-in, corrector writing-for-agents (issue #67, tickets #86, #87)
 
-Live smokes of two role changes the review of `a60d12c` found unsmoked (class missing-behavior-smoke; rule docs/adr/0008, quality#acceptance-prompt-eval). Owed eval: docs/owed-evals/67.md. One run each, no reruns. No role, patch or skill changed in this commit.
+Live smokes of two role changes the review of `a60d12c` found unsmoked (class missing-behavior-smoke; rule docs/adr/0008, quality#acceptance-prompt-eval). Owed eval: docs/owed-evals/67.md. One run each at `a60d12c` with no role change (runs 1 and 2); one corrector rerun after the role repair below (run 3).
 
-Result: implementer **pass**; corrector **fail** (it never read `writing-for-agents`).
+Result: implementer **pass**; corrector **fail** at `a60d12c` (it never read `writing-for-agents`), then **pass** after the repair below (run 3).
+
+Removed: nothing; extends the load line, incident: corrector smoke FAIL df994fd
 
 ## Harness (both runs)
 
@@ -57,7 +59,23 @@ Reply (final stdout, condensed): instruction, not a check ("a script can't decid
 
 **Fail**: the session edits a skill file without reading `writing-for-agents/SKILL.md`, before or after the edit. Listing the skill on `agents/corrector.md`'s skills line offers it; nothing in the role body or `correct` makes the corrector load it before editing a role or skill. Not fixed here (scope: no role edit); the owed eval stays owed and fails today.
 
+## Repair: corrector load line
+
+`agents/corrector.md`'s existing load line now reads: Load `principle-encode-lessons-in-structure` with `correct`, before picking a level, and `writing-for-agents` before editing a role, skill or patch. No new bullet; the skills line is unchanged.
+
+## Run 3: corrector rerun after the repair
+
+- Kit: gh67 `43a9328` plus the repaired `agents/corrector.md` (committed with this record; the run read the same bytes from the worktree before the commit).
+- Same fixture (rebuilt byte for byte; scratch was removed after run 2), same brief, same sandbox and checks (`herdr`, `herdr-say` not found, no `HERDR_*` or `OCTO_FEATHER_*`, `gh` not logged in, state under `<scratch>`). Load before the run: 3 live Pi agents, 6983 MB available, no `just check` running. One run.
+- Model `anthropic/claude-opus-5-5`, thinking medium. 30 s, rc 0, 9 tool calls.
+- Skills offered: `commit, correct, github, principle-encode-lessons-in-structure, writing-for-agents`. Read: `correct/SKILL.md`, `principle-encode-lessons-in-structure/SKILL.md`, **`writing-for-agents/SKILL.md`**.
+- Tool calls, in order: list and read the fixture; read `correct/SKILL.md`; read `principle-encode-lessons-in-structure/SKILL.md`; **read `writing-for-agents/SKILL.md`** (call 4); `octo-feather-state` lanes listing and finding grep (empty); **edit `.agents/skills/greeting-style/SKILL.md`** (call 7); edit `AGENTS.md`; `just check` and commit `968dfb7`.
+- Edit: the sentence became `A greeting is one line. Failure: `Hi Ana!` / `Great to see you.` / `How can I help today?` on three lines. Write: `Hi Ana, how can I help today?``
+
+Reply (final stdout, condensed): level "an instruction with an example of the failure" ("a script can't decide this from the repo, because no greeting output exists here to count lines in"); `call: instruction+example .agents/skills/greeting-style/SKILL.md: a greeting is one line (failure example: a three-line greeting)`; commit `968dfb7`.
+
+**Pass**: the session reads `writing-for-agents/SKILL.md` before its first edit. Caveat: it also added a rule table to the fixture's `AGENTS.md` (from `correct`'s rule-table step), beyond the one sentence asked; its reply flags this and offers to drop it. Run 2 noted the same step and skipped it.
+
 ## Owed
 
 - Both automated evals in docs/owed-evals/67.md stay owed.
-- Corrector: a role or skill change that makes it read `writing-for-agents` before editing a role or skill, then this smoke again.
