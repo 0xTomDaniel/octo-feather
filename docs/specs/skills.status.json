@@ -21,6 +21,22 @@
     "acceptance-notice": {
       "status": "built",
       "pr": 16
+    },
+    "acceptance-tracker-linear": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tracker-default": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tracker-unknown": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-tracker-scripts": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

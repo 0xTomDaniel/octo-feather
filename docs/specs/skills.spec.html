@@ -22,6 +22,7 @@
 <p data-user-story data-user-facing="false" data-anchor="story-upstream-base">As a maintainer, every skill with a Matt or pstack equivalent uses that upstream text plus a small patch, so the kit stays lighter than octo-lite and picks up upstream fixes.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-patch-reason">As a maintainer, every patch says on its first line which decision it serves, so I can tell whether it is still needed.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-role-skills">As the owner, each role loads only the skills its role file lists, so one role's instructions never leak into another.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-tracker">As the owner, I choose for each target repository whether its tickets live in GitHub Issues or Linear, and every agent working on it loads only that tracker's skill, while review and merge stay on GitHub.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-licences">As the owner, every vendored skill's licence and author is credited, so the kit can be shared.</p>
 </section>
 
@@ -31,6 +32,10 @@
 <p data-acceptance-criterion data-anchor="acceptance-skill-frontmatter" data-story="story-role-skills"><span data-acceptance-scenario>Given a maintainer, When any change adds a skill without a name or description in its frontmatter,</span> <span data-acceptance-observable>Then the gate fails naming the skill.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-only-listed" data-story="story-role-skills"><span data-acceptance-scenario>Given a supervisor in a target repository that has its own skills folder, When it starts an implementer there,</span> <span data-acceptance-observable>Then the implementer has exactly the skills its role file lists available, and none from the target's folder or the kit's by discovery.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-external-skill" data-story="story-role-skills"><span data-acceptance-scenario>Given a box with Spec Chat's skills installed for the user, When the director starts a supervisor, then the supervisor needs a change to its accepted spec,</span> <span data-acceptance-observable>Then the lane's pull request shows that spec change logged as a judgement call by that supervisor, and the supervisor has shaped nothing else.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-tracker-linear" data-story="story-tracker"><span data-acceptance-scenario>Given a target repository whose config selects Linear, When the director starts a supervisor for it,</span> <span data-acceptance-observable>Then the supervisor has the <code>github-pr</code> and <code>linear</code> skills available and not <code>github-issues</code>.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-tracker-default" data-story="story-tracker"><span data-acceptance-scenario>Given a target repository with no tracker in its config, When the director starts a supervisor for it,</span> <span data-acceptance-observable>Then the supervisor has the <code>github-pr</code> and <code>github-issues</code> skills available and not <code>linear</code>.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-tracker-unknown" data-story="story-tracker"><span data-acceptance-scenario>Given a target repository whose config names a tracker the kit has no skill for, When the director starts a supervisor for it,</span> <span data-acceptance-observable>Then no supervisor starts, and the director is told the tracker is unknown and which trackers the kit has.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-tracker-scripts" data-story="story-tracker"><span data-acceptance-scenario>Given a maintainer, When any change leaves a tracker skill without one of the tracker scripts,</span> <span data-acceptance-observable>Then the gate fails naming the skill and the missing script.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-notice" data-story="story-licences" data-project-rule="Vendored skills credited in NOTICE"><span data-acceptance-scenario>Given a maintainer, When any change vendors a new upstream skill,</span> <span data-acceptance-observable>Then NOTICE names that skill with its upstream, pin, licence and author.</span></p>
 
 </section>
@@ -38,7 +43,8 @@
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
 <h2>Modular boundaries</h2>
 <p data-modular-boundary data-anchor="boundary-skillfile"><span data-boundary-responsibility>The Skillfile owns which upstream skills are vendored, at which pin, and how patches are kept across updates.</span> <span data-boundary-seam>Caller-facing seam: <code>Skillfile</code>, <code>Skillfile.lock</code> and <code>.skillfile/patches/skills/&lt;name&gt;/</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the upstream repositories and the skillfile tool.</span> <span data-boundary-scope>Observable scope: the committed folders in <code>.agents/skills/</code>.</span></p>
-<p data-modular-boundary data-anchor="boundary-skill-loading"><span data-boundary-responsibility><code>pi-role</code> owns which skills a role gets: discovery off, one load per listed skill, external skills from the target repository's <code>.agents/skills</code>.</span> <span data-boundary-seam>Caller-facing seam: the role file's <code>skills</code> and <code>externalSkills</code> keys.</span> <span data-boundary-dependency>Dependency direction: self-contained over the kit checkout and the repository's <code>.agents/skills</code>.</span> <span data-boundary-scope>Observable scope: the skills a started agent reports.</span></p>
+<p data-modular-boundary data-anchor="boundary-skill-loading"><span data-boundary-responsibility><code>pi-role</code> owns which skills a role gets: discovery off, one load per listed skill, <code>{tracker}</code> replaced by the target's tracker skill, external skills from the target repository's <code>.agents/skills</code>.</span> <span data-boundary-seam>Caller-facing seam: the role file's <code>skills</code> and <code>externalSkills</code> keys, and the target's <code>.octo-feather.toml</code>.</span> <span data-boundary-dependency>Dependency direction: self-contained over the kit checkout, the repository's <code>.agents/skills</code> and its <code>.octo-feather.toml</code>.</span> <span data-boundary-scope>Observable scope: the skills a started agent reports.</span></p>
+<p data-modular-boundary data-anchor="boundary-tracker-skills"><span data-boundary-responsibility>The tracker skills, <code>github-issues</code> and <code>linear</code>, own every read and write of tickets in their tracker; <code>github-pr</code> owns branches, pull requests and merges.</span> <span data-boundary-seam>Caller-facing seam: the tracker scripts below, the same names, arguments and output in each tracker skill, at <code>.agents/skills/&lt;tracker&gt;/scripts/&lt;name&gt;</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; <code>github-issues</code> and <code>github-pr</code> depend on the <code>gh</code> CLI, <code>linear</code> on the <code>linear</code> CLI. The kit's general scripts call the tracker scripts and hold no tracker-specific code; no tracker skill calls the kit.</span> <span data-boundary-scope>Observable scope: tickets in the target's tracker, and pull requests on GitHub.</span></p>
 </section>
 
 <section data-anchor="vendored" id="vendored">
@@ -49,8 +55,8 @@
 <tbody>
 <tr data-anchor="skill-tdd"><td><code>tdd</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0002: seams are public surfaces only, taken from the ticket</td><td>implementer</td></tr>
 <tr data-anchor="skill-implement"><td><code>implement</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked; the gate is <code>just check</code>; ADR 0007 no self-review</td><td>implementer</td></tr>
-<tr data-anchor="skill-implement-spec"><td><code>implement-spec</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues; ADR 0011 and 0017 Herdr workers and <code>just integrate</code>; ADR 0007 fresh reviewer; ADR 0015 merge ask up the chain; ADR 0019 pilot first; ADR 0020 finding classes logged</td><td>supervisor</td></tr>
-<tr data-anchor="skill-to-tickets"><td><code>to-tickets</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 GitHub Issues</td><td>supervisor</td></tr>
+<tr data-anchor="skill-implement-spec"><td><code>implement-spec</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 the tracker skill; ADR 0011 and 0017 Herdr workers and <code>just integrate</code>; ADR 0007 fresh reviewer; ADR 0015 merge ask up the chain; ADR 0019 pilot first; ADR 0020 finding classes logged</td><td>supervisor</td></tr>
+<tr data-anchor="skill-to-tickets"><td><code>to-tickets</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012; ADR 0004 the tracker skill</td><td>supervisor</td></tr>
 <tr data-anchor="skill-grill-with-docs"><td><code>grill-with-docs</code></td><td>mattpocock/skills@49dd158, MIT</td><td>ADR 0012 model-invoked</td><td><code>just shape</code>, not a factory role (ADR 0021)</td></tr>
 <tr data-anchor="skill-grilling"><td><code>grilling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td><code>just shape</code>, through grill-with-docs</td></tr>
 <tr data-anchor="skill-domain-modeling"><td><code>domain-modeling</code></td><td>mattpocock/skills@49dd158, MIT</td><td>none (called by grill-with-docs)</td><td><code>just shape</code>, through grill-with-docs</td></tr>
@@ -74,12 +80,35 @@
 <thead><tr><th>Skill</th><th>For</th></tr></thead>
 <tbody>
 <tr data-anchor="local-herdr-comms"><td><code>herdr-comms</code></td><td>Spawning, messaging, parking, waking and closing agents, with the Herdr wrappers in its assets</td></tr>
-<tr data-anchor="local-github"><td><code>github</code></td><td>Issues, pull requests and consent rules</td></tr>
+<tr data-anchor="local-github-pr"><td><code>github-pr</code></td><td>Branches, pull requests, merges and consent rules, for every target whatever its tracker</td></tr>
+<tr data-anchor="local-github-issues"><td><code>github-issues</code></td><td>The tracker skill for GitHub Issues, through <code>gh</code></td></tr>
+<tr data-anchor="local-linear"><td><code>linear</code></td><td>The tracker skill for Linear, through the <code>linear</code> CLI, with its install notes</td></tr>
 <tr data-anchor="local-git"><td><code>commit</code>, <code>pull</code>, <code>push</code></td><td>Git moves</td></tr>
 <tr data-anchor="local-langs"><td><code>python</code>, <code>typescript</code>, <code>nodejs</code>, <code>pnpm</code></td><td>Language and toolchain rules for implementers. <code>python</code> and <code>typescript</code> are the owner's scaling-octo-engine skills, ported with changes only to their unit-test, octo-workflow and command lines; the kit still has no unit tests (ADR 0002)</td></tr>
 </tbody>
 </table>
 </div>
+</section>
+<section data-anchor="tracker" id="tracker">
+<h2>Tracker skills</h2>
+<p data-anchor="tracker-config">A target repository names its tracker in <code>.octo-feather.toml</code> at its root: <code>tracker = "github"</code> or <code>tracker = "linear"</code>, <code>github</code> when the file or key is absent (ADR 0004).</p>
+<p data-anchor="tracker-packaged">Each tracker skill, and <code>github-pr</code>, is self-contained: <code>.agents/skills/&lt;name&gt;/</code> holds its <code>SKILL.md</code> and a <code>scripts/</code> folder with every script it needs, as <code>herdr-comms</code> does. Each also ships the offline fake of its CLI that the kit's tests use: the fake <code>gh</code>, which the <code>just qc</code> judge also runs, in <code>github-pr</code>, and a fake <code>linear</code> in <code>linear</code>.</p>
+<p data-anchor="tracker-role-line">A role file lists <code>{tracker}</code> among its skills where it needs ticket work, and <code>pi-role</code> loads the target's tracker skill in its place. Role prose and every other kit skill say "the tracker skill" and never name <code>gh</code> issue commands or Linear.</p>
+<div class="table-scroll" data-anchor="tracker-scripts-wrap">
+<table data-anchor="tracker-scripts"><caption>Tracker scripts: every tracker skill implements each one under this name; each prints only its output, and on failure exits non-zero with the reason</caption>
+<thead><tr><th>Script</th><th>Does</th><th>Prints</th></tr></thead>
+<tbody>
+<tr data-anchor="tracker-script-lane-key"><td><code>lane-key ID</code></td><td>Turns a ticket id as the owner writes it into the lane key (ADR 0011)</td><td><code>gh82</code> for GitHub issue 82, <code>tur-123</code> for Linear TUR-123</td></tr>
+<tr data-anchor="tracker-script-key-from-branch"><td><code>key-from-branch BRANCH</code></td><td>Reads the parent ticket from a lane branch or a worker branch named after it</td><td>The ticket key: <code>82</code>, <code>TUR-123</code></td></tr>
+<tr data-anchor="tracker-script-issue-view"><td><code>issue-view KEY</code></td><td>Reads one ticket</td><td>JSON: key, title, body, state, url, its parent's key and the keys it is blocked by</td></tr>
+<tr data-anchor="tracker-script-issue-create"><td><code>issue-create</code></td><td>Files a ticket from a title and a body, optionally as a sub-issue of a parent and blocked by other tickets</td><td>The new ticket's key</td></tr>
+<tr data-anchor="tracker-script-issue-comment"><td><code>issue-comment KEY</code></td><td>Adds a comment to a ticket</td><td>The comment's url</td></tr>
+<tr data-anchor="tracker-script-issue-done"><td><code>issue-done KEY</code></td><td>Moves a ticket to its tracker's done state: closed on GitHub, the team's Done on Linear; a ticket already done stays done</td><td>Nothing</td></tr>
+<tr data-anchor="tracker-script-pr-line"><td><code>pr-line KEY</code></td><td>Names the line a lane pull request's body carries for its parent ticket</td><td><code>Closes #82</code> on GitHub, <code>Tracks TUR-123</code> on Linear</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="tracker-writes">Tracker writes are the same on either tracker: a ticket filed, commented on, and moved to done; no other state change and no label. A Linear target gets no GitHub issue from any agent.</p>
 </section>
 <section data-anchor="loading" id="loading">
 <h2>Where skills live and how they load</h2>

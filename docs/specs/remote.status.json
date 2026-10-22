@@ -29,6 +29,18 @@
     "acceptance-no-url-in-records": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-linear-key-panes": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-linear-key-qc": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-install-linear": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -37,6 +37,10 @@
     "acceptance-worker-in-lane": {
       "status": "built",
       "pr": 16
+    },
+    "acceptance-supervise-layout-linear": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -125,6 +125,18 @@
     "acceptance-gate-correction-lane": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-merge-linear": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pr-tracks": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-no-github-issue": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
