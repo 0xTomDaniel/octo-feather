@@ -195,8 +195,9 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Verify the runtime tools on this box (octo-lite's install --check equivalent).
-install-check:
+# Verify the runtime tools on this box (octo-lite's install --check equivalent), and the tracker CLI of the target
+# (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear.
+install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -205,6 +206,13 @@ install-check:
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
+    # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
+    skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+    s = u.spec_from_loader("pi_role", m.SourceFileLoader("pi_role", sys.argv[1] + "/scripts/pi-role")); r = u.module_from_spec(s); s.loader.exec_module(r)
+    print(r.tracker_skill(sys.argv[1] + "/.agents/skills", sys.argv[2]))' "$root" "$1")" || exit 1
+    echo "tracker ${skill} (target $1)"
+    c="$root/.agents/skills/$skill/scripts/install-check"
+    [[ ! -x "$c" ]] || "$c" || bad=1
     exit "$bad"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).

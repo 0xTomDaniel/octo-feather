@@ -12,6 +12,7 @@ It takes only what the tracker scripts run, printing what the real CLI prints:
   issue relation add A blocked-by B
   issue comment add KEY --body-file F|-
   issue update KEY --state NAME|TYPE
+  --version                          the pinned release (the linear skill's cli-version), needs no store
 and --no-input anywhere. Anything else is refused (exit 2) naming the call. Not found exits 3, like the real CLI.
 """
 import json, os, re, sys
@@ -174,6 +175,9 @@ def update(args):
     print(f"✓ Updated issue {k}: {i['title']}\n{url(db, k, i['title'])}")
 
 
+if argv == ["--version"]:
+    print(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "cli-version")).read().strip())
+    sys.exit(0)
 ROUTES = {("api",): api, ("issue", "create"): create, ("issue", "relation", "add"): relation,
           ("issue", "comment", "add"): comment, ("issue", "update"): update}
 for n in (3, 2, 1):
