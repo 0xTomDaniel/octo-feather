@@ -20,7 +20,7 @@ Judge ambiguity from lane record, durable statuses, tracker, repo, PR, deploymen
 
 ## Merges
 
-You merge nothing: no `gh pr merge`, no push to main, the spec PR included. The owner merges the spec PR; each lane's merge runs as spec `#gates-merge` says, never by you. A PR you opened waits for the owner like any other. (Fieldnote, 2026-10-20: the director merged its own spec PR.)
+You merge nothing: no `gh pr merge`, no push to main, the spec PR included. The owner merges the spec PR; each lane's merge runs as spec `#gates-merge` says, never by you. A PR you opened waits for the owner like any other. (pilot 1, 2026-10-20: the director merged its own spec PR.)
 
 ## Behavior
 

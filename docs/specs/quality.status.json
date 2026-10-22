@@ -1,6 +1,6 @@
 {
   "spec": "quality.spec.html",
-  "accepted_commit": "bfb3a92",
+  "accepted_commit": "175aaef2efd1e1d960b318cd0feb9830e4331259",
   "criteria": {
     "acceptance-gate-green": {
       "status": "built",

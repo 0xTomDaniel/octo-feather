@@ -5,4 +5,4 @@ The director, supervisors and workers are Pi sessions in Herdr panes that messag
 ## Considered options
 
 - scaling-octo-engine's Symphony plus Linear control plane. Rejected: too many moving parts for one person.
-- A2A between agents. Deferred until after the Martell take-home (docs/future.md).
+- A2A between agents. Deferred until after the take-home (docs/future.md).

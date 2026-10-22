@@ -10,7 +10,7 @@ Before `register` it:
   resolves the script (its runtime_path) and is the fix that installs the runtime.
 - stops every review-serve process on the register's state dir registry that
   review-host.py would not recognize as the registry's own, so a new server
-  takes the recorded port and the old link keeps working (Fieldnote: where
+  takes the recorded port and the old link keeps working (pilot 1: where
   review-host.py cannot see the live server, as without /proc on macOS, it
   started a second one on a new port). After `register` it stops any that the
   registry's recorded process is not. Both run under the state's lock.

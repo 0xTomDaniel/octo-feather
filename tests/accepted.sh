@@ -2,7 +2,7 @@
 # Integration test for scripts/octo-feather-accepted against fixture review-host
 # registries, review-page hand-offs and a throwaway repo. Run by `just check`.
 #
-# The Fieldnote failure (2026-10-20): the owner pressed Accept spec, the page
+# The pilot 1 failure (2026-10-20): the owner pressed Accept spec, the page
 # wrote its hand-off, and octo-feather-accepted still exited 1 because it waited
 # for a registry `accepted = true` that nothing writes. Here Accept is the
 # hand-off alone, exactly as the review page writes it.
@@ -64,7 +64,7 @@ row "$c1" 2026-10-20T15:00:00Z "accepted = true" > "$t/state/hosting/default/reg
 run 1 "$s"                                                           # a hand-written registry key is not an Accept
 row "$c1" 2026-10-20T15:00:00Z > "$t/state/hosting/default/registry.toml"
 handoff 1792509686764211101 acc1 "$V1"
-run 0 "$s"                                                           # Fieldnote: register, press Accept, exit 0
+run 0 "$s"                                                           # pilot 1: register, press Accept, exit 0
 [[ "$out" == "accepted $c1 slug=a-flow at=2026-10-20T15:"*" session=default id=spec:a-flow:p::$s handoff=acc1" ]] || fail "bad output: $out"
 handoff 1792509686764211102 com1 "$V1" '[{"id": "c1"}]'
 run 1 "$s"; [[ "$out" == *"sends comments"* ]] || fail "newer comment hand-off: $out"
