@@ -9,7 +9,9 @@ AGENTS.md from the working directory, so roles never read it by hand.
 Pane:      herdr-spawn --role <role> (calls `pi-role --json` and hands the args
            to `herdr agent start`).
 Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
-           message is on stdout.
+           message is on stdout. A -p (--print) run has no route to any pane:
+           its child gets no OCTO_FEATHER_PARENT, HERDR_PANE_ID, HERDR_TAB_ID
+           or HERDR_WORKSPACE_ID (issue #77). A pane launch keeps its env.
 
 Frontmatter (one `key: value` per line, lists comma-separated):
   name         must equal the file name; names the cached prompt file
@@ -33,6 +35,8 @@ import hashlib, json, os, re, subprocess, sys
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
 LIST_KEYS = {"tools", "skills", "externalSkills"}
+# A headless run's route to panes: herdr-say --parent and Herdr's own pane ids (#77).
+HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID")
 
 
 def parse(path):
@@ -125,6 +129,10 @@ def main(argv):
     if as_json:
         print(json.dumps({"args": args}))
         return
+    flags = argv[1:argv.index("--")] if "--" in argv else argv[1:]
+    if "-p" in flags or "--print" in flags:
+        for v in HEADLESS_UNSET:
+            os.environ.pop(v, None)
     os.execvp("pi", ["pi", *args])
 
 
