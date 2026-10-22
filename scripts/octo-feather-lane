@@ -31,7 +31,7 @@ The section, up to the next `## ` heading:
   |---|---|---|---|
   | <spec>#<id> | pass | judged <sha> | <report path, command> |   one row per claimed criterion
   Review verdict: <comment URL>   this PR's verdict comment: same head, verdict clear
-  Built: <id> <id>                = status entries built with this PR = ids in its `qc: built` commits
+  Built: <id> <id>                = status entries built with this PR, each named by one of its `qc: built` commits
   Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
 
 `judged <sha>` is the head just qc judged for that row (7+ hex): a commit of the PR, with
@@ -477,13 +477,12 @@ def cmd_merge_ask(args: list[str]) -> int:
                     f"{' '.join(sorted(status)) or 'none'}; list exactly those (never edit the status file by hand)")
     qc = [QC_COMMIT.match(s) for _, s in commits]
     qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
-    unknown = sorted(x for x in qc_ids if not any(x in cr for cr in specs.values()))
+    unpassed = sorted(c for c in built if c.split("#", 1)[1] not in qc_ids)
     if not any(qc):
         miss.append(f"Built: no `qc: built` commit on PR #{pr}; run just qc on the lane head (docs/adr/0022)")
-    elif b and {c.split("#", 1)[1] for c in built} != qc_ids:
-        miss.append(f"Built: lists {' '.join(sorted(c.split('#', 1)[1] for c in built)) or 'none'}, the PR's `qc: built` commits passed "
-                    f"{' '.join(sorted(qc_ids)) or 'none'}; list exactly those, or run just qc again on the claimed criteria"
-                    + (f" ({' '.join(unknown)} in no --status file: pass --status for its spec)" if unknown else ""))
+    elif unpassed:   # a subset: a later qc run may reset an earlier pass to planned
+        miss.append(f"Built: {' '.join(unpassed)} in no `qc: built` commit of PR #{pr} (they passed "
+                    f"{' '.join(sorted(qc_ids)) or 'none'}); built only by just qc: run just qc on the head for them, never edit the status file by hand")
 
     fails: dict[str, str] = {}
     f = field(lines, "Failed")
