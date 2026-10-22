@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+"""review-host ARGS...   (kit command over Spec Chat's review-host.py, issue #65)
+
+Passes every argument, as data, to review-host.py in the machine-local Spec Chat
+clone ($SPEC_CHAT_CLONE, default ~/src/spec-chat), and returns its exit code.
+Before `register` it:
+- refuses a spec that would render no Spec Chat UI: its page has no runtime
+  <script>, or the runtime.js that script names is missing. It names what is
+  missing and the fix; nothing is registered. Spec Chat's own preflight.py
+  resolves the script (its runtime_path) and is the fix that installs the runtime.
+- stops every review-serve process on the register's state dir registry that
+  review-host.py would not recognize as the registry's own, so a new server
+  takes the recorded port and the old link keeps working (Fieldnote: where
+  review-host.py cannot see the live server, as without /proc on macOS, it
+  started a second one on a new port). After `register` it stops any that the
+  registry's recorded process is not. Both run under the state's lock.
+"""
+import contextlib
+import importlib.util
+import io
+import os
+from pathlib import Path
+import signal
+import subprocess
+import sys
+import time
+
+ME = "review-host"
+CLONE = Path(os.environ.get("SPEC_CHAT_CLONE") or Path.home() / "src/spec-chat").expanduser()
+SCRIPTS = CLONE / "skill/review-spec/scripts"
+HOST = SCRIPTS / "review-host.py"
+PREFLIGHT = SCRIPTS / "preflight.py"
+
+
+def load(name, path):
+    spec = importlib.util.spec_from_file_location(name, path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def register_args(host, argv):
+    """review-host.py's own parse of a register; None for anything else or a parse it would reject itself."""
+    if "register" not in argv:
+        return None
+    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        try:
+            args = host.build_parser().parse_args(argv)
+        except SystemExit:
+            return None
+    return args if args.command == "register" else None
+
+
+def missing_ui(host, preflight, args):
+    """One line per registered spec that would render no Spec Chat UI, naming what is missing and the fix."""
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            items = host.parse_resources(args)
+    except Exception:
+        return []  # review-host.py reports a bad resource itself
+    problems = []
+    for item in items:
+        spec_file = item.get("spec_file")
+        if not spec_file:
+            continue  # a scope row has no page
+        spec, root = Path(spec_file), item["root"]
+        fix = f"python3 {PREFLIGHT} {root} {spec}"
+        runtime = preflight.runtime_path(spec)
+        if runtime is None:
+            problems.append(
+                f"{spec}: no Spec Chat runtime <script>; add exactly one "
+                f'<script defer src="./.viz/runtime.js"></script> (a repository-relative path) to its <head>, '
+                f"then run {fix}")
+        elif not runtime.is_file():
+            problems.append(
+                f"{spec}: Spec Chat runtime {runtime} is missing; run {fix} "
+                "(it copies Spec Chat's runtime into that .viz and commits it)")
+    return problems
+
+
+def serve_pids(registry):
+    """Pids of review-serve processes whose --registry is this registry, from ps (Linux and macOS)."""
+    out = subprocess.run(("ps", "-Ao", "pid=,args="), capture_output=True, text=True, check=False).stdout
+    target, pids = str(registry.resolve()), []
+    for line in out.splitlines():
+        pid, _, command = line.strip().partition(" ")
+        words = command.split()
+        if not any(w.endswith("review-serve.py") for w in words):
+            continue
+        if any(a == "--registry" and b == target for a, b in zip(words, words[1:])):
+            pids.append(int(pid))
+    return pids
+
+
+def stop(pid):
+    with contextlib.suppress(ProcessLookupError):
+        os.kill(pid, signal.SIGTERM)
+        deadline = time.monotonic() + 3
+        while time.monotonic() < deadline:
+            os.kill(pid, 0)
+            time.sleep(0.05)
+        os.kill(pid, signal.SIGKILL)
+
+
+def sweep(host, args, *, trust_recorded):
+    """Stop this state's review-serve processes the registry does not own. Before register, the recorded one
+    stays only if review-host.py itself sees it live (or a unit runs it), since otherwise it starts another."""
+    state = host.state_dir(args)
+    registry = host.paths(state)[0]
+    with host.state_lock(state):
+        try:
+            _, process = host.registry_state(registry)
+        except Exception:
+            return  # an unreadable registry: review-host.py reports it
+        keep = (process or {}).get("pid")
+        if keep and not trust_recorded and not process.get("unit") and not host.process_owns_registry(keep, registry):
+            keep = None
+        for pid in serve_pids(registry):
+            if pid != keep:
+                stop(pid)
+                print(f"{ME}: stopped review-serve pid {pid}, not the process {registry} owns", file=sys.stderr)
+
+
+def main(argv):
+    if not HOST.is_file():
+        print(f"{ME}: no Spec Chat review-host.py at {HOST}; clone Spec Chat there or set SPEC_CHAT_CLONE",
+              file=sys.stderr)
+        return 1
+    host = load("spec_chat_review_host", HOST)
+    args = register_args(host, argv)
+    if args is not None:
+        problems = missing_ui(host, load("spec_chat_preflight", PREFLIGHT), args)
+        if problems:
+            for line in problems:
+                print(f"{ME}: refused, the page would render no Spec Chat UI: {line}", file=sys.stderr)
+            print(f"{ME}: nothing registered", file=sys.stderr)
+            return 2
+        sweep(host, args, trust_recorded=False)
+    code = subprocess.call([sys.executable, str(HOST), *argv])
+    if args is not None:
+        sweep(host, args, trust_recorded=True)
+    return code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
