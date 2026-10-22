@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# issue-done KEY: moves the issue to its team's Done (the first state of type completed); one already done stays done.
+# Prints nothing. Wraps `linear issue update --state`.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: issue-done KEY" >&2; exit 64; }
+[[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-done: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
+out="$(linear issue update "${1^^}" --state completed --no-input 2>&1)" || { echo "issue-done: $out" >&2; exit 1; }
