@@ -14,12 +14,15 @@ Before `register` it:
   review-host.py cannot see the live server, as without /proc on macOS, it
   started a second one on a new port). After `register` it stops any that the
   registry's recorded process is not. Both run under the state's lock.
+  It stops only a process it proves is this registry's review-serve (see
+  serve_pids); one that only looks like one is left running and reported.
 """
 import contextlib
 import importlib.util
 import io
 import os
 from pathlib import Path
+import re
 import signal
 import subprocess
 import sys
@@ -30,6 +33,7 @@ CLONE = Path(os.environ.get("SPEC_CHAT_CLONE") or Path.home() / "src/spec-chat")
 SCRIPTS = CLONE / "skill/review-spec/scripts"
 HOST = SCRIPTS / "review-host.py"
 PREFLIGHT = SCRIPTS / "preflight.py"
+SERVER = CLONE / "skill/review-spec/assets/review-serve.py"
 
 
 def load(name, path):
@@ -78,18 +82,49 @@ def missing_ui(host, preflight, args):
     return problems
 
 
+def is_python(path):
+    return re.fullmatch(r"python[0-9.]*", os.path.basename(path)) is not None
+
+
 def serve_pids(registry):
-    """Pids of review-serve processes whose --registry is this registry, from ps (Linux and macOS)."""
-    out = subprocess.run(("ps", "-Ao", "pid=,args="), capture_output=True, text=True, check=False).stdout
-    target, pids = str(registry.resolve()), []
+    """(owned, unsure): pids proven to be this registry's review-serve, and pids that only look like one.
+    Owned: runs as this uid, and its exact argv is the launch review-host.py builds (server_command):
+    a python running the realpath of the clone's review-serve.py with --registry this registry and
+    --bind/--port/--host. Linux reads exact argv from /proc/PID/cmdline; without /proc (macOS) the
+    `ps` text must equal that launch whole, never split into words."""
+    server, target = str(SERVER.resolve()), str(registry.resolve())
+    owned, unsure = [], []
+    if Path("/proc/self/cmdline").is_file():
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit() or int(entry.name) == os.getpid():
+                continue
+            try:
+                raw = (entry / "cmdline").read_bytes()
+                uid = entry.stat().st_uid
+                exe = os.readlink(entry / "exe") if uid == os.getuid() else ""
+            except OSError:
+                continue
+            argv = raw.split(b"\0")[:-1] if raw.endswith(b"\0") else raw.split(b"\0")
+            argv = [a.decode(errors="surrogateescape") for a in argv]
+            if not (any(target in a for a in argv) and any("review-serve" in a for a in argv)):
+                continue
+            proven = (uid == os.getuid() and is_python(exe) and len(argv) == 10 and is_python(argv[0])
+                      and argv[1:4] == [server, "--registry", target] and argv[4] == "--bind"
+                      and argv[6] == "--port" and argv[7].isdigit() and argv[8] == "--host")
+            (owned if proven else unsure).append(int(entry.name))
+        return owned, unsure
+    out = subprocess.run(("ps", "-Aww", "-o", "pid=,uid=,args="), capture_output=True, text=True,
+                         check=False).stdout
+    launch = re.compile(rf"(?P<python>.+) {re.escape(server)} --registry {re.escape(target)}"
+                        r" --bind \S+ --port \d+ --host \S+")
     for line in out.splitlines():
-        pid, _, command = line.strip().partition(" ")
-        words = command.split()
-        if not any(w.endswith("review-serve.py") for w in words):
+        pid, uid, command = (line.strip().split(None, 2) + ["", ""])[:3]
+        if not pid.isdigit() or int(pid) == os.getpid() or target not in command or "review-serve" not in command:
             continue
-        if any(a == "--registry" and b == target for a, b in zip(words, words[1:])):
-            pids.append(int(pid))
-    return pids
+        m = launch.fullmatch(command)
+        proven = uid == str(os.getuid()) and m is not None and is_python(m["python"])
+        (owned if proven else unsure).append(int(pid))
+    return owned, unsure
 
 
 def stop(pid):
@@ -115,10 +150,16 @@ def sweep(host, args, *, trust_recorded):
         keep = (process or {}).get("pid")
         if keep and not trust_recorded and not process.get("unit") and not host.process_owns_registry(keep, registry):
             keep = None
-        for pid in serve_pids(registry):
+        owned, unsure = serve_pids(registry)
+        for pid in owned:
             if pid != keep:
                 stop(pid)
                 print(f"{ME}: stopped review-serve pid {pid}, not the process {registry} owns", file=sys.stderr)
+        for pid in unsure if not trust_recorded else ():  # reported once, before register
+            if pid != keep:
+                print(f"{ME}: left pid {pid} running: it names {registry} but is not provably its review-serve "
+                      f"({SERVER.resolve()} launched by review-host.py as this user); stop it yourself if it is stale",
+                      file=sys.stderr)
 
 
 def main(argv):
