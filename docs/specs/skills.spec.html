@@ -98,13 +98,13 @@
 <table data-anchor="tracker-scripts"><caption>Tracker scripts: every tracker skill implements each one under this name; each prints only its output, and on failure exits non-zero with the reason</caption>
 <thead><tr><th>Script</th><th>Does</th><th>Prints</th></tr></thead>
 <tbody>
-<tr data-anchor="tracker-script-lane-key"><td><code>lane-key ID</code></td><td>Turns a ticket id as the owner writes it into the lane key (ADR 0011)</td><td><code>gh82</code> for GitHub issue 82, <code>tur-123</code> for Linear TUR-123</td></tr>
-<tr data-anchor="tracker-script-key-from-branch"><td><code>key-from-branch BRANCH</code></td><td>Reads the parent ticket from a lane branch or a worker branch named after it</td><td>The ticket key: <code>82</code>, <code>TUR-123</code></td></tr>
+<tr data-anchor="tracker-script-lane-key"><td><code>lane-key ID</code></td><td>Turns a ticket id as the owner writes it into the lane key (ADR 0011)</td><td><code>gh82</code> for GitHub issue 82, <code>eng-123</code> for Linear ENG-123</td></tr>
+<tr data-anchor="tracker-script-key-from-branch"><td><code>key-from-branch BRANCH</code></td><td>Reads the parent ticket from a lane branch or a worker branch named after it</td><td>The ticket key: <code>82</code>, <code>ENG-123</code></td></tr>
 <tr data-anchor="tracker-script-issue-view"><td><code>issue-view KEY</code></td><td>Reads one ticket</td><td>JSON: key, title, body, state, url, its parent's key and the keys it is blocked by</td></tr>
 <tr data-anchor="tracker-script-issue-create"><td><code>issue-create</code></td><td>Files a ticket from a title and a body, optionally as a sub-issue of a parent and blocked by other tickets</td><td>The new ticket's key</td></tr>
 <tr data-anchor="tracker-script-issue-comment"><td><code>issue-comment KEY</code></td><td>Adds a comment to a ticket</td><td>The comment's url</td></tr>
 <tr data-anchor="tracker-script-issue-done"><td><code>issue-done KEY</code></td><td>Moves a ticket to its tracker's done state: closed on GitHub, the team's Done on Linear; a ticket already done stays done</td><td>Nothing</td></tr>
-<tr data-anchor="tracker-script-pr-line"><td><code>pr-line KEY</code></td><td>Names the line a lane pull request's body carries for its parent ticket</td><td><code>Closes #82</code> on GitHub, <code>Tracks TUR-123</code> on Linear</td></tr>
+<tr data-anchor="tracker-script-pr-line"><td><code>pr-line KEY</code></td><td>Names the line a lane pull request's body carries for its parent ticket</td><td><code>Closes #82</code> on GitHub, <code>Tracks ENG-123</code> on Linear</td></tr>
 </tbody>
 </table>
 </div>
