@@ -199,8 +199,12 @@ ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | 
 ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | ok | judged 0123456 | r |' bad "qc verdict 'ok'; write pass or fail"
 ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-zz | pass | judged 0123456 | r |' bad "acceptance-zz: no criterion"
 BUILT='demo#acceptance-a' bad "Built: lists demo#acceptance-a, the status files hold built with PR #7: demo#acceptance-a demo#acceptance-b"
-bad "the PR's .qc: built. commits passed acceptance-a; list exactly those" \
+# a Built id the status file holds but no qc: built commit names fails
+bad "Built: demo#acceptance-b in no .qc: built. commit of PR #7 (they passed acceptance-a); built only by just qc" \
   'd["commits"][1]["messageHeadline"] = "qc: built acceptance-a (judged 0123456789ab)"'
+# built by an earlier qc run, reset to planned by a later one (PR #49: ac060f9, a56de61): not demanded, passes
+setpr 'd["commits"].insert(1, {"oid": "c0ffee0000000000000000000000000000000000", "messageHeadline": "qc: built acceptance-a acceptance-c (judged 0123456789ab)", "messageBody": ""})'
+run 0 merge-ask 7 "${ST[@]}"
 bad "no .qc: built. commit on PR #7" 'd["commits"] = d["commits"][:1]'
 # a headline GitHub cut with an ellipsis still counts as one qc commit
 setpr 'd["commits"][1].update(messageHeadline="qc: built acceptance-a acceptance-\u2026", messageBody="\u2026b (judged 0123456789ab)")'
@@ -229,12 +233,12 @@ python3 - "$t/pr7.keep" "$(body)" <<'PY' > "$t/old.body"
 import sys; print(sys.argv[2].replace("| criterion | qc verdict | judged | evidence |", "| criterion | qc verdict | evidence |"))
 PY
 bad "criterion table: no judged column" "d['body'] = open('$t/old.body').read()"
-# multi-spec lane: --status once per spec; a qc id with no --status file is named
+# multi-spec lane: --status once per spec; a qc id outside the --status files is not demanded
 python3 - "$t/pr7.keep" <<'EOF'
 import json, sys; d = json.load(open(sys.argv[1])); d["commits"].append({"oid": "3333333333333333333333333333333333333333", "messageHeadline": "qc: built acceptance-x (judged 0123456789ab)", "messageBody": ""})
 json.dump(d, open(sys.argv[1], "w"))
 EOF
-bad "acceptance-x in no --status file: pass --status for its spec"
+setpr; run 0 merge-ask 7 "${ST[@]}"
 ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| other#acceptance-x | pass | judged 0123456 | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
 run 0 merge-ask 7 "${ST[@]}" --status "$t/other.status.json"
 # usage and execution failures
@@ -246,4 +250,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built vs status and qc commits, verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; rows name the judged head: a code commit after qc, a sha not in the PR and an old table fail, exact-head rerun passes)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; rows name the judged head: a code commit after qc, a sha not in the PR and an old table fail, exact-head rerun passes)"
