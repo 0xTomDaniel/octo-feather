@@ -84,6 +84,12 @@ bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/"supervisor"/"impl
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/: false/: true/')" "passes_as_written" "passes_as_written must be false"
 bad "$(call tweaks acceptance-a acceptance-a)" "kind" "kind 'tweaks' is not one of"
 bad "$(call clarifies acceptance-a acceptance-q)" "unknown criterion" "criterion acceptance-q is in neither"
+# lane is a lane key of either tracker (roles spec #lane-key): eng-123 passes like gh62; a ticket as written,
+# or a key with a suffix, is no lane key.
+call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/eng-123/' >"$L"; run "$r"; want 0 "Linear lane key"
+for l in ENG-123 62 gh62-x eng-123-x; do
+  bad "$(call clarifies acceptance-a acceptance-a | perl -pe "s/gh62/$l/")" "lane $l" "lane '$l' is not a lane key"
+done
 
 # #acceptance-call-guard, structure: moving an unchanged criterion between anchored sections, or
 # reordering two anchored siblings, changes the parents, so it needs a call naming them.
