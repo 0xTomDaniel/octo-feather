@@ -1,0 +1,346 @@
+#!/usr/bin/env python3
+"""Every vendored skill folder equals upstream at its pin plus its patches (skills spec #acceptance-patch-only).
+
+Gate (default, `just check-vendored`, inside `just check`): no network, ever.
+For each Skillfile `github` entry, .agents/skills/<name>/ must be byte-identical
+to what `skillfile install` produces from the cached upstream at the pin plus
+.skillfile/patches/ (skillfile's generated .meta aside). Exit 1 names skill and file.
+- Upstream is read from a git object cache keyed by pin SHA and authenticated
+  offline: the commit object must hash to the pin, and every tree and blob on the
+  way to the entry's files must hash to its object id. Tampered or incomplete: exit 1.
+- skillfile (version and sha256 pinned below) runs only in a throwaway copy
+  (install rewrites patches and strips their reason lines), fed the
+  authenticated files, with network removed (`unshare -Un` where available)
+  and every proxy pointed at a dead port, under a timeout.
+- A missing cache or binary fails fast naming `just vendored-fetch`. Never skips.
+
+Fetch (--fetch, `just vendored-fetch`, never inside `just check`): downloads the
+skillfile binary (sha256-checked) and `git fetch --depth 1` of each pin commit
+from github.com, each bounded by $OCTO_FEATHER_FETCH_TIMEOUT seconds (default
+120), then authenticates what it fetched. Public repos: no token needed.
+
+Cache: ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/{bin/,git/<owner>/<repo>/<sha>.git}.
+Usage: check-vendored [--repo DIR] [--fetch]
+Tested by tests/check-vendored.sh.
+"""
+import argparse, difflib, hashlib, json, os, platform, shutil, signal, stat, subprocess, sys, tempfile
+
+TAG = "check-vendored"
+VERSION = "v1.9.2"
+SHA256 = {  # checksums-sha256.txt of eljulians/skillfile release v1.9.2
+    "x86_64-linux": "a4af5a4cd6f7082ba1593d73015fd0b67cb34647cee0380429edd2ff804bc4a2",
+    "aarch64-linux": "d3509576c590b88e9a3c2d7b9bba9b9e44a94ff540fd4f6a1ab046d4075a1651",
+    "x86_64-macos": "321739270421b5f4c7a1e08c3a235f7280bc5007fdf5c1f5f75e90b2d29d3ceb",
+    "aarch64-macos": "e1e98e87dfc1b19897b36ee6dcb491b4361206a06a05825d68645d544473d895",
+}
+SKILLS = ".agents/skills"
+GENERATED = {".meta"}  # skillfile's source metadata, not committed
+FETCH = "run `just vendored-fetch` (refetches into the cache), then `just check`"
+DEAD = "http://127.0.0.1:9"  # discard port: any dial-out fails at once
+INSTALL_TIMEOUT = 120
+
+ap = argparse.ArgumentParser()
+ap.add_argument("--repo")
+ap.add_argument("--fetch", action="store_true")
+a = ap.parse_args()
+root = os.path.abspath(a.repo or os.path.join(os.path.dirname(__file__), ".."))
+cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "octo-feather", "skillfile")
+TIMEOUT = float(os.environ.get("OCTO_FEATHER_FETCH_TIMEOUT") or 120)
+tag = "vendored-fetch" if a.fetch else TAG
+
+
+def die(msg):
+    sys.exit(f"{tag}: {msg}")
+
+
+class Unauthentic(Exception):
+    pass
+
+
+def entries():
+    """Skillfile lines: (kind, name, source, path)."""
+    out = []
+    for line in open(os.path.join(root, "Skillfile")):
+        f = line.split()
+        if f and f[0] in ("github", "local") and len(f) >= 4:
+            out.append((f[0], f[2], f[3], f[4] if len(f) > 4 else f[3]))
+    return out
+
+
+def binary_path():
+    m = {"amd64": "x86_64", "arm64": "aarch64"}.get(platform.machine().lower(), platform.machine().lower())
+    s = {"linux": "linux", "darwin": "macos"}.get(sys.platform, sys.platform)
+    want = SHA256.get(f"{m}-{s}") or die(f"no pinned skillfile {VERSION} build for {m}-{s}")
+    return f"skillfile-{m}-{s}", os.path.join(cache, "bin", f"skillfile-{m}-{s}-{VERSION}"), want
+
+
+def sha256_ok(path, want):
+    return os.path.isfile(path) and hashlib.sha256(open(path, "rb").read()).hexdigest() == want
+
+
+def gitdir(source):
+    repo, sha = source.split("@", 1)
+    return os.path.join(cache, "git", repo, f"{sha}.git")
+
+
+class Objects:
+    """Read git objects by id from one cache repo; every object is re-hashed against its id."""
+
+    def __init__(self, gd):
+        if not os.path.isdir(gd):
+            raise Unauthentic(f"not cached at {gd}")
+        env = dict(os.environ, GIT_NO_REPLACE_OBJECTS="1", GIT_NO_LAZY_FETCH="1")
+        self.p = subprocess.Popen(["git", "--git-dir", gd, "cat-file", "--batch"], env=env,
+                                  stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
+
+    def get(self, oid, kind):
+        try:
+            self.p.stdin.write(oid.encode() + b"\n"); self.p.stdin.flush()
+            head = self.p.stdout.readline().split()
+        except OSError:
+            head = []
+        if len(head) != 3:
+            raise Unauthentic(f"{kind} {oid} is missing (incomplete cache)")
+        body = self.p.stdout.read(int(head[2])); self.p.stdout.read(1)
+        got = head[1].decode()
+        if got != kind or hashlib.sha1(f"{got} {len(body)}\0".encode() + body).hexdigest() != oid:
+            raise Unauthentic(f"{kind} {oid} does not hash to its id (tampered cache)")
+        return body
+
+    def close(self):
+        try:
+            self.p.stdin.close()
+        except OSError:
+            pass
+        self.p.wait()
+
+
+def tree_entries(raw):
+    i = 0
+    while i < len(raw):
+        sp = raw.index(b" ", i); nul = raw.index(b"\0", sp)
+        yield raw[i:sp].decode(), raw[sp + 1:nul].decode(), raw[nul + 1:nul + 21].hex()
+        i = nul + 21
+
+
+def upstream(source, path):
+    """rel path -> bytes of the entry's folder at the pin, authenticated from the pin SHA down."""
+    sha = source.split("@", 1)[1]
+    o = Objects(gitdir(source))
+    try:
+        commit = o.get(sha, "commit")
+        first = commit.split(b"\n", 1)[0].split()
+        if len(first) != 2 or first[0] != b"tree":
+            raise Unauthentic(f"commit {sha} has no tree")
+        tree = first[1].decode()
+        for comp in path.split("/"):
+            hit = [oid for mode, n, oid in tree_entries(o.get(tree, "tree")) if n == comp and mode == "40000"]
+            if not hit:
+                raise Unauthentic(f"{path} is not a folder at {sha}")
+            tree = hit[0]
+        out = {}
+
+        def walk(t, prefix):
+            for mode, n, oid in tree_entries(o.get(t, "tree")):
+                if mode == "40000":
+                    walk(oid, prefix + n + "/")
+                elif mode in ("100644", "100755"):
+                    out[prefix + n] = o.get(oid, "blob")
+                else:
+                    raise Unauthentic(f"{prefix}{n} has unsupported mode {mode}")
+        walk(tree, "")
+        return out
+    finally:
+        o.close()
+
+
+def files(d):
+    """(rel path -> bytes of every regular file under d, skillfile's generated files aside;
+    rel path -> why, for anything else: a symlink (file or folder), a special file, an empty folder).
+    Vendored folders hold regular files only, as skillfile writes them and git trees give them."""
+    out, odd = {}, {}
+    if os.path.islink(d):
+        return out, {".": "is a symlink"}
+    for base, dirs, names in os.walk(d):  # followlinks=False: a folder symlink is reported, never entered
+        if base != d and not dirs and not names:
+            odd[os.path.relpath(base, d)] = "is an empty folder"
+        for n in dirs + names:
+            p = os.path.join(base, n)
+            rel = os.path.relpath(p, d)
+            st = os.lstat(p)
+            if stat.S_ISLNK(st.st_mode):
+                odd[rel] = f"is a symlink (to {os.readlink(p)})"
+            elif stat.S_ISDIR(st.st_mode):
+                continue
+            elif not stat.S_ISREG(st.st_mode):
+                odd[rel] = "is a special file"
+            elif rel not in GENERATED:
+                out[rel] = open(p, "rb").read()
+    return out, odd
+
+
+def bounded(cmd, timeout=None, **kw):
+    """Run cmd under one wall-clock bound, TIMEOUT, in its own process group: on expiry the whole
+    group (git's remote helpers included) is killed. timeout overrides TIMEOUT. Returns the CompletedProcess or None on timeout."""
+    p = subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kw)
+    try:
+        out, err = p.communicate(timeout=timeout or TIMEOUT)
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        return None
+    return subprocess.CompletedProcess(cmd, p.returncode, out, err)
+
+
+# Child for the binary download, so headers and body share bounded()'s one total deadline.
+DOWNLOAD = """
+import sys, urllib.request
+with urllib.request.urlopen(sys.argv[1], timeout=float(sys.argv[3])) as r, open(sys.argv[2], "wb") as fh:
+    while chunk := r.read(65536):
+        fh.write(chunk)
+"""
+
+
+def fetch(ents):
+    """The network step: bounded, then authenticated. Never part of `just check`."""
+    asset, path, want = binary_path()
+    if not sha256_ok(path, want):
+        url = f"https://github.com/eljulians/skillfile/releases/download/{VERSION}/{asset}"
+        os.makedirs(os.path.dirname(path), exist_ok=True)
+        tmp = f"{path}.{os.getpid()}"
+        r = bounded([sys.executable, "-c", DOWNLOAD, url, tmp, str(TIMEOUT)])
+        if r is None or r.returncode != 0:
+            if os.path.exists(tmp):
+                os.remove(tmp)
+            why = f"timed out after {TIMEOUT:g}s" if r is None else f"failed: {(r.stderr.strip().splitlines() or ['?'])[-1]}"
+            die(f"downloading skillfile {VERSION} from {url} {why}; "
+                f"check network and proxy (HTTPS_PROXY), then rerun `just vendored-fetch`")
+        got = hashlib.sha256(open(tmp, "rb").read()).hexdigest()
+        if got != want:
+            os.remove(tmp)
+            die(f"skillfile {VERSION} download {url} has sha256 {got}, pinned {want}; refusing to cache it")
+        os.chmod(tmp, 0o755); os.replace(tmp, path)
+    pins = {}
+    for _, name, source, p in ents:
+        pins.setdefault(source, []).append((name, p))
+    for source, items in pins.items():
+        try:
+            for _, p in items:
+                upstream(source, p)
+            continue  # cached and authentic
+        except Unauthentic:
+            pass
+        repo, sha = source.split("@", 1)
+        gd = gitdir(source)
+        shutil.rmtree(gd, ignore_errors=True)
+        tmp = f"{gd}.{os.getpid()}"
+        shutil.rmtree(tmp, ignore_errors=True)
+        subprocess.run(["git", "init", "-q", "--bare", tmp], check=True)
+        env = dict(os.environ, GIT_TERMINAL_PROMPT="0")
+        cmd = ["git", "--git-dir", tmp, "-c", "http.lowSpeedLimit=1", "-c", f"http.lowSpeedTime={int(TIMEOUT)}",
+               "fetch", "-q", "--depth", "1", "--no-tags", f"https://github.com/{repo}.git", sha]
+        r = bounded(cmd, env=env)
+        if r is None:
+            shutil.rmtree(tmp, ignore_errors=True)
+            die(f"git fetch of {source} timed out after {TIMEOUT:g}s; check network and proxy (HTTPS_PROXY), "
+                f"then rerun `just vendored-fetch`")
+        if r.returncode != 0:
+            shutil.rmtree(tmp, ignore_errors=True)
+            die(f"git fetch of {source} failed: {r.stderr.strip()}; check network, then rerun `just vendored-fetch`")
+        os.makedirs(os.path.dirname(gd), exist_ok=True)
+        os.replace(tmp, gd)
+        for name, p in items:
+            try:
+                upstream(source, p)
+            except Unauthentic as e:
+                die(f"{name}: fetched {source} {p} does not authenticate: {e}")
+        print(f"vendored-fetch: {source} cached ({', '.join(n for n, _ in items)})")
+    print(f"vendored-fetch: ok ({len(ents)} skills, skillfile {VERSION}; cache {cache})")
+
+
+def offline_prefix():
+    """Run skillfile with no network namespace where the kernel allows it."""
+    cmd = ["unshare", "-Un", "--map-current-user"]
+    if shutil.which("unshare") and subprocess.run(cmd + ["true"], capture_output=True).returncode == 0:
+        return cmd
+    return []
+
+
+def gate(ents, vendored):
+    _, binary, want = binary_path()
+    if not sha256_ok(binary, want):
+        die(f"skillfile {VERSION} is not cached at {binary} (or fails its pinned sha256); {FETCH}")
+    work = tempfile.mkdtemp(prefix="check-vendored-")
+    try:
+        for f in ("Skillfile", "Skillfile.lock"):
+            shutil.copy2(os.path.join(root, f), work)
+        lock = json.load(open(os.path.join(root, "Skillfile.lock")))
+        shutil.copytree(os.path.join(root, ".skillfile", "patches"), os.path.join(work, ".skillfile", "patches"), symlinks=True)
+        for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
+            if kind == "local" and os.path.isdir(os.path.join(root, src)):
+                shutil.copytree(os.path.join(root, src), os.path.join(work, src), symlinks=True)
+        for _, name, source, path in vendored:
+            if not os.path.isdir(gitdir(source)):
+                die(f"{name}: upstream {source} is not cached at {gitdir(source)}; {FETCH}")
+            try:
+                tree = upstream(source, path)
+            except Unauthentic as e:
+                die(f"{name}: cached upstream {source} {path} fails authentication: {e}; {FETCH}")
+            repo, sha = source.split("@", 1)
+            locked = lock.get(f"github/skill/{name}", {})
+            if locked.get("sha") != sha:
+                die(f"{name}: Skillfile pins {sha} but Skillfile.lock has {locked.get('sha')}; make them agree")
+            d = os.path.join(work, ".skillfile", "cache", "skills", name)
+            for rel, data in tree.items():
+                os.makedirs(os.path.dirname(os.path.join(d, rel)), exist_ok=True)
+                open(os.path.join(d, rel), "wb").write(data)
+            json.dump({"owner_repo": repo, "path_in_repo": path, "raw_url": locked.get("raw_url"),
+                       "ref": sha, "sha": sha, "source_type": "github"}, open(os.path.join(d, ".meta"), "w"), indent=2)
+        env = {k: v for k, v in os.environ.items() if k not in ("GH_TOKEN", "GITHUB_TOKEN") and "proxy" not in k.lower()}
+        env.update(HOME=os.path.join(work, ".home"), SKILLFILE_QUIET="1", NO_PROXY="", no_proxy="",
+                   **{k: DEAD for k in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy", "ALL_PROXY", "all_proxy")})
+        r = bounded(offline_prefix() + [binary, "install"], timeout=INSTALL_TIMEOUT, cwd=work, env=env)
+        if r is None:
+            die(f"skillfile install did not finish within {INSTALL_TIMEOUT}s offline; {FETCH}")
+        if r.returncode != 0:
+            die(f"skillfile {VERSION} install (offline, throwaway copy) failed:\n{r.stdout}{r.stderr}"
+                f"a patch that no longer applies names its skill above; else {FETCH}")
+        bad = 0
+        for _, name, source, path in vendored:
+            want_files, made_odd = files(os.path.join(work, SKILLS, name))
+            have, odd = files(os.path.join(root, SKILLS, name))
+            origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus .skillfile/patches/skills/{name}/"
+            for rel, why in sorted(made_odd.items()):
+                print(f"{TAG}: {name}: skillfile's install of {origin} has {rel}, which {why}", file=sys.stderr); bad += 1
+            for rel, why in sorted(odd.items()):
+                shown = f"{SKILLS}/{name}" + ("" if rel == "." else f"/{rel}")
+                print(f"{TAG}: {name}: {shown} {why}; vendored folders hold only upstream's regular files", file=sys.stderr); bad += 1
+            for rel in sorted(set(want_files) | set(have)):
+                shown = f"{SKILLS}/{name}/{rel}"
+                if rel not in have:
+                    print(f"{TAG}: {name}: {shown} is missing; upstream {origin} has it", file=sys.stderr)
+                elif rel not in want_files:
+                    print(f"{TAG}: {name}: {shown} is not in upstream {origin}", file=sys.stderr)
+                elif have[rel] != want_files[rel]:
+                    print(f"{TAG}: {name}: {shown} differs from upstream {origin}", file=sys.stderr)
+                    d = difflib.unified_diff(want_files[rel].decode(errors="replace").splitlines(),
+                                             have[rel].decode(errors="replace").splitlines(),
+                                             "upstream+patch", "committed", lineterm="", n=1)
+                    for line in list(d)[:20]:
+                        print(f"    {line}", file=sys.stderr)
+                else:
+                    continue
+                bad += 1
+        if bad:
+            die(f"{bad} vendored file(s) drift from pin plus patch: change vendored text only through "
+                f".skillfile/patches/skills/<name>/<file>.patch (first line names its ADR), else revert the file")
+        print(f"vendored: ok ({len(vendored)} skills equal authenticated upstream at pin plus patches; skillfile {VERSION}, offline)")
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+ents = entries()
+vendored = [e for e in ents if e[0] == "github"]
+if not vendored:
+    die("no github entries in Skillfile")
+fetch(vendored) if a.fetch else gate(ents, vendored)

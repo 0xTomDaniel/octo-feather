@@ -52,6 +52,7 @@ lim="${QC_TEST_RUN_TIMEOUT:-90}"
 bounded() { timeout -k 5 "$lim" "$@" & echo $! > "$t/pids/run"; wait $!; set -- $?; rm -f "$t/pids/run"; return "$1"; }
 hung() { [[ "$1" != 124 && "$1" != 137 ]] || fail "$2 hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: ${3:-}"; }
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+vc0="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"   # the caller's warm check-vendored cache (#69)
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION SPEC_CHAT_STATE HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
@@ -127,6 +128,21 @@ P
     for _ in $(seq 100); do [[ -f scratch/pane.txt ]] && break; sleep 0.1; done
     echo "judge pidns $(readlink /proc/self/ns/pid)"; cat scratch/pane.txt 2>/dev/null || echo "MISSING pane output (pane $id)"
     printf "$ok" ;;
+  vendored)   # `just check`'s check-vendored on the kit reads the cache; every write into it fails
+    vc="$HOME/.cache/octo-feather/skillfile"; kit="$(dirname "$(command -v octo-feather-state)")/.."
+    just --justfile "$kit/justfile" check-vendored 2>&1 | grep -q '^vendored: ok' && echo "VENDORED green" || echo "MISSING check-vendored green"
+    touch "$vc/judge" 2>/dev/null && echo "ESCAPE wrote new file in cache"
+    b="$(find "$vc/bin" -type f | head -1)"; (: >> "$b") 2>/dev/null && echo "ESCAPE opened cached binary for write"
+    rm -rf "$vc/git" 2>/dev/null; [[ -d "$vc/git" ]] || echo "ESCAPE deleted cached git"
+    unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2>/dev/null && echo "ESCAPE remounted cache rw"
+    printf "$ok" ;;
+  nested)   # `just check` in the sandbox runs this test (fresh HOME, its own herdr and state): a sandboxed qc inside the judge's gets past its proof
+    h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
+    o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/bin/pi}/fakeherdr:${0%/pi}:$PATH" \
+      FAKE_QC=garbage octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
+    grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" && grep -q 'qc sandbox: ok   [1-9][0-9]* writable mounts covered' <<< "$o" \
+      || echo "MISSING nested proof: $o"
+    printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
       for flag in "--session default" "--remote live" "--machine live" ""; do
@@ -190,6 +206,7 @@ grep -q "changed .gitignore; deleted docs/specs/demo.spec.html" <<< "$out" || fa
 grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "no pre-run proof printed: $out"
 grep -q "qc sandbox: ok   worktree $PWD is an overlay" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" \
   || fail "no overlay / persistent-writable proof: $out"
+grep -q "qc sandbox: ok   vendored-skill cache: none on the box, nothing bound" <<< "$out" || fail "absent cache: want no bind, no failure: $out"
 
 # --no-sandbox: printed, report written, status never changes.
 run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
@@ -293,10 +310,28 @@ if [[ "$mode" == real ]]; then
 fi
 [[ ! -e scratch ]] || fail "pane run's scratch survived"
 
+# A warm vendored-skill cache (#69): bound back read-only after the cache tmpfs, so `just check` in the sandbox
+# reaches check-vendored green; the proof names the bind; the judge cannot write it.
+[[ -d "$vc0/git" && -d "$vc0/bin" ]] || fail "no warm check-vendored cache at $vc0: run just vendored-fetch"
+vc="$HOME/.cache/octo-feather/skillfile"; mkdir -p "${vc%/*}"; cp -a "$vc0" "$vc"; vsum() { find "$vc" -printf '%P %s %m\n' | sort | md5sum; }; v0="$(vsum)"
+run 0 vendored $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "vendored cache: $judge"
+grep -q "VENDORED green" <<< "$judge" || fail "check-vendored not green in the sandbox: $judge"
+grep -q "qc sandbox: ok   vendored-skill cache $vc bound read-only" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" \
+  || fail "no read-only cache proof: $out"
+[[ "$(vsum)" == "$v0" ]] || fail "the judge changed the vendored-skill cache"
+rm -rf "$HOME/.cache"
+# A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes its proof.
+run 0 nested $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "nested qc: $judge"
+grep -q "NESTED exit 3" <<< "$judge" || fail "nested qc: want the inner judge to run (exit 3, unusable report): $judge"
+
 # The qc recipes pass arguments as data, never as shell source.
 for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/typescript/justfile"; do
   set +e; o="$(bounded just --justfile "$jf" --working-directory "$t/repo" qc "$st" 5 'acceptance-a$(touch pwned)' 'x;touch pwned2' 2>&1)"; rc=$?; set -e; hung "$rc" "$jf qc" "$o"
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
