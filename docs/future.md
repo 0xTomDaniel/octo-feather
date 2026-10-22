@@ -1,6 +1,6 @@
 # Future improvements
 
-Not for the Martell take-home. Each item names what it would replace and what is still unverified.
+Not for the take-home. Each item names what it would replace and what is still unverified.
 
 ## A2A instead of lane records and handoffs.jsonl
 
@@ -74,11 +74,11 @@ Effect pilot after Thu 10-22: one small project tries Effect v4 (Schema in core 
 
 Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API and typescript-eslint, knip and dependency-cruiser support it (7.0 GA 2026-07-08 has no API; the npm-alias bridge was rejected because it puts two compilers in every repo). Until then it stays on `typescript ~6.0.3` (Tom, 2026-10-19).
 
-## Lessons from the Fieldnote run (2026-10-19/20)
+## Lessons from the pilot 1 run (2026-10-19/20)
 
-Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. Kit items:
+Full list with Tom's guidelines: the take-home's notes (private, not in repo). Kit items:
 
-- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, Fieldnote `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
+- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, pilot 1 `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
 - Director merged spec PR #1 itself despite the never-merge rule. Now a Merges section at the top of agents/director.md and the MERGES field of the kickoff brief (`docs/kickoff-brief.md`); owed eval case in docs/owed-evals/backlog.md.
 - Supervisor moved the head after its report (1887d52 → f14e2d8) and reworded commit bodies unasked. The merge ask must name the final head; owed eval case.
 - Orders sent during cliproxy 503 outages were lost; `herdr-say` exit 0 does not mean the order was read.
@@ -87,7 +87,7 @@ Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. 
 - macOS: `just start` works without a hand-patched PATH: the kit justfile puts GNU coreutils and util-linux (`realpath -m`, `readlink -f`, `setsid`, `timeout`), Homebrew's bash 5 (`mapfile`) and mise ahead of the system's, panes inherit it, and octo-feather-start sets HERDR_SESSION from the project. Still Linux-only, and saying so: `just qc` (exit 69) and `herdr-close --park` (exit 69); a closed tab's detached children are not swept on macOS.
 - Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running. Resolved by `review-host` (issue #65, `tests/review-host.sh`): the cause was review-host.py reading liveness from `/proc`, which macOS lacks, so it never saw its own server and started another on a new port. The kit command stops this state's review-serve processes that review-host.py would not see as its own before `register` (so the recorded port is reused) and any the registry does not own after it. Not reproduced on Linux, service or loopback. The lasting fix is in Spec Chat: `process_cmdline` falling back to `ps -o command= -p PID` where there is no `/proc`.
 
-## Lessons from the Quorum run (2026-10-20/21)
+## Lessons from the pilot 2 run (2026-10-20/21)
 
 - Accept went stale twice: amending the spec after registration (rich output 51d4fa7; B2 amend) moved its hash, so `octo-feather-accepted` rejected Tom's real Accept ("Accept spec pressed on version …, not on spec at registered commit …"). Re-register and re-press each time. A spec edit after Accept should re-register automatically and tell Tom. Resolved by the spec-call rule (issue-lifecycle `#gates-spec-calls`, issue #63): an edit after Accept no longer re-registers or voids the Accept; it is a logged call the owner approves or denies at merge, and a weakening reaches Tom at once.
 - `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.

@@ -35,7 +35,7 @@ PASS acceptance-gh-evidence: $ gh issue view 32 --repo 0xTomDaniel/octo-feather 
   history only: the read-only GitHub snapshot shows issue #32 open with the exact required title and PR #35 marked draft.
 PASS acceptance-status-check: $ scripts/octo-feather-spec-status check docs/specs
   Ran in this worktree; exited 0 and printed a line starting "spec-status: ok".
-qc: 2/2 passed at 298aa9bebaaa; offline gh refusals 0; head now ab82bd02cbe8; report /home/exedev/.local/state/octo-feather/qc/298aa9bebaaad0dc1dda10f287196f679d658df2-20261019T230318Z-ff6508.json
+qc: 2/2 passed at 298aa9bebaaa; offline gh refusals 0; head now ab82bd02cbe8; report ~/.local/state/octo-feather/qc/298aa9bebaaad0dc1dda10f287196f679d658df2-20261019T230318Z-ff6508.json
 ```
 
 Result:
