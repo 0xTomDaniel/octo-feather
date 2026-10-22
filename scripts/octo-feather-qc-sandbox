@@ -73,7 +73,8 @@ if [[ "$phase" == setup ]]; then
     [[ -n "$p" && "$p" == /tmp/* ]] || continue
     src="/proc/self/fd/3/${p#/tmp/}"; [[ -e "$src" ]] || continue
     if [[ -d "$src" ]]; then mkdir -p "$p"; else mkdir -p "$(dirname "$p")"; touch "$p"; fi
-    mount --no-canonicalize --bind "$src" "$p" || die "bind back $p"   # canonicalizing would resolve to the new /tmp
+    # canonicalizing would resolve to the new /tmp; recursive: nested, a kept path has an outer run's locked binds below it
+    mount --no-canonicalize --rbind "$src" "$p" || die "bind back $p"
   done <<< "$QC_KEEP"
   probe="qc-tmp-probe-$S"; : > "/proc/self/fd/3/$probe"
   [[ ! -e "/tmp/$probe" ]] && say "ok   /tmp is private (nothing the judge writes there outlives the run)" || die "/tmp is private"
