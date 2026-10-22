@@ -56,11 +56,9 @@ recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
 for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The demo's invocation (program plus first subcommand word,
-the URL path for curl, the test file for playwright) must be named in What to build. A ticket
-that says it has no externally or user visible behavior, is internal only, delivers one layer
-(`persistence layer only`, `schema only`) or defers its surface to another ticket (`a follow-up
-ticket will wire`, `wired later`) fails too. The wide-refactor line
-`Expand-contract: expand|migrate|contract` waives both. Each failure prints
+the URL path for curl, the test file for playwright) must be named in What to build. The
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Checks are
+structural facts only, never what the prose means (that is review's). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
 2 nothing could be checked (gh, file or specs error; nothing printed as passed).
 `tickets` reads issues through `gh issue view --json` (works with the qc judge's offline gh);
@@ -653,11 +651,6 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
                      + ("does not name" if what.strip() else "(missing) cannot name"),
                      "the demo must run the behavior this ticket builds, named in What to build (e.g. What to build says "
                      "`app hello NAME --shout` greets in capitals; demo: `uv run app hello Ada --shout` prints HELLO, ADA!)")
-    m = INTERNAL.search(" ".join([section_text(body, "what to build")] + items))
-    if m:
-        fail("layer-only-ticket", f"the ticket says {m.group(0)!r}: one layer, or no behavior a user sees",
-             "cut the ticket so it ends on behavior a user sees through the app's CLI, HTTP or UI, with its demo; "
-             "or, if it is one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
     return out
 
 
@@ -669,11 +662,6 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "script run by its interpreter, e.g. `python harness.py`), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
-INTERNAL = re.compile(r"\bno (?:externally|user)[- ]visible(?: behaviou?r| change)?|\b(?:not|never) (?:externally|user)[- ]visible"
-                      r"|\binternal[- ]only\b|\bno (?:user[- ]facing|observable|visible) (?:behaviou?r|change)"
-                      # one layer, or its surface deferred to another ticket
-                      r"|\b\w+ layer only\b|\bonly the \w+ layer\b|\b(?:schema|persistence|storage|adapter|backend|frontend|API|UI) only\b"
-                      r"|\ba (?:follow-up|later|subsequent|next) ticket (?:will )?(?:wire|expose|connect|hook)|\bwired (?:up )?later\b", re.I)
 
 
 def names(what: str, inv: str) -> bool:
