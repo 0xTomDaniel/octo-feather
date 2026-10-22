@@ -60,8 +60,9 @@ durable workflow artifacts.
 ## Verdict Mutations
 
 - The reviewer returns a clear or blocking finding set for the diff.
-- A deterministic helper creates or updates one machine-readable PR verdict
-  comment for code review.
+- A deterministic helper, `octo-feather-lane verdict <PR> <head> <report>`,
+  creates or updates one machine-readable PR verdict comment for code review
+  and prints its URL; `octo-feather-lane merge-ask` checks the merge ask links it.
 - The comment records inputs, findings, and the reviewed head.
 - Do not depend on the formal Review API, reviewer identity, checks, or labels.
 - Never merge or approve as the owner reviewer.

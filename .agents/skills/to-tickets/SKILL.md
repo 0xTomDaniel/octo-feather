@@ -36,7 +36,7 @@ Break the work into **tracer bullet** tickets.
 
 Give each ticket its **blocking edges**: the other tickets that must complete before it can start. A ticket with no blockers can start immediately.
 
-**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there.
+**Wide refactors are the exception to vertical slicing.** A **wide refactor** is one mechanical change (rename a column, retype a shared symbol) whose **blast radius** fans across the whole codebase, so a single edit breaks thousands of call sites at once and no vertical slice can land green. Don't force it into a tracer bullet; sequence it as **expand–contract**. First expand: add the new form beside the old so nothing breaks. Then migrate the call sites over in batches sized by blast radius (per package, per directory), each batch its own ticket blocked by the expand, keeping CI green batch to batch because the old form still exists. Finally contract: delete the old form once no caller remains, in a ticket blocked by every migrate batch. When even the batches can't stay green alone, keep the sequence but let them share an integration branch that all block a final integrate-and-verify ticket; green is promised only there. Each ticket of the sequence carries the line `Expand-contract: expand`, `Expand-contract: migrate` or `Expand-contract: contract`: the only tickets allowed to end without a demo.
 
 ### 4. Quiz the user
 
@@ -56,10 +56,14 @@ Iterate until the user approves the breakdown.
 
 ### 5. Publish the tickets to the configured tracker
 
+Before publishing, check each drafted issue body with `octo-feather-lane ticket -` (the draft on stdin) from the target repo. It fails a draft that names no acceptance-criterion anchor of its spec, or ends on no demo through the repo's own surface (its declared CLI, script or recipe, an HTTP request, a UI driver; not the gate, not `printf` or another generic tool) that runs the command, URL or page its What to build names, unless it carries an `Expand-contract:` line, printing the class and the fix. It checks facts, not meaning: whether the ticket is a real vertical slice is still yours to judge. Fix the draft as it says and rerun until it exits 0; never publish a draft that fails. A failure you cannot fix inside the approved breakdown (no criterion fits, no demo path exists) goes back to step 4.
+
 Publish the approved tickets. **How** depends on the tracker; the tickets are the same either way, only the shape of the blocking edges changes:
 
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
 - **A real issue tracker (GitHub Issues)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. If the source was an existing issue, make each ticket its sub-issue (tracker doc's operation). Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
+
+After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent issue>`; it must exit 0.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
@@ -88,12 +92,15 @@ A reference to the parent issue on the tracker (if the source was an existing is
 
 ## What to build
 
-The end-to-end behaviour this ticket makes work, from the user's perspective, not layer-by-layer implementation.
+The end-to-end behaviour this ticket makes work, from the user's perspective, not layer-by-layer implementation. Name the command, URL or page the demo runs.
 
 ## Acceptance criteria
 
-- [ ] Criterion 1
-- [ ] Criterion 2
+- [ ] <spec slug>#<anchor>: what proves the criterion this ticket serves (the anchor from the accepted spec, docs/specs/<spec slug>.spec.html)
+- [ ] <spec slug>#<anchor>: another criterion it serves, if any
+- [ ] demo: `<command>` and what it shows: the behaviour run through the app's own CLI (a program the repo declares), HTTP or UI, never the gate alone (`just check`) or a generic tool (`printf`, `echo`)
+
+For one step of a wide refactor, replace the demo item with the line `Expand-contract: expand`, `migrate` or `contract`.
 
 ## Blocked by
 
