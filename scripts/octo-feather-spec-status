@@ -4,6 +4,9 @@
   octo-feather-spec-status check [DIR...]          check every DIR/*.status.json (default docs/specs)
   octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
+  octo-feather-spec-status calls [--since REF] [DIR...]
+                                                   list the calls added since REF (default: the merge
+                                                   base with origin/main), for the merge ask and PR body
 
 A status file `<slug>.status.json` sits beside `<slug>.spec.html`:
   {"spec": "<slug>.spec.html", "accepted_commit": "<sha>",
@@ -31,6 +34,13 @@ it (so moving or reordering a child changes its parents), whitespace normalized;
 content outside any anchored element is anchor "(page)". Every added, removed or changed anchor
 must be named in `anchors` by a call without `denied`; a removed criterion needs
 such a call of kind weakens, an added one of kind adds.
+
+`calls` is read-only: it lists each call in DIR/*.calls.jsonl that is not in that
+log at REF (a call is the same call with or without `denied`), grouped as the
+loudness table orders them (#gates-call-loudness): weakens, adds, clarifies, each
+group by time. Each call shows its spec, lane, role, anchors, criteria, what, why
+and evidence, and DENIED when the owner denied it. It ends with the count, and a
+line per lane with more than three calls.
 """
 import json, re, subprocess, sys
 from html.parser import HTMLParser
@@ -276,6 +286,130 @@ def check_calls(status: Path) -> list[str]:
     return errs
 
 
+LOUDNESS = (  # (kind, heading): the order and wording of #gates-call-loudness
+    ("weakens", "Weakens or removes a criterion (flagged; the director told the owner at once)"),
+    ("adds", "Adds scope or a criterion (flagged: added scope)"),
+    ("clarifies", "Clarifies or adds detail, criteria unchanged (listed)"),
+)
+
+
+def _parse_log(text: str, where: str) -> tuple[list[dict], list[str]]:
+    calls, errs = [], []
+    for n, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            continue
+        try:
+            c = json.loads(line)
+        except ValueError as e:
+            errs.append(f"{where}:{n}: not a JSON object ({e}); fix: run `octo-feather-spec-status check`"); continue
+        if not isinstance(c, dict):
+            errs.append(f"{where}:{n}: not a JSON object; fix: run `octo-feather-spec-status check`"); continue
+        calls.append(c)
+    return calls, errs
+
+
+def _identity(c: dict) -> str:
+    """A call is the same call whether or not the owner has denied it since."""
+    return json.dumps({k: v for k, v in c.items() if k != "denied"}, sort_keys=True)
+
+
+def _base(d: Path, since: str | None) -> tuple[str | None, str | None]:
+    """The commit to list calls since: REF, else the merge base of HEAD and origin/main."""
+    if since:
+        r = _git(d, "rev-parse", "--verify", "-q", f"{since}^{{commit}}")
+        return (r.stdout.strip(), None) if not r.returncode else (None, f"{d}: no commit {since}")
+    r = _git(d, "merge-base", "HEAD", "origin/main")
+    if r.returncode:
+        return None, f"{d}: no merge base with origin/main; fix: git fetch origin main, or pass --since REF"
+    return r.stdout.strip(), None
+
+
+def new_calls(d: Path, since: str | None) -> tuple[list[tuple[Path, dict]], list[str]]:
+    """Each call in d/*.calls.jsonl not in that log at the base commit, with its log."""
+    out, errs = [], []
+    logs = sorted(d.glob("*.calls.jsonl"))
+    if not logs:
+        return out, errs
+    base, err = _base(d, since)
+    if err:
+        return out, [err]
+    top = Path(_git(d, "rev-parse", "--show-toplevel").stdout.strip()).resolve()
+    for log in logs:
+        rel = log.resolve().relative_to(top).as_posix()
+        shown = _git(d, "show", f"{base}:{rel}")
+        old, e1 = _parse_log(shown.stdout if not shown.returncode else "", f"{rel}@{base[:7]}")
+        now, e2 = _parse_log(log.read_text(encoding="utf-8"), str(log))
+        errs += e1 + e2
+        seen: dict[str, int] = {}
+        for c in old:
+            seen[_identity(c)] = seen.get(_identity(c), 0) + 1
+        for c in now:
+            k = _identity(c)
+            if seen.get(k):
+                seen[k] -= 1
+            else:
+                out.append((log, c))
+    return out, errs
+
+
+def _field(v) -> str:
+    if isinstance(v, list):
+        return ", ".join(map(str, v)) or "(none)"
+    return " ".join(str(v).split()) if v not in (None, "") else "(none)"
+
+
+def list_calls(found: list[tuple[Path, dict]], base_desc: str) -> str:
+    lines = [f"Spec calls since {base_desc} (issue-lifecycle #gates-spec-calls); "
+             f"approve or deny each, merging approves every call not denied."]
+    n = 0
+    for kind, heading in LOUDNESS:
+        group = sorted((x for x in found if x[1].get("kind") == kind),
+                       key=lambda x: (str(x[1].get("at", "")), str(x[0]), _identity(x[1])))
+        lines += ["", f"{heading}: {len(group)}"]
+        for log, c in group:
+            n += 1
+            d = c.get("denied")
+            mark = f" DENIED ({_field(d.get('at'))}: {_field(d.get('note'))})" if isinstance(d, dict) and d else ""
+            spec = log.with_name(log.name.removesuffix(".calls.jsonl") + ".spec.html")
+            lines.append(f"{n}. {kind}{mark}: {spec}, lane {_field(c.get('lane'))}, role {_field(c.get('role'))}, "
+                         f"at {_field(c.get('at'))}" + (f", commit {c['commit']}" if c.get("commit") else ""))
+            for f in ("anchors", "criteria", "what", "why", "evidence"):
+                lines.append(f"   {f}: {_field(c.get(f))}")
+    other = [x for x in found if x[1].get("kind") not in KINDS]
+    if other:
+        lines += ["", f"Unknown kind (fix: run `octo-feather-spec-status check`): {len(other)}"]
+        for log, c in other:
+            n += 1
+            lines.append(f"{n}. {_field(c.get('kind'))}: {log}, lane {_field(c.get('lane'))}, what {_field(c.get('what'))}")
+    denied = sum(1 for _, c in found if c.get("denied"))
+    counts = ", ".join(f"{sum(1 for _, c in found if c.get('kind') == k)} {k}" for k, _ in LOUDNESS)
+    lines += ["", f"{len(found)} call{'s' if len(found) != 1 else ''} ({counts}; {denied} denied)."]
+    lanes: dict[str, int] = {}
+    for _, c in found:
+        lanes[_field(c.get("lane"))] = lanes.get(_field(c.get("lane")), 0) + 1
+    for lane, k in sorted(lanes.items()):
+        if k > 3:
+            lines.append(f"Lane {lane} made {k} calls, more than three: the director tells the owner "
+                         f"(issue-lifecycle #gates-call-loudness).")
+    return "\n".join(lines)
+
+
+def calls_cmd(args: list[str]) -> int:
+    since = None
+    if args[:1] == ["--since"]:
+        if len(args) < 2:
+            print(__doc__.strip(), file=sys.stderr); return 64
+        since, args = args[1], args[2:]
+    found, errs = [], []
+    for d in args or ["docs/specs"]:
+        if not Path(d).is_dir():
+            errs.append(f"{d}: not a directory"); continue
+        f, e = new_calls(Path(d), since); found += f; errs += e
+    if errs:
+        print("\n".join(errs), file=sys.stderr); return 1
+    print(list_calls(found, since or "the merge base with origin/main")); return 0
+
+
 def write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -288,6 +422,8 @@ def main(argv: list[str]) -> int:
         if errs:
             print("\n".join(errs), file=sys.stderr); return 1
         print(f"spec-status: ok ({len(files)} status files)"); return 0
+    if cmd == "calls":
+        return calls_cmd(args)
     if cmd == "init" and len(args) == 2:
         spec = Path(args[0]); slug = spec.name.removesuffix(".spec.html")
         ids = criteria(spec)

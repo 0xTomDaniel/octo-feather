@@ -56,7 +56,7 @@ change. Its only state writes, outside the repository: at its own launch, write
 `$(octo-feather-state)/director.toml` with one key, `pane`,
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
 on each prod (waking or redirecting a supervisor) and note to the owner worth keeping, append one JSON line per
-spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
+spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior), and a relayed spec-call denial its finding line (Spec calls).
 After spawning a supervisor, create its lane record from the spawn output, exactly like this; at teardown of the finished
 lane and its children, derive its space id (the supervisor pane id's prefix, `w5` in
 `w5:pP8`). Close the space with `herdr-close <space id>` only when it is the lane's
@@ -75,6 +75,8 @@ Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start
 `jq -r 'select(.kind == "finding") | .class' $(octo-feather-state)/lanes/{,archive/}*.handoffs.jsonl | sort | uniq -c | awk '$1 >= 2'`.
 Baseline qc failures are product gaps: open a gap lane, never a correction lane; baseline lanes log them as `"kind": "gap"`, which this count never sees (docs/adr/0020).
 Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
+
+Spec calls (rules: spec `#gates-spec-calls`): when a supervisor reports a call that weakens or removes a criterion, or its lane's fourth call, tell the owner at once, naming the lane and the call; nothing waits on the reply and the lane keeps running. At merge, relay each call the owner denies to that lane's supervisor as rework (`herdr-say <supervisor pane>`), and append to that lane's handoffs log `{"at": ..., "kind": "finding", "source": "owner", "class": "spec-call-denied", "role": <the call's role>, "blocking": true, "summary": <the call and the owner's note>}`, so repeats reach the correction-lane count above (docs/adr/0020).
 
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
 and branch (named per docs/adr/0011) from main, which holds the spec and its status file; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);

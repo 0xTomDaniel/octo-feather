@@ -43,7 +43,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 ## Never
 
 - Push, merge, or write the integration branch. Your supervisor integrates with `just integrate` (docs/adr/0017).
-- Touch another ticket, widen scope, or reshape what was shaped. Never edit `docs/specs/*.spec.html`: Accept freezes a spec (docs/adr/0021); a spec change goes to your supervisor.
+- Touch another ticket, widen scope, or reshape what was shaped. Never edit `docs/specs/*.spec.html`: ask your supervisor with `herdr-say --parent`, naming the change needed and its evidence (rules: spec `#gates-spec-calls`).
 - Review your own work or declare it accepted.
 
 ## Stop and escalate
