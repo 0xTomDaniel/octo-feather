@@ -7,10 +7,14 @@
 # for a registry `accepted = true` that nothing writes. Here Accept is the
 # hand-off alone, exactly as the review page writes it.
 #
-# The versions are Spec Chat's own: review-serve.py `_spec_page` (spec-chat
-# 183f3ee) computed them for tests/fixtures/accepted/*.spec.html. When a Spec Chat
-# clone is present ($SPEC_CHAT_CLONE, default ~/src/spec-chat), the test also
-# recomputes them with it, so a change in Spec Chat's version rule fails here.
+# Spec Chat is read only at its pin (the Skillfile fetch-only entry, `just
+# vendored-fetch`), never the box's clone (#96: a clone behind origin failed this
+# test locally while CI, with no clone, skipped the cross-check). With it the test checks:
+# - the versions: review-serve.py `_spec_page` computes V1 and V2 below for
+#   tests/fixtures/accepted/*.spec.html, so a change in its version rule fails here;
+# - the registry: pinned Spec Chat's review-host CLI registers a spec under an
+#   isolated XDG_STATE_HOME, and octo-feather-accepted finds that row and its Accept
+#   (#96, director finding 47: it once read an env var Spec Chat never reads).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 fx="$kit/tests/fixtures/accepted"
@@ -19,9 +23,8 @@ V2=9beb7ff92e817947ef4b7a4241d7cddf36d24f84c00cbe00058240d1610c7a86   # a-edited
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
-clone="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}"; crossed=""
-if [[ -f "$clone/skill/review-spec/assets/review-serve.py" ]]; then
-  got="$(python3 - "$clone/skill/review-spec/assets" "$fx" "$t/x" <<'EOF'
+sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
+got="$(python3 - "$sc/review-spec/assets" "$fx" "$t/x" <<'EOF2'
 import importlib.util, os, shutil, sys
 assets, fx, scratch = sys.argv[1:]
 sys.path.insert(0, assets)
@@ -30,11 +33,9 @@ m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
 os.makedirs(scratch)
 for f in ("a.spec.html", "a-edited.spec.html"):
     p = os.path.join(scratch, f); shutil.copy(os.path.join(fx, f), p); print(m._spec_page(p)[2])
-EOF
-)" || fail "could not compute versions with Spec Chat at $clone"
-  [[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
-  crossed=", versions crossed with Spec Chat"
-fi
+EOF2
+)" || fail "could not run pinned Spec Chat at $sc"
+[[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
 
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 r="$t/repo"; s=docs/specs/a.spec.html
@@ -42,7 +43,8 @@ g init -q "$r"; mkdir -p "$r/docs/specs"; cp "$fx/a.spec.html" "$r/$s"
 g -C "$r" add -A; g -C "$r" commit -qm spec; c1="$(git -C "$r" rev-parse HEAD)"
 cp "$fx/a-edited.spec.html" "$r/$s"; g -C "$r" commit -qam edit; c2="$(git -C "$r" rev-parse HEAD)"
 
-export SPEC_CHAT_STATE="$t/state"; mkdir -p "$t/state/hosting/default" "$t/state/hosting/other"
+export XDG_STATE_HOME="$t/xdg"; state="$t/xdg/spec-chat"   # fixture rows; the real registry case is last
+mkdir -p "$state/hosting/default" "$state/hosting/other"
 SPOOL_SIDE=human; spool="$r/$s.review/$SPOOL_SIDE"   # Spec Chat's owner side of the spool
 row() { # base updated_at [extra line]
   printf '[[resource]]\nid = "spec:a-flow:p::%s"\nslug = "a-flow"\nroot = "%s"\nspec = "%s"\nbase = "%s"\nupdated_at = "%s"\n%s\n' \
@@ -58,18 +60,18 @@ run() { local want="$1"; shift; set +e; out="$("$A" "$@" --repo "$r" 2>&1)"; rc=
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }
 
 run 1 "$s"                                                           # not registered
-row "$c1" 2026-10-20T15:00:00Z > "$t/state/hosting/default/registry.toml"
+row "$c1" 2026-10-20T15:00:00Z > "$state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"no hand-off"* ]] || fail "registered, no hand-off: $out"
-row "$c1" 2026-10-20T15:00:00Z "accepted = true" > "$t/state/hosting/default/registry.toml"
+row "$c1" 2026-10-20T15:00:00Z "accepted = true" > "$state/hosting/default/registry.toml"
 run 1 "$s"                                                           # a hand-written registry key is not an Accept
-row "$c1" 2026-10-20T15:00:00Z > "$t/state/hosting/default/registry.toml"
+row "$c1" 2026-10-20T15:00:00Z > "$state/hosting/default/registry.toml"
 handoff 1792509686764211101 acc1 "$V1"
 run 0 "$s"                                                           # pilot 1: register, press Accept, exit 0
 [[ "$out" == "accepted $c1 slug=a-flow at=2026-10-20T15:"*" session=default id=spec:a-flow:p::$s handoff=acc1" ]] || fail "bad output: $out"
 handoff 1792509686764211102 com1 "$V1" '[{"id": "c1"}]'
 run 1 "$s"; [[ "$out" == *"sends comments"* ]] || fail "newer comment hand-off: $out"
 handoff 1792509686764211103 acc2 "$V1"
-row "$c2" 2026-10-20T15:10:00Z > "$t/state/hosting/default/registry.toml"
+row "$c2" 2026-10-20T15:10:00Z > "$state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"not on the spec at registered commit"* ]] || fail "stale Accept: $out"   # base moved to an edited spec
 handoff 1792509686764211104 acc3 "$V2"
 run 0 "$s"; [[ "$out" == "accepted $c2 "* ]] || fail "re-accepted at the new base: $out"
@@ -85,8 +87,21 @@ set +e; out="$("$A" 2>&1)"; rc=$?; set -e
 printf '{"id": "ag1", "event": "handoff", "actor": "agent", "createdAt": "2026-10-20T15:59:00.000Z", "version": "%s"}\n' "$V1" \
   > "$spool/1792509686764211199-handoff-ag1.json"
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"handoff=acc3" ]] || fail "an agent-actor hand-off counted: $out"
-row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$t/state/hosting/other/registry.toml"
+row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/hosting/other/registry.toml"
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"session=default"* ]] || fail "a missing commit in another session hid the accepted row: $out"
-row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$t/state/hosting/default/registry.toml"
+row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"is not in"* ]] || fail "registered commit missing from the repo: $out"
-echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit$crossed)"
+# The registry pinned Spec Chat's review-host writes (no --state-dir, no Herdr session),
+# under its own XDG_STATE_HOME: octo-feather-accepted finds the row, then its Accept.
+host="$sc/review-spec/scripts/review-host.py"; r0="$t/r0"
+g init -q "$r0"; mkdir -p "$r0/docs/specs"; cp "$fx/a.spec.html" "$r0/$s"
+g -C "$r0" add -A; g -C "$r0" commit -qm spec; c0="$(git -C "$r0" rev-parse HEAD)"
+export XDG_STATE_HOME="$t/xdg-host" SPEC_CHAT_APPROVED_INGRESS_PORTS=""; unset HERDR_SESSION
+trap '(cd "$r0" && python3 "$host" stop >/dev/null 2>&1) || true; rm -rf "$t"' EXIT
+out="$(cd "$r0" && python3 "$host" register --owner t --slug a-flow --base "$c0" "$s" 2>&1)" || fail "pinned review-host register: $out"
+real() { set +e; out="$("$A" "$s" --repo "$r0" 2>&1)"; rc=$?; set -e; }
+real; [[ "$rc" == 1 && "$out" == *"a-flow: no hand-off"* ]] || fail "row review-host wrote not found: rc=$rc $out"
+spool="$r0/$s.review/$SPOOL_SIDE"; handoff 1792509686764211301 real1 "$V1"
+real; [[ "$rc" == 0 && "$out" == "accepted $c0 slug=a-flow "*" session=default "*"handoff=real1" ]] || fail "Accept on the registered row: rc=$rc $out"
+(cd "$r0" && python3 "$host" stop >/dev/null) || fail "pinned review-host stop"
+echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit; versions and registry from pinned Spec Chat: review-host register, then Accept)"

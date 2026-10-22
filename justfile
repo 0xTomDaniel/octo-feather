@@ -168,7 +168,7 @@ check-spec-status:
 check-vendored:
     @python3 "{{root}}/scripts/check-vendored"
 
-# Fill the check-vendored cache: pinned skillfile binary and each pin commit, every call time-bounded. Never inside `just check`.
+# Fill the check-vendored cache: pinned skillfile binary, each Skillfile pin commit (fetch-only Spec Chat included, #96), every call time-bounded. Never inside `just check`.
 vendored-fetch:
     @python3 "{{root}}/scripts/check-vendored" --fetch
 

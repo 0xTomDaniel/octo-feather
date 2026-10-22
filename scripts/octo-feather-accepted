@@ -4,8 +4,9 @@
 Kickoff check (docs/adr/0021): did the owner press Accept spec on SPEC_PATH at
 an exact commit?
 
-Reads Spec Chat's review-host registries, one per Herdr session
-($SPEC_CHAT_STATE or ~/.local/state/spec-chat, then hosting/*/registry.toml),
+Reads Spec Chat's review-host registries, one per Herdr session, in the state
+dir Spec Chat itself uses (${XDG_STATE_HOME:-~/.local/state}/spec-chat, then
+hosting/*/registry.toml; tests/accepted.sh crosses it with pinned Spec Chat),
 for the rows of that spec path. SPEC_PATH may be absolute, ./-prefixed, or
 relative to a cwd inside the repo; it is compared, relative to the --repo top,
 with each row's spec relative to the row's root. For each row it reads the hand-offs the review
@@ -75,6 +76,13 @@ def served_version(body: bytes, path: str) -> str:
     return hashlib.sha256(body).hexdigest()
 
 
+def spec_chat_state() -> Path:
+    """Spec Chat's state dir, as its review-serve session_state() resolves it (#96: an env var Spec Chat
+    never reads sent this check to a different registry than review-host wrote)."""
+    root = os.environ.get("XDG_STATE_HOME")
+    return (Path(root) if root else Path.home() / ".local" / "state") / "spec-chat"
+
+
 def newest_handoff(spool: Path):
     """(file name, event) of the newest owner hand-off in a spool side, or None."""
     found = []
@@ -121,7 +129,7 @@ def main(argv):
     if len(args) != 1 or args[0] in ("-h", "--help"):
         print(__doc__.strip(), file=sys.stderr); return 64
     top, spec = repo_relative(args[0], repo)
-    state = Path(os.environ.get("SPEC_CHAT_STATE") or Path.home() / ".local/state/spec-chat")
+    state = spec_chat_state()
     rows, seen = [], set()
     for reg in sorted(state.glob("hosting/*/registry.toml")):
         try:
