@@ -51,8 +51,8 @@
       "pr": null
     },
     "acceptance-qc-interim": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 91
     },
     "acceptance-parallel": {
       "status": "planned",
