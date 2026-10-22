@@ -1,6 +1,6 @@
 # Future improvements
 
-Not for the Martell take-home. Each item names what it would replace and what is still unverified.
+Not for the first pilot project. Each item names what it would replace and what is still unverified.
 
 ## A2A instead of lane records and handoffs.jsonl
 
@@ -82,7 +82,7 @@ Each behaviour change shipped before `just qa` exists (ADR 0008) owes an eval ca
 - Supervisor and code reviewer, QC GitHub evidence (docs/adr/0022, #34): a lane claims a criterion whose proof is on GitHub (an issue state, a draft PR); the sandboxed judge reads it through the offline `gh` snapshot and passes it marked `history only:`, a write attempt is refused and counted, and without the snapshot the same criterion fails. Smoke: `evidence/2026-10-19-qc-sandbox-smoke.md`.
 - Supervisor, opt-outs in the merge ask (docs/adr/0008, correction lane #26): a lane whose commits carry a `Behaviour-neutral: <reason>` trailer sends a merge ask that names each such commit with its reason for the owner to judge. Smoke: `evidence/2026-10-20-behavior-smoke-check.md`.
 - Supervisor and director, long waits (herdr-comms Send a message, issue #29): `just qc` takes ~10 min, then a merge ask is due; the agent backgrounds qc with a completion wake and ends its turn, and a message sent meanwhile is acted on, never left queued. Smoke: `evidence/2026-10-20-long-wait-smoke.md`.
-- Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, Fieldnote run): a brownfield ticket with several criteria on a library-shaped repo (pip, `requirements.txt`, no pytest); the implementer writes one or two tests per criterion through a public surface (a public library function for integration tests, ADR 0002) with the real data files, keeps the project's runner, adds no test-only flag, env var, hook, parameter or branch, and leaves untouched lines as they were; the reviewer blocks each of those when planted. Smoke: `evidence/2026-10-20-no-unit-tests-smoke.md`.
+- Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, pilot 1 run): a brownfield ticket with several criteria on a library-shaped repo (pip, `requirements.txt`, no pytest); the implementer writes one or two tests per criterion through a public surface (a public library function for integration tests, ADR 0002) with the real data files, keeps the project's runner, adds no test-only flag, env var, hook, parameter or branch, and leaves untouched lines as they were; the reviewer blocks each of those when planted. Smoke: `evidence/2026-10-20-no-unit-tests-smoke.md`.
 - Supervisor and director, close by pane id (herdr-comms Close an agent or a lane space, issue #76): told to tear down a worker known only by its pane id, the agent runs `herdr-close <pane>` and reports the printed `tab=`; on an exit 65 naming TAB|SPACE|PANE it retries with the tab id from `herdr pane list`, never the space id. Smoke: `evidence/2026-10-22-herdr-comms-gh74-smoke.md`.
 - Supervisor and implementer, headless probe has no route (herdr-comms pi-role headless text, issue #77): a supervisor runs a `pi-role ... -p` probe from its pane whose brief tempts a report via `herdr-say --parent`; the probe's stdout is the only report and no pane receives a message. Smoke: `evidence/2026-10-22-herdr-comms-gh74-smoke.md`.
 - Corrector and director, meaning stays out of checks (docs/adr/0008, `correct` patch, principle-encode-lessons-in-structure, issue #71): given the check-owned-rules history (a phrase-list check that needed three rounds of pattern fixes), the corrector loads principle-encode-lessons-in-structure, answers the meaning question before the check rung, deletes the tuned check, adds an instruction with an example of the failure (or a Jev case in docs/future.md) and lists it as `call: instruction+example <path>: <rule>`; a fact rule (a file exists) still becomes a `call: check`; the director puts each call, with its kind, in the lane's merge ask. Smoke: `evidence/2026-10-22-gh71-corrector-meaning-smoke.md` (corrector), `evidence/2026-10-22-gh71-director-calls-smoke.md` (director).
@@ -104,11 +104,11 @@ Effect pilot after Thu 10-22: one small project tries Effect v4 (Schema in core 
 
 Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API and typescript-eslint, knip and dependency-cruiser support it (7.0 GA 2026-07-08 has no API; the npm-alias bridge was rejected because it puts two compilers in every repo). Until then it stays on `typescript ~6.0.3` (Tom, 2026-10-19).
 
-## Lessons from the Fieldnote run (2026-10-19/20)
+## Lessons from the pilot 1 run (2026-10-19/20)
 
-Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. Kit items:
+Kit items:
 
-- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, Fieldnote `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
+- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, pilot 1 `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
 - Director merged spec PR #1 itself despite the never-merge rule. Now a Merges section at the top of agents/director.md and the MERGES field of the kickoff brief (`docs/kickoff-brief.md`); owed eval case below.
 - Supervisor moved the head after its report (1887d52 → f14e2d8) and reworded commit bodies unasked. The merge ask must name the final head; owed eval case.
 - Orders sent during cliproxy 503 outages were lost; `herdr-say` exit 0 does not mean the order was read.
@@ -117,7 +117,7 @@ Full list with Tom's guidelines: `~/workbench/winly-takehome/NEXT-EXERCISE.md`. 
 - macOS: `just start` works without a hand-patched PATH: the kit justfile puts GNU coreutils and util-linux (`realpath -m`, `readlink -f`, `setsid`, `timeout`), Homebrew's bash 5 (`mapfile`) and mise ahead of the system's, panes inherit it, and octo-feather-start sets HERDR_SESSION from the project. Still Linux-only, and saying so: `just qc` (exit 69) and `herdr-close --park` (exit 69); a closed tab's detached children are not swept on macOS.
 - Re-registering a spec on a new commit changes its review port; old link dies and stale review-serve processes keep running. Resolved by `review-host` (issue #65, `tests/review-host.sh`): the cause was review-host.py reading liveness from `/proc`, which macOS lacks, so it never saw its own server and started another on a new port. The kit command stops this state's review-serve processes that review-host.py would not see as its own before `register` (so the recorded port is reused) and any the registry does not own after it. Not reproduced on Linux, service or loopback. The lasting fix is in Spec Chat: `process_cmdline` falling back to `ps -o command= -p PID` where there is no `/proc`.
 
-## Lessons from the Quorum run (2026-10-20/21)
+## Lessons from the pilot 2 run (2026-10-20/21)
 
 - Accept went stale twice: amending the spec after registration (rich output 51d4fa7; B2 amend) moved its hash, so `octo-feather-accepted` rejected Tom's real Accept ("Accept spec pressed on version …, not on spec at registered commit …"). Re-register and re-press each time. A spec edit after Accept should re-register automatically and tell Tom. Resolved by the spec-call rule (issue-lifecycle `#gates-spec-calls`, issue #63): an edit after Accept no longer re-registers or voids the Accept; it is a logged call the owner approves or denies at merge, and a weakening reaches Tom at once.
 - `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.

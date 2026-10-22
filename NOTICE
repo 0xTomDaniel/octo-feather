@@ -45,10 +45,21 @@ were retired on 2026-10-19 and remain in git history; docs/specs/comms.spec.html
 docs/specs/issue-lifecycle.spec.html and docs/specs/roles.spec.html adapt contract text and
 keep anchor names from octo-lite's domains/octo-lite.spec.html.
 
-Copied unmodified from Spec Chat (commit 0f4e0fa), licensed under the Apache
-License, Version 2.0: docs/specs/.viz/runtime.js and docs/specs/.style/spec.css (Spec Chat's
-page runtime and fallback style). docs/specs/.viz/vendor/echarts-5.5.1.min.js is
-Apache ECharts, Apache-2.0.
+Copied unmodified from Spec Chat (https://github.com/0xTomDaniel/spec-chat,
+commit 0f4e0fa), licensed under the Apache License, Version 2.0:
+docs/specs/.viz/runtime.js and docs/specs/.style/spec.css (Spec Chat's page runtime and
+fallback style). docs/specs/.viz/vendor/echarts-5.5.1.min.js is Apache ECharts 5.5.1,
+Apache-2.0, whose NOTICE reads:
+
+    Apache ECharts
+    Copyright 2017-2024 The Apache Software Foundation
+
+    This product includes software developed at
+    The Apache Software Foundation (https://www.apache.org/).
+
+That bundle also contains ZRender (Copyright (c) 2017, Baidu Inc., BSD 3-Clause),
+code derived from d3.js (Copyright 2010-2016 Mike Bostock, BSD 3-Clause) and tslib
+(Copyright (c) Microsoft Corporation, 0BSD, notice kept in the file).
 
 Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/patches/skills/
 (pins in Skillfile.lock):
@@ -65,3 +76,13 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     (local skills, edited in place)
     agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
     (same pin and license).
+
+Third-party license texts, as their licenses require, are in LICENSES/:
+
+    LICENSES/MIT-mattpocock-skills.txt   mattpocock/skills@49dd158 (MIT)
+    LICENSES/MIT-pstack.txt              cursor/plugins@0b8e952 pstack/LICENSE (MIT)
+    LICENSES/NOTICE-echarts.txt          Apache ECharts 5.5.1 NOTICE
+    LICENSES/BSD-3-Clause-zrender.txt    ZRender 5.6.0, bundled in ECharts
+    LICENSES/BSD-3-Clause-d3.txt         d3.js code bundled in ECharts
+
+The Apache License 2.0 text for octo-lite, Spec Chat and ECharts is LICENSE.
