@@ -41,7 +41,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, json, os, re, secrets, shlex, shutil, subprocess, sys, tempfile, threading, time
+import fcntl, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -114,13 +114,16 @@ def github_snapshot(skip, runid):
     if skip:
         return {"off": f"github: SKIPPED (--no-github; {m.group(1)} not fetched, the judge has no GitHub evidence)"}
     snap = Path(tempfile.mkdtemp(prefix=f"qc-ghsnap-{runid}-"))
-    p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
-    if p.returncode:
+    try:   # killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
+        p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
+        if p.returncode:
+            die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
+                    f"{p.stderr.strip() or p.stdout.strip()}")
+        subprocess.run(["chmod", "-R", "a-w", str(snap)], check=True)
+        meta = json.loads((snap / "meta.json").read_text())
+    except BaseException:
         drop(snap)
-        die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
-                f"{p.stderr.strip() or p.stdout.strip()}")
-    subprocess.run(["chmod", "-R", "a-w", str(snap)], check=True)
-    meta = json.loads((snap / "meta.json").read_text())
+        raise
     return {"dir": str(snap), "line": p.stdout.strip(), "repo": meta["repo"], "meta": meta}
 
 
@@ -200,10 +203,14 @@ def sandboxed(judge, session, gh):
         th.start()
     p = subprocess.Popen([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
-                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")])
+                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
     for n in names:
         os.close(pipes[n][1])
-    stdout = p.stdout.read().decode(errors="replace"); p.wait()
+    try:
+        stdout = p.stdout.read().decode(errors="replace"); p.wait()
+    except BaseException:   # qc killed (timeout, ^C): its PID 1 and unshare --fork ignore SIGTERM, so take the
+        os.killpg(p.pid, signal.SIGKILL); p.wait()   # sandbox's group down here, or it judges on unwatched
+        raise
     for th in threads:
         th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
     read = lambda n: b"".join(got[n]).decode(errors="replace")
@@ -266,9 +273,17 @@ def main(argv):
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
     runid = secrets.token_hex(3)
-    gh = github_snapshot(nogh, runid)
-    print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
+    def killed(n, _f):   # a timeout or a closed pane: exit through the finally blocks, so this run's scratch
+        if not killed.once:   # (snapshot, miss log) is removed; a 2nd signal (timeout sends one to the child
+            killed.once = True   # and one to its group) must not cut that short
+            sys.exit(128 + n)
+    killed.once = False
+    for s in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, killed)
+    gh = {}
     try:
+        gh = github_snapshot(nogh, runid)
+        print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
         return judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb)
     finally:
         if "dir" in gh:
@@ -290,8 +305,11 @@ def judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb):
         miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
         env = dict(os.environ, PATH=f"{KIT / 'scripts' / 'qc-bin'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
                    OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
-        run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
-        ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]; miss.unlink()
+        try:
+            run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
+            ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
+        finally:
+            miss.unlink(missing_ok=True)
     else:
         run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}", gh)
         if run is None:

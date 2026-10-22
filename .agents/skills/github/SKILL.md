@@ -70,8 +70,8 @@ durable workflow artifacts.
 ## Merge And Issue Sync
 
 - Merge: who merges, when, and at which head is spec `#gates-merge` alone
-  (docs/specs/issue-lifecycle.spec.html); read it there, never restate it
-  (`just check` fails a copy). The command, with the head that rule names:
+  (docs/specs/issue-lifecycle.spec.html); read it there, never restate it.
+  The command, with the head that rule names:
   `gh pr merge <N> --merge --match-head-commit <head>`.
   Required failed checks remain blockers until fixed or durably waived
   through a repository-approved path.

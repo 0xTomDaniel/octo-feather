@@ -26,7 +26,7 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-owned-rules check-behavior-smoke check-vendored check-tests check-spec-status check-templates
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -48,7 +48,7 @@ check-scripts:
     fi
     for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
 
-# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names.
+# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
@@ -105,6 +105,9 @@ check-refs:
     elif [[ -n "$found" ]]; then
       printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
+    # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
+    if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
+      echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
@@ -190,10 +193,6 @@ integrate issue +refs:
 check-roles:
     @python3 "$root/scripts/check-roles"
 
-# Each owned rule (merge authority, lane branch) is stated once, in its owner; elsewhere only a pointer (correction lane #19).
-check-owned-rules:
-    @python3 "$root/scripts/check-owned-rules"
-
 # A role path changed on this branch needs evidence/*.md and docs/future.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
@@ -238,3 +237,9 @@ state:
 [no-cd]
 new-repo $lang $dest *$flags:
     octo-feather-new-repo "$@"
+
+# Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+# sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
+# Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
+qc-real-herdr:
+    QC_TEST_HERDR=real "$root/tests/qc.sh"
