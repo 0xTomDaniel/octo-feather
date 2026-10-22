@@ -9,7 +9,8 @@
 #   3. caller's archived lanes and director log bound read-only at a scratch
 #      state dir; live lanes/, sessions/, director.toml masked
 #   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
-#   5. tmpfs over the cache dir, /dev/shm and the Pi agent dir (its entries
+#   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
+#      authenticated against each pin, bound back read-only), /dev/shm and the Pi agent dir (its entries
 #      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
 #      never written back); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
@@ -120,7 +121,13 @@ if [[ "$phase" == setup ]]; then
   OV="$SCR/ov"; mkdir -p "$OV"
   mount -t tmpfs -o mode=700 tmpfs "$OV" && mkdir "$OV/u" "$OV/w" "$OV/pi" || die "run tmpfs"
   rw=(/tmp "$HC" "$OV")
+  VC="$CACHE/octo-feather/skillfile"; : > "$SCR/vcache"   # `just check` in the sandbox reads it; read-only
+  vc=0; if [[ -d "$VC" ]]; then exec 10<"$VC" && vc=1; fi
   if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi
+  if ((vc)); then
+    mkdir -p "$VC" && mount --no-canonicalize --bind /proc/self/fd/10 "$VC" && remount ro "$VC" || die "read-only bind $VC"
+    echo "$VC" > "$SCR/vcache"; exec 10<&-
+  fi
   mount -t tmpfs tmpfs /dev/shm 2>/dev/null
   if [[ -d "$PI" ]]; then
     exec 7<"$PI"
@@ -283,6 +290,15 @@ ovl=$(awk -v wt="$wt" -v ov="upperdir=$ov," '{ for (i = 7; $i != "-"; i++); mp =
   mp == wt && $(i+1) == "overlay" && index($(i+3) ",", ov) { n++ } END { print n + 0 }' /proc/self/mountinfo)
 check "$(t test "$ovl" -ge 1 -a ! -e "$ov")" "worktree $wt is an overlay, upper dir on the run tmpfs and hidden from the judge"
 check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}"
+vc=$(cat "$SCR/vcache")
+if [[ -n "$vc" ]]; then   # check-vendored's cache: the last mount on its path is read-only, a write fails
+  vro=$(awk -v m="$vc" '{mp = $5; gsub(/\\040/, " ", mp)} mp == m {o = $6} END {print (("," o ",") ~ /,ro,/)}' /proc/self/mountinfo)
+  w=0; touch "$vc/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$vc/.qc-ro-$S"; }
+  inw=0; for p in "${pers[@]}"; do [[ "$p" == "$vc" ]] && inw=1; done
+  check "$(t test "$vro" = 1 -a "$w" = 0 -a "$inw" = 0)" "vendored-skill cache $vc bound read-only (not writable, not in the writable list)"
+else
+  say "ok   vendored-skill cache: none on the box, nothing bound"
+fi
 if [[ -n "$HERDR" ]]; then
   r=$(t "$HERDR" --session default workspace list); check $((r == 0)) "live Herdr unreachable: raw herdr --session default workspace list exits $r"
   a=$(herdr --session default --remote x --machine y workspace list 2>&1); b=$("$HERDR" --session "$S" workspace list 2>&1)
