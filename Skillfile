@@ -37,6 +37,9 @@ github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d4
 # interrogate: whole folder (skillfile deploys only folders holding SKILL.md); no role loads it, the code
 # reviewer reads only references/code-quality-review.md and references/lead-judgment.md (roles spec #roles-reviewer-patch).
 github  skill  interrogate      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/interrogate
+# linear-cli: schpet/linear-cli release v3.1.0 (ISC), whole folder; no role loads it, the linear tracker skill
+# sends agents to its references by path for reads its scripts do not cover (skills spec #tracker, docs/adr/0004).
+github  skill  linear-cli       schpet/linear-cli@02571d34be662e5487204841fb80bf23ed79b4f0  skills/linear-cli
 
 # octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
 local  skill  commit                  .agents/skills/commit

@@ -5,7 +5,10 @@
 #            the kit's trackers, and no workspace or supervisor starts (fake herdr, tests/start.sh style);
 #   scripts: check-skills (in `just check`) fails a tracker skill missing any tracker script, naming both;
 #   github-issues: each tracker script runs against the offline fake gh (github-pr's scripts/gh), whose
-#            refusal of writes passes through, and against a recording gh for the write arguments.
+#            refusal of writes passes through, and against a recording gh for the write arguments;
+#   linear: tracker = "linear" makes pi-role pass github-pr and linear to the supervisor, never github-issues, and
+#            linear-cli to no role; each linear script reads and writes through the offline fake linear (linear's
+#            scripts/linear, a JSON store), which refuses any other command; same output shapes as github-issues.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -55,12 +58,19 @@ set +e; out="$(cd "$t" && env -u HERDR_SESSION -u HERDR_PANE_ID PATH="$t/bin:$PA
 mkdir -p "$t/kit/scripts"
 cp -r "$kit/agents" "$t/kit/"; cp -r "$kit/.agents" "$t/kit/"; cp "$kit/scripts/check-skills" "$kit/scripts/pi-role" "$t/kit/scripts/"
 python3 "$t/kit/scripts/check-skills" >/dev/null || fail "check-skills fails on the kit copy itself"
-for s in lane-key key-from-branch issue-view issue-create issue-comment issue-done pr-line; do
-  mv "$t/kit/.agents/skills/github-issues/scripts/$s" "$t/held"
-  set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
-  [[ "$rc" == 1 && "$out" == *"tracker skill github-issues: missing tracker script $s "* ]] || fail "check-skills without $s: rc=$rc $out"
-  mv "$t/held" "$t/kit/.agents/skills/github-issues/scripts/$s"
+out="$(python3 "$t/kit/scripts/check-skills")"; [[ "$out" == *"trackers github, linear)"* ]] || fail "check-skills covers both trackers: $out"
+for sk in github-issues linear; do
+  for s in lane-key key-from-branch issue-view issue-create issue-comment issue-done pr-line; do
+    mv "$t/kit/.agents/skills/$sk/scripts/$s" "$t/held"
+    set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
+    [[ "$rc" == 1 && "$out" == *"tracker skill $sk: missing tracker script $s "* ]] || fail "check-skills without $sk $s: rc=$rc $out"
+    mv "$t/held" "$t/kit/.agents/skills/$sk/scripts/$s"
+  done
 done
+chmod -x "$t/kit/.agents/skills/linear/scripts/issue-done"
+set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
+[[ "$rc" == 1 && "$out" == *"tracker skill linear: tracker script issue-done is not executable"* ]] || fail "check-skills with linear issue-done not executable: rc=$rc $out"
+chmod +x "$t/kit/.agents/skills/linear/scripts/issue-done"
 chmod -x "$t/kit/.agents/skills/github-issues/scripts/pr-line"
 set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 && "$out" == *"tracker script pr-line is not executable"* ]] || fail "check-skills with pr-line not executable: rc=$rc $out"
@@ -122,5 +132,74 @@ set +e; out="$(cd "$t/target" && PATH="$ghdir:$PATH" "$GI/issue-comment" 7 <<<"a
   || fail "issue-comment from stdin: rc=$rc $out; gh $(tail -2 "$GH_LOG")"
 off 0 issue-done 7; [[ -z "$out" && -z "$err" && "$(tail -1 "$GH_LOG")" == "issue close 7" ]] || fail "issue-done 7: $out $err"
 off 0 issue-done 6; [[ -z "$out" && -z "$err" ]] || fail "issue-done on a closed issue printed: $out $err"
+# Linear: a target whose config selects it gets github-pr and linear, never github-issues; no role gets linear-cli.
+echo 'tracker = "linear"' > "$t/target/.octo-feather.toml"
+got=" $(skills "$t/target/sub" supervisor) "
+[[ "$got" == *" github-pr "* && "$got" == *" linear "* && "$got" != *" github-issues "* && "$got" != *" linear-cli "* ]] \
+  || fail "supervisor skills with tracker linear: $got"
+for r in "$kit"/agents/*.md; do
+  r="$(basename "$r" .md)"; got=" $(skills "$t/target" "$r") "
+  [[ "$got" != *" linear-cli "* && "$got" != *" github-issues "* ]] || fail "$r with tracker linear: $got"
+done
+
+# linear scripts against the offline fake linear: a store with ENG-7 (parent ENG-3, blocked by ENG-4 and ENG-5) and ENG-8 done.
+LI="$kit/.agents/skills/linear/scripts"
+export OCTO_FEATHER_LINEAR_STORE="$t/store.json"
+cat > "$OCTO_FEATHER_LINEAR_STORE" <<'EOF'
+{"workspace": "acme", "issues": {
+ "ENG-3": {"title": "Parent", "description": "p", "state": "In Progress", "parent": null, "blocked_by": []},
+ "ENG-4": {"title": "B4", "description": "b", "state": "Todo", "parent": null, "blocked_by": []},
+ "ENG-5": {"title": "B5", "description": "b", "state": "Todo", "parent": null, "blocked_by": []},
+ "ENG-7": {"title": "Issue 7", "description": "body 7", "state": "Todo", "parent": "ENG-3", "blocked_by": ["ENG-4", "ENG-5"]},
+ "ENG-8": {"title": "Issue 8", "description": null, "state": "Canceled", "parent": null, "blocked_by": []}}}
+EOF
+lin() { # WANT SCRIPT ARGS...: run with the fake linear first on PATH; stdout in $out, stderr in $err
+  local want="$1" script="$LI/$2" rc; shift 2
+  set +e; out="$(cd "$t/target" && PATH="$LI:$PATH" "$script" "$@" 2>"$t/err")"; rc=$?; set -e; err="$(cat "$t/err")"
+  [[ "$rc" == "$want" ]] || fail "linear ${script##*/} $*: want exit $want, got $rc: $out $err"
+}
+lin 0 issue-view ENG-7
+[[ "$(jq -c . <<<"$out")" == '{"key":"ENG-7","title":"Issue 7","body":"body 7","state":"open","url":"https://linear.app/acme/issue/ENG-7/issue-7","parent":"ENG-3","blocked_by":["ENG-4","ENG-5"]}' ]] \
+  || fail "linear issue-view ENG-7: $out"
+lin 0 issue-view eng-8
+[[ "$(jq -c '[.key, .body, .state, .parent, .blocked_by]' <<<"$out")" == '["ENG-8","","done",null,[]]' ]] || fail "linear issue-view eng-8: $out"
+# Same shape as github-issues' issue-view: the same keys, keys as strings.
+[[ "$(jq -c 'keys' <<<"$out")" == '["blocked_by","body","key","parent","state","title","url"]' ]] || fail "linear issue-view keys: $out"
+lin 1 issue-view ENG-9; [[ -z "$out" && "$err" == *"Entity not found"* ]] || fail "linear issue-view ENG-9: $out $err"
+lin 1 issue-view 82; [[ "$err" == *"not a Linear issue key"* ]] || fail "linear issue-view 82: $err"
+for k in ENG-123 eng-123 https://linear.app/acme/issue/ENG-123/some-title; do lin 0 lane-key "$k"; [[ "$out" == eng-123 ]] || fail "lane-key $k: $out"; done
+lin 1 lane-key 82; [[ -z "$out" && "$err" == *"not a Linear issue key"* ]] || fail "linear lane-key 82: $out $err"
+for b in eng-123 lanes/eng-123 eng-123-fix implementer-eng-123 code-reviewer-eng-123; do
+  lin 0 key-from-branch "$b"; [[ "$out" == ENG-123 ]] || fail "linear key-from-branch $b: $out"
+done
+lin 1 key-from-branch main; [[ "$err" == *"names no Linear issue"* ]] || fail "linear key-from-branch main: $err"
+lin 0 pr-line eng-123; [[ "$out" == "Tracks ENG-123" ]] || fail "linear pr-line: $out"
+# Writes go to the fake's store and print what github-issues prints: the key, the comment url, nothing.
+lin 0 issue-create --title "New one" --body-file "$t/body" --parent eng-3 --blocked-by ENG-4 --blocked-by ENG-5
+[[ "$out" == ENG-9 ]] || fail "linear issue-create: $out"
+lin 0 issue-view ENG-9
+[[ "$(jq -c '[.title, .body, .state, .parent, .blocked_by]' <<<"$out")" == '["New one","hi\n","open","ENG-3",["ENG-4","ENG-5"]]' ]] || fail "linear new ENG-9: $out"
+lin 1 issue-create --title T --body-file "$t/body"; [[ -z "$out" && "$err" == *"No team given"* ]] || fail "linear issue-create, no team: $out $err"
+lin 1 issue-create --title T --body-file "$t/body" --parent ENG-3 --blocked-by ENG-99
+[[ -z "$out" && "$err" == *"filed ENG-10, but marking it blocked by ENG-99 failed"* ]] || fail "linear issue-create, bad blocker: $out $err"
+set +e; out="$(cd "$t/target" && PATH="$LI:$PATH" "$LI/issue-comment" ENG-7 <<<"a note" 2>&1)"; rc=$?; set -e
+[[ "$rc" == 0 && "$out" == "https://linear.app/acme/issue/ENG-7/issue-7#comment-c1" \
+   && "$(jq -c '.issues["ENG-7"].comments' "$OCTO_FEATHER_LINEAR_STORE")" == '[{"id":"c1","body":"a note\n"}]' ]] \
+  || fail "linear issue-comment from stdin: rc=$rc $out"
+lin 0 issue-comment ENG-7 --body-file "$t/body"; [[ "$out" == *"#comment-c2" ]] || fail "linear issue-comment --body-file: $out"
+lin 0 issue-done ENG-7; [[ -z "$out" && -z "$err" ]] || fail "linear issue-done ENG-7 printed: $out $err"
+[[ "$(jq -r '.issues["ENG-7"].state' "$OCTO_FEATHER_LINEAR_STORE")" == Done ]] || fail "issue-done did not move ENG-7 to Done"
+lin 0 issue-view ENG-7; [[ "$(jq -r .state <<<"$out")" == "done" ]] || fail "linear ENG-7 after issue-done: $out"
+lin 0 issue-done ENG-7; [[ -z "$out" && -z "$err" ]] || fail "linear issue-done on a done issue printed: $out $err"
+lin 1 issue-done ENG-99; [[ "$err" == *"Issue not found"* ]] || fail "linear issue-done ENG-99: $err"
+# The fake refuses every other command, and works only from its store.
+for c in "issue list" "issue view ENG-7" "issue delete ENG-7" "api query{viewer{id}}" "issue update ENG-7 --label x"; do
+  # shellcheck disable=SC2086 # $c is one command line, split into its words
+  set +e; out="$(PATH="$LI:$PATH" linear $c 2>&1)"; rc=$?; set -e
+  [[ "$rc" == 2 && "$out" == *"linear (offline fake)"* ]] || fail "fake linear $c: rc=$rc $out"
+done
+set +e; out="$(env -u OCTO_FEATHER_LINEAR_STORE PATH="$LI:$PATH" "$LI/issue-view" ENG-7 2>&1)"; rc=$?; set -e
+[[ "$rc" == 1 && "$out" == *"OCTO_FEATHER_LINEAR_STORE is unset"* ]] || fail "fake linear with no store: rc=$rc $out"
 echo "tracker: ok (no config and github: github-pr + github-issues, no linear; jira refused by pi-role and octo-feather-start, nothing started;" \
-  "check-skills names each missing tracker script; github-issues scripts under the offline gh and a recording gh)"
+  "check-skills names each missing tracker script in github-issues and linear; github-issues scripts under the offline gh and a recording gh;" \
+  "linear: supervisor gets github-pr + linear, no role gets linear-cli; linear scripts read and write through the offline fake linear)"

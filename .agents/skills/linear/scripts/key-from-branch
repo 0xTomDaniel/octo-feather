@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# key-from-branch BRANCH: the issue key a lane branch (eng-123, <prefix>/eng-123) or a worker branch named after it
+# (eng-123-fix, implementer-eng-123) carries: its first <team>-<N> token, uppercased, ENG-123.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: key-from-branch BRANCH" >&2; exit 64; }
+[[ "$1" =~ (^|[/_-])([A-Za-z][A-Za-z0-9]*-[0-9]+)($|[/_-]) ]] \
+  || { echo "key-from-branch: branch $1 names no Linear issue (no <team>-<N> part)" >&2; exit 1; }
+echo "${BASH_REMATCH[2]^^}"
