@@ -91,6 +91,8 @@ check-refs:
           "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
+          # NOTICE names the upstream file the director came from.
+          "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],

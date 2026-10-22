@@ -1,11 +1,10 @@
 octo-feather
 Copyright 2026 Tom Daniel
 
-Licensed under the Apache License, Version 2.0 (LICENSE).
-
-Portions of the files listed below are Copyright 2026 Sebastian Varela,
-licensed under the Apache License, Version 2.0, and were modified by Tom Daniel.
-Their NOTICE reads:
+This product includes software derived from octo-lite
+(https://github.com/varelaseb/octo-lite, commit cc6fa4e),
+Copyright 2026 Sebastian Varela, licensed under the Apache License, Version 2.0
+(see LICENSE). octo-lite's NOTICE reads:
 
     Dev Workflows
     Copyright 2026 Sebastian Varela
@@ -15,14 +14,17 @@ Their NOTICE reads:
 
     These materials are provided under the Apache License, Version 2.0.
 
-Files:
+Files derived from octo-lite, modified by Tom Daniel on 2026-10-18 (Pi as the
+only runtime, GitHub Issues instead of Linear, octo-feather names, Herdr layout
+of docs/adr/0011):
 
-    agents/director.md
-    agents/supervisor.md
+    agents/director.md (was agents/meta-operator.md)
+    agents/supervisor.md (was agents/orchestrator.md)
     agents/implementer.md
     agents/code-reviewer.md
+
     .agents/skills/commit/SKILL.md
-    .agents/skills/github/SKILL.md
+    .agents/skills/github/SKILL.md (was skills/octo-lite-github)
     .agents/skills/herdr-comms/SKILL.md
     .agents/skills/herdr-comms/assets/herdr-close
     .agents/skills/herdr-comms/assets/herdr-say
@@ -32,13 +34,16 @@ Files:
     .agents/skills/pnpm/SKILL.md
     .agents/skills/pull/SKILL.md
     .agents/skills/push/SKILL.md
-    scripts/octo-feather-start
-    scripts/octo-feather-state
+    scripts/octo-feather-start (was scripts/octo-lite-start)
+    scripts/octo-feather-state (was scripts/octo-lite-state)
     Skillfile, Skillfile.lock
     .skillfile/patches/skills/tdd/SKILL.md.patch
-    docs/specs/comms.spec.html
-    docs/specs/issue-lifecycle.spec.html
-    docs/specs/roles.spec.html
+
+Specs (docs/specs/*.spec.html) are octo-feather's own. They replace octo-lite's
+specs (index.spec.html, domains/octo-lite.spec.html, adr/0002, adr/0005), which
+were retired on 2026-10-19 and remain in git history; docs/specs/comms.spec.html,
+docs/specs/issue-lifecycle.spec.html and docs/specs/roles.spec.html adapt contract text and
+keep anchor names from octo-lite's domains/octo-lite.spec.html.
 
 Copied unmodified from Spec Chat (https://github.com/0xTomDaniel/spec-chat,
 commit 0f4e0fa), licensed under the Apache License, Version 2.0:
