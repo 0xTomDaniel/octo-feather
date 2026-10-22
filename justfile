@@ -25,7 +25,7 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills.
 check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
@@ -48,7 +48,7 @@ check-scripts:
     fi
     for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
 
-# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names, no lane branch default.
+# No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
@@ -60,8 +60,6 @@ check-refs:
     if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    if grep -nHE '\bLinear\b' "${files[@]}"; then
-      echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi

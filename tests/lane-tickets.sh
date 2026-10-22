@@ -2,7 +2,7 @@
 # Integration test for scripts/octo-feather-lane tickets|ticket (spec issue-lifecycle
 # #acceptance-tracer-tickets), no network: GitHub is a snapshot, taken by octo-feather-qc-ghsnap
 # from a fake GitHub gh and served by the qc judge's
-# offline gh (scripts/qc-bin/gh), so the check is proven to work under it and to ask only
+# offline gh (.agents/skills/github-pr/scripts/gh), so the check is proven to work under it and to ask only
 # fields octo-feather-qc-ghsnap stores. Proves: a parent whose tickets all name criteria
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
@@ -93,7 +93,7 @@ case "\${FAKE_GH:-}" in
   down) echo "error connecting to api.github.com" >&2; exit 1 ;;
   garbage) echo "<html>rate limited</html>"; exit 0 ;;
 esac
-exec "$kit/scripts/qc-bin/gh" "\$@"
+exec "$kit/.agents/skills/github-pr/scripts/gh" "\$@"
 EOF
 chmod +x "$t/bin/gh"; export PATH="$t/bin:$t/sys"
 cd "$t/repo"

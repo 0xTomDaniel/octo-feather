@@ -4,7 +4,7 @@ description: Director. Owns the program, files GitHub issues, starts one supervi
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash
-skills: herdr-comms, github
+skills: herdr-comms, github-pr, {tracker}
 ---
 
 # Director

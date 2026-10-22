@@ -4,7 +4,7 @@ description: Supervisor. Owns one work item (a GitHub issue) from brief until it
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write
-skills: commit, github, herdr-comms, implement-spec, push, to-tickets
+skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, to-tickets
 externalSkills: spec-chat-shape, spec-chat-review
 ---
 

@@ -40,7 +40,8 @@ github  skill  interrogate      cursor/plugins@0b8e952052d482ee6de06deebf14d590d
 
 # octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
 local  skill  commit                  .agents/skills/commit
-local  skill  github                  .agents/skills/github
+local  skill  github-issues           .agents/skills/github-issues
+local  skill  github-pr               .agents/skills/github-pr
 local  skill  herdr-comms             .agents/skills/herdr-comms
 local  skill  nodejs                  .agents/skills/nodejs
 local  skill  pnpm                    .agents/skills/pnpm

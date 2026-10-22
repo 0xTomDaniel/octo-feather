@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# key-from-branch BRANCH: the issue key a lane branch (gh82, <prefix>/gh82) or a worker branch named after it
+# (gh82-fix, implementer-gh82) carries: its first gh<N> token, 82.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: key-from-branch BRANCH" >&2; exit 64; }
+[[ "$1" =~ (^|[/_-])gh([0-9]+)($|[/_-]) ]] \
+  || { echo "key-from-branch: branch $1 names no GitHub issue (no gh<N> part)" >&2; exit 1; }
+echo "${BASH_REMATCH[2]}"

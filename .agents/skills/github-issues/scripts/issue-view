@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# issue-view KEY: one issue as JSON {key, title, body, state, url, parent, blocked_by}; keys are strings,
+# parent null when it has none. Wraps `gh issue view`.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: issue-view KEY" >&2; exit 64; }
+[[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "issue-view: $1 is not a GitHub issue key" >&2; exit 1; }
+exec gh issue view "${BASH_REMATCH[1]}" --json number,title,body,state,url,parent,blockedBy \
+  --jq '{key: (.number | tostring), title, body, state, url, parent: (.parent.number // null | if . == null then null else tostring end),
+         blocked_by: [(.blockedBy.nodes // [])[].number | tostring]}'
