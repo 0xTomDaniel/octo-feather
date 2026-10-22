@@ -6,7 +6,9 @@ an exact commit?
 
 Reads Spec Chat's review-host registries, one per Herdr session
 ($SPEC_CHAT_STATE or ~/.local/state/spec-chat, then hosting/*/registry.toml),
-for the rows of that spec path. For each row it reads the hand-offs the review
+for the rows of that spec path. SPEC_PATH may be absolute, ./-prefixed, or
+relative to a cwd inside the repo; it is compared, relative to the --repo top,
+with each row's spec relative to the row's root. For each row it reads the hand-offs the review
 page wrote into the owner's side of the row's spool (<root>/<spec>.review/, the
 SPOOL_SIDE directory, *-handoff-*.json). The row is accepted when the newest
 owner hand-off is Accept spec (a hand-off
@@ -86,6 +88,31 @@ def newest_handoff(spool: Path):
     return max(found, key=lambda fe: fe[0], default=None)
 
 
+def repo_relative(given: str, repo: str):
+    """(repo top, SPEC_PATH relative to it): an absolute path, a path relative to
+    the cwd when the cwd is inside the repo and the file is there, else a path
+    relative to the repo top."""
+    top = subprocess.run(["git", "-C", repo, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    top = os.path.realpath(top.stdout.strip() if top.returncode == 0 else repo)
+    cwd = os.path.realpath(os.getcwd())
+    if os.path.isabs(given):
+        path = given
+    elif os.path.commonpath([cwd, top]) == top and os.path.exists(os.path.join(cwd, given)):
+        path = os.path.join(cwd, given)
+    else:
+        path = os.path.join(top, given)
+    return top, os.path.relpath(os.path.realpath(path), top).replace(os.sep, "/")
+
+
+def row_spec(row) -> str:
+    """A registry row's spec, relative to the row's own root."""
+    spec = str(row.get("spec", "")).replace("\\", "/")
+    root = str(row.get("root") or "")
+    if os.path.isabs(spec) and root:
+        spec = os.path.relpath(os.path.realpath(spec), os.path.realpath(root))
+    return os.path.normpath(spec).replace(os.sep, "/")
+
+
 def main(argv):
     args = list(argv)
     repo = "."
@@ -93,23 +120,26 @@ def main(argv):
         i = args.index("--repo"); repo = args[i + 1]; del args[i:i + 2]
     if len(args) != 1 or args[0] in ("-h", "--help"):
         print(__doc__.strip(), file=sys.stderr); return 64
-    spec = args[0].lstrip("./")
+    top, spec = repo_relative(args[0], repo)
     state = Path(os.environ.get("SPEC_CHAT_STATE") or Path.home() / ".local/state/spec-chat")
-    rows = []
+    rows, seen = [], set()
     for reg in sorted(state.glob("hosting/*/registry.toml")):
         try:
             data = tomllib.loads(reg.read_text())
         except (OSError, tomllib.TOMLDecodeError) as e:
             print(f"octo-feather-accepted: skipping {reg}: {e}", file=sys.stderr); continue
         for r in data.get("resource", []):
-            if str(r.get("spec", "")).replace("\\", "/").lstrip("./") == spec and not r.get("test"):
+            if not r.get("test"):
+                seen.add(row_spec(r))
+            if row_spec(r) == spec and not r.get("test"):
                 rows.append((reg.parent.name, r))
     if not rows:
-        print(f"not accepted: {spec} is not registered with the review service (register it, then press Accept spec)"); return 1
+        print(f"not accepted: SPEC_PATH {args[0]} (tried {spec} relative to {top}) is not registered with the review service "
+              f"(registered: {', '.join(sorted(seen)) or 'none'}); register it, then press Accept spec"); return 1
     accepted, why = [], []
     for session, row in rows:
         slug, base = row.get("slug", "?"), str(row.get("base", ""))
-        spool = Path(str(row.get("root") or repo)) / f"{spec}.review" / SPOOL_SIDE
+        spool = Path(str(row.get("root") or top)) / f"{spec}.review" / SPOOL_SIDE
         newest = newest_handoff(spool)
         if newest is None:
             why.append(f"{slug}: no hand-off from the review page yet; press Accept spec"); continue
