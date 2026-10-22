@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for scripts/review-host (issue #65) through its CLI, over the
-# real Spec Chat clone ($SPEC_CHAT_CLONE, default ~/src/spec-chat): on a spawned
+# Spec Chat at its pin (the Skillfile fetch-only entry, `check-vendored --extract spec-chat`,
+# given to review-host as $SPEC_CHAT_CLONE; never the box's clone, #96): on a spawned
 # pane's PATH, --help passes through, register refuses a page with no Spec Chat
 # runtime, and re-registering at a new commit keeps the link and leaves only the
 # registry's own review-serve, also where review-host.py cannot see the live
@@ -8,15 +9,13 @@
 # /proc covered, `ps` reading the real one, as macOS ps reads the kernel), and a
 # process that only names the registry is never stopped. Only --test rows in a
 # temp state dir with a space in its path, on loopback; every process it starts
-# is stopped. No Spec Chat file is copied or changed. Run by `just check`.
+# is stopped. Run by `just check`; never skipped (no pin cached: `just vendored-fetch`).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-clone="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}"
-if [[ ! -f "$clone/skill/review-spec/scripts/review-host.py" ]]; then
-  echo "review-host: skipped (no Spec Chat clone at $clone)"; exit 0
-fi
-clone="$(cd "$clone" && pwd -P)"; server="$clone/skill/review-spec/assets/review-serve.py"
 t="$(mktemp -d)"
+"$kit/scripts/check-vendored" --extract spec-chat "$t/sc" > /dev/null || { rm -rf "$t"; echo "review-host test: no pinned Spec Chat (message above)" >&2; exit 1; }
+clone="$(cd "$t/sc" && pwd -P)"; server="$clone/skill/review-spec/assets/review-serve.py"
+export SPEC_CHAT_CLONE="$clone"
 state="$t/state space"; registry="$state/registry.toml"
 # Real review-serve processes on this registry: a python whose argv runs $server on it.
 serve_pids() { ps -Aww -o pid=,args= | awk -v s="$server --registry $registry --bind " \
