@@ -51,7 +51,9 @@ name= role= tab= pane= cwd= contract= provider_session_id=
 tool allowlist and listed skills (`--skill DIR`), and its body appended to Pi's
 system prompt. Pi loads the target's `AGENTS.md` from `--cwd`. Nothing is
 installed into the user's Pi profile. A one-shot run with no pane is
-`pi-role agents/ROLE.md -p "<brief>"` in the worktree; its stdout is the report. Each agent
+`pi-role agents/ROLE.md -p "<brief>"` in the worktree; its stdout is the report. It has
+no route to any pane: pi-role drops `OCTO_FEATHER_PARENT` and `HERDR_PANE_ID`, `HERDR_TAB_ID`,
+`HERDR_WORKSPACE_ID` for it, so it cannot `herdr-say`. Each agent
 gets a fresh `--session-id`, reported as `provider_session_id=`.
 
 `--operating-model FILE` is optional. It is appended to Pi's system prompt
@@ -92,10 +94,14 @@ does both for you; see below.
 ```
 herdr-close TAB
 herdr-close SPACE
+herdr-close PANE
 ```
 
 The teardown step. An id with a colon (`w5:t2`) is a tab, one without (`w5`) is
-a space. Closes it, then sends TERM to every process of the caller's session
+a space. A pane id (`w5:p3`) is mapped to its tab through `herdr agent get`
+(as `--park` does) and closed as that tab; a pane with no Herdr agent cannot be
+mapped and fails with exit 65 naming the `TAB|SPACE|PANE` form, nothing closed.
+Closes it, then sends TERM to every process of the caller's session
 whose environ carries `HERDR_TAB_ID=TAB` or `HERDR_WORKSPACE_ID=SPACE`, which
 catches detached children that close alone leaves running. Run it from outside
 what it closes: the spawner closes a tab, the director closes a finished lane's
