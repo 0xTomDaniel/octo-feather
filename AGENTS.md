@@ -6,7 +6,7 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 
 ## Rules
 
-- Pi is the only agent runtime. No Claude/Codex config, no `CLAUDE.md`.
+- Pi is the only agent runtime. No Claude/Codex config, no `CLAUDE.md` (what counts: docs/adr/0001).
 - `AGENTS.md` is the only instruction file in any repo the kit touches.
 - Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals.
