@@ -7,6 +7,8 @@
 #   matches, fails naming skill and file;
 # - a poisoned cache (a tampered upstream blob matching a tampered vendored
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
+# - --spec-chat DEST writes pinned Spec Chat (spec-chat.pin) offline, exec bits kept;
+#   uncached, it fails naming `just vendored-fetch` (#96);
 # - a fetch through a stalled proxy times out within its bound, naming the fix.
 # Needs the warm cache `just vendored-fetch` makes (CI runs it before `just check`).
 set -euo pipefail
@@ -15,7 +17,7 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 src="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"
 [[ -d "$src/git" && -d "$src/bin" ]] || { echo "check-vendored test: no warm cache at $src; run \`just vendored-fetch\`" >&2; exit 1; }
 r="$t/repo"; mkdir -p "$r/scripts" "$r/.skillfile" "$r/.agents" "$t/c/octo-feather"
-cp "$kit/justfile" "$kit/Skillfile" "$kit/Skillfile.lock" "$r/"
+cp "$kit/justfile" "$kit/Skillfile" "$kit/Skillfile.lock" "$kit/spec-chat.pin" "$r/"
 cp "$kit/scripts/check-vendored" "$r/scripts/"
 cp -r "$kit/.skillfile/patches" "$r/.skillfile/"
 cp -r "$kit/.agents/skills" "$r/.agents/"
@@ -35,6 +37,10 @@ run() { local want="$1"; shift; set +e; out="$("$@" just -f "$r/justfile" check-
 has() { grep -qF -- "$1" <<<"$out" || { echo "check-vendored test: output lacks '$1': $out" >&2; exit 1; }; }
 # Clean copy, no network at all: passes.
 run 0 ${ns[@]+"${ns[@]}"}; has "vendored: ok"
+# Pinned Spec Chat, written out with no network: its files, exec bits kept.
+sc() { set +e; out="$(${ns[@]+"${ns[@]}"} "$r/scripts/check-vendored" --spec-chat "$1" 2>&1)"; rc=$?; set -e; }
+sc "$t/sc"; [[ "$rc" == 0 && "$out" == "$t/sc/skill" && -x "$t/sc/skill/review-spec/scripts/review-host.py" \
+  && -f "$t/sc/skill/review-spec/assets/review-serve.py" ]] || { echo "check-vendored test: --spec-chat: rc=$rc $out" >&2; exit 1; }
 # One drifted line in a patched file.
 cp "$r/.agents/skills/tdd/SKILL.md" "$t/keep"
 edit "$r/.agents/skills/tdd/SKILL.md" 's.replace("\n\n", "\ndrift\n", 1)'
@@ -82,6 +88,8 @@ has "just vendored-fetch"
 # Missing cache: fails fast naming the fetch step, never a skip.
 rm -rf "$t/c/octo-feather/skillfile/git"
 run 1 ${ns[@]+"${ns[@]}"}; has "is not cached at"; has "run \`just vendored-fetch\`"
+sc "$t/sc2"; [[ "$rc" == 1 ]] || { echo "check-vendored test: uncached --spec-chat want exit 1, got $rc: $out" >&2; exit 1; }
+has "spec-chat-pin: Spec Chat 0xTomDaniel/spec-chat@"; has "run \`just vendored-fetch\`"
 if [[ $stallok == 1 ]]; then
 # Stalled network, two ways: a proxy that accepts and never answers (silent), and one that
 # drips CONNECT response headers every 0.2 s forever (slow progress). Either way the fetch
@@ -115,7 +123,7 @@ rm -rf "$t/c/octo-feather/skillfile/bin"
 for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
 fi
 for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
-ran="drift, symlinks, special files, empty folders, poisoned and missing cache"
+ran="pinned Spec Chat written and uncached, drift, symlinks, special files, empty folders, poisoned and missing cache"
 [[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
 [[ $stallok == 1 ]] && ran="$ran, silent and dripping proxy"
 echo "check-vendored test: ok ($ran)"

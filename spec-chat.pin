@@ -1,0 +1,5 @@
+# The Spec Chat commit the kit's tests run (tests/accepted.sh, tests/review-host.sh; #96).
+# Never the box's ~/src/spec-chat clone: its HEAD differs per box and CI has none.
+# `just vendored-fetch` caches it; `scripts/check-vendored --spec-chat DEST` writes it out offline.
+# To move it: change the sha, `just vendored-fetch`, `just check`.
+0xTomDaniel/spec-chat@077c6b9030dfc6d0fc4f82b902dc2c4a5f7e899b skill

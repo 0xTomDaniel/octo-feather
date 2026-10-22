@@ -21,7 +21,7 @@ Detached worktrees of the real lane heads, base = the lane's merge's first paren
 # Replay the gh71 and gh67 failure shapes through the new check-behavior-smoke.
 # Each evidence file gets a Smoke: line naming only the paths its own run exercised.
 set -uo pipefail
-kit=/home/exedev/src/octo-feather-corrector-gh93
+kit=$HOME/src/octo-feather-corrector-gh93
 C=$kit/scripts/check-behavior-smoke
 d=$(mktemp -d); trap 'git -C $kit worktree remove --force $d/w >/dev/null 2>&1; rm -rf $d' EXIT
 c() { GIT_AUTHOR_NAME=d GIT_AUTHOR_EMAIL=d@d GIT_COMMITTER_NAME=d GIT_COMMITTER_EMAIL=d@d git -C $d/w commit -qam "$1"; }
