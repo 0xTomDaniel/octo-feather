@@ -51,7 +51,9 @@ name= role= tab= pane= cwd= contract= provider_session_id=
 tool allowlist and listed skills (`--skill DIR`), and its body appended to Pi's
 system prompt. Pi loads the target's `AGENTS.md` from `--cwd`. Nothing is
 installed into the user's Pi profile. A one-shot run with no pane is
-`pi-role agents/ROLE.md -p "<brief>"` in the worktree; its stdout is the report. Each agent
+`pi-role agents/ROLE.md -p "<brief>"` in the worktree; its stdout is the report. It has
+no route to any pane: pi-role drops `OCTO_FEATHER_PARENT` and `HERDR_PANE_ID`, `HERDR_TAB_ID`,
+`HERDR_WORKSPACE_ID` for it, so it cannot `herdr-say`. Each agent
 gets a fresh `--session-id`, reported as `provider_session_id=`.
 
 `--operating-model FILE` is optional. It is appended to Pi's system prompt
