@@ -157,5 +157,18 @@ else
   [[ "$(link)" == "$first" ]] || fail "without /proc the link moved: $first -> $(link)"
   [[ "$(serve_pids)" != "$before" ]] || fail "without /proc the old server was not replaced"
   check_link v5
+  # The reviewed repro, last (a register without /proc stops the live server it cannot see): a sleeper whose
+  # args end with the exact launch text, the real interpreter path included, is left running and reported.
+  python="$(python3 -c 'import os, sys; print(os.path.realpath(sys.executable))')"
+  bg prefixed python3 -c "import time; time.sleep(90)" "$python" "$server" --registry "$registry" \
+    --bind 127.0.0.1 --port 1 --host 127.0.0.1
+  for _ in $(seq 50); do [[ -s "$t/pids/prefixed" ]] && break; sleep 0.1; done
+  prefixed="$(cat "$t/pids/prefixed")"
+  set +e; out="$(FAKE_PS_PROC="$t/realproc" PATH="$t/psbin:$PATH" noproc "$kit/scripts/review-host" register \
+    --state-dir "$state" --test --slug w65 --owner test/w65 --base HEAD docs/specs/missing.spec.html 2>&1)"; rc=$?; set -e
+  [[ "$rc" != 0 ]] || fail "register of a missing spec without /proc passed: $out"
+  kill -0 "$prefixed" 2>/dev/null || fail "without /proc register stopped the prefixed sleeper: $out"
+  [[ "$out" == *"left pid $prefixed running: it names"* ]] || fail "prefixed sleeper not reported: $out"
+  kill -- "-$prefixed"; rm "$t/pids/prefixed"
 fi
-echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, re-register keeps link and only the owned server, lookalikes left running and reported, stray stopped, no-/proc link kept; state path with a space)"
+echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, re-register keeps link and only the owned server, lookalikes left running and reported, stray stopped, no-/proc link kept and prefixed lookalike left; state path with a space)"

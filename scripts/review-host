@@ -91,7 +91,9 @@ def serve_pids(registry):
     Owned: runs as this uid, and its exact argv is the launch review-host.py builds (server_command):
     a python running the realpath of the clone's review-serve.py with --registry this registry and
     --bind/--port/--host. Linux reads exact argv from /proc/PID/cmdline; without /proc (macOS) the
-    `ps` text must equal that launch whole, never split into words."""
+    `ps` text must equal that launch whole, never split into words, its interpreter the literal path
+    review-host.py launches with: the realpath of the python running it, this one (main runs it with
+    sys.executable). No other prefix proves anything."""
     server, target = str(SERVER.resolve()), str(registry.resolve())
     owned, unsure = [], []
     if Path("/proc/self/cmdline").is_file():
@@ -115,7 +117,8 @@ def serve_pids(registry):
         return owned, unsure
     out = subprocess.run(("ps", "-Aww", "-o", "pid=,uid=,args="), capture_output=True, text=True,
                          check=False).stdout
-    launch = re.compile(rf"(?P<python>.+) {re.escape(server)} --registry {re.escape(target)}"
+    python = str(Path(sys.executable).resolve())
+    launch = re.compile(rf"{re.escape(python)} {re.escape(server)} --registry {re.escape(target)}"
                         r" --bind \S+ --port \d+ --host \S+")
     for line in out.splitlines():
         fields = line.split(None, 2)
@@ -124,8 +127,7 @@ def serve_pids(registry):
         pid, uid, command = fields
         if not pid.isdigit() or int(pid) == os.getpid() or target not in command or "review-serve" not in command:
             continue
-        m = launch.fullmatch(command)
-        proven = uid == str(os.getuid()) and m is not None and is_python(m["python"])
+        proven = uid == str(os.getuid()) and launch.fullmatch(command) is not None
         (owned if proven else unsure).append(int(pid))
     return owned, unsure
 
