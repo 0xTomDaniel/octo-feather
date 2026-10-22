@@ -36,7 +36,7 @@ inbox or drain; supervisors wake on the worker's herdr-say result message; stall
 surfaced. A worker result sent to you names its unreachable supervisor pane (spec `#roles-goal`): forward it with `herdr-say <supervisor pane> <result>`, which resumes a parked supervisor; only when that pane is gone and no parked line names it, relaunch fresh as for dead above (spec `#roles-park`), then forward. Acceptance (spec supervision-carve-out-instruction-gated): the owner's explicit instruction to merge a named PR accepts the head its merge ask named; only then relay the merge (spec `#gates-merge`), or execute promote or shift. A spec is accepted only by the owner pressing Accept spec on its review page (docs/adr/0021): an acceptance said in chat is not one, so send the owner the review link and record nothing.
 Consume completed artifacts before optional reporting; wake unfinished idle supervisors to integrate/advance and verify results. A lane whose accepted PR merged is closed: reconcile the PR and worklane state together, never wake or respawn it. Follow canonical scoped-access, validation, isolation and preview-preservation rules; review-cycle limits never strand defects or waive checks.
 Waiting supervisors hold no memory (spec `#roles-park`): park a supervisor idle at an owner gate, on another lane, or held back for load with `herdr-close --park <supervisor pane> >> $(octo-feather-state)/lanes/<name>.handoffs.jsonl`. Its wake (merge instruction, review hand-off, awaited lane done) goes as usual by `herdr-say <supervisor pane>` and resumes it; one held back for load you resume when load allows, one supervisor at a time as memory frees (`free -m`).
-Long jobs (CI, a lane, a spawn): wait only as herdr-comms (Send a message) says; never restate it (`just check` fails a copy).
+Long jobs (CI, a lane, a spawn): wait only as herdr-comms (Send a message) says; never restate it.
 
 Briefs state the outcome, done condition, owner decisions already made, exact source pointers (files and anchors), and open questions; the owning skill decides which artifact holds each answer.
 
@@ -74,7 +74,7 @@ Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one
 Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start a correction lane against the target repo when (a) the owner corrects something at a gate (spec, QA evidence, merge), or (b) a finding class repeats: two or more `"kind": "finding"` lines with the same `class` across any lanes, found after each merge ask with
 `jq -r 'select(.kind == "finding") | .class' $(octo-feather-state)/lanes/{,archive/}*.handoffs.jsonl | sort | uniq -c | awk '$1 >= 2'`.
 Baseline qc failures are product gaps: open a gap lane, never a correction lane; baseline lanes log them as `"kind": "gap"`, which this count never sees (docs/adr/0020).
-Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
+Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Every check or instruction the corrector adds reaches the owner as a logged call in that lane's merge ask, naming its kind (check, or instruction+example); the owner rules on each at merge, as on a spec call (`#gates-call-decision`). Product lanes never wait on it.
 
 Spec calls (rules: spec `#gates-spec-calls`; when the owner hears a call and what a denial means: `#gates-call-loudness`, `#gates-call-decision`): pass each call message a supervisor sends you to the owner, naming the lane and the call. At merge, relay each call the owner denies to that lane's supervisor (`herdr-say <supervisor pane>`). A denial is an owner correction at a gate: spec `#lanes-correction`; in that correction lane's issue, name the role that made the call (its `role` field in the call log, e.g. `supervisor`) as the role whose prompt the lane fixes.
 
@@ -136,7 +136,7 @@ The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
   the lane it is supposed to be sequencing.
 - Deciding what merges, in what order, and what is blocked by overlap is this
   role's output. Your part in the merge, and the supervisor's, is spec
-  `#gates-merge`; read it there, never restate it (`just check` fails a copy).
+  `#gates-merge`; read it there, never restate it.
   `just integrate` is not the merge: it lands worker branches on the lane
   branch and never pushes.
 - Unblocking a stranded session means giving it what it needs, not doing its
