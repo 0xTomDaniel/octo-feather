@@ -56,7 +56,8 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     tdd, implement, implement-spec, to-tickets, grill-with-docs, grilling,
     domain-modeling, code-review, improve-codebase-architecture, codebase-design:
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
-    correct, principle-prove-it-works, blast-radius, sharpen: cursor/plugins@0b8e952
+    correct, principle-prove-it-works, blast-radius, sharpen,
+    principle-encode-lessons-in-structure: cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan
     .agents/skills/python, .agents/skills/typescript: ported from
     EmberAGI/scaling-octo-engine@ef11d2b9 at Tom's direction, with the unit-test
