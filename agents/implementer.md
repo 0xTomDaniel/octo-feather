@@ -4,7 +4,7 @@ description: Implement one ticket inside the worktree it was given, and return t
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
-skills: principle-prove-it-works, commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
+skills: principle-prove-it-works, blast-radius, commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
 ---
 
 # Implementer
@@ -52,4 +52,4 @@ Stop on a ticket that contradicts the spec, a missing environment, or work that 
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, declared repo skills loaded, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

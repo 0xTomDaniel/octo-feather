@@ -58,5 +58,9 @@
   "github/skill/principle-encode-lessons-in-structure": {
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/principle-encode-lessons-in-structure?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/interrogate": {
+    "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
+    "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/interrogate?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
   }
 }
