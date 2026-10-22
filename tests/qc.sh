@@ -104,6 +104,11 @@ P
     rm -rf "$vc/git" 2>/dev/null; [[ -d "$vc/git" ]] || echo "ESCAPE deleted cached git"
     unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2>/dev/null && echo "ESCAPE remounted cache rw"
     printf "$ok" ;;
+  nested)   # `just check` in the sandbox runs this test (fresh HOME, its own herdr and state): a sandboxed qc inside the judge's gets past its proof
+    o="$(env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$(mktemp -d)" PATH="${0%/bin/pi}/fakeherdr:${0%/pi}:$PATH" \
+      FAKE_QC=garbage octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
+    grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" || echo "MISSING nested proof: $o"
+    printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
       for flag in "--session default" "--remote live" "--machine live" ""; do
@@ -269,6 +274,11 @@ grep -q "qc sandbox: ok   vendored-skill cache $vc bound read-only" <<< "$out" &
   || fail "no read-only cache proof: $out"
 [[ "$(vsum)" == "$v0" ]] || fail "the judge changed the vendored-skill cache"
 rm -rf "$HOME/.cache"
+# A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes its proof.
+run 0 nested $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "nested qc: $judge"
+grep -q "NESTED exit 3" <<< "$judge" || fail "nested qc: want the inner judge to run (exit 3, unusable report): $judge"
 
 # The qc recipes pass arguments as data, never as shell source.
 for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/typescript/justfile"; do
@@ -276,4 +286,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data)"

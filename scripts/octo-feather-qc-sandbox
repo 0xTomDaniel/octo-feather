@@ -137,10 +137,14 @@ if [[ "$phase" == setup ]]; then
     done
     mount -t tmpfs tmpfs "$PI" || die "tmpfs $PI"; rw+=("$PI")
   fi
-  while read -r _ _ _ _ mp _; do
+  while read -r id _ _ _ mp _; do
     mp=$(printf '%b' "$mp")
     [[ "$mp" == /proc ]] && continue   # replaced by the judge's own /proc
     for k in "${rw[@]}" /dev/shm; do [[ "$mp" == "$k" ]] && continue 2; done
+    # Covered by a later mount (in a nested run, the outer sandbox's /tmp binds and /proc submounts): its path
+    # is gone or reaches another mount, so it is unreachable and keeps its flags; the proof lists it if writable.
+    [[ -e "$mp" || -L "$mp" ]] || continue
+    m=$(awk '/^mnt_id:/ {print $2}' /proc/self/fdinfo/3 2>/dev/null 3<"$mp"); [[ -n "$m" && "$m" != "$id" ]] && continue
     remount ro "$mp" || die "read-only $mp"
   done < <(cat /proc/self/mountinfo)
   if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json and models.json the per-run copies
