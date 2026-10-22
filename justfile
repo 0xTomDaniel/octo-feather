@@ -11,12 +11,22 @@ export root := justfile_directory()
 # The running just's own dir comes first so recipes and tests find it without a mise shim.
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
 export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
+# The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
+# this before any recipe runs, so a check or check-* recipe reaching qa, qc or Jev, by dependency or body, fails
+# every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
+# backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
+# Backticks run in --working-directory when given: there the guard is the published command on PATH.
+gate_free_out := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f"`
+# The scan cannot see into the repo scripts a recipe runs: a check run also exports a marker (the outermost check
+# run's just pid) that nested just runs and tools inherit; qa and octo-feather-qc refuse under it (check-gate-free --refuse).
+export OCTO_FEATHER_CHECK_RUN := `f=scripts/check-gate-free; [[ -x "$f" ]] || f=check-gate-free; exec "$f" --run`
+gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out == "`f=scripts/check-gate-free; [[ -x \"$f\" ]] || f=check-gate-free; exec \"$f\"`" { "dry run" } else { error("check-gate-free did not pass (message above); just check stays deterministic and free") }
 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter.
-check: check-scripts check-refs check-dashes check-skills check-roles check-owned-rules check-behavior-smoke check-vendored check-tests check-spec-status check-templates
+# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-owned-rules check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -47,24 +57,54 @@ check-refs:
     set -euo pipefail
     cd "$root"
     bad=0
-    if git ls-files | grep -E '(^|/)(CLAUDE\.md|\.claude|\.codex)(/|$)'; then
-      echo "check-refs: Claude/Codex projection files above are not allowed (docs/adr/0001)" >&2; bad=1; fi
+    if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
+      echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
     if grep -nHE '\bLinear\b' "${files[@]}"; then
       echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
-    # The gate and its check-* recipes never reach the product judge or factory evals.
-    if awk '/^[A-Za-z]/{g = ($0 ~ /^check(-[a-z]+)?( [^:]*)?:/)} g' justfile | grep -nE '[Jj][e]v|\bq[a]\b|\bq[c]\b'; then
-      echo "check-refs: the gate recipe lines above call the product judge or factory evals; just check stays deterministic and free (docs/future.md)" >&2; bad=1; fi
-    # Retired words stay retired. Exempt: GLOSSARY.md (lists them), a spec anchor,
-    # the corrector quoting pstack correct, vendored skills (upstream wording), and a
-    # SPOOL_SIDE line naming Spec Chat's owner side of a spool (its on-disk word).
+    # Retired words stay retired in all kit text, docs/ and this justfile included
+    # (the pattern brackets a letter so it does not match itself). Exempt files:
+    #   GLOSSARY.md: lists the retired words.
+    #   vendored skills (Skillfile github entries) and .skillfile/: upstream wording and quotes of it.
+    #   docs/specs/.viz/, docs/specs/.style/: Spec Chat's vendored runtime and style (NOTICE).
+    #   LICENSE: the upstream Apache-2.0 text.
+    # Exempt quotes of frozen or upstream text, not kit naming: each a (file, exact quote)
+    # pair in the table below, removed only in that file, then the rest of its line is scanned.
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t own < <(printf '%s\n' "${files[@]}" | grep -vE "^(\.agents/skills/(${vend%|})/|GLOSSARY\.md\$)")
-    if grep -nHiE '\b(meta-)?operator\b|\bhumans?\b' "${own[@]}" | grep -vE '#handoff-operator|"The operator"|SPOOL_SIDE'; then
-      echo "check-refs: say director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
+    mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$)")
+    # Fails closed: grep exit 0 or 1 and perl exit 0 are the only scans; match is perl output, no match none,
+    # any other exit a scanner error that fails the check.
+    retired='\b(meta-)?[o]perators?\b|\b[h]umans?\b'
+    rc=0; hits="$(grep -nHiE "$retired" "${own[@]}")" || rc=$?
+    if (( rc > 1 )); then
+      echo "check-refs: retired-words scanner error: grep exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1; hits=""; fi
+    rc=0; found="$(RETIRED="$retired" perl -ne '
+        BEGIN { %ok = (
+          # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its one citer.
+          "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
+          "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
+          "agents/director.md"            => [qr{`#handoff-[o]perator`}],
+          # The frozen #acceptance-retired-words criterion names the words it retires.
+          "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
+          # The corrector quotes vendored pstack correct.
+          "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
+          # NOTICE attribution names the octo-lite file the director came from.
+          "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
+          # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
+          "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
+          "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+        ) }
+        my ($f, $s) = /^(.*?):\d+:(.*)$/s;
+        $s =~ s/$_//g for @{ $ok{$f} || [] };
+        if ($s =~ /$ENV{RETIRED}/i) { print }' <<<"$hits")" || rc=$?
+    if (( rc != 0 )); then
+      echo "check-refs: retired-words scanner error: perl exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1
+    elif [[ -n "$found" ]]; then
+      printf '%s\n' "$found"
+      echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
@@ -83,20 +123,13 @@ check-dashes:
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
 
-# Every skill has name and description frontmatter; every role file exists.
+# Every skill opens with a --- frontmatter block with non-empty name and description; every role file exists.
 check-skills:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    n=0
-    for f in .agents/skills/*/SKILL.md; do
-      head -5 "$f" | grep -q '^name: ' && head -8 "$f" | grep -q '^description: ' || { echo "check-skills: $f lacks name/description frontmatter" >&2; exit 1; }
-      n=$((n + 1))
-    done
-    for r in director supervisor implementer code-reviewer corrector; do
-      [[ -f "agents/$r.md" ]] || { echo "check-skills: missing role contract agents/$r.md" >&2; exit 1; }
-    done
-    echo "skills: ok ($n skills, 5 roles)"
+    @python3 "$root/scripts/check-skills"
+
+# Every tracked decisions.jsonl, anywhere in the repo: each line one JSON object matching schemas/decision-log.schema.json (quality #decision-log, docs/adr/0010).
+check-decision-log:
+    @python3 "$root/scripts/check-decision-log"
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
@@ -193,6 +226,7 @@ qc $status $pr +$ids:
 
 # Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
 qa *args:
+    @[[ "$(check-gate-free --refuse 'just qa (factory evals)')" == "gate-free: ok" ]]
     @echo "just qa: not implemented yet (factory evals, docs/future.md)" >&2; exit 2
 
 # Print this Herdr session's octo-feather state directory.

@@ -12,6 +12,9 @@
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
 set -euo pipefail
+# A test harness, not a gate recipe reaching the judge: its fake-pi runs start outside any check run (the one
+# boundary; octo-feather-qc refuses under the marker, whatever pi it would launch).
+unset OCTO_FEATHER_CHECK_RUN
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"

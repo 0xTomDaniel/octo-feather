@@ -9,6 +9,9 @@
 # aborts before the judge (67) unless --no-github; PR 0 is refused before the judge; a
 # failed status commit leaves the status file unmodified. Run by `just check`.
 set -euo pipefail
+# A test harness, not a gate recipe reaching the judge: its fake-pi runs start outside any check run (the one
+# boundary; octo-feather-qc refuses under the marker, whatever pi it would launch).
+unset OCTO_FEATHER_CHECK_RUN
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc-gh: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"

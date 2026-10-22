@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "decision-log.schema.json",
+  "title": "Decision log line (quality spec #decision-log, docs/adr/0010): one JSON object per line of a tracked decisions.jsonl",
+  "type": "object",
+  "required": ["ts", "agent", "phase", "decision", "why", "evidence", "result"],
+  "properties": {
+    "ts": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "agent": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "phase": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "decision": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "why": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "evidence": {"type": "string", "minLength": 1, "pattern": "\\S"},
+    "result": {"type": "string", "minLength": 1, "pattern": "\\S"}
+  },
+  "additionalProperties": false
+}
