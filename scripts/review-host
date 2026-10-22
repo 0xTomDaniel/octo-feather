@@ -118,7 +118,10 @@ def serve_pids(registry):
     launch = re.compile(rf"(?P<python>.+) {re.escape(server)} --registry {re.escape(target)}"
                         r" --bind \S+ --port \d+ --host \S+")
     for line in out.splitlines():
-        pid, uid, command = (line.strip().split(None, 2) + ["", ""])[:3]
+        fields = line.split(None, 2)
+        if len(fields) < 3:
+            continue  # not pid, uid and args (blank, or no args): never an owned server
+        pid, uid, command = fields
         if not pid.isdigit() or int(pid) == os.getpid() or target not in command or "review-serve" not in command:
             continue
         m = launch.fullmatch(command)

@@ -126,12 +126,15 @@ check_link v4
 
 # 6. Where review-host.py cannot see its live server (no /proc, as on macOS), the link holds and the old server
 #    is gone: register runs in a user+mount namespace with tmpfs over /proc; `ps` (macOS-style, args joined by
-#    spaces) reads the real /proc, bound aside before it is covered.
+#    spaces) reads the real /proc, bound aside before it is covered. It also prints the odd lines a busy box
+#    yields (a blank line, a pid and uid with no args): register skips them, never crashes or kills on them.
 mkdir -p "$t/realproc" "$t/psbin"
 cat > "$t/psbin/ps" <<'PY'
 #!/usr/bin/env python3
 import os
 proc = os.environ["FAKE_PS_PROC"]
+print()
+print(os.getpid(), os.getuid())
 for pid in filter(str.isdigit, os.listdir(proc)):
     try:
         argv = open(f"{proc}/{pid}/cmdline", "rb").read().rstrip(b"\0").split(b"\0")
