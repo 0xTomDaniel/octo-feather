@@ -84,3 +84,23 @@ Runnable script (after merging origin/main 231596e, whose spec `#lanes-tickets` 
 ## (f) Criterion id is an acceptance criterion's anchor (qc FAIL at 23f1a7a, class no-criterion)
 
 The qc judge took #47's body with `issue-lifecycle#acceptance-tracer-tickets` replaced by `issue-lifecycle#story-tracer-tickets` (a user-story anchor) and `ticket` passed it. Fix: an id counts as a criterion only when its anchor is the data-anchor of a data-acceptance-criterion element; a ticket naming only other anchors fails no-criterion naming them, with the fix "name the data-acceptance-criterion anchor it serves, e.g. <slug>#acceptance-...". Other spec anchors next to a real criterion stay allowed (#46 cites comms#octo-lane-record-life-archive). Rerun, 2026-10-21: the judge's draft (fixture `41-judge-story-anchor.md`) rc=1, `class: no-criterion: no acceptance item names an acceptance criterion: issue-lifecycle#story-tracer-tickets is not a data-acceptance-criterion anchor; fix: ...`; `tickets 40` rc=0 (#46, #47, #48 ok); `tickets 8` rc=1, #9 and #10 as in (a).
+
+## (g) Wording rules stripped (owner ruling: no deterministic check judges what prose means)
+
+Removed from `scripts/octo-feather-lane`: the INTERNAL regex (no externally or user visible behaviour, internal only, `<word> layer only`, `schema|persistence|... only`, `a follow-up ticket will wire`, `wired later`), the code applying it, its docstring sentences and error message. Removed from the test: fixtures 34-internal-only, 39-layer-wording, 108-internal-expand, 109-expand-layer and their assertions; the judge drafts 28 (printf) and 36 (persistence) stay, each now asserted on its one structural failure (no declared surface; demo command not named in What to build). Kept, each proven by a mutation that turns `tests/lane-tickets.sh` red: criterion anchor exists and is a data-acceptance-criterion anchor; demo is the last item; it names a backticked command; that command is a surface the repo declares and not the gate alone; What to build names the demo invocation; `Expand-contract:` waives the demo rules. The to-tickets check sentence drops the wording clause and says whether a ticket is a real slice is still the author's to judge; docs/future.md owes "Jev judges whether a ticket is a real tracer slice".
+
+Real run, 2026-10-21, this branch:
+
+```
+$ scripts/octo-feather-lane tickets 40
+#46: ok
+#47: ok
+#48: ok
+#40: 3 of 3 tickets pass
+rc=0
+$ scripts/octo-feather-lane tickets 8
+#9: class: layer-only-ticket: demo names no backticked command (demo: just check green, its herdr-spawn/herdr-say test line names the live-space); fix: end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI (e.g. demo: `app cmd ARGS` prints X), not the gate alone; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`
+#10: class: layer-only-ticket: demo names no backticked command (demo: just check green (refs, dashes, roles)); fix: end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI (e.g. demo: `app cmd ARGS` prints X), not the gate alone; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`
+#8: 0 of 2 tickets pass, 2 fail
+rc=1
+```
