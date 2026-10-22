@@ -49,6 +49,10 @@ HC="$cfg/herdr"
 SCR="/tmp/.qc-$S"                      # per-run scratch on the private /tmp
 SB="$SCR/state/octo-feather/sessions/$S"
 say() { printf 'qc sandbox: %s\n' "$*" >&4; printf 'qc sandbox: %s\n' "$*" >&2; }
+# covered ID PATH: mount ID is covered by a later mount (in a nested run, the outer sandbox's /tmp binds,
+# worktree overlay and /proc submounts): PATH is gone or reaches another mount, so ID is unreachable.
+covered() { local m; [[ -e "$2" || -L "$2" ]] || return 0
+  m=$(awk '/^mnt_id:/ {print $2}' /proc/self/fdinfo/3 2>/dev/null 3<"$2"); [[ -n "$m" && "$m" != "$1" ]]; }
 
 if [[ "$phase" == setup ]]; then
   exec 4>&"$QC_FD_PROOF" 5>&"$QC_FD_POST" 6>&"$QC_FD_ERR" {QC_FD_PROOF}>&- {QC_FD_POST}>&- {QC_FD_ERR}>&-
@@ -141,10 +145,7 @@ if [[ "$phase" == setup ]]; then
     mp=$(printf '%b' "$mp")
     [[ "$mp" == /proc ]] && continue   # replaced by the judge's own /proc
     for k in "${rw[@]}" /dev/shm; do [[ "$mp" == "$k" ]] && continue 2; done
-    # Covered by a later mount (in a nested run, the outer sandbox's /tmp binds and /proc submounts): its path
-    # is gone or reaches another mount, so it is unreachable and keeps its flags; the proof lists it if writable.
-    [[ -e "$mp" || -L "$mp" ]] || continue
-    m=$(awk '/^mnt_id:/ {print $2}' /proc/self/fdinfo/3 2>/dev/null 3<"$mp"); [[ -n "$m" && "$m" != "$id" ]] && continue
+    covered "$id" "$mp" && continue   # unreachable: keeps its flags; the proof counts it
     remount ro "$mp" || die "read-only $mp"
   done < <(cat /proc/self/mountinfo)
   if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json and models.json the per-run copies
@@ -288,12 +289,16 @@ check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only${kitn:+; $kitn
 ov=$(cat "$SCR/ovupper"); wt=$(git rev-parse --show-toplevel 2>/dev/null)
 mapfile -t pers < <(awk -v ov="upperdir=$ov," '
   { for (i = 7; $i != "-"; i++); fs = $(i+1); so = $(i+3) ","; mp = $5; gsub(/\\040/, " ", mp); w[mp] = ""
-    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && index(so, ov)))) w[mp] = mp }
+    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && index(so, ov)))) w[mp] = $1 " " mp }
   END { for (m in w) if (w[m] != "") print w[m] }' /proc/self/mountinfo)   # last mount on a path wins: covered ones are unreachable
+reach=(); unreach=0   # writable but covered under another path (nested run): unreachable, counted apart
+for e in "${pers[@]}"; do if covered "${e%% *}" "${e#* }"; then unreach=$((unreach + 1)); else reach+=("${e#* }"); fi; done
+pers=("${reach[@]}")
 ovl=$(awk -v wt="$wt" -v ov="upperdir=$ov," '{ for (i = 7; $i != "-"; i++); mp = $5; gsub(/\\040/, " ", mp) }
   mp == wt && $(i+1) == "overlay" && index($(i+3) ",", ov) { n++ } END { print n + 0 }' /proc/self/mountinfo)
 check "$(t test "$ovl" -ge 1 -a ! -e "$ov")" "worktree $wt is an overlay, upper dir on the run tmpfs and hidden from the judge"
 check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}"
+((unreach == 0)) || say "ok   $unreach writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run)"
 vc=$(cat "$SCR/vcache")
 if [[ -n "$vc" ]]; then   # check-vendored's cache: the last mount on its path is read-only, a write fails
   vro=$(awk -v m="$vc" '{mp = $5; gsub(/\\040/, " ", mp)} mp == m {o = $6} END {print (("," o ",") ~ /,ro,/)}' /proc/self/mountinfo)

@@ -105,9 +105,11 @@ P
     unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2>/dev/null && echo "ESCAPE remounted cache rw"
     printf "$ok" ;;
   nested)   # `just check` in the sandbox runs this test (fresh HOME, its own herdr and state): a sandboxed qc inside the judge's gets past its proof
-    o="$(env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$(mktemp -d)" PATH="${0%/bin/pi}/fakeherdr:${0%/pi}:$PATH" \
+    h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
+    o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/bin/pi}/fakeherdr:${0%/pi}:$PATH" \
       FAKE_QC=garbage octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
-    grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" || echo "MISSING nested proof: $o"
+    grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" && grep -q 'qc sandbox: ok   [1-9][0-9]* writable mounts covered' <<< "$o" \
+      || echo "MISSING nested proof: $o"
     printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
