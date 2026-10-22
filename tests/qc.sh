@@ -12,6 +12,9 @@
 # --no-sandbox never commits, and the qc recipes pass arguments as data.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`).
 set -euo pipefail
+# A test harness, not a gate recipe reaching the judge: its fake-pi runs start outside any check run (the one
+# boundary; octo-feather-qc refuses under the marker, whatever pi it would launch).
+unset OCTO_FEATHER_CHECK_RUN
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -150,7 +153,8 @@ real="$(PATH="$base" command -v herdr || true)"; mode=fake
 echo "qc test: sandbox Herdr mode: $mode${real:+ ($real)}" >&2
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
-"$S" init docs/specs/demo.spec.html 0123abc >/dev/null; echo scratch/ > .gitignore; git add -A; git commit -qm spec
+git add -A; git commit -qm accepted; "$S" init docs/specs/demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null
+echo scratch/ > .gitignore; git add -A; git commit -qm spec
 st=docs/specs/demo.status.json
 run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" "$Q" "${@:2}" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }

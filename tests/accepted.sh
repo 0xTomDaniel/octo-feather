@@ -73,6 +73,15 @@ row "$c2" 2026-10-20T15:10:00Z > "$t/state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"not on the spec at registered commit"* ]] || fail "stale Accept: $out"   # base moved to an edited spec
 handoff 1792509686764211104 acc3 "$V2"
 run 0 "$s"; [[ "$out" == "accepted $c2 "* ]] || fail "re-accepted at the new base: $out"
+# gh#64: the same Accept is found however SPEC_PATH is given.
+run 0 "$r/$s"; [[ "$out" == "accepted $c2 "* ]] || fail "absolute SPEC_PATH: $out"
+run 0 "./$s"; [[ "$out" == "accepted $c2 "* ]] || fail "./ SPEC_PATH: $out"
+set +e; out="$(cd "$r/docs" && "$A" specs/a.spec.html 2>&1)"; rc=$?; set -e
+[[ "$rc" == 0 && "$out" == "accepted $c2 "* ]] || fail "SPEC_PATH relative to a subdirectory cwd: rc=$rc $out"
+run 1 docs/specs/missing.spec.html
+[[ "$out" == *"SPEC_PATH docs/specs/missing.spec.html"*"tried docs/specs/missing.spec.html"*"registered: $s"* ]] || fail "unregistered reason: $out"
+set +e; out="$("$A" 2>&1)"; rc=$?; set -e
+[[ "$rc" == 64 && "$(head -n1 <<<"$out")" == *SPEC_PATH* ]] || fail "no argument: rc=$rc $out"
 printf '{"id": "ag1", "event": "handoff", "actor": "agent", "createdAt": "2026-10-20T15:59:00.000Z", "version": "%s"}\n' "$V1" \
   > "$spool/1792509686764211199-handoff-ag1.json"
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"handoff=acc3" ]] || fail "an agent-actor hand-off counted: $out"
@@ -80,4 +89,4 @@ row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$t/state/ho
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"session=default"* ]] || fail "a missing commit in another session hid the accepted row: $out"
 row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$t/state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"is not in"* ]] || fail "registered commit missing from the repo: $out"
-echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, agent actor, missing commit$crossed)"
+echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit$crossed)"
