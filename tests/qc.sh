@@ -150,7 +150,8 @@ real="$(PATH="$base" command -v herdr || true)"; mode=fake
 echo "qc test: sandbox Herdr mode: $mode${real:+ ($real)}" >&2
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
-"$S" init docs/specs/demo.spec.html 0123abc >/dev/null; echo scratch/ > .gitignore; git add -A; git commit -qm spec
+git add -A; git commit -qm accepted; "$S" init docs/specs/demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null
+echo scratch/ > .gitignore; git add -A; git commit -qm spec
 st=docs/specs/demo.status.json
 run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" "$Q" "${@:2}" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }

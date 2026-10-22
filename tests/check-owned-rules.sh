@@ -44,6 +44,24 @@ plant agents/github.md 'Mechanical rebases onto accepted main do not require ren
 plant agents/impl.md 'Any code change after QC means `just qc` and a fresh review again, on the new head.' merge-authority 'spec `#gates-merge`'
 plant agents/sleep.md 'Never hold your turn in a sleep over a minute; background `just qc` and end the turn.' long-wait 'herdr-comms (Send a message)'
 plant agents/steer.md 'While a sleep runs, messages queue unread as "Steering".' long-wait 'herdr-comms (Send a message)'
+# Spec-call rules (issue #63): a role paraphrasing them fails; its pointer and the check's own message pass.
+echo '- Never edit a spec: ask your supervisor with the change and its evidence (rules: spec `#gates-spec-calls`).' > "$t/agents/calls-ok.md"
+echo 'passes_as_written must be false: if the criteria pass as written there is no edit' > "$t/scripts/calls-msg"
+g add -A; run 0
+plant agents/calls.md 'Each call cites a failing command or an error. No evidence, no call.' spec-calls 'spec `#gates-spec-calls`'
+plant agents/adds.md 'Additions are proposals, not calls: a new feature goes to docs/future.md.' spec-calls 'spec `#gates-spec-calls`'
+# Loudness and denial (review of f3bd790: owned-rule-restatement): the role pointers pass, each copied clause fails.
+cat > "$t/agents/loud-ok.md" <<'TXT'
+Send each call spec `#gates-call-loudness` has the director tell the owner at once to the director with `herdr-say --parent`, naming the call. Handle a denial the director relays as spec `#gates-call-decision` says, setting the call's `denied` field in the commit that acts on it.
+Spec calls (rules: spec `#gates-spec-calls`; when the owner hears a call and what a denial means: `#gates-call-loudness`, `#gates-call-decision`): pass each call message a supervisor sends you to the owner, naming the lane and the call. At merge, relay each call the owner denies to that lane's supervisor (`herdr-say <supervisor pane>`).
+Do not wait for a reply from CI; poll it with `gh run watch`.
+TXT
+g add -A; run 0
+plant agents/loud.md "A call that weakens or removes a criterion, and your lane's fourth call, go to the director at once." spec-calls '`#gates-call-loudness`'
+plant agents/loud2.md "Tell the owner at once, naming the lane and the call; nothing waits on the reply and the lane keeps running." spec-calls '`#gates-call-loudness`'
+plant agents/noreply.md "Send it with \`herdr-say --parent\`, naming the call; do not wait for a reply, keep working." spec-calls '`#gates-call-loudness`'
+plant agents/deny.md "A denial the director relays is rework: undo or revise that change and set the call's \`denied\` field in the same commit." spec-calls '`#gates-call-decision`'
+plant agents/deny2.md "At merge, relay each call the owner denies to that lane's supervisor as rework (\`herdr-say <supervisor pane>\`)." spec-calls '`#gates-call-decision`'
 plant agents/lane.md 'Cut branch gh<N>-<slug> for the lane.' lane-branch 'docs/adr/0011'
 plant agents/push.md '2. Verify the branch matches the target repo convention, else `octo-feather/gh<issue-number>-<slug>`.' lane-branch 'docs/adr/0011'
 # A patch's added line is ours, so it is checked.
@@ -93,4 +111,4 @@ selfcheck 'non-str element' '"The lane branch is `gh<N>`: see docs/adr/0011.",' 
 selfcheck 'empty-str element' '"The lane branch is `gh<N>`: see docs/adr/0011.",' '"The lane branch is `gh<N>`: see docs/adr/0011.", "",' \
   "RULES['lane-branch']['negatives'][3] is '' (str), not a non-empty str"
 rm -f "$t/check-copy"
-echo "check-owned-rules: ok (examples gate: missing positives/negatives, a matched negative and a missed positive fail naming the entry and fix; owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, a slug default and a patch line fail with their fix)"
+echo "check-owned-rules: ok (examples gate: missing positives/negatives, a matched negative and a missed positive fail naming the entry and fix; owner, pointer, record, generic words and short process waits pass; 3 past restatements, 2 long-wait copies, 7 spec-call copies, a slug default and a patch line fail with their fix)"

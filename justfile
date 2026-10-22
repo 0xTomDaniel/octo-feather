@@ -124,7 +124,8 @@ check-tests:
     TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "$root"/tests/*.sh; do "$t"; done
 
-# Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built (docs/adr/0021).
+# Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built, and every spec change
+# since its accepted_commit is named by a call in <slug>.calls.jsonl (docs/adr/0021, issue-lifecycle #gates-spec-calls).
 check-spec-status:
     @python3 "$root/scripts/octo-feather-spec-status" check "$root/docs/specs"
 

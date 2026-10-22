@@ -72,6 +72,53 @@ RULES = {
             "- Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says.",
         ],
     ),
+    # The spec-call rules (issue #63): roles point to them, never paraphrase the three rules,
+    # nor which calls reach the owner at once, that nothing waits, and that a denial is rework.
+    "spec-calls": dict(
+        pattern=r"no evidence,? no call|additions are proposals|can the accepted criteria pass"
+        r"|pass(es)? with the spec as written|if they can,? there is no edit"
+        r"|weakens or removes a criterion,? (and|or) (your|its|the|a) lane'?s fourth call"
+        r"|(do not wait for a reply|nothing waits on the (reply|owner))[,;]? (and )?(keep working|the lane keeps running)"
+        r"|denial[^.;]{0,40} is rework|owner denies to [^.;]* as rework",
+        owners={"docs/specs/issue-lifecycle.spec.html"},
+        fix="write only a pointer: the call rules are spec `#gates-spec-calls`, who hears a call and when "
+        "`#gates-call-loudness`, a denial `#gates-call-decision` (docs/specs/issue-lifecycle.spec.html)",
+        positives=[
+            "Before any spec edit, ask: can the accepted criteria pass with the spec as written? If they can, there is no edit.",
+            "Each call cites a failing command or an error. No evidence, no call.",
+            "Additions are proposals, not calls: a new feature goes to docs/future.md.",
+            "Edit the spec only when the criteria cannot pass with the spec as written.",
+            # agents/supervisor.md:28 and agents/director.md:79 at f3bd790 (review: owned-rule-restatement)
+            "A call that weakens or removes a criterion, and your lane's fourth call, go to the director at once "
+            "with `herdr-say --parent`, naming the call; do not wait for a reply, keep working.",
+            "A denial the director relays is rework: undo or revise that change and set the call's `denied` field "
+            "in the same commit.",
+            "when a supervisor reports a call that weakens or removes a criterion, or its lane's fourth call, tell "
+            "the owner at once, naming the lane and the call; nothing waits on the reply and the lane keeps running.",
+            "At merge, relay each call the owner denies to that lane's supervisor as rework (`herdr-say <supervisor pane>`).",
+        ],
+        negatives=[  # real lines: scripts/octo-feather-spec-status, docs/future.md (Jev judges call evidence)
+            "passes_as_written must be false: if the criteria pass as written there is no edit",
+            "does the cited evidence show the accepted criterion cannot pass as written?",
+            "A call that adds a criterion adds it to the status file as planned.",
+            "Never edit `docs/specs/*.spec.html`: ask your supervisor, naming the change needed and its evidence.",
+            "Whether the evidence is good enough is the owner's call at merge.",
+            "The accepted criteria pass in qc.",
+            # the role pointers that replaced the restatements, and real lines that name the same things
+            "Send each call spec `#gates-call-loudness` has the director tell the owner at once to the director with "
+            "`herdr-say --parent`, naming the call.",
+            "Handle a denial the director relays as spec `#gates-call-decision` says, setting the call's `denied` field "
+            "in the commit that acts on it.",
+            "pass each call message a supervisor sends you to the owner, naming the lane and the call.",
+            "At merge, relay each call the owner denies to that lane's supervisor (`herdr-say <supervisor pane>`).",
+            '("weakens", "Weakens or removes a criterion (flagged; the director told the owner at once)"),',
+            "(b) a needed weakening, which is also the lane's fourth call: spec edit, call line and status change in "
+            "one commit, `herdr-say --parent` to the director at once and work goes on;",
+            "an owner denial at merge is relayed as rework and is an owner correction at a gate",
+            "Do not wait for a reply from CI; poll it with `gh run watch`.",
+            "Rework the failed criterion; keep working until `just check` is green.",
+        ],
+    ),
 }
 # Lines allowed to name the rule's mechanism: (rule, file, line regex).
 MECHANISM = {
