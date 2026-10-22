@@ -4,7 +4,8 @@
 # text, no evidence), evidence plus docs/future.md fails (#80), evidence plus a
 # docs/owed-evals/<issue>.md passes, evidence deleted again is no
 # evidence, the Behaviour-neutral opt-out (all touching commits, printed), the pruning habit
-# (#67: a role or patch change's evidence has a `Removed:` line; skill markdown alone needs none). The check runs
+# (#67: a role or patch change's evidence has a `Removed:` line; skill markdown alone needs none), per-path
+# smoke (#93: each role path on a `Smoke:` line; the gh71 and gh67 shapes, one role's smoke covering another). The check runs
 # with no git config at all; fixture commits set their identity by env. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -43,10 +44,15 @@ run 1; has '#67 pruning habit'; has 'agents/supervisor.md'; has 'Fix: add a line
 echo 'Removed:' >> "$t/evidence/smoke.md"; g commit -qam 'empty removed'
 run 1; has '#67 pruning habit'
 echo 'Removed: nothing; incident #19 justifies it.' >> "$t/evidence/smoke.md"; g commit -qam 'removed line'
+# Per-path smoke (#93): evidence that names no path on a `Smoke:` line covers none.
+run 1; has '#93 missing-behavior-smoke'; has '  agents/supervisor.md'; has 'Smoke: <path> ...'
+echo 'Smoke:' >> "$t/evidence/smoke.md"; g commit -qam 'empty smoke'
+run 1; has '#93 missing-behavior-smoke'
+echo 'Smoke: `agents/supervisor.md`, run 1 pass' >> "$t/evidence/smoke.md"; g commit -qam 'smoke line'
 run 0; has 'evidence evidence/smoke.md, owed evals docs/owed-evals/19.md'
 # Evidence deleted again is no net change: it fails.
 g rm -q evidence/smoke.md; g commit -qm 'drop smoke'
-run 1; has 'missing: an added or modified evidence/*.md'; has 'with a `Removed: <what it deleted, or the incident>` line'
+run 1; has 'missing: an added or modified evidence/*.md'; has 'with a `Smoke: <path> ...` line naming each path it ran and a `Removed: <what it deleted, or the incident>` line'
 
 # A patch change needs the line too; vendored skill markdown alone does not.
 g checkout -q -b patch main
@@ -55,10 +61,25 @@ echo '# reason: ADR 1' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; echo '
 g add -A; g commit -qm 'patch x'
 run 1 OCTO_FEATHER_BASE=main; has '#67 pruning habit'; has '.skillfile/patches/skills/x/SKILL.md.patch'
 echo 'Removed: the Spec pass.' >> "$t/evidence/p.md"; g commit -qam 'removed'
+run 1 OCTO_FEATHER_BASE=main; has '  .skillfile/patches/skills/x/SKILL.md.patch'
+echo 'Smoke: .skillfile/patches/skills/x/' >> "$t/evidence/p.md"; g commit -qam 'smoke dir'
 run 0 OCTO_FEATHER_BASE=main
 g checkout -q -b skillmd main
-mkdir -p "$t/.agents/skills/x" "$t/evidence" "$t/docs/owed-evals"; echo 'x' > "$t/.agents/skills/x/SKILL.md"; echo 'Probe.' > "$t/evidence/p.md"; echo '- x' > "$t/docs/owed-evals/67.md"
+mkdir -p "$t/.agents/skills/x" "$t/evidence" "$t/docs/owed-evals"; echo 'x' > "$t/.agents/skills/x/SKILL.md"; echo 'Smoke: .agents/skills/x/SKILL.md' > "$t/evidence/p.md"; echo '- x' > "$t/docs/owed-evals/67.md"
 g add -A; g commit -qm 'skill md'
+run 0 OCTO_FEATHER_BASE=main
+
+# Lane gh71 shape (0035adc): director and corrector changed, the only evidence ran the corrector.
+g checkout -q -b gh71 main; mkdir -p "$t/evidence" "$t/docs/owed-evals"
+echo 'Director forwards calls.' > "$t/agents/director.md"; echo 'Corrector logs calls.' > "$t/agents/corrector.md"
+printf 'Smoke: agents/corrector.md\nRemoved: nothing; incident #71.\n' > "$t/evidence/corrector.md"; echo '- calls' > "$t/docs/owed-evals/71.md"
+g add -A; g commit -qm 'roles: calls'
+run 1 OCTO_FEATHER_BASE=main; has '  agents/director.md'
+! grep -qF '  agents/corrector.md' <<<"$out" || { echo "check-behavior-smoke test: smoked corrector.md listed: $out" >&2; exit 1; }
+# A prose mention of the path is not a Smoke: line (gh67 a60d12c named corrector.md in a Changes list).
+echo '- `agents/director.md` forwards calls.' >> "$t/evidence/corrector.md"; g commit -qam 'mention'
+run 1 OCTO_FEATHER_BASE=main; has '  agents/director.md'
+echo 'Smoke: agents/director.md' > "$t/evidence/director.md"; g add -A; g commit -qm 'director smoke'
 run 0 OCTO_FEATHER_BASE=main
 
 # Opt-out: a pointer-only rewrite fails without the trailer, passes with it, and the run names it.
@@ -73,4 +94,4 @@ run 1 OCTO_FEATHER_BASE=main; has 'without Behaviour-neutral'
 # An empty reason is no opt-out.
 g reset -q --hard HEAD^; g commit -q --amend -m 'role: pointer only' -m 'Behaviour-neutral:'
 run 1 OCTO_FEATHER_BASE=main
-echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; a role or patch change without a Removed: line fails naming the fix, passes with one; the opt-out passes and is printed, one untagged commit or an empty reason fails)"
+echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; a role or patch change without a Removed: line fails naming the fix, passes with one; a role path on no Smoke: line fails (gh71, gh67 shapes), a directory token covers its files; the opt-out passes and is printed, one untagged commit or an empty reason fails)"
