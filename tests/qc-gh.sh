@@ -9,6 +9,9 @@
 # aborts before the judge (67) unless --no-github; PR 0 is refused before the judge; a
 # failed status commit leaves the status file unmodified. Run by `just check`.
 set -euo pipefail
+# A test harness, not a gate recipe reaching the judge: its fake-pi runs start outside any check run (the one
+# boundary; octo-feather-qc refuses under the marker, whatever pi it would launch).
+unset OCTO_FEATHER_CHECK_RUN
 # The qc sandbox is Linux-only (unshare, /proc); CI runs this on Linux.
 [[ "$(uname -s)" != Darwin ]] || { echo "qc-gh: skipped, not on macOS (just qc needs Linux; CI runs it)"; exit 0; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -73,7 +76,7 @@ EOF
 chmod +x "$t/bin/gh" "$t/bin/pi"; export PATH="$t/bin:$kit/scripts:$PATH"
 cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$t/repo/docs/specs/"
 cd "$t/repo"; git init -q -b main .
-"$S" init docs/specs/demo.spec.html 0123abc >/dev/null; git add -A; git commit -qm spec
+git add -A; git commit -qm accepted; "$S" init docs/specs/demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null; git add -A; git commit -qm spec
 git remote add origin https://github.com/o/r.git   # never contacted: only the fake gh is
 st=docs/specs/demo.status.json
 run() { local want="$1"; shift; set +e; out="$("$Q" "$@" 2>&1)"; rc=$?; set -e
@@ -168,8 +171,10 @@ shim 0 pr list --json number,mergedAt; [[ "$out" == *'"mergedAt": null'* ]] || f
 [[ "$(wc -l < "$t/miss.log")" == "$n" ]] || fail "a genuine null was logged as a miss"
 # Kit on kit: a copy of the kit judging itself (kit inside the judged worktree) passes the proof.
 mkdir -p "$t/kc"; git -C "$kit" ls-files -z | (cd "$kit" && xargs -0 cp -P --parents -t "$t/kc" 2>/dev/null || true)
-cd "$t/kc"; git init -q -b main .; cp "$t/repo/docs/specs/demo.spec.html" docs/specs/zz-demo.spec.html
-"$S" init docs/specs/zz-demo.spec.html 0123abc >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
+# The kit's own status files name accepted commits this fresh repo lacks; only zz-demo is judged.
+cd "$t/kc"; git init -q -b main .; rm -f docs/specs/*.status.json docs/specs/*.calls.jsonl
+cp "$t/repo/docs/specs/demo.spec.html" docs/specs/zz-demo.spec.html; git add -A; git -c core.hooksPath=/dev/null commit -qm kit
+"$S" init docs/specs/zz-demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null; git add -A; git -c core.hooksPath=/dev/null commit -qm status
 Q="$t/kc/scripts/octo-feather-qc" run 0 docs/specs/zz-demo.status.json 5 acceptance-a
 grep -q "qc sandbox: ok   HOME, /var/tmp read-only; the kit is the judged worktree" <<< "$out" || fail "kit-on-kit proof: $out"
 echo "qc-gh: ok (kit on kit, snapshot fetched outside per run, read-only inside, proof line, offline gh reads, writes refused and counted, brief names evidence, fetch failure 67, --no-github, no remote, PR and id validation, failed status commit restored, --json fields absent from the snapshot refused and counted, stored nulls kept)"
