@@ -115,4 +115,33 @@ run "$m"; want 0 "reordered siblings, call names the parent"
 # An accepted_commit missing from the repo is named.
 perl -pi -e 's/"accepted_commit": "[0-9a-f]+"/"accepted_commit": "deadbee"/' "$d/demo.status.json"; rm -f "$L"
 run "$r"; want 1 "missing accepted_commit" "accepted_commit deadbee is not in this repo" "fetch full history"
-echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, blank fields, move, reorder, missing commit)"
+# `calls` (#acceptance-call-listed, -added, -weakens, -many, -denied): the lane's calls since its
+# base, grouped weakens, adds, clarifies as #gates-call-loudness orders them; a call already
+# at the base is not the lane's, even once denied; a fourth call prints the more-than-three line.
+c="$t/calls"; repo calls good; cs="$c/docs/specs"; CL="$cs/demo.calls.jsonl"
+lcall() { # lcall KIND WHAT LANE [EXTRA_JSON]
+  printf '{"at": "2026-10-21T10:00:00Z", "lane": "%s", "role": "supervisor", "kind": "%s", "anchors": ["acceptance-a"], "criteria": ["acceptance-a"], "what": "%s", "why": "why-%s", "passes_as_written": false, "evidence": "ev-%s"%s}\n' \
+    "$3" "$1" "$2" "$2" "$2" "${4:-}"; }
+lcall clarifies old-call gh50 >"$CL"; git -C "$c" add -A; git -C "$c" commit -qm "earlier lane"
+base="$(git -C "$c" rev-parse HEAD)"
+list() { set +e; out="$(cd "$c" && "$S" calls "$@" 2>&1)"; rc=$?; set -e; }
+line() { grep -nF -- "$1" <<<"$out" | head -1 | cut -d: -f1; }
+{ perl -pe 's/\}$/, "denied": {"at": "2026-10-22T09:00:00Z", "note": "old"}}/' "$CL"
+  lcall clarifies what-clar gh63
+  lcall adds what-add gh63
+  lcall weakens what-weak gh63 ', "denied": {"at": "2026-10-22T10:00:00Z", "note": "keep it"}'; } >"$CL.new"; mv "$CL.new" "$CL"
+list --since "$base" docs/specs; want 0 "calls listing" "3 calls (1 weakens, 1 adds, 1 clarifies; 1 denied)." \
+  "weakens DENIED (2026-10-22T10:00:00Z: keep it): docs/specs/demo.spec.html, lane gh63, role supervisor" \
+  "   why: why-what-weak" "   evidence: ev-what-add" "   anchors: acceptance-a" "   criteria: acceptance-a"
+grep -qF old-call <<<"$out" && fail "a call at the base was listed: $out"
+grep -qF "more than three" <<<"$out" && fail "three calls printed the more-than-three line: $out"
+prev=0; for w in "Weakens or removes" what-weak "Adds scope" what-add "Clarifies or adds detail" what-clar; do
+  n="$(line "$w")"; [[ -n "$n" && "$n" -gt "$prev" ]] || fail "calls not grouped weakens, adds, clarifies at '$w': $out"; prev="$n"; done
+lcall clarifies what-four gh63 >>"$CL"
+list --since "$base"; want 0 "fourth call" "4 calls" "Lane gh63 made 4 calls, more than three: the director tells the owner"
+# Default base: the merge base with origin/main; none is an error naming the fix.
+list; want 1 "no origin/main" "no merge base with origin/main" "--since REF"
+git -C "$c" update-ref refs/remotes/origin/main "$base"
+list; want 0 "default base" "4 calls"
+
+echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, blank fields, move, reorder, missing commit; calls: grouped, denied, base, more than three)"

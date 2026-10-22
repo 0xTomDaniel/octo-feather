@@ -76,6 +76,8 @@ Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start
 Baseline qc failures are product gaps: open a gap lane, never a correction lane; baseline lanes log them as `"kind": "gap"`, which this count never sees (docs/adr/0020).
 Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, merge ask) whose brief names the trigger; its supervisor spawns one `corrector`. Product lanes never wait on it.
 
+Spec calls (rules: spec `#gates-spec-calls`): when a supervisor reports a call that weakens or removes a criterion, or its lane's fourth call, tell the owner at once, naming the lane and the call; nothing waits on the reply and the lane keeps running. At merge, relay each call the owner denies to that lane's supervisor as rework (`herdr-say <supervisor pane>`). A denial is an owner correction at a gate: spec `#lanes-correction`; name the call's role in that correction lane's issue.
+
 Lane start, in order: create the lane's parent GitHub issue (`gh issue create`); add the lane's worktree
 and branch (named per docs/adr/0011) from main, which holds the spec and its status file; `octo-feather-start --issue <n> --cwd <worktree>`, which creates the lane workspace `gh<n>` with the supervisor in tab `supervisor` (docs/adr/0011, 0014);
 write the lane record below from its output; send the supervisor a lane-shaped `/goal` as its first message (agents cannot run

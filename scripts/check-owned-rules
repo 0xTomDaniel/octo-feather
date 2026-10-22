@@ -72,6 +72,27 @@ RULES = {
             "- Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says.",
         ],
     ),
+    # The spec-call rules (issue #63): roles point to them, never paraphrase the three rules.
+    "spec-calls": dict(
+        pattern=r"no evidence,? no call|additions are proposals|can the accepted criteria pass"
+        r"|pass(es)? with the spec as written|if they can,? there is no edit",
+        owners={"docs/specs/issue-lifecycle.spec.html"},
+        fix="write only a pointer: the call rules are spec `#gates-spec-calls` (docs/specs/issue-lifecycle.spec.html)",
+        positives=[
+            "Before any spec edit, ask: can the accepted criteria pass with the spec as written? If they can, there is no edit.",
+            "Each call cites a failing command or an error. No evidence, no call.",
+            "Additions are proposals, not calls: a new feature goes to docs/future.md.",
+            "Edit the spec only when the criteria cannot pass with the spec as written.",
+        ],
+        negatives=[  # real lines: scripts/octo-feather-spec-status, docs/future.md (Jev judges call evidence)
+            "passes_as_written must be false: if the criteria pass as written there is no edit",
+            "does the cited evidence show the accepted criterion cannot pass as written?",
+            "A call that adds a criterion adds it to the status file as planned.",
+            "Never edit `docs/specs/*.spec.html`: ask your supervisor, naming the change needed and its evidence.",
+            "Whether the evidence is good enough is the owner's call at merge.",
+            "The accepted criteria pass in qc.",
+        ],
+    ),
 }
 # Lines allowed to name the rule's mechanism: (rule, file, line regex).
 MECHANISM = {
