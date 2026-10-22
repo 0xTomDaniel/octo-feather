@@ -2,7 +2,7 @@
 
 Smoke runs for this batch's behaviour changes to role files and skills (ADR 0008, until `just qa` exists).
 
-Setup: each probe starts the real role headless (`pi-role agents/<role>.md --model anthropic/claude-sonnet-5-5 --thinking off -p "<scenario>"`) in an empty git repo, with no Herdr session. The prompt asks for its next actions and their commands, and says to run nothing. A probe shows how the role text reads to a model. It is weaker than a live chain like block 3, and is no substitute for the owed eval cases in `docs/future.md`. The lane-level behaviours were also seen live in `2026-10-19-qc-smoke.md` and `2026-10-19-language-skills-smoke.md`.
+Setup: each probe starts the real role headless (`pi-role agents/<role>.md --model anthropic/claude-sonnet-5-5 --thinking off -p "<scenario>"`) in an empty git repo, with no Herdr session. The prompt asks for its next actions and their commands, and says to run nothing. A probe shows how the role text reads to a model. It is weaker than a live chain like block 3, and is no substitute for the owed eval cases in `docs/owed-evals/backlog.md`. The lane-level behaviours were also seen live in `2026-10-19-qc-smoke.md` and `2026-10-19-language-skills-smoke.md`.
 
 | Probe | Change under test | Answer (abridged) | Result |
 |---|---|---|---|

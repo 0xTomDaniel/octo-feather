@@ -193,7 +193,7 @@ integrate issue +refs:
 check-roles:
     @python3 "$root/scripts/check-roles"
 
-# A role path changed on this branch needs evidence/*.md and docs/future.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
+# A role path changed on this branch needs evidence/*.md and docs/owed-evals/*.md in the same diff, or Behaviour-neutral commits (docs/adr/0008, correction lane #26). Base: origin/main or the CI PR base; none: skips locally, fails in CI.
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 

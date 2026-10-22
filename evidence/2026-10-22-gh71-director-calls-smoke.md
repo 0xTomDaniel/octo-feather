@@ -1,6 +1,6 @@
 # Director typed-call forwarding smoke (issue #71, PR #73 review finding)
 
-Live smoke of agents/director.md (Correction lanes paragraph): every check or instruction a corrector adds reaches the owner as a logged call in the lane's merge ask, naming its kind. Companion to `evidence/2026-10-22-gh71-corrector-meaning-smoke.md`; the calls fed in are the two `instruction+example` calls of that file's run 2, plus one synthetic `check` call (run 2 had none). Owed eval: docs/future.md, Owed eval cases, "Corrector and director, meaning stays out of checks".
+Live smoke of agents/director.md (Correction lanes paragraph): every check or instruction a corrector adds reaches the owner as a logged call in the lane's merge ask, naming its kind. Companion to `evidence/2026-10-22-gh71-corrector-meaning-smoke.md`; the calls fed in are the two `instruction+example` calls of that file's run 2, plus one synthetic `check` call (run 2 had none). Owed eval: docs/owed-evals/71.md, "Corrector and director, meaning stays out of checks".
 
 ## Setup
 

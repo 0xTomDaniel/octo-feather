@@ -21,5 +21,5 @@ Code review of the TypeScript change: real reviewer (`openai/gpt-6.1-sol` high, 
 - Cost: $0.066.
 
 Findings:
-- The TypeScript implementer did not open the `typescript` skill. Nothing in the ticket touched schemas or MSW, so no rule was broken, but the skill's guidance was never read. This is owed as an eval case in `docs/future.md`.
+- The TypeScript implementer did not open the `typescript` skill. Nothing in the ticket touched schemas or MSW, so no rule was broken, but the skill's guidance was never read. This is owed as an eval case in `docs/owed-evals/backlog.md`.
 - Both implementers verified through the real demo path, as `principle-prove-it-works` asks, without naming the skill.

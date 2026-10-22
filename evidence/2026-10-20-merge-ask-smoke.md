@@ -1,6 +1,6 @@
 # Merge ask smoke: `octo-feather-lane verdict` and `merge-ask` (issue #48), 2026-10-20
 
-Smoke for the merge-ask pointers in agents/supervisor.md (self-check), implement-spec step 8 and the github skill (Verdict Mutations), and the new `verdict` and `merge-ask` subcommands of `scripts/octo-feather-lane` (branch implementer-gh48, from gh40; spec issue-lifecycle `#acceptance-merge-ask-evidence`). ADR 0008 second paragraph; the owed eval is listed in docs/future.md (Owed eval cases). The commands themselves are proven by `tests/lane-merge-ask.sh` in `just check` (fake gh; five mutations of the checks each turn it red).
+Smoke for the merge-ask pointers in agents/supervisor.md (self-check), implement-spec step 8 and the github skill (Verdict Mutations), and the new `verdict` and `merge-ask` subcommands of `scripts/octo-feather-lane` (branch implementer-gh48, from gh40; spec issue-lifecycle `#acceptance-merge-ask-evidence`). ADR 0008 second paragraph; the owed eval is listed in docs/owed-evals/48.md. The commands themselves are proven by `tests/lane-merge-ask.sh` in `just check` (fake gh; five mutations of the checks each turn it red).
 
 ## (a) Ticket demo, real GitHub, read-only
 
