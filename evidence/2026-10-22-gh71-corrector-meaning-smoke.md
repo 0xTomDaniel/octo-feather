@@ -1,6 +1,6 @@
 # Corrector meaning smoke (issue #71, ticket #72)
 
-Live smoke of the changed corrector (docs/adr/0008): `agents/corrector.md` (meaning question, calls with kind, stop rule, loads principle-encode-lessons-in-structure), the `correct` patch (question before the check rung) and the principle-encode-lessons-in-structure patch (model-invoked, ADR 0012). Owed eval: docs/future.md, Owed eval cases, "Corrector and director, meaning stays out of checks".
+Live smoke of the changed corrector (docs/adr/0008): `agents/corrector.md` (meaning question, calls with kind, stop rule, loads principle-encode-lessons-in-structure), the `correct` patch (question before the check rung) and the principle-encode-lessons-in-structure patch (model-invoked, ADR 0012). Owed eval: docs/owed-evals/71.md, "Corrector and director, meaning stays out of checks".
 
 ## Setup
 
