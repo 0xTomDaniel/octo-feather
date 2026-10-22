@@ -12,11 +12,11 @@ The supervisor never shapes; a spec change after Accept is a logged call, not a 
 
 ## Considered options
 
-- The supervisor shapes inside its lane (octo-lite). Rejected: shaping is a conversation with the owner, and only the director talks to the owner (ADR 0015); a lane would exist before anyone knows how to cut it (ADR 0019).
+- The supervisor shapes inside its lane. Rejected: shaping is a conversation with the owner, and only the director talks to the owner (ADR 0015); a lane would exist before anyone knows how to cut it (ADR 0019).
 - The director records an acceptance receipt comment on each lane PR, and the spec reaches main with the first lane. Rejected: the acceptance is scattered across lane PRs, and main never says which criteria are built.
 - The director records an acceptance the owner gives in chat. Rejected: a second path to the same gate, and an agent writing the owner's decision.
 - Status inside the spec HTML (an attribute per criterion). Rejected: the accepted bytes would change, and Spec Chat would have to know this workflow.
-- Accept freezes the spec, and a behavior change goes back to the owner for a fresh Accept (the rule from 2026-10-19 to 2026-10-21). Rejected: lanes stalled on re-review, and in the Quorum run every amend after registration voided the owner's real Accept.
+- Accept freezes the spec, and a behavior change goes back to the owner for a fresh Accept (the rule from 2026-10-19 to 2026-10-21). Rejected: lanes stalled on re-review, and in the pilot 2 run every amend after registration voided the owner's real Accept.
 - Agents report their own spec edits in the merge ask. Rejected: an edit nobody reported reaches main unseen.
 - The call log in the lane's state directory. Rejected: the owner cannot review it in the pull request, and it is gone when the lane is archived.
 

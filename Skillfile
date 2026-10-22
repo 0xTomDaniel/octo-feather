@@ -1,6 +1,4 @@
-# octo-feather skill management, ported from octo-lite's Skillfile
-# (varelaseb/octo-lite@cc6fa4e, Apache-2.0; its ADR 0002, in octo-lite's
-# history).
+# octo-feather skill management.
 #
 # skillfile (github.com/eljulians/skillfile) pins upstream skills at exact SHAs
 # and preserves the tdd seam-gate patch across upstream updates
@@ -34,7 +32,7 @@ github  skill  blast-radius     cursor/plugins@0b8e952052d482ee6de06deebf14d590d
 github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/sharpen
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
 
-# octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
+# octo-feather's own skills, authored in .agents/skills.
 local  skill  commit                  .agents/skills/commit
 local  skill  github                  .agents/skills/github
 local  skill  herdr-comms             .agents/skills/herdr-comms

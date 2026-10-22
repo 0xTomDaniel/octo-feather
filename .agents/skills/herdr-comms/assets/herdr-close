@@ -2,8 +2,6 @@
 # Close one Herdr tab or space and end everything it ran, or park one idle
 # Pi agent.
 #
-# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
-#
 # Closing a tab or space kills its panes, but a detached command child (setsid)
 # survives, reparented. Every process started in a tab carries
 # HERDR_TAB_ID=<tab> and HERDR_WORKSPACE_ID=<space> in its environ, so that tag,

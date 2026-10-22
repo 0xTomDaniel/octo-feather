@@ -10,5 +10,5 @@ Every escalation moves one level up the org chart, never straight to the owner: 
 
 ## Considered options
 
-- Let workers and supervisors message the owner for speed (octo-lite's supervisor faced the owner directly). Rejected: the owner gets fragmented asks with no one filtering them, and the director loses the picture it needs to sequence work.
+- Let workers and supervisors message the owner for speed. Rejected: the owner gets fragmented asks with no one filtering them, and the director loses the picture it needs to sequence work.
 - Enforce the chain in Herdr itself. Rejected for now: Herdr has no per-agent permissions, and a wrapper guard is enough to stop accidents.

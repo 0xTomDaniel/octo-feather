@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
 # Send one message to a Herdr agent, and confirm it actually landed.
-# Ported from octo-lite (varelaseb/octo-lite@cc6fa4e, Apache-2.0).
 #
 # This is a thin wrapper over a single native Herdr command:
 #   herdr agent prompt TARGET TEXT --wait --until working --until idle

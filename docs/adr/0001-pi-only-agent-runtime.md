@@ -6,4 +6,4 @@ Clarified by Tom, 2026-10-20: inert upstream files inside a vendored skill folde
 
 ## Considered options
 
-- octo-lite's default: Claude, with `.claude`/`.codex` projections installed. Rejected: two runtimes double every launch path and role contract.
+- Claude as the default runtime, with `.claude`/`.codex` projections installed. Rejected: two runtimes double every launch path and role contract.

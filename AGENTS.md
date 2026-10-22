@@ -1,6 +1,6 @@
 # octo-feather
 
-Lightweight agentic development kit built on octo-lite (`varelaseb/octo-lite`, Apache-2.0): one director over one supervisor per work item, Pi workers in Herdr panes, a spec-chat HTML spec, and a validation gate tight enough that sloppy code cannot land.
+Lightweight agentic development kit: one director over one supervisor per work item, Pi workers in Herdr panes, a spec-chat HTML spec, and a validation gate tight enough that sloppy code cannot land.
 
 This file governs work on the kit itself. Terms (director, supervisor, worker, work item, lane) are defined in [GLOSSARY.md](GLOSSARY.md). Target repos get their own `AGENTS.md` from `templates/`.
 
@@ -22,6 +22,6 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - `templates/python`, `templates/typescript` starter target repos: app CLI with `--json`, integration and E2E tests through it, `just check` (also run by `.githooks/pre-commit` and CI), `just integrate` and `just qc` (both templates define them and `check-templates` enforces it; a repo the kit did not create never gets them, docs/adr/0017), and an `AGENTS.md` with a `Repo skills:` line. Copy one, then `just setup`.
 - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir), `octo-feather-integrate` (`just integrate`), `octo-feather-accepted` (kickoff check: is a spec accepted at an exact commit), `octo-feather-spec-status` (per-criterion status file beside a spec, docs/adr/0021), `octo-feather-qc` (`just qc`), `octo-feather-shape` (`just shape`), `octo-feather-exclude` (keeps Spec Chat review state out of a target's git), `review-host` (Spec Chat's `review-host.py`; `register` refuses a page with no Spec Chat runtime and stops review-serve processes its registry does not own).
 - `justfile` kit commands: `just check` (the gate), `just install-check`, `just start`, `just supervise N`, `just integrate N REF...`, `just shape` (run in a target repo: the owner's shaping chat, Pi with only the shaping skills, not a factory role), `just state`, `just qc STATUS PR ID...` (interim product judge, docs/adr/0022) and the stub `just qa` (factory evals); neither runs inside `just check`.
-- `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
+- `NOTICE`, `LICENSE` Apache-2.0 license and third-party notices; `LICENSES/` third-party license texts.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
 - `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas.

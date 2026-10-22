@@ -48,7 +48,7 @@ check-scripts:
     fi
     for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
 
-# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names, no lane branch default.
+# No CLAUDE.md, no .claude/.codex projections, no Linear, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
@@ -83,7 +83,7 @@ check-refs:
       echo "check-refs: retired-words scanner error: grep exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1; hits=""; fi
     rc=0; found="$(RETIRED="$retired" perl -ne '
         BEGIN { %ok = (
-          # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its one citer.
+          # Frozen spec anchor (docs/adr/0021): its definition, the index map, its one citer.
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
@@ -91,8 +91,6 @@ check-refs:
           "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
-          # NOTICE attribution names the octo-lite file the director came from.
-          "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
@@ -108,8 +106,6 @@ check-refs:
     # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
     if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
-    if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
-      echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
@@ -197,7 +193,7 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Verify the runtime tools on this box (octo-lite's install --check equivalent).
+# Verify the runtime tools on this box.
 install-check:
     #!/usr/bin/env bash
     set -uo pipefail
