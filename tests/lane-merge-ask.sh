@@ -6,7 +6,11 @@
 # passes a complete section and prints it (also through the qc judge's offline gh, scripts/qc-bin/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: stale head,
 # failing or pending check, missing row, Built unequal to the status file or to the qc commits,
-# verdict link to another head or a blocking verdict, untriaged failed criterion. Run by `just check`.
+# verdict link to another head or a blocking verdict, untriaged failed criterion. One judged head (spec
+# #acceptance-one-head), on a real git lane: review on J plus qc's status commit H passes with the
+# check's proof line; a non-status file after J fails naming it; a clean main merge keeps the qc
+# verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
+# Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -50,21 +54,26 @@ die(f"fake gh: unexpected {a}", 2)
 EOF
 chmod +x "$t/bin/gh"; export PATH="$t/bin:$PATH"
 
-H="$(printf 'a1b2c3d4%.0s' 1 2 3 4 5)"   # 40 hex
+# The lane worktree: a git repo whose origin/main is B; the lane commits J (code, the judged head)
+# and qc's status commit H (the PR head H'). merge-ask reads it from the current directory.
+R="$t/repo"; mkdir -p "$R/docs/specs"; cd "$R"
+git init -q -b main .; git config user.email t@example.com; git config user.name t; git config commit.gpgsign false
+status() { # A_B_STATUS A_B_PR
+  printf '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {\n  "acceptance-a": {"status": "%s", "pr": %s}, "acceptance-b": {"status": "%s", "pr": %s},\n  "acceptance-c": {"status": "planned", "pr": null}, "acceptance-d": {"status": "built", "pr": 3}}}\n' "$1" "$2" "$1" "$2" > docs/specs/demo.status.json; }
+commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
+status planned null; seq 1 20 > app.py; echo notes > notes.txt
+echo '{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}' > docs/specs/other.status.json
+B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
+sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
+status built 7; H="$(commit "qc: built acceptance-a acceptance-b (judged ${J:0:12})")"
+JS="${J:0:7}"
 OTHER="$(printf 'ffee%.0s' 1 2 3 4 5 6 7 8 9 10)"
-cat > "$t/demo.status.json" <<'EOF'
-{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {
-  "acceptance-a": {"status": "built", "pr": 7}, "acceptance-b": {"status": "built", "pr": 7},
-  "acceptance-c": {"status": "planned", "pr": null}, "acceptance-d": {"status": "built", "pr": 3}}}
-EOF
-cat > "$t/other.status.json" <<'EOF'
-{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}
-EOF
-ST=(--status "$t/demo.status.json")
+ST=(--status docs/specs/demo.status.json)
 check_ok='[{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}, {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"}]'
-commits='[{"oid": "0123456789ab0000000000000000000000000000", "messageHeadline": "feat: x", "messageBody": ""},
-  {"oid": "HEADSHA", "messageHeadline": "qc: built acceptance-a acceptance-b (judged 0123456789ab)", "messageBody": ""}]'
-printf '{"number": 7, "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "${commits//HEADSHA/$H}" > "$FAKE_GH/pr/7.json"
+commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
+  {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a acceptance-b (judged ${J:0:12})\", \"messageBody\": \"\"}]"
+printf '{"number": 7, "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
+PROOF="${J:0:12} to ${H:0:12}: qc status commits ${H:0:12} change only docs/specs/demo.status.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"
@@ -75,50 +84,50 @@ writes() { grep -c '^api' "$FAKE_GH_LOG" || true; }
 # --- verdict: create once, update in place, refusals write nothing ---
 printf 'Findings: none blocking.\nVerdict: clear\n' > "$t/report"
 : > "$FAKE_GH_LOG"
-run 0 verdict 7 "${H:0:7}" "$t/report"
+run 0 verdict 7 "$JS" "$t/report"   # the review judged J, while qc made H
 url="$out"; [[ "$url" == "https://github.com/o/r/pull/7#issuecomment-1001" ]] || fail "verdict printed $url"
 grep -q '^api -X POST repos/{owner}/{repo}/issues/7/comments ' "$FAKE_GH_LOG" || fail "no POST: $(cat "$FAKE_GH_LOG")"
 [[ "$(comments)" == 1 ]] || fail "create made $(comments) comments"
 printf 'Note: a nit.\nVerdict: blocking\n' > "$t/report2"
-run 0 verdict 7 "$H" "$t/report2"
+run 0 verdict 7 "$J" "$t/report2"
 [[ "$out" == "$url" && "$(comments)" == 1 ]] || fail "rerun did not update in place: $out, $(comments) comments"
 grep -q '^api -X PATCH repos/{owner}/{repo}/issues/comments/1001 ' "$FAKE_GH_LOG" || fail "no PATCH of 1001: $(cat "$FAKE_GH_LOG")"
-python3 - "$FAKE_GH/pr/7.json" "$H" <<'EOF' || fail "comment body after update"
+python3 - "$FAKE_GH/pr/7.json" "$J" "$H" <<'EOF' || fail "comment body after update"
 import json, sys; b = json.load(open(sys.argv[1]))["comments"][0]["body"]
-assert b.startswith("<!-- octo-feather-review-verdict -->") and f"Head: {sys.argv[2]}\n" in b and "Verdict: blocking\n" in b and "a nit" in b, b
+assert b.startswith("<!-- octo-feather-review-verdict -->") and f"Head: {sys.argv[2]}\nPR head: {sys.argv[3]}\n" in b and "Verdict: blocking\n" in b and "a nit" in b, b
 EOF
-run 0 verdict 7 "$H" - < "$t/report"   # stdin, back to clear
+run 0 verdict 7 "$J" - < "$t/report"   # stdin, back to clear
 [[ "$(writes)" == 3 && "$(comments)" == 1 ]] || fail "third run: $(writes) writes, $(comments) comments"
-run 0 verdict 7 "$H" "$t/report"; [[ "$(writes)" == 3 ]] || fail "unchanged rerun wrote"
+run 0 verdict 7 "$J" "$t/report"; [[ "$(writes)" == 3 ]] || fail "unchanged rerun wrote"
 grep -q unchanged <<<"$err" || fail "unchanged rerun not said: $err"
 # the verdict is the last line outside fences and quotes (review of 39515df, class verdict-parsing)
 printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\nThe quoted run predates the fix commit.\nVerdict: blocking\n' > "$t/fenced"
-run 0 verdict 7 "$H" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
+run 0 verdict 7 "$J" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
 python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
   || fail "fenced report posted the wrong verdict"
-run 0 verdict 7 "$H" "$t/report"   # back to clear
+run 0 verdict 7 "$J" "$t/report"   # back to clear
 # refusals: each non-zero, fix named, no write
 n="$(writes)"
-run 1 verdict 7 "$OTHER" "$t/report"; grep -q "is not PR #7's head.*push the reviewed head" <<<"$err" || fail "wrong head: $err"
-printf 'looks fine\n' > "$t/nov"; run 1 verdict 7 "$H" "$t/nov"; grep -q 'add a line `Verdict: clear`' <<<"$err" || fail "no verdict: $err"
-printf 'Verdict: clear\nmore\nVerdict: blocking\n' > "$t/both"; run 1 verdict 7 "$H" "$t/both"
+run 1 verdict 7 "$OTHER" "$t/report"; grep -q "is not a commit of PR #7 (head ${H:0:12}): push the reviewed head" <<<"$err" || fail "wrong head: $err"
+printf 'looks fine\n' > "$t/nov"; run 1 verdict 7 "$J" "$t/nov"; grep -q 'add a line `Verdict: clear`' <<<"$err" || fail "no verdict: $err"
+printf 'Verdict: clear\nmore\nVerdict: blocking\n' > "$t/both"; run 1 verdict 7 "$J" "$t/both"
 grep -q "verdicts that disagree (clear, blocking): keep one" <<<"$err" || fail "disagreeing verdicts: $err"
-run 1 verdict 7 "$H" "$t/missing"; grep -q "cannot read report" <<<"$err" || fail "missing report: $err"
-: > "$t/empty"; run 1 verdict 7 "$H" "$t/empty"; grep -q "is empty" <<<"$err" || fail "empty report: $err"
+run 1 verdict 7 "$J" "$t/missing"; grep -q "cannot read report" <<<"$err" || fail "missing report: $err"
+: > "$t/empty"; run 1 verdict 7 "$J" "$t/empty"; grep -q "is empty" <<<"$err" || fail "empty report: $err"
 run 1 verdict 7 xyz "$t/report"; grep -q "commit sha" <<<"$err" || fail "bad head: $err"
-run 1 verdict 7 "$H"; grep -q usage <<<"$err" || fail "usage: $err"
-run 1 verdict 9 "$H" "$t/report"; grep -q "check PR #9 exists" <<<"$err" || fail "unknown PR: $err"
+run 1 verdict 7 "$J"; grep -q usage <<<"$err" || fail "usage: $err"
+run 1 verdict 9 "$J" "$t/report"; grep -q "check PR #9 exists" <<<"$err" || fail "unknown PR: $err"
 [[ "$(writes)" == "$n" ]] || fail "a refusal wrote"
 # execution failures: a failed create leaves no comment; a failed read names the fix
 cp "$FAKE_GH/pr/7.json" "$t/pr7.keep"
 python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); d["comments"]=[]; json.dump(d,open(sys.argv[1],"w"))' "$FAKE_GH/pr/7.json"
-FAKE_GH_FAIL="write" run 1 verdict 7 "$H" "$t/report"
+FAKE_GH_FAIL="write" run 1 verdict 7 "$J" "$t/report"
 grep -q "was not created; fix the cause.*then rerun" <<<"$err" || fail "failed write: $err"
 [[ "$(comments)" == 0 ]] || fail "failed create left a comment"
 cp "$t/pr7.keep" "$FAKE_GH/pr/7.json"
-FAKE_GH_FAIL="write" run 1 verdict 7 "$H" "$t/report2"; grep -q "was not updated" <<<"$err" || fail "failed update: $err"
+FAKE_GH_FAIL="write" run 1 verdict 7 "$J" "$t/report2"; grep -q "was not updated" <<<"$err" || fail "failed update: $err"
 grep -qF "Verdict: clear" <<<"$(cat "$FAKE_GH/pr/7.json")" || fail "failed update changed the comment"
-FAKE_GH_FAIL="read" run 1 verdict 7 "$H" "$t/report"; grep -q "error connecting.*gh auth status" <<<"$err" || fail "failed read: $err"
+FAKE_GH_FAIL="read" run 1 verdict 7 "$J" "$t/report"; grep -q "error connecting.*gh auth status" <<<"$err" || fail "failed read: $err"
 python3 - "$FAKE_GH/pr/7.json" <<'EOF'   # a second marker comment: refused, nothing written
 import json, sys; d = json.load(open(sys.argv[1])); c = dict(d["comments"][0]); c["url"] = c["url"][:-4] + "1099"
 d["comments"].append(c); json.dump(d, open(sys.argv[1] + ".two", "w"))
@@ -127,7 +136,7 @@ mv "$FAKE_GH/pr/7.json.two" "$t/two.json"
 n="$(writes)"   # merge-ask never writes from here on
 
 # --- merge-ask ---
-body() { # complete section, overridable by env: HEADL ROWS BUILT FAILED REVIEW
+body() { # complete section, overridable by env: HEADL JUDGEDL ROWS BUILT FAILED REVIEW
   cat <<EOF
 Closes #6
 
@@ -139,10 +148,11 @@ Lane work.
 
 Head: ${HEADL-${H:0:12}}
 Checks: check, ci/x pass on ${H:0:12}
+Judged: ${JUDGEDL-$PROOF}
 | criterion | qc verdict | judged | evidence |
 |---|---|---|---|
-${ROWS-| demo#acceptance-a | pass | judged 0123456 | qc report a1b2.json, cmd ok |
-| acceptance-b | pass | judged 0123456 | qc report a1b2.json, cmd ok |}
+${ROWS-| demo#acceptance-a | pass | judged $JS | qc report a1b2.json, cmd ok |
+| acceptance-b | pass | judged $JS | qc report a1b2.json, cmd ok |}
 Review verdict: ${REVIEW-$url}
 Built: ${BUILT-demo#acceptance-a acceptance-b}
 ${FAILED-Failed: none}
@@ -170,13 +180,13 @@ grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out"
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
 snap="$t/snap"; mkdir -p "$snap/pr"; echo '{"repo": "o/r", "counts": {}, "capped": []}' > "$snap/meta.json"; echo x > "$snap/fetched_at"
 cp "$FAKE_GH/pr/7.json" "$snap/pr/7.json"
-out="$(cd "$t" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" merge-ask 7 "${ST[@]}")" || fail "merge-ask under the offline gh failed"
+out="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" merge-ask 7 "${ST[@]}")" || fail "merge-ask under the offline gh failed"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] || fail "offline gh pass: $out"
-set +e; err="$(cd "$t" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" verdict 7 "$H" "$t/report2" 2>&1)"; rc=$?; set -e
+set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/scripts/qc-bin:$PATH" "$L" verdict 7 "$H" "$t/report2" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] && grep -q "was not updated.*offline read-only snapshot\|offline read-only snapshot.*was not updated" <<<"$err" || fail "verdict under the offline gh: $rc $err"
 # a failed criterion with triage passes; Failed bullet forms
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \
-  ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r, output x |' setpr
+  ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r, output x |' setpr
 run 0 merge-ask 7 "${ST[@]}"; grep -q "^- acceptance-c: outside" <<<"$out" || fail "triaged fail: $out"
 
 # PR #16's real body: no section, each item named
@@ -194,10 +204,10 @@ bad "Checks: pending on head .*: check in_progress" 'd["statusCheckRollup"][0].u
 bad "Checks: pending on head .*: ci/x pending" 'd["statusCheckRollup"][1]["state"] = "PENDING"'
 bad "Checks: failing on head .*: ci/x error" 'd["statusCheckRollup"][1]["state"] = "ERROR"'
 bad "Checks: none reported" 'd["statusCheckRollup"] = []'
-ROWS='| demo#acceptance-a | pass | judged 0123456 | r |' bad "criterion row demo#acceptance-b: missing (it is in Built)"
-ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | |' bad "criterion row demo#acceptance-b: no evidence"
-ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | ok | judged 0123456 | r |' bad "qc verdict 'ok'; write pass or fail"
-ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-zz | pass | judged 0123456 | r |' bad "acceptance-zz: no criterion"
+ROWS="| demo#acceptance-a | pass | judged $JS | r |" bad "criterion row demo#acceptance-b: missing (it is in Built)"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | |' bad "criterion row demo#acceptance-b: no evidence"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | ok | judged '"$JS"$' | r |' bad "qc verdict 'ok'; write pass or fail"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-zz | pass | judged '"$JS"$' | r |' bad "acceptance-zz: no criterion"
 BUILT='demo#acceptance-a' bad "Built: lists demo#acceptance-a, the status files hold built with PR #7: demo#acceptance-a demo#acceptance-b"
 # a Built id the status file holds but no qc: built commit names fails
 bad "Built: demo#acceptance-b in no .qc: built. commit of PR #7 (they passed acceptance-a); built only by just qc" \
@@ -212,23 +222,54 @@ run 0 merge-ask 7 "${ST[@]}"
 REVIEW="" bad "Review verdict: empty is not a comment on PR #7"
 REVIEW="https://github.com/o/r/pull/8#issuecomment-1001" bad "is not a comment on PR #7"
 REVIEW="${url%1001}4242" bad "comment 4242 not on PR #7"
-bad "the comment names head $OTHER, not ${H:0:12}" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('$H', '$OTHER')"
+bad "the comment names head $OTHER, not the judged head ${J:0:12}" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $OTHER')"
 bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Verdict: clear', 'Verdict: blocking')"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
-ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r |' bad "criterion row demo#acceptance-c: fail with no triage"
-FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| demo#acceptance-c | fail | judged 0123456 | r |' \
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-c: fail with no triage"
+FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' \
   bad "Failed: demo#acceptance-c has no triage"
 FAILED=$'Failed:\n- acceptance-c: repair ticket #9' bad "criterion row demo#acceptance-c: missing (it is in Failed)"
 FAILED='Failed: some' bad "Failed: 'some'; write"
-# qc must have judged the head (spec #lanes-one-head; review of 39515df, class unverified-merge-ask)
-F="$(printf 'f00d%.0s' 1 2 3 4 5 6 7 8 9 10)"
-newhead="d['headRefOid'] = '$F'; d['commits'].append({'oid': '$F', 'messageHeadline': 'feat: after qc', 'messageBody': ''}); d['comments'][0]['body'] = d['comments'][0]['body'].replace('$H', '$F')"
-HEADL="${F:0:12}" bad "criterion row demo#acceptance-a: judged 0123456, but 1 non-qc commit came after it (${F:0:12} 'feat: after qc'): stale; rerun just qc on the head ${F:0:12}" "$newhead"
-grep -q "criterion row demo#acceptance-b: judged 0123456, but" <<<"$err" || fail "stale b not named: $err"
-HEADL="${F:0:12}" ROWS=$'| demo#acceptance-a | pass | judged '"${F:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${F:0:9}"' | r |' setpr "$newhead"
-run 0 merge-ask 7 "${ST[@]}"   # qc reran at the exact head, nothing to flip: no status commit, passes
-ROWS=$'| demo#acceptance-a | pass | judged deadbee | r |\n| demo#acceptance-b | pass | judged 0123456 | r |' bad "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head just qc judged"
-ROWS=$'| demo#acceptance-a | pass | yesterday | r |\n| demo#acceptance-b | pass | judged 0123456 | r |' bad "judged 'yesterday'; write .judged <sha>."
+# one judged head (spec #acceptance-one-head): review and qc judged J; H' may add only qc's status
+# commit and clean merges of main that leave the lane's own diff identical, each with the check's proof
+setpr; run 0 merge-ask 7 "${ST[@]}"; grep -qF "Judged: $PROOF" <<<"$out" || fail "pass did not print the proof: $out"
+JUDGEDL="" bad "Judged: names ''; add the check's proof line \`Judged: $PROOF\`"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"${H:0:7}"$' | r |' bad "rows name 2 judged heads"
+on() { # PARENT CMD...: run CMD on a detached checkout of PARENT, print the new HEAD, back on the lane
+  git checkout -q --detach "$1"; shift; "$@" >/dev/null; git rev-parse HEAD; git checkout -q -f lane; }
+pr_head() { # SHA SUBJECT: python making SHA the PR head, a commit of the PR
+  echo "d['headRefOid'] = '$1'; d['commits'].append({'oid': '$1', 'messageHeadline': '$2', 'messageBody': ''})"; }
+F="$(on "$H" sh -c 'echo two >> app.py; git commit -qam "feat: after qc"')"
+HEADL="${F:0:12}" bad "Judged: commit ${F:0:12} 'feat: after qc' after the judged head ${J:0:12} changes app.py, not only the status file qc writes (docs/specs/demo.status.json): run just qc and the review again, in parallel, on ${F:0:12}" "$(pr_head "$F" "feat: after qc")"
+# qc's own commit carrying a non-status file fails, naming the file
+Q="$(on "$J" sh -c 'sed -i "s/\"planned\", \"pr\": null}, \"acceptance-b/\"built\", \"pr\": 7}, \"acceptance-b/" docs/specs/demo.status.json; echo x > stray.txt; git add -A; git commit -qm "qc: built acceptance-a (judged '"${J:0:12}"')"')"
+HEADL="${Q:0:12}" bad "commit ${Q:0:12} 'qc: built acceptance-a (judged ${J:0:12})' after the judged head ${J:0:12} changes stray.txt, not only" "$(pr_head "$Q" "qc: built acceptance-a (judged ${J:0:12})")"
+S="$(on "$H" sh -c 'sed -i s/acceptance-d/acceptance-d/ docs/specs/demo.status.json; echo " " >> docs/specs/demo.status.json; git commit -qam "fix status"')"
+HEADL="${S:0:12}" bad "commit ${S:0:12} 'fix status' after the judged head ${J:0:12} is not a .qc: built" "$(pr_head "$S" "fix status")"
+# qc reran at the exact head, nothing to flip: no status commit, passes
+HEADL="${F:0:12}" JUDGEDL="${F:0:12} is the PR head" ROWS=$'| demo#acceptance-a | pass | judged '"${F:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${F:0:9}"' | r |' \
+  setpr "$(pr_head "$F" "feat: after qc"); d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $F')"
+run 0 merge-ask 7 "${ST[@]}"
+# a clean main merge keeps the qc verdict: the check prints its proof line
+M1="$(on "$B" sh -c 'echo main >> notes.txt; git commit -qam "main: notes"')"; git update-ref refs/remotes/origin/main "$M1"
+R1="$(on "$H" git merge -q --no-edit "$M1")"
+HEADL="${R1:0:12}" bad "add the check's proof line .Judged: ${J:0:12} to ${R1:0:12}: qc status commits ${H:0:12} change only docs/specs/demo.status.json; clean merge of main ${R1:0:12}: lane diff identical (1 file, sha256 [0-9a-f]\{12\})." "$(pr_head "$R1" "Merge main")"
+proof="$(sed -n 's/.*add the check.s proof line `Judged: \(.*\)`$/\1/p' <<<"$err")"
+HEADL="${R1:0:12}" JUDGEDL="$proof" setpr "$(pr_head "$R1" "Merge main")"
+run 0 merge-ask 7 "${ST[@]}"; grep -qF "Judged: $proof" <<<"$out" || fail "clean refresh: proof not in the section: $out"
+# a main merge touching a lane file, resolving a conflict, or merging another branch: qc reruns
+M2="$(on "$M1" sh -c 'sed -i 20s/.*/twenty/ app.py; git commit -qam "main: app tail"')"; git update-ref refs/remotes/origin/main "$M2"
+R2="$(on "$H" git merge -q --no-edit "$M2")"
+HEADL="${R2:0:12}" bad "Judged: after merging origin/main, the lane's own diff changed in app.py (main touched a lane file, or the lane's diff moved): the qc verdict does not carry over; run just qc and the review again, in parallel, on ${R2:0:12}" "$(pr_head "$R2" "Merge main")"
+M3="$(on "$M1" sh -c 'sed -i 1s/.*/uno/ app.py; git commit -qam "main: app head"')"; git update-ref refs/remotes/origin/main "$M3"
+R3="$(on "$H" sh -c "git merge -q --no-edit $M3 2>/dev/null; git checkout -q --ours app.py; git commit -qam 'Merge main, conflict resolved'")"
+HEADL="${R3:0:12}" bad "Judged: merge ${R3:0:12} 'Merge main, conflict resolved' resolved a conflict with origin/main: the qc verdict does not carry over" "$(pr_head "$R3" "Merge main, conflict resolved")"
+git update-ref refs/remotes/origin/main "$M1"
+X="$(on "$B" sh -c 'echo side > side.txt; git add side.txt; git commit -qm side')"
+R4="$(on "$H" git merge -q --no-edit "$X")"
+HEADL="${R4:0:12}" bad "Judged: merge ${R4:0:12} .* brings in ${X:0:12}, not origin/main: only a merge of main keeps the qc verdict" "$(pr_head "$R4" "Merge side")"
+ROWS=$'| demo#acceptance-a | pass | judged deadbee | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head qc and the review judged"
+ROWS=$'| demo#acceptance-a | pass | yesterday | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "judged 'yesterday'; write .judged <sha>."
 python3 - "$t/pr7.keep" "$(body)" <<'PY' > "$t/old.body"
 import sys; print(sys.argv[2].replace("| criterion | qc verdict | judged | evidence |", "| criterion | qc verdict | evidence |"))
 PY
@@ -239,8 +280,8 @@ import json, sys; d = json.load(open(sys.argv[1])); d["commits"].append({"oid": 
 json.dump(d, open(sys.argv[1], "w"))
 EOF
 setpr; run 0 merge-ask 7 "${ST[@]}"
-ROWS=$'| demo#acceptance-a | pass | judged 0123456 | r |\n| demo#acceptance-b | pass | judged 0123456 | r |\n| other#acceptance-x | pass | judged 0123456 | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
-run 0 merge-ask 7 "${ST[@]}" --status "$t/other.status.json"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| other#acceptance-x | pass | judged '"$JS"$' | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
+run 0 merge-ask 7 "${ST[@]}" --status docs/specs/other.status.json
 # usage and execution failures
 run 1 merge-ask 7; grep -q "name the lane's status file" <<<"$err" || fail "no --status: $err"
 run 1 merge-ask 7 --status "$t/nope.json"; grep -q "not a readable status file" <<<"$err" || fail "bad --status: $err"
@@ -250,4 +291,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; rows name the judged head: a code commit after qc, a sha not in the PR and an old table fail, exact-head rerun passes)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"

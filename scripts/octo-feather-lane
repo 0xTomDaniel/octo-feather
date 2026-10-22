@@ -13,30 +13,39 @@ place, when the record is missing or either archive target already exists.
   octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
                                    create, or update in place, the PR's one review verdict
                                    comment (marker, head, verdict, findings); prints its URL
-  octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--repo O/R]
+  octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
 Only lines outside fenced code blocks and blockquotes count; the last such line is the
-verdict, and lines that disagree are refused. HEAD must be the PR's current head (7+ hex prefix).
+verdict, and lines that disagree are refused. HEAD is the head the review judged, H, a commit
+of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 
-`merge-ask` only reads, through `gh pr view --json` (also under the qc judge's offline gh).
-The section, up to the next `## ` heading:
+`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
+when the PR head is not the judged head, the git repo of the current directory (the lane
+worktree, PR head and BASE fetched; BASE defaults to origin/main). The section, up to the
+next `## ` heading:
 
   ## Merge ask
-  Head: <sha>                     the PR's head (7+ hex prefix)
+  Head: <sha>                     the PR's head H' (7+ hex prefix)
   Checks: <summary>               verified: every check on that head SUCCESS, none pending
+  Judged: <proof>                 = the line the check prints for H to H' (below)
   | criterion | qc verdict | judged | evidence |
   |---|---|---|---|
   | <spec>#<id> | pass | judged <sha> | <report path, command> |   one row per claimed criterion
-  Review verdict: <comment URL>   this PR's verdict comment: same head, verdict clear
+  Review verdict: <comment URL>   this PR's verdict comment: head H, verdict clear
   Built: <id> <id>                = status entries built with this PR, each named by one of its `qc: built` commits
   Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
 
-`judged <sha>` is the head just qc judged for that row (7+ hex): a commit of the PR, with
-only `qc: built ... (judged <sha>)` status commits after it (spec #lanes-one-head). It is the
-sha in the `(judged ...)` of the qc commit, or the PR head when qc reran there with nothing to flip.
+Every row names one judged head H (7+ hex), a commit of the PR: the head qc and the code
+review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
+... (judged <sha>)` commits changing only the --status files and (b) merges of BASE whose tree
+is git's automatic merge of their parents (no conflict resolved), after which the lane's own
+diff against BASE (BASE's merge base to the head, status files aside) is identical to its diff
+at H: same files, same content. Anything else fails naming the commit and file: run just qc
+and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
+the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Pass: the section on stdout (send it with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
@@ -227,22 +236,100 @@ def head_matches(named: str, head: str) -> bool:
     return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
 
 
-def judged_check(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> str | None:
-    """Why a row's judged head does not stand for the PR head, or None (spec #lanes-one-head)."""
+def judged_sha(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
+    """(the PR commit a row's judged cell names, None) or (None, why)."""
     m = JUDGED.fullmatch(cell.strip())
     if not m:
-        return f"judged {cell or 'empty'!r}; write `judged <sha>`, the head just qc judged (7+ hex)"
+        return None, f"judged {cell or 'empty'!r}; write `judged <sha>`, the head qc and the review judged (7+ hex)"
     sha = m.group(1).lower()
-    at = [i for i, (oid, _) in enumerate(commits) if oid.lower().startswith(sha)]
+    at = [oid for oid, _ in commits if oid.lower().startswith(sha)]
     if len(at) != 1:
-        return (f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; "
-                f"name the head just qc judged (the sha in its `qc: built ... (judged <sha>)` commit, or the PR head {head[:12]})")
-    after = [(oid, s) for oid, s in commits[at[0] + 1:] if not ((q := QC_COMMIT.match(s)) and q.group(2))]
-    if after:
-        oid, s = after[0]
-        return (f"judged {sha}, but {len(after)} non-qc commit{'s' * (len(after) > 1)} came after it ({oid[:12]} {s[:60]!r}): "
-                f"stale; rerun just qc on the head {head[:12]}, then update the row")
-    return None
+        return None, (f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; "
+                      f"name the head qc and the review judged (the sha in its `qc: built ... (judged <sha>)` commit, or the PR head {head[:12]})")
+    return at[0].lower(), None
+
+
+def git(*args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    try:
+        p = subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("git not on PATH: install git")
+    if p.returncode not in ok:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git {' '.join(args[:2])} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     "run merge-ask in the lane worktree with the PR head and the base fetched (git fetch origin)")
+    return p.returncode, p.stdout
+
+
+def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
+    """{path: raw diff line} of X's own diff against BASE (from their merge base), status files aside."""
+    mb = git("merge-base", x, base)[1].strip()
+    out = git("diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb, x)[1].split("\0")
+    return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
+
+
+def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tuple[str | None, list[str]]:
+    """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
+    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical."""
+    j, h = judged[:12], head[:12]
+    if head.lower() == judged.lower():
+        return f"{j} is the PR head", []
+    rerun = f"run just qc and the review again, in parallel, on {h}"
+    for sha in (judged, head):
+        if git("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0]:
+            raise Refuse(f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
+    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
+    if git("merge-base", "--is-ancestor", judged, head, ok=(0, 1))[0]:
+        return None, [f"judged head {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
+    top = os.path.realpath(git("rev-parse", "--show-toplevel")[1].strip())
+    status = set()
+    for f in status_files:
+        rel = os.path.relpath(os.path.realpath(f), top)
+        if rel.startswith(".."):
+            raise Refuse(f"--status {f} is outside this repo ({top}): run merge-ask in the lane worktree, naming its status file")
+        status.add(rel)
+    why, qc, merges, touched = [], [], [], set()
+    for line in git("rev-list", "--reverse", "--parents", head, f"^{judged}", f"^{base}")[1].split("\n"):
+        if not line.strip():
+            continue
+        c, *parents = line.split(); s = git("log", "-1", "--format=%s", c)[1].strip()
+        if len(parents) == 1:
+            files = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)[1].split("\0")))
+            other = sorted(files - status)
+            if other:
+                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} changes {', '.join(other)}, not only the status "
+                           f"file{'s' * (len(status) > 1)} qc writes ({', '.join(sorted(status))}): {rerun}")
+            elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
+                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} is not a `qc: built ... (judged <sha>)` commit: "
+                           f"only just qc writes the status file; drop it, then {rerun}")
+            else:
+                qc.append(c); touched |= files
+        elif len(parents) != 2 or not any(git("merge-base", "--is-ancestor", p, base, ok=(0, 1))[0] == 0 for p in parents[1:]):
+            why.append(f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, not {base}: "
+                       f"only a merge of main keeps the qc verdict; {rerun}")
+        else:
+            rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
+            auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
+            if rc:
+                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: the qc verdict does not carry over; {rerun}")
+            elif auto != tree:
+                diff = git("diff", "--name-only", auto, tree)[1].split()
+                why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge: {rerun}")
+            else:
+                merges.append(c)
+    proof = f"{j} to {h}: " + (f"qc status commits {' '.join(c[:12] for c in qc)} change only {', '.join(sorted(touched))}" if qc else "no qc status commit")
+    if merges and not why:
+        before, after = lane_diff(judged, base, status), lane_diff(head, base, status)
+        moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+        if moved:
+            why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
+                       f"or the lane's diff moved): the qc verdict does not carry over; {rerun}")
+        else:
+            d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
+            proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
+                      f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})")
+    return (None, why) if why else (proof, [])
 
 
 def subject(c: dict) -> str:
@@ -283,21 +370,24 @@ def cmd_verdict(args: list[str]) -> int:
     if len(set(vs)) > 1:
         raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line outside code blocks and quotes, the reviewer's final verdict, then rerun")
     verdict = vs[-1]
-    d = pr_view(pr, "headRefOid,comments", repo)
+    d = pr_view(pr, "headRefOid,comments,commits", repo)
     head = d["headRefOid"]
-    if not head_matches(want, head):
-        raise Refuse(f"HEAD {want} is not PR #{pr}'s head {head}: push the reviewed head, or review {head[:12]}")
+    at = [c.get("oid") or "" for c in d["commits"] or [] if head_matches(want, c.get("oid") or "")]
+    if len(at) != 1:
+        raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
+                     f"push the reviewed head, or name the head the review judged in full")
+    judged = at[0]
     mine = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
     if len(mine) > 1:
         raise Refuse(f"PR #{pr} has {len(mine)} verdict comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
-    body = f"{MARKER}\n## Code review verdict\n\nHead: {head}\nVerdict: {verdict}\n\n### Findings\n\n{report.strip()}\n"
+    body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n\n### Findings\n\n{report.strip()}\n"
     api = f"repos/{repo or '{owner}/{repo}'}"
     if mine:
         m = COMMENT_URL.fullmatch(mine[0].get("url") or "")
         if not m:
             raise Refuse(f"verdict comment has no issuecomment URL ({mine[0].get('url')!r}): delete it, then rerun")
         if mine[0]["body"].strip() == body.strip():
-            print(f"verdict: unchanged ({verdict}, head {head[:12]})", file=sys.stderr); print(mine[0]["url"]); return 0
+            print(f"verdict: unchanged ({verdict}, head {judged[:12]})", file=sys.stderr); print(mine[0]["url"]); return 0
         call, said = ["-X", "PATCH", f"{api}/issues/comments/{m.group(3)}"], "updated"
     else:
         call, said = ["-X", "POST", f"{api}/issues/{pr}/comments"], "created"
@@ -307,7 +397,7 @@ def cmd_verdict(args: list[str]) -> int:
                  f"the verdict comment was not {said}; fix the cause (gh auth status, network), then rerun").strip()
     if not COMMENT_URL.fullmatch(out):
         raise Refuse(f"comment {said} but gh printed no comment URL ({out[:100]!r}): rerun to print it")
-    print(f"verdict: {said} ({verdict}, head {head[:12]})", file=sys.stderr)
+    print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
     print(out)
     return 0
 
@@ -376,14 +466,16 @@ def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
-    files, rest, i = [], [], 0
+    files, rest, i, base = [], [], 0, "origin/main"
     while i < len(args):
         if args[i] == "--status" and i + 1 < len(args):
             files.append(args[i + 1]); i += 2
+        elif args[i] == "--base" and i + 1 < len(args):
+            base = args[i + 1]; i += 2
         else:
             rest.append(args[i]); i += 1
     if len(rest) != 1:
-        raise Refuse(f"usage: octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+        raise Refuse(f"usage: octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0]); specs = load_specs(files)
     d = pr_view(pr, "body,headRefOid,statusCheckRollup,comments,commits", repo)
     head = d["headRefOid"]; miss: list[str] = []
@@ -410,7 +502,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
 
     commits = [(c.get("oid") or "", subject(c)) for c in d["commits"] or []]
-    rows: dict[str, str] = {}
+    rows: dict[str, str] = {}; judged_at: set[str] = set()
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
     if t is None:
         old = any(re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I) for l in lines)
@@ -434,18 +526,30 @@ def cmd_merge_ask(args: list[str]) -> int:
                 miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
             if not cells[3]:
                 miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
-            judged_problem = judged_check(cells[2], commits, head, pr)
-            if judged_problem:
-                miss.append(f"criterion row {cid}: {judged_problem}")
+            sha, why = judged_sha(cells[2], commits, head, pr)
+            (judged_at.add(sha) if sha else miss.append(f"criterion row {cid}: {why}"))
             rows[cid] = v
         if not rows:
             miss.append("criterion table: no rows; add one per claimed criterion")
+    judged = next(iter(judged_at)) if len(judged_at) == 1 else None
+    if len(judged_at) > 1:
+        miss.append(f"criterion table: rows name {len(judged_at)} judged heads ({', '.join(sorted(s[:12] for s in judged_at))}); "
+                    "qc and the review judge one head: run just qc, naming every criterion the lane builds, and the review on one integrated head")
+    jl = field(lines, "Judged")
+    if judged:
+        try:
+            proof, why = head_proof(judged, head, files, base)
+        except Refuse as e:
+            proof, why = None, [str(e)]
+        miss += [f"Judged: {w}" for w in why]
+        if proof and (not jl or jl[1].strip("`") != proof):
+            miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
     rv = field(lines, "Review verdict")
     url = (rv[1].strip("<>` ") if rv else "")
     m = COMMENT_URL.fullmatch(url)
     if not rv:
-        miss.append(f"Review verdict: missing; run `octo-feather-lane verdict {pr} {head[:12]} <report>` and add `Review verdict: <the URL it prints>`")
+        miss.append(f"Review verdict: missing; run `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>` and add `Review verdict: <the URL it prints>`")
     elif not m or int(m.group(2)) != pr:
         miss.append(f"Review verdict: {url or 'empty'} is not a comment on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
     else:
@@ -458,8 +562,9 @@ def cmd_merge_ask(args: list[str]) -> int:
             miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
         elif not cb.lstrip().startswith(MARKER):
             miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
-        elif not ch or not head.lower().startswith(ch.group(1).lower()):
-            miss.append(f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not {head[:12]}; review {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
+        elif judged and (not ch or not judged.startswith(ch.group(1).lower())):
+            miss.append(f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not the judged head {judged[:12]}; "
+                        f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
         elif cv != "clear":
             miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
 

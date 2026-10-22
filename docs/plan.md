@@ -2,7 +2,7 @@
 
 Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project per language went spec-chat HTML spec, accepted, director dispatch, supervisor, Pi implementer, integrator, code-reviewer, green `just check`, evidence bundle, without Tom touching code.
 
-Purpose: pass the Martell/Winly take-home (due EoD Thu 10-22) at Tom's best. The email stays unopened until the kit is ready, so the kit is stack-agnostic: Python and TypeScript both prepared. Submit the method (AGENTS.md, spec, evidence) with the code if the rules allow.
+Purpose: pass the take-home (due EoD Thu 10-22) at Tom's best. The email stays unopened until the kit is ready, so the kit is stack-agnostic: Python and TypeScript both prepared. Submit the method (AGENTS.md, spec, evidence) with the code if the rules allow.
 
 Base: skills are vendored from mattpocock/skills `49dd158` and pstack `0b8e952` (cursor/plugins) through `Skillfile`; octo-lite `cc6fa4e` supplies requirements and the wiring skeleton only. Lasting decisions live in `docs/adr/` (Matt's ADR format); there is no separate decisions file.
 

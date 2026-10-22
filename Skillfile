@@ -26,6 +26,7 @@ github  skill  grill-with-docs  mattpocock/skills@49dd158d1076134a641b33efb03594
 github  skill  grilling         mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/productivity/grilling
 github  skill  domain-modeling  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/domain-modeling
 github  skill  code-review      mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
+github  skill  writing-for-agents mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/productivity/writing-for-agents
 github  skill  correct          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/correct
 github  skill  improve-codebase-architecture mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/improve-codebase-architecture
 github  skill  codebase-design  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/codebase-design
@@ -33,6 +34,9 @@ github  skill  principle-prove-it-works cursor/plugins@0b8e952052d482ee6de06deeb
 github  skill  blast-radius     cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/blast-radius
 github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/sharpen
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
+# interrogate: whole folder (skillfile deploys only folders holding SKILL.md); no role loads it, the code
+# reviewer reads only references/code-quality-review.md and references/lead-judgment.md (roles spec #roles-reviewer-patch).
+github  skill  interrogate      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/interrogate
 
 # octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
 local  skill  commit                  .agents/skills/commit

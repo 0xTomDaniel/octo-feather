@@ -7,7 +7,7 @@ import tempfile, json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS = os.path.join(ROOT, "agents")
-ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
+ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector", "qc-judge"]
 # Models the deployment can reach. Add one here, on purpose, to allow it.
 MODELS = {"openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-6-astra",
           "anthropic/claude-opus-5-5", "anthropic/claude-sonnet-5-5"}
@@ -81,6 +81,8 @@ for role in ROLES:
 # the implementer whose diff it judges (docs/adr/0007).
 if families.get("code-reviewer") and families.get("code-reviewer") == families.get("implementer"):
     err("agents/code-reviewer.md: model family equals implementer's; the reviewer must use a different family")
+if families.get("qc-judge") and families.get("qc-judge") == families.get("implementer"):
+    err("agents/qc-judge.md: model family equals implementer's; the qc judge must use a different family (docs/adr/0022)")
 if os.path.exists(os.path.join(ROOT, ".pi/settings.json")):
     err(".pi/settings.json: no Pi packages; every agent launches through pi-role (docs/adr/0016)")
 

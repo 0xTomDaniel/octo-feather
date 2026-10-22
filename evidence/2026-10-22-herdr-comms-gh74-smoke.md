@@ -42,9 +42,9 @@ OCTO_FEATHER_PARENT=fake:p1 HERDR_PANE_ID=fake:p0 HERDR_TAB_ID=fake:t0 HERDR_WOR
 Child output (verbatim), exit 0:
 
 ```
-HERDR_BIN_PATH=/home/exedev/.local/bin/herdr
+HERDR_BIN_PATH=$HOME/.local/bin/herdr
 HERDR_ENV=1
-HERDR_SOCKET_PATH=/home/exedev/.config/herdr/herdr.sock
+HERDR_SOCKET_PATH=$HOME/.config/herdr/herdr.sock
 end
 ```
 

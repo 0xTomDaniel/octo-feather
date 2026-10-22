@@ -39,7 +39,7 @@ run 66 7 w1                                                # gh7-demo alone is n
 g worktree remove ../suf; g worktree add -q -b octo-feather/gh7 ../pre main
 run 0 7 w1                                                 # namespaced lane octo-feather/gh7 integrates
 [[ "$out" == *"branch=octo-feather/gh7 "* && -e ../pre/b ]] || { echo "integrate test: prefixed lane not integrated: $out" >&2; exit 1; }
-# Hand-in hygiene (Fieldnote, 2026-10-20): review state and factory recipes never land on the lane.
+# Hand-in hygiene (pilot 1, 2026-10-20): review state and factory recipes never land on the lane.
 "$kit/scripts/octo-feather-exclude" . >/dev/null
 mkdir -p docs/specs/a.spec.html.review/versions; echo v > docs/specs/a.spec.html.review/versions/1.html
 [[ -z "$(git status --porcelain)" ]] || { echo "integrate test: excluded review state shows in git status" >&2; exit 1; }

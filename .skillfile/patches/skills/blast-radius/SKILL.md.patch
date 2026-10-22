@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked: the code reviewer runs it
+# reason: ADR 0012 model-invoked: the implementer runs it
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,7 +1,6 @@
