@@ -107,12 +107,12 @@
       "pr": null
     },
     "acceptance-call-guard": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 68
     },
     "acceptance-call-evidence": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 68
     },
     "acceptance-on-main": {
       "status": "built",
