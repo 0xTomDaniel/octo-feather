@@ -1,6 +1,6 @@
 # Language skills smoke (python, typescript), 2026-10-19
 
-Smoke for the ported language skills (ADR 0008, until `just qa` exists). The skills come from scaling-octo-engine@ef11d2b9, with the unit-test content, the Octo workflow paragraphs and the pnpm build commands removed, basedpyright strict for Python, and Zod 4 as the TypeScript default.
+Smoke for the ported language skills (ADR 0008, until `just qa` exists). The skills come from a private upstream skills repo, with the unit-test content, the Octo workflow paragraphs and the pnpm build commands removed, basedpyright strict for Python, and Zod 4 as the TypeScript default.
 
 Setup: one headless implementer per language, `pi-role agents/implementer.md --model anthropic/claude-sonnet-5-5 --thinking off -p "<ticket>"`, run in a fresh copy of `templates/<lang>` (after `just setup`, one commit). The ticket was to add `app bye NAME` (JSON on `--json`, exit 0; a blank name gives a JSON error and exit 2), working test-first and keeping `just check` green.
 
