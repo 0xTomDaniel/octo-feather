@@ -62,5 +62,9 @@
   "github/skill/interrogate": {
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/interrogate?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/writing-for-agents": {
+    "sha": "49dd158d1076134a641b33efb035946536778336",
+    "raw_url": "https://api.github.com/repos/mattpocock/skills/contents/skills/productivity/writing-for-agents?ref=49dd158d1076134a641b33efb035946536778336"
   }
 }

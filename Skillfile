@@ -26,6 +26,7 @@ github  skill  grill-with-docs  mattpocock/skills@49dd158d1076134a641b33efb03594
 github  skill  grilling         mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/productivity/grilling
 github  skill  domain-modeling  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/domain-modeling
 github  skill  code-review      mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/code-review
+github  skill  writing-for-agents mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/productivity/writing-for-agents
 github  skill  correct          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/correct
 github  skill  improve-codebase-architecture mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/improve-codebase-architecture
 github  skill  codebase-design  mattpocock/skills@49dd158d1076134a641b33efb035946536778336  skills/engineering/codebase-design

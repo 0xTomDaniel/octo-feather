@@ -3,7 +3,8 @@
 # throwaway repo: absent base (skip locally, fail in CI), the lane #19 shape (af760a4: role
 # text, no evidence), evidence plus docs/future.md fails (#80), evidence plus a
 # docs/owed-evals/<issue>.md passes, evidence deleted again is no
-# evidence, the Behaviour-neutral opt-out (all touching commits, printed). The check runs
+# evidence, the Behaviour-neutral opt-out (all touching commits, printed), the pruning habit
+# (#67: a role or patch change's evidence has a `Removed:` line; skill markdown alone needs none). The check runs
 # with no git config at all; fixture commits set their identity by env. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -37,10 +38,28 @@ run 1; has 'missing: an added or modified docs/owed-evals/<issue>.md'; has 'owed
 echo '- ask first. Smoke: evidence/smoke.md' >> "$t/docs/future.md"; g commit -qam 'owed in future'
 run 1; has 'missing: an added or modified docs/owed-evals/<issue>.md'
 echo '- ask first. Smoke: evidence/smoke.md' > "$t/docs/owed-evals/19.md"; g add -A; g commit -qm owed
+# Pruning habit (#67): smoke and owed eval, but nothing says what the role change removed.
+run 1; has '#67 pruning habit'; has 'agents/supervisor.md'; has 'Fix: add a line `Removed: <what this change deleted, or the incident that justifies it>` to evidence/smoke.md'
+echo 'Removed:' >> "$t/evidence/smoke.md"; g commit -qam 'empty removed'
+run 1; has '#67 pruning habit'
+echo 'Removed: nothing; incident #19 justifies it.' >> "$t/evidence/smoke.md"; g commit -qam 'removed line'
 run 0; has 'evidence evidence/smoke.md, owed evals docs/owed-evals/19.md'
 # Evidence deleted again is no net change: it fails.
 g rm -q evidence/smoke.md; g commit -qm 'drop smoke'
-run 1; has 'missing: an added or modified evidence/*.md'
+run 1; has 'missing: an added or modified evidence/*.md'; has 'with a `Removed: <what it deleted, or the incident>` line'
+
+# A patch change needs the line too; vendored skill markdown alone does not.
+g checkout -q -b patch main
+mkdir -p "$t/.skillfile/patches/skills/x" "$t/.agents/skills/x" "$t/evidence" "$t/docs/owed-evals"
+echo '# reason: ADR 1' > "$t/.skillfile/patches/skills/x/SKILL.md.patch"; echo 'Probe.' > "$t/evidence/p.md"; echo '- x' > "$t/docs/owed-evals/67.md"
+g add -A; g commit -qm 'patch x'
+run 1 OCTO_FEATHER_BASE=main; has '#67 pruning habit'; has '.skillfile/patches/skills/x/SKILL.md.patch'
+echo 'Removed: the Spec pass.' >> "$t/evidence/p.md"; g commit -qam 'removed'
+run 0 OCTO_FEATHER_BASE=main
+g checkout -q -b skillmd main
+mkdir -p "$t/.agents/skills/x" "$t/evidence" "$t/docs/owed-evals"; echo 'x' > "$t/.agents/skills/x/SKILL.md"; echo 'Probe.' > "$t/evidence/p.md"; echo '- x' > "$t/docs/owed-evals/67.md"
+g add -A; g commit -qm 'skill md'
+run 0 OCTO_FEATHER_BASE=main
 
 # Opt-out: a pointer-only rewrite fails without the trailer, passes with it, and the run names it.
 g checkout -q -b neutral main
@@ -54,4 +73,4 @@ run 1 OCTO_FEATHER_BASE=main; has 'without Behaviour-neutral'
 # An empty reason is no opt-out.
 g reset -q --hard HEAD^; g commit -q --amend -m 'role: pointer only' -m 'Behaviour-neutral:'
 run 1 OCTO_FEATHER_BASE=main
-echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; the opt-out passes and is printed, one untagged commit or an empty reason fails)"
+echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; a role or patch change without a Removed: line fails naming the fix, passes with one; the opt-out passes and is printed, one untagged commit or an empty reason fails)"
