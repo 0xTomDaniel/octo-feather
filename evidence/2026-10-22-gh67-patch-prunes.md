@@ -50,3 +50,7 @@ Verdict (final message, condensed): BLOCKED. Block `redundant-wrapper` core.py:1
 
 - No Spec pass: the skill has none, and the report has no Spec section or axis summary (before: `### Standards` and `### Spec`).
 - Behaviour block: **still there.** `template-content-loss` is the same self-built repro as #86's smoke, now with no skill text asking for it. What still points at it: `agents/code-reviewer.md` Required inputs ("The ticket, and the canonical spec section it derives from") and a brief that quotes the ticket, so the model checks the diff against the ticket on its own. The role file is out of this ticket's scope (#86); the patch half of the owed eval is done, the "no behaviour block" half is not met. One smoke, as briefed; no rerun.
+
+## Repair: the reviewer's ticket input
+
+Removed: `agents/code-reviewer.md` Required inputs "The ticket, and the canonical spec section it derives from." (the input the smoke above traced the remaining behaviour block to; the reviewer judges code quality only). No new smoke for it: the #89 replay of the #51 round-1 review is its proof.
