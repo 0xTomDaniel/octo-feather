@@ -102,15 +102,15 @@
       "status": "planned",
       "pr": null
     },
-    "acceptance-call-review": {
-      "status": "planned",
-      "pr": null
-    },
     "acceptance-call-denied": {
       "status": "planned",
       "pr": null
     },
     "acceptance-call-guard": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-call-evidence": {
       "status": "planned",
       "pr": null
     },

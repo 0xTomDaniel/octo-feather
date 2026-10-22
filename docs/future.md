@@ -38,6 +38,10 @@ Direction: a lane or stage should be explicit registry data supplied by the call
 
 Until Jev, `just qc` is a fresh cross-family judge that runs each claimed criterion's demo path (ADR 0022). Jev replaces it behind the same recipe and must verify every `built` criterion and only those, and report any it cannot confirm.
 
+## Jev judges call evidence
+
+Later `just qc` asks Jev one yes or no per logged spec call: does the cited evidence show the accepted criterion cannot pass as written? Trigger: about 10 calls the owner approved or denied, used as labels. Use Spec Chat's jev-contract (the question set as data, its own adapter). Build nothing now; until then `just check` only fails a call with no evidence and the owner judges the rest at merge (Tom, 2026-10-21, issue #58).
+
 ## Landing agent
 
 A dedicated landing role that takes an approved head to main: rebases, reruns gates, queues merges across lanes, as scaling-octo-engine's Symphony landing role does. Today the lane's supervisor runs the merge itself, per spec `#gates-merge` (ADR 0007). Trigger: post-approval conflicts become common, or parallel lanes need merge queueing.
