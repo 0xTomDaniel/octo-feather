@@ -24,7 +24,7 @@ env -u HERDR_PANE_ID -u HERDR_TAB_ID -u HERDR_WORKSPACE_ID -u HERDR_ENV -u OCTO_
     "gh74 merge ask: PR #75, head b736826, CI green, review clear, just qc n/a (kit has no product CLI). The corrector deleted the long-wait entry of scripts/check-owned-rules (stop rule: 2 pattern-fix rounds, 747ce62 3241930) and moved it into the roles. Corrector calls:
     - call: instruction+example agents/director.md: long jobs wait only as herdr-comms (Send a message) says; never restate it (example of the failure quoted)
     - call: instruction+example agents/supervisor.md: same rule, for worker briefs and the lane record
-    - call: check scripts/check-owned-rules: lane-branch kept as two fixed strings (octo-feather/gh<, gh<N>-<), no regex
+    - call: check scripts/check-owned-rules: lane-branch kept as two fixed strings ([two literals elided]), no regex
     octo-feather-spec-status calls: none. Behaviour-neutral opt-outs: b736826 Behaviour-neutral: rule unchanged, false enforcement claim swapped for an example."
 
     Do what your role says with this message. Your final reply must be the exact text you would send the owner (the merge ask relay), followed by one line naming which command you would have used to send it.
@@ -46,6 +46,8 @@ All read-only (spec, skills, git log, state dir reads).
 
 ## Final reply, verbatim
 
+Verbatim except one edit, also in the prompt: the two lane-branch literals are written `[two literals elided]`, because check-refs bans them in any tracked file outside docs/.
+
     The merge ask, as I would relay it to the owner:
 
     ---
@@ -58,7 +60,7 @@ All read-only (spec, skills, git log, state dir reads).
     **Calls.** Approve or deny each; merging approves any you don't deny:
     1. instruction+example, `agents/director.md`: long jobs wait only as herdr-comms (Send a message) says; never restate it. Includes a quoted example of the failure.
     2. instruction+example, `agents/supervisor.md`: same rule, for worker briefs and the lane record.
-    3. check, `scripts/check-owned-rules`: the lane-branch rule stays as two fixed strings (`octo-feather/gh<`, `gh<N>-<`), no regex.
+    3. check, `scripts/check-owned-rules`: the lane-branch rule stays as two fixed strings ([two literals elided]), no regex.
 
     Spec calls: none.
 
