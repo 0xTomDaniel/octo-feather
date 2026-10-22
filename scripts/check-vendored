@@ -19,8 +19,14 @@ skillfile binary (sha256-checked) and `git fetch --depth 1` of each pin commit
 from github.com, each bounded by $OCTO_FEATHER_FETCH_TIMEOUT seconds (default
 120), then authenticates what it fetched. Public repos: no token needed.
 
+Spec Chat pin (--spec-chat DEST, #96): the kit's tests run Spec Chat only at the
+commit in spec-chat.pin, never the box's clone (whose HEAD differs per box and is
+absent in CI). Fetch caches that pin like a skill pin; --spec-chat DEST writes its
+authenticated folder into DEST/<path>, offline, exit 1 naming `just vendored-fetch`
+when it is not cached. A repo with no spec-chat.pin has no Spec Chat pin.
+
 Cache: ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/{bin/,git/<owner>/<repo>/<sha>.git}.
-Usage: check-vendored [--repo DIR] [--fetch]
+Usage: check-vendored [--repo DIR] [--fetch | --spec-chat DEST]
 Tested by tests/check-vendored.sh.
 """
 import argparse, difflib, hashlib, json, os, platform, shutil, signal, stat, subprocess, sys, tempfile
@@ -42,11 +48,12 @@ INSTALL_TIMEOUT = 120
 ap = argparse.ArgumentParser()
 ap.add_argument("--repo")
 ap.add_argument("--fetch", action="store_true")
+ap.add_argument("--spec-chat", metavar="DEST")
 a = ap.parse_args()
 root = os.path.abspath(a.repo or os.path.join(os.path.dirname(__file__), ".."))
 cache = os.path.join(os.environ.get("XDG_CACHE_HOME") or os.path.expanduser("~/.cache"), "octo-feather", "skillfile")
 TIMEOUT = float(os.environ.get("OCTO_FEATHER_FETCH_TIMEOUT") or 120)
-tag = "vendored-fetch" if a.fetch else TAG
+tag = "vendored-fetch" if a.fetch else "spec-chat-pin" if a.spec_chat else TAG
 
 
 def die(msg):
@@ -65,6 +72,17 @@ def entries():
         if f and f[0] in ("github", "local") and len(f) >= 4:
             out.append((f[0], f[2], f[3], f[4] if len(f) > 4 else f[3]))
     return out
+
+
+def spec_chat_pin():
+    """(source, path) from spec-chat.pin, or None when the repo has no pin file."""
+    f = os.path.join(root, "spec-chat.pin")
+    if not os.path.exists(f):
+        return None
+    lines = [ln.split() for ln in open(f) if ln.strip() and not ln.lstrip().startswith("#")]
+    if len(lines) != 1 or len(lines[0]) != 2 or "@" not in lines[0][0]:
+        die(f"{f} must hold one line `<owner>/<repo>@<sha> <path>`")
+    return lines[0][0], lines[0][1]
 
 
 def binary_path():
@@ -123,8 +141,9 @@ def tree_entries(raw):
         i = nul + 21
 
 
-def upstream(source, path):
-    """rel path -> bytes of the entry's folder at the pin, authenticated from the pin SHA down."""
+def upstream(source, path, modes=None):
+    """rel path -> bytes of the entry's folder at the pin, authenticated from the pin SHA down.
+    modes, when given, gets rel path -> git file mode."""
     sha = source.split("@", 1)[1]
     o = Objects(gitdir(source))
     try:
@@ -146,6 +165,8 @@ def upstream(source, path):
                     walk(oid, prefix + n + "/")
                 elif mode in ("100644", "100755"):
                     out[prefix + n] = o.get(oid, "blob")
+                    if modes is not None:
+                        modes[prefix + n] = mode
                 else:
                     raise Unauthentic(f"{prefix}{n} has unsupported mode {mode}")
         walk(tree, "")
@@ -223,6 +244,9 @@ def fetch(ents):
     pins = {}
     for _, name, source, p in ents:
         pins.setdefault(source, []).append((name, p))
+    sc = spec_chat_pin()
+    if sc:
+        pins.setdefault(sc[0], []).append(("spec-chat.pin", sc[1]))
     for source, items in pins.items():
         try:
             for _, p in items:
@@ -255,7 +279,7 @@ def fetch(ents):
             except Unauthentic as e:
                 die(f"{name}: fetched {source} {p} does not authenticate: {e}")
         print(f"vendored-fetch: {source} cached ({', '.join(n for n, _ in items)})")
-    print(f"vendored-fetch: ok ({len(ents)} skills, skillfile {VERSION}; cache {cache})")
+    print(f"vendored-fetch: ok ({len(ents)} skills{', Spec Chat ' + sc[0] if sc else ''}, skillfile {VERSION}; cache {cache})")
 
 
 def offline_prefix():
@@ -343,4 +367,24 @@ ents = entries()
 vendored = [e for e in ents if e[0] == "github"]
 if not vendored:
     die("no github entries in Skillfile")
-fetch(vendored) if a.fetch else gate(ents, vendored)
+def extract_spec_chat(dest):
+    """The pinned Spec Chat folder, authenticated, into dest/<path>. Offline."""
+    sc = spec_chat_pin() or die(f"no spec-chat.pin in {root}")
+    source, path = sc
+    modes = {}
+    try:
+        tree = upstream(source, path, modes)
+    except Unauthentic as e:
+        die(f"Spec Chat {source} {path}: {e}; {FETCH}")
+    for rel, data in tree.items():
+        p = os.path.join(dest, path, rel)
+        os.makedirs(os.path.dirname(p), exist_ok=True)
+        open(p, "wb").write(data)
+        os.chmod(p, 0o755 if modes[rel] == "100755" else 0o644)
+    print(os.path.join(dest, path))
+
+
+if a.spec_chat:
+    extract_spec_chat(a.spec_chat)
+else:
+    fetch(vendored) if a.fetch else gate(ents, vendored)
