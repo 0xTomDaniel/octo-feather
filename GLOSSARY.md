@@ -29,7 +29,7 @@ A fresh agent, run as its own correction lane when the owner corrects something 
 _Avoid_: Fixer
 
 **Code reviewer**:
-A fresh agent, from a different model family than the implementer, that judges one change against its ticket and the spec and returns a verdict, changing nothing.
+A fresh agent, from a different model family than the implementer, that judges one change against its ticket and the spec and returns a verdict, changing nothing. Code review is QC on code (product quality, spec quality `#quality-reviewer`), run in parallel with `just qc` on one head; it is not QA, which judges the factory.
 _Avoid_: Reviewer (alone), QA, approver
 
 **Owner**:
