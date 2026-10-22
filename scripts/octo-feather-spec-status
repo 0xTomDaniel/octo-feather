@@ -173,8 +173,21 @@ def accepted_html(spec: Path, commit: str) -> tuple[str | None, str | None]:
     return shown.stdout, None
 
 
+def call_name(c: dict) -> str:
+    """How an error names a call so the owner can find it: its lane, and its anchors or else its what."""
+    lane, anchors, what = c.get("lane"), c.get("anchors"), c.get("what")
+    parts = [f"lane {lane}" if isinstance(lane, str) and lane else "no lane"]
+    if isinstance(anchors, list) and anchors:
+        parts.append("anchors " + ", ".join(map(str, anchors)))
+    elif isinstance(what, str) and what:
+        parts.append(f"what {what[:60]!r}" + ("..." if len(what) > 60 else ""))
+    else:
+        parts.append("no anchors or what")
+    return f"call ({'; '.join(parts)})"
+
+
 def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
-    """The valid calls in log, and an error per bad line naming file, line and fix."""
+    """The valid calls in log, and an error per bad line naming file, line, the call and fix."""
     calls, errs = [], []
     if not log.is_file():
         return calls, errs
@@ -187,6 +200,7 @@ def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
             errs.append(f"{where}: not a JSON object ({e}); fix: one JSON call per line"); continue
         if not isinstance(c, dict):
             errs.append(f"{where}: not a JSON object; fix: one JSON call per line"); continue
+        where = f"{where}: {call_name(c)}"
         bad = [f for f in FIELDS if f not in c or c[f] in (None, "", [])]
         bad += [f for f in ("anchors", "criteria") if f not in bad and not (
             isinstance(c[f], list) and all(isinstance(x, str) and x for x in c[f]))]

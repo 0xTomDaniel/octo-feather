@@ -70,6 +70,11 @@ git -C "$r" checkout -q -- docs/specs
 bad() { { call clarifies acceptance-a acceptance-a; printf '%s\n' "$1"; } >"$L"; run "$r"; want 1 "$2" "demo.calls.jsonl:2: " "fix: " "$3"; }
 bad '{"at": ' "bad JSON" "not a JSON object"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/"why": "y", //')" "missing field" "missing or empty field why"
+# #acceptance-call-evidence: an empty or missing evidence fails, naming that call (line 2, lane gh77, its anchors).
+bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/gh77/; s/"evidence": "e"/"evidence": ""/')" \
+  "empty evidence" "demo.calls.jsonl:2: call (lane gh77; anchors acceptance-a): missing or empty field evidence"
+bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/gh62/gh77/; s/, "evidence": "e"//')" \
+  "missing evidence" "demo.calls.jsonl:2: call (lane gh77; anchors acceptance-a): missing or empty field evidence"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/"supervisor"/"implementer"/')" "role" "role 'implementer'"
 bad "$(call clarifies acceptance-a acceptance-a | perl -pe 's/: false/: true/')" "passes_as_written" "passes_as_written must be false"
 bad "$(call tweaks acceptance-a acceptance-a)" "kind" "kind 'tweaks' is not one of"
@@ -78,4 +83,4 @@ bad "$(call clarifies acceptance-a acceptance-q)" "unknown criterion" "criterion
 # An accepted_commit missing from the repo is named.
 perl -pi -e 's/"accepted_commit": "[0-9a-f]+"/"accepted_commit": "deadbee"/' "$d/demo.status.json"; rm -f "$L"
 run "$r"; want 1 "missing accepted_commit" "accepted_commit deadbee is not in this repo" "fetch full history"
-echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, missing commit)"
+echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, missing commit)"
