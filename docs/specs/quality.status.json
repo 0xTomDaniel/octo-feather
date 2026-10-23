@@ -19,8 +19,8 @@
       "pr": null
     },
     "acceptance-prompt-eval": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-finding-class": {
       "status": "planned",
@@ -35,20 +35,20 @@
       "pr": 111
     },
     "acceptance-qa-isolated": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-fails-before": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-skill-triggers": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-role-cases": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-cases-checked": {
       "status": "built",
