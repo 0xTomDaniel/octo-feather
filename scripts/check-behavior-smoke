@@ -18,7 +18,9 @@ read-only git only: whether the smoke is adequate is review's judgment.
   deleted, or the incident that justifies it). A fact, never its meaning.
 - Per-path smoke (#93): every such path is named on a `Smoke: <path> ...` line of one of
   those evidence files (a token equal to the path, or a token ending in `/` that is its
-  directory prefix; backticks and commas stripped, and a trailing `.:!?` that ends a sentence). One evidence file no longer covers
+  directory prefix, matched literally so a path may hold spaces; bounded by line start,
+  whitespace, a backtick, comma or semicolon, and ended by whitespace or the line end after
+  an optional backtick, a comma or semicolon, or `.:!?` that ends a sentence). One evidence file no longer covers
   every path: lanes gh71 (director.md, evidence ran only the corrector) and gh67
   (implementer.md, corrector.md, no run at all) passed with an unrelated smoke file.
   Whether the named run exercised the path stays with review.
@@ -112,10 +114,15 @@ owed = [f for f in am if OWED.match(f)]
 pruned = [f for f in need if PRUNE.match(f)]
 texts = {f: git("show", f"{head}:{f}") or "" for f in evidence}
 removed = not pruned or any(REMOVED.search(t) for t in texts.values())
-tokens = {tok.strip("`,;") for t in texts.values() for line in SMOKE.findall(t) for tok in line.replace(",", " ").split()}
-tokens |= {t.rstrip(".:!?").strip("`,;") for t in tokens}  # a path ending a sentence: `Smoke: agents/x.md.` (#121 N7)
-tokens.discard("")
-unsmoked = [f for f in need if not any(f == t or (t.endswith("/") and f.startswith(t)) for t in tokens)]
+lines = [line for t in texts.values() for line in SMOKE.findall(t)]
+
+
+def named(p):  # p literally, as a whole token: a path may hold spaces; a sentence may end after it (#121 N7)
+    return re.compile(r"(?:^|(?<=[\s`,;]))" + re.escape(p) + r"`?(?:[,;]|[.:!?]*`?(?=\s|$))")
+
+
+unsmoked = [f for f in need if not any(named(p).search(line) for p in [f] + [f[:i + 1] for i, c in enumerate(f) if c == "/"]
+                                       for line in lines)]
 if evidence and owed and removed and not unsmoked:
     print(f"behavior smoke: ok ({len(need)} role paths, evidence {', '.join(evidence)}, owed evals {', '.join(owed)}"
           f"{f', {len(exempt)} opted out' if exempt else ''})")
