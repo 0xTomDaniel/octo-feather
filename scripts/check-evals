@@ -6,7 +6,7 @@ Deterministic and free: reads JSON only, never starts an agent or a model. Run b
 
 EVALS_DIR (default: the kit's evals/) holds one dir per suite plus fixtures/ (one dir per fixture,
 copied and git-initialized per run). A suite dir holds:
-  suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript",
+  suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript" | "judgment",
                                 "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
                                 optional "covers": "role-skills" (skill-trigger only, below)}
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
@@ -19,6 +19,13 @@ copied and git-initialized per run). A suite dir holds:
                                  fake_gh  true: a fake gh first on PATH, logging each call
                                and its task may hold {repo} and {head} (the copy's path, its HEAD sha)
   reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
+A judgment suite (kind "judgment", spec judgment#acceptance: one closed question's labelled set, benched on
+classifiers by octo-feather-qa, never graded by facts) holds instead:
+  question.json                {"id": str, "question": the closed question, "labels": [2+ distinct labels],
+                                "label_help": {label: one line, exactly the labels}, "state_shape": str}
+  cases.json                   [{id, split ("train" | "held-out"), state (what the classifier is shown)}],
+                               at least 15 cases, at least one in each split
+  reference/expectations.json  {id: {"label": one of the labels, "reason": one line, "source": str}}
 Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/0008):
   {"fact": "skill_read", "skill": S}         S's SKILL.md entered the agent's context: a tool result (any
                                              tool: a Pi read, a bash cat) holding its full content as the
@@ -104,7 +111,11 @@ NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # a before target reachab
 SETUP = {"branch", "head", "origin", "fake_gh"}   # optional, role-transcript cases only
 BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential"}
-KINDS = {"skill-trigger", "role-transcript"}
+KINDS = {"skill-trigger", "role-transcript", "judgment"}
+JUDGMENT_MIN = 15   # spec judgment#acceptance: at least fifteen cases per labelled set
+QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
+J_CASE = {"id", "split", "state"}
+J_EXP = {"label", "reason", "source"}
 BASE = {"id", "role", "fixture", "task"}
 TRIGGER = {"should_trigger", "split"}
 SPLITS = {"train", "held-out"}
@@ -172,6 +183,8 @@ def check_suite(d, evals, errs):
         errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
     if not isinstance(exps, dict):
         errs.append(f"{name}/reference/expectations.json: must be a JSON object keyed by case id"); return 0
+    if kind == "judgment":
+        return check_judgment(d, cases, exps, errs)
     need = BASE | (TRIGGER if kind == "skill-trigger" else set())
     extra = SETUP if kind == "role-transcript" else set()
     ids = []
@@ -233,6 +246,83 @@ def check_suite(d, evals, errs):
         errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
     if suite.get("covers") == "role-skills" and kind == "skill-trigger":
         check_coverage(name, cases, exps, evals, errs)
+    return len(cases)
+
+
+def check_judgment(d, cases, exps, errs):
+    """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+    name = d.name
+    q = load(d / "question.json", errs)
+    labels = []
+    if q is not None and not isinstance(q, dict):
+        errs.append(f"{name}/question.json: must be a JSON object")
+    elif q is not None:
+        at = f"{name}/question.json"
+        for k in sorted(QUESTION - set(q)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(q) - QUESTION):
+            errs.append(f"{at}: field {k}: unknown field")
+        for k in ("id", "question", "state_shape"):
+            if k in q and not (isinstance(q[k], str) and q[k].strip()):
+                errs.append(f"{at}: field {k}: must be a non-empty string")
+        ls = q.get("labels")
+        if "labels" in q and not (isinstance(ls, list) and len(ls) >= 2 and all(isinstance(x, str) and x.strip() for x in ls)
+                                  and len(set(ls)) == len(ls)):
+            errs.append(f"{at}: field labels: must be a list of 2 or more distinct non-empty strings")
+        elif "labels" in q:
+            labels = ls
+        h = q.get("label_help")
+        if "label_help" in q and not (isinstance(h, dict) and all(isinstance(v, str) and v.strip() for v in h.values())):
+            errs.append(f"{at}: field label_help: must map each label to a non-empty string")
+        elif "label_help" in q and labels and set(h) != set(labels):
+            errs.append(f"{at}: field label_help: keys must be exactly the labels {labels}, got {sorted(h)}")
+    ids, splits = [], set()
+    for n, c in enumerate(cases):
+        if not isinstance(c, dict):
+            errs.append(f"{name}/cases.json: case #{n + 1}: must be a JSON object"); continue
+        cid = c.get("id") if isinstance(c.get("id"), str) else f"#{n + 1}"
+        at = f"{name}/cases.json case {cid}"
+        for k in sorted(J_CASE - set(c)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(c) - J_CASE):
+            errs.append(f"{at}: field {k}: unknown field" + ("; label, reason and source live only in reference/expectations.json" if k in J_EXP else ""))
+        if "id" in c:
+            if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
+                errs.append(f"{at}: field id: must match {ID.pattern}")
+            elif c["id"] in ids:
+                errs.append(f"{at}: field id: duplicate")
+            else:
+                ids.append(c["id"])
+        if "split" in c and c["split"] not in SPLITS:
+            errs.append(f"{at}: field split: must be one of {sorted(SPLITS)}, got {c['split']!r}")
+        elif "split" in c:
+            splits.add(c["split"])
+        if "state" in c and not (isinstance(c["state"], str) and c["state"].strip()):
+            errs.append(f"{at}: field state: must be a non-empty string")
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        if exp is None:
+            if isinstance(c.get("id"), str):
+                errs.append(f"{at}: field id: no expectations in reference/expectations.json")
+            continue
+        at = f"{name}/reference/expectations.json case {cid}"
+        if not isinstance(exp, dict):
+            errs.append(f"{at}: must be a JSON object {{\"label\", \"reason\", \"source\"}}"); continue
+        for k in sorted(J_EXP - set(exp)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(exp) - J_EXP):
+            errs.append(f"{at}: field {k}: unknown field")
+        if "label" in exp and labels and exp["label"] not in labels:
+            errs.append(f"{at}: field label: must be one of {labels}, got {exp['label']!r}")
+        if "reason" in exp and not (isinstance(exp["reason"], str) and exp["reason"].strip() and "\n" not in exp["reason"]):
+            errs.append(f"{at}: field reason: must be one non-empty line")
+        if "source" in exp and not (isinstance(exp["source"], str) and exp["source"].strip()):
+            errs.append(f"{at}: field source: must be a non-empty string")
+    for k in sorted(set(exps) - set(ids)):
+        errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
+    if len(cases) < JUDGMENT_MIN:
+        errs.append(f"{name}/cases.json: {len(cases)} cases; a judgment set needs at least {JUDGMENT_MIN}")
+    for sp in sorted(SPLITS - splits):
+        errs.append(f"{name}/cases.json: no case in split {sp}; a judgment set marks a held-out share apart from train")
     return len(cases)
 
 

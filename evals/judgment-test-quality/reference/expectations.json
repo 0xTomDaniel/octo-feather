@@ -1,0 +1,112 @@
+{
+  "a-tdd-add-restates-sum": {
+    "label": "tautological",
+    "reason": "expected value is a + b, the very operation add performs, so it passes by construction",
+    "source": ".agents/skills/tdd/SKILL.md:31@5f8fca3 (tdd anti-pattern example)"
+  },
+  "a-tdd-total-reduce": {
+    "label": "tautological",
+    "reason": "expected is recomputed with the same reduce-sum calculateTotal performs; no independent value",
+    "source": ".agents/skills/tdd/tests.md:67-71@5f8fca3 (tdd anti-pattern example)"
+  },
+  "a-shout-json-expected-upper": {
+    "label": "tautological",
+    "reason": "goes through the CLI but builds expected with the code's own .upper() + '!', so a wrong shout rule still passes",
+    "source": "evals/fixtures/python-app-shout/tests/test_cli.py:32-36@649faad (#107 fixture; reviewer probes in evidence/2026-10-23-gh107-role-skill-loading-smoke.md@origin/gh107)"
+  },
+  "a-tdd-checkout-mock-payment": {
+    "label": "implementation-coupled",
+    "reason": "mocks the internal paymentService collaborator and asserts the call, not the checkout outcome",
+    "source": ".agents/skills/tdd/tests.md:31-35@5f8fca3 (tdd anti-pattern example)"
+  },
+  "a-check-refs-sed-justfile": {
+    "label": "implementation-coupled",
+    "reason": "provokes a scanner error by sed-editing a private perl statement in the justfile; renaming it breaks the test",
+    "source": "tests/check-refs.sh:68-79@0fc2232; finding internal-test-coupling, $(octo-feather-state)/lanes/archive/gh38.handoffs.jsonl at 2026-10-21T21:11:51Z"
+  },
+  "a-lane-tickets-parse-if": {
+    "label": "implementation-coupled",
+    "reason": "parses the private constant IF out of the ghsnap script's source with sed; a rename turns the gate red",
+    "source": "tests/lane-tickets.sh:108-114@b1ab3dc; finding internal-test-coupling, $(octo-feather-state)/lanes/archive/gh40.handoffs.jsonl at 2026-10-21T21:26:41Z"
+  },
+  "a-review-host-rewrite-process-cmdline": {
+    "label": "implementation-coupled",
+    "reason": "simulates no-/proc by string-replacing Spec Chat's private process_cmdline in a copied script, not at an external boundary",
+    "source": "tests/review-host.sh:95-108@1a77a78; finding test-private-helper-coupling, $(octo-feather-state)/lanes/archive/gh58.handoffs.jsonl at 2026-10-22T01:22:38Z"
+  },
+  "a-page-bounds-pagechars": {
+    "label": "implementation-coupled",
+    "reason": "asserts through internal pageChars/surfaceLines/parseLines instead of the update/read tool surface",
+    "source": "exosurface repo plugins/bb-plugin-exo-a2ui-spike/test/page-bounds.test.ts:455-468@53e0ff2 (~/src/exosurface-gh21); finding test-reaches-internals, $(octo-feather-state)/lanes/exo-gh21.handoffs.jsonl at 2026-10-21T22:13:37Z"
+  },
+  "a-accepted-importlib-spec-page": {
+    "label": "implementation-coupled",
+    "reason": "loads review-serve.py as a module and calls its private _spec_page to get the served version",
+    "source": "tests/accepted.sh:26-38@3e2c626; finding internal-test-surface, $(octo-feather-state)/lanes/archive/gh96.handoffs.jsonl at 2026-10-22T23:06:56Z"
+  },
+  "a-shout-suffix-source-read": {
+    "label": "implementation-coupled",
+    "reason": "reads core.py source text and asserts a constant's spelling; a rename breaks it while behaviour is unchanged",
+    "source": "evals/fixtures/python-app-shout/tests/test_cli.py:39-41@649faad (#107 fixture)"
+  },
+  "a-tdd-checkout-confirmed": {
+    "label": "ok",
+    "reason": "drives checkout through its public API and checks the observable status against a literal",
+    "source": ".agents/skills/tdd/tests.md:9-14@5f8fca3 (tdd good example)"
+  },
+  "a-tdd-total-literal": {
+    "label": "ok",
+    "reason": "public function, independent known literal 15 as expected value",
+    "source": ".agents/skills/tdd/tests.md:74-76@5f8fca3 (tdd good example)"
+  },
+  "a-template-hello-json": {
+    "label": "ok",
+    "reason": "in-process CLI entry, literal expected JSON for the success and error paths",
+    "source": "templates/python/tests/test_cli.py:12-19@5f8fca3"
+  },
+  "a-recipe-args-exact-argv": {
+    "label": "ok",
+    "reason": "runs real just recipes against stub commands at the PATH boundary and compares recorded argv/cwd to the literal arguments it passed",
+    "source": "tests/recipe-args.sh:15-46@5f8fca3"
+  },
+  "a-check-refs-stub-on-path": {
+    "label": "ok",
+    "reason": "injects a failing perl/grep as a stub first on PATH (external boundary) and checks the gate's exit and message",
+    "source": "tests/check-refs.sh:68-81@dcf8bcb (fix of the gh38 finding)"
+  },
+  "a-review-host-no-proc-namespace": {
+    "label": "ok",
+    "reason": "removes /proc with a mount namespace and a ps stub (OS boundary), drives the review-host CLI, asserts link and server facts",
+    "source": "tests/review-host.sh:127-157@89cdfc9 (fix of the gh58 finding)"
+  },
+  "a-accepted-etag": {
+    "label": "ok",
+    "reason": "starts pinned review-serve as a server and reads the ETag over HTTP, compared to pinned literal hashes",
+    "source": "tests/accepted.sh:28-37@dd07eaf (fix of the gh96 finding)"
+  },
+  "a-impl-shout-literal": {
+    "label": "ok",
+    "reason": "CLI entry with literal expected 'HELLO, ADA!' for text and JSON, independent of the implementation",
+    "source": "/tmp/gh107/fx-impl tests/test_cli.py:17-25@7df51a7 (implementer probe from the #107 runs; scratch repo); copy: a-test-quality/sources/gh107-fx-impl-7df51a7/tests/test_cli.py:17-25 (code: sources/gh107-fx-impl-7df51a7/src/app/core.py, cli.py)"
+  },
+  "a-constructed-py-e2e-recompute-greeting": {
+    "label": "tautological",
+    "reason": "lines 22-28; the literal {'name': 'Grace', 'text': 'Hello, Grace'} was rewritten to strip the name and format f'Hello, {clean}', greet's own rule, so a wrong greeting rule still passes (constructed per director ruling 2026-10-23)",
+    "source": "constructed from templates/python/tests/test_cli.py@5f8fca3"
+  },
+  "a-constructed-ts-expected-from-greet": {
+    "label": "tautological",
+    "reason": "lines 4-5, 9-20; the literal { name: 'Ada', text: 'Hello, Ada' } was rewritten to greet('Ada'), the function the CLI prints, so expected is the code's own output (constructed per director ruling 2026-10-23)",
+    "source": "constructed from templates/typescript/tests/cli.test.ts@5f8fca3"
+  },
+  "a-constructed-pi-role-common-dir": {
+    "label": "tautological",
+    "reason": "lines 7-14; the literal $t/repo main-checkout path was rewritten to dirname of git rev-parse --git-common-dir, the lookup pi-role itself runs, so a wrong lookup rule still passes (constructed per director ruling 2026-10-23)",
+    "source": "constructed from tests/pi-role.sh@5f8fca3"
+  },
+  "a-constructed-shape-skill-roots": {
+    "label": "tautological",
+    "reason": "lines 5-12; its one assertion's literal want (six $kit/.agents/skills paths, T/repo/.agents/skills/spec-chat-shape, no-skills) was rewritten to octo-feather-shape --json run again for the same repo and HOME through the same filter as got, so want is the code's own output and equals got by construction: a home-not-repo lookup, a wrong skill list or a missing --no-skills still passes; nothing else in the test asserts (the rest is fixture setup, HOME faked at the boundary) (constructed per director ruling 2026-10-23)",
+    "source": "constructed from tests/shape.sh@5f8fca3"
+  }
+}
