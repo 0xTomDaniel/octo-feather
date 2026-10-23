@@ -1,5 +1,9 @@
 {
   "tdd-shout-flag": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
   "tdd-near-miss-count-tests": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]},
-  "blast-radius-keep-whitespace": {"facts": [{"fact": "skill_read", "skill": "blast-radius"}]}
+  "blast-radius-keep-whitespace": {"facts": [{"fact": "skill_read", "skill": "blast-radius"}]},
+  "corrector-eval-cases-should": {"facts": [{"fact": "skill_read", "skill": "eval-cases"}]},
+  "corrector-eval-cases-should-heldout": {"facts": [{"fact": "skill_read", "skill": "eval-cases"}]},
+  "corrector-eval-cases-near-pytest": {"facts": [{"fact": "skill_not_read", "skill": "eval-cases"}]},
+  "corrector-eval-cases-near-field-or-text": {"facts": [{"fact": "skill_not_read", "skill": "eval-cases"}]}
 }
