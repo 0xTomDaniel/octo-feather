@@ -47,13 +47,22 @@
       },
       {
         "fact": "skill_read_before",
-        "skill": "writing-for-agents",
+        "skill": "commit",
+        "before": "git_commit"
+      }
+    ]
+  },
+  "corrector-repo-skill-rule": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "correct",
         "before": "edit"
       },
       {
         "fact": "skill_read_before",
-        "skill": "commit",
-        "before": "git_commit"
+        "skill": "writing-for-agents",
+        "before": "kit_contract_edit"
       }
     ]
   },

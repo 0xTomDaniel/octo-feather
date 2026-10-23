@@ -39,8 +39,15 @@ def tool(i, name, args):   # as pi: the assistant message holding the call ends,
                                            "content": [{"type": "toolCall", "id": i, "name": name, "arguments": args}]}})
     out({"type": "tool_execution_start", "toolCallId": i, "toolName": name, "args": args})
 tool("c1", "bash", {"command": "ls"})
+def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an error
+    try:
+        return False, open(path).read()
+    except OSError as e:
+        return True, f"ENOENT: {e}"
 if "STUB-READ-TDD" in prompt and tdd:
     tool("c2", "read", {"path": tdd})
+    err, txt = pi_read(tdd)
+    out({"type": "tool_execution_end", "toolCallId": "c2", "toolName": "read", "isError": err, "result": {"content": [{"type": "text", "text": txt}]}})
 if "STUB-LINGER" in prompt:
     time.sleep(120)
 if "STUB-ATTEMPTS" in prompt:   # really run each command in the sandbox, as pi's bash tool would, result and all
@@ -66,14 +73,24 @@ if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] 
             s = s.replace(f"@rel:{n}", os.path.relpath(d + "/SKILL.md")).replace(f"@dot:{n}", f"{d}/../{n}/SKILL.md") \
                  .replace(f"@other:{n}", f"/nowhere/{n}/SKILL.md").replace(f"@@{n}", d).replace(f"@{n}", d + "/SKILL.md")
         return s
+    # read PATH|limit=N: the first N lines and Pi's continuation notice; bash CMD #TRUNC: Pi marks the output truncated.
     for k, (kind, arg) in enumerate(json.loads(prompt.split("STUB-STEPS:", 1)[1])):
         if kind == "say":
             final = arg; break
-        tool(f"s{k}", kind, {"path": sub(arg)} if kind == "read" else {"command": sub(arg)})
+        path, _, lim = sub(arg).partition("|limit=")
+        tool(f"s{k}", kind, {"path": path} if kind == "read" else {"command": sub(arg)})
         p = subprocess.run(["bash", "-c", sub(arg)], capture_output=True, text=True) if kind == "bash" else None
-        o = (p.stdout + p.stderr) if p else "read"
-        out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": bool(p and p.returncode),
-             "result": {"content": [{"type": "text", "text": o}], "structuredContent": {"output": o, "exit_code": p.returncode if p else 0}}})
+        if p:
+            o, err = p.stdout + p.stderr, bool(p.returncode)
+            res = {"content": [{"type": "text", "text": o + (f"\n\nCommand exited with code {p.returncode}" if err else "")}],
+                   "structuredContent": {"output": o, "exit_code": p.returncode, "truncated": "#TRUNC" in arg}}
+        else:
+            err, o = pi_read(path)
+            if lim and not err:
+                ls = o.split("\n")
+                o = "\n".join(ls[:int(lim)]) + f"\n\n[{len(ls) - int(lim)} more lines in file. Use offset={int(lim) + 1} to continue.]"
+            res = {"content": [{"type": "text", "text": o}]}
+        out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": err, "result": res})
         time.sleep(0.5)   # the model's next turn: as with pi, the watcher snapshots before the next call runs
     else:
         final = "done"
@@ -129,9 +146,9 @@ line() { grep -E "^$1 trig/$2: " <<< "$out" || fail "no $1 line for $2: $out"; }
 # Every case: one line each, facts named; any failure exits 1.
 t0=$SECONDS
 run 1 "$Q" --evals "$t/evals"
-line PASS reads | grep -q "skill_read tdd: read at tool call 2 of 2 (read .*/tdd/SKILL.md)" || fail "reads: deciding fact not named: $out"
-line FAIL near | grep -q "skill_not_read tdd: read at tool call 2" || fail "near: deciding fact not named: $out"
-line PASS quiet | grep -q "skill_not_read tdd: no read of tdd/SKILL.md in 1 tool calls" || fail "quiet: deciding fact not named: $out"
+line PASS reads | grep -q "skill_read tdd: loaded at tool call 2 of 2 (read .*/tdd/SKILL.md)" || fail "reads: deciding fact not named: $out"
+line FAIL near | grep -q "skill_not_read tdd: loaded at tool call 2" || fail "near: deciding fact not named: $out"
+line PASS quiet | grep -q "skill_not_read tdd: no load of tdd/SKILL.md (its full content in a tool result) in 1 tool calls" || fail "quiet: deciding fact not named: $out"
 line PASS linger | grep -q "stop: decided" || fail "linger: run not stopped once decided: $out"
 (( SECONDS - t0 < 100 )) || fail "the lingering stub was not stopped once its fact was decided ($((SECONDS - t0)) s)"
 line FAIL crash | grep -q "run: pi exited 3 on its own" || fail "crash: a dead pi must fail, not pass skill_not_read: $out"
@@ -210,7 +227,7 @@ gk add -A; gk commit -qm c1; c1="$(gk rev-parse HEAD)"
 cp "$t/im.md" "$im"; gk commit -qam c2; c2="$(gk rev-parse HEAD)"
 K="$t/kit/scripts/octo-feather-qa"
 run 1 "$K" --evals "$t/evals" --case reads --kit-ref "${c1:0:9}"
-line FAIL reads | grep -q "skill_read tdd: no read of tdd/SKILL.md.*\[kit $c1\]" || fail "kit-ref before the change: want FAIL with its sha: $out"
+line FAIL reads | grep -q "skill_read tdd: no load of tdd/SKILL.md.*\[kit $c1\]" || fail "kit-ref before the change: want FAIL with its sha: $out"
 grep -q "ok   extra binds read-only" <<< "$out" || fail "the earlier kit is not bound read-only in the sandbox: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 python3 - "$d/trig/reads" "$c1" <<'EOF' || fail "kit-ref artifacts wrong"
@@ -263,10 +280,11 @@ d="$(ls -dt "$t"/out/*/ | head -1)"
 mkdir -p "$t/dec/dec/reference" "$t/dec/fixtures"; cp -r "$t/good/fixtures/fx" "$t/dec/fixtures/"
 echo '{"suite": "dec", "kind": "role-transcript", "description": "stub declared", "max_tool_calls": 10, "timeout_s": 8}' > "$t/dec/dec/suite.json"
 echo "[$(ic ok "Pick. STUB-READ-TDD STUB-DECL-OK"), $(ic out "Pick. STUB-DECL-OUT"), $(ic none "Pick. STUB-DECL-NONE"),
- $(ic two "Pick. STUB-DECL-TWO"), $(ic early "Pick. STUB-LINGER STUB-DECL-OK")]" > "$t/dec/dec/cases.json"
+ $(ic two "Pick. STUB-DECL-TWO"), $(ic early "Pick. STUB-LINGER STUB-DECL-OK"), $(ic earlyrb "Pick. STUB-READ-TDD STUB-LINGER")]" > "$t/dec/dec/cases.json"
 d1='{"fact": "declared", "field": "rung", "in": ["check", "instruction"]}'
 echo "{\"ok\": {\"facts\": [{\"fact\": \"skill_read\", \"skill\": \"tdd\"}, $d1]}, \"out\": {\"facts\": [$d1]}, \"none\": {\"facts\": [$d1]},
-  \"two\": {\"facts\": [$d1]}, \"early\": {\"facts\": [$d1]}}" > "$t/dec/dec/reference/expectations.json"
+  \"two\": {\"facts\": [$d1]}, \"early\": {\"facts\": [$d1]},
+  \"earlyrb\": {\"facts\": [{\"fact\": \"skill_read_before\", \"skill\": \"tdd\", \"before\": \"final_message\"}]}}" > "$t/dec/dec/reference/expectations.json"
 run 1 "$Q" --evals "$t/dec"
 dl() { grep -E "^$1 dec/$2: " <<< "$out" | grep -qF "$3" || fail "declared $2: want $1 with '$3': $out"; }
 dl PASS ok 'declared rung: "check", one of ["check", "instruction"]'
@@ -274,6 +292,8 @@ dl FAIL out 'declared rung: "vibes" is not one of ["check", "instruction"]'
 dl FAIL none 'declared rung: final message holds 0 ```json blocks, want exactly 1'
 dl FAIL two 'declared rung: final message holds 2 ```json blocks, want exactly 1'
 dl FAIL early 'declared rung: run stopped (timeout) before its final message'
+# A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+dl FAIL earlyrb 'skill_read_before tdd final_message: target never reached (run stopped (timeout) before its final message); loaded at tool call 2 of 2'
 
 # Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads by Pi `read` only,
 # before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
@@ -300,10 +320,14 @@ cases = [
   (case("fsonly", [["bash", "ls tests/ 2>&1 > /dev/null; cat README.md > /dev/null"], ["read", "@tdd"],
                    ["bash", "python3 -c \"import os; os.makedirs('tests'); open('tests/test_z.py', 'w').write('x')\""]]),
    [rb("tdd", "test_write"), rb("tdd", "edit"), fx]),
-  # bash cat, ls and grep of a SKILL.md, and a read of another tdd/SKILL.md, never count; a dotted or relative read does.
-  (case("loads", [["bash", "cat @tdd; ls @@tdd; grep -c . @tdd"], ["read", "@other:tdd"],
-                  ["read", "@dot:commit"], ["read", "@rel:python"]]),
-   [{"fact": "skill_read", "skill": "tdd"}, {"fact": "skill_read", "skill": "commit"}, {"fact": "skill_read", "skill": "python"}]),
+  # A load is the full SKILL.md content in a tool result: an ls, grep, head of a part, a read of another tdd/SKILL.md,
+  # a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated never count.
+  (case("partial", [["bash", "ls @@tdd; grep -c . @tdd; head -5 @tdd; grep -v '^$' @tdd"], ["read", "@other:tdd"],
+                    ["read", "@tdd|limit=3"], ["bash", "cat @tdd #TRUNC"]]),
+   [{"fact": "skill_read", "skill": "tdd"}]),
+  # Any tool counts once the full content is in its result: a bash cat (beside other files), a dotted or relative read.
+  (case("loads", [["bash", "cat README.md @commit"], ["read", "@dot:python"], ["read", "@rel:github"]]),
+   [{"fact": "skill_read", "skill": "commit"}, {"fact": "skill_read", "skill": "python"}, {"fact": "skill_read", "skill": "github"}]),
   (case("setup", [["bash", "echo branch=$(git branch --show-current); git log --format=msg=%s -1 hb; git rev-list --count hb;"
                            " echo repo={repo} cwd=$(pwd -P) head={head} rev=$(git rev-parse HEAD); ls tests;"
                            " echo origin=$(git ls-remote origin main | wc -l); echo gh=$(command -v gh)"]],
@@ -315,6 +339,15 @@ cases = [
     {"fact": "declared_includes", "field": "criteria", "items": [{"id": "x", "verdict": "pass"}]}]),
   (case("inclflat", [["say", blk({"blocking": "t.py::a"})]]),
    [{"fact": "declared_includes", "field": "blocking", "items": [{"test": "t.py::a"}]}]),
+  # kit_contract_edit: a role, skill or patch changed (agents/corrector.md's words); AGENTS.md, agents/<dir>/x.md or another
+  # file is an edit only.
+  # A target never reached fails the read before it (test_write here), read or not.
+  (case("contract", [["bash", "mkdir -p agents/notes && echo x > agents/notes/a.md && echo x > docs.md"], ["read", "@commit"],
+                     ["bash", "mkdir -p .agents/skills/x && echo y > .agents/skills/x/SKILL.md"]]),
+   [rb("commit", "edit"), rb("commit", "kit_contract_edit"), rb("commit", "test_write")]),
+  (case("roleedit", [["bash", "mkdir -p agents && echo r > agents/x.md"], ["bash", "echo z >> AGENTS.md"],
+                     ["bash", "mkdir -p .skillfile/patches && echo p > .skillfile/patches/p.patch"]]),
+   [rb("tdd", "kit_contract_edit"), fx]),
 ]
 json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
 json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
@@ -323,9 +356,11 @@ cp -r "$t/rt" "$t/rt-good"
 run 1 "$Q" --evals "$t/rt"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 rl() { grep -E "^$1 rt/$2: " <<< "$out" || fail "rt $2: want $1: $out"; }
-rl FAIL order >/dev/null; rl PASS fsonly >/dev/null; rl PASS setup >/dev/null; rl PASS incl >/dev/null
-rl FAIL loads | grep -q "skill_read tdd: no read of tdd/SKILL.md in 5 tool calls" || fail "loads: a bash cat/ls/grep or a read elsewhere counted: $out"
-! rl FAIL loads | grep -q "skill_read \(commit\|python\)" || fail "loads: a dotted or relative read of the kit's SKILL.md did not count: $out"
+rl FAIL order >/dev/null; rl FAIL partial >/dev/null; rl FAIL contract >/dev/null; rl FAIL roleedit >/dev/null; rl PASS fsonly >/dev/null; rl PASS setup >/dev/null; rl PASS incl >/dev/null
+rl FAIL partial | grep -q "skill_read tdd: no load of tdd/SKILL.md (its full content in a tool result) in 5 tool calls" \
+  || fail "partial: an ls, grep, head, a read elsewhere, a cut-short read or a truncated cat counted: $out"
+rl PASS loads | grep -q "skill_read commit: loaded at tool call 2 of [0-9] (bash cat README.md .*/commit/SKILL.md); skill_read python: loaded at tool call 3 of [0-9] (read .*/../python/SKILL.md); skill_read github: loaded at tool call 4 of [0-9] (read [^/]" \
+  || fail "loads: a cat, a dotted or a relative read of the kit's SKILL.md did not count: $out"
 rl FAIL inclmiss | grep -qF 'declared_includes blocking: no entry with {"test": "t.py::b"} in [{"test": "t.py::a"}]' \
   && rl FAIL inclmiss | grep -qF 'declared_includes criteria: no entry with {"id": "x", "verdict": "pass"}' || fail "inclmiss: missing items not named: $out"
 rl FAIL inclflat | grep -qF "declared_includes blocking: top-level 'blocking' is \"t.py::a\", want a list" || fail "inclflat: $out"
@@ -334,10 +369,10 @@ python3 - "$d/rt" <<'EOF' || fail "rt artifacts wrong"
 import json, re, sys
 d = sys.argv[1]
 g = {(f["skill"], f.get("before")): (f["status"], f["evidence"]) for f in json.load(open(f"{d}/order/grading.json"))["facts"]}
-want = {("tdd", "test_write"): ("pass", "read at tool call 2 of 8 (read "), ("commit", "test_write"): ("fail", "first test_write at tool call 3 of 8"),
+want = {("tdd", "test_write"): ("pass", "loaded at tool call 2 of 8 (read "), ("commit", "test_write"): ("fail", "first test_write at tool call 3 of 8"),
         ("commit", "git_commit"): ("pass", "first git_commit at tool call 5 of 8"), ("tdd", "git_push"): ("pass", "first git_push at tool call 6 of 8"),
-        ("github", "gh_call"): ("fail", "first gh_call at tool call 7 of 8 (bash gh pr create --title x), read only at tool call 8 of 8"),
-        ("python", "edit"): ("fail", "first edit at tool call 3 of 8"), ("commit", "final_message"): ("pass", "no final_message yet")}
+        ("github", "gh_call"): ("fail", "first gh_call at tool call 7 of 8 (bash gh pr create --title x), loaded only at tool call 8 of 8"),
+        ("python", "edit"): ("fail", "first edit at tool call 3 of 8"), ("commit", "final_message"): ("pass", "before the final message")}
 for k, (st, ev) in want.items():
     assert g[k][0] == st and ev in g[k][1], (k, g[k])
 fs = [json.loads(l) for l in open(f"{d}/order/transcript.jsonl") if '"qa_fs"' in l]
@@ -345,7 +380,18 @@ assert [e["marks"] for e in fs] == [["edit", "test_write"], ["git_commit"], ["gi
 assert fs[-1]["gh"] == ["gh pr create --title x"], fs[-1]
 g = {f.get("before"): f["evidence"] for f in json.load(open(f"{d}/fsonly/grading.json"))["facts"]}
 assert "first test_write at tool call 4 of 4" in g["test_write"] and "first edit at tool call 4 of 4" in g["edit"], g
-assert all(not k.startswith("_") for f in json.load(open(f"{d}/loads/grading.json"))["facts"] for k in f), "private keys in grading"
+assert all(not k.startswith("_") for f in json.load(open(f"{d}/partial/grading.json"))["facts"] for k in f), "private keys in grading"
+g = {f.get("before"): (f["status"], f["evidence"]) for f in json.load(open(f"{d}/contract/grading.json"))["facts"]}
+assert g["edit"][0] == "fail" and "first edit at tool call 2 of 4" in g["edit"][1], g
+assert g["kit_contract_edit"][0] == "pass" and "loaded at tool call 3 of 4" in g["kit_contract_edit"][1] \
+    and "before first kit_contract_edit at tool call 4 of 4" in g["kit_contract_edit"][1], g
+assert g["test_write"][0] == "fail" and "test_write: target never reached (no test_write in 4 tool calls); loaded at tool call 3 of 4" \
+    in g["test_write"][1], g
+fs = [json.loads(l)["marks"] for l in open(f"{d}/roleedit/transcript.jsonl") if '"qa_fs"' in l]
+assert fs == [["edit", "kit_contract_edit"], ["edit"], ["edit", "kit_contract_edit"]], fs   # agents/x.md, AGENTS.md, a patch
+g = json.load(open(f"{d}/roleedit/grading.json"))["facts"][0]
+assert g["status"] == "fail" and "first kit_contract_edit at tool call 2 of 4 (bash mkdir -p agents" in g["evidence"] \
+    and "no load of tdd/SKILL.md" in g["evidence"], g
 o = "".join(json.loads(l)["result"]["structuredContent"]["output"] for l in open(f"{d}/setup/transcript.jsonl") if '"tool_execution_end"' in l)
 repo, cwd, head, rev = re.search(r"repo=(\S+) cwd=(\S+) head=(\S+) rev=(\S+)", o).groups()
 assert "branch=work" in o and "msg=head msg" in o and "\n2\n" in o and "test_y.py" in o, o   # hb: fixture + head commit
@@ -392,10 +438,10 @@ bad 'c[0]["branch"] = "x"' "trig/cases.json case reads: field branch: unknown fi
 bad 'c[0]["branch"] = "a..b"' "rt/cases.json case order: field branch: must be a branch name" "$t/rt-good" rt
 bad 'c[0]["origin"] = False' "rt/cases.json case order: field origin: must be true (leave it out for false)" "$t/rt-good" rt
 bad 'c[0]["fake_gh"] = "yes"' "rt/cases.json case order: field fake_gh: must be true" "$t/rt-good" rt
-bad 'del c[3]["head"]["message"]' "rt/cases.json case setup: field head.message: missing" "$t/rt-good" rt
-bad 'c[3]["head"]["fixture"] = "nope"' "rt/cases.json case setup: field head.fixture: no fixture dir" "$t/rt-good" rt
-bad 'c[3]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.branch: must be a new branch name" "$t/rt-good" rt
-bad 'c[3]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
+bad 'del c[4]["head"]["message"]' "rt/cases.json case setup: field head.message: missing" "$t/rt-good" rt
+bad 'c[4]["head"]["fixture"] = "nope"' "rt/cases.json case setup: field head.fixture: no fixture dir" "$t/rt-good" rt
+bad 'c[4]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.branch: must be a new branch name" "$t/rt-good" rt
+bad 'c[4]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
 bad 'del c[0]["origin"]' "case order fact #4: field before: git_push needs the case's origin: true" "$t/rt-good" rt
 bad 'del c[0]["fake_gh"]' "case order fact #5: field before: gh_call needs the case's fake_gh: true" "$t/rt-good" rt
 bad 'e["order"]["facts"][0]["before"] = "lunch"' "case order fact #1: field before: must be one of" "$t/rt-good" rt
@@ -409,4 +455,4 @@ bad 'e["reads"]["facts"].append({"fact": "declared", "field": "rung", "in": [1]}
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill read by Pi read only, before-targets from filesystem snapshots, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field)"
