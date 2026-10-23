@@ -25,5 +25,16 @@
         "in": ["structure", "structured-judgment", "prose"]
       }
     ]
+  },
+  "implementer-secret-grep": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "every": {"class": ["exact"]}},
+      {"fact": "branch_paths", "untouched": ["scripts/", "justfile"]}
+    ]
+  },
+  "implementer-exec-bit": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"class": "exact"}], "every": {"class": ["exact"]}}
+    ]
   }
 }

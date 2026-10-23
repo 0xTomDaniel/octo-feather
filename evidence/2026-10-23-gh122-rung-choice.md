@@ -1,7 +1,7 @@
 # gh122 (ticket #129): ladder suite, corrector rung choice
 
 Smoke: evals/ladder/ (suite ladder, cases corrector-fuzzy-lesson, corrector-fact-lesson; role agents/corrector.md unchanged)
-Removed: nothing from the owed list: the rung-choice entry in docs/owed-evals/118.md stays, reworded to point at evals/ladder/ and still owe a separating case, since both cases pass at head and at 61b9f22 (below). Fixture python-app instead of py-mini: the corrector's brief needs the `just check` gate, and python-app holds an executable `.githooks/pre-commit` for the fact lesson; same fixture as the evidence/2026-10-23-gh118-ladder-smoke.md run.
+Removed: the rung-choice entry in docs/owed-evals/118.md (corrector-coupling-lesson separates: FAIL at 61b9f22, PASS at bdb7ca4, below; corrector-fuzzy-lesson and corrector-fact-lesson stay, reported non-separating). Fixture python-app instead of py-mini: the corrector's brief needs the `just check` gate, and python-app holds an executable `.githooks/pre-commit` for the fact lesson; same fixture as the evidence/2026-10-23-gh118-ladder-smoke.md run.
 
 Suite: `role-transcript`, max_tool_calls 200, timeout_s 2700. Each case graded only on `{"fact": "declared", "field": "rung"}`: fuzzy `in` structure, structured-judgment, prose; fact `in` structure, exact-check. Both cases written and committed (a41fc21) before any run; neither reworded after.
 
@@ -33,6 +33,20 @@ qa: 1/1 passed (run 20261023T222525Z-24c17d)
 
 Held-out score: head 1/1, 61b9f22 1/1 (does not separate either; it guards against always answering a rung above exact-check).
 
-## corrector-coupling-lesson (written, not run here)
+## corrector-coupling-lesson
 
-Added after the two cases above did not separate: the check-test-surface incident (docs/adr/0008 Rejected), two `internal-test-surface` findings plus a reviewer's suggested import/private-name ban; expects `rung` in structure, structured-judgment, prose. Written and committed before any run; the lane supervisor runs it (lane Pi quota). No result yet.
+The check-test-surface incident (docs/adr/0008 Rejected), two `internal-test-surface` findings plus a reviewer's suggested import/private-name ban; expects `rung` in structure, structured-judgment, prose. Written and committed before any run, never reworded. Runs by the lane supervisor (lane Pi quota).
+
+Fails-before, `--kit-ref 61b9f22`:
+
+FAIL ladder/corrector-coupling-lesson: declared rung: "exact-check" is not one of ["structure", "structured-judgment", "prose"] [stop: exit, 13 tool calls, 82.4 s] [kit 61b9f22b869e630325e5b5013e767db9f3816eb7]
+qa: 0/1 passed (run 20261023T230202Z-ab9a48)
+
+The old corrector chose a ruff ban (TID251 banned-api app.core, PLC2701, SLF001) and called it exact.
+
+Head bdb7ca4:
+
+PASS ladder/corrector-coupling-lesson: declared rung: "structured-judgment", one of ["structure", "structured-judgment", "prose"] [stop: exit, 14 tool calls, 94.5 s] [kit bdb7ca48d20fec6d22aedd7d5e4b76858f27c4bd]
+qa: 1/1 passed (run 20261023T230333Z-9695df)
+
+SEPARATES: this case discharges the owed rung-choice eval.

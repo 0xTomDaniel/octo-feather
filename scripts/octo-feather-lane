@@ -27,6 +27,16 @@ a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment'
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 
+  octo-feather-lane fields REPORT|-   a report's column-0 field lines as JSON (the parser verdict uses)
+
+`fields` reads the lines outside fenced code blocks as `verdict` does and prints one JSON object:
+"Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field above (errors:
+`verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
+errors} from the code-review skill's `Owner: <path>: <rule> | restated: none|<path>:<line>[, ...]` or
+`Owners: none` (`:<line>` stripped from every path); "fields" {Name: [value...]} for every other
+`Name: value` line at column 0 (Name: a capital, then letters or -). Exit 0; 1 on an unreadable report.
+The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
+
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
 when the PR head is not the judged head, the git repo of the current directory (the lane
 worktree, PR head and BASE fetched; BASE defaults to origin/main). The PR body carries the
@@ -252,6 +262,60 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
         why.append("report has `Checks: none` and `Check:` lines; keep the `Check:` lines, one per added or changed check")
     lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
     return lines, why
+
+
+OWNER_LINE = re.compile(r"^Owner:[ \t]*(.*?)\s*$")
+OWNER_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*restated:\s*(\S[^|]*?)")
+OWNERS_LINE = re.compile(r"^Owners:[ \t]*(.*?)\s*$")
+FIELD_LINE = re.compile(r"^([A-Z][A-Za-z-]*):[ \t]*(.*?)\s*$")
+AT_LINE = re.compile(r":\d+$")   # `<path>:<line>`: the path alone
+
+
+def owner_lines(text: str) -> tuple[list[dict], bool, list[str]]:
+    """(Owner lines as {path, rule, restated}, `Owners: none` given, why unusable) (code-review skill, Verdict step)."""
+    owners, nones, why = [], [], []
+    for l in outside(text):
+        if m := OWNERS_LINE.match(l):
+            nones.append(m.group(1))
+        elif m := OWNER_LINE.match(l):
+            s = OWNER_SHAPE.fullmatch(m.group(1))
+            rest = [AT_LINE.sub("", x.strip().strip("`")) for x in s.group(3).split(",")] if s else []
+            if not s or not all(rest):
+                why.append(f"owner line `{l.strip()}` is not `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`"); continue
+            owners.append({"path": AT_LINE.sub("", s.group(1)), "rule": s.group(2),
+                           "restated": [] if rest == ["none"] else list(dict.fromkeys(rest))})
+    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
+    if bad_none:
+        why.append(f"`Owners: {bad_none[0]}`; `Owners:` takes only `none`; name each owned rule on its own `Owner:` line")
+    if not owners and not nones and not why:
+        why.append("report names no owned rule: add `Owners: none`, or one `Owner:` line per owned rule the diff writes or changes")
+    if owners and nones:
+        why.append("report has `Owners: none` and `Owner:` lines; keep the `Owner:` lines")
+    return owners, bool(nones) and not bad_none and not owners, why
+
+
+def cmd_fields(args: list[str]) -> int:
+    if len(args) != 1:
+        raise Refuse(f"usage: octo-feather-lane fields REPORT|- (got {' '.join(args) or 'nothing'})")
+    try:
+        report = sys.stdin.read() if args[0] == "-" else Path(args[0]).read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read report {args[0]} ({e}): pass a report file, or - for stdin")
+    cls, cwhy = check_lines(report)
+    checks = []
+    for c in cls if cls != ["Checks: none"] else []:
+        path, rule, reads, kind = CHECK_SHAPE.fullmatch(c[len("Check: "):]).groups()
+        o = OWNED.fullmatch(rule)
+        checks.append({"path": path, "rule": o.group(1), "owner": o.group(2).strip(), "reads": reads, "class": kind})
+    owners, onone, owhy = owner_lines(report)
+    other = {}
+    for l in outside(report):
+        m = FIELD_LINE.match(l)
+        if m and m.group(1) not in ("Check", "Checks", "Owner", "Owners"):
+            other.setdefault(m.group(1), []).append(m.group(2))
+    print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
+                      "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
+    return 0
 
 
 def gh(args: list[str], fix: str) -> str:
@@ -1141,6 +1205,7 @@ def cmd_ticket(args: list[str]) -> int:
 COMMANDS = {
     "archive": cmd_archive,
     "verdict": cmd_verdict,
+    "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,
     "tickets": cmd_tickets,
     "done": cmd_done,

@@ -19,5 +19,19 @@
     "fixture": "python-app",
     "branch": "corrector-gh15",
     "task": "Correction lane gh15 for this repo (ADR 0020 factory QA). Trigger: finding class `internal-test-surface` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greet_trims calls app.core.greet(' Ada ') and asserts its .text; it drives no CLI, so renaming greet breaks the test while `app hello` still works\"} (lane gh12)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_clean_name calls the private helper app.cli._clean_name and asserts its return value; the test should go through `app hello` and its --json output\"} (lane gh14)\nThe lane gh14 reviewer suggested a fix: a `just check` script (or a lint ban) that fails any test file that imports from app.core or names a private function.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh15 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  },
+  {
+    "id": "implementer-secret-grep",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t3",
+    "task": "Ticket T3 (lane gh3, parent #3): no secret ever reaches `app`'s output.\nWhat to build: a `just check` gate for it: a script under scripts/ that greps src/ for print, sys.stdout.write, sys.stderr.write or logging calls whose arguments mention password, token, secret or api_key, and fails the gate naming the file and line.\nAcceptance criterion: no-secret-output: no secret appears in any `app` output. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-exec-bit",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t6",
+    "task": "Ticket T6 (lane gh6, parent #6): a script committed without its exec bit never lands again (two lanes lost a git hook that way).\nWhat to build: `just check` fails, naming each file, when a file tracked under scripts/ or .githooks/ is not executable in git.\nAcceptance criterion: scripts-executable: every script under scripts/ and .githooks/ is executable: `just check` fails when a tracked file there has git mode 100644 and passes when each one is 100755. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]
