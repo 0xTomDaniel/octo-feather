@@ -7,7 +7,9 @@ No network and no API key, ever. It answers from, and writes to, one JSON store,
    "issues": {"ENG-7": {"title", "description", "state" (a state name), "parent" (key or null),
                         "blocked_by" (keys), "comments" ([{"id", "body"}])}}}
 It takes only what the tracker scripts run, printing what the real CLI prints:
-  api [--variable K=V]... DOCUMENT   only the `query IssueView` document (issue-view)
+  api [--variable K=V]... [DOCUMENT] one query, any operation name or none, answered as Linear's GraphQL API does:
+                                     only the selected fields, against SCHEMA (a subset of Linear's public schema);
+                                     a field or argument outside it is refused by name
   issue create --title T --description-file F|- [--team K] [--parent K]
   issue relation add A blocked-by B
   issue comment add KEY --body-file F|-
@@ -95,25 +97,183 @@ def one(o, k, default=None):
     return v[-1] if v else default
 
 
+# SCHEMA: the part of Linear's public GraphQL schema the fake serves, type -> field -> (type, arguments).
+# Objects: Issue a key, WorkflowState a state name, IssueRelation (issue, type, relatedIssue), a connection (items, first).
+SCALARS = {"String", "ID", "Float", "Boolean"}
+PAGE = {"first"}
+SCHEMA = {
+    "Query": {"issue": ("Issue!", {"id"})},
+    "Issue": {"id": ("ID!", set()), "identifier": ("String!", set()), "number": ("Float!", set()),
+              "title": ("String!", set()), "description": ("String", set()), "url": ("String!", set()),
+              "state": ("WorkflowState!", set()), "parent": ("Issue", set()), "children": ("IssueConnection!", PAGE),
+              "relations": ("IssueRelationConnection!", PAGE), "inverseRelations": ("IssueRelationConnection!", PAGE)},
+    "WorkflowState": {"id": ("ID!", set()), "name": ("String!", set()), "type": ("String!", set())},
+    "IssueRelation": {"id": ("ID!", set()), "type": ("String!", set()), "issue": ("Issue!", set()),
+                      "relatedIssue": ("Issue!", set())},
+    "IssueConnection": {"nodes": ("[Issue!]!", set()), "pageInfo": ("PageInfo!", set())},
+    "IssueRelationConnection": {"nodes": ("[IssueRelation!]!", set()), "pageInfo": ("PageInfo!", set())},
+    "PageInfo": {"hasNextPage": ("Boolean!", set()), "hasPreviousPage": ("Boolean!", set())},
+}
+TOKEN = re.compile(r'\s+|,|#[^\n]*|(\.\.\.|[{}():!$=\[\]@]|[_A-Za-z][_0-9A-Za-z]*|-?[0-9]+(?:\.[0-9]+)?|"(?:[^"\\]|\\.)*")')
+
+
+def tokens(doc):
+    out, i = [], 0
+    while i < len(doc):
+        m = TOKEN.match(doc, i)
+        if not m:
+            refuse(f"api: Syntax Error: unexpected character {doc[i]!r}")
+        if m.group(1):
+            out.append(m.group(1))
+        i = m.end()
+    return out
+
+
+def parse(doc, var):
+    """One query document -> its selection: [(alias, name, {arg: value}, sub-selection or None)]."""
+    t = tokens(doc) + ["<end>"]
+    p = 0
+
+    def take(want=None):
+        nonlocal p
+        tok = t[p]
+        if want is not None and tok != want:
+            refuse(f"api: Syntax Error: expected {want!r}, found {tok!r}")
+        p += 1
+        return tok
+
+    def value():
+        tok = take()
+        if tok == "$":
+            n = take()
+            if n not in var:
+                refuse(f'api: Variable "${n}" is not given (--variable {n}=...)')
+            return var[n]
+        if tok.startswith('"'):
+            return json.loads(tok)
+        if re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", tok):
+            return json.loads(tok)
+        if tok in ("true", "false", "null"):
+            return json.loads(tok)
+        refuse(f"api: argument value {tok!r} is not served by the fake (a variable, string, number, boolean or null)")
+
+    def selection():
+        take("{")
+        out = []
+        while t[p] != "}":
+            if t[p] in ("...", "@"):
+                refuse("api: fragments and directives are not served by the fake")
+            alias = name = take()
+            if t[p] == ":":
+                take(); name = take()
+            args = {}
+            if t[p] == "(":
+                take()
+                while t[p] != ")":
+                    a = take(); take(":"); args[a] = value()
+                take()
+            out.append((alias, name, args, selection() if t[p] == "{" else None))
+        take("}")
+        return out
+
+    if t[p] in ("mutation", "subscription", "fragment"):
+        refuse(f"api: a {t[p]} is not served by the fake, only a query")
+    if t[p] == "query":
+        take()
+        if t[p] not in ("(", "{"):
+            take()  # the operation name: any name
+        if t[p] == "(":  # variable definitions: values come from --variable
+            while take() != ")":
+                pass
+    sel = selection()
+    if t[p] != "<end>":
+        refuse("api: one query per document")
+    return sel
+
+
+def validate(typ, sel):
+    """Refuse, before anything runs, a selection Linear's API would reject or the fake does not serve."""
+    for alias, name, args, sub in sel:
+        if name == "__typename":
+            continue
+        if name not in SCHEMA[typ]:
+            refuse(f'api: Cannot query field "{name}" on type "{typ}" (the fake serves {typ}: {" ".join(SCHEMA[typ])})')
+        ftype, known = SCHEMA[typ][name]
+        for a in args:
+            if a not in known:
+                refuse(f'api: argument "{a}" on field "{typ}.{name}" is not served by the fake')
+        base = ftype.strip("[]!")
+        if base in SCALARS and sub is not None:
+            refuse(f'api: Field "{name}" must not have a selection since type "{ftype}" has no subfields')
+        if base not in SCALARS and sub is None:
+            refuse(f'api: Field "{name}" of type "{ftype}" must have a selection of subfields')
+        if sub is not None:
+            validate(base, sub)
+
+
+def resolve(db, typ, obj, sel):
+    out = {}
+    for alias, name, args, sub in sel:
+        if name == "__typename":
+            out[alias] = typ; continue
+        ftype = SCHEMA[typ][name][0]
+        base = ftype.strip("[]!")
+        v = field(db, typ, obj, name, args)
+        if base in SCALARS or v is None:
+            out[alias] = v
+        elif ftype.startswith("["):
+            out[alias] = [resolve(db, base, x, sub) for x in v]
+        else:
+            out[alias] = resolve(db, base, v, sub)
+    return out
+
+
+def field(db, typ, obj, name, args):
+    """The value of typ.name on obj: a scalar, or the object the next resolve reads."""
+    issues = db.get("issues", {})
+    if typ == "Query":
+        k = str(args.get("id", "")).upper()
+        if k not in issues:
+            print(json.dumps({"data": {name: None}, "errors": [{"message": "Entity not found: Issue", "path": [name]}]}))
+            sys.exit(1)
+        return k
+    if typ == "Issue":
+        i = issues[obj]
+        page = lambda items: (items, args.get("first", 50))
+        return {"id": lambda: obj, "identifier": lambda: obj, "number": lambda: int(KEY.match(obj).group(2)),
+                "title": lambda: i["title"], "description": lambda: i.get("description"),
+                "url": lambda: url(db, obj, i["title"]), "state": lambda: i.get("state", "Todo"),
+                "parent": lambda: i.get("parent") or None,
+                "children": lambda: page([c for c, x in issues.items() if x.get("parent") == obj]),
+                "relations": lambda: page([(obj, "blocks", c) for c, x in issues.items() if obj in x.get("blocked_by", [])]),
+                "inverseRelations": lambda: page([(b, "blocks", obj) for b in i.get("blocked_by", [])])}[name]()
+    if typ == "WorkflowState":
+        return state_type(db, obj) if name == "type" else obj
+    if typ == "IssueRelation":
+        return {"id": "-".join(obj), "issue": obj[0], "type": obj[1], "relatedIssue": obj[2]}[name]
+    if typ == "PageInfo":
+        return obj if name == "hasNextPage" else False
+    items, first = obj  # a connection
+    return items[:first] if name == "nodes" else len(items) > first
+
+
+def scalar(v):
+    """A --variable value: boolean, number or null when it looks like one, else the string."""
+    try:
+        return json.loads(v) if v in ("true", "false", "null") or re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", v) else v
+    except ValueError:
+        return v
+
+
 def api(args):
     o, pos = flags(args, {"--variable"})
+    if len(pos) > 1:
+        refuse("api: one DOCUMENT argument, or the document on stdin")
     doc = pos[0] if pos else sys.stdin.read()
-    if len(pos) > 1 or not re.match(r"\s*query\s+IssueView\b", doc):
-        refuse("api: only the `query IssueView` document of issue-view is supported")
-    var = dict(v.split("=", 1) for v in o.get("--variable", []))
-    db = load()
-    k = var.get("id", "").upper()
-    i = db.get("issues", {}).get(k)
-    if i is None:
-        print(json.dumps({"data": {"issue": None}, "errors": [{"message": "Entity not found: Issue", "path": ["issue"]}]}))
-        sys.exit(1)
-    print(json.dumps({"data": {"issue": {
-        "identifier": k, "title": i["title"], "description": i.get("description"), "url": url(db, k, i["title"]),
-        "state": {"type": state_type(db, i.get("state", "Todo"))},
-        "parent": {"identifier": i["parent"]} if i.get("parent") else None,
-        "children": {"nodes": [{"identifier": c} for c, x in db["issues"].items() if x.get("parent") == k],
-                     "pageInfo": {"hasNextPage": False}},
-        "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": b}} for b in i.get("blocked_by", [])]}}}}))
+    var = {k: scalar(v) for k, _, v in (x.partition("=") for x in o.get("--variable", []))}
+    sel = parse(doc, var)
+    validate("Query", sel)
+    print(json.dumps({"data": resolve(load(), "Query", None, sel)}))
 
 
 def create(args):

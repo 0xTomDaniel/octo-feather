@@ -10,7 +10,9 @@
 #   linear: tracker = "linear" makes pi-role pass github-pr and linear to the supervisor, never github-issues, and
 #            linear-cli to no role; each linear script reads and writes through the offline fake linear (linear's
 #            scripts/linear, a JSON store), which refuses any other command; same output shapes as github-issues;
-#            issue-done leaves an issue already done (Canceled) unchanged.
+#            issue-done leaves an issue already done (Canceled) unchanged; the fake's api answers a query under any
+#            operation name or none with only the selected fields (nested, aliased, paged by first) and refuses a
+#            field outside Linear's schema by name, so issue-view's JSON proves what its query selects.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -205,6 +207,32 @@ lin 1 issue-done ENG-99; [[ "$err" == *"not found"* ]] || fail "linear issue-don
 # An issue already done stays as it is: Canceled is done, so issue-done leaves it Canceled.
 lin 0 issue-done ENG-8; [[ -z "$out" && -z "$err" && "$(jq -r '.issues["ENG-8"].state' "$OCTO_FEATHER_LINEAR_STORE")" == Canceled ]] \
   || fail "linear issue-done moved canceled ENG-8: $out $err $(jq -r '.issues["ENG-8"].state' "$OCTO_FEATHER_LINEAR_STORE")"
+# The fake's api answers any query document the way Linear's GraphQL API does: any operation name or none, only the
+# fields selected (nested, aliased, connections paged by first), and a field outside Linear's schema refused by name.
+fapi() { # WANT DOCUMENT [ARGS...]: the fake linear api, stdout and stderr in $out
+  local want="$1" rc; shift
+  set +e; out="$(PATH="$LI:$PATH" linear api --no-input "$@" 2>&1)"; rc=$?; set -e
+  [[ "$rc" == "$want" ]] || fail "fake linear api $*: want exit $want, got $rc: $out"
+}
+for doc in 'query ReadTicket($id: String!) { issue(id: $id) { identifier title } }' 'query($id: String!) { issue(id: $id) { identifier title } }' \
+           '{ issue(id: $id) { identifier title } }'; do
+  fapi 0 --variable id=ENG-3 "$doc"
+  [[ "$(jq -c . <<<"$out")" == '{"data":{"issue":{"identifier":"ENG-3","title":"Parent"}}}' ]] || fail "fake linear api, $doc: $out"
+done
+fapi 0 'query Lean { issue(id: "ENG-9") { identifier } }'
+[[ "$(jq -c . <<<"$out")" == '{"data":{"issue":{"identifier":"ENG-9"}}}' ]] || fail "fake linear api returns only the selected fields: $out"
+fapi 0 '{ issue(id: "ENG-9") { key: identifier state { type name } parent { identifier title }
+  children(first: 1) { nodes { identifier } pageInfo { hasNextPage } } inverseRelations { nodes { type issue { identifier } } } } }'
+[[ "$(jq -c . <<<"$out")" == '{"data":{"issue":{"key":"ENG-9","state":{"type":"unstarted","name":"Todo"},"parent":{"identifier":"ENG-3","title":"Parent"},"children":{"nodes":[],"pageInfo":{"hasNextPage":false}},"inverseRelations":{"nodes":[{"type":"blocks","issue":{"identifier":"ENG-4"}},{"type":"blocks","issue":{"identifier":"ENG-5"}}]}}}}' ]] \
+  || fail "fake linear api, nested and aliased selection: $out"
+fapi 0 '{ issue(id: "ENG-3") { children(first: 1) { nodes { identifier } pageInfo { hasNextPage } } } }'
+[[ "$(jq -c .data.issue.children <<<"$out")" == '{"nodes":[{"identifier":"ENG-7"}],"pageInfo":{"hasNextPage":true}}' ]] || fail "fake linear api pages children by first: $out"
+fapi 2 '{ issue(id: "ENG-3") { identifier bogus } }'
+[[ "$out" == *'linear (offline fake): api: Cannot query field "bogus" on type "Issue"'* ]] || fail "fake linear api, unknown field: $out"
+fapi 2 '{ issue(id: "ENG-3") { state { colour } } }'
+[[ "$out" == *'Cannot query field "colour" on type "WorkflowState"'* ]] || fail "fake linear api, unknown nested field: $out"
+fapi 2 '{ issue(id: "ENG-3") { state } }'
+[[ "$out" == *'Field "state" of type "WorkflowState!" must have a selection of subfields'* ]] || fail "fake linear api, object with no selection: $out"
 # The fake refuses every other command, and works only from its store.
 for c in "issue list" "issue view ENG-7" "issue delete ENG-7" "api query{viewer{id}}" "issue update ENG-7 --label x"; do
   # shellcheck disable=SC2086 # $c is one command line, split into its words
@@ -215,4 +243,4 @@ set +e; out="$(env -u OCTO_FEATHER_LINEAR_STORE PATH="$LI:$PATH" "$LI/issue-view
 [[ "$rc" == 1 && "$out" == *"OCTO_FEATHER_LINEAR_STORE is unset"* ]] || fail "fake linear with no store: rc=$rc $out"
 echo "tracker: ok (no config and github: github-pr + github-issues, no linear; jira refused by pi-role and octo-feather-start, nothing started;" \
   "check-skills names each missing tracker script in github-issues and linear; github-issues scripts under the offline gh and a recording gh;" \
-  "linear: supervisor gets github-pr + linear, no role gets linear-cli; linear scripts read and write through the offline fake linear)"
+  "linear: supervisor gets github-pr + linear, no role gets linear-cli; linear scripts read and write through the offline fake linear, whose api honours any query's selection)"
