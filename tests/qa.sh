@@ -56,8 +56,11 @@ if "STUB-ATTEMPTS" in prompt:   # really run each command in the sandbox, as pi'
         out({"type": "tool_execution_end", "toolCallId": f"a{k}", "toolName": "bash", "isError": p.returncode != 0,
              "result": {"content": [{"type": "text", "text": o + (f"\n\nCommand exited with code {p.returncode}" if p.returncode else "")}],
                         "structuredContent": {"output": o, "exit_code": p.returncode}}})
+blk = lambda v: '```json\n{"rung": "%s", "note": "x"}\n```' % v
+say = {"STUB-DECL-OK": "Picked a check.\n\n" + blk("check"), "STUB-DECL-OUT": blk("vibes"), "STUB-DECL-NONE": "rung: check",
+       "STUB-DECL-TWO": blk("check") + "\nor\n" + blk("instruction")}
 out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                       "content": [{"type": "text", "text": "done"}]}})
+                                       "content": [{"type": "text", "text": next((v for k, v in say.items() if k in prompt), "done")}]}})
 EOF
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
@@ -202,6 +205,23 @@ grep -E '^FAIL iso/nocred: ' <<< "$out" | grep -q "attempt_blocked credential: n
 d="$(ls -dt "$t"/out/*/ | head -1)"
 ! grep -rq 'LIVE\|ARCHIVED\|SECRET' "$d"/iso/*/transcript.jsonl || fail "live lane state or a credential reached a case"
 
+# declared: the final message's one ```json block names a label from the list. Read only once pi exits on its own:
+# `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.
+mkdir -p "$t/dec/dec/reference" "$t/dec/fixtures"; cp -r "$t/good/fixtures/fx" "$t/dec/fixtures/"
+echo '{"suite": "dec", "kind": "role-transcript", "description": "stub declared", "max_tool_calls": 10, "timeout_s": 8}' > "$t/dec/dec/suite.json"
+echo "[$(ic ok "Pick. STUB-READ-TDD STUB-DECL-OK"), $(ic out "Pick. STUB-DECL-OUT"), $(ic none "Pick. STUB-DECL-NONE"),
+ $(ic two "Pick. STUB-DECL-TWO"), $(ic early "Pick. STUB-LINGER STUB-DECL-OK")]" > "$t/dec/dec/cases.json"
+d1='{"fact": "declared", "field": "rung", "in": ["check", "instruction"]}'
+echo "{\"ok\": {\"facts\": [{\"fact\": \"skill_read\", \"skill\": \"tdd\"}, $d1]}, \"out\": {\"facts\": [$d1]}, \"none\": {\"facts\": [$d1]},
+  \"two\": {\"facts\": [$d1]}, \"early\": {\"facts\": [$d1]}}" > "$t/dec/dec/reference/expectations.json"
+run 1 "$Q" --evals "$t/dec"
+dl() { grep -E "^$1 dec/$2: " <<< "$out" | grep -qF "$3" || fail "declared $2: want $1 with '$3': $out"; }
+dl PASS ok 'declared rung: "check", one of ["check", "instruction"]'
+dl FAIL out 'declared rung: "vibes" is not one of ["check", "instruction"]'
+dl FAIL none 'declared rung: final message holds 0 ```json blocks, want exactly 1'
+dl FAIL two 'declared rung: final message holds 2 ```json blocks, want exactly 1'
+dl FAIL early 'declared rung: run stopped (timeout) before its final message'
+
 # Shape check: each defect names the case and the field; the evals refuse a malformed suite (exit 2).
 bad() {   # bad PY_EDIT WANT: apply a python edit to a fresh copy's cases (c) and expectations (e), expect WANT
   rm -rf "$t/evals"; cp -r "$t/good" "$t/evals"
@@ -225,7 +245,9 @@ bad 'c[0]["task"] += " Read .agents/skills/tdd/SKILL.md first."' "case reads: fi
 bad 'c[2]["task"] += " Graded on " + json.dumps(e["quiet"]["facts"][0])' "case quiet: field task: shows the agent its grade (expectation JSON"
 bad 'c[0]["should_trigger"] = False' "case reads: field should_trigger: false, but no skill_not_read fact"
 bad 'e["reads"]["facts"].append({"fact": "attempt_blocked", "kind": "vibes"})' "case reads fact #2: field kind: must be one of ['credential', 'herdr', 'lane_state'], got 'vibes'"
+bad 'e["reads"]["facts"].append({"fact": "declared", "field": "", "in": []})' "case reads fact #2: field field: must be a non-empty string"
+bad 'e["reads"]["facts"].append({"fact": "declared", "field": "rung", "in": [1]})' "case reads fact #2: field in: must be a non-empty list of strings"
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, no lane history bound, shape check names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, shape check names case and field)"

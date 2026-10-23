@@ -19,6 +19,16 @@ kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts: ch
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
+A `declared` fact reads the run's final assistant message (message_end events): it stays open until pi
+exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
+
+Case format rule (check-evals --help): graders read STRUCTURED facts, never prose. A verdict a case
+needs is emitted by the producer as data (a machine-readable block list by test or file id; the
+`declared` fact reads one) and graded as a field. Grading meaning by regex over prose is the defect
+class regex-judging-meaning (#107's grade-review.py inferred "blocks" from report headings and
+test-name spelling). A fuzzy question would get a judgment fact, run separately through Pi codemode
+models.classify with one closed question, labelled a judgment in the result and never gating until
+calibrated against owner labels; none is built: every case grades structured producer facts.
 
 Prints one PASS or FAIL line per case with the facts that decided it, then a summary line with the
 artifacts dir: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa, then <run-id>/<suite>/<case>/
@@ -169,8 +179,45 @@ def test_write(call):
     return bool(re.search(r"(^|[\s/'\"])tests?/", c)) and bool(re.search(r">|\btee\b|sed -i|cat <<", c))
 
 
-def judge(fact, calls, final, runs=()):
+JSON_FENCE = re.compile(r"^[ \t]*```[ \t]*json[ \t]*$", re.M | re.I)
+FENCE_END = re.compile(r"^[ \t]*```[ \t]*$", re.M)
+
+
+def judge_declared(fact, final, last):
+    """The final message's one ```json block, an object whose top-level FIELD is one of the labels.
+    last: (stop, text): the watcher's stop reason and the last assistant message's text (None: no message)."""
+    f, labels = fact["field"], fact["in"]
+    head = f"declared {f}"
+    if not final:
+        return "open", f"{head}: read from the final message only"
+    stop, text = last or (None, None)
+    if stop not in (None, "exit"):
+        return "fail", f"{head}: run stopped ({stop}) before its final message"
+    if text is None:
+        return "fail", f"{head}: no final assistant message"
+    opens = list(JSON_FENCE.finditer(text))
+    if len(opens) != 1:
+        return "fail", f"{head}: final message holds {len(opens)} ```json blocks, want exactly 1"
+    end = FENCE_END.search(text, opens[0].end())
+    if end is None:
+        return "fail", f"{head}: the ```json block is never closed"
+    try:
+        obj = json.loads(text[opens[0].end():end.start()])
+    except ValueError as e:
+        return "fail", f"{head}: invalid JSON in the ```json block ({e})"
+    if not isinstance(obj, dict):
+        return "fail", f"{head}: the ```json block is not an object"
+    if f not in obj:
+        return "fail", f"{head}: no top-level {f!r} in the ```json block"
+    if not isinstance(obj[f], str) or obj[f] not in labels:
+        return "fail", f"{head}: {json.dumps(obj[f])[:80]} is not one of {json.dumps(labels)}"
+    return "pass", f"{head}: {json.dumps(obj[f])}, one of {json.dumps(labels)}"
+
+
+def judge(fact, calls, final, runs=(), last=None):
     """(status, text): status pass, fail, or open (undecided so far; only when not final)."""
+    if fact["fact"] == "declared":
+        return judge_declared(fact, final, last)
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], list(runs), final, fact.get("live", ()))
     t, s, n = fact["fact"], fact["skill"], len(calls)
@@ -364,7 +411,10 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
             and e["message"].get("role") == "assistant"]
     used = next((f"{m.get('provider')}/{m.get('model')}" for m in asst if m.get("model")), role_model)
     runs = tool_runs(lines)
-    graded = [dict({k: v for k, v in f.items() if k != "live"}, status=s, evidence=txt) for f in facts for s, txt in [judge(f, calls, True, runs)]]
+    last = ((w or {}).get("stop"), "".join(str(c.get("text", "")) for c in asst[-1].get("content", [])
+                                            if isinstance(c, dict) and c.get("type") == "text") if asst else None)
+    graded = [dict({k: v for k, v in f.items() if k != "live"}, status=s, evidence=txt) for f in facts
+              for s, txt in [judge(f, calls, True, runs, last)]]
     problems = []
     if w is None:
         problems.append(f"run: no stop record (exit {run.returncode})")

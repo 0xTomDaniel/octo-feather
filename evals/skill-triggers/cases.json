@@ -22,5 +22,37 @@
     "should_trigger": true,
     "split": "train",
     "task": "I am about to drop the `.strip()` in `greet` (src/app/core.py) so names keep their surrounding whitespace. Before I ship that: what else in this repo could it break, beyond that one line, and how sure are you? Do not change any file; answer in a few lines."
+  },
+  {
+    "id": "corrector-eval-cases-should",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner correction, second time this week: implementers in this repo keep testing `app hello` without its `--json` output. Your fix: a repo skill at .agents/skills/json-output/SKILL.md telling an implementer to cover both outputs, declared in AGENTS.md under Repo skills. Write it, and ship with it what will show, run after run, that an implementer really picks it up when a task needs it. Commit when done."
+  },
+  {
+    "id": "corrector-eval-cases-should-heldout",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The python skill this repo declares never gets read by implementers here, the owner says. Put a repo-local copy at .agents/skills/python/SKILL.md whose description fires on Python edits, and include the proof that it now fires on such tasks while staying quiet on, say, a README typo fix."
+  },
+  {
+    "id": "corrector-eval-cases-near-pytest",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Add a pytest case to tests/test_cli.py asserting `app hello Ada --json` prints valid JSON holding the greeting, run `uv run pytest -q`, and commit when green."
+  },
+  {
+    "id": "corrector-eval-cases-near-field-or-text",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Change nothing. Go through tests/test_cli.py: which tests assert on fields of the CLI's JSON and which match its printed text? One line per test: its name, then `field` or `text`."
   }
 ]
