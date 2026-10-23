@@ -56,7 +56,7 @@ result.json, and <run-id>/summary.json.
   --sample N                of the selected cases run only N, stratified by should_trigger and split
                             (a seeded shuffle per stratum, taken in turn; the same N picks the same
                             cases), printed before the run
-  --model MODEL             pi --model override (default: the role's frontmatter model; a bench's relay pi: Pi's default)
+  --model MODEL             pi --model override (default: the role's frontmatter model; a bench runs no chat model)
   --classifier P/ID         a judgment bench benches only this classifier (repeatable; default every available one)
   --evals DIR               eval suites dir (default: the kit's evals/)
   --kit-ref COMMIT          run the cases against the kit at COMMIT: its role files, skills (its committed
@@ -67,20 +67,23 @@ result.json, and <run-id>/summary.json.
                             fails that case naming the file. Every input.json, result.json and result line
                             records the kit's full sha (without --kit-ref: the kit's HEAD).
 A judgment suite (kind judgment, spec judgment#acceptance; shape: check-evals --help) is a bench, not facts: its
-selected cases run as one headless relay pi in the same sandbox (`pi --no-session --no-skills --no-mcp --tools
-read,codemode -p`), told to run one fixed codemode script unchanged (a call whose input differs counts for nothing).
-The script lists models.getAvailableOfType("classifier") and has each (or each --classifier) answer the closed
-question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once;
-classify never throws, so stopReason and errorMessage are kept. Its JSON output is graded here against
+selected cases run in the same sandbox as one Pi extension command, no agent: `pi --no-session --no-skills --no-mcp
+--no-extensions --no-tools -e <bench extension> -p "/octo-feather-bench <input>"` runs the command and exits, no
+chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
+ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) answer the closed question
+(a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once. The state
+goes as the case's state string, the one shape every classifier takes (some accept no other object than their
+own). classify never throws, so stopReason and errorMessage are kept. Its JSON output line is graded here against
 reference/expectations.json, never shown to it. Prints the classifiers available, then a TRAIN and a HELD-OUT table
 per answering model (answered, correct, accuracy, Brier, ECE over top-probability buckets, cost from result.usage,
 errors), each listed model that answered nothing as unavailable with its error, the chosen model and a proposed
-threshold (both from train only: best train accuracy over all train cases, ties lower Brier, cost, name; held-out
+threshold (both from train only: best train accuracy over all train cases, ties lower train Brier, lower train
+cost, name; held-out
 accuracy >= the Wilson 95% lower bound of train accuracy, held-out Brier <= train Brier mean + 1.96 standard
 errors), whether held-out meets it, and the chosen model's confidence buckets. Every answer is labelled a model
-judgment; no gate reads it. Artifacts <run-id>/<suite>/: input.json (what the classifiers see), script.js,
-prompt.md, transcript.jsonl, stderr.txt, sandbox.json, answers.json, bench.json, report.txt; summary.json `benches`.
-A bench FAILS when its sandbox or relay fails or no classifier answers every train case.
+judgment; no gate reads it. Artifacts <run-id>/<suite>/: input.json (what the classifiers see), extension.js,
+stdout.txt, stderr.txt, sandbox.json, answers.json, bench.json, report.txt; summary.json `benches`.
+A bench FAILS when its sandbox or command fails or no classifier answers every train case.
 Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -677,56 +680,64 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
 # ---- a judgment bench -----------------------------------------------------------------------
 
 BENCH_INPUT = "bench-input.json"
-BENCH_PROMPT = "Call the codemode tool once with exactly this script as its input, unchanged, then reply done.\n\n"
+BENCH_EXT = "bench-extension.js"
+BENCH_COMMAND = "octo-feather-bench"
 BUCKETS = (0.0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)   # top-probability buckets for ECE and the confidence table
 Z = 1.96   # the threshold's 95% bounds
 JUDGMENT = "model judgment (classifier output, advisory: no gate reads it)"
-# The one script the relay pi must run unchanged: every available classifier (or the --classifier ones) answers the
-# closed question for every case; rows [model, case, choice, probabilities in label order, cost, error index].
-BENCH_SCRIPT = """// @options: {"max_output_tokens": 1000000, "timeout_ms": %(ms)d}
-const inp = JSON.parse(await tools.read({path: %(path)s}));
-const all = await models.getAvailableOfType("classifier");
-const name = (m) => m.provider + "/" + m.id;
-const ms = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
-const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
-const errors = [];
-const err = (e) => { const s = String(e).slice(0, 400); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
-const r4 = (x) => (typeof x === "number" ? Math.round(x * 1e4) / 1e4 : null);
-const jobs = [];
-ms.forEach((m, mi) => inp.cases.forEach((c, ci) => jobs.push([mi, ci])));
-const rows = await Promise.all(jobs.map(async ([mi, ci]) => {
-  let r;
-  try { r = await models.classify(ms[mi], {state: {text: inp.cases[ci].state}, questions: {q}}); }
-  catch (e) { return [mi, ci, null, null, null, err(e)]; }
-  const a = r.answers ? r.answers.q : undefined;
-  const cost = r.usage && r.usage.cost && typeof r.usage.cost.total === "number" ? r.usage.cost.total : null;
-  if (r.stopReason !== "stop" || !a) return [mi, ci, null, null, cost, err(r.errorMessage || r.stopReason)];
-  return [mi, ci, a.choice, inp.labels.map((l) => r4((a.probabilities || {})[l])), cost, null];
-}));
-text(JSON.stringify({bench: {available: all.map(name), benched: ms.map(name), errors, rows}}));
+# The bench as a Pi extension command, run by `pi -e <this> -p "/octo-feather-bench <input path>"`: no agent, no chat
+# model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
+# 4 calls at once; the state is the case's state string. One stdout line {"bench": {available, benched, errors,
+# rows}}, rows [model, case, choice, probabilities in label order, cost, error index].
+BENCH_SOURCE = """import { readFileSync, writeSync } from "node:fs";
+export default function (pi) {
+  pi.registerCommand("%(command)s", {
+    description: "octo-feather-qa judgment bench: every classifier answers the closed question for each case",
+    handler: async (args, ctx) => {
+      const inp = JSON.parse(readFileSync(args.trim(), "utf8"));
+      const reg = ctx.modelRegistry;
+      const all = await reg.getAvailableOfType("classifier");
+      const name = (m) => m.provider + "/" + m.id;
+      const ms = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+      const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
+      const errors = [];
+      const err = (e) => { const s = String(e).slice(0, 400); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+      const r4 = (x) => (typeof x === "number" ? Math.round(x * 1e4) / 1e4 : null);
+      const one = async (mi, ci) => {
+        let r;
+        try { r = await reg.classify(ms[mi], {state: inp.cases[ci].state, questions: {q}}); }
+        catch (e) { return [mi, ci, null, null, null, err(e)]; }
+        const a = r && r.answers ? r.answers.q : undefined;
+        const cost = r && r.usage && r.usage.cost && typeof r.usage.cost.total === "number" ? r.usage.cost.total : null;
+        if (!r || r.stopReason !== "stop" || !a) return [mi, ci, null, null, cost, err((r && (r.errorMessage || r.stopReason)) || "no result")];
+        return [mi, ci, a.choice, inp.labels.map((l) => r4((a.probabilities || {})[l])), cost, null];
+      };
+      const jobs = [];
+      ms.forEach((m, mi) => inp.cases.forEach((c, ci) => jobs.push([mi, ci])));
+      const rows = new Array(jobs.length);
+      let next = 0;
+      const lane = async () => { while (next < jobs.length) { const k = next++; rows[k] = await one(...jobs[k]); } };
+      await Promise.all([lane(), lane(), lane(), lane()]);
+      // Pi keeps stdout for itself in print mode (an extension's process.stdout goes to stderr): write fd 1 directly.
+      const buf = Buffer.from(JSON.stringify({bench: {available: all.map(name), benched: ms.map(name), errors, rows}}) + "\\n");
+      const nap = new Int32Array(new SharedArrayBuffer(4));
+      for (let off = 0; off < buf.length;) {
+        try { off += writeSync(1, buf, off); }
+        catch (e) { if (e.code !== "EAGAIN") throw e; Atomics.wait(nap, 0, 0, 10); }
+      }
+    },
+  });
+}
 """
 
 
-def bench_output(lines, script):
-    """(bench, problem): the script's {"bench": ...} output from the relay's top-level codemode call whose input is the
-    script exactly; problem names why there is none (never called, changed, failed, no such output)."""
-    events = [e for e in (safe_json(l) for l in lines) if isinstance(e, dict)]
-    starts = [e for e in events if e.get("type") == "tool_execution_start" and e.get("toolName") == "codemode"
-              and not e.get("parentToolCallId")]
-    if not starts:
-        return None, "the relay pi never called codemode"
-    run = next((e for e in starts if isinstance(e.get("args"), dict) and e["args"].get("code") == script), None)
-    if run is None:
-        return None, f"the relay pi called codemode {len(starts)} time(s), never with the bench script unchanged"
-    end = next((e for e in events if e.get("type") == "tool_execution_end" and e.get("toolCallId") == run.get("toolCallId")), None)
-    if end is None:
-        return None, "the bench script never ended (timeout?)"
-    texts = [str(c.get("text", "")) for c in (end.get("result") or {}).get("content", []) if isinstance(c, dict) and c.get("type") == "text"]
-    for t in texts:
+def bench_output(stdout):
+    """(bench, problem): the command's one {"bench": ...} stdout line; problem names why there is none."""
+    for t in stdout.splitlines():
         o = safe_json(t)
         if isinstance(o, dict) and isinstance(o.get("bench"), dict):
             return o["bench"], None
-    return None, "the bench script printed no bench result: " + " ".join(texts)[:300].replace("\n", " ")
+    return None, "the bench command printed no bench result: " + stdout[-300:].replace("\n", " ")
 
 
 def calibration(answered, labels):
@@ -781,11 +792,12 @@ def bench_metrics(bench, cases, labels):
         errs = [r["error"] or f"answer {r['choice']!r} not a label" for r in rows if r["choice"] not in labels]
         costs = [r["cost"] for r in rows if r["cost"] is not None]
         models.append({"model": m, "train": sp["train"], "held-out": sp["held-out"], "cost_usd": sum(costs),
+                       "train_cost_usd": sum(r["cost"] for r in rows if r["cost"] is not None and r["split"] == "train"),
                        "cost_unreported": len(rows) - len(costs), "errors": len(errs), "first_error": errs[0] if errs else None,
                        "available": any(r["choice"] in labels for r in rows)})
     n_train = sum(c["split"] == "train" for c, _ in cases)
     eligible = [m for m in models if n_train and m["train"]["answered"] == n_train]
-    eligible.sort(key=lambda m: (-m["train"]["accuracy"], m["train"]["brier"], m["cost_usd"], m["model"]))
+    eligible.sort(key=lambda m: (-m["train"]["accuracy"], m["train"]["brier"], m["train_cost_usd"], m["model"]))
     choice = None
     if eligible:
         c = eligible[0]; t = c["train"]["_terms"]; n = len(t); mean = sum(t) / n
@@ -795,7 +807,7 @@ def bench_metrics(bench, cases, labels):
         meets = (h["answered"] == h["cases"] and h["answered"] > 0 and h["accuracy"] >= thr["accuracy_min"]
                  and h["brier"] <= thr["brier_max"])
         choice = {"model": c["model"], "rule": "highest train accuracy over every train case answered; ties: lower train "
-                  "Brier, lower cost, name", "threshold": thr, "threshold_rule": f"from train only: accuracy_min the Wilson "
+                  "Brier, lower train cost, name", "threshold": thr, "threshold_rule": f"from train only: accuracy_min the Wilson "
                   f"{Z} lower bound of train accuracy, brier_max train Brier mean + {Z} standard errors", "held_out_meets": meets}
     for m in models:
         for s in ("train", "held-out"):
@@ -848,9 +860,9 @@ def bench_report(suite, q, cases, bench, models, choice, requested):
     return out
 
 
-def run_bench(qc, d, suite, picked, requested, model, runid, out):
-    """One judgment suite's bench: a relay pi in the qa sandbox runs BENCH_SCRIPT through codemode, every available
-    classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
+def run_bench(qc, d, suite, picked, requested, runid, out):
+    """One judgment suite's bench: pi in the qa sandbox runs the BENCH_SOURCE extension's command (no agent), every
+    available classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
     out.mkdir(parents=True, exist_ok=True)
     q = json.loads((d / "question.json").read_text())
     tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
@@ -861,17 +873,17 @@ def run_bench(qc, d, suite, picked, requested, model, runid, out):
         inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
                "cases": [{"id": c["id"], "state": c["state"]} for c, _ in picked], "classifiers": requested or None}
         (scratch / BENCH_INPUT).write_text(json.dumps(inp, indent=1) + "\n")
+        ext = BENCH_SOURCE % {"command": BENCH_COMMAND}
+        (scratch / BENCH_EXT).write_text(ext)
         g = ["git", "-C", str(scratch), "-c", "user.name=octo-feather-qa", "-c", "user.email=qa@octo-feather.invalid",
              "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"]
         for a in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "bench input"]):
             subprocess.run([*g, *a], check=True, capture_output=True)
-        script = BENCH_SCRIPT % {"ms": max(tmo - 30, 60) * 1000, "path": json.dumps(str(scratch / BENCH_INPUT))}
-        prompt = BENCH_PROMPT + script
         (out / "input.json").write_text(json.dumps(inp, indent=2) + "\n")
-        (out / "script.js").write_text(script)
-        (out / "prompt.md").write_text(prompt + "\n")
+        (out / "extension.js").write_text(ext)
         cmd = ["timeout", "-k", "10", str(tmo), "pi", "--no-session", "--no-skills", "--no-mcp", "--no-context-files",
-               "--no-prompt-templates", "--tools", "read,codemode", *(["--model", model] if model else []), "--mode", "json", "-p", prompt]
+               "--no-prompt-templates", "--no-extensions", "--no-tools", "-e", str(scratch / BENCH_EXT),
+               "-p", f"/{BENCH_COMMAND} {scratch / BENCH_INPUT}"]
         here = os.getcwd(); os.chdir(scratch)
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-bench", {"off": GH_OFF}, history=False)
@@ -886,9 +898,9 @@ def run_bench(qc, d, suite, picked, requested, model, runid, out):
     if run is None:
         bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
         return bench_end(out, res, f"sandbox: proof failed, bench not run: {'; '.join(bad)}")
-    (out / "transcript.jsonl").write_text(run.stdout)
+    (out / "stdout.txt").write_text(run.stdout)
     (out / "stderr.txt").write_text(run.stderr)
-    bench, problem = bench_output(run.stdout.splitlines(), script)
+    bench, problem = bench_output(run.stdout)
     if problem:
         return bench_end(out, res, f"{problem} (pi exit {run.returncode})")
     models, choice, answers = bench_metrics(bench, picked, q["labels"])
@@ -896,7 +908,8 @@ def run_bench(qc, d, suite, picked, requested, model, runid, out):
     lines = bench_report(suite, q, picked, bench, models, choice, requested)
     (out / "report.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines), flush=True)
-    res.update(available=bench.get("available"), benched=bench.get("benched"), models=models, choice=choice)
+    res.update(available=bench.get("available"), benched=bench.get("benched"), models=models, choice=choice,
+               cost_usd=sum(m["cost_usd"] for m in models))
     return bench_end(out, res, None if choice else "no classifier answered every train case")
 
 
@@ -1024,7 +1037,7 @@ def run_all(o, evals, picked, kit, sha):
     benches = []
     for name in dict.fromkeys(s["suite"] for s, _, _ in picked if s["kind"] == "judgment"):
         s = next(s for s, _, _ in picked if s["suite"] == name)
-        benches.append(run_bench(qc, evals / name, s, [(c, e) for x, c, e in picked if x is s], o["classifier"], o["model"],
+        benches.append(run_bench(qc, evals / name, s, [(c, e) for x, c, e in picked if x is s], o["classifier"],
                                  runid.split("-")[-1], run_dir / name))
     passed = sum(r["verdict"] == "PASS" for r in results)
     sc = scores(results)
