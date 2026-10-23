@@ -107,7 +107,7 @@
   "cor-github-near-classes": {"facts": [{"fact": "skill_not_read", "skill": "github-pr"}]},
   "cor-github-near-call-line": {"facts": [{"fact": "skill_not_read", "skill": "github-pr"}]},
   "cor-ghpr-review-comments": {"facts": [{"fact": "skill_read", "skill": "github-pr"}]},
-  "cor-ghpr-open-fix-pr": {"facts": [{"fact": "skill_read", "skill": "github-pr"}]},
+  "cor-ghpr-verdict-checks": {"facts": [{"fact": "skill_read", "skill": "github-pr"}]},
   "corrector-eval-cases-should": {"facts": [{"fact": "skill_read", "skill": "eval-cases"}]},
   "corrector-eval-cases-should-heldout": {"facts": [{"fact": "skill_read", "skill": "eval-cases"}]},
   "corrector-eval-cases-near-pytest": {"facts": [{"fact": "skill_not_read", "skill": "eval-cases"}]},

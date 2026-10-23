@@ -864,12 +864,12 @@
     "task": "The repeated finding came from review on PR #31. Pull that PR's review comments from GitHub and quote the ones tagged cli-holds-logic."
   },
   {
-    "id": "cor-ghpr-open-fix-pr",
+    "id": "cor-ghpr-verdict-checks",
     "role": "corrector",
     "fixture": "lane-mini",
     "should_trigger": true,
     "split": "held-out",
-    "task": "Your correction is committed on this branch. Publish it: push the branch and open a draft pull request against main, then report its URL."
+    "task": "Before you pick a rung: the cli-holds-logic findings came from review of lane gh12's PR #31. On GitHub, read that PR's review verdict comment and its CI checks, and tell me whether the finding still blocks it."
   },
   {
     "id": "corrector-eval-cases-should",
