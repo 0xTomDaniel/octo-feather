@@ -1,7 +1,7 @@
 # gh122 (ticket #129): ladder suite, corrector rung choice
 
 Smoke: evals/ladder/ (suite ladder, cases corrector-fuzzy-lesson, corrector-fact-lesson; role agents/corrector.md unchanged)
-Removed: docs/owed-evals/118.md entry "Corrector, rung choice (issue #118 outcome 3)", converted to evals/ladder/ (fixture python-app instead of py-mini: the corrector's brief needs the `just check` gate, and python-app holds an executable `.githooks/pre-commit` for the fact lesson; same fixture as the evidence/2026-10-23-gh118-ladder-smoke.md run).
+Removed: nothing from the owed list: the rung-choice entry in docs/owed-evals/118.md stays, reworded to point at evals/ladder/ and still owe a separating case, since both cases pass at head and at 61b9f22 (below). Fixture python-app instead of py-mini: the corrector's brief needs the `just check` gate, and python-app holds an executable `.githooks/pre-commit` for the fact lesson; same fixture as the evidence/2026-10-23-gh118-ladder-smoke.md run.
 
 Suite: `role-transcript`, max_tool_calls 200, timeout_s 2700. Each case graded only on `{"fact": "declared", "field": "rung"}`: fuzzy `in` structure, structured-judgment, prose; fact `in` structure, exact-check. Both cases written and committed (a41fc21) before any run; neither reworded after.
 
@@ -32,3 +32,7 @@ PASS ladder/corrector-fact-lesson: declared rung: "exact-check", one of ["struct
 qa: 1/1 passed (run 20261023T222525Z-24c17d)
 
 Held-out score: head 1/1, 61b9f22 1/1 (does not separate either; it guards against always answering a rung above exact-check).
+
+## corrector-coupling-lesson (written, not run here)
+
+Added after the two cases above did not separate: the check-test-surface incident (docs/adr/0008 Rejected), two `internal-test-surface` findings plus a reviewer's suggested import/private-name ban; expects `rung` in structure, structured-judgment, prose. Written and committed before any run; the lane supervisor runs it (lane Pi quota). No result yet.
