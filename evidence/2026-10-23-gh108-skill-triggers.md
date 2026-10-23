@@ -64,4 +64,6 @@ Every failing case (13). Each is a finding about the skill's description or the 
 
 Patterns: `commit` and `github` are under-triggered across roles (agents run git and gh by hand; the descriptions read as workflow policy, not "use before any git commit / gh call"), and `commit`'s description over-triggers on drafting a message. The implementer does not load `implement` or `principle-prove-it-works` on its own, despite its body naming them; `tdd` loads only when the task names test-first. Should-not cases otherwise held: 53 of 54 near misses passed.
 
+After these runs, merging gh108 (698e152) brought #114's case `blast-radius-keep-whitespace` (implementer, blast-radius, should_trigger true, train) into the suite, now 109 cases; it was not in either run here.
+
 Not shown: stability across trials (one trial per case), and the supervisor's externalSkills (skipped above).

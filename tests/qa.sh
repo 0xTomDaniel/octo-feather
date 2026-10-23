@@ -2,9 +2,10 @@
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr.
 # Proves: one PASS/FAIL line per case naming the deciding transcript facts, exit 1 on any failure and 0
-# when all pass, train and held-out score lines, --sample stratified and deterministic, --suite/--case selection, per-run artifacts outside the repo, the run stops once its
-# facts are decided, a pi that dies without an answer fails its case, each case runs in the qc sandbox
-# and a failed sandbox proof is a FAIL, refusal inside a check run, and the shape check naming case and field.
+# when all pass, train and held-out score lines, --sample stratified and deterministic, role-skill coverage,
+# --suite/--case selection, per-run artifacts outside the repo, the run stops once its facts are decided, a pi
+# that dies without an answer fails its case, each case runs in the qc sandbox and a failed sandbox proof is a FAIL,
+# refusal inside a check run, and the shape check naming case and field.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 set -euo pipefail
 # A test harness, not a gate recipe reaching the evals: its stub-pi runs start outside any check run (the one
@@ -26,7 +27,7 @@ cat > "$t/bin/pi" <<'EOF'
 import json, sys, time
 a = sys.argv[1:]
 prompt = a[a.index("-p") + 1]
-tdd = next(x for x in a if x.endswith("/tdd")) + "/SKILL.md"
+tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)   # None: the role does not list tdd
 out = lambda e: print(json.dumps(e), flush=True)
 out({"type": "stub_argv", "argv": a})
 out({"type": "session", "version": 3, "id": "stub", "cwd": "."})
@@ -38,7 +39,7 @@ def tool(i, name, args):   # as pi: the assistant message holding the call ends,
                                            "content": [{"type": "toolCall", "id": i, "name": name, "arguments": args}]}})
     out({"type": "tool_execution_start", "toolCallId": i, "toolName": name, "args": args})
 tool("c1", "bash", {"command": "ls"})
-if "STUB-READ-TDD" in prompt:
+if "STUB-READ-TDD" in prompt and tdd:
     tool("c2", "read", {"path": tdd})
 if "STUB-LINGER" in prompt:
     time.sleep(120)
@@ -157,6 +158,38 @@ line FAIL reads | grep -q "sandbox: proof failed, case not run: .*FAIL live Herd
 OCTO_FEATHER_CHECK_RUN='{"just":1}' run 70 "$Q" --evals "$t/evals"
 ! grep -q "qa: run " <<< "$out" || fail "a case started inside a check run: $out"
 
+# --kit-ref: the same case against an earlier kit commit. A throwaway kit repo (this kit's tree) whose history
+# is c0 no implementer role, c1 the implementer not listing tdd, c2 the head; cases and grader stay the head's.
+gk() { git -C "$t/kit" -c user.name=t -c user.email=t@t.invalid -c commit.gpgsign=false -c core.hooksPath=/dev/null "$@"; }
+mkdir "$t/kit"; tar -C "$kit" --exclude=./.git -cf - . | tar -C "$t/kit" -xf -
+im="$t/kit/agents/implementer.md"; cp "$im" "$t/im.md"
+gk init -q -b main; rm "$im"; gk add -A; gk commit -qm c0; c0="$(gk rev-parse HEAD)"
+sed 's/^skills:\(.*\), tdd,/skills:\1,/' "$t/im.md" > "$im"; grep -q '^skills:' "$im" && ! grep -q '^skills:.*tdd' "$im" || fail "c1 still lists tdd"
+gk add -A; gk commit -qm c1; c1="$(gk rev-parse HEAD)"
+cp "$t/im.md" "$im"; gk commit -qam c2; c2="$(gk rev-parse HEAD)"
+K="$t/kit/scripts/octo-feather-qa"
+run 1 "$K" --evals "$t/evals" --case reads --kit-ref "${c1:0:9}"
+line FAIL reads | grep -q "skill_read tdd: no read of tdd/SKILL.md.*\[kit $c1\]" || fail "kit-ref before the change: want FAIL with its sha: $out"
+grep -q "ok   extra binds read-only" <<< "$out" || fail "the earlier kit is not bound read-only in the sandbox: $out"
+d="$(ls -dt "$t"/out/*/ | head -1)"
+python3 - "$d/trig/reads" "$c1" <<'EOF' || fail "kit-ref artifacts wrong"
+import json, sys
+c, sha = sys.argv[1:]
+argv = json.loads(open(f"{c}/transcript.jsonl").readline())["argv"]
+sk = [argv[i + 1] for i, a in enumerate(argv) if a == "--skill"]
+assert sk and all("/qa-kit-" in s for s in sk), sk   # the earlier kit's own skills, not the head's
+assert json.load(open(f"{c}/input.json"))["kit_sha"] == sha and json.load(open(f"{c}/result.json"))["kit_sha"] == sha
+EOF
+! ls -d "$TMPDIR"/qa-kit-* 2>/dev/null || fail "the earlier kit's scratch copy outlived the run"
+run 0 "$K" --evals "$t/evals" --case reads --kit-ref "$c2"
+line PASS reads | grep -q "\[kit $c2\]" || fail "kit-ref at the change: want PASS with its sha: $out"
+run 0 "$K" --evals "$t/evals" --case reads
+line PASS reads | grep -q "\[kit $c2\]" || fail "head run does not record the kit's HEAD sha: $out"
+run 1 "$K" --evals "$t/evals" --case reads --kit-ref "$c0"
+line FAIL reads | grep -q "kit $c0: no agents/implementer.md at that commit" || fail "missing role file not named: $out"
+run 64 "$K" --evals "$t/evals" --case reads --kit-ref no-such-ref
+grep -q "kit-ref no-such-ref: no such commit" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "unknown ref not refused by name: $out"
+
 # Shape check: each defect names the case and the field; the evals refuse a malformed suite (exit 2).
 bad() {   # bad PY_EDIT WANT: apply a python edit to a fresh copy's cases (c) and expectations (e), expect WANT
   rm -rf "$t/evals"; cp -r "$t/good" "$t/evals"
@@ -182,4 +215,4 @@ bad 'c[0]["should_trigger"] = False' "case reads: field should_trigger: false, b
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, shape check names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, shape check names case and field)"

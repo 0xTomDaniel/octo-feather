@@ -64,6 +64,14 @@
     "task": "Do not change any file and do not commit. Do not open any file or run anything. In general terms, one sentence: what could break at runtime if a Python function's return type annotation were wrong?"
   },
   {
+    "id": "blast-radius-keep-whitespace",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "I am about to drop the `.strip()` in `greet` (src/app/core.py) so names keep their surrounding whitespace. Before I ship that: what else in this repo could it break, beyond that one line, and how sure are you? Do not change any file; answer in a few lines."
+  },
+  {
     "id": "impl-commit-editorconfig",
     "role": "implementer",
     "fixture": "py-mini",
