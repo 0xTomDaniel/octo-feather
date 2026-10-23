@@ -347,6 +347,10 @@ def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss):
     blocks = re.findall(r"```json\s*(\{.*?\})\s*```", run.stdout, re.S)
     try:
         rep = json.loads(blocks[-1])
+        assert rep["head"] == head, f"report head {rep['head']!r} is not the judged head {head}"
+        named = [c["id"] for c in rep["criteria"]]
+        twice = sorted({i for i in named if named.count(i) > 1})
+        assert not twice, f"judged more than once: {' '.join(map(str, twice))}"
         verdicts = {c["id"]: c for c in rep["criteria"]}
         assert sorted(verdicts) == sorted(ids), f"ids {sorted(verdicts)} != {sorted(ids)}"
         for c in verdicts.values():
