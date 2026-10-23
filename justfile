@@ -134,15 +134,15 @@ check-refs:
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
-# No em or en dashes in kit text. Exempt upstream copies: docs/specs/ (Spec Chat's vendored runtime), LICENSE and
-# vendored skills (the Skillfile's github entries in .agents/skills/, .skillfile/patches/),
-# which keep upstream wording.
+# No em or en dashes in kit text, docs/specs/ included (#121 D7). Exempt upstream copies only: docs/specs/.viz/ and
+# docs/specs/.style/ (Spec Chat's vendored runtime and style), LICENSE and vendored skills (the Skillfile's github
+# entries in .agents/skills/, .skillfile/), which keep upstream wording.
 check-dashes:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
+    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/\.(viz|style)/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
     if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
