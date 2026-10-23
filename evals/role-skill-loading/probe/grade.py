@@ -3,7 +3,7 @@
 
 Lists tool calls in order. LOAD = first `read` of a path ending /SKILL/SKILL.md (or a bash
 command naming SKILL/SKILL.md). TARGET: `cmd:REGEX` = first bash command matching REGEX; `test` = first write/edit whose path has a tests/ dir or
-test_ file (or a bash command writing into tests/: >, tee, sed -i); `edit` = first write/edit at all.
+test_ file (or a bash command whose >, >>, tee or sed -i targets tests/); `edit` = first write/edit at all.
 PASS when LOAD exists and comes before TARGET (or TARGET never happens: reported as such).
 """
 import json, re, sys
@@ -31,7 +31,8 @@ def is_target(n, a):
         return bool(re.search(target[4:], a.get("command", "")))
     if n == "bash" and target == "test":
         c = a.get("command", "")
-        return bool(re.search(r"tests/", c)) and bool(re.search(r"(>|\btee\b|sed -i|cat <<)", c))
+        # the write must target tests/: `> tests/x`, `>> tests/x`, `tee tests/x`, `sed -i ... tests/x` (not `2>&1` or `| head`)
+        return bool(re.search(r"(?<![0-9&])>>?\s*\S*tests/|\btee\s+(-a\s+)?\S*tests/|sed -i\b[^|;&]*\stests/", c))
     return False
 
 load = next((i for i, (n, a) in enumerate(calls) if is_load(n, a)), None)

@@ -70,3 +70,29 @@ error: Recipe `check-refs` failed with exit code 1
 ```
 
 (The run predates widening the scan to `agents/`; main's agents/supervisor.md:64 `Skill call` is caught by the same grep.)
+
+## Rates: x3 on committed text (649faad) vs main (5f8fca3)
+
+Runner (lane scratch, /tmp/gh107/rates.sh): `git archive` of each commit as the kit; per run a fresh copy of evals/fixtures/python-app (reviewer: plus python-app-shout committed on branch implementer-t1), `git init`, `uv sync`; `probe.sh` (isolated, free -m gate), one probe Pi at a time, lane and main interleaved. Task text from evals/role-skill-loading/cases.json. Graded with the committed `grade.py` / `grade-review.py`. Positions are tool-call indexes: `skill=load<step@index`, `None` = never read.
+
+grade.py fix in this commit: a bash test write is now a `>`, `>>`, `tee` or `sed -i` whose target is under tests/; the old pattern counted any command naming tests/ with any `>` (`2>&1`), so main runs showed `test@0` on a read-only `find`. No lane result changed.
+
+| case | 649faad | 5f8fca3 |
+|---|---|---|
+| implementer-python-ticket, full case (tdd, python, implement before first test write; principle-prove-it-works, blast-radius, commit before git commit) | 2/3 | 0/3 |
+| implementer: tdd read before first test write | 3/3 | 0/3 |
+| reviewer-test-quality (verdict blocks both tests) | 3/3 | 0/3 |
+| reviewer: tdd read | 3/3 | 0/3 |
+
+Smoke: agents/implementer.md lane-impl-1 PASS: implement=0 tdd=2 python=2 < test write @4; principle-prove-it-works=9 blast-radius=9 commit=9 < git commit @10
+Smoke: agents/implementer.md lane-impl-2 PASS: implement=0 tdd=2 python=3 < test write @5; principle-prove-it-works=12 blast-radius=13 commit=14 < git commit @15
+Smoke: agents/implementer.md lane-impl-3 FAIL: implement=0 tdd=6 python=7 < test write @8; blast-radius=14 commit=15 < git commit @16; principle-prove-it-works never read
+Smoke: agents/implementer.md main-impl-1 FAIL (baseline): python=1 < test write @2; tdd, implement never read; run ended on a provider 503 (auth_unavailable) after 7 calls, before any commit, so principle-prove-it-works, blast-radius, commit never read
+Smoke: agents/implementer.md main-impl-2 FAIL (baseline): python=1 < test write @2; tdd, implement, principle-prove-it-works, blast-radius, commit never read (git commit @7)
+Smoke: agents/implementer.md main-impl-3 FAIL (baseline): python=1 < test write @2; tdd, implement, principle-prove-it-works, blast-radius, commit never read (git commit @7)
+Smoke: agents/code-reviewer.md lane-rev-1 PASS: tdd=4; verdict BLOCKED, test_shout_json and test_shout_suffix_is_bang both block
+Smoke: agents/code-reviewer.md lane-rev-2 PASS: tdd=2; both block
+Smoke: agents/code-reviewer.md lane-rev-3 PASS: tdd=4; both block
+Smoke: agents/code-reviewer.md main-rev-1 FAIL (baseline): tdd never read; blocks test_shout_suffix_is_bang only
+Smoke: agents/code-reviewer.md main-rev-2 FAIL (baseline): tdd never read; grader finds neither name blocked: the report blocks the coupled test by line (tests/test_cli.py:39-41) and says "Keep the existing JSON test" (tautological one)
+Smoke: agents/code-reviewer.md main-rev-3 FAIL (baseline): tdd never read; blocks test_shout_suffix_is_bang only
