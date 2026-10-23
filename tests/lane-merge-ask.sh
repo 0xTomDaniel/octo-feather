@@ -2,7 +2,8 @@
 # Integration test for scripts/octo-feather-lane verdict and merge-ask (spec issue-lifecycle
 # #acceptance-merge-ask-evidence, issue #48), no network: a fake `gh` holds PR #7 of o/r and logs
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
-# wrong head, a report with no verdict and a failed write, leaving no comment behind. `merge-ask`
+# wrong head, a report with no verdict or no check classes (docs/adr/0008), a proxy check with a clear verdict
+# and a failed write, leaving no comment behind. `merge-ask`
 # passes a complete section and prints it (also through the qc judge's offline gh, github-pr/scripts/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
 # (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
@@ -84,13 +85,13 @@ comments() { python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))
 writes() { grep -c '^api' "$FAKE_GH_LOG" || true; }
 
 # --- verdict: create once, update in place, refusals write nothing ---
-printf 'Findings: none blocking.\nVerdict: clear\n' > "$t/report"
+printf 'Findings: none blocking.\nChecks: none\nVerdict: clear\n' > "$t/report"
 : > "$FAKE_GH_LOG"
 run 0 verdict 7 "$JS" "$t/report"   # the review judged J, while qc made H
 url="$out"; [[ "$url" == "https://github.com/o/r/pull/7#issuecomment-1001" ]] || fail "verdict printed $url"
 grep -q '^api -X POST repos/{owner}/{repo}/issues/7/comments ' "$FAKE_GH_LOG" || fail "no POST: $(cat "$FAKE_GH_LOG")"
 [[ "$(comments)" == 1 ]] || fail "create made $(comments) comments"
-printf 'Note: a nit.\nVerdict: blocking\n' > "$t/report2"
+printf 'Note: a nit.\nChecks: none\nVerdict: blocking\n' > "$t/report2"
 run 0 verdict 7 "$J" "$t/report2"
 [[ "$out" == "$url" && "$(comments)" == 1 ]] || fail "rerun did not update in place: $out, $(comments) comments"
 grep -q '^api -X PATCH repos/{owner}/{repo}/issues/comments/1001 ' "$FAKE_GH_LOG" || fail "no PATCH of 1001: $(cat "$FAKE_GH_LOG")"
@@ -103,10 +104,15 @@ run 0 verdict 7 "$J" - < "$t/report"   # stdin, back to clear
 run 0 verdict 7 "$J" "$t/report"; [[ "$(writes)" == 3 ]] || fail "unchanged rerun wrote"
 grep -q unchanged <<<"$err" || fail "unchanged rerun not said: $err"
 # the verdict is the last line outside fences and quotes (review of 39515df, class verdict-parsing)
-printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\nThe quoted run predates the fix commit.\nVerdict: blocking\n' > "$t/fenced"
+printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\nThe quoted run predates the fix commit.\nChecks: none\nVerdict: blocking\n' > "$t/fenced"
 run 0 verdict 7 "$J" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
-python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
+python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\nChecks: none\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
   || fail "fenced report posted the wrong verdict"
+# check classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking verdict, in the header
+printf 'Check: `scripts/check-x`: tests reach no internals (docs/adr/0002) | reads: code tokens in tests/*.sh | class: Proxy\nVerdict: blocking\n' > "$t/proxy"
+run 0 verdict 7 "$J" "$t/proxy"
+python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\nCheck: scripts/check-x: tests reach no internals (docs/adr/0002) | reads: code tokens in tests/*.sh | class: proxy\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
+  || fail "proxy check not in the verdict header"
 run 0 verdict 7 "$J" "$t/report"   # back to clear
 # refusals: each non-zero, fix named, no write
 n="$(writes)"
@@ -114,6 +120,23 @@ run 1 verdict 7 "$OTHER" "$t/report"; grep -q "is not a commit of PR #7 (head ${
 printf 'looks fine\n' > "$t/nov"; run 1 verdict 7 "$J" "$t/nov"; grep -q 'add a line `Verdict: clear`' <<<"$err" || fail "no verdict: $err"
 printf 'Verdict: clear\nmore\nVerdict: blocking\n' > "$t/both"; run 1 verdict 7 "$J" "$t/both"
 grep -q "verdicts that disagree (clear, blocking): keep one" <<<"$err" || fail "disagreeing verdicts: $err"
+printf 'Verdict: clear\n```\nChecks: none\n```\n' > "$t/nocls"; run 1 verdict 7 "$J" "$t/nocls"
+grep -q 'report classifies no check: add `Checks: none` when' <<<"$err" || fail "no classification (fenced one ignored): $err"
+printf 'Check: scripts/check-x: tests reach no internals (docs/adr/0002) | reads: code tokens | class: proxy\nVerdict: clear\n' > "$t/mclear"; run 1 verdict 7 "$J" "$t/mclear"
+grep -q 'with a proxy check (Check: scripts/check-x: .*): a proxy check blocks (docs/adr/0008)' <<<"$err" || fail "proxy + clear: $err"
+printf 'Check: scripts/check-x: r (ADR 1) | reads: y | class: meaning\nVerdict: blocking\n' > "$t/badcls"; run 1 verdict 7 "$J" "$t/badcls"
+grep -q "has class 'meaning'; write .class: exact. or .class: proxy." <<<"$err" || fail "bad class: $err"
+printf 'Check: scripts/check-x is a fact\nVerdict: clear\n' > "$t/badshape"; run 1 verdict 7 "$J" "$t/badshape"
+grep -q 'check line `Check: scripts/check-x is a fact` is not `Check: <path>' <<<"$err" || fail "malformed check line: $err"
+# The rule names its owner (review of 2e1a0da, class unvalidated-input): none, or empty parentheses, refused.
+for r in 'r' 'r ()' 'r (  )' '(ADR 1)'; do
+  printf 'Check: scripts/x: %s | reads: y | class: exact\nVerdict: clear\n' "$r" > "$t/noowner"; run 1 verdict 7 "$J" "$t/noowner"
+  grep -q 'check line for scripts/x names no owner: write its rule as stated where it is owned' <<<"$err" || fail "no owner ($r): $err"
+done
+printf 'Checks: fine\nVerdict: clear\n' > "$t/badnone"; run 1 verdict 7 "$J" "$t/badnone"
+grep -q '`Checks: fine`; `Checks:` takes only `none`' <<<"$err" || fail "Checks: other: $err"
+printf 'Checks: none\nCheck: scripts/check-x: r (ADR 1) | reads: y | class: exact\nVerdict: clear\n' > "$t/bothcls"; run 1 verdict 7 "$J" "$t/bothcls"
+grep -q 'has `Checks: none` and `Check:` lines' <<<"$err" || fail "none and lines: $err"
 run 1 verdict 7 "$J" "$t/missing"; grep -q "cannot read report" <<<"$err" || fail "missing report: $err"
 : > "$t/empty"; run 1 verdict 7 "$J" "$t/empty"; grep -q "is empty" <<<"$err" || fail "empty report: $err"
 run 1 verdict 7 xyz "$t/report"; grep -q "commit sha" <<<"$err" || fail "bad head: $err"
@@ -176,7 +199,8 @@ bad() { # WANT_PATTERN [PY]: merge-ask exits 1 naming it
 }
 
 setpr; run 0 merge-ask 7 "${ST[@]}"
-[[ "$(head -1 <<<"$out")" == "## Merge ask" && "$(tail -1 <<<"$out")" == "Failed: none" ]] || fail "pass did not print the section: $out"
+[[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Failed: none" <<<"$out" || fail "pass did not print the section: $out"
+[[ "$(tail -2 <<<"$out")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
 [[ "$(writes)" == "$n" ]] || fail "merge-ask wrote"
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
@@ -245,6 +269,10 @@ REVIEW="https://github.com/o/r/pull/8#issuecomment-1001" bad "is not a comment o
 REVIEW="${url%1001}4242" bad "comment 4242 not on PR #7"
 bad "the comment names head $OTHER, not the judged head ${J:0:12}" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $OTHER')"
 bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Verdict: clear', 'Verdict: blocking')"
+bad "Review verdict: the comment carries no usable check classification (report classifies no check" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('\\nChecks: none\\n', '\\n')"
+bad "Review verdict: clear with a proxy check (Check: scripts/x: r (ADR 1) | reads: y | class: proxy): a proxy check blocks" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: proxy')"
+setpr "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: exact')"
+run 0 merge-ask 7 "${ST[@]}"; [[ "$(tail -1 <<<"$out")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-c: fail with no triage"
 FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' \
@@ -312,4 +340,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"

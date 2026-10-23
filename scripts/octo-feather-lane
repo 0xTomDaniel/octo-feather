@@ -19,7 +19,12 @@ place, when the record is missing or either archive target already exists.
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
 Only lines outside fenced code blocks and blockquotes count; the last such line is the
-verdict, and lines that disagree are refused. HEAD is the head the review judged, H, a commit
+verdict, and lines that disagree are refused. The report also classifies every check, test
+gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
+`Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
+Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
+a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
+the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
@@ -49,7 +54,9 @@ at H: same files, same content. Anything else fails naming the commit and file: 
 and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
 the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
-Pass: the section on stdout (send it with herdr-say --parent). Failure: each missing item
+The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
+`class: proxy`). Pass: the section on stdout, then `Review check classes` listing the comment's
+lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
   octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
@@ -65,10 +72,10 @@ pnpm exec...), a program the repo declares (a tracked executable outside tests/,
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
 for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
-or a generic tool (printf, echo). The demo's invocation (program plus first subcommand word,
-the URL path for curl, the test file for playwright) must be named in What to build. The
+or a generic tool (printf, echo). The
 wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Checks are
-structural facts only, never what the prose means (that is review's). Each failure prints
+structural facts only, never what the prose means: whether the demo shows the behavior What to
+build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
 2 nothing could be checked (gh, file or specs error; nothing printed as passed).
 `tickets` reads tickets only through the target's tracker skill's `issue-view` (the parent's
@@ -188,9 +195,18 @@ QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged ([0-9a-f]+)\))?\s*$")
 JUDGED = re.compile(r"`?(?:judged\s+)?`?([0-9a-fA-F]{7,40})`?", re.I)
 
 
-def verdicts(text: str) -> list[str]:
-    """Every `Verdict: clear|blocking` line outside fenced code blocks and blockquotes, in order."""
-    found, fence = [], None
+CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
+CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
+# The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
+OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
+CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
+CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check "
+              "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
+
+
+def outside(text: str) -> list[str]:
+    """The lines outside fenced code blocks, in order (a blockquote's `> ` prefix keeps it off column 0)."""
+    out, fence = [], None
     for l in text.replace("\r\n", "\n").split("\n"):
         f = re.match(r"\s{0,3}(`{3,}|~{3,})", l)
         if fence:
@@ -199,10 +215,43 @@ def verdicts(text: str) -> list[str]:
             continue
         if f:
             fence = f.group(1); continue
-        m = VERDICT_LINE.match(l)   # anchored at column 0: a blockquote's `> Verdict:` never matches
-        if m:
-            found.append(m.group(1))
-    return found
+        out.append(l)
+    return out
+
+
+def verdicts(text: str) -> list[str]:
+    """Every `Verdict: clear|blocking` line outside fenced code blocks and blockquotes, in order."""
+    return [m.group(1) for l in outside(text) if (m := VERDICT_LINE.match(l))]   # column 0: `> Verdict:` never matches
+
+
+def check_lines(text: str) -> tuple[list[str], list[str]]:
+    """(the report's check classification as normalized lines, why it is unusable) (docs/adr/0008)."""
+    checks, nones, why = [], [], []
+    for l in outside(text):
+        if m := CHECKS_LINE.match(l):
+            nones.append(m.group(1))
+        elif m := CHECK_LINE.match(l):
+            s = CHECK_SHAPE.fullmatch(m.group(1))
+            if not s:
+                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`"); continue
+            path, rule, reads, cls = s.groups()
+            o = OWNED.fullmatch(rule)
+            if not o:
+                why.append(f"check line for {path} names no owner: write its rule as stated where it is owned, then the owner in "
+                           f"parentheses, `<rule> (<spec criterion, ADR or owner ruling>)` (docs/adr/0008)"); continue
+            rule = f"{o.group(1)} ({o.group(2).strip()})"
+            if cls.lower() not in ("exact", "proxy"):
+                why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
+            checks.append((f"Check: {path}: {rule} | reads: {reads} | class: {cls.lower()}", cls.lower()))
+    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
+    if bad_none:
+        why.append(f"`Checks: {bad_none[0]}`; `Checks:` takes only `none`; name each check on its own `Check:` line")
+    if not checks and not nones and not why:
+        why.append(f"report classifies no check: add {CHECK_FORM}")
+    if checks and nones:
+        why.append("report has `Checks: none` and `Check:` lines; keep the `Check:` lines, one per added or changed check")
+    lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
+    return lines, why
 
 
 def gh(args: list[str], fix: str) -> str:
@@ -381,6 +430,13 @@ def cmd_verdict(args: list[str]) -> int:
     if len(set(vs)) > 1:
         raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line outside code blocks and quotes, the reviewer's final verdict, then rerun")
     verdict = vs[-1]
+    cls, why = check_lines(report)
+    if why:
+        raise Refuse("; ".join(why) + "; fix the report, then rerun")
+    proxy = [c for c in cls if c.endswith("| class: proxy")]
+    if proxy and verdict == "clear":
+        raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
+                     "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
     d = pr_view(pr, "headRefOid,comments,commits", repo)
     head = d["headRefOid"]
     at = [c.get("oid") or "" for c in d["commits"] or [] if head_matches(want, c.get("oid") or "")]
@@ -391,7 +447,7 @@ def cmd_verdict(args: list[str]) -> int:
     mine = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
     if len(mine) > 1:
         raise Refuse(f"PR #{pr} has {len(mine)} verdict comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
-    body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n\n### Findings\n\n{report.strip()}\n"
+    body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n"
     api = f"repos/{repo or '{owner}/{repo}'}"
     if mine:
         m = COMMENT_URL.fullmatch(mine[0].get("url") or "")
@@ -581,6 +637,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         if proof and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
+    review_checks: list[str] = []
     rv = field(lines, "Review verdict")
     url = (rv[1].strip("<>` ") if rv else "")
     m = COMMENT_URL.fullmatch(url)
@@ -603,6 +660,15 @@ def cmd_merge_ask(args: list[str]) -> int:
                         f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
         elif cv != "clear":
             miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
+        else:
+            review_checks, why = check_lines(hdr)
+            proxy = [c for c in review_checks if c.endswith("| class: proxy")]
+            if why:
+                miss.append(f"Review verdict: the comment carries no usable check classification ({why[0]}): have the review report "
+                            f"hold {CHECK_FORM}, then `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>`")
+            elif proxy:
+                miss.append(f"Review verdict: clear with a proxy check ({proxy[0]}): a proxy check blocks (docs/adr/0008); "
+                            "delete or replace it, review again, and post the verdict with `octo-feather-lane verdict`")
 
     built = set()
     b = field(lines, "Built")
@@ -662,6 +728,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    print("\nReview check classes (from the verdict comment, docs/adr/0008):")
+    print("\n".join(f"- {c}" for c in review_checks))
     return 0
 
 
@@ -783,14 +851,8 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
             surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
             runs = [surf.runs(c) for c in cmds]
             invs = [i for r in runs for i in r[0]]
-            what = section_text(body, "what to build")
             if not invs:
                 fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
-            elif not any(names(what, i) for i in invs):
-                fail("layer-only-ticket", f"demo runs {', '.join(f'`{i}`' for i in dict.fromkeys(invs))}, which What to build "
-                     + ("does not name" if what.strip() else "(missing) cannot name"),
-                     "the demo must run the behavior this ticket builds, named in What to build (e.g. What to build says "
-                     "`app hello NAME --shout` greets in capitals; demo: `uv run app hello Ada --shout` prints HELLO, ADA!)")
     return out
 
 
@@ -804,10 +866,6 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
 
-def names(what: str, inv: str) -> bool:
-    """Does What to build name the invocation INV (words in order, a path prefix allowed)?"""
-    words = [re.escape(w) for w in inv.split()]
-    return bool(words) and re.search(r"(?<![\w-])(?:[\w./-]*/)?" + r"\s+".join(words) + r"(?![\w-])", what.replace("`", " "), re.I) is not None
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
            ("npx",), ("pnpx",), ("bunx",), ("pnpm",), ("yarn",), ("env",), ("exec",), ("command",), ("time",), ("sudo",)}
 # A target with no CLI, HTTP or UI demos through its runnable script (ADR 0002), e.g. `python harness.py`.
@@ -815,16 +873,6 @@ INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
 TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
-
-
-def section_text(body: str, title: str) -> str:
-    out, inside = [], False
-    for line in body.replace("\r\n", "\n").split("\n"):
-        if re.match(r"^#{1,6}\s", line):
-            inside = line.lstrip("#").strip().lower() == title; continue
-        if inside:
-            out.append(line.strip())
-    return " ".join(out)
 
 
 class Surface:

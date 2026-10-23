@@ -12,7 +12,7 @@ export root := justfile_directory()
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
 export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
-# this before any recipe runs, so a check or check-* recipe reaching qa, qc or Jev, by dependency or body, fails
+# this before any recipe runs, so a check or check-* recipe depending on the qa or qc recipe, directly or transitively, fails
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
 # backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
 # Backticks run in --working-directory when given: there the guard is the published command on PATH.
@@ -60,9 +60,6 @@ check-refs:
     if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
-    if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
-      echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
     # Retired words stay retired in all kit text, docs/ and this justfile included
     # (the pattern brackets a letter so it does not match itself). Exempt files:
     #   GLOSSARY.md: lists the retired words.
@@ -85,8 +82,8 @@ check-refs:
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
-          # The frozen #acceptance-retired-words criterion names the words it retires.
-          "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
+          # The #acceptance-retired-words criterion names the words it bans.
+          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
           # NOTICE attribution names the octo-lite file the director came from.
@@ -153,11 +150,11 @@ check-templates:
     done
     echo "templates: ok ($n)"
 
-# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh), none loading a script as a module (#104).
+# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
+# script's public surface is review's call, not a check (docs/adr/0008, #118).
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
-    python3 "$root/scripts/check-test-surface"
     # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
     TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "$root"/tests/*.sh; do "$t"; done
