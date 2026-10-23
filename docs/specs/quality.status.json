@@ -19,8 +19,8 @@
       "pr": null
     },
     "acceptance-prompt-eval": {
-      "status": "built",
-      "pr": 111
+      "status": "planned",
+      "pr": null
     },
     "acceptance-finding-class": {
       "status": "planned",
@@ -35,8 +35,8 @@
       "pr": 111
     },
     "acceptance-qa-isolated": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-fails-before": {
       "status": "built",
