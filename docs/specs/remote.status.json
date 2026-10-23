@@ -31,16 +31,16 @@
       "pr": null
     },
     "acceptance-linear-key-panes": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     },
     "acceptance-linear-key-qc": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     },
     "acceptance-install-linear": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 103
     }
   }
 }
