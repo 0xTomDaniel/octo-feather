@@ -71,10 +71,10 @@ pnpm exec...), a program the repo declares (a tracked executable outside tests/,
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
 for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
-or a generic tool (printf, echo). The demo's invocation (program plus first subcommand word,
-the URL path for curl, the test file for playwright) must be named in What to build. The
+or a generic tool (printf, echo). The
 wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Checks are
-structural facts only, never what the prose means (that is review's). Each failure prints
+structural facts only, never what the prose means: whether the demo shows the behavior What to
+build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
 2 nothing could be checked (gh, file or specs error; nothing printed as passed).
 `tickets` reads issues through `gh issue view --json` (works with the qc judge's offline gh);
@@ -808,14 +808,8 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
             surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
             runs = [surf.runs(c) for c in cmds]
             invs = [i for r in runs for i in r[0]]
-            what = section_text(body, "what to build")
             if not invs:
                 fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
-            elif not any(names(what, i) for i in invs):
-                fail("layer-only-ticket", f"demo runs {', '.join(f'`{i}`' for i in dict.fromkeys(invs))}, which What to build "
-                     + ("does not name" if what.strip() else "(missing) cannot name"),
-                     "the demo must run the behavior this ticket builds, named in What to build (e.g. What to build says "
-                     "`app hello NAME --shout` greets in capitals; demo: `uv run app hello Ada --shout` prints HELLO, ADA!)")
     return out
 
 
@@ -829,10 +823,6 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
 
-def names(what: str, inv: str) -> bool:
-    """Does What to build name the invocation INV (words in order, a path prefix allowed)?"""
-    words = [re.escape(w) for w in inv.split()]
-    return bool(words) and re.search(r"(?<![\w-])(?:[\w./-]*/)?" + r"\s+".join(words) + r"(?![\w-])", what.replace("`", " "), re.I) is not None
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
            ("npx",), ("pnpx",), ("bunx",), ("pnpm",), ("yarn",), ("env",), ("exec",), ("command",), ("time",), ("sudo",)}
 # A target with no CLI, HTTP or UI demos through its runnable script (ADR 0002), e.g. `python harness.py`.
@@ -840,16 +830,6 @@ INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
 TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
-
-
-def section_text(body: str, title: str) -> str:
-    out, inside = [], False
-    for line in body.replace("\r\n", "\n").split("\n"):
-        if re.match(r"^#{1,6}\s", line):
-            inside = line.lstrip("#").strip().lower() == title; continue
-        if inside:
-            out.append(line.strip())
-    return " ".join(out)
 
 
 class Surface:
