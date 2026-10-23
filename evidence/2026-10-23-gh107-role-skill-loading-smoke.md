@@ -105,3 +105,9 @@ Smoke: agents/code-reviewer.md main-rev-3 FAIL (baseline): tdd never read; label
 - Director rerun at 6c3a001: implementer read implement, tdd, python before the first test edit and commit before `git commit`, but not principle-prove-it-works or blast-radius (report-step skills 2 of 4 runs). Cause: the step line said "before reporting" while the implementer commits before it reports. One wording attempt: "once the code works and before the commit, in order: `principle-prove-it-works`, `blast-radius`, then `commit`".
 
 Removed: agents/implementer.md "before reporting, `principle-prove-it-works`, then `blast-radius` for the safety fact; before committing, `commit`".
+
+Rerun x3 at 8bec1b3 (same runner and graders, /tmp/gh107/rates2.sh, one probe Pi at a time, free -m gate): implementer-python-ticket full case 2/3. principle-prove-it-works before the commit 2/3, blast-radius 3/3, commit 3/3, tdd/python/implement before the first test write 3/3. Reported as is; no further wording round.
+
+Smoke: agents/implementer.md 8bec1b3-impl-1 PASS: implement=0 tdd=3 python=3 < test write @4; principle-prove-it-works=7 blast-radius=7 commit=7 < git commit @8
+Smoke: agents/implementer.md 8bec1b3-impl-2 FAIL: implement=0 python=2 tdd=3 < test write @5; blast-radius=11 commit=12 < git commit @13; principle-prove-it-works never read
+Smoke: agents/implementer.md 8bec1b3-impl-3 PASS: implement=0 python=2 tdd=3 < test write @5; principle-prove-it-works=11 blast-radius=12 commit=13 < git commit @15
