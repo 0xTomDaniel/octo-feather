@@ -29,17 +29,40 @@ default:
 check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
     @echo "just check: ok"
 
-# shellcheck when installed, else bash -n; python scripts byte-compile.
+# shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
+# A script is python when its shebang runs python: the interpreter, or env's command after its options,
+# is python/pypy (any version) or `uv run ... --script`.
 check-scripts:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
+    runs_python() {
+      local l w i=0 x; IFS= read -r l < "$1" || true
+      [[ "$l" == '#!'* ]] || return 1
+      read -ra w <<<"${l#??}"
+      if [[ "${w[0]:-}" == */env || "${w[0]:-}" == env ]]; then
+        for ((i = 1; i < ${#w[@]}; i++)); do
+          case "${w[i]}" in
+            -u|--unset|-C|--chdir) i=$((i + 1)) ;;
+            -S?*) w[i]="${w[i]#-S}"; break ;;
+            -*|*=*) ;;
+            *) break ;;
+          esac
+        done
+      fi
+      x="${w[i]:-}"; x="${x##*/}"
+      [[ "$x" =~ ^(python|pypy)[0-9.]*$ ]] && return 0
+      [[ "$x" == uv && "${w[i + 1]:-}" == run ]] || return 1
+      for x in "${w[@]:i + 2}"; do [[ "$x" == --script ]] && return 0; done
+      return 1
+    }
     files=(); py=()
     for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
       [[ -f "$f" ]] || continue   # tests/fixtures/ holds data, not scripts
-      if head -1 "$f" | grep -q python; then py+=("$f"); else files+=("$f"); fi
+      if runs_python "$f"; then py+=("$f"); else files+=("$f"); fi
     done
-    for f in "${py[@]}"; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"; done
+    # compile(), not ast.parse: byte-compile refuses what parses but cannot run (top-level return, break, yield).
+    for f in "${py[@]}"; do python3 -c 'import sys; compile(open(sys.argv[1], "rb").read(), sys.argv[1], "exec", dont_inherit=True)' "$f"; done
     echo "python: ok (${#py[@]} files)"
     if command -v shellcheck >/dev/null; then
       shellcheck -S warning "${files[@]}"; echo "scripts: shellcheck ok (${#files[@]} files)"
