@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008)
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -44,7 +44,7 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,25 @@
+@@ -55,35 +41,31 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
@@ -95,3 +95,9 @@
 +`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
 +
 +`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
++
++Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule at column 0 outside code blocks, or the one line `Owners: none`:
++
++`Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
++
++List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
