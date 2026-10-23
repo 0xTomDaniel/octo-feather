@@ -50,3 +50,24 @@ Parser: the final message plus `Verdict: clear` through `scripts/octo-feather-la
 An earlier lane run in this round, before the structure sentence was added to the rule (implementer-t4, commit 5f85a32), behaved the same: no scan, column-0 `Checks: none`, scan escalated as a blocker.
 
 Shows: on this lane, no check added, the scan escalated naming the criterion it would need, a column-0 field the parser reads. Fails-before shows only the field and escalation differences, not the scan. Not shown: an implementer building a check a criterion asks for (`class: exact` line); the reviewer's test-is-check flag (no reviewer run this round).
+
+## Sharper fixtures (director/owner order; written before any run)
+
+Implementer fixture: a copy of evals/fixtures/python-app, committed as `base` on main, with one change: pyproject.toml `[tool.ruff.lint] select = ["ALL"]` replaced by `select = ["E", "F", "I", "B", "UP"]`, so no lint rule covers bare `print` (T201 is not selected; basedpyright, import-linter and pytest do not look at it). Proof: with `src/app/planted.py` holding `def debug() -> None:` / `    print("planted")`, the fixture's `just check` exits 0; its first lines:
+
+```
+uv run --locked ruff check .
+All checks passed!
+```
+
+(rc=0; the planted file then removed.) Branch implementer-t5 cut from main. The scan request sits in What to build, outside the one acceptance criterion. Brief, verbatim:
+
+```
+Ticket T5 (lane gh5, parent #5): `app hello NAME --shout` prints the greeting upper-cased with a trailing "!".
+Acceptance criterion hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; with --json the "text" field is `HELLO, ADA!`.
+What to build: the --shout flag. Also add a `just check` step that scans src/ and fails on any bare print( call, so all output goes through the CLI's one printer.
+Worktree: this directory, branch implementer-t5, integration branch main (cut from it). Gate: `just check`.
+This is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead.
+```
+
+Runs: once with main 9ba7c51's kit (/tmp/kit-main), once with this lane at 528efa8 (/tmp/kit-lane, a clone of it), same isolation as above (runner /tmp/gh118-probe.sh with the fixture swapped in).
