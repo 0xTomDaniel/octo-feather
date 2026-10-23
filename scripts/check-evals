@@ -7,7 +7,8 @@ Deterministic and free: reads JSON only, never starts an agent or a model. Run b
 EVALS_DIR (default: the kit's evals/) holds one dir per suite plus fixtures/ (one dir per fixture,
 copied and git-initialized per run). A suite dir holds:
   suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript",
-                                "description": str, optional "max_tool_calls", "timeout_s" (positive ints)}
+                                "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
+                                optional "covers": "role-skills" (skill-trigger only, below)}
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out")
   reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
@@ -49,8 +50,14 @@ fact exists yet; every case grades structured producer facts.
 Fails, naming the case and the field, on: a missing or unknown field, a wrong type, an unknown fact
 or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill with no kit SKILL.md, a
 case id without expectations or the reverse, a skill-trigger case whose facts disagree with
-should_trigger, or a task that leaks its grade: the task contains a graded skill's path
-(<skill>/SKILL.md or skills/<skill>) or the JSON of its expectation or of one of its facts.
+should_trigger, a "covers": "role-skills" suite missing a case for a role's skill (below), or a task
+that leaks its grade: the task contains a graded skill's path (<skill>/SKILL.md or skills/<skill>) or
+the JSON of its expectation or of one of its facts.
+Coverage: in a suite with "covers": "role-skills", every skill each kit role lists (agents/<role>.md
+`skills:`) needs, for that role, a should_trigger true case graded skill_read or skill_read_before of it
+and a should_trigger false case graded skill_not_read of it, each in split train and in held-out; a
+missing one fails naming the role and the skill, so a skill added to a role gets its cases. Not
+covered: `externalSkills` (installed in the target repo, not kit skills, so no fact can name them).
 Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
 EVALS_DIR is not a dir.
 """
@@ -108,7 +115,7 @@ def check_suite(d, evals, errs):
     where = f"{name}/suite.json"
     if not isinstance(suite, dict):
         errs.append(f"{where}: must be a JSON object"); return 0
-    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s"}):
+    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers"}):
         errs.append(f"{where}: field {k}: unknown field")
     if suite.get("suite") != name:
         errs.append(f"{where}: field suite: must equal the dir name {name!r}, got {suite.get('suite')!r}")
@@ -120,6 +127,8 @@ def check_suite(d, evals, errs):
     for k in ("max_tool_calls", "timeout_s"):
         if k in suite and not (type(suite[k]) is int and suite[k] > 0):
             errs.append(f"{where}: field {k}: must be a positive integer")
+    if "covers" in suite and (suite["covers"] != "role-skills" or kind != "skill-trigger"):
+        errs.append(f"{where}: field covers: only \"role-skills\", and only in a skill-trigger suite, got {suite['covers']!r}")
     if not isinstance(cases, list):
         errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
     if not isinstance(exps, dict):
@@ -174,7 +183,38 @@ def check_suite(d, evals, errs):
                 errs.append(f"{at}: field task: shows the agent its grade ({leak}); graded facts stay hidden")
     for k in sorted(set(exps) - set(ids)):
         errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
+    if suite.get("covers") == "role-skills" and kind == "skill-trigger":
+        check_coverage(name, cases, exps, errs)
     return len(cases)
+
+
+def role_skills():
+    """(role, skill) for every skill each kit role's frontmatter lists under `skills:`."""
+    pairs = []
+    for f in sorted((KIT / "agents").glob("*.md")):
+        m = re.match(r"---\n(.*?)\n---", f.read_text(encoding="utf-8"), re.S)
+        line = re.search(r"^skills:(.*)$", m.group(1), re.M) if m else None
+        pairs += [(f.stem, s.strip()) for s in (line.group(1).split(",") if line else []) if s.strip()]
+    return pairs
+
+
+def check_coverage(name, cases, exps, errs):
+    have = set()
+    for c in cases:
+        if not isinstance(c, dict) or not isinstance(c.get("should_trigger"), bool) or c.get("split") not in SPLITS:
+            continue
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        facts = exp.get("facts") if isinstance(exp, dict) and isinstance(exp.get("facts"), list) else []
+        grading = {"skill_read", "skill_read_before"} if c["should_trigger"] else {"skill_not_read"}
+        for f in facts:
+            if isinstance(f, dict) and f.get("fact") in grading:
+                have.add((c.get("role"), f.get("skill"), c["should_trigger"], c["split"]))
+    for role, skill in role_skills():
+        missing = [f"should_trigger {str(st).lower()} split {sp}" for st in (True, False) for sp in ("train", "held-out")
+                   if (role, skill, st, sp) not in have]
+        if missing:
+            errs.append(f"{name}: role {role} skill {skill}: no case for {', '.join(missing)}; every skill a role lists "
+                        "needs a should and a should-not (near miss) case, each in train and held-out")
 
 
 def check_exp(at, exp, errs):
