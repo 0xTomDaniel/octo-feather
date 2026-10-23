@@ -70,10 +70,12 @@ A judgment suite (kind judgment, spec judgment#acceptance; shape: check-evals --
 selected cases run in the same sandbox as one Pi extension command, no agent: `pi --no-session --no-skills --no-mcp
 --no-extensions --no-tools -e <bench extension> -p "/octo-feather-bench <input>"` runs the command and exits, no
 chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
-ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) answer the closed question
+ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) pinned version answer the closed question
 (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once. The state
 goes as the case's state string, the one shape every classifier takes (some accept no other object than their
-own). classify never throws, so stopReason and errorMessage are kept. Its JSON output line is graded here against
+own). A moving alias (a model id starting with "~" or ending in "-latest") is never called nor chosen: the report
+lists it as "skipped: moving alias" and bench.json `skipped` records it. classify never throws, so stopReason and
+errorMessage are kept. Its JSON output line is graded here against
 reference/expectations.json, never shown to it. Prints the classifiers available, then a TRAIN and a HELD-OUT table
 per answering model (answered, correct, accuracy, Brier, ECE over top-probability buckets, cost from result.usage,
 errors), each listed model that answered nothing as unavailable with its error, the chosen model and a proposed
@@ -687,8 +689,8 @@ Z = 1.96   # the threshold's 95% bounds
 JUDGMENT = "model judgment (classifier output, advisory: no gate reads it)"
 # The bench as a Pi extension command, run by `pi -e <this> -p "/octo-feather-bench <input path>"`: no agent, no chat
 # model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
-# 4 calls at once; the state is the case's state string. One stdout line {"bench": {available, benched, errors,
-# rows}}, rows [model, case, choice, probabilities in label order, cost, error index].
+# 4 calls at once; the state is the case's state string; a moving alias is skipped. One stdout line {"bench":
+# {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label order, cost, error index].
 BENCH_SOURCE = """import { readFileSync, writeSync } from "node:fs";
 export default function (pi) {
   pi.registerCommand("%(command)s", {
@@ -698,7 +700,11 @@ export default function (pi) {
       const reg = ctx.modelRegistry;
       const all = await reg.getAvailableOfType("classifier");
       const name = (m) => m.provider + "/" + m.id;
-      const ms = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+      const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+      // Only pinned versions: a moving alias (its id starts with "~" or ends in "-latest") is skipped, never called.
+      const moving = (m) => m.id.startsWith("~") || m.id.endsWith("-latest");
+      const ms = listed.filter((m) => !moving(m));
+      const skipped = listed.filter(moving).map(name);
       const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
       const errors = [];
       const err = (e) => { const s = String(e).slice(0, 400); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
@@ -719,7 +725,7 @@ export default function (pi) {
       const lane = async () => { while (next < jobs.length) { const k = next++; rows[k] = await one(...jobs[k]); } };
       await Promise.all([lane(), lane(), lane(), lane()]);
       // Pi keeps stdout for itself in print mode (an extension's process.stdout goes to stderr): write fd 1 directly.
-      const buf = Buffer.from(JSON.stringify({bench: {available: all.map(name), benched: ms.map(name), errors, rows}}) + "\\n");
+      const buf = Buffer.from(JSON.stringify({bench: {available: all.map(name), benched: ms.map(name), skipped, errors, rows}}) + "\\n");
       const nap = new Int32Array(new SharedArrayBuffer(4));
       for (let off = 0; off < buf.length;) {
         try { off += writeSync(1, buf, off); }
@@ -826,8 +832,10 @@ def bench_report(suite, q, cases, bench, models, choice, requested):
            f"held-out {n['held-out']}); every answer is a {JUDGMENT}",
            f"bench {suite['suite']}: classifiers available ({len(bench.get('available') or [])}): {', '.join(bench.get('available') or []) or 'none'}"]
     if requested:
-        miss = [m for m in requested if m not in (bench.get("benched") or [])]
+        miss = [m for m in requested if m not in (bench.get("benched") or []) + (bench.get("skipped") or [])]
         out.append(f"bench {suite['suite']}: benched only --classifier {', '.join(requested)}" + (f" (not available: {', '.join(miss)})" if miss else ""))
+    if bench.get("skipped"):
+        out.append(f"bench {suite['suite']}: skipped: moving alias ({len(bench['skipped'])}): {', '.join(bench['skipped'])}")
     ok = sorted((m for m in models if m["available"]), key=lambda m: (-(m["train"]["accuracy"] or 0), m["train"]["brier"] or 9, m["model"]))
     w = max([len(m["model"]) for m in models] + [5])
     for s, what in (("train", "the choice and threshold are made here"), ("held-out", "the measure, never used to choose")):
@@ -908,7 +916,7 @@ def run_bench(qc, d, suite, picked, requested, runid, out):
     lines = bench_report(suite, q, picked, bench, models, choice, requested)
     (out / "report.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines), flush=True)
-    res.update(available=bench.get("available"), benched=bench.get("benched"), models=models, choice=choice,
+    res.update(available=bench.get("available"), benched=bench.get("benched"), skipped=bench.get("skipped") or [], models=models, choice=choice,
                cost_usd=sum(m["cost_usd"] for m in models))
     return bench_end(out, res, None if choice else "no classifier answered every train case")
 
