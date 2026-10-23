@@ -24,8 +24,10 @@ of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
 when the PR head is not the judged head, the git repo of the current directory (the lane
-worktree, PR head and BASE fetched; BASE defaults to origin/main). The section, up to the
-next `## ` heading:
+worktree, PR head and BASE fetched; BASE defaults to origin/main). The PR body carries the
+parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
+the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
+on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
 
   ## Merge ask
   Head: <sha>                     the PR's head H' (7+ hex prefix)
@@ -50,8 +52,7 @@ Ids are <spec slug>#<id> or a bare id one --status file names; pass --status onc
 Pass: the section on stdout (send it with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
-  octo-feather-lane tickets PARENT [--repo OWNER/NAME]
-                                   check every sub-issue of issue PARENT as a tracer bullet
+  octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
   octo-feather-lane ticket FILE|-  check one ticket draft (a file, or stdin) before publishing
 
 `tickets` and `ticket` (spec issue-lifecycle #acceptance-tracer-tickets) read a ticket's
@@ -70,16 +71,26 @@ wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo ru
 structural facts only, never what the prose means (that is review's). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
 2 nothing could be checked (gh, file or specs error; nothing printed as passed).
-`tickets` reads issues through `gh issue view --json` (works with the qc judge's offline gh);
-the repo is --repo, else gh's default for the current directory.
+`tickets` reads tickets only through the target's tracker skill's `issue-view` (the parent's
+`children`, then each body; GitHub Issues or Linear, from the .octo-feather.toml of the git repo
+at the current directory; on GitHub it works under the qc judge's offline gh).
+
+  octo-feather-lane done PARENT    the lane's close (spec issue-lifecycle #gates-pr-line): move
+                                   every ticket of PARENT, then PARENT, to done
+
+`done` runs the tracker skill's `issue-done` on each sub-issue `issue-view PARENT` lists, then
+on PARENT, whether or not the tracker already did (one already done stays as it is), reads each
+back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
+named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, json, os, re, shlex, subprocess, sys, tempfile
+import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+KIT = Path(__file__).resolve().parent.parent
 
 
 class Refuse(Exception):
@@ -463,6 +474,30 @@ def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
     return failed, pending
 
 
+# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
+CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
+
+
+def parent_line(body: str, branch: str) -> list[str]:
+    """Spec #gates-pr-line: the body carries the tracker skill's pr-line for the lane's parent (the key its
+    key-from-branch reads from the PR branch), and closes no other GitHub issue."""
+    try:
+        key = tracker("key-from-branch", branch, err=Refuse).strip()
+        want = tracker("pr-line", key, err=Refuse).strip()
+    except Refuse as e:
+        return [f"parent line: cannot name it for branch {branch!r} ({e}); push the lane from its lane branch (docs/adr/0011)"]
+    lines = [l.strip() for l in body.splitlines()]
+    got = [l for l in lines if l == want or (l.startswith(want) and not re.match(r"[\w-]", l[len(want):len(want) + 1]))]
+    out = [] if got else [f"parent line: missing; add the line `{want}` (the tracker skill's pr-line {key}) to the PR body"]
+    for l in lines:
+        for m in CLOSES.finditer(l):
+            if l in got and m.end() <= len(want):
+                continue  # the parent line's own closing link (GitHub: Closes #<parent>), never the rest of its line
+            out.append(f"parent line: `{l[:80]}` closes GitHub issue #{m.group(1)}, not the lane's parent line `{want}`; "
+                       "remove it (the supervisor's close moves each ticket to done with the tracker skill's issue-done)")
+    return out
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -477,8 +512,9 @@ def cmd_merge_ask(args: list[str]) -> int:
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0]); specs = load_specs(files)
-    d = pr_view(pr, "body,headRefOid,statusCheckRollup,comments,commits", repo)
+    d = pr_view(pr, "body,headRefName,headRefOid,statusCheckRollup,comments,commits", repo)
     head = d["headRefOid"]; miss: list[str] = []
+    miss += parent_line(d["body"] or "", d["headRefName"] or "")
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
@@ -949,62 +985,92 @@ def strip_subst(cmd: str) -> str:
     return "".join(out)
 
 
-def gh_json(args: list[str], what: str) -> dict:
+def tracker(script: str, *args: str, err: type = Unchecked) -> str:
+    """Run SCRIPT of the target's tracker skill (scripts/pi-role's tracker_skill resolves it from the
+    .octo-feather.toml of the git repo at the current directory, docs/adr/0004); its stdout. A failure
+    raises ERR naming the script and its reason."""
+    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
+    pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+    loader.exec_module(pr)
     try:
-        p = subprocess.run(["gh", *args], capture_output=True, text=True, timeout=120)
-    except FileNotFoundError as e:
-        raise Unchecked("gh not found on PATH: install GitHub CLI (gh) or put it on PATH, then rerun") from e
-    except subprocess.TimeoutExpired as e:
-        raise Unchecked(f"gh timed out reading {what}: check the network and gh auth status, then rerun") from e
-    if p.returncode != 0:
-        err = " ".join(p.stderr.split())[:400] or f"exit {p.returncode}"
-        raise Unchecked(f"gh could not read {what} ({err}): check the issue number, --repo, network and `gh auth status`, then rerun")
+        skill = pr.tracker_skill(str(KIT / ".agents" / "skills"))
+    except SystemExit as e:
+        raise err(f"{e.code}: set `tracker` in the target's .octo-feather.toml to a tracker the kit has, then rerun") from e
+    path = KIT / ".agents" / "skills" / skill / "scripts" / script
     try:
-        d = json.loads(p.stdout)
-        if not isinstance(d, dict):
-            raise ValueError("not an object")
-        return d
+        p = subprocess.run([str(path), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=120)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise err(f"tracker script {skill}/{script} {' '.join(args)} did not run ({e}): check the tracker CLI and network, then rerun") from e
+    if p.returncode:
+        why = " ".join((p.stderr or p.stdout).split())[:400] or f"exit {p.returncode}"
+        raise err(f"tracker script {skill}/{script} {' '.join(args)} failed ({why}): fix the cause it names, then rerun")
+    return p.stdout
+
+
+def issue_view(key: str, err: type = Unchecked) -> dict:
+    """The tracker skill's issue-view of KEY: {key, ..., state, children}, children a list of key strings."""
+    out = tracker("issue-view", key, err=err)
+    try:
+        d = json.loads(out)
+        if not isinstance(d, dict) or not isinstance(d.get("key"), str) or not isinstance(d.get("children"), list) \
+                or not all(isinstance(k, str) for k in d["children"]):
+            raise ValueError("no key or children list of key strings")
     except ValueError as e:
-        raise Unchecked(f"gh returned unreadable JSON for {what} ({e}): check gh's version supports `issue view --json`, then rerun") from e
+        raise err(f"issue-view {key} printed unreadable JSON ({e}): the tracker skill's issue-view must print key and children, then rerun") from e
+    return d
+
+
+def key_order(k: str) -> tuple:
+    """Keys in tracker order: the prefix, then the trailing number (101 before 110, ENG-9 before ENG-10)."""
+    m = re.fullmatch(r"(.*?)(\d+)", k)
+    return (m.group(1), int(m.group(2))) if m else (k, 0)
 
 
 def cmd_tickets(args: list[str]) -> int:
-    repo, rest, i = [], [], 0
-    while i < len(args):
-        a = args[i]
-        if a in ("--repo", "-R") and i + 1 < len(args):
-            repo = ["--repo", args[i + 1]]; i += 2; continue
-        if a.startswith("--repo="):
-            repo = ["--repo", a[7:]]; i += 1; continue
-        rest.append(a); i += 1
-    if len(rest) != 1 or not re.fullmatch(r"#?\d+", rest[0]) or (repo and not re.fullmatch(r"[\w.-]+/[\w.-]+", repo[1])):
-        raise Unchecked(f"usage: octo-feather-lane tickets PARENT [--repo OWNER/NAME] (PARENT the lane's parent issue number, e.g. 40; got {' '.join(args) or 'nothing'})")
-    parent = rest[0].lstrip("#")
+    if len(args) != 1 or not args[0].strip():
+        raise Unchecked(f"usage: octo-feather-lane tickets PARENT (PARENT the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
     specs = specs_dir()
-    d = gh_json(["issue", "view", parent, *repo, "--json", "number,subIssues"], f"parent #{parent}")
-    sub = d.get("subIssues") or {}
-    nodes = sub.get("nodes") if isinstance(sub, dict) else sub
-    if not isinstance(nodes, list) or any(not isinstance(n, dict) or not isinstance(n.get("number"), int) for n in nodes):
-        raise Unchecked(f"gh returned no subIssues list for #{parent}: check gh's version supports `issue view --json subIssues`, then rerun")
-    total = sub.get("totalCount", len(nodes)) if isinstance(sub, dict) else len(nodes)
-    if total != len(nodes):
-        raise Unchecked(f"#{parent} has {total} sub-issues but gh returned {len(nodes)}: check them by hand with `octo-feather-lane ticket`, or split the parent")
-    if not nodes:
-        print(f"#{parent}: class: no-sub-issues: the parent lists no sub-issues; fix: file each lane ticket as a sub-issue of #{parent} (to-tickets publish step, spec issue-lifecycle #acceptance-sub-issues)")
+    d = issue_view(args[0])
+    parent = d["key"]
+    kids = sorted(set(d["children"]), key=key_order)
+    if not kids:
+        print(f"{parent}: class: no-sub-issues: the parent lists no sub-issues; fix: file each lane ticket as a sub-issue of {parent} (to-tickets publish step, spec issue-lifecycle #acceptance-sub-issues)")
         return 1
-    bodies = []   # fetch every ticket first: a gh failure midway reports nothing as passed
-    for n in sorted(x["number"] for x in nodes):
-        t = gh_json(["issue", "view", str(n), *repo, "--json", "number,body"], f"ticket #{n}")
+    bodies = []   # read every ticket first: a tracker failure midway reports nothing as passed
+    for k in kids:
+        t = issue_view(k)
         if not isinstance(t.get("body"), str):
-            raise Unchecked(f"gh returned no body for ticket #{n}: check gh's version supports `issue view --json body`, then rerun")
-        bodies.append((n, t["body"]))
+            raise Unchecked(f"issue-view {k} printed no body: the tracker skill's issue-view must print body, then rerun")
+        bodies.append((t["key"], t["body"]))
     cache, bad = {}, 0
-    for n, body in bodies:
-        fails = check_body(f"#{n}", body, specs, cache)
-        print("\n".join(fails) if fails else f"#{n}: ok")
+    for k, body in bodies:
+        fails = check_body(k, body, specs, cache)
+        print("\n".join(fails) if fails else f"{k}: ok")
         bad += bool(fails)
-    print(f"#{parent}: {len(bodies) - bad} of {len(bodies)} tickets pass" + (f", {bad} fail" if bad else ""))
+    print(f"{parent}: {len(bodies) - bad} of {len(bodies)} tickets pass" + (f", {bad} fail" if bad else ""))
     return 1 if bad else 0
+
+
+def cmd_done(args: list[str]) -> int:
+    if len(args) != 1 or not args[0].strip():
+        raise Refuse(f"usage: octo-feather-lane done PARENT (the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
+    d = issue_view(args[0], err=Refuse)
+    parent = d["key"]
+    keys = sorted(set(d["children"]), key=key_order) + [parent]   # the parent last: it is done when its tickets are
+    failed = []
+    for k in keys:
+        try:
+            tracker("issue-done", k, err=Refuse)
+            state = issue_view(k, err=Refuse).get("state")   # read back: the move landed
+            if state != "done":
+                raise Refuse(f"{k} reads {state!r} after issue-done, not done: move it by hand in the tracker, then rerun")
+            print(f"{k}: done")
+        except Refuse as e:
+            failed.append(f"  - {k}: {e}")
+    if failed:
+        raise Refuse(f"{parent}: {len(failed)} of {len(keys)} not done:\n" + "\n".join(failed) + "\nrerun `octo-feather-lane done " + parent + "` after the fix (issue-done leaves a done ticket as it is)")
+    print(f"{parent}: parent and {len(keys) - 1} tickets done")
+    return 0
 
 
 def cmd_ticket(args: list[str]) -> int:
@@ -1029,6 +1095,7 @@ COMMANDS = {
     "verdict": cmd_verdict,
     "merge-ask": cmd_merge_ask,
     "tickets": cmd_tickets,
+    "done": cmd_done,
     "ticket": cmd_ticket,
 }
 

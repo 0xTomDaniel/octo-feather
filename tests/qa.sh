@@ -206,6 +206,30 @@ json.dump({k: v for k, v in e.items() if k not in gone}, open(f"{d}/reference/ex
 EOF
 run 1 "$C" "$t/kit-evals"
 grep -qF "skill-triggers: role implementer skill pull: no case for should_trigger false split held-out" <<< "$out" || fail "coverage gap not named: $out"
+# {tracker} on a role's skills line resolves as pi-role does in a fixture copy: no .octo-feather.toml is github, so
+# github-issues is the supervisor's skill and its cases count; a fixture naming linear adds linear; an unknown tracker fails.
+cp -r "$kit/evals" "$t/trk-evals"
+python3 - "$t/trk-evals/skill-triggers" <<'EOF'
+import json, sys
+d = sys.argv[1]; c = json.load(open(f"{d}/cases.json")); e = json.load(open(f"{d}/reference/expectations.json"))
+gone = [x["id"] for x in c if x["role"] == "supervisor" and x["should_trigger"] and x["split"] == "train"
+        and e[x["id"]]["facts"] == [{"fact": "skill_read", "skill": "github-issues"}]]
+assert gone, "no train should case for supervisor github-issues in the kit suite"
+json.dump([x for x in c if x["id"] not in gone], open(f"{d}/cases.json", "w"))
+json.dump({k: v for k, v in e.items() if k not in gone}, open(f"{d}/reference/expectations.json", "w"))
+EOF
+run 1 "$C" "$t/trk-evals"
+grep -qF "skill-triggers: role supervisor skill github-issues: no case for should_trigger true split train;" <<< "$out" \
+  || fail "a {tracker} gap not named as github-issues: $out"
+[[ "$(grep -c ': role .* skill ' <<< "$out")" == 1 ]] || fail "only the dropped {tracker} pair should be missing: $out"
+cp -r "$kit/evals" "$t/lin-evals"; echo 'tracker = "linear"' > "$t/lin-evals/fixtures/lane-mini/.octo-feather.toml"
+run 1 "$C" "$t/lin-evals"
+for r in director implementer supervisor; do grep -qF "skill-triggers: role $r skill linear: no case for should_trigger true split train" <<< "$out" \
+  || fail "a fixture's linear tracker did not add $r linear: $out"; done
+grep -q "skill {tracker}\|skill github-issues:" <<< "$out" && fail "{tracker} left unresolved, or github-issues dropped: $out"
+echo 'tracker = "jira"' > "$t/lin-evals/fixtures/lane-mini/.octo-feather.toml"
+run 1 "$C" "$t/lin-evals"
+grep -qF "fixtures/lane-mini/.octo-feather.toml: field tracker: 'jira' has no kit tracker skill" <<< "$out" || fail "unknown tracker not named: $out"
 
 # A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs.
 FAKE_HERDR_LEAK=1 run 1 "$Q" --evals "$t/evals" --case reads
@@ -310,12 +334,12 @@ blk = lambda o: "Verdict.\n```json\n" + json.dumps(o) + "\n```"
 rb = lambda s, b: {"fact": "skill_read_before", "skill": s, "before": b}
 fx = {"fact": "skill_not_read", "skill": "pull"}   # stays open until the run ends
 cases = [
-  # order: tdd read, test write, commit read, commit, push, gh call, github read; github comes after its gh call.
+  # order: tdd read, test write, commit read, commit, push, gh call, github-pr read; github-pr comes after its gh call.
   (case("order", [["read", "@tdd"], ["bash", "mkdir -p tests && printf 'def test_x(): pass\\n' > tests/test_x.py"],
                   ["read", "@commit"], ["bash", G + " add -A && " + G + " commit -qm x"], ["bash", "git push -q origin HEAD"],
-                  ["bash", "gh pr create --title x"], ["read", "@github"]], branch="impl-t1", origin=True, fake_gh=True),
+                  ["bash", "gh pr create --title x"], ["read", "@github-pr"]], branch="impl-t1", origin=True, fake_gh=True),
    [rb("tdd", "test_write"), rb("commit", "test_write"), rb("commit", "git_commit"), rb("tdd", "git_push"),
-    rb("github", "gh_call"), rb("python", "edit"), rb("commit", "final_message"), fx]),   # fx: open to the end, so all 7 run
+    rb("github-pr", "gh_call"), rb("python", "edit"), rb("commit", "final_message"), fx]),   # fx: open to the end, so all 7 run
   # a write the commands never name as one: python writes the test file; a read-only command that names tests/ with > is none.
   (case("fsonly", [["bash", "ls tests/ 2>&1 > /dev/null; cat README.md > /dev/null"], ["read", "@tdd"],
                    ["bash", "python3 -c \"import os; os.makedirs('tests'); open('tests/test_z.py', 'w').write('x')\""]]),
@@ -326,8 +350,10 @@ cases = [
                     ["read", "@tdd|limit=3"], ["bash", "cat @tdd #TRUNC"]]),
    [{"fact": "skill_read", "skill": "tdd"}]),
   # Any tool counts once the full content is in its result: a bash cat (beside other files), a dotted or relative read.
-  (case("loads", [["bash", "cat README.md @commit"], ["read", "@dot:python"], ["read", "@rel:github"]]),
-   [{"fact": "skill_read", "skill": "commit"}, {"fact": "skill_read", "skill": "python"}, {"fact": "skill_read", "skill": "github"}]),
+  # The role's {tracker} slot: pi-role resolves it in the case copy (no .octo-feather.toml: github, so github-issues).
+  (case("loads", [["bash", "cat README.md @commit"], ["read", "@dot:python"], ["read", "@rel:github-pr"], ["read", "@github-issues"]]),
+   [{"fact": "skill_read", "skill": "commit"}, {"fact": "skill_read", "skill": "python"}, {"fact": "skill_read", "skill": "github-pr"},
+    {"fact": "skill_read", "skill": "github-issues"}]),
   (case("setup", [["bash", "echo branch=$(git branch --show-current); git log --format=msg=%s -1 hb; git rev-list --count hb;"
                            " echo repo={repo} cwd=$(pwd -P) head={head} rev=$(git rev-parse HEAD); ls tests;"
                            " echo origin=$(git ls-remote origin main | wc -l); echo gh=$(command -v gh)"]],
@@ -359,7 +385,7 @@ rl() { grep -E "^$1 rt/$2: " <<< "$out" || fail "rt $2: want $1: $out"; }
 rl FAIL order >/dev/null; rl FAIL partial >/dev/null; rl FAIL contract >/dev/null; rl FAIL roleedit >/dev/null; rl PASS fsonly >/dev/null; rl PASS setup >/dev/null; rl PASS incl >/dev/null
 rl FAIL partial | grep -q "skill_read tdd: no load of tdd/SKILL.md (its full content in a tool result) in 5 tool calls" \
   || fail "partial: an ls, grep, head, a read elsewhere, a cut-short read or a truncated cat counted: $out"
-rl PASS loads | grep -q "skill_read commit: loaded at tool call 2 of [0-9] (bash cat README.md .*/commit/SKILL.md); skill_read python: loaded at tool call 3 of [0-9] (read .*/../python/SKILL.md); skill_read github: loaded at tool call 4 of [0-9] (read [^/]" \
+rl PASS loads | grep -q "skill_read commit: loaded at tool call 2 of [0-9] (bash cat README.md .*/commit/SKILL.md); skill_read python: loaded at tool call 3 of [0-9] (read .*/../python/SKILL.md); skill_read github-pr: loaded at tool call 4 of [0-9] (read [^/].*; skill_read github-issues: loaded at tool call 5 of [0-9] (read .*/github-issues/SKILL.md)" \
   || fail "loads: a cat, a dotted or a relative read of the kit's SKILL.md did not count: $out"
 rl FAIL inclmiss | grep -qF 'declared_includes blocking: no entry with {"test": "t.py::b"} in [{"test": "t.py::a"}]' \
   && rl FAIL inclmiss | grep -qF 'declared_includes criteria: no entry with {"id": "x", "verdict": "pass"}' || fail "inclmiss: missing items not named: $out"
@@ -371,7 +397,7 @@ d = sys.argv[1]
 g = {(f["skill"], f.get("before")): (f["status"], f["evidence"]) for f in json.load(open(f"{d}/order/grading.json"))["facts"]}
 want = {("tdd", "test_write"): ("pass", "loaded at tool call 2 of 8 (read "), ("commit", "test_write"): ("fail", "first test_write at tool call 3 of 8"),
         ("commit", "git_commit"): ("pass", "first git_commit at tool call 5 of 8"), ("tdd", "git_push"): ("pass", "first git_push at tool call 6 of 8"),
-        ("github", "gh_call"): ("fail", "first gh_call at tool call 7 of 8 (bash gh pr create --title x), loaded only at tool call 8 of 8"),
+        ("github-pr", "gh_call"): ("fail", "first gh_call at tool call 7 of 8 (bash gh pr create --title x), loaded only at tool call 8 of 8"),
         ("python", "edit"): ("fail", "first edit at tool call 3 of 8"), ("commit", "final_message"): ("pass", "before the final message")}
 for k, (st, ev) in want.items():
     assert g[k][0] == st and ev in g[k][1], (k, g[k])
@@ -455,4 +481,4 @@ bad 'e["reads"]["facts"].append({"fact": "declared", "field": "rung", "in": [1]}
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field)"

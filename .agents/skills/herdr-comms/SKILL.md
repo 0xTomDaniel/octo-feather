@@ -21,8 +21,10 @@ kit's `.agents/skills/herdr-comms/assets` and `scripts` on `PATH`.
 
 - Workspace `director`, one tab `director`: the director,
   started by `octo-feather-start --director` (`just start`).
-- One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
-  started by `octo-feather-start --issue <n> --cwd <worktree>`.
+- One workspace per lane, named by its lane key, what the tracker skill's
+  `lane-key` prints (`gh12` for ticket 12, `eng-123` for ticket ENG-123): tab `supervisor` is the supervisor, started by
+  `octo-feather-start --issue <ticket> --cwd <worktree>`, the ticket as the
+  tracker writes it (`12`, `ENG-123`).
 - In that workspace, one tab per worker: `worker-1`, `worker-2`, and the
   per-merge `code-reviewer`; a correction lane has a `corrector` tab instead of
   workers. One agent per tab, one pane per tab.
@@ -63,7 +65,10 @@ without passing the flag.
 
 A new tab gets the Herdr server's environment, so the spawn always exports the
 caller's `HOME`, the kit `PATH`, `OCTO_FEATHER_ROLE` and
-`OCTO_FEATHER_SESSION_ID` into it.
+`OCTO_FEATHER_SESSION_ID` into it, and `LINEAR_API_KEY` when the caller has
+it set (unset in the caller, unset in the tab). The key comes only from the
+environment that starts the factory: never write it into a file, brief,
+message, lane record or log.
 
 It wraps `herdr tab create` and `herdr agent start`, and handles three things
 those leave to the caller:
