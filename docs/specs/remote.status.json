@@ -31,8 +31,8 @@
       "pr": null
     },
     "acceptance-linear-key-panes": {
-      "status": "built",
-      "pr": 103
+      "status": "planned",
+      "pr": null
     },
     "acceptance-linear-key-qc": {
       "status": "built",
