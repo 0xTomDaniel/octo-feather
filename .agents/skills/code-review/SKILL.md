@@ -64,7 +64,7 @@ Then classify every check the diff adds or changes (Check: GLOSSARY.md), one lin
 
 `<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
 
-Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (one owner per rule: docs/adr/0008 rung 1). One line per owned rule at column 0 outside code blocks, or the one line `Owners: none`:
+Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule at column 0 outside code blocks, or the one line `Owners: none`:
 
 `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
 
