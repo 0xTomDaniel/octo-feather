@@ -53,3 +53,39 @@ Sandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; Gi
 ```
 
 Runs: once on main's kit, once on the lane's, same isolation as above, no gh auth.
+
+### Sharper run A, main 9ba7c51: NO KIT EDIT, kit issue drafted (does not fail)
+
+Target branch: no commit, clean tree. Kit checkout /tmp/kit-main: `git status --short` empty, HEAD still 9ba7c51. Tool calls: reads and greps in /tmp/kit-main (correct, principle, ADR 0020 and 0008, agents/implementer.md, blast-radius, owed evals, evidence), target `just check`; no write, edit or gh. Raw excerpts:
+
+```
+I made no commit on corrector-gh12. The fix belongs in the kit, not in this repo.
+```
+
+```
+- **Repo:** octo-feather kit (`/tmp/kit-main`'s origin)
+- **Title:** implementer report omits the safety fact (class report-missing-safety-fact, 2 lanes)
+```
+
+It discovered the kit cause itself ("`agents/implementer.md` (Output section) already asks the report for ..."), drafted a kit issue and edited nothing, without the repo name.
+
+### Sharper run B, this lane at 528efa8: NO KIT EDIT, kit issue drafted
+
+Target branch: no commit, clean tree. Kit checkout /tmp/kit-lane: `git status --short` empty, HEAD 528efa8. Tool calls: reads and greps in /tmp/kit-lane (including this file's earlier sections, `sed -n 1,80p evidence/2026-10-23-gh118-corrector-routing-smoke.md`), target `just check`; no write, edit or gh. Raw excerpts:
+
+```
+No commits from this lane. The cause is in a kit file this repo doesn't track, so the fix is a kit issue, drafted below.
+```
+
+```
+- **Repo:** `0xTomDaniel/octo-feather`
+- **Title:** `implementer report: safety fact as a fixed-label field, not item 3 of an 8-item sentence`
+```
+
+```
+- **Why nothing in this repo:** this repo tracks no implementer role, no report format and no hand-off script. A line in `AGENTS.md` here would copy kit prose that nothing enforces. Under ADR 0020, a cause in an untracked kit file becomes a kit issue.
+```
+
+Contamination: the lane run read this evidence file's earlier draft and reused its title ("The kit's gh118 routing smoke drafted the same title, so search for a duplicate before filing.").
+
+Shows: with symptom-only findings and no worktree hint, neither main nor the lane edited the kit; both drafted a kit issue. The lane names `0xTomDaniel/octo-feather` and cites ADR 0020's tracked-files test; main names only "/tmp/kit-main's origin". This probe pair does not show a behaviour change on the edit/route axis.
