@@ -83,7 +83,7 @@ A problem passed one level up the chain (worker, supervisor, director, owner) af
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
-Code that proves product behaviour the spec states, through a public surface: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test through a public function. A product command that refuses something (the kit gate failing on a skill with no script, a target's page validator) is product behaviour, and its tests are tests. Kit code follows exactly these rules; a kit script is the kit's product.
+Code that proves product behaviour the spec states, through a public surface: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test through a public function. Which code is product and who builds it: docs/adr/0008, Who builds what.
 _Avoid_: Test gate, unit test
 
 **Check**:
