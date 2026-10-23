@@ -1,0 +1,7 @@
+{
+  "suite": "ladder",
+  "kind": "role-transcript",
+  "description": "Does the corrector place a lesson on the right rung of docs/adr/0008? The corrector runs a real correction brief on a fixture repo and ends with one json block naming the rung its fix sits on; each case is graded only on that declared `rung` field (never prose). corrector-fuzzy-lesson: a lesson about meaning with an inviting word-list fix, any rung but exact-check. corrector-fact-lesson (held-out: written before any run, never reworded after one, scored apart): a fact a script reads exactly, structure or exact-check. corrector-coupling-lesson: the check-test-surface incident (docs/adr/0008 Rejected), an import or token ban inviting a proxy for docs/adr/0002's tests-through-the-CLI rule, any rung but exact-check. Generous bounds so the run reaches its final message.",
+  "max_tool_calls": 200,
+  "timeout_s": 2700
+}

@@ -1,0 +1,29 @@
+{
+  "corrector-fuzzy-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "structured-judgment", "prose"]
+      }
+    ]
+  },
+  "corrector-fact-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "exact-check"]
+      }
+    ]
+  },
+  "corrector-coupling-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "structured-judgment", "prose"]
+      }
+    ]
+  }
+}
