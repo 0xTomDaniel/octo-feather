@@ -84,9 +84,8 @@ check-refs:
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
-          # The #acceptance-retired-words criterion names the words it bans. The second quote is its wording before
-          # the clarifies call by the director; delete it when that spec commit lands.
-          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}, qr{calls the top agent [o]perator or the person [h]uman}],
+          # The #acceptance-retired-words criterion names the words it bans.
+          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
           # NOTICE attribution names the octo-lite file the director came from.
