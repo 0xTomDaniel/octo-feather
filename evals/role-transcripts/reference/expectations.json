@@ -165,5 +165,14 @@
         ]
       }
     ]
+  },
+  "implementer-skill-ticket": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "eval-cases",
+        "before": "kit_contract_edit"
+      }
+    ]
   }
 }

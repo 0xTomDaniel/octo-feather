@@ -392,6 +392,38 @@
     "task": "Do not change any file and do not commit. Which Node.js version does this repo pin, and where? One line."
   },
   {
+    "id": "impl-evalcases-skill-sections",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket T6 (criterion changelog-sections): the changelog skill in this repo should also say that entries under `## Unreleased` are grouped into `### Added`, `### Changed` and `### Fixed`. Make the change and commit it."
+  },
+  {
+    "id": "impl-evalcases-new-repo-skill",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "new ticket, small one: whoever touches src/app/cli.py keeps forgetting that errors exit 2 with a single line on stderr. we want that written down as a repo skill here (cli-errors), declared in AGENTS.md next to python. ship it."
+  },
+  {
+    "id": "impl-evalcases-near-read-skill",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. What rules does this repo's changelog skill set for an entry? List them, one line each."
+  },
+  {
+    "id": "impl-evalcases-near-use-skill",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T7: `app hello --json` gained a `name` field in #9. Add its CHANGELOG.md entry the way this repo wants entries written, and commit. Change nothing else."
+  },
+  {
     "id": "sup-commit-pr-body",
     "role": "supervisor",
     "fixture": "lane-mini",
