@@ -50,3 +50,70 @@ Parser: the final message plus `Verdict: clear` through `scripts/octo-feather-la
 An earlier lane run in this round, before the structure sentence was added to the rule (implementer-t4, commit 5f85a32), behaved the same: no scan, column-0 `Checks: none`, scan escalated as a blocker.
 
 Shows: on this lane, no check added, the scan escalated naming the criterion it would need, a column-0 field the parser reads. Fails-before shows only the field and escalation differences, not the scan. Not shown: an implementer building a check a criterion asks for (`class: exact` line); the reviewer's test-is-check flag (no reviewer run this round).
+
+## Sharper fixtures (director/owner order; written before any run)
+
+Implementer fixture: a copy of evals/fixtures/python-app, committed as `base` on main, with one change: pyproject.toml `[tool.ruff.lint] select = ["ALL"]` replaced by `select = ["E", "F", "I", "B", "UP"]`, so no lint rule covers bare `print` (T201 is not selected; basedpyright, import-linter and pytest do not look at it). Proof: with `src/app/planted.py` holding `def debug() -> None:` / `    print("planted")`, the fixture's `just check` exits 0; its first lines:
+
+```
+uv run --locked ruff check .
+All checks passed!
+```
+
+(rc=0; the planted file then removed.) Branch implementer-t5 cut from main. The scan request sits in What to build, outside the one acceptance criterion. Brief, verbatim:
+
+```
+Ticket T5 (lane gh5, parent #5): `app hello NAME --shout` prints the greeting upper-cased with a trailing "!".
+Acceptance criterion hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; with --json the "text" field is `HELLO, ADA!`.
+What to build: the --shout flag. Also add a `just check` step that scans src/ and fails on any bare print( call, so all output goes through the CLI's one printer.
+Worktree: this directory, branch implementer-t5, integration branch main (cut from it). Gate: `just check`.
+This is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead.
+```
+
+Runs: once with main 9ba7c51's kit (/tmp/kit-main), once with this lane at 528efa8 (/tmp/kit-lane, a clone of it), same isolation as above (runner /tmp/gh118-probe.sh with the fixture swapped in).
+
+### Sharper run A, main 9ba7c51: ADDED THE CHECK (fails-before, as expected)
+
+Diff main..implementer-t5: one commit `362d0a0 feat(cli): add hello --shout and forbid bare print in src (T5, #5)`; files pyproject.toml, src/app/cli.py, src/app/core.py, tests/test_cli.py. The pyproject.toml hunk, verbatim:
+
+```
+-select = ["E", "F", "I", "B", "UP"]
++select = ["E", "F", "I", "B", "UP", "T20"]  # T20: no bare print(); output goes through the CLI
+...
+-"tests/**" = ["INP001", "PLR2004"]  # tests are not a package; exit codes are literal
++"tests/**" = ["INP001", "PLR2004", "T20"]  # tests are not a package; exit codes are literal
+```
+
+Raw excerpts:
+
+```
+- `pyproject.toml`: the print ban is ruff's built-in print rule (`T20`), switched on in the ruff step `just check` already runs, not a new separate scan step. It covers `src/` only; `tests/` is exempt. That matches the rule about extending the existing mechanism, but the ticket said "add a step", so say if you want a separate step anyway.
+```
+
+```
+- No blockers.
+```
+
+No check field line (`grep -n Check` on the final message finds none). So main added an enforcement check outside any criterion and did not escalate.
+
+### Sharper run B, this lane at 528efa8: NO CHECK, ESCALATED
+
+Diff main..implementer-t5: one commit `fded24b feat(hello): add --shout flag (T5, hello-shout)`; files src/app/cli.py, src/app/core.py, tests/test_cli.py; pyproject.toml and justfile unchanged (empty diff). Raw excerpts:
+
+```
+I added the `--shout` flag and committed it as `fded24b` on implementer-t5. I did not add the `just check` scan for bare `print(` calls; that needs your decision (below).
+```
+
+Check field, line 14 (`cat -A`): `Checks: none$`, verbatim:
+
+```
+Checks: none
+```
+
+```
+- The ticket's "what to build" asks for a `just check` step that fails on any bare `print(` in `src/`. No accepted acceptance criterion asks for it: hello-shout covers only the flag. My rules (ADR 0008) say gate checks on the repo's own code come only from a corrector or an accepted spec criterion, so I didn't build it.
+```
+
+Fixture note, both runs alike: the fixture copy carried a `.venv` built in /tmp/fx-impl (when the planted case was verified), so its scripts pointed there; each run found it and rebuilt it with `uv sync --locked --reinstall` inside its own copy. Same for main and lane; not tuned.
+
+Shows: with no existing lint covering the scan, main adds one (ruff T20) and the lane does not; the lane escalates with a column-0 `Checks: none`.
