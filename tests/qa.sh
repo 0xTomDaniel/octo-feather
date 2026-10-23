@@ -5,8 +5,8 @@
 # when all pass, train and held-out score lines, --sample stratified and deterministic, role-skill coverage,
 # --suite/--case selection, per-run artifacts outside the repo, the run stops once its facts are decided, a pi
 # that dies without an answer fails its case, each case runs in the qc sandbox and a failed sandbox proof is a FAIL,
-# refusal inside a check run, the shape check naming case and field, and a judgment suite's bench (stub classifiers
-# behind the stub pi's codemode) and shape.
+# refusal inside a check run, the shape check naming case and field, and a judgment suite's bench (its extension
+# command run for real by the stub pi under node, stub classifiers at the model registry) and shape.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 set -euo pipefail
 # A test harness, not a gate recipe reaching the evals: its stub-pi runs start outside any check run (the one
@@ -35,28 +35,42 @@ out({"type": "session", "version": 3, "id": "stub", "cwd": "."})
 out({"type": "agent_start"})
 if "STUB-CRASH" in prompt:
     sys.exit(3)
-if prompt.startswith("Call the codemode tool"):   # a judgment bench's relay: run its script as codemode would, with three
-    import re                                      # stub classifiers: token picks the PICK=<label> in a state at 0.8,
-    code = prompt.split("\n\n", 1)[1]               # first always picks the first label at 1.0, broken always errors
-    inp = json.load(open(re.search(r'tools\.read\(\{path: ("[^"]*")\}\)', code).group(1).strip('"')))
-    names = ["stub/token", "stub/first", "stub/broken"]
-    ms = [m for m in names if not inp["classifiers"] or m in inp["classifiers"]]
-    L = inp["labels"]; rows = []
-    for mi, m in enumerate(ms):
-        for ci, c in enumerate(inp["cases"]):
-            pick = c["state"].split("PICK=")[1].split()[0] if m == "stub/token" else L[0]
-            p = 0.8 if m == "stub/token" else 1.0
-            rows.append([mi, ci, None, None, None, 0] if m == "stub/broken" else
-                        [mi, ci, pick, [p if lb == pick else round((1 - p) / (len(L) - 1), 4) for lb in L], 0.001, None])
-    if any("STUB-ALTER" in c["state"] for c in inp["cases"]):
-        code += "// changed\n"
-    out({"type": "tool_execution_start", "toolCallId": "cm", "toolName": "codemode", "args": {"code": code}})
-    res = json.dumps({"bench": {"available": names, "benched": ms, "errors": ["stub provider down"], "rows": rows}})
-    out({"type": "tool_execution_end", "toolCallId": "cm", "toolName": "codemode", "isError": False,
-         "result": {"content": [{"type": "text", "text": "Script completed\nWall time 0.1 seconds\nOutput:\n"}, {"type": "text", "text": res}]}})
-    out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                           "content": [{"type": "text", "text": "done"}]}})
-    sys.exit(0)
+if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a judgment bench): load the -e extension
+    # and run its command for real under node, with stub classifiers at the model registry: token picks the PICK=<label>
+    # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
+    # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), broken never answers;
+    # a state holding STUB-DIE kills the run. As pi's print mode, an extension's process.stdout goes to stderr.
+    name, _, args = prompt[1:].partition(" ")
+    harness = """import {pathToFileURL} from "node:url";
+const [ext, name, args] = process.argv.slice(1);
+const cmds = {};
+(await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
+const ids = ["token", "first", "broken", "cheap-train", "cheap-total"];
+const models = ids.map((id) => ({type: "classifier", provider: "stub", id, name: id, api: "stub", input: ["text"]}));
+const cost = (id, state) => id === "cheap-train" ? (state.startsWith("case h") ? 0.01 : 0.001) : id === "cheap-total" ? (state.startsWith("case h") ? 0 : 0.002) : 0.001;
+const modelRegistry = {
+  getAvailableOfType: async (type) => (type === "classifier" ? models : []),
+  classify: async (m, {state, questions}) => {
+    if (m.id === "broken") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub provider down"};
+    if (typeof state !== "string") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub: state must be a string"};
+    if (state.includes("STUB-DIE")) process.exit(3);
+    const answers = {};
+    for (const [k, q] of Object.entries(questions)) {
+      const L = Object.keys(q.criteria);
+      const pick = m.id === "token" ? state.split("PICK=")[1].split(/\\s/)[0] : L[0];
+      const p = m.id === "token" ? 0.8 : 1.0;
+      answers[k] = {type: "choice", choice: pick, confidence: p,
+                    probabilities: Object.fromEntries(L.map((l) => [l, l === pick ? p : (1 - p) / (L.length - 1)]))};
+    }
+    return {provider: "stub", model: m.id, answers, usage: {input: 1, output: 1, totalTokens: 2, cost: {total: cost(m.id, state)}}, stopReason: "stop"};
+  },
+};
+if (!cmds[name]) { console.error(`stub pi: no command /${name}`); process.exit(1); }
+process.stdout.write = process.stderr.write.bind(process.stderr);   // as pi's print mode: stdout is pi's own
+await cmds[name].handler(args, {mode: "print", hasUI: false, modelRegistry});
+"""
+    p = subprocess.run(["node", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args])
+    sys.exit(p.returncode)
 def tool(i, name, args):   # as pi: the assistant message holding the call ends, then the tool runs
     out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "toolUse",
                                            "content": [{"type": "toolCall", "id": i, "name": name, "arguments": args}]}})
@@ -505,8 +519,9 @@ bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
 
-# A judgment suite: one closed question's labelled set, benched on every available classifier through the relay pi's
-# codemode (stubbed: token 9/12 train and 1/3 held-out right at 0.8, first always label a at 1.0, broken never answers).
+# A judgment suite: one closed question's labelled set, benched on every available classifier by a Pi extension command,
+# no agent (stubbed at the model registry: token 9/12 train and 1/3 held-out right at 0.8 on a string state only, first
+# and the cheap ones always label a at 1.0, broken never answers).
 mkdir -p "$t/jg/jb/reference"
 python3 - "$t/jg/jb" <<'EOF'
 import json, sys
@@ -526,11 +541,11 @@ cp -r "$t/jg" "$t/jg-good"
 run 0 "$Q" --evals "$t/jg"
 jl() { grep -qF -- "$1" <<< "$out" || fail "bench: no '$1' in: $out"; }
 jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every answer is a model judgment"
-jl "bench jb: classifiers available (3): stub/token, stub/first, stub/broken"
-[[ "$(grep -A3 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
-   $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
-[[ "$(grep -A3 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
-   $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
+jl "bench jb: classifiers available (5): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total"
+[[ "$(grep -A5 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
+   $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
+[[ "$(grep -A5 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
+   $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
 jl "unavailable stub/broken: listed but answered no case: stub provider down"
 jl "chosen stub/token (from train only"
 jl "held-out accuracy >= 0.468 and held-out brier <= 0.687"
@@ -538,23 +553,35 @@ jl "held-out now: accuracy 0.333 (1/3 of 3), brier 0.880, ece 0.467: does not me
 jl "DONE bench jb: chosen stub/token"
 grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "bench: not run in the qa sandbox: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
-for f in input.json script.js prompt.md transcript.jsonl sandbox.json answers.json bench.json report.txt; do [[ -e "$d/jb/$f" ]] || fail "bench artifact $f missing"; done
-! grep -q SECRET-REASON "$d/jb/input.json" "$d/jb/prompt.md" "$d/jb/transcript.jsonl" || fail "bench: the expectations reached the classifier side"
+for f in input.json extension.js stdout.txt stderr.txt sandbox.json answers.json bench.json report.txt; do [[ -e "$d/jb/$f" ]] || fail "bench artifact $f missing"; done
+! grep -q SECRET-REASON "$d/jb/input.json" "$d/jb/extension.js" "$d/jb/stdout.txt" || fail "bench: the expectations reached the classifier side"
 python3 - "$d" <<'EOF' || fail "bench artifacts wrong"
 import json, sys
 d = sys.argv[1]
 a = json.load(open(f"{d}/jb/answers.json"))
-assert len(a["answers"]) == 45 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
+assert len(a["answers"]) == 75 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
 s = json.load(open(f"{d}/summary.json"))
 assert s["benches"][0]["choice"]["model"] == "stub/token" and s["benches"][0]["verdict"] == "DONE", s["benches"]
+b = json.load(open(f"{d}/jb/bench.json"))   # per-model cost and the run total (token, first 0.015 each; cheap 0.042 + 0.024)
+assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-train"] == 0.042 and round(b["cost_usd"], 6) == 0.096, b
+# No agent: one pi, no tools, no chat model, no session; only the bench extension loaded.
+argv = json.loads(open(f"{d}/jb/stdout.txt").readline())["argv"]
+for x in ("--no-tools", "--no-extensions", "--no-session", "--no-skills", "--no-mcp"):
+    assert x in argv, (x, argv)
+assert "--model" not in argv and "--mode" not in argv and "--tools" not in argv, argv
+assert argv[argv.index("-p") + 1].startswith("/octo-feather-bench "), argv
 EOF
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
 jl "DONE bench jb: chosen stub/first"
-# The relay pi must run the script unchanged; otherwise no answer counts.
-python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-ALTER'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
-run 1 "$Q" --evals "$t/jg"
-jl "FAILED bench jb: the relay pi called codemode 1 time(s), never with the bench script unchanged"
+# Ties on train accuracy and Brier break on train cost only: cheap-train costs less on train, more in all.
+run 0 "$Q" --evals "$t/jg" --classifier stub/cheap-total --classifier stub/cheap-train
+jl "DONE bench jb: chosen stub/cheap-train"
+# A pi that dies before the command prints its result: the bench fails, naming it.
+python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-DIE'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
+run 1 "$Q" --evals "$t/jg" --classifier stub/first
+jl "FAILED bench jb: the bench command printed no bench result:"
+jl "(pi exit 3)"
 # The judgment shape: case and field named on a missing or bad one.
 bad 'del e["t3"]["reason"]' "jb/reference/expectations.json case t3: field reason: missing" "$t/jg-good" jb
 bad 'del e["t3"]["source"]' "jb/reference/expectations.json case t3: field source: missing" "$t/jg-good" jb
@@ -564,4 +591,4 @@ bad 'del c[2]["split"]' "jb/cases.json case t2: field split: missing" "$t/jg-goo
 bad 'c[2]["label"] = "a"' "jb/cases.json case t2: field label: unknown field; label, reason and source live only" "$t/jg-good" jb
 bad 'del c[0]; del e["t0"]' "jb/cases.json: 14 cases; a judgment set needs at least 15" "$t/jg-good" jb
 bad 'c[:] = [dict(x, split="train") for x in c]' "jb/cases.json: no case in split held-out" "$t/jg-good" jb
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, unavailable named, choice and threshold from train, --classifier, relay must run the script unchanged, judgment shape names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field)"
