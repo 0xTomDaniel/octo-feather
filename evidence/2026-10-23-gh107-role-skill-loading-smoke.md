@@ -26,7 +26,7 @@ Removed: 8 "Call the Skill tool" lines in implement, implement-spec, tdd, improv
 
 `evals/role-skill-loading/probe/probe.sh KIT ROLE FIXTURE BRIEF OUT`: `env -i`; PATH = a bin with only `pi` (plus the fake `gh` when given), then `/usr/local/bin:/usr/bin:/bin` (no herdr, herdr-say or kit scripts); `HERDR_SESSION=gh107-probe-sandbox`; temp HOME and `PI_CODING_AGENT_DIR` (copied auth, models, settings, extensions); `--session-dir` under OUT, so no session file lands in `~/.pi/agent/sessions` (checked: no `--tmp-gh107*` dir there). Waits for `free -m` available >= 2500 MB and swap < 500 MB. One probe at a time. Headless `pi-role agents/<role>.md -p <brief>`.
 
-Graders (facts from the session jsonl toolCalls, no model): `grade.py SESSION SKILL TARGET` = the first `read` of `<skill>/SKILL.md` (or a bash naming it) comes before the first TARGET call (`test`: write/edit/bash-write into tests/; `edit`; `cmd:REGEX`). `grade-review.py FINAL TEST...` = the final report's verdict blocks and each test name sits in a block finding. Baselines run the same probe with the role files and skills at main 5f8fca3 (`git archive 5f8fca3`).
+Graders (facts from the session jsonl toolCalls, no model): `grade.py SESSION SKILL TARGET` = the first `read` of `<skill>/SKILL.md` (or a bash naming it) comes before the first TARGET call (`test`: write/edit/bash-write into tests/; `edit`; `cmd:REGEX`). Whether the reviewer blocks each test is a labelled judgment, not a script: I read each final report and quote its blocking line (docs/adr/0008; the prose grader grade-review.py was deleted at review round 1, class regex-judging-meaning). Baselines run the same probe with the role files and skills at main 5f8fca3 (`git archive 5f8fca3`).
 
 Fixtures: evals/fixtures/python-app (templates/python), evals/fixtures/python-app-shout (the same plus a `--shout` change with one tautological test, `test_shout_json`, and one implementation-coupled test, `test_shout_suffix_is_bang`).
 
@@ -38,8 +38,8 @@ Fixtures: evals/fixtures/python-app (templates/python), evals/fixtures/python-ap
 | implementer-python-ticket | main 5f8fca3 | FAIL: tdd never read; python (1), implement (2) read; commit, blast-radius, principle-prove-it-works never read |
 | corrector-repeated-class | lane | PASS: correct (0), principle-encode (1), writing-for-agents (4), commit (5) before first edit (6) and commit |
 | reviewer-test-quality | lane, first wording | FAIL: tdd read; blocked the coupled test, missed the tautological one (expected built with the code's own `.upper() + "!"` through the CLI). Rule reworded once: "an expected value computed with the code's own operations is tautological, even through a public surface" |
-| reviewer-test-quality | lane | PASS: tdd and code-review read; verdict BLOCKED, `test_shout_json` (tautological-test) and `test_shout_suffix_is_bang` (implementation-coupled-test) both block |
-| reviewer-test-quality | main 5f8fca3 | FAIL: tdd never read; blocked only the coupled test |
+| reviewer-test-quality | lane | PASS: tdd and code-review read; labelled: verdict BLOCKED, `test_shout_json` (tautological-test) and `test_shout_suffix_is_bang` (implementation-coupled-test) both block |
+| reviewer-test-quality | main 5f8fca3 | FAIL: tdd never read; labelled: blocks the coupled test ("Block | class: test-internals | `tests/test_cli.py:39-41`"), not the tautological one |
 | qc-judge-demo-path | lane | PASS: principle-prove-it-works (0) before the demo run (6); verdict pass with the command and output |
 | director-file-parent | lane | PASS: github (0) before first gh call (2); filed the issue on the fake gh |
 | supervisor-publish-lane | lane | PASS: push (0) before `git push` (8); github (1) before first gh call (4); draft PR on the fake gh |
@@ -73,7 +73,7 @@ error: Recipe `check-refs` failed with exit code 1
 
 ## Rates: x3 on committed text (649faad) vs main (5f8fca3)
 
-Runner (lane scratch, /tmp/gh107/rates.sh): `git archive` of each commit as the kit; per run a fresh copy of evals/fixtures/python-app (reviewer: plus python-app-shout committed on branch implementer-t1), `git init`, `uv sync`; `probe.sh` (isolated, free -m gate), one probe Pi at a time, lane and main interleaved. Task text from evals/role-skill-loading/cases.json. Graded with the committed `grade.py` / `grade-review.py`. Positions are tool-call indexes: `skill=load<step@index`, `None` = never read.
+Runner (lane scratch, /tmp/gh107/rates.sh): `git archive` of each commit as the kit; per run a fresh copy of evals/fixtures/python-app (reviewer: plus python-app-shout committed on branch implementer-t1), `git init`, `uv sync`; `probe.sh` (isolated, free -m gate), one probe Pi at a time, lane and main interleaved. Task text from evals/role-skill-loading/cases.json. Skill reads graded with the committed `grade.py`; reviewer blocks are a labelled judgment (quoted lines below), relabelled at review round 1: main-rev-2 now blocks the coupled test (by line), the counts are unchanged. Positions are tool-call indexes: `skill=load<step@index`, `None` = never read.
 
 grade.py fix in this commit: a bash test write is now a `>`, `>>`, `tee` or `sed -i` whose target is under tests/; the old pattern counted any command naming tests/ with any `>` (`2>&1`), so main runs showed `test@0` on a read-only `find`. No lane result changed.
 
@@ -81,7 +81,9 @@ grade.py fix in this commit: a bash test write is now a `>`, `>>`, `tee` or `sed
 |---|---|---|
 | implementer-python-ticket, full case (tdd, python, implement before first test write; principle-prove-it-works, blast-radius, commit before git commit) | 2/3 | 0/3 |
 | implementer: tdd read before first test write | 3/3 | 0/3 |
-| reviewer-test-quality (verdict blocks both tests) | 3/3 | 0/3 |
+| reviewer-test-quality, labelled judgment: blocks both tests | 3/3 | 0/3 |
+| reviewer, labelled: blocks the coupled test | 3/3 | 3/3 |
+| reviewer, labelled: blocks the tautological test | 3/3 | 0/3 |
 | reviewer: tdd read | 3/3 | 0/3 |
 
 Smoke: agents/implementer.md lane-impl-1 PASS: implement=0 tdd=2 python=2 < test write @4; principle-prove-it-works=9 blast-radius=9 commit=9 < git commit @10
@@ -90,9 +92,16 @@ Smoke: agents/implementer.md lane-impl-3 FAIL: implement=0 tdd=6 python=7 < test
 Smoke: agents/implementer.md main-impl-1 FAIL (baseline): python=1 < test write @2; tdd, implement never read; run ended on a provider 503 (auth_unavailable) after 7 calls, before any commit, so principle-prove-it-works, blast-radius, commit never read
 Smoke: agents/implementer.md main-impl-2 FAIL (baseline): python=1 < test write @2; tdd, implement, principle-prove-it-works, blast-radius, commit never read (git commit @7)
 Smoke: agents/implementer.md main-impl-3 FAIL (baseline): python=1 < test write @2; tdd, implement, principle-prove-it-works, blast-radius, commit never read (git commit @7)
-Smoke: agents/code-reviewer.md lane-rev-1 PASS: tdd=4; verdict BLOCKED, test_shout_json and test_shout_suffix_is_bang both block
-Smoke: agents/code-reviewer.md lane-rev-2 PASS: tdd=2; both block
-Smoke: agents/code-reviewer.md lane-rev-3 PASS: tdd=4; both block
-Smoke: agents/code-reviewer.md main-rev-1 FAIL (baseline): tdd never read; blocks test_shout_suffix_is_bang only
-Smoke: agents/code-reviewer.md main-rev-2 FAIL (baseline): tdd never read; grader finds neither name blocked: the report blocks the coupled test by line (tests/test_cli.py:39-41) and says "Keep the existing JSON test" (tautological one)
-Smoke: agents/code-reviewer.md main-rev-3 FAIL (baseline): tdd never read; blocks test_shout_suffix_is_bang only
+Smoke: agents/code-reviewer.md lane-rev-1 PASS: tdd=4; labelled: taut yes ("1. **class: tautological-test** `tests/test_cli.py:35-36`, `test_shout_json`"), coupled yes ("2. **class: implementation-coupled-test** `tests/test_cli.py:39-41`, `test_shout_suffix_is_bang`"), both under "### Blocking findings"
+Smoke: agents/code-reviewer.md lane-rev-2 PASS: tdd=2; labelled: taut yes ("2. **class: tautological-test** `tests/test_cli.py:35-36`, `test_shout_json`"), coupled yes ("1. **class: implementation-coupled-test** `tests/test_cli.py:40-42`, `test_shout_suffix_is_bang`"), both under "### Blocking findings"
+Smoke: agents/code-reviewer.md lane-rev-3 PASS: tdd=4; labelled: taut yes ("1. **`tests/test_cli.py:35-36`** · `class: tautological-test`"), coupled yes ("2. **`tests/test_cli.py:39-41`** · `class: implementation-coupled-test`"), both under "### Blocking findings"
+Smoke: agents/code-reviewer.md main-rev-1 FAIL (baseline): tdd never read; labelled: coupled yes ("**Block | class: `internal-test-coupling`** `tests/test_cli.py:40-42`, `test_shout_suffix_is_bang`"), taut no (test_shout_json not mentioned)
+Smoke: agents/code-reviewer.md main-rev-2 FAIL (baseline): tdd never read; labelled: coupled yes ("**Block | class: `non-public-surface-test`** `tests/test_cli.py:39-41` reads `src/app/core.py`"), taut no ("Keep the existing JSON test.")
+Smoke: agents/code-reviewer.md main-rev-3 FAIL (baseline): tdd never read; labelled: coupled yes ("### Blocking finding ... **class: test-reaches-internals** `tests/test_cli.py:39-41`: `test_shout_suffix_is_bang`"), taut no (test_shout_json not mentioned)
+
+## Review round 1 (6c3a001): grader deleted, report-step wording anchored to the commit
+
+- Finding class regex-judging-meaning: grade-review.py decided "blocked" from report prose. Deleted (docs/adr/0008 stop rule); reviewer blocks are a labelled judgment above; expectations.json fact `labelled_judgment`.
+- Director rerun at 6c3a001: implementer read implement, tdd, python before the first test edit and commit before `git commit`, but not principle-prove-it-works or blast-radius (report-step skills 2 of 4 runs). Cause: the step line said "before reporting" while the implementer commits before it reports. One wording attempt: "once the code works and before the commit, in order: `principle-prove-it-works`, `blast-radius`, then `commit`".
+
+Removed: agents/implementer.md "before reporting, `principle-prove-it-works`, then `blast-radius` for the safety fact; before committing, `commit`".

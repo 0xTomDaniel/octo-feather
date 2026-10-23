@@ -68,14 +68,11 @@
         "skill": "code-review"
       },
       {
-        "fact": "verdict_blocks",
-        "tests": [
-          "test_shout_json",
-          "test_shout_suffix_is_bang"
-        ],
-        "labels": {
-          "test_shout_json": "tautological",
-          "test_shout_suffix_is_bang": "implementation-coupled"
+        "fact": "labelled_judgment",
+        "judge": "review (a person or QC judge reads the final report; no script, docs/adr/0008) until #108 owns a structured verdict field",
+        "expect": {
+          "test_shout_json": "blocked as tautological",
+          "test_shout_suffix_is_bang": "blocked as implementation-coupled"
         }
       }
     ]
