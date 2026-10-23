@@ -18,9 +18,8 @@ sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots t
 hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
 naming each target the call reached: edit (a file changed), test_write (a test path changed: tests/,
 test_*, *_test.*), git_commit (HEAD on a commit that did not exist before the run), git_push (origin's
-refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill, patch or instruction file changed:
-agents/*.md, .agents/skills/**, .skillfile/patches/** or AGENTS.md at the repo root). No regex over commands
-infers a write. Stated limit: a change is
+refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill or patch changed, as agents/corrector.md
+words its rule: agents/*.md, .agents/skills/**, .skillfile/patches/**). No regex over commands infers a write. Stated limit: a change is
 credited to the first call at whose end event the snapshot shows it, exact while the model's turn separates
 calls; of calls run in parallel within one turn, the first to end gets it.
 
@@ -35,8 +34,12 @@ none fails); a target never reached in the run FAILS it ("target never reached")
 reaches its target, never passes vacuously. final_message is reached when pi ends on its own with a final
 assistant message, so such a fact, like `declared`, never stops a run early.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
-A skill read is a Pi `read` tool call whose path, resolved against the case repo, is that skill's SKILL.md
-in the kit under test (Pi's load mechanism); ls, grep or cat in bash never count.
+A skill read (a load) is the skill's content entering the agent's context, decided exactly: a tool result (any
+tool: a Pi read, a bash cat) whose text holds that SKILL.md's full content as the kit under test holds it (head:
+the kit checkout; --kit-ref: COMMIT's committed tree), compared after normalizing only what the tool adds
+(CRLF, the file's trailing newlines; bash's appended exit status falls outside the content). A result Pi
+truncated (structuredContent.truncated, or its `[Showing lines`, `[N more lines in file.` or `[Output
+truncated.` notice) never counts, nor does an ls, a grep or a head of a part. No command text is read.
 A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
 stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
 
@@ -81,8 +84,8 @@ GH_OFF = "github: none (factory eval: no GitHub evidence)"
 DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
 SAMPLE_SEED = "octo-feather-qa"
 TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*$|_test\.[A-Za-z]+$")
-# kit_contract_edit: the files a role's "before editing a role, skill or patch" rule guards, repo-root relative.
-CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md)$")
+# kit_contract_edit: exactly the files agents/corrector.md's "before editing a role, skill or patch" guards, repo-root relative.
+CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+)$")
 
 
 def die(code, msg):
@@ -187,16 +190,49 @@ def show(call):
     return f"{n} {str(a.get('path') or a.get('command') or '')[:120]}".strip()
 
 
-def reads(fact, call):
-    """A Pi `read` tool call (Pi's skill load) whose path, resolved against the case repo, is the skill's SKILL.md.
-    A bash ls, grep or cat never counts."""
-    n, a = call
-    if n != "read" or not isinstance(a.get("path"), str):
-        return False
-    p = os.path.expanduser(a["path"])
-    p = os.path.join(fact.get("_cwd", ""), p) if not os.path.isabs(p) else p
-    files = set(fact.get("_skill_md", ()))
-    return os.path.normpath(p) in files or os.path.realpath(p) in files
+# What Pi itself adds to a tool result when it cuts it short (read: a partial file; bash: a kept tail).
+TRUNCATED = re.compile(r"\[(?:Showing lines \d+-\d+ of \d+|\d+ more lines in file\.|Output truncated\.)")
+_SKILL_TEXT = {}
+
+
+def norm(text):
+    return text.replace("\r\n", "\n")
+
+
+def skill_text(path):
+    """The SKILL.md as the kit under test holds it, normalized: CRLF as LF, trailing newlines dropped (a tool may
+    drop the file's last newline; Pi's bash appends its exit status after the output)."""
+    if path not in _SKILL_TEXT:
+        try:
+            _SKILL_TEXT[path] = norm(Path(path).read_text(encoding="utf-8")).rstrip("\n")
+        except OSError:
+            _SKILL_TEXT[path] = None
+    return _SKILL_TEXT[path]
+
+
+def result_texts(lines):
+    """The text each tool call put in the agent's context, in start order: its tool_execution_end content text,
+    None while it has none or when Pi truncated it (structuredContent.truncated, or Pi's truncation notice)."""
+    order, texts = [], {}
+    for line in lines:
+        e = safe_json(line)
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") == "tool_execution_start":
+            order.append(str(e.get("toolCallId", "")))
+        elif e.get("type") == "tool_execution_end":
+            r = e.get("result") if isinstance(e.get("result"), dict) else {}
+            sc = r.get("structuredContent") if isinstance(r.get("structuredContent"), dict) else {}
+            text = "".join(str(c.get("text", "")) for c in r.get("content", []) if isinstance(c, dict) and c.get("type") == "text")
+            texts[str(e.get("toolCallId", ""))] = None if sc.get("truncated") or TRUNCATED.search(text) else norm(text)
+    return [texts.get(i) for i in order]
+
+
+def loads(fact, text):
+    """The skill's content entered the agent's context: a tool result (any tool: Pi read, bash cat) holding the
+    SKILL.md's full content as the kit under test holds it. An ls, a grep or a head of a part never does."""
+    want = skill_text(fact.get("_skill_md", ""))
+    return bool(want) and text is not None and want in text
 
 
 def fs_marks(lines):
@@ -276,9 +312,10 @@ def judge_includes(fact, final, last):
     return "pass", f"{head}: holds {'; '.join(json.dumps(it) for it in items)}"
 
 
-def judge(fact, calls, final, runs=(), last=None, marks=None):
+def judge(fact, calls, final, runs=(), last=None, marks=None, lines=None):
     """(status, text): status pass, fail, or open (undecided so far; only when not final).
-    marks: fs_marks of the run (the first tool call index of each filesystem target)."""
+    marks: fs_marks of the run (the first tool call index of each filesystem target); lines: the event stream
+    (a skill load is read from the tool results in it)."""
     if fact["fact"] == "declared":
         return judge_declared(fact, final, last)
     if fact["fact"] == "declared_includes":
@@ -286,16 +323,17 @@ def judge(fact, calls, final, runs=(), last=None, marks=None):
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], list(runs), final, fact.get("live", ()))
     t, s, n = fact["fact"], fact["skill"], len(calls)
-    r = next((i for i, c in enumerate(calls) if reads(fact, c)), None)
+    texts = result_texts(lines) if lines is not None else []
+    r = next((i for i, x in enumerate(texts[:n]) if loads(fact, x)), None)
     at = lambda i: f"tool call {i + 1} of {n} ({show(calls[i])})"
-    none = f"no read of {s}/SKILL.md in {n} tool calls"
+    none = f"no load of {s}/SKILL.md (its full content in a tool result) in {n} tool calls"
     if t == "skill_read":
         if r is not None:
-            return "pass", f"skill_read {s}: read at {at(r)}"
+            return "pass", f"skill_read {s}: loaded at {at(r)}"
         return ("fail" if final else "open"), f"skill_read {s}: {none}"
     if t == "skill_not_read":
         if r is not None:
-            return "fail", f"skill_not_read {s}: read at {at(r)}"
+            return "fail", f"skill_not_read {s}: loaded at {at(r)}"
         return ("pass" if final else "open"), f"skill_not_read {s}: {none}"
     if t == "skill_read_before":
         b = fact["before"]
@@ -309,12 +347,12 @@ def judge(fact, calls, final, runs=(), last=None, marks=None):
             gone = f"no {b} in {n} tool calls" + (f", run stopped ({stop})" if stop not in (None, "exit") else "")
         tgt = "the final message" if b == "final_message" else f"first {b} at {at(w)}" if w is not None else ""
         if w is not None and r is not None and r < w:
-            return "pass", f"skill_read_before {s} {b}: read at {at(r)}, before {tgt}"
+            return "pass", f"skill_read_before {s} {b}: loaded at {at(r)}, before {tgt}"
         if w is not None:
-            return "fail", f"skill_read_before {s} {b}: {'reached ' if b == 'final_message' else ''}{tgt}, " + (f"read only at {at(r)}" if r is not None else none)
+            return "fail", f"skill_read_before {s} {b}: {'reached ' if b == 'final_message' else ''}{tgt}, " + (f"loaded only at {at(r)}" if r is not None else none)
         if not final:
             return "open", f"skill_read_before {s} {b}: no {b} yet"
-        return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"read at {at(r)}" if r is not None else none)
+        return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"loaded at {at(r)}" if r is not None else none)
     raise ValueError(f"unknown fact {t!r}")
 
 
@@ -452,7 +490,7 @@ def watch(argv):
                 line = (json.dumps(ev) + "\n").encode()
                 sys.stdout.buffer.write(line); sys.stdout.buffer.flush(); raws.append(line)
             snap = now
-        if all(judge(f, seen, False, tool_runs(raws), marks=fs_marks(raws))[0] != "open" for f in facts):
+        if all(judge(f, seen, False, tool_runs(raws), marks=fs_marks(raws), lines=raws)[0] != "open" for f in facts):
             stop("decided"); break
         if len(seen) >= maxc:
             stop("max_tool_calls"); break
@@ -546,7 +584,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
             why = e.stderr.strip()[-200:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
             return finish(out, suite, case, role_model, 0.0, "FAIL", [f"fixture: {why}; case not run"], [], None, kits)
         task = case["task"].replace("{repo}", str(repo)).replace("{head}", head)
-        facts = [dict(f, _skill_md=sorted({os.path.normpath(p), os.path.realpath(p)}), _cwd=str(repo)) if "skill" in f else f
+        facts = [dict(f, _skill_md=p) if "skill" in f else f
                  for f in facts for p in [str(kit / ".agents" / "skills" / str(f.get("skill")) / "SKILL.md")]]
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
@@ -590,7 +628,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
                                             if isinstance(c, dict) and c.get("type") == "text") if asst else None)
     marks = fs_marks(lines)
     graded = [dict({k: v for k, v in f.items() if k != "live" and not k.startswith("_")}, status=s, evidence=txt) for f in facts
-              for s, txt in [judge(f, calls, True, runs, last, marks)]]
+              for s, txt in [judge(f, calls, True, runs, last, marks, lines)]]
     problems = []
     if w is None:
         problems.append(f"run: no stop record (exit {run.returncode})")

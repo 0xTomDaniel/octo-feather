@@ -20,20 +20,23 @@ copied and git-initialized per run). A suite dir holds:
                                and its task may hold {repo} and {head} (the copy's path, its HEAD sha)
   reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
 Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/0008):
-  {"fact": "skill_read", "skill": S}         the agent read S's SKILL.md: a Pi `read` tool call whose path
-                                             resolves to the kit's .agents/skills/S/SKILL.md (Pi loads a
-                                             skill that way); ls, grep or cat in bash never count
+  {"fact": "skill_read", "skill": S}         S's SKILL.md entered the agent's context: a tool result (any
+                                             tool: a Pi read, a bash cat) holding its full content as the
+                                             kit under test holds it (head, or --kit-ref COMMIT's tree),
+                                             normalized only for what the tool adds (CRLF, trailing
+                                             newlines); a result Pi truncated never counts, nor an ls, a
+                                             grep or a head of a part; no command text is read
   {"fact": "skill_not_read", "skill": S}     it never did
   {"fact": "skill_read_before", "skill": S, "before": T}
-                                             it read S's SKILL.md before the first tool call that reached
+                                             S loaded (as above) before the first tool call that reached
                                              T, decided from the filesystem (the watcher snapshots the case
                                              repo after each call), never from command text: test_write (a
                                              test path changed), edit (any file git does not ignore
                                              changed), git_commit (HEAD on a new commit), git_push (origin's
                                              refs changed; needs origin), gh_call (the fake gh ran; needs
-                                             fake_gh), kit_contract_edit (a role, skill, patch or
-                                             instruction file changed: agents/*.md, .agents/skills/**,
-                                             .skillfile/patches/** or AGENTS.md at the repo root),
+                                             fake_gh), kit_contract_edit (a role, skill or patch
+                                             changed, as agents/corrector.md words it: agents/*.md,
+                                             .agents/skills/**, .skillfile/patches/**),
                                              final_message (pi ended on its own with a final assistant
                                              message). T never reached in the run FAILS it ("target never
                                              reached"), read or not: write the case so T is reached
