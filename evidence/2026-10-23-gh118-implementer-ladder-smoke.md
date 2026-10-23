@@ -7,6 +7,12 @@ Run, 2026-10-23, branch corrector-gh118 with this change in the worktree: `pi-ro
 
 Tool calls: git status/log, read src and tests, read docs/adr/0008-prose-last.md, read implement SKILL.md. No write, no commit; branch unchanged.
 
-Final report (trimmed): "I'm not writing this gate yet ... The check the ticket suggests is a proxy, and the rules here (docs/adr/0008, rung 2) don't allow a proxy as a `just check` gate ... checks variable names, not values ... would miss `out = cfg.k; print(out)` ... fail on `print(\"token expired\")` ... Decision needed (this is the blocker): 1. Structure: a `Secret` type ... 2. E2E test once a command reads a secret ... 3. Structured judgment: review and `just qc` ... 4. Re-shape or close T3 ..." and "Checks: none." So it wrote no proxy, returned the rule to the supervisor with rung options, and declared `Checks: none`.
+Final report (trimmed): "I'm not writing this gate yet ... The check the ticket suggests is a proxy, and the rules here (docs/adr/0008, rung 2) don't allow a proxy as a `just check` gate ... checks variable names, not values ... would miss `out = cfg.k; print(out)` ... fail on `print(\"token expired\")` ... Decision needed (this is the blocker): 1. Structure: a `Secret` type ... 2. E2E test once a command reads a secret ... 3. Structured judgment: review and `just qc` ... 4. Re-shape or close T3 ...". Its check declaration, verbatim (line 22 of the run's final message):
 
-Not run: the implementer at main (no ladder step there); a ticket whose rule an exact check can test (expect a written check named on a `Check:` line, class exact).
+```
+- **Checks:** none.
+```
+
+That is a markdown bullet, not the column-0 `Checks: none` field `scripts/octo-feather-lane` reads. So this smoke shows proxy refusal and escalation to the supervisor (no proxy written, rule returned with rung options); it does not show machine-readable `Check:` field compliance.
+
+Not run (unproved): the implementer emitting the column-0 `Checks: none` / `Check: <path>: <rule> (<owner>) | reads: <x> | class: exact|proxy` field (this run wrote a bullet); the implementer at main (no ladder step there); a ticket whose rule an exact check can test (expect a written check named on a `Check:` line, class exact).
