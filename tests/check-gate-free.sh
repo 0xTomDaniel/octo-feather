@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Integration test for the gate-free guard (quality #acceptance-gate-no-model): in a
 # throwaway git copy of the kit's tracked files, each justfile change that makes a check
-# or check-* recipe reach the product judge (qc, octo-feather-qc, Jev) or the factory
-# evals (qa), by dependency, transitive dependency or body, makes `just check` fail
-# saying it stays deterministic and free, before any recipe runs (no qa stub output).
+# or check-* recipe reach the qc or qa recipe, by dependency, transitive dependency or a body
+# running it, makes `just check` fail saying it stays deterministic and free, before any recipe
+# runs (no qa stub output); a recipe or script starting octo-feather-qc or qa is refused at run time.
 # Run by `just check`.
 set -euo pipefail
 shopt -u patsub_replacement 2>/dev/null || true  # bash 5.2: a literal & in ${x/a/b} replacements
@@ -48,23 +48,16 @@ expect "${c/check:/check: (qc \"x\" \"1\" \"a\")}" ""
 expect "$z" $'check-zz: helper-zz\nhelper-zz: qa'
 expect "$c" $'check-zz: (qc "x" "1" "a")'
 expect "$c" $'check-zz: helper-zz\nhelper-zz: deeper-zz\ndeeper-zz: (qc "x" "1" "a")'
-# Body forms, in check-* recipes inside and outside check, and in a recipe they reach.
+# Body forms that run a recipe: in check-* recipes inside and outside check, and in a recipe they reach.
+# A body that starts the judge as a program (octo-feather-qc) is refused at run time (script forms below);
+# no word scan stands in for reachability (docs/adr/0008, #118).
 expect "$z" $'check-zz:\n    just qa'
 expect "$c" $'check-zz:\n    @just --justfile "{{justfile()}}" qa --all'
-expect "$c" $'check-zz:\n    octo-feather-qc x 1 a'
-expect "$c" $'check-zz:\n    "{{root}}/scripts/octo-feather-qc" x 1 a'
-expect "$c" $'check-zz:\n    "$root"/scripts/octo-feather-qc x 1 a'
-expect "$c" $'check-zz:\n    @python3 "$root/scripts/octo-feather-qc" x 1 a'
-expect "$c" $'check-zz:\n    #!/usr/bin/env bash\n    set -e\n    jev judge .'
-expect "$z" $'check-zz:\n    just helper-zz\nhelper-zz:\n    octo-feather-qc x 1 a'
 expect "$z" $'check-zz: helper-zz\nhelper-zz:\n    @echo hi; just qa'
-# Spelling and evasion variants: case, shell quotes, interpolation, variables, defaults, arguments.
-expect "$c" $'check-zz:\n    JUST QA'
-expect "$c" $'check-zz:\n    Jev run'
+# Evasion variants of a recipe name: shell quotes, interpolation, defaults, arguments.
 expect "$c" $'check-zz:\n    just q\'\'a'
 expect "$c" $'check-zz:\n    just "q"c x 1 a'
 expect "$c" $'check-zz:\n    just {{ "q" + "a" }}'
-expect "$c" $'zz_judge := "octo-feather-" + "qc"\ncheck-zz:\n    {{zz_judge}} x 1 a'
 expect "$z" $'check-zz a=`just qa`:\n    echo {{a}}'
 expect "$z" $'check-zz: (helper-zz `just qa`)\nhelper-zz b:\n    echo {{b}}'
 # Mixed: a harmless check-* beside a bad one still fails; the harmless forms alone pass.
@@ -135,4 +128,4 @@ stub just 'echo "{}"' 'check-gate-free: error: unexpected just --dump JSON'
 stub just 'echo "not json"' 'check-gate-free: error: unexpected just --dump JSON'
 stub python3 'exit 0' "$msg"
 [[ "$(cat "$t/justfile")" == "$orig" && -z "$(g status --porcelain)" ]] || { echo "check-gate-free test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; spelling and evasion variants; mixed inputs; script, nested check-* and any-pi forms; fails closed)"
+echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; evasion variants of a recipe name; mixed inputs; script, nested check-* and any-pi forms; fails closed)"
