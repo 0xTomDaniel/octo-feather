@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qa [--suite NAME]... [--case ID]... [--model MODEL] [--evals DIR]   factory evals (`just qa`)
+"""octo-feather-qa [--suite NAME]... [--case ID]... [--sample N] [--model MODEL] [--evals DIR]   factory evals (`just qa`)
 
 Runs the kit's eval cases (evals/<suite>/, shape: scripts/check-evals, which runs first and must
 pass). Each case: its fixture (evals/fixtures/<fixture>) is copied and git-initialized in a scratch
@@ -18,11 +18,15 @@ A run stops once every fact is decided (a skill read seen, say), or at the suite
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
 
-Prints one PASS or FAIL line per case with the facts that decided it, then a summary line with the
-artifacts dir: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa, then <run-id>/<suite>/<case>/
+Prints one PASS or FAIL line per case with the facts that decided it, then, when any case has a split
+(skill-trigger cases), a train and a held-out score line (passed/total each, summary.json `scores`),
+then a summary line with the artifacts dir: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa, then <run-id>/<suite>/<case>/
 holding prompt.md, input.json, transcript.jsonl, stderr.txt, sandbox.json, grading.json,
 result.json, and <run-id>/summary.json.
   --suite NAME, --case ID   select cases (repeatable; default every case); unknown names exit 64
+  --sample N                of the selected cases run only N, stratified by should_trigger and split
+                            (a seeded shuffle per stratum, taken in turn; the same N picks the same
+                            cases), printed before the run
   --model MODEL             pi --model override (default: the role's frontmatter model)
   --evals DIR               eval suites dir (default: the kit's evals/)
 Exit: 0 every case passed, 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
@@ -31,13 +35,14 @@ Exit: 0 every case passed, 1 any failed, 2 the shape check failed, 64 usage, 70 
 Internal, the in-sandbox stop rule (not for callers):
   octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S -- CMD...
 """
-import importlib.machinery, importlib.util, json, os, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
+import importlib.machinery, importlib.util, json, os, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 SELF = KIT / "scripts" / "octo-feather-qa"
 GH_OFF = "github: none (factory eval: no GitHub evidence)"
 DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
+SAMPLE_SEED = "octo-feather-qa"
 TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*$|_test\.[A-Za-z]+$")
 
 
@@ -236,7 +241,7 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w):
     (out / "grading.json").write_text(json.dumps({"facts": graded, "deciding": deciding}, indent=2) + "\n")
     res = {"suite": suite["suite"], "id": case["id"], "verdict": verdict, "deciding": deciding, "model": model, "seconds": secs,
            "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
-           **({k: case[k] for k in ("should_trigger", "split") if k in case})}
+           **({k: case[k] for k in ("role", "should_trigger", "split") if k in case})}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     stop = f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]"
     print(f"{verdict} {suite['suite']}/{case['id']}: {'; '.join(deciding)}{stop}", flush=True)
@@ -253,12 +258,12 @@ def gate_free():
 
 
 def parse(argv):
-    opts = {"suite": [], "case": [], "model": None, "evals": None}
+    opts = {"suite": [], "case": [], "model": None, "evals": None, "sample": None}
     it = iter(argv)
     for a in it:
         if a in ("-h", "--help"):
             print(__doc__.strip()); sys.exit(0)
-        k = a[2:] if a in ("--suite", "--case", "--model", "--evals") else None
+        k = a[2:] if a in ("--suite", "--case", "--model", "--evals", "--sample") else None
         if k is None:
             die(64, f"unknown argument {a!r} (see --help)")
         v = next(it, None)
@@ -268,7 +273,42 @@ def parse(argv):
             opts[k].append(v)
         else:
             opts[k] = v
+    if opts["sample"] is not None and not (opts["sample"].isdigit() and int(opts["sample"]) > 0):
+        die(64, f"--sample needs a positive integer, got {opts['sample']!r}")
     return opts
+
+
+def stratum(case):
+    return case.get("should_trigger"), case.get("split")
+
+
+def sample(picked, n):
+    """n of picked, stratified by (should_trigger, split): each stratum shuffled with a fixed seed, then one
+    from each in turn; should_trigger true/train and false/held-out lead, so 2 picks hold one of each."""
+    rng = random.Random(SAMPLE_SEED)
+    strata = {}
+    for p in picked:
+        strata.setdefault(stratum(p[1]), []).append(p)
+    keys = sorted(strata, key=lambda k: (k[0] != (k[1] == "train"), str(k)))
+    pools = []
+    for k in keys:
+        pool = sorted(strata[k], key=lambda p: (p[0]["suite"], p[1]["id"]))
+        rng.shuffle(pool)
+        pools.append(pool)
+    chosen = []
+    while len(chosen) < n and any(pools):
+        for pool in pools:
+            if pool and len(chosen) < n:
+                chosen.append(id(pool.pop(0)))
+    return [p for p in picked if id(p) in chosen]
+
+
+def scores(results):
+    """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+    if not any("split" in r for r in results):
+        return {}
+    return {sp: {"passed": sum(r["verdict"] == "PASS" for r in results if r.get("split") == sp),
+                 "total": sum(r.get("split") == sp for r in results)} for sp in ("train", "held-out")}
 
 
 def main(argv):
@@ -294,6 +334,12 @@ def main(argv):
         die(64, f"no case {' '.join(unknown)} in the selected suites")
     if not picked:
         die(64, "no cases selected")
+    if o["sample"]:
+        total = len(picked)
+        picked = sample(picked, int(o["sample"]))
+        show_case = lambda c: f"{c['id']} (should_trigger {str(c.get('should_trigger')).lower()}, {c.get('split', 'no split')})"
+        print(f"qa: sample {len(picked)} of {total} (seed {SAMPLE_SEED!r}, stratified by should_trigger and split): "
+              + ", ".join(f"{s['suite']}/{show_case(c)}" for s, c, _ in picked), flush=True)
     runid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(3)}"
     root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
         [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
@@ -304,7 +350,10 @@ def main(argv):
     results = [run_case(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"])
                for n, (s, c, f) in enumerate(picked, 1)]
     passed = sum(r["verdict"] == "PASS" for r in results)
-    (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "passed": passed, "total": len(results),
+    sc = scores(results)
+    for sp, v in sc.items():
+        print(f"qa: {sp} score {v['passed']}/{v['total']} passed")
+    (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "passed": passed, "total": len(results), "scores": sc,
                                                       "seconds": round(time.time() - t0, 1), "cases": results}, indent=2) + "\n")
     print(f"qa: {passed}/{len(results)} passed (run {runid}); artifacts {run_dir}")
     return 0 if passed == len(results) else 1

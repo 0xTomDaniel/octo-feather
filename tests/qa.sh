@@ -2,7 +2,7 @@
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr.
 # Proves: one PASS/FAIL line per case naming the deciding transcript facts, exit 1 on any failure and 0
-# when all pass, --suite/--case selection, per-run artifacts outside the repo, the run stops once its
+# when all pass, train and held-out score lines, --sample stratified and deterministic, --suite/--case selection, per-run artifacts outside the repo, the run stops once its
 # facts are decided, a pi that dies without an answer fails its case, each case runs in the qc sandbox
 # and a failed sandbox proof is a FAIL, refusal inside a check run, and the shape check naming case and field.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
@@ -67,10 +67,10 @@ echo "fixture" > "$t/evals/fixtures/fx/README.md"
 cat > "$t/evals/trig/suite.json" <<'EOF'
 {"suite": "trig", "kind": "skill-trigger", "description": "stub suite", "max_tool_calls": 5, "timeout_s": 60}
 EOF
-case_() { printf '{"id": "%s", "role": "implementer", "fixture": "fx", "should_trigger": %s, "split": "train", "task": "%s"}' "$@"; }
+case_() { printf '{"id": "%s", "role": "implementer", "fixture": "fx", "should_trigger": %s, "split": "%s", "task": "%s"}' "$@"; }
 cat > "$t/evals/trig/cases.json" <<EOF
-[$(case_ reads true "Build it. STUB-READ-TDD"), $(case_ near false "Only look. STUB-READ-TDD"), $(case_ quiet false "Only look."),
- $(case_ linger true "Build it. STUB-READ-TDD STUB-LINGER"), $(case_ crash false "Only look. STUB-CRASH")]
+[$(case_ reads true train "Build it. STUB-READ-TDD"), $(case_ near false held-out "Only look. STUB-READ-TDD"), $(case_ quiet false train "Only look."),
+ $(case_ linger true held-out "Build it. STUB-READ-TDD STUB-LINGER"), $(case_ crash false train "Only look. STUB-CRASH")]
 EOF
 r='{"facts": [{"fact": "skill_read", "skill": "tdd"}]}'; n='{"facts": [{"fact": "skill_not_read", "skill": "tdd"}]}'
 echo "{\"reads\": $r, \"near\": $n, \"quiet\": $n, \"linger\": $r, \"crash\": $n}" > "$t/evals/trig/reference/expectations.json"
@@ -95,6 +95,9 @@ line PASS linger | grep -q "stop: decided" || fail "linger: run not stopped once
 line FAIL crash | grep -q "run: pi exited 3 on its own" || fail "crash: a dead pi must fail, not pass skill_not_read: $out"
 grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" || fail "no sandbox proof printed: $out"
 grep -q "qa: 3/5 passed" <<< "$out" || fail "no summary line: $out"
+# Train (reads, quiet, crash) and held-out (near, linger) scored apart, after every case line, before the summary.
+[[ "$(grep -E '^(PASS|FAIL) |^qa: (train|held-out) score|^qa: [0-9]+/' <<< "$out" | tail -3 | sed 's/ (run .*//')" == $'qa: train score 2/3 passed\nqa: held-out score 1/2 passed\nqa: 3/5 passed' ]] \
+  || fail "score lines missing or out of order: $out"
 # Artifacts outside the repo, per case and per run; the prompt holds the task, never its expectations.
 d="$(ls -d "$t"/out/*/)"; c="$d/trig/reads"
 for f in prompt.md input.json transcript.jsonl stderr.txt sandbox.json grading.json result.json; do [[ -e "$c/$f" ]] || fail "artifact $f missing"; done
@@ -111,6 +114,7 @@ r = json.load(open(f"{c}/result.json")); assert r["verdict"] == "PASS" and r["mo
 g = json.load(open(f"{c}/grading.json")); assert g["facts"][0]["status"] == "pass", g
 sb = json.load(open(f"{c}/sandbox.json")); assert sb["proof"] and "agents_started" in sb, sb
 sm = json.load(open(f"{d}/summary.json")); assert (sm["passed"], sm["total"]) == (3, 5), sm
+assert sm["scores"] == {"train": {"passed": 2, "total": 3}, "held-out": {"passed": 1, "total": 2}}, sm["scores"]
 EOF
 
 # Selection: --case and --suite; all selected pass: exit 0. Unknown names: 64.
@@ -118,6 +122,31 @@ run 0 "$Q" --evals "$t/evals" --case reads --case quiet
 [[ "$(grep -cE '^(PASS|FAIL) ' <<< "$out")" == 2 ]] || fail "--case selected the wrong cases: $out"
 run 64 "$Q" --evals "$t/evals" --suite nope
 run 64 "$Q" --evals "$t/evals" --case nope
+run 64 "$Q" --evals "$t/evals" --sample 0
+
+# --sample 2: one should and one should-not, one train and one held-out, named before the run; the same picks twice.
+sampled() { grep '^qa: sample ' <<< "$out" || fail "no sample line: $out"; }
+run 1 "$Q" --evals "$t/evals" --sample 2; s1="$(sampled)"
+[[ "$(grep -cE '^(PASS|FAIL) ' <<< "$out")" == 2 ]] || fail "--sample 2 ran the wrong number of cases: $out"
+for want in "should_trigger true" "should_trigger false" ", train)" ", held-out)"; do
+  grep -qF "$want" <<< "$s1" || fail "sample not stratified, no '$want': $s1"; done
+grep -q "^qa: sample 2 of 5 (seed " <<< "$s1" || fail "sample line does not say its seed and size: $s1"
+grep -q '^qa: train score 1/1' <<< "$out" || fail "no train score in a sample: $out"
+run 1 "$Q" --evals "$t/evals" --sample 2; [[ "$(sampled)" == "$s1" ]] || fail "--sample not deterministic: $s1 vs $(sampled)"
+
+# Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+cp -r "$kit/evals" "$t/kit-evals"
+python3 - "$t/kit-evals/skill-triggers" <<'EOF'
+import json, sys
+d = sys.argv[1]; c = json.load(open(f"{d}/cases.json")); e = json.load(open(f"{d}/reference/expectations.json"))
+gone = [x["id"] for x in c if x["role"] == "implementer" and not x["should_trigger"] and x["split"] == "held-out"
+        and e[x["id"]]["facts"] == [{"fact": "skill_not_read", "skill": "pull"}]]
+assert gone, "no held-out near miss for implementer pull in the kit suite"
+json.dump([x for x in c if x["id"] not in gone], open(f"{d}/cases.json", "w"))
+json.dump({k: v for k, v in e.items() if k not in gone}, open(f"{d}/reference/expectations.json", "w"))
+EOF
+run 1 "$C" "$t/kit-evals"
+grep -qF "skill-triggers: role implementer skill pull: no case for should_trigger false split held-out" <<< "$out" || fail "coverage gap not named: $out"
 
 # A failed sandbox proof (raw herdr reaches a live session) is a FAIL; the case never runs.
 FAKE_HERDR_LEAK=1 run 1 "$Q" --evals "$t/evals" --case reads
@@ -153,4 +182,4 @@ bad 'c[0]["should_trigger"] = False' "case reads: field should_trigger: false, b
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, shape check names case and field)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage, --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, shape check names case and field)"
