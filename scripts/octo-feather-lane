@@ -186,6 +186,8 @@ JUDGED = re.compile(r"`?(?:judged\s+)?`?([0-9a-fA-F]{7,40})`?", re.I)
 
 CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
 CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
+# The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
+OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
 CHECK_FORM = ("`Checks: none` when the diff adds or changes no check, test gate or grader, else one line per check "
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
@@ -222,6 +224,11 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
             if not s:
                 why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`"); continue
             path, rule, reads, cls = s.groups()
+            o = OWNED.fullmatch(rule)
+            if not o:
+                why.append(f"check line for {path} names no owner: write its rule as stated where it is owned, then the owner in "
+                           f"parentheses, `<rule> (<spec criterion, ADR or owner ruling>)` (docs/adr/0008)"); continue
+            rule = f"{o.group(1)} ({o.group(2).strip()})"
             if cls.lower() not in ("exact", "proxy"):
                 why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
             checks.append((f"Check: {path}: {rule} | reads: {reads} | class: {cls.lower()}", cls.lower()))

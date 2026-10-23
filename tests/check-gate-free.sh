@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 # Integration test for the gate-free guard (quality #acceptance-gate-no-model): in a
 # throwaway git copy of the kit's tracked files, each justfile change that makes a check
-# or check-* recipe reach the qc or qa recipe, by dependency, transitive dependency or a body
-# running it, makes `just check` fail saying it stays deterministic and free, before any recipe
-# runs (no qa stub output); a recipe or script starting octo-feather-qc or qa is refused at run time.
+# or check-* recipe reach the qc or qa recipe through just's dependency edges makes `just check`
+# fail saying it stays deterministic and free, before any recipe runs (no qa stub output); a body,
+# default, argument or script that runs qa or octo-feather-qc is refused at run time, and a body that
+# only names them (echo qa) passes and runs.
 # Run by `just check`.
 set -euo pipefail
 shopt -u patsub_replacement 2>/dev/null || true  # bash 5.2: a literal & in ${x/a/b} replacements
@@ -48,21 +49,11 @@ expect "${c/check:/check: (qc \"x\" \"1\" \"a\")}" ""
 expect "$z" $'check-zz: helper-zz\nhelper-zz: qa'
 expect "$c" $'check-zz: (qc "x" "1" "a")'
 expect "$c" $'check-zz: helper-zz\nhelper-zz: deeper-zz\ndeeper-zz: (qc "x" "1" "a")'
-# Body forms that run a recipe: in check-* recipes inside and outside check, and in a recipe they reach.
-# A body that starts the judge as a program (octo-feather-qc) is refused at run time (script forms below);
-# no word scan stands in for reachability (docs/adr/0008, #118).
-expect "$z" $'check-zz:\n    just qa'
-expect "$c" $'check-zz:\n    @just --justfile "{{justfile()}}" qa --all'
-expect "$z" $'check-zz: helper-zz\nhelper-zz:\n    @echo hi; just qa'
-# Evasion variants of a recipe name: shell quotes, interpolation, defaults, arguments.
-expect "$c" $'check-zz:\n    just q\'\'a'
-expect "$c" $'check-zz:\n    just "q"c x 1 a'
-expect "$c" $'check-zz:\n    just {{ "q" + "a" }}'
-expect "$z" $'check-zz a=`just qa`:\n    echo {{a}}'
-expect "$z" $'check-zz: (helper-zz `just qa`)\nhelper-zz b:\n    echo {{b}}'
-# Mixed: a harmless check-* beside a bad one still fails; the harmless forms alone pass.
-expect "$z" $'check-zz:\n    echo quality aqua qcow2 jevons\ncheck-yy:\n    just qa'
+# Harmless forms pass the static guard: words that only resemble or name a recipe.
 allow $'check-zz:\n    echo quality aqua qcow2 jevons octo-feather-qcx'
+# A word is not a run (review of 2e1a0da, class proxy-check): naming qa or qc in a body reaches nothing.
+allow $'check-zz:\n    echo qa qc'
+allow $'check-zz a="qa":\n    echo {{a}}'
 allow $'check-zz: helper-zz\nhelper-zz:\n    echo QAZ'
 # From another working directory (backticks run there; the guard is the published command on PATH).
 w="$t.bin"; mkdir -p "$w"
@@ -99,6 +90,34 @@ script_form() {
     ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: $probe: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
   done
 }
+# Body forms: a gate recipe whose body, parameter default or dependency argument runs qa or the judge
+# is refused at run time, where the launch happens (no static word scan, docs/adr/0008, #118).
+# body_form RECIPE EXTRA: the justfile plus EXTRA; `just RECIPE` fails with the message; no stub, no pi.
+body_form() {
+  plant "$c" "$2"
+  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
+  printf '%s\n' "$orig" > "$t/justfile"
+  [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just $1: $2" >&2; echo "$out" >&2; exit 1; }
+  grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: just $1: $2" >&2; echo "$out" >&2; exit 1; }
+  ! grep -qF 'not implemented yet' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: just $1: $2" >&2; echo "$out" >&2; exit 1; }
+}
+body_form check-zz $'check-zz:\n    just qa'
+body_form check-zz $'check-zz:\n    @just --justfile "{{justfile()}}" qa --all'
+body_form check-zz $'check-zz: helper-zz\nhelper-zz:\n    @echo hi; just qa'
+body_form check-zz $'check-zz:\n    octo-feather-qc x 1 a'
+body_form check-zz $'check-zz:\n    "$root"/scripts/octo-feather-qc x 1 a'
+body_form check-zz $'check-zz:\n    just q\'\'a'
+body_form check-zz $'check-zz:\n    just "q"c x 1 a'
+body_form check-zz $'check-zz:\n    just {{ "q" + "a" }}'
+body_form check-zz $'zz_judge := "octo-feather-" + "qc"\ncheck-zz:\n    {{zz_judge}} x 1 a'
+body_form check-zz $'check-zz a=`just qa`:\n    echo {{a}}'
+body_form check-zz $'check-zz: (helper-zz `just qa`)\nhelper-zz b:\n    echo {{b}}'
+body_form check-yy $'check-zz:\n    echo quality aqua\ncheck-yy:\n    just qa'
+# The reviewer's repro runs: echo only, exit 0.
+plant "$c" $'check-zz:\n    echo qa'
+out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just check-zz 2>&1)" && grep -qx qa <<<"$out" \
+  || { echo "check-gate-free test: echo qa in a check recipe did not run: $out" >&2; printf '%s\n' "$orig" > "$t/justfile"; exit 1; }
+printf '%s\n' "$orig" > "$t/justfile"
 script_form 'exec just qa'
 script_form 'just qc x 1 a'
 script_form 'just --justfile "$(dirname "$0")/../justfile" qa'
@@ -128,4 +147,4 @@ stub just 'echo "{}"' 'check-gate-free: error: unexpected just --dump JSON'
 stub just 'echo "not json"' 'check-gate-free: error: unexpected just --dump JSON'
 stub python3 'exit 0' "$msg"
 [[ "$(cat "$t/justfile")" == "$orig" && -z "$(g status --porcelain)" ]] || { echo "check-gate-free test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-gate-free: ok (dependency, transitive, after-&&, argument and body forms; evasion variants of a recipe name; mixed inputs; script, nested check-* and any-pi forms; fails closed)"
+echo "check-gate-free: ok (dependency, transitive, after-&& and argument forms statically; body, default and argument runs refused at run time; a named word reaches nothing; mixed inputs; script, nested check-* and any-pi forms; fails closed)"
