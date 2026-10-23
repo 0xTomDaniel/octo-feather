@@ -1,0 +1,18 @@
+[
+  {
+    "id": "tdd-shout-flag",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Add a `--shout` option to `app hello` that upper-cases the greeting text (plain and --json output). Work test-first, red-green-refactor: write one failing test through the CLI, see it fail, then make it pass. Commit when green."
+  },
+  {
+    "id": "tdd-near-miss-count-tests",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file. Tell me how many test functions tests/test_cli.py defines and which pytest options pyproject.toml sets, in two lines."
+  }
+]

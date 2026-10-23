@@ -1,0 +1,195 @@
+#!/usr/bin/env python3
+"""check-evals [EVALS_DIR]   the shape of every factory eval case (quality #acceptance-qa-cases-checked)
+
+Deterministic and free: reads JSON only, never starts an agent or a model. Run by `just check`
+(check-evals) and first by every factory eval run, which refuses a malformed suite.
+
+EVALS_DIR (default: the kit's evals/) holds one dir per suite plus fixtures/ (one dir per fixture,
+copied and git-initialized per run). A suite dir holds:
+  suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript",
+                                "description": str, optional "max_tool_calls", "timeout_s" (positive ints)}
+  cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
+                               case also has should_trigger (bool) and split ("train" | "held-out")
+  reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
+Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/0008):
+  {"fact": "skill_read", "skill": S}         the agent read S's SKILL.md
+  {"fact": "skill_not_read", "skill": S}     it never did
+  {"fact": "skill_read_before", "skill": S, "before": "test_write"}
+                                             it read S's SKILL.md before its first test-file write
+Fails, naming the case and the field, on: a missing or unknown field, a wrong type, an unknown fact
+or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill with no kit SKILL.md, a
+case id without expectations or the reverse, a skill-trigger case whose facts disagree with
+should_trigger, or a task that leaks its grade: the task contains a graded skill's path
+(<skill>/SKILL.md or skills/<skill>) or the JSON of its expectation or of one of its facts.
+Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
+EVALS_DIR is not a dir.
+"""
+import json, re, sys
+from pathlib import Path
+
+KIT = Path(__file__).resolve().parent.parent
+FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"}}
+BEFORE = {"test_write"}
+KINDS = {"skill-trigger", "role-transcript"}
+BASE = {"id", "role", "fixture", "task"}
+TRIGGER = {"should_trigger", "split"}
+SPLITS = {"train", "held-out"}
+ID = re.compile(r"[a-z0-9][a-z0-9-]*")
+FIX = "fix the case (check-evals --help lists the shape)"
+
+
+def load(path, errs):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        errs.append(f"{path}: missing; a suite needs suite.json, cases.json and reference/expectations.json")
+    except (OSError, ValueError) as e:
+        errs.append(f"{path}: unreadable JSON ({e})")
+    return None
+
+
+def leaks(task, exp):
+    """The graded strings a task must not contain: skill paths and the expectation's JSON."""
+    low = task.lower()
+    found = []
+    pieces = [exp] + list(exp.get("facts", []))
+    for p in pieces:
+        for s in (json.dumps(p), json.dumps(p, separators=(",", ":"))):
+            if s.lower() in low:
+                found.append(f"expectation JSON {s}")
+    for f in exp.get("facts", []):
+        sk = f.get("skill") if isinstance(f, dict) else None
+        if isinstance(sk, str) and sk:
+            for s in (f"{sk}/SKILL.md", f"skills/{sk}"):
+                if s.lower() in low:
+                    found.append(f"skill path {s}")
+    return sorted(set(found))
+
+
+def check_suite(d, evals, errs):
+    name = d.name
+    suite = load(d / "suite.json", errs)
+    cases = load(d / "cases.json", errs)
+    exps = load(d / "reference" / "expectations.json", errs)
+    if suite is None or cases is None or exps is None:
+        return 0
+    where = f"{name}/suite.json"
+    if not isinstance(suite, dict):
+        errs.append(f"{where}: must be a JSON object"); return 0
+    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s"}):
+        errs.append(f"{where}: field {k}: unknown field")
+    if suite.get("suite") != name:
+        errs.append(f"{where}: field suite: must equal the dir name {name!r}, got {suite.get('suite')!r}")
+    kind = suite.get("kind")
+    if kind not in KINDS:
+        errs.append(f"{where}: field kind: must be one of {sorted(KINDS)}, got {kind!r}")
+    if not isinstance(suite.get("description"), str) or not suite.get("description", "").strip():
+        errs.append(f"{where}: field description: missing or empty")
+    for k in ("max_tool_calls", "timeout_s"):
+        if k in suite and not (type(suite[k]) is int and suite[k] > 0):
+            errs.append(f"{where}: field {k}: must be a positive integer")
+    if not isinstance(cases, list):
+        errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
+    if not isinstance(exps, dict):
+        errs.append(f"{name}/reference/expectations.json: must be a JSON object keyed by case id"); return 0
+    need = BASE | (TRIGGER if kind == "skill-trigger" else set())
+    ids = []
+    for n, c in enumerate(cases):
+        if not isinstance(c, dict):
+            errs.append(f"{name}/cases.json: case #{n + 1}: must be a JSON object"); continue
+        cid = c.get("id") if isinstance(c.get("id"), str) else f"#{n + 1}"
+        at = f"{name}/cases.json case {cid}"
+        for k in sorted(need - set(c)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(c) - need):
+            errs.append(f"{at}: field {k}: unknown field" + ("; graded facts live only in reference/expectations.json" if k == "facts" else ""))
+        if "id" in c:
+            if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
+                errs.append(f"{at}: field id: must match {ID.pattern}")
+            elif c["id"] in ids:
+                errs.append(f"{at}: field id: duplicate")
+            else:
+                ids.append(c["id"])
+        for k in ("role", "fixture", "task"):
+            if k in c and not (isinstance(c[k], str) and c[k].strip()):
+                errs.append(f"{at}: field {k}: must be a non-empty string")
+        if isinstance(c.get("role"), str) and c["role"].strip() and not (
+                re.fullmatch(r"[a-z0-9-]+", c["role"]) and (KIT / "agents" / f"{c['role']}.md").is_file()):
+            errs.append(f"{at}: field role: no kit role agents/{c['role']}.md")
+        if isinstance(c.get("fixture"), str) and c["fixture"].strip() and not (
+                re.fullmatch(r"[A-Za-z0-9._-]+", c["fixture"]) and (evals / "fixtures" / c["fixture"]).is_dir()):
+            errs.append(f"{at}: field fixture: no fixture dir {evals / 'fixtures' / c['fixture']}")
+        if "should_trigger" in c and kind == "skill-trigger" and not isinstance(c["should_trigger"], bool):
+            errs.append(f"{at}: field should_trigger: must be true or false")
+        if "split" in c and kind == "skill-trigger" and c["split"] not in SPLITS:
+            errs.append(f"{at}: field split: must be one of {sorted(SPLITS)}, got {c['split']!r}")
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        if exp is None:
+            if isinstance(c.get("id"), str):
+                errs.append(f"{at}: field id: no expectations in reference/expectations.json")
+            continue
+        check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs)
+        if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
+            continue
+        kinds = {f.get("fact") for f in exp["facts"] if isinstance(f, dict)}
+        if kind == "skill-trigger" and isinstance(c.get("should_trigger"), bool):
+            if c["should_trigger"] and not kinds & {"skill_read", "skill_read_before"}:
+                errs.append(f"{at}: field should_trigger: true, but no skill_read or skill_read_before fact grades it")
+            if not c["should_trigger"] and "skill_not_read" not in kinds:
+                errs.append(f"{at}: field should_trigger: false, but no skill_not_read fact grades it")
+        if isinstance(c.get("task"), str):
+            for leak in leaks(c["task"], exp):
+                errs.append(f"{at}: field task: shows the agent its grade ({leak}); graded facts stay hidden")
+    for k in sorted(set(exps) - set(ids)):
+        errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
+    return len(cases)
+
+
+def check_exp(at, exp, errs):
+    if not isinstance(exp, dict):
+        errs.append(f"{at}: must be a JSON object {{\"facts\": [...]}}"); return
+    for k in sorted(set(exp) - {"facts"}):
+        errs.append(f"{at}: field {k}: unknown field")
+    facts = exp.get("facts")
+    if not isinstance(facts, list) or not facts:
+        errs.append(f"{at}: field facts: missing or empty"); return
+    for n, f in enumerate(facts):
+        fa = f"{at} fact #{n + 1}"
+        if not isinstance(f, dict):
+            errs.append(f"{fa}: must be a JSON object"); continue
+        t = f.get("fact")
+        if t not in FACTS:
+            errs.append(f"{fa}: field fact: unknown fact type {t!r}; known: {sorted(FACTS)}"); continue
+        for k in sorted(FACTS[t] - set(f)):
+            errs.append(f"{fa}: field {k}: missing")
+        for k in sorted(set(f) - FACTS[t] - {"fact"}):
+            errs.append(f"{fa}: field {k}: unknown field for {t}")
+        sk = f.get("skill")
+        if "skill" in f and not (isinstance(sk, str) and re.fullmatch(r"[a-z0-9-]+", sk)
+                                 and (KIT / ".agents" / "skills" / sk / "SKILL.md").is_file()):
+            errs.append(f"{fa}: field skill: no kit skill .agents/skills/{sk}/SKILL.md")
+        if "before" in f and f["before"] not in BEFORE:
+            errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+def main(argv):
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip()); return 0
+    evals = Path(argv[0]) if argv else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr); return 2
+    errs, n, suites = [], 0, 0
+    for d in sorted(p for p in evals.iterdir() if p.is_dir() and p.name != "fixtures"):
+        suites += 1
+        n += check_suite(d, evals, errs)
+    if errs:
+        for e in errs:
+            print(f"check-evals: {e}", file=sys.stderr)
+        print(f"check-evals: {len(errs)} problem(s) above; {FIX}", file=sys.stderr)
+        return 1
+    print(f"evals: ok ({suites} suites, {n} cases)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

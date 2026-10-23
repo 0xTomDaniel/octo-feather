@@ -3,7 +3,7 @@
 # throwaway git copy of the kit's tracked files, each justfile change that makes a check
 # or check-* recipe reach the product judge (qc, octo-feather-qc, Jev) or the factory
 # evals (qa), by dependency, transitive dependency or body, makes `just check` fail
-# saying it stays deterministic and free, before any recipe runs (no qa stub output).
+# saying it stays deterministic and free, before any recipe runs (no qa output).
 # Run by `just check`.
 set -euo pipefail
 shopt -u patsub_replacement 2>/dev/null || true  # bash 5.2: a literal & in ${x/a/b} replacements
@@ -18,9 +18,9 @@ g init -q; g add -A; g commit -qm base
 orig="$(cat "$t/justfile")"; checkline="$(grep '^check:' "$t/justfile")"
 msg='just check stays deterministic and free'
 (cd "$t" && just check-dashes >/dev/null 2>&1) || { echo "check-gate-free test: clean copy is not green" >&2; (cd "$t" && just check-dashes) >&2; exit 1; }
-# Ordinary runs (outside a check run, so not under this test's own) are unaffected: the qa stub runs as before, qc resolves (dry run, no judge).
-set +e; out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just qa 2>&1)"; rc=$?; set -e
-[[ "$rc" == 2 ]] && grep -qF 'not implemented yet' <<<"$out" || { echo "check-gate-free test: plain just qa changed" >&2; echo "$out" >&2; exit 1; }
+# Ordinary runs (outside a check run, so not under this test's own) are unaffected: qa runs (its --help, no case), qc resolves (dry run, no judge).
+set +e; out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just qa --help 2>&1)"; rc=$?; set -e
+[[ "$rc" == 0 ]] && grep -qF 'octo-feather-qa [--suite NAME]' <<<"$out" || { echo "check-gate-free test: plain just qa changed" >&2; echo "$out" >&2; exit 1; }
 out="$(cd "$t" && just --dry-run qc x 1 a 2>&1)" && grep -qF 'octo-feather-qc' <<<"$out" || { echo "check-gate-free test: plain just qc blocked" >&2; echo "$out" >&2; exit 1; }
 # plant NEWCHECK EXTRA: the justfile with its check line replaced by NEWCHECK and EXTRA appended.
 plant() { printf '%s\n\n%s\n' "${orig/"$checkline"/$1}" "$2" > "$t/justfile"; }
@@ -31,7 +31,7 @@ expect() {
   printf '%s\n' "$orig" > "$t/justfile"
   [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $1 / $2" >&2; exit 1; }
   grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $1 / $2" >&2; echo "$out" >&2; exit 1; }
-  ! grep -qE 'not implemented yet|python: ok|Recipe `' <<<"$out" || { echo "check-gate-free test: a recipe ran before the guard: $1 / $2" >&2; echo "$out" >&2; exit 1; }
+  ! grep -qE 'qa: run |python: ok|Recipe `' <<<"$out" || { echo "check-gate-free test: a recipe ran before the guard: $1 / $2" >&2; echo "$out" >&2; exit 1; }
 }
 # allow EXTRA: appending EXTRA (wired into check) keeps the guard green.
 allow() {
@@ -79,7 +79,7 @@ out="$(cd "$w" && PATH="$t/scripts:$PATH" just --justfile "$t/justfile" --workin
 plant "${c/check:/check: qa}" ""
 set +e; out="$(cd "$w" && PATH="$t/scripts:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just --justfile "$t/justfile" --working-directory "$w" check 2>&1)"; rc=$?; set -e
 printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
-[[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'not implemented yet' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
+[[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'qa: run ' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
 # Script forms: a repo script a gate recipe runs reaches qa or the judge at run time, through just or directly.
 # A fake `pi` first on the check run's PATH (HOME moved: no ~/.local/bin ahead of it) logs any launch.
 sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
@@ -101,7 +101,7 @@ script_form() {
     printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
     [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
     grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
-    ! grep -qE 'not implemented yet|just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+    ! grep -qE 'qa: run |just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
     # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
     ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: $probe: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
   done

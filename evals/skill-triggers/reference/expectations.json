@@ -1,0 +1,4 @@
+{
+  "tdd-shout-flag": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
+  "tdd-near-miss-count-tests": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]}
+}
