@@ -82,6 +82,14 @@ _Avoid_: Launch, go
 A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up
 
+**Test**:
+Code that proves product behaviour the spec states, through a public surface: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test through a public function. A product command that refuses something (the kit gate failing on a skill with no script, a target's page validator) is product behaviour, and its tests are tests. Kit code follows exactly these rules; a kit script is the kit's product.
+_Avoid_: Test gate, unit test
+
+**Check**:
+A rule the gate enforces on the repo's own code or text: lint, types, structure, a scan, a banned pattern, an eval grader judging an agent. A file under `tests/` that scans the repo's own text (lane #82's former `tests/tracker-prose.sh`) is a check and is judged as one. Only an exact check is allowed (docs/adr/0008); who builds one is ruled there too.
+_Avoid_: Test (for a scan), guard, lint (for anything that is not a linter)
+
 **Gate**:
 A point where work stops until the owner decides, such as accepting a spec or a merge.
 _Avoid_: Checkpoint, approval step

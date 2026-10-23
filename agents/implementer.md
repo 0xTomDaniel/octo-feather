@@ -35,7 +35,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while the behavior stays wrong.
 - Brownfield code keeps its original lines in their original order: change only the lines a criterion needs, and never restructure, rename or reformat code the ticket does not need.
 - Tests go through a public surface (docs/adr/0002), one or two per criterion, and no test detail leaks into production code: the `tdd` skill (Seams, Test leak; docs/adr/0002).
-- Before writing a check, test gate or grader (a `just check` script or recipe, a gating test, an eval grader), place its rule on the ladder in docs/adr/0008. Write it only if it is an exact check of the rule as owned (spec criterion, ADR, owner ruling). A rule you cannot test exactly goes back to your supervisor as a judgment or prose question, never a proxy script: a regex for `print(.*(error|fail))` lacking `run|use|try` is a proxy for "an error tells the user what to do next". Name each check you add in your report on the reviewer's `Check:` line (agents/code-reviewer.md).
+- Write product code and integration/E2E tests through public surfaces. Structure stays your everyday job: types, narrow interfaces, illegal states unrepresentable, import boundaries in your own code (ADR 0008 rung 1). Do not add enforcement checks on the repo's own code or text (lint rules, gate checks, scans); those come from a corrector or from an accepted spec criterion that asks for one. If a criterion does, build it as product code, exact only (ADR 0008); anything not testable exactly goes back to your supervisor.
 - In vendored skills, "the user" is your supervisor (`herdr-say --parent`).
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; report the smoke result first.
 - One mechanism (operating model): before adding a client, format, store, config, status file, or table, find the existing one and extend it, or state in the spec why a second is needed.
@@ -53,4 +53,12 @@ Stop on a ticket that contradicts the spec, a missing environment, or work that 
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, a `Check:` line for each check, test gate or grader added (or `Checks: none`), validation run and its result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, the check field, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. The check field is plain lines at column 0, exactly as `octo-feather-lane verdict` reads them, never a bullet, bold or a code block: the one line
+
+Checks: none
+
+or, for each check a criterion asked you to build, one line
+
+Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact
+
+(fields: the `code-review` skill's Verdict step). Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

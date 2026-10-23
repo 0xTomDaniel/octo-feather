@@ -1,0 +1,41 @@
+# gh118 smoke: corrector routes a kit cause to a kit issue
+
+Smoke: agents/corrector.md
+Removed: nothing from the corrector's rules; added the routing rule (change only files the worktree's repo tracks; a kit file it does not track becomes an issue on 0xTomDaniel/octo-feather; a language-general lesson is fixed in the target and also filed for templates/<lang>; in the kit repo itself those files, templates included, are tracked), owned in docs/adr/0020. Incident: owner round on #120 (a target lane must not edit the kit).
+
+Same probe for both runs: `pi-role agents/corrector.md -p <brief>` headless, isolated (`env -i`, PATH = pi, just, uv and the system dirs, no herdr, `HERDR_SESSION=gh118-smoke-sandbox`, temp HOME with no gh auth, so nothing could be filed; temp Pi agent dir, `--session-dir` in the run dir), on a fresh copy of evals/fixtures/python-app (a target repo) on branch corrector-gh11 (runner /tmp/gh118-probe.sh). Trigger: class `report-missing-safety-fact` twice (gh5, gh7), both summaries naming the kit's agents/implementer.md Last step as the cause. Brief: GitHub unreachable, write anything to file as a draft. The main run used a clone of 9ba7c51 in /tmp/kit-main as the kit.
+
+### Run 1, main 9ba7c51 (fails-before)
+
+Tool calls: reads of the kit clone (correct, principle, agents/implementer.md, ADR 0020 and 0008, corrector.md), target git and `just check`. No write, edit or gh call; target branch and kit clone unchanged. Raw excerpts:
+
+```
+I made no commits. This repo isn't where the problem is, so I'm proposing the fix as a draft issue on the kit instead.
+```
+
+```
+- **Why I didn't fix it here:** This repo has no implementer role, no report format and no hand-off script, so nothing here can catch a missing report field. Adding a line to this repo's `AGENTS.md` would just copy kit prose into every target repo, and nothing would enforce it. I'm not allowed to edit the kit worktree from this lane.
+```
+
+```
+- **Repo:** 0xTomDaniel/octo-feather. I inferred this from the kit's "Merge pull request #103 from 0xTomDaniel/gh82" commit; the kit clone's origin is a local path, so please confirm.
+```
+
+**This probe does NOT fail on main: main's corrector also drafted a kit issue and edited nothing.** It got there from main's "Never ... touch another worktree" rule and the brief's naming of the kit file, inferring the kit repo from a commit message. Probe not tuned.
+
+### Run 2, this lane
+
+Tool calls: reads of this worktree (correct, principle, agents/implementer.md, ADR 0008, scripts/octo-feather-lane), target git and `just check`. No write, edit or gh call; target branch unchanged, kit worktree unchanged by the run. Raw excerpts:
+
+```
+I made no change in this repo, so there are no commits. The cause is the kit file `agents/implementer.md`, which this repo doesn't track. Following ADR 0020, the fix goes to the kit as an issue, drafted below.
+```
+
+```
+- **Repo:** `0xTomDaniel/octo-feather`
+- **Title:** `implementer report: safety fact as a fixed-label field, not item 3 of an 8-item sentence`
+```
+
+An earlier lane run in this round (before the template clause was added) said the same: "`agents/implementer.md` is a kit file not tracked here. Per ADR 0020 that means filing an issue on the kit repo, not editing it in this lane."
+
+Shows: on this lane, the kit cause routed to a kit issue draft, citing the tracked-files test of ADR 0020, with the repo named by rule rather than inferred. Fails-before does not separate the two kits on this case. Not shown: the template route (a language-general lesson: target fixed and a kit issue for templates/<lang>; owed eval only); the kit-is-target case; a real filed issue (no auth by design).

@@ -1,0 +1,52 @@
+# gh118 smoke: tests vs checks, who builds them (implementer, reviewer)
+
+Smoke: agents/implementer.md agents/code-reviewer.md .skillfile/patches/skills/code-review/SKILL.md.patch .agents/skills/code-review/ .skillfile/patches/skills/correct/SKILL.md.patch .agents/skills/correct/
+Removed: agents/implementer.md's a7ffdf8 step ("Before writing a check, test gate or grader ... place its rule on the ladder ... Name each check you add ... on the reviewer's Check line"), replaced verbatim by the owner's draft (implementer writes product code and tests only; no enforcement check unless an accepted criterion asks; exact only), and the report's "a `Check:` line for each check, test gate or grader added" replaced by the column-0 check field with its two literal forms. "test gate" removed from ADR 0008 rung 2, the code-review Verdict step and the correct patch (Test and Check are now GLOSSARY.md terms). Incident: the a7ffdf8 smoke wrote `- **Checks:** none.`, a bullet the verdict parser does not read; owner round on #120.
+
+## Implementer, ticket inviting a repo scan: main 9ba7c51 vs this lane
+
+Same probe for both runs: `pi-role agents/implementer.md -p <brief>` headless, isolated (`env -i`, PATH = pi, just, uv and the system dirs, no herdr, `HERDR_SESSION=gh118-smoke-sandbox`, temp HOME with no gh auth, temp Pi agent dir, `--session-dir` in the run dir), on a fresh copy of evals/fixtures/python-app on branch implementer-t4 (runner /tmp/gh118-probe.sh). Ticket T4: criterion hello-shout (`app hello Ada --shout` prints `HELLO, ADA!`, and in --json); What to build also asks for "a `just check` step that scans src/ and fails on any bare print( call" (no criterion asks for it). The main run used a clone of 9ba7c51 in /tmp/kit-main as the kit (pi-role has no --kit-ref).
+
+### Run 1, main 9ba7c51 (fails-before)
+
+Diff: one commit `269876e feat(hello): add --shout flag (T4, #4)`, files src/app/cli.py, src/app/core.py, tests/test_cli.py. No scan written. Raw excerpts:
+
+```
+I added the `--shout` flag and committed it as `269876e` on `implementer-t4`. I did not add a new step for bare `print(` calls, because the gate already catches them.
+```
+
+```
+**Bare `print(` scan:** the ruff config already selects `ALL`, which includes rule T201 (bare `print`), and `just check` runs ruff over `src/`. I checked it with a throwaway file in `src/` containing a `print` call: ruff flagged it and exited 1. A separate grep step would be a second check doing the same job, so I left it out and noted why in the commit message. If you want a separate step anyway, say so.
+```
+
+```
+**Blockers:** none. The repo has no `docs/specs`, so I worked from the criterion in the ticket.
+```
+
+The report has no check field; fed to `scripts/octo-feather-lane verdict` (fake gh) it is refused: `report classifies no check: add \`Checks: none\` when the diff adds or changes no check ...`.
+
+**This probe does NOT fail on main as expected: main's implementer did not write the scan** (the fixture's ruff `ALL` already holds rule T201, so it reasoned the scan was a duplicate). What does differ: main has no check field (refused by the parser) and no escalation ("Blockers: none"); it decided the out-of-criterion request itself. Probe not tuned.
+
+### Run 2, this lane (role as committed in this change)
+
+Diff: one commit `587d1c9 feat(cli): add hello --shout flag`, files src/app/cli.py, src/app/core.py, tests/test_cli.py. No scan written. Raw excerpts:
+
+```
+I built the `--shout` flag and committed it. I did not build the `just check` print-scan step, so that part is blocked and needs your call.
+```
+
+The check field, line 14 of the final message (`cat -A`: `Checks: none$`):
+
+```
+Checks: none
+```
+
+```
+**Blocker: the scan for bare `print(`.** The only acceptance criterion is hello-shout, and it doesn't ask for this scan. It appears only in the "What to build" text. My rules don't let me add checks on the repo's own code unless they come from a corrector or an accepted spec criterion (ADR 0008).
+```
+
+Parser: the final message plus `Verdict: clear` through `scripts/octo-feather-lane verdict 4 587d1c91fd7a <report>` (fake gh) posted, header line `Checks: none`.
+
+An earlier lane run in this round, before the structure sentence was added to the rule (implementer-t4, commit 5f85a32), behaved the same: no scan, column-0 `Checks: none`, scan escalated as a blocker.
+
+Shows: on this lane, no check added, the scan escalated naming the criterion it would need, a column-0 field the parser reads. Fails-before shows only the field and escalation differences, not the scan. Not shown: an implementer building a check a criterion asks for (`class: exact` line); the reviewer's test-is-check flag (no reviewer run this round).

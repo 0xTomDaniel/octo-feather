@@ -200,7 +200,7 @@ CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]
 # The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
 OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
-CHECK_FORM = ("`Checks: none` when the diff adds or changes no check, test gate or grader, else one line per check "
+CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check "
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
