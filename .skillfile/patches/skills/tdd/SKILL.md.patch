@@ -1,6 +1,14 @@
-# reason: ADR 0002: seams are public surfaces only, taken from the ticket's acceptance criteria, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path
+# reason: ADR 0002: seams are public surfaces only, taken from the ticket's acceptance criteria, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; issue #107 description triggers on writing, changing or reviewing tests, not on a user asking
 --- a/SKILL.md
 +++ b/SKILL.md
+@@ -1,6 +1,6 @@
+ ---
+ name: tdd
+-description: Test-driven development. Use when the user wants to build features or fix bugs test-first, mentions "red-green-refactor", or wants integration tests.
++description: Tests that are worth keeping: where tests go (seams) and the anti-patterns (implementation-coupled, tautological, test leak), with the red-green loop. Use before writing or changing any test, when building a feature or fixing a bug, and when reviewing a diff that touches tests.
+ ---
+ 
+ # Test-Driven Development
 @@ -19,16 +19,17 @@
  
  A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.

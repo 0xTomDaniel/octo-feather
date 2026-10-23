@@ -1,11 +1,12 @@
-# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews); issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path
+# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews); issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; description triggers on starting a ticket
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,17 +1,14 @@
  ---
  name: implement
- description: "Implement a piece of work based on a spec or set of tickets."
+-description: "Implement a piece of work based on a spec or set of tickets."
 -disable-model-invocation: true
++description: "Implement a piece of work based on a spec or set of tickets. Use when starting a ticket: the build loop from tests to a green gate and a commit."
  ---
  
  Implement the work described by the user in the spec or tickets.
