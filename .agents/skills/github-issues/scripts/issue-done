@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# issue-done KEY: closes the issue (GitHub's done state); one already closed stays closed. Prints nothing.
+# Wraps `gh issue close`.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: issue-done KEY" >&2; exit 64; }
+[[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "issue-done: $1 is not a GitHub issue key" >&2; exit 1; }
+out="$(gh issue close "${BASH_REMATCH[1]}" 2>&1)" || { echo "issue-done: $out" >&2; exit 1; }

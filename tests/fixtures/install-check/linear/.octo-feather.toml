@@ -1,0 +1,2 @@
+# A target whose tickets live in Linear (docs/adr/0004); tests/install-check.sh copies it into a fresh git repo.
+tracker = "linear"

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# pr-line KEY: the line a lane pull request's body carries for its parent issue: Closes #82.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: pr-line KEY" >&2; exit 64; }
+[[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "pr-line: $1 is not a GitHub issue key" >&2; exit 1; }
+echo "Closes #${BASH_REMATCH[1]}"

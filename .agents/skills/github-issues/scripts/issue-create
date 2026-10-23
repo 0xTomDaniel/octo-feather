@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# issue-create --title TITLE --body-file FILE|- [--parent KEY] [--blocked-by KEY]...: files an issue, optionally
+# as a sub-issue of PARENT and blocked by other issues; prints the new issue's key. Wraps `gh issue create`.
+set -euo pipefail
+usage() { echo "usage: issue-create --title TITLE --body-file FILE|- [--parent KEY] [--blocked-by KEY]..." >&2; exit 64; }
+key() { [[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "issue-create: $1 is not a GitHub issue key" >&2; exit 1; }; echo "${BASH_REMATCH[1]}"; }
+title=""; body=""; args=(); blocked=()
+while (($#)); do
+  case "$1" in
+    --title) title="${2:?}"; shift 2 ;;
+    --body-file) body="${2:?}"; shift 2 ;;
+    --parent) args+=(--parent "$(key "${2:?}")"); shift 2 ;;
+    --blocked-by) blocked+=("$(key "${2:?}")"); shift 2 ;;
+    *) usage ;;
+  esac
+done
+[[ -n "$title" && -n "$body" ]] || usage
+((${#blocked[@]} == 0)) || args+=(--blocked-by "$(IFS=,; echo "${blocked[*]}")")
+url="$(gh issue create --title "$title" --body-file "$body" "${args[@]}")"
+[[ "$url" =~ /issues/([0-9]+)$ ]] || { echo "issue-create: gh printed no issue url: $url" >&2; exit 1; }
+echo "${BASH_REMATCH[1]}"

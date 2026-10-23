@@ -1,6 +1,6 @@
 {
   "spec": "roles.spec.html",
-  "accepted_commit": "175aaef2efd1e1d960b318cd0feb9830e4331259",
+  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
   "criteria": {
     "acceptance-tab-headless-same": {
       "status": "built",
@@ -37,6 +37,10 @@
     "acceptance-worker-in-lane": {
       "status": "built",
       "pr": 16
+    },
+    "acceptance-supervise-layout-linear": {
+      "status": "built",
+      "pr": 103
     }
   }
 }

@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# pr-line KEY: the line a lane pull request's body carries for its parent issue: Tracks ENG-123.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: pr-line KEY" >&2; exit 64; }
+[[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "pr-line: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
+echo "Tracks ${1^^}"

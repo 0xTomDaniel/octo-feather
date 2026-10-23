@@ -25,7 +25,7 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills.
 check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates
     @echo "just check: ok"
 
@@ -48,7 +48,7 @@ check-scripts:
     fi
     for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
 
-# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names, no lane branch default.
+# No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
@@ -60,8 +60,6 @@ check-refs:
     if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    if grep -nHE '\bLinear\b' "${files[@]}"; then
-      echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
     # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
     if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
       echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
@@ -188,7 +186,7 @@ shape *args:
 spec-chat repo:
     octo-feather-spec-chat "$1"
 
-# Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
+# Integrate worker commits onto the lane's branch (its lane key: gh12, eng-123 for ENG-123), then its `just check`; non-zero on any conflict (docs/adr/0017).
 [no-cd]
 integrate issue +refs:
     octo-feather-integrate "$@"
@@ -201,8 +199,9 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Verify the runtime tools on this box (octo-lite's install --check equivalent).
-install-check:
+# Verify the runtime tools on this box (octo-lite's install --check equivalent), and the tracker CLI of the target
+# (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear.
+install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -211,13 +210,20 @@ install-check:
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
+    # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
+    skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+    s = u.spec_from_loader("pi_role", m.SourceFileLoader("pi_role", sys.argv[1] + "/scripts/pi-role")); r = u.module_from_spec(s); s.loader.exec_module(r)
+    print(r.tracker_skill(sys.argv[1] + "/.agents/skills", sys.argv[2]))' "$root" "$1")" || exit 1
+    echo "tracker ${skill} (target $1)"
+    c="$root/.agents/skills/$skill/scripts/install-check"
+    [[ ! -x "$c" ]] || "$c" || bad=1
     exit "$bad"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():
     octo-feather-start --director --cwd "$1"
 
-# Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
+# Start one supervisor for a ticket as the tracker writes it (12, ENG-123) in workspace named by its lane key (gh12, eng-123), tab `supervisor`.
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "$1" --cwd "$2"
 

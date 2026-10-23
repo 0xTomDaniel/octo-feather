@@ -11,11 +11,11 @@ Be extremely concise. Sacrifice grammar for the sake of concision.
 No em-dashes or en-dashes. Ever.
 
 Use this skill when an implementer needs to publish branch changes and open or
-update the PR for a shaped GitHub issue.
+update the PR for a shaped ticket.
 
 ## Prerequisites
 
-- Push and open a PR only as [consent](../github/SKILL.md#consent) allows. Otherwise stop at local commits and report.
+- Push and open a PR only as [consent](../github-pr/SKILL.md#consent) allows. Otherwise stop at local commits and report.
 - `gh auth status` succeeds.
 - `git remote -v` shows the intended target repo.
 - Target repo validation has run or the failure is recorded with rationale.
@@ -30,10 +30,10 @@ update the PR for a shaped GitHub issue.
    validation, then push again.
 5. Use `--force-with-lease` only when history was deliberately rewritten.
 6. Create or update exactly one PR for the issue.
-7. PR title should match the GitHub issue title unless the
-   target repo has a stronger convention.
-8. PR body must start with `Closes #<issue-number>` and include `## Summary`
-   and `## Validation`.
+7. PR title should match the parent ticket's title (the tracker skill's
+   `issue-view`) unless the target repo has a stronger convention.
+8. PR body must start with the line the tracker skill's `pr-line <parent key>`
+   prints and include `## Summary` and `## Validation`.
 9. Return the PR URL.
 
 Do not merge. Surface auth, permissions, branch protection, and workflow errors
