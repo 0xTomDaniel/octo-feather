@@ -474,8 +474,8 @@ def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
     return failed, pending
 
 
-# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge.
-CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+)?#(\d+)\b", re.I)
+# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
+CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
 
 
 def parent_line(body: str, branch: str) -> list[str]:
@@ -490,9 +490,9 @@ def parent_line(body: str, branch: str) -> list[str]:
     got = [l for l in lines if l == want or (l.startswith(want) and not re.match(r"[\w-]", l[len(want):len(want) + 1]))]
     out = [] if got else [f"parent line: missing; add the line `{want}` (the tracker skill's pr-line {key}) to the PR body"]
     for l in lines:
-        if l in got:
-            continue
         for m in CLOSES.finditer(l):
+            if l in got and m.end() <= len(want):
+                continue  # the parent line's own closing link (GitHub: Closes #<parent>), never the rest of its line
             out.append(f"parent line: `{l[:80]}` closes GitHub issue #{m.group(1)}, not the lane's parent line `{want}`; "
                        "remove it (the supervisor's close moves each ticket to done with the tracker skill's issue-done)")
     return out
