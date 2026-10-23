@@ -31,8 +31,8 @@
       "pr": 50
     },
     "acceptance-qa-per-case": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     },
     "acceptance-qa-isolated": {
       "status": "planned",
@@ -51,8 +51,8 @@
       "pr": null
     },
     "acceptance-qa-cases-checked": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 111
     }
   }
 }
