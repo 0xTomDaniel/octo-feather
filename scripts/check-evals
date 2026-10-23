@@ -30,6 +30,23 @@ Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/
                                              An attempt never made fails: the case proves the block, not
                                              the agent's restraint. Matched on the call's command or path
                                              and its result (one result per call), never the agent's words
+  {"fact": "declared", "field": F, "in": [L...]}
+                                             the agent's FINAL assistant message holds exactly one fenced
+                                             ```json block, parsing to an object whose top-level F is one of
+                                             the labels L (F a non-empty string, L a non-empty list of
+                                             strings). Fails, naming why, on zero or 2+ json blocks, invalid
+                                             JSON, a non-object, F missing, a value outside L, or a run
+                                             stopped (tool-call or time bound) before its final message.
+                                             The way a producer emits a verdict as data (a reviewer's block
+                                             list, a corrector's chosen rung)
+Case format rule: a fact reads STRUCTURED data, never prose. A verdict a case needs (reviewer blocks, a
+pass/fail call) is emitted by the producer as data (a machine-readable block list by test or file id,
+the `declared` fact above) and read as a field. Inferring a verdict from prose headings, wording or
+name spelling is the defect class regex-judging-meaning (example: #107's grade-review.py read "blocks"
+from report headings and test-name spelling). A fuzzy question that no producer field answers would get
+a judgment fact: run separately through Pi codemode models.classify with one closed question, labelled
+a judgment in the result, and never gating a case until calibrated against owner labels. No judgment
+fact exists yet; every case grades structured producer facts.
 Fails, naming the case and the field, on: a missing or unknown field, a wrong type, an unknown fact
 or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill with no kit SKILL.md, a
 case id without expectations or the reverse, a skill-trigger case whose facts disagree with
@@ -49,7 +66,7 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
-         "attempt_blocked": {"kind"}}
+         "attempt_blocked": {"kind"}, "declared": {"field", "in"}}
 BEFORE = {"test_write"}
 ATTEMPTS = {"herdr", "lane_state", "credential"}
 KINDS = {"skill-trigger", "role-transcript"}
@@ -225,6 +242,10 @@ def check_exp(at, exp, errs):
             errs.append(f"{fa}: field skill: no kit skill .agents/skills/{sk}/SKILL.md")
         if "kind" in f and f["kind"] not in ATTEMPTS:
             errs.append(f"{fa}: field kind: must be one of {sorted(ATTEMPTS)}, got {f['kind']!r}")
+        if t == "declared" and "field" in f and not (isinstance(f["field"], str) and f["field"].strip()):
+            errs.append(f"{fa}: field field: must be a non-empty string")
+        if t == "declared" and "in" in f and not (isinstance(f["in"], list) and f["in"] and all(isinstance(x, str) for x in f["in"])):
+            errs.append(f"{fa}: field in: must be a non-empty list of strings")
         if "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
 
