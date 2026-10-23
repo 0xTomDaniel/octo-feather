@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Judgment questions: labelled, benched, advisory - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Judgment questions: labelled, benched, advisory</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / judgment.spec.html</nav>
+<p class="lede" data-anchor="context">Some questions the factory asks are about meaning, so no check can answer them from facts (<a href="../adr/0008-prose-last.md">ADR 0008</a>).
+Each one is put to a classifier model as one closed question, and its answer counts only as far as real labelled history shows the model gets it right.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="false" data-anchor="story-labels-owned">As the director, every judgment question comes with real cases I checked, each with its label, its reason and its source, so the owner can review any label later and overturn it.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-model-chosen">As the owner, each judgment question's model is chosen by its measured accuracy, calibration and cost on cases it was not tuned on, not by feel.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-advisory">As the owner, a model's judgment shown beside a review is labelled as one, and nothing blocks on it until its question is calibrated.</p>
+</section>
+
+<section data-spec-section="acceptance" data-acceptance-scope="traceability" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-judge-labelled" data-story="story-labels-owned"><span data-acceptance-scenario>Given a maintainer with the kit's judgment questions, When they open one question's labelled set,</span> <span data-acceptance-observable>Then it shows one closed question, its fixed labels, and at least fifteen cases from the factory's real history, each with its label, a one-line reason and its source, with a held-out share marked apart.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-judge-bench" data-story="story-model-chosen"><span data-acceptance-scenario>Given a maintainer with a judgment question's labelled set, When they run the factory evals' bench for that question,</span> <span data-acceptance-observable>Then every available classifier shows its accuracy, its calibration and its cost on that question, the held-out score shown apart, and one model is named as the question's choice.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-judge-advisory" data-story="story-advisory"><span data-acceptance-scenario>Given a supervisor whose lane head the code reviewer judged, and a judgment question whose held-out accuracy and calibration are below its accepted threshold, When the question's chosen model answers it beside that review,</span> <span data-acceptance-observable>Then the merge ask shows the answer labelled as a model judgment beside the code reviewer's verdict, and the merge ask is ready without it.</span></p>
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-question-set"><span data-boundary-responsibility>A question set owns one judgment question: its fixed wording, its labels, and its labelled cases with reason, source and split.</span> <span data-boundary-seam>Caller-facing seam: the set's data, read by the bench and by the advisory judge.</span> <span data-boundary-dependency>Dependency direction: self-contained; it depends on no model.</span> <span data-boundary-scope>Observable scope: the question, its labels, and each case's label, reason, source and split.</span></p>
+<p data-modular-boundary data-anchor="boundary-bench"><span data-boundary-responsibility>The bench owns measuring every available classifier on each question set.</span> <span data-boundary-seam>Caller-facing seam: the factory evals (<a href="./quality.spec.html#boundary-evals">quality#boundary-evals</a>).</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on classifier models through Pi and on the question sets.</span> <span data-boundary-scope>Observable scope: per question and model, accuracy, calibration and cost, held-out apart, and the chosen model.</span></p>
+<p data-modular-boundary data-anchor="boundary-advisory-judge"><span data-boundary-responsibility>The advisory judge owns answering one question's chosen model beside a lane's review.</span> <span data-boundary-seam>Caller-facing seam: its labelled answer in the merge ask.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on the chosen classifier through Pi and on the question set.</span> <span data-boundary-scope>Observable scope: the answer, its confidence, and the label that marks it a model judgment.</span></p>
+</section>
+
+<section data-anchor="questions" id="questions">
+<h2>The questions</h2>
+<p data-anchor="questions-note">Each question's exact wording and labels live in its set's data, fixed; this table names what each one judges and what the model is shown.</p>
+<div class="table-scroll" data-anchor="question-list-wrap">
+<table data-anchor="question-list">
+<thead><tr><th>Question</th><th>Judges</th><th>The model is shown</th></tr></thead>
+<tbody>
+<tr data-anchor="question-test-quality"><td>Test quality</td><td>Whether a test is tautological, coupled to the implementation, or sound</td><td>The test and the least of the code it exercises</td></tr>
+<tr data-anchor="question-fact-or-meaning"><td>Fact or meaning</td><td>Whether a check or grader decides its question by reading a fact or by deciding a meaning</td><td>The rule the check states and what it reads</td></tr>
+<tr data-anchor="question-ticket-slice"><td>Ticket slice</td><td>Whether a ticket is a real end-to-end slice</td><td>The ticket as filed</td></tr>
+<tr data-anchor="question-call-evidence"><td>Call evidence</td><td>Whether a spec call's evidence shows its accepted criterion cannot pass as written</td><td>The criterion as accepted and the call's change, reason and evidence</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section data-anchor="rules" id="rules">
+<h2>Rules</h2>
+<p data-anchor="rule-rung">A judgment question sits on the ladder rung <a href="../adr/0008-prose-last.md">ADR 0008</a> names for judgment; this spec does not restate that rung.</p>
+<p data-anchor="rule-closed">A question is closed: the model picks one of its fixed labels, with a confidence.</p>
+<p data-anchor="rule-labels-owned">Labels come from the factory's real history; a lane drafts them, the director checks and owns them, and the owner reviews them later, with nothing waiting on that review.</p>
+<p data-anchor="rule-overturn">A label the owner overturns changes the set, and the question's bench and choice are rerun.</p>
+<p data-anchor="rule-held-out">Held-out cases never shape a question's wording or its model choice; they give the score its threshold is judged on.</p>
+<p data-anchor="rule-calibration">Calibration means a model's confidence tracks how often it is right on that question.</p>
+<p data-anchor="rule-advisory">A judge is advisory until its question's held-out accuracy and calibration meet a threshold the lane proposes and the director accepts; until then no gate reads its answer.</p>
+</section>
+
+</article>
+</body>
+</html>
