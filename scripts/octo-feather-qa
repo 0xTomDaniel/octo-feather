@@ -73,7 +73,8 @@ chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/001
 ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) pinned version answer the closed question
 (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once. The state
 goes as the case's state string, the one shape every classifier takes (some accept no other object than their
-own). A moving alias (a model id starting with "~" or ending in "-latest") is never called nor chosen: the report
+own). A moving alias (a model id starting with "~" or ending in "-latest", one trailing
+":<tag>" routing suffix such as :free or :nitro ignored) is never called nor chosen: the report
 lists it as "skipped: moving alias" and bench.json `skipped` records it. classify never throws, so stopReason and
 errorMessage are kept. Its JSON output line is graded here against
 reference/expectations.json, never shown to it. Prints the classifiers available, then a TRAIN and a HELD-OUT table
@@ -702,7 +703,8 @@ export default function (pi) {
       const name = (m) => m.provider + "/" + m.id;
       const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
       // Only pinned versions: a moving alias (its id starts with "~" or ends in "-latest") is skipped, never called.
-      const moving = (m) => m.id.startsWith("~") || m.id.endsWith("-latest");
+      // One trailing routing tag (":free", ":nitro"...) is ignored: it routes the same version.
+      const moving = (m) => { const id = m.id.replace(/:[^:/]+$/, ""); return id.startsWith("~") || id.endsWith("-latest"); };
       const ms = listed.filter((m) => !moving(m));
       const skipped = listed.filter(moving).map(name);
       const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
