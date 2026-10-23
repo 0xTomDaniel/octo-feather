@@ -47,7 +47,7 @@ Each one is put to a classifier model as one closed question, and its answer cou
 <thead><tr><th>Question</th><th>Judges</th><th>The model is shown</th></tr></thead>
 <tbody>
 <tr data-anchor="question-test-quality"><td>Test quality</td><td>Whether a test is tautological, coupled to the implementation, or sound</td><td>The test and the least of the code it exercises</td></tr>
-<tr data-anchor="question-fact-or-meaning"><td>Exact or proxy</td><td>Whether a check or grader decides its rule exactly, refusing every case the rule forbids and only those, or by a proxy for the rule, whether the proxy reads facts or prose</td><td>The rule the check states and what it reads</td></tr>
+<tr data-anchor="question-fact-or-meaning"><td>Exact or proxy</td><td>Whether a check or grader tests the rule it states itself, so any case it lets through is a defect to fix, or tests a stand-in that only correlates with the rule, such as code tokens for coupling, words for reachability or a pattern over prose for intent</td><td>The rule the check states and what it reads</td></tr>
 <tr data-anchor="question-ticket-slice"><td>Ticket slice</td><td>Whether a ticket is a real end-to-end slice</td><td>The ticket as filed</td></tr>
 <tr data-anchor="question-call-evidence"><td>Call evidence</td><td>Whether a spec call's evidence shows its accepted criterion cannot pass as written</td><td>The criterion as accepted and the call's change, reason and evidence</td></tr>
 </tbody>
