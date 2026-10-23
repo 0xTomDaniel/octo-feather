@@ -86,8 +86,20 @@ g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
 [[ "$rc" != 0 ]] && grep -qF 'retired-words scanner error: grep exited 2' <<<"$out" && ! grep -qF 'refs: ok' <<<"$out" || { echo "check-refs test: grep error not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
 # The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
 expect agents/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
-expect agents/x.md "else \`octo-feather/""gh<issue-number>-<slug>\`." "docs/adr/0011"
+expect agents/x.md "else \`octo-feather/""gh<issue-number>""-<slug>\`." "docs/adr/0011"
+# Any placeholder token then a dash and a placeholder, in any kit file but docs/adr/0011, the rule's one owner (#121 N1 N2).
+expect agents/x.md "Cut branch gh<issue>""-<slug> for the lane." "docs/adr/0011"
+expect scripts/octo-feather-state "# lane branch gh<issue>""-<slug>" "docs/adr/0011"
+expect agents/x.md "Worker branch gh<N>""-<worker>." "docs/adr/0011"
+expect README.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
+expect AGENTS.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
+expect docs/guide/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
+expect docs/adr/0017-integration-is-a-script.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
+expect docs/x.md "Branch \`octo-feather/""gh<N>\`." "docs/adr/0011"
+expect justfile "# lane branch gh<N>""-<slug>" "docs/adr/0011"
+allow docs/adr/0011-herdr-layout.md "Rejected: \`octo-feather/""gh<issue>""-<slug>\` and gh<N>""-<slug>."
 allow agents/supervisor.md "The lane branch is \`gh<N>\`: see docs/adr/0011. Worker branches gh<N>-* never match."
+allow README.md "Worker branches gh<N>-* and gh<issue>-*, never the lane."
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }

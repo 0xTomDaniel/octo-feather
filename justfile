@@ -74,7 +74,8 @@ check-scripts:
 # No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
-# .skillfile/ patches, which quote the upstream lines they remove.
+# .skillfile/ patches, which quote the upstream lines they remove. The lane branch default
+# exempts only docs/adr/0011 (below).
 check-refs:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -123,8 +124,11 @@ check-refs:
     elif [[ -n "$found" ]]; then
       printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
-    # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
-    if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
+    # The lane branch is stated once, in docs/adr/0011, its only owner and the only exempt file (#121 N1 N2): the
+    # owner's #71 strings below: the slugged prefix and the token shape (any placeholder, then a dash and a
+    # placeholder); gh<N>-* passes (docs/adr/0008). The patterns bracket a letter so this justfile does not match itself.
+    mapfile -t lane < <(git ls-files | grep -vE '^docs/adr/0011-')
+    if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
     # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
     if git ls-files -z .agents/skills agents | xargs -0 grep -nHF -e 'Skill tool' -e 'Skill call'; then
