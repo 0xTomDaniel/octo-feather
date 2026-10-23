@@ -7,7 +7,8 @@
 #   1. private /tmp (tmpfs); QC_KEEP paths (worktree, kit, PATH dirs) bound back
 #   2. tmpfs over the Herdr and gh config dirs; ~/.git-credentials and ~/.ssh masked
 #   3. caller's archived lanes and director log bound read-only at a scratch
-#      state dir; live lanes/, sessions/, director.toml masked
+#      state dir (none with QC_HISTORY=none: a factory eval sees no lane history);
+#      live lanes/, sessions/, director.toml masked
 #   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
 #   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
 #      authenticated against each pin, bound back read-only), /dev/shm and the Pi agent dir (its entries
@@ -37,7 +38,8 @@
 # state dir, QC_WORKTREE, QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
 # QC_PATH_PREPEND dirs put on PATH after scripts/qc-bin, QC_GHSNAP snapshot dir and
-# QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_FD_PROOF /
+# QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_HISTORY=none to bind
+# no history (step 3), QC_FD_PROOF /
 # QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
 # Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
 set -uo pipefail
@@ -91,17 +93,19 @@ if [[ "$phase" == setup ]]; then
 
   # 3. history read-only at the scratch state dir, then live records masked.
   mkdir -p "$SB/lanes" "$SCR/gh" "$SCR/bin"
-  hist=0
-  if [[ -d "$RS/lanes/archive" ]]; then
+  hist=0; nohist=0; [[ "${QC_HISTORY:-}" == none ]] && nohist=1
+  if ((nohist)); then :
+  elif [[ -d "$RS/lanes/archive" ]]; then
     mkdir -p "$SB/lanes/archive"
     mount --bind "$RS/lanes/archive" "$SB/lanes/archive" && remount ro "$SB/lanes/archive" || die "history archive"
     hist=$((hist + 1))
   fi
-  if [[ -f "$RS/director.handoffs.jsonl" ]]; then
+  if ((!nohist)) && [[ -f "$RS/director.handoffs.jsonl" ]]; then
     touch "$SB/director.handoffs.jsonl"
     mount --bind "$RS/director.handoffs.jsonl" "$SB/director.handoffs.jsonl" && remount ro "$SB/director.handoffs.jsonl" || die "history director log"
     hist=$((hist + 1))
   fi
+  ((nohist)) && hist=none
   echo "$hist" > "$SCR/hist"; : > "$SCR/masked"
   for d in "$TOP" "$RS"; do
     for x in lanes sessions; do
@@ -252,7 +256,7 @@ fi
 
 # Inner: PID 1 of the judge's namespace, the caller's uid, no capabilities.
 GH="$QC_GH"; GC="$GH_CONFIG_DIR"; GHLINE="${QC_GHSNAP_LINE:-}"; WT="$QC_WORKTREE"
-unset QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
+unset QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
   QC_GHSNAP QC_GHSNAP_OFF QC_GHSNAP_LINE
 nsprocs() {   # every live process in this PID namespace but PID 1 and the caller
   local p s; for p in /proc/[0-9]*; do p=${p#/proc/}
@@ -337,7 +341,11 @@ while IFS= read -r m; do
 done < "$SCR/masked"
 hist=$(cat "$SCR/hist")
 got=0; [[ -d "$SB/lanes/archive" ]] && got=$((got + 1)); [[ -f "$SB/director.handoffs.jsonl" ]] && got=$((got + 1))
+if [[ "$hist" == none ]]; then
+  check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = 0)" "history none ($got bound: no archived lanes, no director log; a factory eval sees no lane history); live records masked ($nmask paths, $live bytes or entries visible)"
+else
 check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = "$hist")" "history read-only ($got of $hist bound: archive $(find "$SB/lanes/archive" -type f 2>/dev/null | wc -l) files, director log $(cat "$SB/director.handoffs.jsonl" 2>/dev/null | wc -l) lines); live records masked ($nmask paths, $live bytes or entries visible)"
+fi
 ro=0; while IFS= read -r p; do [[ -n "$p" ]] && touch "$p/.w" 2>/dev/null && ro=1; done < "$SCR/robinds"
 [[ -n "$(tr -d '\n' < "$SCR/robinds")" ]] && check "$ro" "extra binds read-only"
 offgh="$(dirname "$0")/qc-bin/gh"
