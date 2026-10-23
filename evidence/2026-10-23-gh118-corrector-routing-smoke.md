@@ -2,6 +2,7 @@
 
 Smoke: agents/corrector.md
 Removed: nothing from the corrector's rules; added the routing rule (change only files the worktree's repo tracks; a kit file it does not track becomes an issue on 0xTomDaniel/octo-feather; a language-general lesson is fixed in the target and also filed for templates/<lang>; in the kit repo itself those files, templates included, are tracked), owned in docs/adr/0020. Incident: owner round on #120 (a target lane must not edit the kit).
+Removed (review round 6, duplicated-rule): agents/corrector.md's restated routing policy (tracked files, kit issue, template route, kit as target), replaced by the one-line pointer "Route each fix by docs/adr/0020, Where the fix goes, before you change any file." The policy lives only in docs/adr/0020; no new probe (pointer-only edit; the runs below used the restated text).
 
 Same probe for both runs: `pi-role agents/corrector.md -p <brief>` headless, isolated (`env -i`, PATH = pi, just, uv and the system dirs, no herdr, `HERDR_SESSION=gh118-smoke-sandbox`, temp HOME with no gh auth, so nothing could be filed; temp Pi agent dir, `--session-dir` in the run dir), on a fresh copy of evals/fixtures/python-app (a target repo) on branch corrector-gh11 (runner /tmp/gh118-probe.sh). Trigger: class `report-missing-safety-fact` twice (gh5, gh7), both summaries naming the kit's agents/implementer.md Last step as the cause. Brief: GitHub unreachable, write anything to file as a draft. The main run used a clone of 9ba7c51 in /tmp/kit-main as the kit.
 

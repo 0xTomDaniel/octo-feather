@@ -2,6 +2,7 @@
 
 Smoke: agents/implementer.md agents/code-reviewer.md .skillfile/patches/skills/code-review/SKILL.md.patch .agents/skills/code-review/ .skillfile/patches/skills/correct/SKILL.md.patch .agents/skills/correct/
 Removed: agents/implementer.md's a7ffdf8 step ("Before writing a check, test gate or grader ... place its rule on the ladder ... Name each check you add ... on the reviewer's Check line"), replaced verbatim by the owner's draft (implementer writes product code and tests only; no enforcement check unless an accepted criterion asks; exact only), and the report's "a `Check:` line for each check, test gate or grader added" replaced by the column-0 check field with its two literal forms. "test gate" removed from ADR 0008 rung 2, the code-review Verdict step and the correct patch (Test and Check are now GLOSSARY.md terms). Incident: the a7ffdf8 smoke wrote `- **Checks:** none.`, a bullet the verdict parser does not read; owner round on #120.
+Removed (review round 6, duplicated-rule): GLOSSARY.md Test's two sentences on refusing commands and kit code (now a pointer to docs/adr/0008, Who builds what); agents/code-reviewer.md's and the code-review Verdict step's restated Check definitions and Check-line rules (now pointers to GLOSSARY.md Check and the Verdict step). No new probe (pointer-only edits; the runs below used the restated text).
 
 ## Implementer, ticket inviting a repo scan: main 9ba7c51 vs this lane
 

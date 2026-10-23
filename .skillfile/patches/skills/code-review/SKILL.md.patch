@@ -88,7 +88,7 @@
 +- **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 +- **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 +
-+Then classify every check the diff adds or changes (GLOSSARY.md Check: a `just check` script or recipe, a lint rule, an eval grader, and any file under `tests/` that scans the repo's own text rather than running the product), one line each at column 0 outside code blocks, or the one line `Checks: none`:
++Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each at column 0 outside code blocks, or the one line `Checks: none`:
 +
 +`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
 +
