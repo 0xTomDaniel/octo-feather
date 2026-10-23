@@ -18,7 +18,9 @@ sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots t
 hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
 naming each target the call reached: edit (a file changed), test_write (a test path changed: tests/,
 test_*, *_test.*), git_commit (HEAD on a commit that did not exist before the run), git_push (origin's
-refs changed), gh_call (the fake gh ran). No regex over commands infers a write. Stated limit: a change is
+refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill, patch or instruction file changed:
+agents/*.md, .agents/skills/**, .skillfile/patches/** or AGENTS.md at the repo root). No regex over commands
+infers a write. Stated limit: a change is
 credited to the first call at whose end event the snapshot shows it, exact while the model's turn separates
 calls; of calls run in parallel within one turn, the first to end gets it.
 
@@ -28,6 +30,10 @@ case's reference/expectations.json, which the agent's prompt never contains (sta
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts: check-evals --help.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
+A skill_read_before is decided only once its target is reached (the read before it passes, after it or
+none fails); a target never reached in the run FAILS it ("target never reached"), read or not: a case
+reaches its target, never passes vacuously. final_message is reached when pi ends on its own with a final
+assistant message, so such a fact, like `declared`, never stops a run early.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
 A skill read is a Pi `read` tool call whose path, resolved against the case repo, is that skill's SKILL.md
 in the kit under test (Pi's load mechanism); ls, grep or cat in bash never count.
@@ -75,6 +81,8 @@ GH_OFF = "github: none (factory eval: no GitHub evidence)"
 DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
 SAMPLE_SEED = "octo-feather-qa"
 TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*$|_test\.[A-Za-z]+$")
+# kit_contract_edit: the files a role's "before editing a role, skill or patch" rule guards, repo-root relative.
+CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md)$")
 
 
 def die(code, msg):
@@ -193,7 +201,7 @@ def reads(fact, call):
 
 def fs_marks(lines):
     """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
-    gh_call, from its qa_fs events (filesystem snapshots, never command text)."""
+    gh_call, kit_contract_edit, from its qa_fs events (filesystem snapshots, never command text)."""
     order, marks = {}, {}
     for line in lines:
         e = safe_json(line)
@@ -290,14 +298,23 @@ def judge(fact, calls, final, runs=(), last=None, marks=None):
             return "fail", f"skill_not_read {s}: read at {at(r)}"
         return ("pass" if final else "open"), f"skill_not_read {s}: {none}"
     if t == "skill_read_before":
-        b = fact["before"]   # final_message: never a mark; every tool call precedes the final message
-        w = (marks or {}).get(b)
-        w = w if w is not None and w < n else None
-        if r is not None and (w is None or r < w):
-            return "pass", f"skill_read_before {s} {b}: read at {at(r)}, " + (f"first {b} at {at(w)}" if w is not None else f"no {b} yet")
+        b = fact["before"]
+        stop, text = last or (None, None)
+        if b == "final_message":   # never a mark: reached when pi ends on its own with a final message, after every call
+            w = n if final and stop in (None, "exit") and text is not None else None
+            gone = "no final assistant message" if stop in (None, "exit") else f"run stopped ({stop}) before its final message"
+        else:
+            w = (marks or {}).get(b)
+            w = w if w is not None and w < n else None
+            gone = f"no {b} in {n} tool calls" + (f", run stopped ({stop})" if stop not in (None, "exit") else "")
+        tgt = "the final message" if b == "final_message" else f"first {b} at {at(w)}" if w is not None else ""
+        if w is not None and r is not None and r < w:
+            return "pass", f"skill_read_before {s} {b}: read at {at(r)}, before {tgt}"
         if w is not None:
-            return "fail", f"skill_read_before {s} {b}: first {b} at {at(w)}, " + (f"read only at {at(r)}" if r is not None else none)
-        return ("fail" if final else "open"), f"skill_read_before {s} {b}: {none}, no {b}"
+            return "fail", f"skill_read_before {s} {b}: {'reached ' if b == 'final_message' else ''}{tgt}, " + (f"read only at {at(r)}" if r is not None else none)
+        if not final:
+            return "open", f"skill_read_before {s} {b}: no {b} yet"
+        return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"read at {at(r)}" if r is not None else none)
     raise ValueError(f"unknown fact {t!r}")
 
 
@@ -387,9 +404,11 @@ def snapshot(origin, log):
 def changed(old, new, known):
     """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
     tests = lambda s: {k: v for k, v in s["files"].items() if TEST_PATH.search(k)}
+    contract = lambda s: {k: v for k, v in s["files"].items() if CONTRACT_PATH.match(k)}
     return [m for m, hit in (("edit", old["files"] != new["files"]), ("test_write", tests(old) != tests(new)),
                              ("git_commit", new["head"] != old["head"] and new["head"] not in known),
-                             ("git_push", new["refs"] != old["refs"]), ("gh_call", len(new["gh"]) > len(old["gh"]))) if hit]
+                             ("git_push", new["refs"] != old["refs"]), ("gh_call", len(new["gh"]) > len(old["gh"])),
+                             ("kit_contract_edit", contract(old) != contract(new))) if hit]
 
 
 def watch(argv):

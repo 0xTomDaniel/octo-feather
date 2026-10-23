@@ -14,6 +14,13 @@
     "task": "Correction lane gh9 for this repo (ADR 0020 factory QA). Trigger: finding class `internal-test-surface` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greet_strips imports app.core.greet directly; assert through the CLI\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greeting_text imports app.core.Greeting; constructs and asserts a dataclass, no CLI\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh9 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
   },
   {
+    "id": "corrector-repo-skill-rule",
+    "role": "corrector",
+    "fixture": "python-app-skill",
+    "branch": "corrector-gh11",
+    "task": "Correction lane gh11 for this repo (ADR 0020 factory QA). Trigger: finding class `changelog-internal-wording` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"changelog-internal-wording\", \"blocking\": true, \"summary\": \"CHANGELOG.md entry for #5 names core.greet, a shout bool and cli.main; it says how the code changed, not what a user of app sees (app hello NAME --shout)\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"changelog-internal-wording\", \"blocking\": true, \"summary\": \"CHANGELOG.md entry for #7 is about the Greeting dataclass and asdict; users never see app.core, the entry should say what --json now prints\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh11 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
     "id": "reviewer-test-quality",
     "role": "code-reviewer",
     "fixture": "python-app",
