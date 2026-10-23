@@ -1,20 +1,33 @@
 #!/usr/bin/env bash
 # Role prose and kit skills say "the tracker skill" (spec skills #tracker-role-line, issue-lifecycle
 # #acceptance-no-github-issue): agents/*.md and every kit skill's .md outside the vendored skills (Skillfile
-# `github` entries) and the tracker skills (scripts/pi-role's TRACKERS) name no gh issue command and no
-# Linear, so no agent files or closes a GitHub issue for a Linear lane. Each hit names the file, line and
-# the fix. Proves the scan finds a planted hit in a kit copy. Run by `just check`.
+# `github` entries) and the tracker skills (each tracker scripts/pi-role resolves a role's {tracker} to, asked
+# through its --json command) name no gh issue command and no Linear, so no agent files or closes a GitHub
+# issue for a Linear lane. Each hit names the file, line and the fix. Proves the scan finds a planted hit in a
+# kit copy. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "tracker-prose test: $*" >&2; exit 1; }
+trackers() { # KIT: the tracker skill folder of each tracker KIT's pi-role knows, one per line
+  local p; p="$(mktemp -d "$t/probe.XXXX")"; mkdir -p "$p/agents" "$p/tgt"; ln -s "$1/.agents" "$p/.agents"
+  printf -- '---\nname: probe\nskills: {tracker}\n---\n' > "$p/agents/probe.md"; git -C "$p/tgt" init -q
+  echo 'tracker = "no-such-tracker"' > "$p/tgt/.octo-feather.toml"
+  local e names n; e="$(cd "$p/tgt" && "$1/scripts/pi-role" --json "$p/agents/probe.md" 2>&1)" && fail "pi-role took an unknown tracker: $e"
+  names="${e##*the kit has: }"; [[ "$names" != "$e" && "$names" != none ]] || fail "pi-role named no kit tracker: $e"
+  for n in ${names//,/ }; do
+    echo "tracker = \"$n\"" > "$p/tgt/.octo-feather.toml"
+    (cd "$p/tgt" && "$1/scripts/pi-role" --json "$p/agents/probe.md") \
+      | python3 -c 'import json,os,sys; a=json.load(sys.stdin)["args"]; print(os.path.basename(a[a.index("--skill") + 1]))' \
+      || fail "pi-role --json did not resolve tracker $n"
+  done
+}
 scan() { # KIT: one line per hit, `<file>:<line>: <what>; fix: ...`
-  python3 - "$1" <<'PY'
-import importlib.machinery, importlib.util, os, re, sys
+  local ts; mapfile -t ts < <(trackers "$1")
+  python3 - "$1" "${ts[@]}" <<'PY'
+import os, re, sys
 root = sys.argv[1]
-l = importlib.machinery.SourceFileLoader("pi_role", os.path.join(root, "scripts", "pi-role"))
-pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", l)); l.exec_module(pr)
-skip = set(pr.TRACKERS.values())
+skip = set(sys.argv[2:])
 skip |= {w[2] for w in (x.split() for x in open(os.path.join(root, "Skillfile"))) if len(w) > 2 and w[:2] == ["github", "skill"]}
 files = [os.path.join("agents", f) for f in sorted(os.listdir(os.path.join(root, "agents"))) if f.endswith(".md")]
 sk = os.path.join(root, ".agents", "skills")
@@ -33,6 +46,8 @@ for f in files:
                       "issue-comment, issue-done, pr-line, lane-key), never a tracker's own command or name (spec skills #tracker-role-line)")
 PY
 }
+mapfile -t kts < <(trackers "$kit"); [[ " ${kts[*]} " == *" github-issues "* ]] || fail "tracker skills via pi-role: ${kts[*]}"
+for s in "${kts[@]}"; do [[ -f "$kit/.agents/skills/$s/SKILL.md" ]] || fail "pi-role tracker skill $s has no SKILL.md"; done
 out="$(scan "$kit")"
 [[ -z "$out" ]] || { echo "$out" >&2; fail "role prose or a kit skill names a tracker; fix each line above"; }
 # The scan sees a planted hit in a role and in a local skill, and none in a vendored or tracker skill.
