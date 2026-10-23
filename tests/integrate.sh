@@ -51,4 +51,18 @@ g worktree add -q -b w6 ../w6; (cd ../w6 && printf '\nintegrate issue +refs:\n  
 run 3 7 w6; [[ "$out" == *"factory recipes"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: factory recipe not refused: $out" >&2; exit 1; }
 g worktree add -q -b w7 ../w7; (cd ../w7 && mkdir -p docs/specs && echo s > docs/specs/a.spec.html && g add docs/specs/a.spec.html && g commit -qm spec)
 run 0 7 w7                                                 # a spec alone stays tracked and integrates
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused, spec kept)"
+run 64 ENG-7 w1; [[ "$out" == *"not a GitHub issue number"* ]] || { echo "integrate test: ENG-7 in a GitHub target: $out" >&2; exit 1; }
+# Linear target (roles spec #lane-key): ENG-123 lands on the worktree on branch eng-123, never eng-1230
+# or eng-123-x; an unknown tracker is refused before any worktree is touched.
+cd "$t" && g init -q lin && cd lin
+printf 'check:\n    true\n' > justfile; echo 'tracker = "linear"' > .octo-feather.toml; echo a > f; g add -A; g commit -qm base
+g worktree add -q -b eng-1230 ../l1230; g worktree add -q -b eng-123-x ../l123x
+g worktree add -q -b lw ../lw; (cd ../lw && echo l > l && g add l && g commit -qm lw)
+run 66 ENG-123 lw                                          # eng-1230 and eng-123-x are not lane eng-123
+g worktree add -q -b eng-123 ../l123
+run 0 ENG-123 lw
+[[ "$out" == *"branch=eng-123 "* && -e ../l123/l && ! -e ../l1230/l && ! -e ../l123x/l ]] || { echo "integrate test: Linear lane eng-123 not integrated: $out" >&2; exit 1; }
+run 64 12 lw; [[ "$out" == *"not a Linear issue key"* ]] || { echo "integrate test: 12 in a Linear target: $out" >&2; exit 1; }
+echo 'tracker = "jira"' > .octo-feather.toml; g commit -qam jira; head="$(git -C ../l123 rev-parse HEAD)"
+run 64 ENG-123 lw; [[ "$out" == *"unknown tracker 'jira'"* && "$(git -C ../l123 rev-parse HEAD)" == "$head" ]] || { echo "integrate test: jira target: $out" >&2; exit 1; }
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused)"

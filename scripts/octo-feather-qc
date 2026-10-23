@@ -21,8 +21,10 @@ run and never written back. If the box auth.json holds OAuth credentials, a warn
 says a token refresh during the run is discarded.
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
-the sandbox binds it read-only and the offline gh (scripts/qc-bin/gh) serves it,
+the sandbox binds it read-only and the offline gh (.agents/skills/github-pr/scripts/gh) serves it,
 refusing writes. No GitHub remote: no snapshot, and that gh refuses every call.
+No tracker credential: the judge never gets LINEAR_API_KEY (also not with --no-sandbox), so it
+reads no Linear ticket; the sandbox proof fails if it is set.
   --no-github            skip the snapshot (printed in the proof) instead of
                          aborting when the fetch fails
   --no-sandbox           debugging only: prints UNSANDBOXED, writes the report,
@@ -301,8 +303,9 @@ def judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb):
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
         miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
-        env = dict(os.environ, PATH=f"{KIT / 'scripts' / 'qc-bin'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
+        env = dict(os.environ, PATH=f"{KIT / '.agents' / 'skills' / 'github-pr' / 'scripts'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
                    OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
+        env.pop("LINEAR_API_KEY", None)
         try:
             run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
             ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]

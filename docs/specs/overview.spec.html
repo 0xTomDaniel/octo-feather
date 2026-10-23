@@ -36,7 +36,7 @@
 
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
 <h2>Modular boundaries</h2>
-<p data-modular-boundary data-anchor="boundary-kit"><span data-boundary-responsibility>The kit owns the role files, its own and vendored skills, the launch and integration scripts, and its gate.</span> <span data-boundary-seam>Caller-facing seam: the justfile recipes (<code>just start</code>, <code>just supervise N</code>, <code>just integrate N</code>, <code>just check</code>) and the role files in <code>agents/</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit depends on Pi, Herdr, GitHub, Spec Chat and the remote host, and none of them depends on the kit.</span> <span data-boundary-scope>Observable scope: Herdr workspaces and tabs, GitHub issues and pull requests, and gate output.</span></p>
+<p data-modular-boundary data-anchor="boundary-kit"><span data-boundary-responsibility>The kit owns the role files, its own and vendored skills, the launch and integration scripts, and its gate.</span> <span data-boundary-seam>Caller-facing seam: the justfile recipes (<code>just start</code>, <code>just supervise N</code>, <code>just integrate N</code>, <code>just check</code>) and the role files in <code>agents/</code>.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit depends on Pi, Herdr, GitHub, the target's tracker (GitHub Issues or Linear), Spec Chat and the remote host, and none of them depends on the kit.</span> <span data-boundary-scope>Observable scope: Herdr workspaces and tabs, tracker issues, GitHub pull requests, and gate output.</span></p>
 <p data-modular-boundary data-anchor="boundary-target"><span data-boundary-responsibility>A target repository owns its product, its <code>AGENTS.md</code>, its own <code>just check</code>, and its specs.</span> <span data-boundary-seam>Caller-facing seam: the target's <code>AGENTS.md</code>, which every role loads from its working directory, and its <code>just check</code>.</span> <span data-boundary-dependency>Dependency direction: self-contained; the target names no kit path, and the kit depends only on these seams.</span> <span data-boundary-scope>Observable scope: commits, the target's gate, and its app CLI.</span></p>
 </section>
 
@@ -95,7 +95,7 @@
 <tbody>
 <tr data-anchor="is-runtime"><td>Pi agents only (ADR 0001)</td><td>Claude Code or Codex, or any <code>CLAUDE.md</code></td></tr>
 <tr data-anchor="is-handoffs"><td>Agents handing off through Herdr messages (ADR 0003)</td><td>A workflow engine, scheduler, daemon or A2A network (A2A is future only)</td></tr>
-<tr data-anchor="is-tracker"><td>GitHub Issues as the tracker (ADR 0004)</td><td>Linear or a second tracker</td></tr>
+<tr data-anchor="is-tracker"><td>GitHub Issues or Linear as the tracker, chosen per target, with review and merge on GitHub (ADR 0004)</td><td>A tracker abstraction in the kit's general scripts, or a Linear target's tickets mirrored into GitHub issues</td></tr>
 <tr data-anchor="is-specs"><td>Spec Chat HTML specs the owner accepts (ADR 0006)</td><td>Markdown specs or a Markdown twin</td></tr>
 <tr data-anchor="is-tests"><td>Integration and end-to-end tests through public surfaces (ADR 0002)</td><td>Unit tests of internals</td></tr>
 <tr data-anchor="is-host"><td>A dedicated remote VM (ADR 0005)</td><td>Anything running on the owner's laptop</td></tr>

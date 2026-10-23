@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked; ADR 0004 GitHub Issues, not Linear; spec issue-lifecycle #acceptance-tracer-tickets: the issue template names criterion ids and ends on a demo (or an Expand-contract line), each draft passes octo-feather-lane ticket before publishing (lane #40, ticket #47); issue #118 the What-to-build naming rule left the check (meaning, docs/adr/0008)
+# reason: ADR 0012 model-invoked; ADR 0004 the target's tracker through the tracker skill's scripts, issue-create with --parent and --blocked-by and no label (skills #tracker-writes, #100); spec issue-lifecycle #acceptance-tracer-tickets: the issue template names criterion ids and ends on a demo (or an Expand-contract line), each draft passes octo-feather-lane ticket before publishing (lane #40, ticket #47); issue #118 the What-to-build naming rule left the check (a proxy, docs/adr/0008)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,14 +1,13 @@
@@ -13,7 +13,7 @@
  Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
  
 -The issue tracker and triage label vocabulary should have been provided to you. If not, tell the user to run `/setup-matt-pocock-skills`.
-+The issue tracker is GitHub Issues, through the `github` skill.
++The issue tracker is the target's: read, file and close tickets only through the tracker skill's scripts.
  
  ## Process
  
@@ -37,9 +37,9 @@
  
  - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
 -- **A real issue tracker (GitHub, Linear, …)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. If the source was an existing issue, make each ticket its sub-issue (tracker doc's operation). Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
-+- **A real issue tracker (GitHub Issues)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. If the source was an existing issue, make each ticket its sub-issue (tracker doc's operation). Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
++- **A real issue tracker (the tracker skill)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers: the tracker skill's `issue-create`, with `--blocked-by` for each blocking ticket and `--parent` the lane's parent ticket, so each ticket is its sub-issue. No label: tracker writes are a ticket filed, commented on and moved to done; the tickets are agent-grabbable by construction.
 +
-+After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent issue>`; it must exit 0.
++After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent key>`; it must exit 0.
  
  Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
  

@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# issue-create --title TITLE --body-file FILE|- [--parent KEY] [--blocked-by KEY]...: files an issue in the parent's team
+# (else the configured team), optionally as a sub-issue of PARENT and blocked by other issues; prints the new issue's key.
+# Wraps `linear issue create`, then `linear issue relation add NEW blocked-by KEY` for each blocker (the create has no such flag).
+set -euo pipefail
+usage() { echo "usage: issue-create --title TITLE --body-file FILE|- [--parent KEY] [--blocked-by KEY]..." >&2; exit 64; }
+key() { [[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-create: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }; echo "${1^^}"; }
+title=""; body=""; args=(); blocked=()
+while (($#)); do
+  case "$1" in
+    --title) title="${2:?}"; shift 2 ;;
+    --body-file) body="${2:?}"; shift 2 ;;
+    --parent) p="$(key "${2:?}")"; args+=(--parent "$p" --team "${p%-*}"); shift 2 ;;
+    --blocked-by) blocked+=("$(key "${2:?}")"); shift 2 ;;
+    *) usage ;;
+  esac
+done
+[[ -n "$title" && -n "$body" ]] || usage
+out="$(linear issue create --title "$title" --description-file "$body" "${args[@]}" --no-input 2>&1)" \
+  || { echo "issue-create: $out" >&2; exit 1; }
+[[ "$out" =~ https://linear\.app/[^/]+/issue/([A-Z][A-Z0-9]*-[0-9]+) ]] || { echo "issue-create: linear printed no issue url: $out" >&2; exit 1; }
+new="${BASH_REMATCH[1]}"
+for b in "${blocked[@]}"; do
+  out="$(linear issue relation add "$new" blocked-by "$b" --no-input 2>&1)" \
+    || { echo "issue-create: filed $new, but marking it blocked by $b failed: $out" >&2; exit 1; }
+done
+echo "$new"

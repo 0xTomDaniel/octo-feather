@@ -15,8 +15,8 @@
 #      never written back); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
 #      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge
-#   6. env scrubbed; herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
-#      scripts/qc-bin first on PATH: its gh is the offline gh serving QC_GHSNAP (or
+#   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
+#      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
 #      refusing every call with QC_GHSNAP_OFF), each refusal logged in scratch
 #   then a nested user+mount+PID+IPC namespace mapped to the caller's uid/gid
 #   with no_new_privs, so every mount above is locked (umount fails, also after
@@ -36,7 +36,7 @@
 # Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
 # state dir, QC_WORKTREE, QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
-# QC_PATH_PREPEND dirs put on PATH after scripts/qc-bin, QC_GHSNAP snapshot dir and
+# QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_GHSNAP snapshot dir and
 # QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_FD_PROOF /
 # QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
 # Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
@@ -172,7 +172,7 @@ if [[ "$phase" == setup ]]; then
   # 6. env and shims.
   unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE \
     HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
-    GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK
+    GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
     GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
   realpi=$(command -v pi || echo pi)
@@ -195,7 +195,7 @@ if [[ "$phase" == setup ]]; then
   chmod +x "$SCR"/bin/*
   PATH="$SCR/bin:$PATH"
   [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
-  PATH="$(dirname "$0")/qc-bin:$PATH"   # the offline gh shadows every other gh
+  PATH="$(cd "$(dirname "$0")/.." && pwd -P)/.agents/skills/github-pr/scripts:$PATH"   # the offline gh shadows every other gh
   export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/gh-miss.log"
   unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --ipc --fork --kill-child --mount-proc \
     -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&-; rc=$?
@@ -323,6 +323,9 @@ ghls=$(find "$GC" "$cfgc/gh" -mindepth 1 2>/dev/null | wc -l)
 cred=$(cat "$HOME/.git-credentials" "$cfgc/git/credentials" 2>/dev/null | wc -c)
 r=1; [[ -n "$GH" ]] && r=$(t "$GH" auth status)
 check "$(t test "$tok" = 0 -a "$ghls" = 0 -a "$cred" = 0 -a "$r" != 0)" "no gh or git creds: tokens $tok, gh config entries $ghls, git-credentials ${cred} bytes, gh auth status exits $r"
+# The judge reads no tracker ticket: no tracker credential (issue-lifecycle spec #qc-interim).
+lin=$(env | grep -c '^LINEAR_API_KEY=')
+check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
 route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
 check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
 st=$("$(dirname "$0")/octo-feather-state")
@@ -340,7 +343,7 @@ got=0; [[ -d "$SB/lanes/archive" ]] && got=$((got + 1)); [[ -f "$SB/director.han
 check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = "$hist")" "history read-only ($got of $hist bound: archive $(find "$SB/lanes/archive" -type f 2>/dev/null | wc -l) files, director log $(cat "$SB/director.handoffs.jsonl" 2>/dev/null | wc -l) lines); live records masked ($nmask paths, $live bytes or entries visible)"
 ro=0; while IFS= read -r p; do [[ -n "$p" ]] && touch "$p/.w" 2>/dev/null && ro=1; done < "$SCR/robinds"
 [[ -n "$(tr -d '\n' < "$SCR/robinds")" ]] && check "$ro" "extra binds read-only"
-offgh="$(dirname "$0")/qc-bin/gh"
+offgh="$kit/.agents/skills/github-pr/scripts/gh"
 if [[ -n "$OCTO_FEATHER_GHSNAP" ]]; then
   w=0; touch "$OCTO_FEATHER_GHSNAP/.w" 2>/dev/null && w=1
   r=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>&1)

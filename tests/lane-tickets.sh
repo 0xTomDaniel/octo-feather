@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-lane tickets|ticket (spec issue-lifecycle
-# #acceptance-tracer-tickets), no network: GitHub is a snapshot, taken by octo-feather-qc-ghsnap
-# from a fake GitHub gh and served by the qc judge's
-# offline gh (scripts/qc-bin/gh), so the check is proven to work under it and to ask only
-# fields octo-feather-qc-ghsnap stores. Proves: a parent whose tickets all name criteria
+# #acceptance-tracer-tickets), no network: `tickets` reads tickets only through the target's tracker
+# skill's issue-view (parent's children, then bodies; comms #octo-lane-record-tickets). GitHub is a
+# snapshot, taken by octo-feather-qc-ghsnap from a fake GitHub gh and served by the qc judge's
+# offline gh (.agents/skills/github-pr/scripts/gh), so the check is proven to work under it and to ask only
+# fields octo-feather-qc-ghsnap stores; a Linear target (tracker = "linear") reads the same through
+# the offline fake linear (.agents/skills/linear/scripts/linear, a JSON store). Proves: a parent whose tickets all name criteria
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
 # class; a demo passes only through a surface the repo declares (tracked executable, justfile
@@ -11,7 +13,7 @@
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
-# (gh down, gh missing, bad JSON, missing ticket midway, wrong repo, no specs, unreadable
+# (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
 # draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
 set -euo pipefail
@@ -24,7 +26,7 @@ unset GH_REPO GH_TOKEN FAKE_GH
 mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs"
 # The only PATH: $t/bin (the fake gh) and $t/sys (the tools this test and the scripts run).
 # No host directory is on it, so a host gh (a CI runner's, asking for GH_TOKEN) is never reached.
-for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname; do
+for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head; do
   p="$(command -v "$c")" || fail "tool $c not found on the host"; ln -s "$p" "$t/sys/$c"
 done
 export PATH="$t/sys"
@@ -93,7 +95,7 @@ case "\${FAKE_GH:-}" in
   down) echo "error connecting to api.github.com" >&2; exit 1 ;;
   garbage) echo "<html>rate limited</html>"; exit 0 ;;
 esac
-exec "$kit/scripts/qc-bin/gh" "\$@"
+exec "$kit/.agents/skills/github-pr/scripts/gh" "\$@"
 EOF
 chmod +x "$t/bin/gh"; export PATH="$t/bin:$t/sys"
 cd "$t/repo"
@@ -114,44 +116,44 @@ hasnt() { ! grep -qF -- "$1" <<<"$out" || fail "${2:-output} has '$1': $out"; }
 # assignment with $(...), `uv run app` from pyproject, a justfile recipe plus curl to a URL,
 # pnpm exec playwright), and an Expand-contract ticket without a demo.
 run 0 tickets 100
-for n in 101 102 103 104 105 106 107 110; do has "#$n: ok"; done; has "#100: 8 of 8 tickets pass"
-run 0 tickets '#100' --repo o/r
+for n in 101 102 103 104 105 106 107 110; do has "$n: ok"; done; has "100: 8 of 8 tickets pass"
+run 0 tickets '#100'
 
 # #10's real body: layer-only-ticket and the fix; its sibling passes; exit 1.
 run 1 tickets 8
-has "#10: class: layer-only-ticket: demo names no backticked command"
+has "10: class: layer-only-ticket: demo names no backticked command"
 has "fix: end the acceptance list on \`demo: \` with a backticked command"
 has "Expand-contract: expand|migrate|contract"
-has "#101: ok"; has "#8: 1 of 2 tickets pass, 1 fail"
-hasnt "#10: class: unknown-criterion" "#10's ids exist in the kit specs:"
+has "101: ok"; has "8: 1 of 2 tickets pass, 1 fail"
+hasnt "10: class: unknown-criterion" "10's ids exist in the kit specs:"
 
 # Each failing class.
 run 1 tickets 20
-has "#21: class: no-criterion: no acceptance item names a criterion id; fix: start each item with the criterion it serves"
-hasnt "#21: class: layer-only"
-has "#22: class: unknown-criterion: demo#acceptance-zz: no anchor acceptance-zz in"
-has "#23: class: unknown-criterion: nospec#acceptance-a: no spec"
-has "#24: class: layer-only-ticket: demo is the gate alone (\`just check\`)"
-has "#25: class: no-criterion: no \`## Acceptance criteria\` section"
-has "#25: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
-has "#26: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
-has "#27: class: layer-only-ticket: Expand-contract line names \`maybe\`"
+has "21: class: no-criterion: no acceptance item names a criterion id; fix: start each item with the criterion it serves"
+hasnt "21: class: layer-only"
+has "22: class: unknown-criterion: demo#acceptance-zz: no anchor acceptance-zz in"
+has "23: class: unknown-criterion: nospec#acceptance-a: no spec"
+has "24: class: layer-only-ticket: demo is the gate alone (\`just check\`)"
+has "25: class: no-criterion: no \`## Acceptance criteria\` section"
+has "25: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
+has "26: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
+has "27: class: layer-only-ticket: Expand-contract line names \`maybe\`"
 # The qc judge's draft (gh47 qc at 294ac1d), verbatim: a printf demo is no declared surface.
-has "#28: class: layer-only-ticket: demo runs no surface the repo declares (\`printf \"schema ready\\n\"\`: printf is not a program the repo declares)"
+has "28: class: layer-only-ticket: demo runs no surface the repo declares (\`printf \"schema ready\\n\"\`: printf is not a program the repo declares)"
 has "fix: make the demo a backticked command through the repo's own public surface (ADR 0009)"
-has "#33: class: layer-only-ticket: demo runs no surface the repo declares (\`tests/demo.sh\`: tests/demo.sh is a test or hook"
-has "#35: class: layer-only-ticket: demo runs no surface the repo declares (\`just qc\`: just qc is a gate or factory recipe, not the app; \`echo done\`: echo is not a program the repo declares)"
+has "33: class: layer-only-ticket: demo runs no surface the repo declares (\`tests/demo.sh\`: tests/demo.sh is a test or hook"
+has "35: class: layer-only-ticket: demo runs no surface the repo declares (\`just qc\`: just qc is a gate or factory recipe, not the app; \`echo done\`: echo is not a program the repo declares)"
 # The qc judge's second draft (gh47 qc at 4a95d10), verbatim: a persistence-only ticket whose demo runs
 # a declared surface passes every fact; whether it is a real slice is review's, never a regex over
 # What to build (deleted, #118, docs/adr/0008).
-has "#36: ok"
-has "#40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
+has "36: ok"
+has "40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
 # The qc judge's third draft (gh47 qc at 23f1a7a), verbatim: #47's body with a user-story anchor
 # for the criterion id; only a data-acceptance-criterion anchor counts.
-has "#41: class: no-criterion: no acceptance item names an acceptance criterion: issue-lifecycle#story-tracer-tickets is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. issue-lifecycle#acceptance-"
-hasnt "#41: class: layer-only"
-has "#20: 1 of 13 tickets pass, 12 fail"
-run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of #30"
+has "41: class: no-criterion: no acceptance item names an acceptance criterion: issue-lifecycle#story-tracer-tickets is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. issue-lifecycle#acceptance-"
+hasnt "41: class: layer-only"
+has "20: 1 of 13 tickets pass, 12 fail"
+run 1 tickets 30; has "30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of 30"
 
 # One draft: a file, stdin passing, stdin failing (#10), the waiver.
 run 0 ticket "$F/101.md"; has "$F/101.md: ok"
@@ -175,15 +177,15 @@ run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
 # Execution failures: exit 2, the fix named, no ticket reported as passed.
 err() { # WANT_MSG ARGS...
   local msg="$1"; shift; run 2 "$@"; has "$msg" "'$*'"; hasnt ": ok" "'$*'"; hasnt "tickets pass" "'$*'"; }
-err "gh could not read ticket #199" tickets 60           # sub-issue missing midway: #101 was fetched, not reported
-has "check the issue number, --repo, network"
-err "has 3 sub-issues but gh returned 1" tickets 50
-err "repo x/y not in read-only snapshot" tickets 100 --repo x/y
+err "tracker script github-issues/issue-view 199 failed" tickets 60   # sub-issue missing midway: 101 was read, not reported
+has "fix the cause it names"
+err "gh returned a partial or unreadable sub-issue list" tickets 50
 FAKE_GH=down err "error connecting to api.github.com" tickets 100
-FAKE_GH=garbage err "gh returned unreadable JSON for parent #100" tickets 100
-PATH="$t/sys" err "gh not found on PATH" tickets 100
+FAKE_GH=garbage err "issue-view: #100: gh returned a partial or unreadable sub-issue list" tickets 100
+PATH="$t/sys" err "gh: command not found" tickets 100
 err "usage: octo-feather-lane tickets PARENT" tickets
-err "usage: octo-feather-lane tickets PARENT" tickets abc
+err "usage: octo-feather-lane tickets PARENT" tickets 100 --repo x/y
+err "abc is not a GitHub issue key" tickets abc
 err "usage: octo-feather-lane ticket FILE|-" ticket
 err "cannot read draft $t/nope.md" ticket "$t/nope.md"
 printf '\xff\xfe\n' >"$t/bin.md"; err "cannot read draft $t/bin.md" ticket "$t/bin.md"
@@ -194,7 +196,31 @@ err "no spec dir $t/elsewhere/docs/specs: run this inside the target repo" ticke
 err "no spec dir" ticket "$F/101.md"
 cd "$t/repo"
 
+# A Linear target: the same checks through the linear tracker skill's issue-view, against the fake linear.
+LI="$kit/.agents/skills/linear/scripts"
+cp -r "$t/repo" "$t/lrepo"; echo 'tracker = "linear"' >"$t/lrepo/.octo-feather.toml"
+python3 - "$F" "$t/store.json" <<'PY'
+import json, sys, pathlib
+F = pathlib.Path(sys.argv[1])
+b101 = (F / "101.md").read_text(); b10 = json.loads((F / "10.json").read_text())["body"]
+def i(t, d, parent=None, state="Todo"): return {"title": t, "description": d, "state": state, "parent": parent, "blocked_by": []}
+pathlib.Path(sys.argv[2]).write_text(json.dumps({"workspace": "acme", "issues": {
+  "ENG-123": i("Lane", "parent"), "ENG-124": i("Pass", b101, "ENG-123"), "ENG-125": i("Layer only", b10, "ENG-123"),
+  "ENG-200": i("Lane 2", "parent"), "ENG-210": i("Pass", b101, "ENG-200"), "ENG-201": i("Pass", b101, "ENG-200", "Done"),
+  "ENG-300": i("Empty", "parent")}}))
+PY
+cd "$t/lrepo"; : >"$GH_LOG"
+OCTO_FEATHER_LINEAR_STORE="$t/store.json" PATH="$LI:$PATH" run 1 tickets ENG-123
+has "ENG-124: ok"; has "ENG-125: class: layer-only-ticket: demo names no backticked command"; has "ENG-123: 1 of 2 tickets pass, 1 fail"
+OCTO_FEATHER_LINEAR_STORE="$t/store.json" PATH="$LI:$PATH" run 0 tickets eng-200
+[[ "$out" == $'ENG-201: ok\nENG-210: ok\nENG-200: 2 of 2 tickets pass' ]] || fail "linear tickets eng-200, in key order: $out"
+OCTO_FEATHER_LINEAR_STORE="$t/store.json" PATH="$LI:$PATH" run 1 tickets ENG-300; has "ENG-300: class: no-sub-issues"
+OCTO_FEATHER_LINEAR_STORE="$t/store.json" PATH="$LI:$PATH" err "tracker script linear/issue-view ENG-999 failed" tickets ENG-999
+OCTO_FEATHER_LINEAR_STORE="$t/store.json" PATH="$LI:$PATH" err "100 is not a Linear issue key" tickets 100
+[[ ! -s "$GH_LOG" ]] || fail "a Linear target's tickets ran gh: $(cat "$GH_LOG")"
+cd "$t/repo"
+
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

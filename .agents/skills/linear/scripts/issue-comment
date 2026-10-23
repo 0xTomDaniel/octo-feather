@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+# issue-comment KEY [--body-file FILE|-]: adds a comment (body from FILE, standard input by default); prints its url.
+# Wraps `linear issue comment add`.
+set -euo pipefail
+[[ $# == 1 || ($# == 3 && "$2" == --body-file) ]] || { echo "usage: issue-comment KEY [--body-file FILE|-]" >&2; exit 64; }
+[[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-comment: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
+out="$(linear issue comment add "${1^^}" --body-file "${3:--}" --no-input 2>&1)" || { echo "issue-comment: $out" >&2; exit 1; }
+url="$(grep -oE '^https://[^[:space:]]+' <<<"$out" | tail -1)" || { echo "issue-comment: linear printed no comment url: $out" >&2; exit 1; }
+echo "$url"

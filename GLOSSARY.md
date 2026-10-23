@@ -89,7 +89,7 @@ _Avoid_: Checkpoint, approval step
 ## Workspace
 
 **Workspace**:
-The Herdr space that holds one lane's agents, or the director's. The director has workspace `director`; each work item has workspace `gh<n>`.
+The Herdr space that holds one lane's agents, or the director's. The director has workspace `director`; each work item has the workspace named by its lane key (`gh12`, `eng-123`).
 _Avoid_: Space, session
 
 **Tab**:
