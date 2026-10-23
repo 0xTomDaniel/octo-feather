@@ -152,11 +152,11 @@ check-templates:
     done
     echo "templates: ok ($n)"
 
-# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh), none loading a script as a module (#104).
+# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
+# script's public surface is review's call, not a check (docs/adr/0008, #118).
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
-    python3 "$root/scripts/check-test-surface"
     # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
     TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "$root"/tests/*.sh; do "$t"; done

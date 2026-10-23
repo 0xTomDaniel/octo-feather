@@ -8,8 +8,8 @@
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
 # class; a demo passes only through a surface the repo declares (tracked executable, justfile
 # recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
-# a test script fail; the demo must run what What to build names (program plus first subcommand,
-# URL path, test file); checks are facts only, never prose meaning; an Expand-contract ticket passes without a
+# a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
+# draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, wrong repo, no specs, unreadable
 # draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
@@ -50,7 +50,7 @@ F = pathlib.Path(sys.argv[1])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 37, 38, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 iss = {}
 for p, subs in parents.items():
@@ -141,17 +141,16 @@ has "#28: class: layer-only-ticket: demo runs no surface the repo declares (\`pr
 has "fix: make the demo a backticked command through the repo's own public surface (ADR 0009)"
 has "#33: class: layer-only-ticket: demo runs no surface the repo declares (\`tests/demo.sh\`: tests/demo.sh is a test or hook"
 has "#35: class: layer-only-ticket: demo runs no surface the repo declares (\`just qc\`: just qc is a gate or factory recipe, not the app; \`echo done\`: echo is not a program the repo declares)"
-# The qc judge's second draft (gh47 qc at 4a95d10), verbatim: its demo runs a command What to build
-# does not name (the structural fact; what its prose means is review's, not this check's).
-has "#36: class: layer-only-ticket: demo runs \`octo-feather-lane tickets\`, which What to build does not name; fix: the demo must run the behavior this ticket builds, named in What to build"
-has "#37: class: layer-only-ticket: demo runs \`demo b\`, which What to build does not name"
-has "#38: class: layer-only-ticket: demo runs \`demo a\`, which What to build (missing) cannot name"
+# The qc judge's second draft (gh47 qc at 4a95d10), verbatim: a persistence-only ticket whose demo runs
+# a declared surface passes every fact; whether it is a real slice is review's, never a regex over
+# What to build (deleted, #118, docs/adr/0008).
+has "#36: ok"
 has "#40: class: layer-only-ticket: demo runs no surface the repo declares (\`python3 -c"
 # The qc judge's third draft (gh47 qc at 23f1a7a), verbatim: #47's body with a user-story anchor
 # for the criterion id; only a data-acceptance-criterion anchor counts.
 has "#41: class: no-criterion: no acceptance item names an acceptance criterion: issue-lifecycle#story-tracer-tickets is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. issue-lifecycle#acceptance-"
 hasnt "#41: class: layer-only"
-has "#20: 0 of 15 tickets pass, 15 fail"
+has "#20: 1 of 13 tickets pass, 12 fail"
 run 1 tickets 30; has "#30: class: no-sub-issues"; has "fix: file each lane ticket as a sub-issue of #30"
 
 # One draft: a file, stdin passing, stdin failing (#10), the waiver.
@@ -167,7 +166,7 @@ run 0 ticket "$F/104-uv-app.md"
 run 1 ticket - <"$F/41-judge-story-anchor.md"; has "stdin: class: no-criterion: no acceptance item names an acceptance criterion"
 printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section anchor\n- [ ] demo: `demo a` prints ok\n' >"$t/section.md"
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
-run 1 ticket - <"$F/36-judge-persistence.md"; [[ "$(grep -c '^stdin: class: ' <<<"$out")" == 1 ]] || fail "judge persistence draft on stdin: $out"; has "stdin: class: layer-only-ticket: demo runs \`octo-feather-lane tickets\`, which What to build does not name"
+run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
 
 # The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
 # asked is one the snapshot CLI fetches.
@@ -198,4 +197,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf and persistence-only drafts, test-script demo, demo not named in What to build, no What to build, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, wrong repo, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written)"
