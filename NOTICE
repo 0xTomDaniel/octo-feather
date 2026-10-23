@@ -24,7 +24,7 @@ of docs/adr/0011):
     agents/code-reviewer.md
 
     .agents/skills/commit/SKILL.md
-    .agents/skills/github/SKILL.md (was skills/octo-lite-github)
+    .agents/skills/github-pr/SKILL.md (was skills/octo-lite-github)
     .agents/skills/herdr-comms/SKILL.md
     .agents/skills/herdr-comms/assets/herdr-close
     .agents/skills/herdr-comms/assets/herdr-say
@@ -62,9 +62,20 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md):
     cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan
+    linear-cli (whole folder; no role loads it, the linear tracker skill points
+    agents to its references): schpet/linear-cli@02571d3 (release v3.1.0,
+    https://github.com/schpet/linear-cli), ISC, Copyright (c) Peter Schilling
+    and contributors
     .agents/skills/python, .agents/skills/typescript: ported from
     EmberAGI/scaling-octo-engine@ef11d2b9 at Tom's direction, with the unit-test
     content, the Octo workflow paragraphs and the pnpm build commands removed
     (local skills, edited in place)
     agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
     (same pin and license).
+    .agents/skills/eval-cases: a local skill adapting the eval method of
+    Anthropic's skill-creator (anthropics/skills@dbd4588f9e1033efb41dad4bef2f7947c8993d44,
+    skills/skill-creator, by Anthropic, Apache License, Version 2.0):
+    should and near-miss should-not trigger cases, a held-out share scored apart,
+    transcript facts as the grade. Rewritten for Pi and the kit's factory evals; no
+    skill-creator code or text is copied (its runner, description loop and viewer
+    assume Claude Code, docs/adr/0001).

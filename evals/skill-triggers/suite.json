@@ -1,0 +1,8 @@
+{
+  "suite": "skill-triggers",
+  "kind": "skill-trigger",
+  "description": "Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases, each in train and held-out (covers: role-skills). Graded only by skill_read / skill_not_read. A run stops once every fact is decided, or at the tool-call or time bound.",
+  "covers": "role-skills",
+  "max_tool_calls": 12,
+  "timeout_s": 600
+}

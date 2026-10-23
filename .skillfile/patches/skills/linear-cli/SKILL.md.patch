@@ -1,0 +1,11 @@
+# reason: docs/adr/0001 Pi only: drop the allowed-tools frontmatter (another runtime's permission key); no role loads this skill, the linear tracker skill reads its references
+--- a/SKILL.md
++++ b/SKILL.md
+@@ -1,7 +1,6 @@
+ ---
+ name: linear-cli
+ description: Manage Linear issues from the command line using the linear cli. This skill allows automating linear management.
+-allowed-tools: Bash(linear:*), Bash(curl:*)
+ ---
+ 
+ # Linear CLI

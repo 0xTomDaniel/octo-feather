@@ -19,7 +19,11 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   model        --model
   thinking     --thinking
   tools        --tools (built-in Pi tools only)
-  skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018)
+  skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018);
+               {tracker} is the target's tracker skill: `tracker` in
+               .octo-feather.toml at the working directory's checkout top,
+               github when the file or key is absent (docs/adr/0004). A tracker
+               the kit has no skill for refuses the start, naming the ones it has
   externalSkills  optional: skills installed into the target repo, not the kit
                (Spec Chat's), looked up in the target repo's .agents/skills: the
                working directory's checkout, then its main checkout (a lane
@@ -31,12 +35,17 @@ Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
 """
-import hashlib, json, os, re, subprocess, sys
+import hashlib, json, os, re, subprocess, sys, tomllib
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
 LIST_KEYS = {"tools", "skills", "externalSkills"}
 # A headless run's route to panes: herdr-say --parent and Herdr's own pane ids (#77).
 HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID")
+# A target's `tracker` value and the kit skill that implements it (spec skills#tracker); the kit
+# has a tracker when its skill folder exists. {tracker} on a role's skills line loads it.
+TRACKERS = {"github": "github-issues", "linear": "linear"}
+DEFAULT_TRACKER = "github"
+TRACKER_SLOT = "{tracker}"
 
 
 def parse(path):
@@ -76,6 +85,28 @@ def repo_skill_roots(cwd="."):
     return roots
 
 
+def kit_trackers(skills_root):
+    """Trackers the kit has: those whose tracker skill is in the kit's .agents/skills."""
+    return [t for t, s in TRACKERS.items() if os.path.isfile(os.path.join(skills_root, s, "SKILL.md"))]
+
+
+def tracker_skill(skills_root, cwd="."):
+    """The tracker skill the target at cwd names in its .octo-feather.toml; exits on an unknown one."""
+    r = subprocess.run(["git", "-C", cwd, "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    cfg = os.path.join(r.stdout.strip() if r.returncode == 0 else os.path.abspath(cwd), ".octo-feather.toml")
+    name = DEFAULT_TRACKER
+    if os.path.isfile(cfg):
+        try:
+            with open(cfg, "rb") as f:
+                name = tomllib.load(f).get("tracker", DEFAULT_TRACKER)
+        except (OSError, tomllib.TOMLDecodeError) as e:
+            sys.exit(f"pi-role: cannot read {cfg}: {e}")
+    have = kit_trackers(skills_root)
+    if name not in have:
+        sys.exit(f"pi-role: unknown tracker {name!r} in {cfg}; the kit has: {', '.join(have) or 'none'}")
+    return TRACKERS[name]
+
+
 def launch(path, to_file=False):
     fm, body = parse(path)
     args = ["--approve"]
@@ -87,7 +118,9 @@ def launch(path, to_file=False):
         args += ["--tools", ",".join(fm["tools"])] if fm["tools"] else ["--no-tools"]
     args += ["--no-mcp", "--no-skills"]
     roots = skill_roots(path)
+    tracker = tracker_skill(roots[0])
     for s in fm.get("skills", []):
+        s = tracker if s == TRACKER_SLOT else s
         for r in roots:
             if os.path.isfile(os.path.join(r, s, "SKILL.md")):
                 args += ["--skill", os.path.join(r, s)]

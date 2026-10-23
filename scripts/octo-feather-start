@@ -4,8 +4,10 @@
 #
 #   octo-feather-start --director [--cwd DIR]
 #     the director in Herdr workspace `director`, tab `director`
-#   octo-feather-start --issue N [--cwd WORKTREE]
-#     one supervisor in its own workspace `gh<N>`, tab `supervisor`
+#   octo-feather-start --issue TICKET [--cwd WORKTREE]
+#     one supervisor in its own workspace named by the lane key, tab `supervisor`:
+#     TICKET as the target's tracker writes it (12 or ENG-123), the key from that
+#     tracker skill's lane-key (gh12, eng-123; roles spec #lane-key)
 #
 # Layout per docs/adr/0011. Workers later get their own tab
 # in the lane workspace, spawned by the supervisor with herdr-spawn.
@@ -18,16 +20,16 @@
 # else in a new lane workspace (comms spec #roles-park).
 set -euo pipefail
 
-cwd="$PWD"; name=""; label=""; role="supervisor"; model=(); resume=(); parent=()
+cwd="$PWD"; name=""; issue=""; label=""; role="supervisor"; model=(); resume=(); parent=()
 usage() {
-  echo "usage: octo-feather-start (--director | --issue N | --name LANE) [--cwd DIR]" \
+  echo "usage: octo-feather-start (--director | --issue TICKET | --name LANE) [--cwd DIR]" \
        "[--label LABEL] [--operating-model FILE] [--resume SESSION] [--parent PANE]" >&2
   exit 64
 }
 while (($#)); do
   case "$1" in
     --director) name="director"; label="director"; role="director"; shift ;;
-    --issue) [[ "${2:?}" =~ ^[0-9]+$ ]] || usage; name="gh$2"; shift 2 ;;
+    --issue) issue="${2:?}"; shift 2 ;;
     --cwd) cwd="${2:?}"; shift 2 ;;
     --name) name="${2:?}"; shift 2 ;;
     --label) label="${2:?}"; shift 2 ;;
@@ -38,10 +40,25 @@ while (($#)); do
     *) usage ;;
   esac
 done
-[[ -n "$name" ]] || usage
+[[ -n "$name$issue" ]] || usage
 [[ -n "$label" ]] || label="supervisor"
 
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
+[[ -d "$cwd" ]] || { echo "octo-feather-start: no such directory: $cwd" >&2; exit 66; }
+cwd="$(cd "$cwd" && pwd -P)"
+# The role must start in the target at --cwd: pi-role resolves its {tracker} skill there, and an unknown
+# tracker refuses here, before any workspace exists (spec skills#acceptance-tracker-unknown).
+(cd "$cwd" && "$root/scripts/pi-role" --json "$root/agents/$role.md" >/dev/null) \
+  || { echo "octo-feather-start: $role not started: pi-role refused its role file in $cwd (reason above)" >&2; exit 65; }
+# The lane key comes from the tracker pi-role resolved above (one mechanism: its tracker_skill), via that
+# tracker skill's lane-key (docs/adr/0011).
+if [[ -n "$issue" ]]; then
+  skill="$(cd "$cwd" && python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+l = m.SourceFileLoader("pi_role", sys.argv[1]); p = u.module_from_spec(u.spec_from_loader("pi_role", l)); l.exec_module(p)
+print(p.tracker_skill(sys.argv[2]))' "$root/scripts/pi-role" "$root/.agents/skills")" || exit 65
+  name="$("$root/.agents/skills/$skill/scripts/lane-key" "$issue")" \
+    || { echo "octo-feather-start: --issue $issue has no lane key in this target's tracker ($skill, reason above)" >&2; exit 64; }
+fi
 # Review state never lands in the target's tracked tree (docs/adr/0017).
 ! git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || "$root/scripts/octo-feather-exclude" "$cwd" >&2
 if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:-}" ]]; then
@@ -51,12 +68,12 @@ if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:
   herdr session list 2>/dev/null | awk -v s="$HERDR_SESSION" '$1 == s && $2 == "running" {f=1} END {exit !f}' \
     || { echo "octo-feather-start: Herdr session $HERDR_SESSION is not running; start it in a terminal with: herdr --session $HERDR_SESSION" >&2; exit 69; }
 fi
-spawn() { # $1: workspace id
-  "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
+spawn() { # $1: workspace id; run in the target, where pi-role resolves {tracker}
+  cd "$cwd" && "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
 }
 
-# One workspace per name: refuse a second director or a second lane gh<N>.
+# One workspace per name: refuse a second director or a second lane of one lane key.
 # A resume instead lands a new tab in the existing one.
 existing="$(herdr workspace list 2>/dev/null | jq -r --arg n "$name" \
   '[.result.workspaces[]? | select(.label == $n) | .workspace_id] | first // empty' 2>/dev/null || true)"

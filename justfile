@@ -12,7 +12,7 @@ export root := justfile_directory()
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
 export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
-# this before any recipe runs, so a check or check-* recipe reaching qa, qc or Jev, by dependency or body, fails
+# this before any recipe runs, so a check or check-* recipe depending on the qa or qc recipe, directly or transitively, fails
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
 # backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
 # Backticks run in --working-directory when given: there the guard is the published command on PATH.
@@ -25,8 +25,8 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only and GitHub-only references, no dashes, skill frontmatter, decision logs, vendored skills.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape.
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -48,7 +48,7 @@ check-scripts:
     fi
     for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
 
-# No CLAUDE.md, no .claude/.codex projections, no Linear, no octo-lite product names, no lane branch default.
+# No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
 # .skillfile/ patches, which quote the upstream lines they remove.
@@ -60,11 +60,6 @@ check-refs:
     if git ls-files | grep -iE '(^|/)(CLAUDE(\.local)?\.md|AGENTS\.override\.md|\.claude|\.codex)(/|$)'; then
       echo "check-refs: Claude/Codex instruction files or projections above are not allowed; Pi is the only runtime, AGENTS.md the only instruction file (docs/adr/0001)" >&2; bad=1; fi
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
-    if grep -nHE '\bLinear\b' "${files[@]}"; then
-      echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
-    # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
-    if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
-      echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
     # Retired words stay retired in all kit text, docs/ and this justfile included
     # (the pattern brackets a letter so it does not match itself). Exempt files:
     #   GLOSSARY.md: lists the retired words.
@@ -87,8 +82,8 @@ check-refs:
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
-          # The frozen #acceptance-retired-words criterion names the words it retires.
-          "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
+          # The #acceptance-retired-words criterion names the words it bans.
+          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
           # NOTICE attribution names the octo-lite file the director came from.
@@ -108,6 +103,9 @@ check-refs:
     # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
     if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
+    # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
+    if git ls-files -z .agents/skills agents | xargs -0 grep -nHF -e 'Skill tool' -e 'Skill call'; then
+      echo "check-refs: Skill tool named above; Pi has none: write 'read the \`<name>\` skill (\`../<name>/SKILL.md\`)', vendored skills through .skillfile/patches (#107)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
@@ -152,11 +150,11 @@ check-templates:
     done
     echo "templates: ok ($n)"
 
-# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh), none loading a script as a module (#104).
+# Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
+# script's public surface is review's call, not a check (docs/adr/0008, #118).
 check-tests:
     #!/usr/bin/env bash
     set -euo pipefail
-    python3 "$root/scripts/check-test-surface"
     # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
     TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
     for t in "$root"/tests/*.sh; do "$t"; done
@@ -185,10 +183,14 @@ shape *args:
 spec-chat repo:
     octo-feather-spec-chat "$1"
 
-# Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
+# Integrate worker commits onto the lane's branch (its lane key: gh12, eng-123 for ENG-123), then its `just check`; non-zero on any conflict (docs/adr/0017).
 [no-cd]
 integrate issue +refs:
     octo-feather-integrate "$@"
+
+# Every eval case's shape: required fields, known facts, expectations for each case, no task showing its grade (quality #acceptance-qa-cases-checked).
+check-evals:
+    @python3 "$root/scripts/check-evals"
 
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:
@@ -198,8 +200,9 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Verify the runtime tools on this box (octo-lite's install --check equivalent).
-install-check:
+# Verify the runtime tools on this box (octo-lite's install --check equivalent), and the tracker CLI of the target
+# (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear.
+install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -208,13 +211,20 @@ install-check:
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
+    # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
+    skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+    s = u.spec_from_loader("pi_role", m.SourceFileLoader("pi_role", sys.argv[1] + "/scripts/pi-role")); r = u.module_from_spec(s); s.loader.exec_module(r)
+    print(r.tracker_skill(sys.argv[1] + "/.agents/skills", sys.argv[2]))' "$root" "$1")" || exit 1
+    echo "tracker ${skill} (target $1)"
+    c="$root/.agents/skills/$skill/scripts/install-check"
+    [[ ! -x "$c" ]] || "$c" || bad=1
     exit "$bad"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():
     octo-feather-start --director --cwd "$1"
 
-# Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
+# Start one supervisor for a ticket as the tracker writes it (12, ENG-123) in workspace named by its lane key (gh12, eng-123), tab `supervisor`.
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "$1" --cwd "$2"
 
@@ -224,10 +234,10 @@ supervise issue cwd=invocation_directory():
 qc $status $pr +$ids:
     octo-feather-qc "$@"
 
-# Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
+# Factory QA: each eval case (evals/) runs its role headless in the qc sandbox; PASS/FAIL per case from transcript facts (octo-feather-qa --help). Never inside `just check`.
 qa *args:
     @[[ "$(check-gate-free --refuse 'just qa (factory evals)')" == "gate-free: ok" ]]
-    @echo "just qa: not implemented yet (factory evals, docs/future.md)" >&2; exit 2
+    octo-feather-qa "$@"
 
 # Print this Herdr session's octo-feather state directory.
 state:

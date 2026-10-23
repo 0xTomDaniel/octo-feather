@@ -4,7 +4,7 @@ description: Implement one ticket inside the worktree it was given, and return t
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
-skills: principle-prove-it-works, blast-radius, commit, github, implement, nodejs, pnpm, pull, python, tdd, typescript
+skills: principle-prove-it-works, blast-radius, commit, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
 ---
 
 # Implementer
@@ -31,11 +31,13 @@ Implement one ticket inside the worktree it was given, and return the commit.
 
 - Work only inside the given worktree. It is the isolation, and leaving it breaks the one thing that lets workers run in parallel.
 - Follow the target `AGENTS.md` for how to build, test, and validate. It outranks habit.
-- Load only the skills this ticket needs: from the kit skills you were given (available, not mandatory), and by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks a generic one. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
+- Load each skill when its step comes: starting the ticket, `implement`, and the tracker skill to read it; before the first `gh` call (a PR read), `github-pr`; before each test you write or change, `tdd`; before touching a stack's code, its skill (`python`, `typescript`, `nodejs`, `pnpm`); once the code works and before the commit, in order: `principle-prove-it-works` (run the real artifact), `blast-radius` (the safety fact), then `commit`; merging the integration branch in, `pull`. Also load by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks a generic one. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
+- Load `eval-cases` before editing a skill, a role or an eval case when the ticket adds or changes one: that change owes its eval case (docs/adr/0008).
 - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while the behavior stays wrong.
 - Brownfield code keeps its original lines in their original order: change only the lines a criterion needs, and never restructure, rename or reformat code the ticket does not need.
 - Tests go through a public surface (docs/adr/0002), one or two per criterion, and no test detail leaks into production code: the `tdd` skill (Seams, Test leak; docs/adr/0002).
-- Build the ticket with the `implement` skill. In vendored skills, "the user" is your supervisor (`herdr-say --parent`).
+- Write product code and integration/E2E tests through public surfaces. Structure stays your everyday job: types, narrow interfaces, illegal states unrepresentable, import boundaries in your own code (ADR 0008 rung 1). Do not add enforcement checks on the repo's own code or text (lint rules, gate checks, scans); those come from a corrector or from an accepted spec criterion that asks for one. If a criterion does, build it as product code, exact only (ADR 0008); anything not testable exactly goes back to your supervisor.
+- In vendored skills, "the user" is your supervisor (`herdr-say --parent`).
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; report the smoke result first.
 - One mechanism (operating model): before adding a client, format, store, config, status file, or table, find the existing one and extend it, or state in the spec why a second is needed.
 - Start any server or background process as `setsid sh -c 'echo $$ > "$(git rev-parse --git-dir)/pids/<name>"; exec cmd' &` (mkdir that `pids` dir first) and stop it before reporting, only via that file: `kill -- -<pid>`. Never `pkill -f` or `killall`.
@@ -52,4 +54,12 @@ Stop on a ticket that contradicts the spec, a missing environment, or work that 
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, the check field, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. The check field is plain lines at column 0, exactly as `octo-feather-lane verdict` reads them, never a bullet, bold or a code block: the one line
+
+Checks: none
+
+or, for each check a criterion asked you to build, one line
+
+Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact
+
+(fields: the `code-review` skill's Verdict step). Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.

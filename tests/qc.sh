@@ -59,7 +59,7 @@ vc0="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"   # the caller's wa
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
-export GH_TOKEN=SECRET-token OCTO_FEATHER_PARENT=wX:p9 HERDR_PANE_ID=p9 HERDR_TAB_ID=t9 HERDR_WORKSPACE_ID=w9
+export LINEAR_API_KEY=SECRET-linear-key GH_TOKEN=SECRET-token OCTO_FEATHER_PARENT=wX:p9 HERDR_PANE_ID=p9 HERDR_TAB_ID=t9 HERDR_WORKSPACE_ID=w9
 live="$HOME/.local/state/octo-feather"
 mkdir -p "$HOME/.config/herdr" "$HOME/.config/gh" "$live/lanes/archive" "$t/bin" "$t/fakeherdr" "$t/pids" "$t/repo/docs/specs"
 echo default > "$HOME/.config/herdr/herdr.sock"
@@ -92,6 +92,7 @@ cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env bash
 # Fake judge: FAKE_QC picks the reply; `escape` tries every way out and prints ESCAPE per success.
 [[ "${1:-}" == --version ]] && exit 0
+[[ -z "${LINEAR_API_KEY+x}" ]] || echo "LINEAR KEY IN JUDGE ENV"   # remote#acceptance-linear-key-qc
 ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "ok", "why": "shown"}]}\n```\n'
 case "$FAKE_QC" in
   mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
@@ -140,12 +141,16 @@ P
     rm -rf "$vc/git" 2>/dev/null; [[ -d "$vc/git" ]] || echo "ESCAPE deleted cached git"
     unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2>/dev/null && echo "ESCAPE remounted cache rw"
     printf "$ok" ;;
-  nested)   # `just check` in the sandbox runs this test (fresh HOME, its own herdr and state): a sandboxed qc inside the judge's gets past its proof
+  nested)   # `just check` in the sandbox runs this test (fresh HOME, its own state): a sandboxed qc inside the judge's gets past its proof
     h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
-    o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/bin/pi}/fakeherdr:${0%/pi}:$PATH" \
+    # The judge's PATH as is: `herdr` there is the outer sandbox's shim; the nested run wraps the real (fake) binary.
+    o="$(cd "$h/repo" && env -u XDG_STATE_HOME -u HERDR_SESSION -u HERDR_SOCKET_PATH -u HERDR_BIN_PATH HOME="$h" PATH="${0%/pi}:$PATH" \
       FAKE_QC=garbage octo-feather-qc docs/specs/demo.status.json 5 acceptance-a 2>&1)"; echo "NESTED exit $?"
     grep -q 'qc sandbox: ok   writable persistent paths: none$' <<< "$o" && grep -q 'qc sandbox: ok   [1-9][0-9]* writable mounts covered' <<< "$o" \
       || echo "MISSING nested proof: $o"
+    grep -q 'qc sandbox: ok   live Herdr unreachable: raw herdr --session default workspace list exits 1$' <<< "$o" \
+      && grep -q 'qc sandbox: ok   herdr shim pins sandbox session' <<< "$o" && grep -q 'qc sandbox: ok   Herdr config shows only the sandbox session' <<< "$o" \
+      || echo "MISSING nested Herdr proof (real binary, not the outer shim): $o"
     printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
@@ -218,6 +223,7 @@ run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
 grep -q UNSANDBOXED <<< "$out" || fail "--no-sandbox not printed: $out"
 [[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain)" ]] || fail "--no-sandbox changed the status file"
 [[ "$(report '["sandbox"]')" == False ]] || fail "--no-sandbox report must record sandbox false"
+! report '["stdout"]' | grep -q "LINEAR KEY IN JUDGE ENV" || fail "--no-sandbox judge got LINEAR_API_KEY"
 # A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no scratch behind.
 FAKE_QC=hang timeout -k 5 "$lim" "$Q" $st 5 acceptance-a --no-sandbox > /dev/null 2>&1 & hp=$!; echo "$hp" > "$t/pids/run"
 for _ in $(seq 100); do compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null && break; sleep 0.1; done
@@ -256,10 +262,18 @@ FAKE_HERDR_LEAK=1 run 66 escape $st 5 acceptance-a
 grep -q "FAIL live Herdr unreachable" <<< "$out" || fail "leaking Herdr not caught by the proof: $out"
 [[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started after a failed proof"
 
+# remote#acceptance-linear-key-qc: a Linear key re-entering the judge's env (here a BASH_ENV that exports it
+# again after the scrub) fails the proof, so the judge never starts; the plain run below proves it absent.
+printf 'export LINEAR_API_KEY=SECRET-linear-leak\n' > "$t/bin/leak.env"
+BASH_ENV="$t/bin/leak.env" run 66 escape $st 5 acceptance-a
+grep -q "FAIL no tracker credential: LINEAR_API_KEY set 1 times" <<< "$out" || fail "leaking Linear key not caught by the proof: $out"
+[[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started with a Linear key in its env"
+
 # Every escape fails; leftovers killed, agents counted, credential copies gone, live records untouched.
 run 0 escape $st 5 acceptance-a
 judge="$(report '["stdout"]')"
-grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "sandbox escape: $judge"
+grep -E 'ESCAPE|MISSING|LINEAR KEY' <<< "$judge" && fail "sandbox escape: $judge"
+grep -q "qc sandbox: ok   no tracker credential: LINEAR_API_KEY set 0 times" <<< "$out" || fail "no Linear key proof: $out"
 grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" || fail "no agent count: $out"
 [[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["worktree_writes"]')" == "[]" ]] \
   || fail "cleanup record: $(report '["sandbox"]')"

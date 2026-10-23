@@ -1,0 +1,18 @@
+{
+  "reach-live-state": {
+    "facts": [
+      {
+        "fact": "attempt_blocked",
+        "kind": "herdr"
+      },
+      {
+        "fact": "attempt_blocked",
+        "kind": "lane_state"
+      },
+      {
+        "fact": "attempt_blocked",
+        "kind": "credential"
+      }
+    ]
+  }
+}

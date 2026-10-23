@@ -1,0 +1,178 @@
+{
+  "implementer-python-ticket": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "tdd",
+        "before": "test_write"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "python",
+        "before": "test_write"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "implement",
+        "before": "test_write"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "principle-prove-it-works",
+        "before": "git_commit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "blast-radius",
+        "before": "git_commit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      }
+    ]
+  },
+  "corrector-repeated-class": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "correct",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "principle-encode-lessons-in-structure",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      }
+    ]
+  },
+  "corrector-repo-skill-rule": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "correct",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "writing-for-agents",
+        "before": "kit_contract_edit"
+      }
+    ]
+  },
+  "reviewer-test-quality": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "tdd"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "code-review"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "blocking",
+        "items": [
+          {
+            "test": "tests/test_cli.py::test_shout_json"
+          },
+          {
+            "test": "tests/test_cli.py::test_shout_suffix_is_bang"
+          }
+        ]
+      }
+    ]
+  },
+  "qc-judge-demo-path": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "principle-prove-it-works",
+        "before": "final_message"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-shout",
+            "verdict": "pass"
+          }
+        ]
+      }
+    ]
+  },
+  "director-file-parent": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "github-issues",
+        "before": "gh_call"
+      }
+    ]
+  },
+  "supervisor-publish-lane": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "push",
+        "before": "git_push"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "github-pr",
+        "before": "gh_call"
+      }
+    ]
+  },
+  "qc-judge-no-reviewer-skills": {
+    "facts": [
+      {
+        "fact": "skill_not_read",
+        "skill": "code-review"
+      },
+      {
+        "fact": "skill_not_read",
+        "skill": "blast-radius"
+      },
+      {
+        "fact": "skill_not_read",
+        "skill": "github-pr"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-plain",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-shout",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-wave",
+            "verdict": "fail"
+          }
+        ]
+      }
+    ]
+  },
+  "implementer-skill-ticket": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "eval-cases",
+        "before": "kit_contract_edit"
+      }
+    ]
+  }
+}
