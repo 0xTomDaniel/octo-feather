@@ -47,7 +47,7 @@ Each one is put to a classifier model as one closed question, and its answer cou
 <thead><tr><th>Question</th><th>Judges</th><th>The model is shown</th></tr></thead>
 <tbody>
 <tr data-anchor="question-test-quality"><td>Test quality</td><td>Whether a test is tautological, coupled to the implementation, or sound</td><td>The test and the least of the code it exercises</td></tr>
-<tr data-anchor="question-fact-or-meaning"><td>Fact or meaning</td><td>Whether a check or grader decides its question by reading a fact or by deciding a meaning</td><td>The rule the check states and what it reads</td></tr>
+<tr data-anchor="question-fact-or-meaning"><td>Exact or proxy</td><td>Whether a check or grader decides its rule exactly, refusing every case the rule forbids and only those, or by a proxy for the rule, whether the proxy reads facts or prose</td><td>The rule the check states and what it reads</td></tr>
 <tr data-anchor="question-ticket-slice"><td>Ticket slice</td><td>Whether a ticket is a real end-to-end slice</td><td>The ticket as filed</td></tr>
 <tr data-anchor="question-call-evidence"><td>Call evidence</td><td>Whether a spec call's evidence shows its accepted criterion cannot pass as written</td><td>The criterion as accepted and the call's change, reason and evidence</td></tr>
 </tbody>
@@ -58,7 +58,8 @@ Each one is put to a classifier model as one closed question, and its answer cou
 <section data-anchor="rules" id="rules">
 <h2>Rules</h2>
 <p data-anchor="rule-rung">A judgment question sits on the ladder rung <a href="../adr/0008-prose-last.md">ADR 0008</a> names for judgment; this spec does not restate that rung.</p>
-<p data-anchor="rule-closed">A question is closed: the model picks one of its fixed labels, with a confidence.</p>
+<p data-anchor="rule-closed">Each question has a closed answer set: the model picks one of its fixed labels, with a confidence.</p>
+<p data-anchor="rule-new-question">The list of questions is open, and adding one is factory QA: a lane or a corrector proposes it with its labelled set, the director checks and owns the labels, the owner reviews them later, the factory evals bench it, and it stays advisory until it meets its threshold.</p>
 <p data-anchor="rule-labels-owned">Labels come from the factory's real history; a lane drafts them, the director checks and owns them, and the owner reviews them later, with nothing waiting on that review.</p>
 <p data-anchor="rule-overturn">A label the owner overturns changes the set, and the question's bench and choice are rerun.</p>
 <p data-anchor="rule-held-out">Held-out cases never shape a question's wording or its model choice; they give the score its threshold is judged on.</p>
