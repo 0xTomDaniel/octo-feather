@@ -55,6 +55,8 @@ expect agents/director.md "See spec \`#handoff-$op\`: the $op spawns supervisors
 expect docs/specs/comms.spec.html "<div data-anchor=\"handoff-$op-wrap\">the $op</div>" "$words"
 expect docs/specs/index.spec.html "<a href=\"./comms.spec.html#handoff-$op\">the $hu</a>" "$words"
 expect docs/specs/overview.spec.html "calls the top agent $op or the person $hu; ask the $hu." "$words"
+expect docs/x.md "uses the retired word $op or $hu" "$words"
+expect docs/specs/overview.spec.html "uses the retired word $op or $hu; ask the $hu." "$words"
 expect agents/corrector.md "\"The $op\" there is the owner; the $op spawns lanes." "$words"
 expect NOTICE "agents/director.md (was agents/meta-$op.md), written by the $op" "$words"
 # Spec Chat's on-disk spool side name is exempt only as the SPOOL_SIDE value in the two files that set it.

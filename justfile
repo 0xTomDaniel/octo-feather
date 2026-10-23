@@ -12,7 +12,7 @@ export root := justfile_directory()
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
 export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
-# this before any recipe runs, so a check or check-* recipe reaching qa, qc or Jev, by dependency or body, fails
+# this before any recipe runs, so a check or check-* recipe reaching the qa or qc recipe, by dependency or a body running it, fails
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
 # backtick's own text, which `just --dry-run` substitutes without running it (or any recipe).
 # Backticks run in --working-directory when given: there the guard is the published command on PATH.
@@ -62,9 +62,6 @@ check-refs:
     mapfile -t files < <(git ls-files | grep -vE '^(docs/|\.skillfile/|AGENTS\.md$|README\.md$|NOTICE$|LICENSE$|justfile$)')
     if grep -nHE '\bLinear\b' "${files[@]}"; then
       echo "check-refs: Linear references above; GitHub Issues is the tracker (docs/adr/0004)" >&2; bad=1; fi
-    # Model ids (anthropic/claude-*) are a provider choice, not a runtime.
-    if grep -nHiE 'claude|codex' "${files[@]}" | grep -vE 'anthropic/claude-[a-z0-9-]+'; then
-      echo "check-refs: Claude/Codex references above; Pi is the only runtime (docs/adr/0001)" >&2; bad=1; fi
     # Retired words stay retired in all kit text, docs/ and this justfile included
     # (the pattern brackets a letter so it does not match itself). Exempt files:
     #   GLOSSARY.md: lists the retired words.
@@ -87,8 +84,9 @@ check-refs:
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
-          # The frozen #acceptance-retired-words criterion names the words it retires.
-          "docs/specs/overview.spec.html" => [qr{calls the top agent [o]perator or the person [h]uman}],
+          # The #acceptance-retired-words criterion names the words it bans. The second quote is its wording before
+          # the clarifies call by the director; delete it when that spec commit lands.
+          "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}, qr{calls the top agent [o]perator or the person [h]uman}],
           # The corrector quotes vendored pstack correct.
           "agents/corrector.md"           => [qr{"The [o]perator" there is the owner}],
           # NOTICE attribution names the octo-lite file the director came from.

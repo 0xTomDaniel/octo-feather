@@ -7,9 +7,12 @@ any recipe runs, so a gate that would reach them fails before running one.
 Reads the parsed justfile (`just --dump --dump-format json`), takes every
 recipe named check or check-* plus everything they reach (dependencies before
 and after `&&`, and any recipe or alias name a body names, as in `just NAME`),
-and fails when that closure holds qa or qc, or when any of its bodies,
-parameter defaults or dependency arguments (interpolations and the variables
-they read resolved, shell quotes removed) name qa, qc or jev as a word.
+and fails when that closure holds qa or qc. Bodies, parameter defaults and
+dependency arguments are read with interpolations and the variables they read
+resolved and shell quotes removed, for the recipe names they run. A body that
+starts the judge or evals some other way (octo-feather-qc, a script) is caught
+at run time by the marker below, never by a word scan: words stand in for
+reachability, a proxy (docs/adr/0008, #118).
 
 The justfile: the one beside this script's scripts/ dir, or, where /proc shows
 the parent just's argv, the --justfile/-f it was given (`just --justfile X
@@ -43,7 +46,6 @@ boundary, visibly.
 import json, os, re, signal, subprocess, sys
 
 FORBIDDEN_RECIPES = ("qa", "qc")
-FORBIDDEN = re.compile(r"\b(qa|qc|jev)\b", re.I)
 TOKEN = re.compile(r"[A-Za-z0-9_][A-Za-z0-9_-]*")
 FIX = "just check stays deterministic and free: the gate never runs the product judge or the factory evals (docs/future.md)"
 
@@ -204,7 +206,7 @@ def main():
         dump = json.loads(p.stdout)
         recipes, assigns = dump["recipes"], dump["assignments"]
         aliases = {a: v["target"] for a, v in dump.get("aliases", {}).items()}
-        texts, edges = {}, {}
+        edges = {}
         for name, r in recipes.items():
             lines = ["".join(fragment(f, assigns) for f in line) for line in r["body"]]
             for prm in r["parameters"]:
@@ -215,7 +217,6 @@ def main():
                 deps.append(d["recipe"])
                 lines.extend(render(a, assigns) for a in d["arguments"])
             text = "\n".join(lines)
-            texts[name] = text
             named = set(TOKEN.findall(re.sub(r"[\"'\\]", "", text)))
             edges[name] = deps + sorted((named & set(recipes)) | {aliases[n] for n in named & set(aliases)})
     except (ValueError, KeyError, TypeError, AttributeError) as e:
@@ -237,14 +238,6 @@ def main():
         chain = " -> ".join(via[n])
         if n in FORBIDDEN_RECIPES:
             bad.append(f"recipe {chain} reaches `{n}`")
-            continue
-        text = texts.get(n, "")
-        for raw in text.split("\n"):
-            for line in {raw, re.sub(r"[\"'\\]", "", raw)}:
-                hit = FORBIDDEN.search(line)
-                if hit:
-                    bad.append(f"recipe {chain} names `{hit.group(0)}` in: {raw.strip()}")
-                    break
     if bad:
         for b in dict.fromkeys(bad):
             print(f"check-gate-free: {b}", file=sys.stderr)

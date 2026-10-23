@@ -58,7 +58,9 @@ Report the findings, each marked **block** or **note**, then one verdict: blocke
 
 Then classify every check, test gate or grader the diff adds or changes (a `just check` script or recipe, a gating test, an eval grader), one line each at column 0 outside code blocks, or the one line `Checks: none`:
 
-`Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy`
+`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
 
-- **exact**: it tests the rule itself, the rule the ADR, spec criterion or finding class it cites states (a word ban whose rule is that the word never appears). A case escaping it is a defect to fix, still exact.
+`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
+
+- **exact**: it tests the rule itself. `<rule>` is the rule as stated where it is owned and `<owner>` names that place (a spec criterion id, an ADR, a recorded owner ruling), never the check's own docstring or error; when owners conflict, the latest owner ruling wins. A case escaping an exact check is a defect to fix, still exact.
 - **proxy**: it tests a stand-in that correlates with the rule, however factual what it reads (code tokens for coupling, words for reachability, a regex over prose for intent). A proxy check blocks, class `proxy-check` (docs/adr/0008): `scripts/check-test-surface` read six real module-loading tokens to enforce "tests reach no internals", and tests coupled to internals in other ways kept passing it.

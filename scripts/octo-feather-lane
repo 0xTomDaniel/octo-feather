@@ -21,7 +21,7 @@ report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blockin
 Only lines outside fenced code blocks and blockquotes count; the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
 gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
-`Checks: none`, or one line per check `Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy`.
+`Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
 Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
@@ -188,7 +188,7 @@ CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
 CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
 CHECK_FORM = ("`Checks: none` when the diff adds or changes no check, test gate or grader, else one line per check "
-              "`Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
+              "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
 def outside(text: str) -> list[str]:
@@ -220,7 +220,7 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
         elif m := CHECK_LINE.match(l):
             s = CHECK_SHAPE.fullmatch(m.group(1))
             if not s:
-                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy`"); continue
+                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`"); continue
             path, rule, reads, cls = s.groups()
             if cls.lower() not in ("exact", "proxy"):
                 why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
