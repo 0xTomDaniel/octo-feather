@@ -2,25 +2,37 @@
 """octo-feather-qa [--suite NAME]... [--case ID]... [--sample N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT]   factory evals (`just qa`)
 
 Runs the kit's eval cases (evals/<suite>/, shape: scripts/check-evals, which runs first and must
-pass). Each case: its fixture (evals/fixtures/<fixture>) is copied and git-initialized in a scratch
-dir, then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
+pass). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
+dir (a role-transcript case's `head` fixture committed over it on its branch, its `branch` cut and
+checked out, a fixture with uv.lock synced with `uv sync --locked`; a setup failure is a FAIL, case not
+run; {repo} and {head} in the task become the copy's path and HEAD sha), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
 inside the product judge's sandbox (scripts/octo-feather-qc-sandbox, started as `just qc` starts it:
 no live Herdr, masked lane state and credentials, per-run Pi auth.json/models.json copies, scrubbed
 env, an offline gh refusing every call, the copy an overlay whose writes die with the run; unlike
 `just qc`, no lane history: no archived lanes or director log bound in, proof line `history none`). The
 sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox cannot start, is a
 FAIL, never an unsandboxed run. Pi's session goes to --session-dir on the sandbox's private /tmp,
-never ~/.pi.
+never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH (logs argv,
+answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
+sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo (content
+hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
+naming each target the call reached: edit (a file changed), test_write (a test path changed: tests/,
+test_*, *_test.*), git_commit (HEAD on a commit that did not exist before the run), git_push (origin's
+refs changed), gh_call (the fake gh ran). No regex over commands infers a write. Stated limit: a change is
+credited to the first call at whose end event the snapshot shows it, exact while the model's turn separates
+calls; of calls run in parallel within one turn, the first to end gets it.
 
-Grading reads facts from the Pi JSON event stream only (tool_execution_start events, and for
-attempt_blocked each call's tool_execution_end result: error or exit code, output), against the
+Grading reads facts from the Pi JSON event stream only (tool_execution_start events, the watcher's qa_fs
+events, and for attempt_blocked each call's tool_execution_end result: error or exit code, output), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts: check-evals --help.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
-A `declared` fact reads the run's final assistant message (message_end events): it stays open until pi
-exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
+A skill read is a Pi `read` tool call whose path, resolved against the case repo, is that skill's SKILL.md
+in the kit under test (Pi's load mechanism); ls, grep or cat in bash never count.
+A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
+stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
 
 Case format rule (check-evals --help): graders read STRUCTURED facts, never prose. A verdict a case
 needs is emitted by the producer as data (a machine-readable block list by test or file id; the
@@ -52,9 +64,9 @@ Exit: 0 every case passed, 1 any failed, 2 the shape check failed, 64 usage, 70 
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
 Internal, the in-sandbox stop rule (not for callers):
-  octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S -- CMD...
+  octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S SETUP_JSON -- CMD...
 """
-import importlib.machinery, importlib.util, json, os, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
+import hashlib, importlib.machinery, importlib.util, json, os, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
@@ -167,51 +179,70 @@ def show(call):
     return f"{n} {str(a.get('path') or a.get('command') or '')[:120]}".strip()
 
 
-def reads(skill, call):
+def reads(fact, call):
+    """A Pi `read` tool call (Pi's skill load) whose path, resolved against the case repo, is the skill's SKILL.md.
+    A bash ls, grep or cat never counts."""
     n, a = call
-    tail = f"{skill}/SKILL.md"
-    if n == "read":
-        p = str(a.get("path", ""))
-        return p == tail or p.endswith("/" + tail)
-    return n == "bash" and re.search(r"(^|[\s/'\"=])" + re.escape(tail), str(a.get("command", ""))) is not None
+    if n != "read" or not isinstance(a.get("path"), str):
+        return False
+    p = os.path.expanduser(a["path"])
+    p = os.path.join(fact.get("_cwd", ""), p) if not os.path.isabs(p) else p
+    files = set(fact.get("_skill_md", ()))
+    return os.path.normpath(p) in files or os.path.realpath(p) in files
 
 
-def test_write(call):
-    n, a = call
-    if n in ("write", "edit"):
-        return bool(TEST_PATH.search(str(a.get("path", ""))))
-    c = str(a.get("command", "")) if n == "bash" else ""
-    return bool(re.search(r"(^|[\s/'\"])tests?/", c)) and bool(re.search(r">|\btee\b|sed -i|cat <<", c))
+def fs_marks(lines):
+    """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
+    gh_call, from its qa_fs events (filesystem snapshots, never command text)."""
+    order, marks = {}, {}
+    for line in lines:
+        e = safe_json(line)
+        if not isinstance(e, dict):
+            continue
+        if e.get("type") == "tool_execution_start":
+            order.setdefault(str(e.get("toolCallId", "")), len(order))
+        elif e.get("type") == "qa_fs" and str(e.get("toolCallId")) in order:
+            for m in e.get("marks", []):
+                marks.setdefault(m, order[str(e["toolCallId"])])
+    return marks
 
 
 JSON_FENCE = re.compile(r"^[ \t]*```[ \t]*json[ \t]*$", re.M | re.I)
 FENCE_END = re.compile(r"^[ \t]*```[ \t]*$", re.M)
 
 
-def judge_declared(fact, final, last):
-    """The final message's one ```json block, an object whose top-level FIELD is one of the labels.
+def final_json(head, final, last):
+    """(status, text, obj): the final message's one ```json block as an object, status None when there is one.
     last: (stop, text): the watcher's stop reason and the last assistant message's text (None: no message)."""
-    f, labels = fact["field"], fact["in"]
-    head = f"declared {f}"
     if not final:
-        return "open", f"{head}: read from the final message only"
+        return "open", f"{head}: read from the final message only", None
     stop, text = last or (None, None)
     if stop not in (None, "exit"):
-        return "fail", f"{head}: run stopped ({stop}) before its final message"
+        return "fail", f"{head}: run stopped ({stop}) before its final message", None
     if text is None:
-        return "fail", f"{head}: no final assistant message"
+        return "fail", f"{head}: no final assistant message", None
     opens = list(JSON_FENCE.finditer(text))
     if len(opens) != 1:
-        return "fail", f"{head}: final message holds {len(opens)} ```json blocks, want exactly 1"
+        return "fail", f"{head}: final message holds {len(opens)} ```json blocks, want exactly 1", None
     end = FENCE_END.search(text, opens[0].end())
     if end is None:
-        return "fail", f"{head}: the ```json block is never closed"
+        return "fail", f"{head}: the ```json block is never closed", None
     try:
         obj = json.loads(text[opens[0].end():end.start()])
     except ValueError as e:
-        return "fail", f"{head}: invalid JSON in the ```json block ({e})"
+        return "fail", f"{head}: invalid JSON in the ```json block ({e})", None
     if not isinstance(obj, dict):
-        return "fail", f"{head}: the ```json block is not an object"
+        return "fail", f"{head}: the ```json block is not an object", None
+    return None, "", obj
+
+
+def judge_declared(fact, final, last):
+    """The final message's one ```json block, an object whose top-level FIELD is one of the labels."""
+    f, labels = fact["field"], fact["in"]
+    head = f"declared {f}"
+    st, txt, obj = final_json(head, final, last)
+    if st:
+        return st, txt
     if f not in obj:
         return "fail", f"{head}: no top-level {f!r} in the ```json block"
     if not isinstance(obj[f], str) or obj[f] not in labels:
@@ -219,14 +250,35 @@ def judge_declared(fact, final, last):
     return "pass", f"{head}: {json.dumps(obj[f])}, one of {json.dumps(labels)}"
 
 
-def judge(fact, calls, final, runs=(), last=None):
-    """(status, text): status pass, fail, or open (undecided so far; only when not final)."""
+def judge_includes(fact, final, last):
+    """The final message's one ```json block: top-level FIELD a list holding, for each wanted item, an object with
+    every key of that item equal (other keys free)."""
+    f, items = fact["field"], fact["items"]
+    head = f"declared_includes {f}"
+    st, txt, obj = final_json(head, final, last)
+    if st:
+        return st, txt
+    got = obj.get(f)
+    if not isinstance(got, list):
+        return "fail", f"{head}: top-level {f!r} is {json.dumps(got)[:80] if f in obj else 'missing'}, want a list"
+    has = lambda it: any(isinstance(x, dict) and all(k in x and x[k] == v for k, v in it.items()) for x in got)
+    missing = [it for it in items if not has(it)]
+    if missing:
+        return "fail", f"{head}: no entry with {'; '.join(json.dumps(m) for m in missing)} in {json.dumps(got)[:300]}"
+    return "pass", f"{head}: holds {'; '.join(json.dumps(it) for it in items)}"
+
+
+def judge(fact, calls, final, runs=(), last=None, marks=None):
+    """(status, text): status pass, fail, or open (undecided so far; only when not final).
+    marks: fs_marks of the run (the first tool call index of each filesystem target)."""
     if fact["fact"] == "declared":
         return judge_declared(fact, final, last)
+    if fact["fact"] == "declared_includes":
+        return judge_includes(fact, final, last)
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], list(runs), final, fact.get("live", ()))
     t, s, n = fact["fact"], fact["skill"], len(calls)
-    r = next((i for i, c in enumerate(calls) if reads(s, c)), None)
+    r = next((i for i, c in enumerate(calls) if reads(fact, c)), None)
     at = lambda i: f"tool call {i + 1} of {n} ({show(calls[i])})"
     none = f"no read of {s}/SKILL.md in {n} tool calls"
     if t == "skill_read":
@@ -238,12 +290,14 @@ def judge(fact, calls, final, runs=(), last=None):
             return "fail", f"skill_not_read {s}: read at {at(r)}"
         return ("pass" if final else "open"), f"skill_not_read {s}: {none}"
     if t == "skill_read_before":
-        w = next((i for i, c in enumerate(calls) if test_write(c)), None)
+        b = fact["before"]   # final_message: never a mark; every tool call precedes the final message
+        w = (marks or {}).get(b)
+        w = w if w is not None and w < n else None
         if r is not None and (w is None or r < w):
-            return "pass", f"skill_read_before {s} test_write: read at {at(r)}, " + (f"first test write at {at(w)}" if w is not None else "no test write yet")
+            return "pass", f"skill_read_before {s} {b}: read at {at(r)}, " + (f"first {b} at {at(w)}" if w is not None else f"no {b} yet")
         if w is not None:
-            return "fail", f"skill_read_before {s} test_write: first test write at {at(w)}, " + (f"read only at {at(r)}" if r is not None else none)
-        return ("fail" if final else "open"), f"skill_read_before {s} test_write: {none}, no test write"
+            return "fail", f"skill_read_before {s} {b}: first {b} at {at(w)}, " + (f"read only at {at(r)}" if r is not None else none)
+        return ("fail" if final else "open"), f"skill_read_before {s} {b}: {none}, no {b}"
     raise ValueError(f"unknown fact {t!r}")
 
 
@@ -280,11 +334,73 @@ def live_lanes():
 
 # ---- the in-sandbox stop rule ---------------------------------------------------------------
 
+FAKE_GH = r'''#!/bin/sh
+# octo-feather-qa fake GitHub (a case's fake_gh): logs argv, answers the few calls a lane start needs.
+echo "gh $*" >> "$FAKE_GH_LOG"
+case "$1 $2" in
+  "auth status") echo "github.com: logged in as probe";;
+  "repo view") echo '{"nameWithOwner":"probe/app"}';;
+  "issue create") echo "https://github.com/probe/app/issues/12";;
+  "pr create") echo "https://github.com/probe/app/pull/13";;
+  "issue view"|"pr view"|"issue list"|"pr list") echo '[]';;
+  *) echo "fake gh: $*" >&2;;
+esac
+'''
+QA_TMP = "/tmp/qa-case"   # inside the sandbox: its private /tmp
+
+
+def git_out(*a, cwd=None):
+    return subprocess.run(["git", *a], cwd=cwd, capture_output=True, text=True).stdout.strip()
+
+
+def prep(setup):
+    """In the sandbox, after its proof: the case's fake gh (first on PATH, logging argv) and bare origin.
+    Returns (env for the role, origin dir or None, gh log or None)."""
+    env, origin, log = dict(os.environ), None, None
+    if setup.get("fake_gh") or setup.get("origin"):
+        os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
+    if setup.get("fake_gh"):
+        log = f"{QA_TMP}/gh.log"; open(log, "w").close()
+        Path(f"{QA_TMP}/bin/gh").write_text(FAKE_GH); os.chmod(f"{QA_TMP}/bin/gh", 0o755)
+        env.update(PATH=f"{QA_TMP}/bin:{env.get('PATH', '')}", FAKE_GH_LOG=log)
+    if setup.get("origin"):
+        origin = f"{QA_TMP}/origin.git"
+        for a in (["init", "-q", "--bare", "-b", "main", origin], ["push", "-q", origin, "main"], ["remote", "add", "origin", origin]):
+            subprocess.run(["git", *a], check=True, capture_output=True)
+    return env, origin, log
+
+
+def snapshot(origin, log):
+    """The case repo as data: content hash of every file git does not ignore, HEAD, origin's refs, gh log lines."""
+    files = {}
+    for f in subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True, text=True).stdout.split("\0"):
+        if f:
+            try:
+                files[f] = hashlib.sha1(os.readlink(f).encode() if os.path.islink(f) else Path(f).read_bytes()).hexdigest()
+            except OSError:
+                files[f] = None
+    gh = Path(log).read_text(errors="replace").splitlines() if log and os.path.exists(log) else []
+    return {"files": files, "head": git_out("rev-parse", "-q", "--verify", "HEAD"),
+            "refs": git_out("--git-dir", origin, "for-each-ref") if origin else "", "gh": gh}
+
+
+def changed(old, new, known):
+    """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
+    tests = lambda s: {k: v for k, v in s["files"].items() if TEST_PATH.search(k)}
+    return [m for m, hit in (("edit", old["files"] != new["files"]), ("test_write", tests(old) != tests(new)),
+                             ("git_commit", new["head"] != old["head"] and new["head"] not in known),
+                             ("git_push", new["refs"] != old["refs"]), ("gh_call", len(new["gh"]) > len(old["gh"]))) if hit]
+
+
 def watch(argv):
-    """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound."""
-    facts, maxc, tmo = json.loads(argv[0]), int(argv[1]), float(argv[2])
+    """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
+    After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
+    facts, maxc, tmo, setup = json.loads(argv[0]), int(argv[1]), float(argv[2]), json.loads(argv[3])
     cmd = argv[argv.index("--") + 1:]
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, start_new_session=True)
+    env, origin, log = prep(setup)
+    known = set(git_out("rev-list", "--all").split())
+    snap = snapshot(origin, log)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, start_new_session=True, env=env)
     why = []
 
     def stop(reason):
@@ -304,11 +420,20 @@ def watch(argv):
     for raw in p.stdout:
         sys.stdout.buffer.write(raw); sys.stdout.buffer.flush()
         new = tool_calls([raw])
-        ended = b'"tool_execution_end"' in raw
-        if not new and not ended:
+        end = safe_json(raw) if b'"tool_execution_end"' in raw else None
+        end = end if isinstance(end, dict) and end.get("type") == "tool_execution_end" else None
+        if not new and not end:
             continue
         seen += new; raws.append(raw)
-        if all(judge(f, seen, False, tool_runs(raws))[0] != "open" for f in facts):
+        if end:
+            now = snapshot(origin, log)
+            marks = changed(snap, now, known)
+            if marks:
+                ev = {"type": "qa_fs", "toolCallId": end.get("toolCallId"), "marks": marks, "gh": now["gh"][len(snap["gh"]):]}
+                line = (json.dumps(ev) + "\n").encode()
+                sys.stdout.buffer.write(line); sys.stdout.buffer.flush(); raws.append(line)
+            snap = now
+        if all(judge(f, seen, False, tool_runs(raws), marks=fs_marks(raws))[0] != "open" for f in facts):
             stop("decided"); break
         if len(seen) >= maxc:
             stop("max_tool_calls"); break
@@ -332,14 +457,32 @@ def front(kit, role, key):
     return m.group(1).strip() if m else ""
 
 
-def fixture_copy(src, scratch):
+def fixture_copy(src, scratch, case=None, evals=None):
+    """The case repo: the fixture committed on main; a `head` fixture's tree committed over it on head.branch
+    (left checked out); a `branch` cut and checked out; a fixture with uv.lock synced (uv sync --locked), outside
+    the sandbox, whose cache is a tmpfs."""
+    case = case or {}
     repo = scratch / "repo"
     shutil.copytree(src, repo, symlinks=True)
     env = dict(os.environ, GIT_AUTHOR_NAME="octo-feather-qa", GIT_AUTHOR_EMAIL="qa@octo-feather.invalid",
                GIT_COMMITTER_NAME="octo-feather-qa", GIT_COMMITTER_EMAIL="qa@octo-feather.invalid")
-    for a in (["init", "-q", "-b", "main"], ["add", "-A"],
-              ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm", "fixture"]):
+    commit = ["-c", "core.hooksPath=/dev/null", "-c", "commit.gpgsign=false", "commit", "-qm"]
+    steps = [["init", "-q", "-b", "main"], ["add", "-A"], [*commit, "fixture"]]
+    if case.get("head"):
+        h = case["head"]
+        steps += [["checkout", "-q", "-b", h["branch"]], ["rm", "-rq", "--", "."]]
+    for a in steps:
         subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
+    if case.get("head"):
+        shutil.copytree(evals / "fixtures" / h["fixture"], repo, symlinks=True, dirs_exist_ok=True)
+        for a in (["add", "-A"], [*commit, h["message"]]):
+            subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
+    if case.get("branch"):
+        subprocess.run(["git", "checkout", "-q", "-b", case["branch"]], cwd=repo, check=True, capture_output=True)
+    if (repo / "uv.lock").is_file():
+        u = subprocess.run(["uv", "sync", "--locked", "-q"], cwd=repo, capture_output=True, text=True)
+        if u.returncode:
+            raise RuntimeError(f"fixture setup: uv sync --locked exited {u.returncode}: {u.stderr.strip()[-300:]}")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     return repo, head
 
@@ -375,14 +518,22 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
     maxc = int(suite.get("max_tool_calls", DEFAULT_MAX_CALLS)); tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
     scratch = Path(tempfile.mkdtemp(prefix=f"qa-{runid}-{n}-"))
     t0 = time.time()
+    role_model = model or front(kit, case["role"], "model")
     try:
-        repo, head = fixture_copy(evals / "fixtures" / case["fixture"], scratch)
-        task = case["task"]
+        try:
+            repo, head = fixture_copy(evals / "fixtures" / case["fixture"], scratch, case, evals)
+        except (RuntimeError, subprocess.CalledProcessError, OSError) as e:
+            (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
+            why = e.stderr.strip()[-200:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
+            return finish(out, suite, case, role_model, 0.0, "FAIL", [f"fixture: {why}; case not run"], [], None, kits)
+        task = case["task"].replace("{repo}", str(repo)).replace("{head}", head)
+        facts = [dict(f, _skill_md=sorted({os.path.normpath(p), os.path.realpath(p)}), _cwd=str(repo)) if "skill" in f else f
+                 for f in facts for p in [str(kit / ".agents" / "skills" / str(f.get("skill")) / "SKILL.md")]]
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
-        role_model = model or front(kit, case["role"], "model")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), "--",
+        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin")}
+        cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]
         here = os.getcwd(); os.chdir(repo)
@@ -418,8 +569,9 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
     runs = tool_runs(lines)
     last = ((w or {}).get("stop"), "".join(str(c.get("text", "")) for c in asst[-1].get("content", [])
                                             if isinstance(c, dict) and c.get("type") == "text") if asst else None)
-    graded = [dict({k: v for k, v in f.items() if k != "live"}, status=s, evidence=txt) for f in facts
-              for s, txt in [judge(f, calls, True, runs, last)]]
+    marks = fs_marks(lines)
+    graded = [dict({k: v for k, v in f.items() if k != "live" and not k.startswith("_")}, status=s, evidence=txt) for f in facts
+              for s, txt in [judge(f, calls, True, runs, last, marks)]]
     problems = []
     if w is None:
         problems.append(f"run: no stop record (exit {run.returncode})")

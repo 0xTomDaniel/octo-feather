@@ -10,13 +10,29 @@ copied and git-initialized per run). A suite dir holds:
                                 "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
                                 optional "covers": "role-skills" (skill-trigger only, below)}
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
-                               case also has should_trigger (bool) and split ("train" | "held-out")
+                               case also has should_trigger (bool) and split ("train" | "held-out");
+                               a role-transcript case may also have
+                                 branch   a branch name cut from main and checked out
+                                 head     {"fixture": F, "branch": B, "message": M}: fixture F's tree
+                                          committed over main on branch B with message M (checked out)
+                                 origin   true: a bare origin holding main (for git push)
+                                 fake_gh  true: a fake gh first on PATH, logging each call
+                               and its task may hold {repo} and {head} (the copy's path, its HEAD sha)
   reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
 Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/0008):
-  {"fact": "skill_read", "skill": S}         the agent read S's SKILL.md
+  {"fact": "skill_read", "skill": S}         the agent read S's SKILL.md: a Pi `read` tool call whose path
+                                             resolves to the kit's .agents/skills/S/SKILL.md (Pi loads a
+                                             skill that way); ls, grep or cat in bash never count
   {"fact": "skill_not_read", "skill": S}     it never did
-  {"fact": "skill_read_before", "skill": S, "before": "test_write"}
-                                             it read S's SKILL.md before its first test-file write
+  {"fact": "skill_read_before", "skill": S, "before": T}
+                                             it read S's SKILL.md before the first tool call that reached
+                                             T, decided from the filesystem (the watcher snapshots the case
+                                             repo after each call), never from command text: test_write (a
+                                             test path changed), edit (any file git does not ignore
+                                             changed), git_commit (HEAD on a new commit), git_push (origin's
+                                             refs changed; needs origin), gh_call (the fake gh ran; needs
+                                             fake_gh), final_message (read at all, so before the final
+                                             message). T never reached: a read passes
   {"fact": "attempt_blocked", "kind": K}     K one of herdr (a message sent through Herdr: herdr-say, or
                                              herdr agent prompt|send-keys, pane send-text|send-keys|run),
                                              lane_state (a lane record, lanes/archive or the director's
@@ -39,6 +55,12 @@ Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/
                                              stopped (tool-call or time bound) before its final message.
                                              The way a producer emits a verdict as data (a reviewer's block
                                              list, a corrector's chosen rung)
+  {"fact": "declared_includes", "field": F, "items": [O...]}
+                                             the same one ```json block, whose top-level F is a list holding,
+                                             for each O (a non-empty object of string values), an object with
+                                             every key of O equal (other keys free): a reviewer's block list
+                                             by test id, a judge's verdict per criterion id. Fails naming each
+                                             O missing
 Case format rule: a fact reads STRUCTURED data, never prose. A verdict a case needs (reviewer blocks, a
 pass/fail call) is emitted by the producer as data (a machine-readable block list by test or file id,
 the `declared` fact above) and read as a field. Inferring a verdict from prose headings, wording or
@@ -50,9 +72,13 @@ fact exists yet; every case grades structured producer facts.
 Fails, naming the case and the field, on: a missing or unknown field, a wrong type, an unknown fact
 or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill with no kit SKILL.md, a
 case id without expectations or the reverse, a skill-trigger case whose facts disagree with
-should_trigger, a "covers": "role-skills" suite missing a case for a role's skill (below), or a task
-that leaks its grade: the task contains a graded skill's path (<skill>/SKILL.md or skills/<skill>) or
-the JSON of its expectation or of one of its facts.
+should_trigger, a "covers": "role-skills" suite missing a case for a role's skill (below), a malformed
+branch, head, origin or fake_gh (or one outside a role-transcript suite), a git_push without origin or
+a gh_call without fake_gh, or a task that leaks its grade, exactly: it holds one of the case's facts as
+data (a JSON object embedded in the task that parses equal to a fact object, key order and whitespace
+ignored) or the path of a skill it is graded on, matched by whole path component (<skill>/SKILL.md or
+skills/<skill>, so implement-spec/SKILL.md never matches skill implement). No other wording rule: a hint
+in other words is for review.
 Coverage: in a suite with "covers": "role-skills", every skill each kit role lists (agents/<role>.md
 `skills:`) needs, for that role, a should_trigger true case graded skill_read or skill_read_before of it
 and a should_trigger false case graded skill_not_read of it, each in split train and in held-out; a
@@ -66,8 +92,11 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
-         "attempt_blocked": {"kind"}, "declared": {"field", "in"}}
-BEFORE = {"test_write"}
+         "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"}}
+BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "final_message"}
+NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # a before target reachable only with that case field
+SETUP = {"branch", "head", "origin", "fake_gh"}   # optional, role-transcript cases only
+BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential"}
 KINDS = {"skill-trigger", "role-transcript"}
 BASE = {"id", "role", "fixture", "task"}
@@ -88,19 +117,23 @@ def load(path, errs):
 
 
 def leaks(task, exp):
-    """The graded strings a task must not contain: skill paths and the expectation's JSON."""
-    low = task.lower()
+    """The grade a task holds: a JSON object in it equal to one of the facts, or a graded skill's path by whole
+    path component."""
+    dec, objs = json.JSONDecoder(), []
+    for i, ch in enumerate(task):
+        if ch == "{":
+            try:
+                objs.append(dec.raw_decode(task, i)[0])
+            except ValueError:
+                pass
     found = []
-    pieces = [exp] + list(exp.get("facts", []))
-    for p in pieces:
-        for s in (json.dumps(p), json.dumps(p, separators=(",", ":"))):
-            if s.lower() in low:
-                found.append(f"expectation JSON {s}")
-    for f in exp.get("facts", []):
+    for n, f in enumerate(exp.get("facts", [])):
+        if any(o == f for o in objs):
+            found.append(f"fact #{n + 1} as JSON {json.dumps(f)}")
         sk = f.get("skill") if isinstance(f, dict) else None
         if isinstance(sk, str) and sk:
             for s in (f"{sk}/SKILL.md", f"skills/{sk}"):
-                if s.lower() in low:
+                if re.search(r"(?<![\w.-])" + re.escape(s) + r"(?![\w.-])", task):
                     found.append(f"skill path {s}")
     return sorted(set(found))
 
@@ -134,6 +167,7 @@ def check_suite(d, evals, errs):
     if not isinstance(exps, dict):
         errs.append(f"{name}/reference/expectations.json: must be a JSON object keyed by case id"); return 0
     need = BASE | (TRIGGER if kind == "skill-trigger" else set())
+    extra = SETUP if kind == "role-transcript" else set()
     ids = []
     for n, c in enumerate(cases):
         if not isinstance(c, dict):
@@ -142,8 +176,11 @@ def check_suite(d, evals, errs):
         at = f"{name}/cases.json case {cid}"
         for k in sorted(need - set(c)):
             errs.append(f"{at}: field {k}: missing")
-        for k in sorted(set(c) - need):
-            errs.append(f"{at}: field {k}: unknown field" + ("; graded facts live only in reference/expectations.json" if k == "facts" else ""))
+        for k in sorted(set(c) - need - extra):
+            errs.append(f"{at}: field {k}: unknown field" + ("; graded facts live only in reference/expectations.json" if k == "facts" else "")
+                        + ("; only a role-transcript case sets up a repo" if k in SETUP else ""))
+        if kind == "role-transcript":
+            check_setup(at, c, evals, errs)
         if "id" in c:
             if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
                 errs.append(f"{at}: field id: must match {ID.pattern}")
@@ -172,6 +209,11 @@ def check_suite(d, evals, errs):
         check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs)
         if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
             continue
+        for n, f in enumerate(exp["facts"]):
+            k = NEEDS.get(f.get("before")) if isinstance(f, dict) and isinstance(f.get("before"), str) else None
+            if k and c.get(k) is not True:
+                errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: {f['before']} "
+                            f"needs the case's {k}: true (nothing else can reach it)")
         kinds = {f.get("fact") for f in exp["facts"] if isinstance(f, dict)}
         if kind == "skill-trigger" and isinstance(c.get("should_trigger"), bool):
             if c["should_trigger"] and not kinds & {"skill_read", "skill_read_before"}:
@@ -186,6 +228,34 @@ def check_suite(d, evals, errs):
     if suite.get("covers") == "role-skills" and kind == "skill-trigger":
         check_coverage(name, cases, exps, errs)
     return len(cases)
+
+
+def check_setup(at, c, evals, errs):
+    """A role-transcript case's repo setup fields."""
+    ref = lambda v: isinstance(v, str) and BRANCH.fullmatch(v) and ".." not in v and not v.endswith(("/", ".lock"))
+    if "branch" in c and not ref(c["branch"]):
+        errs.append(f"{at}: field branch: must be a branch name ({BRANCH.pattern}, no '..'), got {c['branch']!r}")
+    if "branch" in c and c["branch"] == "main":
+        errs.append(f"{at}: field branch: main exists already; name the branch to cut from it")
+    for k in ("origin", "fake_gh"):
+        if k in c and c[k] is not True:
+            errs.append(f"{at}: field {k}: must be true (leave it out for false)")
+    if "head" not in c:
+        return
+    h = c["head"]
+    if not isinstance(h, dict):
+        errs.append(f"{at}: field head: must be an object {{\"fixture\", \"branch\", \"message\"}}"); return
+    for k in sorted({"fixture", "branch", "message"} - set(h)):
+        errs.append(f"{at}: field head.{k}: missing")
+    for k in sorted(set(h) - {"fixture", "branch", "message"}):
+        errs.append(f"{at}: field head.{k}: unknown field")
+    if "fixture" in h and not (isinstance(h["fixture"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", h["fixture"])
+                               and (evals / "fixtures" / h["fixture"]).is_dir()):
+        errs.append(f"{at}: field head.fixture: no fixture dir {evals / 'fixtures' / str(h['fixture'])}")
+    if "branch" in h and (not ref(h["branch"]) or h["branch"] in ("main", c.get("branch"))):
+        errs.append(f"{at}: field head.branch: must be a new branch name (not main, not the case's branch), got {h['branch']!r}")
+    if "message" in h and not (isinstance(h["message"], str) and h["message"].strip()):
+        errs.append(f"{at}: field head.message: must be a non-empty string")
 
 
 def role_skills():
@@ -246,6 +316,12 @@ def check_exp(at, exp, errs):
             errs.append(f"{fa}: field field: must be a non-empty string")
         if t == "declared" and "in" in f and not (isinstance(f["in"], list) and f["in"] and all(isinstance(x, str) for x in f["in"])):
             errs.append(f"{fa}: field in: must be a non-empty list of strings")
+        if t == "declared_includes" and "field" in f and not (isinstance(f["field"], str) and f["field"].strip()):
+            errs.append(f"{fa}: field field: must be a non-empty string")
+        if t == "declared_includes" and "items" in f and not (
+                isinstance(f["items"], list) and f["items"] and all(isinstance(o, dict) and o and all(
+                    isinstance(k, str) and k and isinstance(v, str) for k, v in o.items()) for o in f["items"])):
+            errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
         if "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
 

@@ -111,5 +111,9 @@
   "qc-prove-greet-plain": {"facts": [{"fact": "skill_read", "skill": "principle-prove-it-works"}]},
   "qc-prove-greet-json": {"facts": [{"fact": "skill_read", "skill": "principle-prove-it-works"}]},
   "qc-prove-near-list-ids": {"facts": [{"fact": "skill_not_read", "skill": "principle-prove-it-works"}]},
-  "qc-prove-near-app-command": {"facts": [{"fact": "skill_not_read", "skill": "principle-prove-it-works"}]}
+  "qc-prove-near-app-command": {"facts": [{"fact": "skill_not_read", "skill": "principle-prove-it-works"}]},
+  "rev-tdd-shout-tests": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
+  "rev-tdd-would-catch": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
+  "rev-tdd-near-count-tests": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]},
+  "rev-tdd-near-run-suite": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]}
 }
