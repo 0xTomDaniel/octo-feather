@@ -38,6 +38,47 @@ for f in --no-skills --no-mcp; do grep -qx -- "$f" "$t/ok/start-argv" || fail "p
 grep -q 'tab=w9:t1 pane=w9:p1' "$t/ok/out" || fail "spawn printed no tab and pane: $(cat "$t/ok/out")"
 [[ ! -s "$t/ok/keys" ]] || fail "keys sent to a ready pane: $(cat "$t/ok/keys")"
 
+# 1b. pi-role runs in --cwd, not the caller's directory: the tracker skill is the target's
+#     (spec skills#tracker). A caller in a jira target spawning into $t/cwd (no config) gets
+#     github-issues; spawning into the jira target from $t/cwd is refused before any tab.
+mkdir -p "$t/jira"; git -C "$t/jira" init -q; echo 'tracker = "jira"' > "$t/jira/.octo-feather.toml"
+spawn_from() { # $1: case dir, $2: caller dir, $3: --cwd
+  local c="$t/$1"; mkdir -p "$c"; rc=0
+  (cd "$2" && env FAKE_HERDR_DIR="$c" PATH="$t/bin:$PATH" XDG_CACHE_HOME="$t/cache" HERDR_PANE_ID=w9:p0 \
+    HERDR_SPAWN_TRUST_RETRIES=3 HERDR_SPAWN_READY_RETRIES=2 \
+    "$kit/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace w9 --name t1 --role implementer \
+    --cwd "$3" >"$c/out" 2>"$c/err") || rc=$?
+}
+spawn_from cwd-target "$t/jira" "$t/cwd"
+[[ "$rc" == 0 ]] || fail "spawn into a no-config target from a jira caller: exit $rc: $(cat "$t/cwd-target/err")"
+grep -q '/github-issues$' "$t/cwd-target/start-argv" || fail "spawn into a no-config target lacks github-issues: $(tr '\n' ' ' <"$t/cwd-target/start-argv")"
+spawn_from cwd-jira "$t/cwd" "$t/jira"
+[[ "$rc" == 65 ]] && grep -q "unknown tracker 'jira'" "$t/cwd-jira/err" || fail "spawn into a jira target: exit $rc: $(cat "$t/cwd-jira/err")"
+[[ ! -s "$t/cwd-jira/start-argv" ]] || fail "spawn into a jira target started an agent"
+
+# 1c. remote#acceptance-linear-key-panes: LINEAR_API_KEY set in the caller reaches the tab's env (the fake
+#     herdr's tab-env), no file the spawn writes (home, state, cache, worktree) holds it, and a ticket filed
+#     from that env through the linear skill's issue-create reaches the fake linear, which takes it only
+#     with the key. Unset in the caller: not set in the tab.
+key="lin-test-$(od -An -N8 -tx8 /dev/urandom | tr -d ' ')"
+lk="$t/lk"; mkdir -p "$lk/home" "$lk/state" "$lk/lbin"
+spawn key LINEAR_API_KEY="$key" HOME="$lk/home" XDG_STATE_HOME="$lk/state"
+[[ "$rc" == 0 ]] || fail "spawn with LINEAR_API_KEY: exit $rc: $(cat "$t/key/err")"
+grep -qxF "LINEAR_API_KEY=$key" "$t/key/tab-env" || fail "tab env lacks LINEAR_API_KEY: $(cut -d= -f1 "$t/key/tab-env" | tr '\n' ' ')"
+hits="$(grep -rlF -- "$key" "$lk" "$t/cache" "$t/cwd" "$t/key/out" "$t/key/err" 2>/dev/null || true)"
+[[ -z "$hits" ]] || fail "files written by the spawn hold the Linear key: $hits"
+printf '#!/usr/bin/env bash\n[[ "${LINEAR_API_KEY:-}" == %q ]] || { echo "linear: no API key" >&2; exit 1; }\nexec %q "$@"\n' \
+  "$key" "$kit/.agents/skills/linear/scripts/linear" >"$t/key/linear"; chmod +x "$t/key/linear"
+echo '{"workspace": "acme", "default_team": "ENG", "issues": {}}' >"$t/key/store.json"
+mapfile -t tabenv <"$t/key/tab-env"
+filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "$t/key/tab-env")" \
+  OCTO_FEATHER_LINEAR_STORE="$t/key/store.json" "$kit/.agents/skills/linear/scripts/issue-create" --title T --body-file -)" \
+  || fail "issue-create from the tab env failed"
+[[ "$filed" == ENG-1 && "$(jq -r '.issues["ENG-1"].title' "$t/key/store.json")" == T ]] || fail "ticket did not reach the fake linear: $filed"
+unset LINEAR_API_KEY; spawn nokey
+[[ "$rc" == 0 ]] || fail "spawn without LINEAR_API_KEY: exit $rc: $(cat "$t/nokey/err")"
+! grep -q '^LINEAR_API_KEY=' "$t/nokey/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
+
 # 2. A trust dialog that opens anyway is never answered: exit 69, zero keys,
 #    tab closed, pane text on stderr.
 spawn dialog FAKE_HERDR_FORCE_DIALOG=1
@@ -140,4 +181,4 @@ run "$kit/scripts/octo-feather-start" --issue 2 --cwd "$t/cwd"
 [[ "$rc" == 73 ]] || fail "resume: fresh start on existing gh2: exit $rc, want 73: $(cat "$c/err")"
 grep -qE '^(tab|workspace) create' "$c/argv" && fail "resume: fresh start on existing gh2: created a tab or workspace"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"

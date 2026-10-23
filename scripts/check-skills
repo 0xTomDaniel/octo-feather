@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Every .agents/skills/*/SKILL.md opens with a frontmatter block (a `---` first
 line, a closing `---` line) holding a non-empty `name` and `description`
-(skills spec #acceptance-skill-frontmatter); the five role contracts exist.
+(skills spec #acceptance-skill-frontmatter); the five role contracts exist; every
+tracker skill the kit has (scripts/pi-role's TRACKERS) holds each tracker script as
+an executable in its scripts/ (skills spec #acceptance-tracker-scripts).
 
 Stdlib only. Fails closed: an unreadable skill or an internal error fails the
 gate, never reads as ok. Run by `just check`.
 """
-import glob, os, re, sys
+import glob, importlib.machinery, importlib.util, os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
@@ -14,6 +16,34 @@ REQUIRED = ("name", "description")
 KEY = re.compile(r"([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$")
 BLOCK = re.compile(r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$")
 NULLS = {"", "~", "null", "Null", "NULL"}
+# Spec skills#tracker-scripts: the same names in every tracker skill.
+TRACKER_SCRIPTS = ("lane-key", "key-from-branch", "issue-view", "issue-create", "issue-comment", "issue-done", "pr-line")
+
+
+def pi_role():
+    loader = importlib.machinery.SourceFileLoader("pi_role", os.path.join(ROOT, "scripts", "pi-role"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def tracker_problems():
+    """(skill, problem) for each tracker script a tracker skill the kit has lacks; the default tracker must exist."""
+    pr = pi_role()
+    root = os.path.join(ROOT, ".agents", "skills")
+    have = pr.kit_trackers(root)
+    out = []
+    if pr.DEFAULT_TRACKER not in have:
+        out.append((pr.TRACKERS[pr.DEFAULT_TRACKER], f"default tracker {pr.DEFAULT_TRACKER} has no skill"))
+    for t in have:
+        skill = pr.TRACKERS[t]
+        for s in TRACKER_SCRIPTS:
+            p = os.path.join(root, skill, "scripts", s)
+            if not os.path.isfile(p):
+                out.append((skill, f"missing tracker script {s} (.agents/skills/{skill}/scripts/{s})"))
+            elif not os.access(p, os.X_OK):
+                out.append((skill, f"tracker script {s} is not executable (chmod +x .agents/skills/{skill}/scripts/{s})"))
+    return out, have
 
 
 def scalar_empty(inline, cont):
@@ -92,9 +122,13 @@ def main():
         if not os.path.isfile(f"agents/{r}.md"):
             print(f"check-skills: missing role contract agents/{r}.md", file=sys.stderr)
             bad += 1
+    found, trackers = tracker_problems()
+    for skill, p in found:
+        print(f"check-skills: tracker skill {skill}: {p}; every tracker skill holds {', '.join(TRACKER_SCRIPTS)} (skills spec #tracker-scripts)", file=sys.stderr)
+        bad += 1
     if bad:
         return 1
-    print(f"skills: ok ({n} skills, {len(ROLES)} roles)")
+    print(f"skills: ok ({n} skills, {len(ROLES)} roles, trackers {', '.join(trackers)})")
     return 0
 
 

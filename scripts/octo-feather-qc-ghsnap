@@ -3,7 +3,7 @@
 
 Not run by hand: octo-feather-qc runs it before every judge, outside the sandbox,
 with the caller's gh auth, into a new per-run DIR that the sandbox binds
-read-only and scripts/qc-bin/gh (the offline gh) serves. REPO is owner/name.
+read-only and the github-pr skill's scripts/gh (the offline gh) serves. REPO is owner/name.
 Lists, all states: issues (500), PRs (500), workflow runs (200). Full views for
 the DETAIL_CAP most recently updated issues and PRs, fetched in parallel:
 `gh issue view`/`gh pr view --json` (comments, reviews, commits, files, closing

@@ -113,7 +113,7 @@
     "facts": [
       {
         "fact": "skill_read_before",
-        "skill": "github",
+        "skill": "github-issues",
         "before": "gh_call"
       }
     ]
@@ -127,7 +127,7 @@
       },
       {
         "fact": "skill_read_before",
-        "skill": "github",
+        "skill": "github-pr",
         "before": "gh_call"
       }
     ]
@@ -144,7 +144,7 @@
       },
       {
         "fact": "skill_not_read",
-        "skill": "github"
+        "skill": "github-pr"
       },
       {
         "fact": "declared_includes",

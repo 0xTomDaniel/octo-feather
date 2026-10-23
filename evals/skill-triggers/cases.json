@@ -136,6 +136,38 @@
     "task": "Do not change any file and do not commit. Write, in your reply only, a two-line description of a --shout flag for `app hello`. Do not file or post it anywhere."
   },
   {
+    "id": "impl-ghpr-open-draft",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "This branch has the `--shout` work committed. Put it up on GitHub for review: push it and open the lane's draft pull request, then give me its URL."
+  },
+  {
+    "id": "impl-ghpr-near-commit-msg",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Write, in your reply only, the title and a two-line body you would give a pull request adding `--shout` to `app hello`. Open nothing."
+  },
+  {
+    "id": "impl-ghissues-ticket-scope",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "I'm starting ticket 13 from the issue list. Pull it up and tell me its title, its state and which parent issue it belongs to."
+  },
+  {
+    "id": "impl-ghissues-near-todo",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without any network access, grep this repo for TODO or FIXME comments and list each with its file and line."
+  },
+  {
     "id": "impl-implement-shout-ticket",
     "role": "implementer",
     "fixture": "py-mini",
@@ -424,6 +456,38 @@
     "task": "Do not change any file and do not commit. Draft, in your reply only, a one-line comment for issue #12 saying the pilot ticket passed qc. Do not post it."
   },
   {
+    "id": "sup-ghpr-merge-head",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh12's PR #31 is ready. What exact head would you merge it at, and with what command? Look it up, do not merge."
+  },
+  {
+    "id": "sup-ghpr-near-diff-stat",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, which files does review/shout.diff change, and how many lines does it add?"
+  },
+  {
+    "id": "sup-ghpr-near-pr-number",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Read notes/lane.toml and tell me which PR number and repository this lane is recorded against. Look nothing up online."
+  },
+  {
+    "id": "sup-ghissues-file-ticket",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket #14 needs a sibling: file a sub-ticket of #12 titled 'hello --times 0 prints nothing', blocked by #14."
+  },
+  {
     "id": "sup-herdr-tell-worker",
     "role": "supervisor",
     "fixture": "lane-mini",
@@ -616,6 +680,38 @@
     "task": "Do not change any file and do not commit. Write, in your reply only, the one-line owner update for lane gh12 from notes/lane.toml. Post nothing."
   },
   {
+    "id": "dir-ghpr-review-state",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The owner asks whether lane gh12's PR #31 has a review verdict comment yet and whether it is still a draft. Find out."
+  },
+  {
+    "id": "dir-ghpr-near-handoff-time",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. From notes/lane.toml alone, when was lane gh12's last handoff, and which pane supervises it?"
+  },
+  {
+    "id": "dir-ghissues-parent-children",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before I close out lane gh12: list the sub-tickets of its parent ticket #12 as the tracker has them now, with each one's state."
+  },
+  {
+    "id": "dir-ghissues-near-tickets-md",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, read notes/tickets.md and say which ticket is blocked, and by what."
+  },
+  {
     "id": "cor-commit-remove-scratch",
     "role": "corrector",
     "fixture": "lane-mini",
@@ -744,22 +840,6 @@
     "task": "Change 'Helo' to 'Hello' in src/app/core.py's docstring. Only that edit, no commit."
   },
   {
-    "id": "cor-github-issue-comments",
-    "role": "corrector",
-    "fixture": "lane-mini",
-    "should_trigger": true,
-    "split": "train",
-    "task": "The owner's correction is in the comments of GitHub issue #12. Read it there and tell me what it asks."
-  },
-  {
-    "id": "cor-github-closed-lanes",
-    "role": "corrector",
-    "fixture": "lane-mini",
-    "should_trigger": true,
-    "split": "held-out",
-    "task": "Find on GitHub whether a correction-lane issue for class cli-holds-logic was already filed, open or closed."
-  },
-  {
     "id": "cor-github-near-classes",
     "role": "corrector",
     "fixture": "lane-mini",
@@ -774,6 +854,22 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Draft, in your reply only, the call line you would list for a check that bans print() in app.core. Post nothing."
+  },
+  {
+    "id": "cor-ghpr-review-comments",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The repeated finding came from review on PR #31. Pull that PR's review comments from GitHub and quote the ones tagged cli-holds-logic."
+  },
+  {
+    "id": "cor-ghpr-open-fix-pr",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Your correction is committed on this branch. Publish it: push the branch and open a draft pull request against main, then report its URL."
   },
   {
     "id": "corrector-eval-cases-should",

@@ -20,7 +20,7 @@ check:
     uv run --locked lint-imports
     uv run --locked pytest -q
 
-# Integrate worker commits onto lane gh<N> (octo-feather kit script on PATH).
+# Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:
     octo-feather-integrate "$@"
 

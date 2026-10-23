@@ -24,7 +24,7 @@ of docs/adr/0011):
     agents/code-reviewer.md
 
     .agents/skills/commit/SKILL.md
-    .agents/skills/github/SKILL.md (was skills/octo-lite-github)
+    .agents/skills/github-pr/SKILL.md (was skills/octo-lite-github)
     .agents/skills/herdr-comms/SKILL.md
     .agents/skills/herdr-comms/assets/herdr-close
     .agents/skills/herdr-comms/assets/herdr-say
@@ -62,6 +62,10 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md):
     cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan
+    linear-cli (whole folder; no role loads it, the linear tracker skill points
+    agents to its references): schpet/linear-cli@02571d3 (release v3.1.0,
+    https://github.com/schpet/linear-cli), ISC, Copyright (c) Peter Schilling
+    and contributors
     .agents/skills/python, .agents/skills/typescript: ported from
     EmberAGI/scaling-octo-engine@ef11d2b9 at Tom's direction, with the unit-test
     content, the Octo workflow paragraphs and the pnpm build commands removed

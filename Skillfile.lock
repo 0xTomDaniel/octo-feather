@@ -66,5 +66,9 @@
   "github/skill/writing-for-agents": {
     "sha": "49dd158d1076134a641b33efb035946536778336",
     "raw_url": "https://api.github.com/repos/mattpocock/skills/contents/skills/productivity/writing-for-agents?ref=49dd158d1076134a641b33efb035946536778336"
+  },
+  "github/skill/linear-cli": {
+    "sha": "02571d34be662e5487204841fb80bf23ed79b4f0",
+    "raw_url": "https://api.github.com/repos/schpet/linear-cli/contents/skills/linear-cli?ref=02571d34be662e5487204841fb80bf23ed79b4f0"
   }
 }
