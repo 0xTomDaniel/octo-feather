@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked
+# reason: ADR 0012 model-invoked; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,7 +1,6 @@
@@ -8,4 +8,5 @@
 -disable-model-invocation: true
  ---
  
- Call the Skill tool twice, for "grilling" and "domain-modeling".
+-Call the Skill tool twice, for "grilling" and "domain-modeling".
++Read two skills: `grilling` (`../grilling/SKILL.md`) and `domain-modeling` (`../domain-modeling/SKILL.md`).
