@@ -182,7 +182,7 @@ shape *args:
 spec-chat repo:
     octo-feather-spec-chat "$1"
 
-# Integrate worker commits onto lane gh<N>'s branch, then its `just check`; non-zero on any conflict (docs/adr/0017).
+# Integrate worker commits onto the lane's branch (its lane key: gh12, eng-123 for ENG-123), then its `just check`; non-zero on any conflict (docs/adr/0017).
 [no-cd]
 integrate issue +refs:
     octo-feather-integrate "$@"
@@ -211,7 +211,7 @@ install-check:
 start cwd=invocation_directory():
     octo-feather-start --director --cwd "$1"
 
-# Start one supervisor for GitHub issue N in workspace gh<N>, tab `supervisor`.
+# Start one supervisor for a ticket as the tracker writes it (12, ENG-123) in workspace named by its lane key (gh12, eng-123), tab `supervisor`.
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "$1" --cwd "$2"
 

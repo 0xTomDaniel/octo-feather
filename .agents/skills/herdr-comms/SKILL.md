@@ -21,8 +21,10 @@ kit's `.agents/skills/herdr-comms/assets` and `scripts` on `PATH`.
 
 - Workspace `director`, one tab `director`: the director,
   started by `octo-feather-start --director` (`just start`).
-- One workspace per issue, `gh<n>`: tab `supervisor` is the supervisor,
-  started by `octo-feather-start --issue <n> --cwd <worktree>`.
+- One workspace per lane, named by its lane key (`gh12` for GitHub issue 12,
+  `eng-123` for Linear ENG-123): tab `supervisor` is the supervisor, started by
+  `octo-feather-start --issue <ticket> --cwd <worktree>`, the ticket as the
+  tracker writes it (`12`, `ENG-123`).
 - In that workspace, one tab per worker: `worker-1`, `worker-2`, and the
   per-merge `code-reviewer`; a correction lane has a `corrector` tab instead of
   workers. One agent per tab, one pane per tab.
