@@ -17,3 +17,20 @@ Check: justfile: check includes CLI-surface and executable guards | reads: exist
 Through the helper (fake gh, PR 2 at the reviewed head): the report plus `Verdict: blocking` posts, the comment header carrying the three `Check:` lines; the same report with `Verdict: clear` is refused ("a proxy check blocks"); the earlier fact|meaning run's report is refused ("has class 'meaning'; write `class: exact` or `class: proxy`").
 
 An earlier run on the fact|meaning wording classified the regex check `meaning` and blocked it as `meaning-in-check`. Not run: the reviewer at main 61b9f22 (no instruction to classify existed there).
+
+## Owned rule named (director ruling 2026-10-23)
+
+Smoke: agents/code-reviewer.md .skillfile/patches/skills/code-review/SKILL.md.patch .agents/skills/code-review/
+Removed: the exact definition "the rule the ADR, spec criterion or finding class it cites" (it let a check's own docstring stand as its rule); now `<rule> (<owner>)`, the rule as stated where owned, latest owner ruling wins.
+
+Run 3 (same fixture and brief): the reviewer named owners (`(AGENTS.md Rules; T2)`) but wrote `<path>` as `justfile:check / scripts/check-tests-public`; `octo-feather-lane verdict` refused both lines ("is not `Check: <path>: <rule> (<owner>) | ...`"), so the instruction gained "`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>`".
+
+Run 4, after that line: report lines
+
+```
+Check: scripts/check-tests-public: tests go through CLI, not internals (AGENTS.md Rules; T2) | reads: regex matches in tests/*.py | class: proxy
+Check: scripts/check-exec: every script is executable (T2) | reads: tracked scripts' Git index modes | class: exact
+Check: justfile:check: single gate runs lint, types, import boundaries and tests (AGENTS.md Rules) | reads: command exit statuses | class: exact
+```
+
+with the proxy blocked as `proxy-check`; the report (plus `Verdict: blocking`, which this reviewer wrote only as a heading, as the supervisor supplies today) posted through the helper with the three lines in the header.
