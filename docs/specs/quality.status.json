@@ -35,8 +35,8 @@
       "pr": 111
     },
     "acceptance-qa-isolated": {
-      "status": "built",
-      "pr": 111
+      "status": "planned",
+      "pr": null
     },
     "acceptance-qa-fails-before": {
       "status": "built",
