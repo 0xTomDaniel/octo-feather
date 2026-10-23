@@ -10,8 +10,10 @@
 # Spec Chat is read only at its pin (the Skillfile fetch-only entry, `just
 # vendored-fetch`), never the box's clone (#96: a clone behind origin failed this
 # test locally while CI, with no clone, skipped the cross-check). With it the test checks:
-# - the versions: review-serve.py `_spec_page` computes V1 and V2 below for
-#   tests/fixtures/accepted/*.spec.html, so a change in its version rule fails here;
+# - the versions: pinned review-serve.py, run as a server, serves
+#   tests/fixtures/accepted/*.spec.html with ETags V1 and V2 below (the ETag names
+#   the served body, the version its events record), so a change in its version
+#   rule fails here. Through its HTTP surface, never its private helpers (#104);
 # - the registry: pinned Spec Chat's review-host CLI registers a spec under an
 #   isolated XDG_STATE_HOME, and octo-feather-accepted finds that row and its Accept
 #   (#96, director finding 47: it once read an env var Spec Chat never reads).
@@ -24,17 +26,14 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
 sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
-got="$(python3 - "$sc/review-spec/assets" "$fx" "$t/x" <<'EOF2'
-import importlib.util, os, shutil, sys
-assets, fx, scratch = sys.argv[1:]
-sys.path.insert(0, assets)
-s = importlib.util.spec_from_file_location("review_serve", os.path.join(assets, "review-serve.py"))
-m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
-os.makedirs(scratch)
-for f in ("a.spec.html", "a-edited.spec.html"):
-    p = os.path.join(scratch, f); shutil.copy(os.path.join(fx, f), p); print(m._spec_page(p)[2])
-EOF2
-)" || fail "could not run pinned Spec Chat at $sc"
+mkdir -p "$t/x"; cp "$fx/a.spec.html" "$fx/a-edited.spec.html" "$t/x/"
+XDG_STATE_HOME="$t/xdg-serve" python3 "$sc/review-spec/assets/review-serve.py" "$t/x" --port 0 >"$t/serve.log" 2>&1 &
+serve=$!; trap 'kill "$serve" 2>/dev/null || true; rm -rf "$t"' EXIT
+for _ in $(seq 100); do url="$(sed -n 's|^spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done
+[[ -n "$url" ]] || fail "pinned review-serve did not start: $(cat "$t/serve.log")"
+etag() { curl -sf -D - -o /dev/null "$url/$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: "\(.*\)"$/\1/p'; }
+got="$(etag a.spec.html)"$'\n'"$(etag a-edited.spec.html)"
+kill "$serve"; wait "$serve" 2>/dev/null || true
 [[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
 
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
