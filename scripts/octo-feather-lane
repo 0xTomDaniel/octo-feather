@@ -67,14 +67,15 @@ with its fix on stderr, exit 1.
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion, nor is <template> content), and its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
-[project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
-for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
+[project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
+only for a target that declares none of these, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Checks are
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Headings, items
+and that line inside fenced code or an HTML comment do not count. Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
@@ -824,13 +825,21 @@ DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 
 class Anchors(HTMLParser):
     def __init__(self):
-        super().__init__(); self.ids = set(); self.criteria = set()
+        super().__init__(); self.ids = set(); self.criteria = set(); self.inert = 0
 
     def handle_starttag(self, tag, attrs):
+        if tag == "template":   # an inert <template>'s content is no element of the page
+            self.inert += 1
+        if self.inert:
+            return
         self.ids.update(v for k, v in attrs if k in ("id", "data-anchor") and v)
         a = dict(attrs)
         if "data-acceptance-criterion" in a and a.get("data-anchor"):
             self.criteria.add(a["data-anchor"])   # a criterion id: the data-anchor of a criterion element
+
+    def handle_endtag(self, tag):
+        if tag == "template" and self.inert:
+            self.inert -= 1
 
 
 def specs_dir() -> Path:
@@ -859,7 +868,7 @@ def spec_anchors(specs: Path, slug: str, cache: dict) -> "Anchors | None":
 
 def criteria_items(body: str) -> list[str] | None:
     """The `## Acceptance criteria` list items (continuation lines joined); None if no such section."""
-    lines, items, inside = body.replace("\r\n", "\n").split("\n"), [], False
+    lines, items, inside = structure(body), [], False
     found = False
     for line in lines:
         if re.match(r"^#{1,6}\s", line):
@@ -873,6 +882,11 @@ def criteria_items(body: str) -> list[str] | None:
         elif items:
             items[-1] += " " + line.strip()
     return items if found else None
+
+
+def structure(body: str) -> list[str]:
+    """BODY's lines that carry the ticket's Markdown structure: fenced code and HTML comments dropped."""
+    return [l for l, kind in markdown(body, comments=True) if kind not in ("fence", "comment")]
 
 
 def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
@@ -906,7 +920,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
-    ec = EXPAND.search(body)
+    ec = EXPAND.search("\n".join(structure(body)))
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
         return out
     if ec:
@@ -939,7 +953,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
-               "script run by its interpreter, e.g. `python harness.py`), "
+               "script run by its interpreter, e.g. `python harness.py`, when the repo declares no program), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
@@ -991,6 +1005,11 @@ class Surface:
         except (OSError, ValueError, ImportError):
             pass
 
+    def program(self) -> str:
+        """A program the repo declares (an executable, a recipe other than the gate's, a bin), '' if none."""
+        recipes = sorted(f"just {r}" for r in self.recipes if not NOT_DEMO_RECIPES.fullmatch(r))
+        return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
+
     def runs(self, cmd: str) -> tuple[list[str], str]:
         """(the surface invocation of each stage of CMD on the repo's surface, why the others are not)."""
         invs, whys = [], []
@@ -1017,6 +1036,8 @@ class Surface:
             rel = os.path.normpath(script[2:] if script.startswith("./") else script)
             if TEST_DIR.search(rel):
                 return f"{script} is a test or hook, not the app's surface"
+            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002: the runnable script only for a target with no CLI, HTTP or UI
+                return f"the repo declares a program ({declared}), so the demo runs it, not a script by its interpreter (ADR 0002)"
             return None if rel in self.files else f"{script} is not a script the repo tracks"
         if prog in HTTP:
             return None if any(re.match(r"https?://", a) for a in args) else f"{prog} without an http(s) URL"
