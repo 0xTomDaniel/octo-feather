@@ -72,7 +72,7 @@
     },
     "acceptance-merge-approved-head": {
       "status": "built",
-      "pr": 24
+      "pr": 103
     },
     "acceptance-merge-main-merged": {
       "status": "planned",
