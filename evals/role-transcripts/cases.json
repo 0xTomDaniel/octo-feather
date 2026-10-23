@@ -7,6 +7,13 @@
     "task": "Ticket T1 (lane gh1, parent #1): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text).\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t1, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   },
   {
+    "id": "implementer-skill-ticket",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "branch": "implementer-t4",
+    "task": "Ticket T4 (lane gh4, parent #4): the repo's changelog skill gains a rule: a CHANGELOG.md entry says what a user of `app` sees (a command, a flag, an output), never internal names such as modules, functions or dataclasses. Example: `- app hello NAME --shout prints the greeting upper-cased (#5)`, not `- core.greet takes a shout bool (#5)`.\nAcceptance criterion: changelog-user-facing. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
