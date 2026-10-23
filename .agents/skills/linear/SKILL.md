@@ -18,7 +18,15 @@ skill's references by path: `<this skill's folder>/../linear-cli/references/`
 way, and never file a GitHub issue for a Linear target.
 
 A key is the team key and number, `ENG-123`; the lane key is it lowercased.
-The `linear` CLI reads its key from the environment, never from a file here.
+The `linear` CLI reads its key, `LINEAR_API_KEY`, from the environment that
+started the factory (herdr-spawn passes it into every pane), never from a
+file: never write it into a file, brief, message, log or pull request.
+
+The CLI is schpet/linear-cli at the release in `cli-version` (v3.1.0, the
+vendored `linear-cli` skill's pin). `scripts/install-check`, run by the kit's
+`just install-check` for a Linear target, checks `linear --version` against it
+and names the install path when missing: the release binary on `PATH` as
+`linear`, or a `linear` on `PATH` that runs `npx @schpet/linear-cli@3.1.0`.
 
 | Script | Does | Prints |
 | --- | --- | --- |

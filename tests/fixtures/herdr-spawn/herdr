@@ -4,6 +4,7 @@
 #   start-argv  the agent start argv, one arg per line
 #   keys        every send-keys / send-text payload
 #   closed      tab ids closed
+#   tab-env     the tab's environment: each tab create --env KEY=VALUE, one per line
 # The pane shows Pi's trust dialog (pi-trust-dialog.txt beside this file) when
 # the agent start argv lacks --approve, or when FAKE_HERDR_FORCE_DIALOG=1;
 # otherwise a ready Pi prompt. FAKE_HERDR_FORCE_DIALOG=other shows a non-Pi
@@ -18,7 +19,9 @@ dialog_open() {
   [[ -f "$d/start-argv" ]] && ! grep -qx -- --approve "$d/start-argv"
 }
 case "$1 $2" in
-  "tab create") echo '{"result":{"tab":{"tab_id":"w9:t1"},"root_pane":{"pane_id":"w9:p1"}}}' ;;
+  "tab create")
+    shift 2; : >"$d/tab-env"; while (($#)); do [[ "$1" == --env ]] && { printf '%s\n' "$2" >>"$d/tab-env"; shift; }; shift; done
+    echo '{"result":{"tab":{"tab_id":"w9:t1"},"root_pane":{"pane_id":"w9:p1"}}}' ;;
   "tab close") echo "$3" >>"$d/closed" ;;
   "agent start")
     shift 2; while (($#)) && [[ "$1" != -- ]]; do shift; done; shift

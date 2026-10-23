@@ -95,6 +95,9 @@ tab_env=(--env "HOME=$HOME"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")
+# The Linear key comes only from the caller's environment (spec remote#host-tracker-key): passed
+# on when set, never written to any file; unset in the caller means unset in the tab.
+[[ -z "${LINEAR_API_KEY:-}" ]] || tab_env+=(--env "LINEAR_API_KEY=$LINEAR_API_KEY")
 out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
 tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
 pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"

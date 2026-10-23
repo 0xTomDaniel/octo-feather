@@ -15,7 +15,7 @@
 #      never written back); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
 #      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge
-#   6. env scrubbed; herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
+#   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session; pi shim counts agents;
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
 #      refusing every call with QC_GHSNAP_OFF), each refusal logged in scratch
 #   then a nested user+mount+PID+IPC namespace mapped to the caller's uid/gid
@@ -172,7 +172,7 @@ if [[ "$phase" == setup ]]; then
   # 6. env and shims.
   unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE \
     HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
-    GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK
+    GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
     GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
   realpi=$(command -v pi || echo pi)
@@ -323,6 +323,9 @@ ghls=$(find "$GC" "$cfgc/gh" -mindepth 1 2>/dev/null | wc -l)
 cred=$(cat "$HOME/.git-credentials" "$cfgc/git/credentials" 2>/dev/null | wc -c)
 r=1; [[ -n "$GH" ]] && r=$(t "$GH" auth status)
 check "$(t test "$tok" = 0 -a "$ghls" = 0 -a "$cred" = 0 -a "$r" != 0)" "no gh or git creds: tokens $tok, gh config entries $ghls, git-credentials ${cred} bytes, gh auth status exits $r"
+# The judge reads no tracker ticket: no tracker credential (issue-lifecycle spec #qc-interim).
+lin=$(env | grep -c '^LINEAR_API_KEY=')
+check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
 route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
 check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
 st=$("$(dirname "$0")/octo-feather-state")

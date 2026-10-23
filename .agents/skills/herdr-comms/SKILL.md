@@ -65,7 +65,10 @@ without passing the flag.
 
 A new tab gets the Herdr server's environment, so the spawn always exports the
 caller's `HOME`, the kit `PATH`, `OCTO_FEATHER_ROLE` and
-`OCTO_FEATHER_SESSION_ID` into it.
+`OCTO_FEATHER_SESSION_ID` into it, and `LINEAR_API_KEY` when the caller has
+it set (unset in the caller, unset in the tab). The key comes only from the
+environment that starts the factory: never write it into a file, brief,
+message, lane record or log.
 
 It wraps `herdr tab create` and `herdr agent start`, and handles three things
 those leave to the caller:
