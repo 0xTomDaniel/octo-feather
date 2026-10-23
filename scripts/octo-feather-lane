@@ -18,7 +18,8 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines outside fenced code blocks and blockquotes count; the last such line is the
+Only lines outside fenced code blocks and blockquotes count (a lazy continuation line belongs to
+its blockquote, a blank line ends it, CommonMark); the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
 gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
 `Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
@@ -204,19 +205,96 @@ CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.m
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
-def outside(text: str) -> list[str]:
-    """The lines outside fenced code blocks, in order (a blockquote's `> ` prefix keeps it off column 0)."""
-    out, fence = [], None
-    for l in text.replace("\r\n", "\n").split("\n"):
-        f = re.match(r"\s{0,3}(`{3,}|~{3,})", l)
+FENCE = re.compile(r"[ \t]*(`{3,}(?=[^`]*$)|~{3,})")   # a backtick fence's info string holds no backtick (CommonMark)
+QUOTE = re.compile(r" {0,3}> ?")
+# Blocks that start no paragraph (CommonMark): ATX heading, thematic break, HTML blocks 1 to 6.
+NO_PARA = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|<(?:!--|\?|![A-Za-z]|/?(?:script|pre|style|textarea|"
+                     r"address|article|aside|base|basefont|blockquote|body|caption|center|col|colgroup|dd|details|dialog|dir|div|dl|dt|"
+                     r"fieldset|figcaption|figure|footer|form|frame|frameset|h[1-6]|head|header|hr|html|iframe|legend|li|link|main|menu|"
+                     r"menuitem|nav|noframes|ol|optgroup|option|p|param|search|section|summary|table|tbody|td|tfoot|th|thead|title|tr|"
+                     r"track|ul)(?:[ \t/>]|$)))", re.I)
+# A list item that may interrupt a paragraph: not empty, ordered only from 1.
+ITEM_START = re.compile(r" {0,3}(?:[-+*]|1[.)])[ \t]+\S")
+CODE_SPAN = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)")
+
+
+def fence_closes(fence: str, l: str) -> bool:
+    f = FENCE.match(l)
+    return bool(f) and f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence) and not l.strip().strip(fence[0])
+
+
+def interrupts(l: str) -> bool:
+    """L ends an open paragraph, so it is no lazy continuation line (CommonMark): a block start or a blank line."""
+    return not l.strip() or bool(NO_PARA.match(l) or ITEM_START.match(l) or QUOTE.match(l) or (FENCE.match(l) and not re.match(r" {4}", l)))
+
+
+def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
+    """Each line of Markdown TEXT with its kind: `fence` (fenced code and its ``` or ~~~ fences), `quote` (a
+    blockquote line, or a lazy continuation of a blockquote's paragraph, CommonMark), `comment` (with COMMENTS:
+    an HTML comment block, or a line inside a comment spanning lines) or `text`. With COMMENTS a text line
+    comes with its inline comments cut out."""
+    lines = text.replace("\r\n", "\n").split("\n")
+    out, fence, para, qfence, open_cmt = [], None, False, None, None   # para: a blockquote's paragraph is open
+    for i, l in enumerate(lines):
+        if open_cmt == "block":   # an HTML comment block runs to the end of the line holding `-->`
+            open_cmt = None if "-->" in l else "block"
+            out.append((l, "comment")); continue
+        if open_cmt == "inline":   # an inline comment spanning lines: the text after its `-->` stays
+            if "-->" not in l:
+                out.append((l, "comment")); continue
+            l, open_cmt = cut_comments(l[l.index("-->") + 3:], lines[i + 1:])
+            out.append((l, "text")); continue
         if fence:
-            if f and f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence) and not l.strip().strip(fence[0]):
+            if fence_closes(fence, l):
                 fence = None
-            continue
-        if f:
-            fence = f.group(1); continue
-        out.append(l)
+            out.append((l, "fence")); continue
+        if QUOTE.match(l):
+            c = l
+            while q := QUOTE.match(c):
+                c = c[q.end():]
+            if qfence:   # fenced code inside the quote: no paragraph
+                qfence = None if fence_closes(qfence, c) else qfence; para = False
+            elif (f := FENCE.match(c)) and not (para and re.match(r" {4}", c)):
+                qfence, para = f.group(1), False
+            elif para:
+                para = not interrupts(c) or bool(ITEM_START.match(c) and not NO_PARA.match(c))   # an item holds a paragraph
+            else:   # a paragraph starts unless the line is blank, indented code or a block that holds none
+                para = bool(c.strip()) and not re.match(r" {4}|\t", c) and not NO_PARA.match(c)
+            out.append((l, "quote")); continue
+        qfence = None
+        if para and not interrupts(l):
+            out.append((l, "quote")); continue   # a lazy continuation line belongs to the blockquote
+        para = False
+        if f := FENCE.match(l):
+            fence = f.group(1); out.append((l, "fence")); continue
+        if comments and re.match(r" {0,3}<!--", l):
+            open_cmt = None if "-->" in l[l.index("<!--") + 2:] else "block"
+            out.append((l, "comment")); continue
+        if comments:
+            l, open_cmt = cut_comments(l, lines[i + 1:])
+        out.append((l, "text"))
     return out
+
+
+def cut_comments(l: str, rest: list[str]) -> tuple[str, str | None]:
+    """(L with its inline HTML comments cut, "inline" if one stays open into REST). Outside code spans; a comment
+    open at the line's end continues only if REST closes it before a blank line ends the paragraph."""
+    spans = [m.span() for m in CODE_SPAN.finditer(l)]
+    i = 0
+    while (s := l.find("<!--", i)) >= 0:
+        if any(a <= s < b for a, b in spans):
+            i = s + 4; continue
+        e = l.find("-->", s + 2)
+        if e >= 0:
+            l = l[:s] + l[e + 3:]; spans = [m.span() for m in CODE_SPAN.finditer(l)]; i = s; continue
+        para = rest[:next((k for k, r in enumerate(rest) if not r.strip()), len(rest))]
+        return (l[:s], "inline") if any("-->" in r for r in para) else (l, None)
+    return l, None
+
+
+def outside(text: str) -> list[str]:
+    """The lines outside fenced code blocks and blockquotes, lazy continuation lines included, in order."""
+    return [l for l, kind in markdown(text) if kind == "text"]
 
 
 def verdicts(text: str) -> list[str]:
