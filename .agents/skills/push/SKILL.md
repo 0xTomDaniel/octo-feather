@@ -1,6 +1,6 @@
 ---
 name: push
-description: Push the current octo-feather branch and create or update the linked GitHub PR using the target repo's conventions and validation evidence.
+description: Use before every git push. Push the current octo-feather branch and create or update the linked GitHub PR using the target repo's conventions and validation evidence.
 ---
 
 # Push

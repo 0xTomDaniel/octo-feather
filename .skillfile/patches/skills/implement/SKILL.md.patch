@@ -1,17 +1,20 @@
-# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews)
+# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews); issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; description triggers on starting a ticket
 --- a/SKILL.md
 +++ b/SKILL.md
-@@ -1,7 +1,6 @@
+@@ -1,17 +1,14 @@
  ---
  name: implement
- description: "Implement a piece of work based on a spec or set of tickets."
+-description: "Implement a piece of work based on a spec or set of tickets."
 -disable-model-invocation: true
++description: "Implement a piece of work based on a spec or set of tickets. Use when starting a ticket: the build loop from tests to a green gate and a commit."
  ---
  
  Implement the work described by the user in the spec or tickets.
-@@ -10,8 +9,6 @@
  
- Call the Skill tool with "tdd" where possible, at pre-agreed seams.
+ If the user passes a ticket reference, fetch it from the issue tracker and state its title before starting. If the reference is ambiguous, ask.
+ 
+-Call the Skill tool with "tdd" where possible, at pre-agreed seams.
++Follow the `tdd` skill (`../tdd/SKILL.md`) where possible, at pre-agreed seams.
  
 -Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 -
