@@ -21,9 +21,9 @@ report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blockin
 Only lines outside fenced code blocks and blockquotes count; the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
 gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
-`Checks: none`, or one line per check `Check: <path>: <rule> | reads: <what it reads> | class: fact|meaning`.
-Refused: neither form, both, a malformed Check line, a class other than fact or meaning, and
-a `class: meaning` line with `Verdict: clear` (meaning blocks). The comment's header carries
+`Checks: none`, or one line per check `Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy`.
+Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
+a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 
@@ -53,7 +53,7 @@ and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> 
 the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
-`class: meaning`). Pass: the section on stdout, then `Review check classes` listing the comment's
+`class: proxy`). Pass: the section on stdout, then `Review check classes` listing the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
@@ -188,7 +188,7 @@ CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
 CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
 CHECK_FORM = ("`Checks: none` when the diff adds or changes no check, test gate or grader, else one line per check "
-              "`Check: <path>: <rule> | reads: <what it reads> | class: fact|meaning` (docs/adr/0008)")
+              "`Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
 def outside(text: str) -> list[str]:
@@ -220,10 +220,10 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
         elif m := CHECK_LINE.match(l):
             s = CHECK_SHAPE.fullmatch(m.group(1))
             if not s:
-                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> | reads: <what it reads> | class: fact|meaning`"); continue
+                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> | reads: <what it reads> | class: exact|proxy`"); continue
             path, rule, reads, cls = s.groups()
-            if cls.lower() not in ("fact", "meaning"):
-                why.append(f"check line for {path} has class {cls!r}; write `class: fact` or `class: meaning` (docs/adr/0008)"); continue
+            if cls.lower() not in ("exact", "proxy"):
+                why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
             checks.append((f"Check: {path}: {rule} | reads: {reads} | class: {cls.lower()}", cls.lower()))
     bad_none = [v for v in nones if v.strip("`").lower() != "none"]
     if bad_none:
@@ -415,9 +415,9 @@ def cmd_verdict(args: list[str]) -> int:
     cls, why = check_lines(report)
     if why:
         raise Refuse("; ".join(why) + "; fix the report, then rerun")
-    meaning = [c for c in cls if c.endswith("| class: meaning")]
-    if meaning and verdict == "clear":
-        raise Refuse(f"report says `Verdict: clear` with a meaning check ({meaning[0]}): a meaning check blocks "
+    proxy = [c for c in cls if c.endswith("| class: proxy")]
+    if proxy and verdict == "clear":
+        raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
     d = pr_view(pr, "headRefOid,comments,commits", repo)
     head = d["headRefOid"]
@@ -619,12 +619,12 @@ def cmd_merge_ask(args: list[str]) -> int:
             miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
         else:
             review_checks, why = check_lines(hdr)
-            meaning = [c for c in review_checks if c.endswith("| class: meaning")]
+            proxy = [c for c in review_checks if c.endswith("| class: proxy")]
             if why:
                 miss.append(f"Review verdict: the comment carries no usable check classification ({why[0]}): have the review report "
                             f"hold {CHECK_FORM}, then `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>`")
-            elif meaning:
-                miss.append(f"Review verdict: clear with a meaning check ({meaning[0]}): a meaning check blocks (docs/adr/0008); "
+            elif proxy:
+                miss.append(f"Review verdict: clear with a proxy check ({proxy[0]}): a proxy check blocks (docs/adr/0008); "
                             "delete or replace it, review again, and post the verdict with `octo-feather-lane verdict`")
 
     built = set()
