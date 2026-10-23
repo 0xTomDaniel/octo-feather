@@ -1,6 +1,6 @@
 ---
 name: commit
-description: Create a well-formed git commit from current changes using session history, issue scope, and repo conventions; use when asked to commit or finalize staged octo-feather work.
+description: Create a well-formed git commit from current changes using session history, issue scope, and repo conventions; use before every git commit, and when asked to commit or finalize staged octo-feather work.
 ---
 
 # Commit

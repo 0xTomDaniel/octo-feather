@@ -18,7 +18,7 @@ Judge the head your brief names against each criterion it lists: one pass or fai
 ## Rules
 
 - For each criterion, find its demo path through the app's public surface (CLI, HTTP or UI, or the repo's runnable script when it has none, docs/adr/0002; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output.
-- Pass only what you ran and saw (`principle-prove-it-works`). A criterion you could not exercise fails, and its why says what stopped you.
+- Load `principle-prove-it-works` before judging the first criterion: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
 - Scratch only under /tmp.
 
 ## Never

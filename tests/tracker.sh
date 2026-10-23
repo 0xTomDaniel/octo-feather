@@ -31,7 +31,7 @@ for case in none github; do
     || fail "supervisor skills with tracker $case: $got"
 done
 got=" $(skills "$t/target" code-reviewer) "
-[[ "$got" == " code-review github-pr " ]] || fail "code-reviewer lists no {tracker} but got: $got"
+[[ "$got" == " code-review github-pr tdd " ]] || fail "code-reviewer lists no {tracker} but got: $got"
 
 # Unknown: pi-role refuses naming jira and github.
 echo 'tracker = "jira"' > "$t/target/.octo-feather.toml"
