@@ -39,15 +39,16 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
     # and run its command for real under node, with stub classifiers at the model registry: token picks the PICK=<label>
     # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
     # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
-    # p/q-1.2, broken never answers, the moving aliases ~x/y and p/q-latest kill the run if called;
+    # p/q-1.2 and p/q-1.2:free (pinned, an OpenRouter routing tag), broken never answers, the moving aliases ~x/y,
+    # p/q-latest and x-latest:free (the tag ignored) kill the run if called;
     # a state holding STUB-DIE kills the run. As pi's print mode, an extension's process.stdout goes to stderr.
     name, _, args = prompt[1:].partition(" ")
     harness = """import {pathToFileURL} from "node:url";
 const [ext, name, args] = process.argv.slice(1);
 const cmds = {};
 (await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
-const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2"];
-const aliases = ["~x/y", "p/q-latest"];   // moving aliases: a call to one kills the run
+const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2", "x-latest:free", "p/q-1.2:free"];
+const aliases = ["~x/y", "p/q-latest", "x-latest:free"];   // moving aliases: a call to one kills the run
 const models = ids.map((id) => ({type: "classifier", provider: "stub", id, name: id, api: "stub", input: ["text"]}));
 const cost = (id, state) => id === "cheap-train" ? (state.startsWith("case h") ? 0.01 : 0.001) : id === "cheap-total" ? (state.startsWith("case h") ? 0 : 0.002) : 0.001;
 const modelRegistry = {
@@ -544,13 +545,13 @@ cp -r "$t/jg" "$t/jg-good"
 run 0 "$Q" --evals "$t/jg"
 jl() { grep -qF -- "$1" <<< "$out" || fail "bench: no '$1' in: $out"; }
 jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every answer is a model judgment"
-jl "bench jb: classifiers available (8): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2"
-jl "bench jb: skipped: moving alias (2): stub/~x/y, stub/p/q-latest"
+jl "bench jb: classifiers available (10): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free"
+jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/p/q-latest, stub/x-latest:free"
 grep -m1 "skipped: moving alias" <<< "$out"
-[[ "$(grep -A6 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
-   $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
-[[ "$(grep -A6 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
-   $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
+[[ "$(grep -A7 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
+   $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2:free 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
+[[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
+   $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2:free 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
 jl "unavailable stub/broken: listed but answered no case: stub provider down"
 jl "chosen stub/token (from train only"
 jl "held-out accuracy >= 0.468 and held-out brier <= 0.687"
@@ -564,12 +565,12 @@ python3 - "$d" <<'EOF' || fail "bench artifacts wrong"
 import json, sys
 d = sys.argv[1]
 a = json.load(open(f"{d}/jb/answers.json"))
-assert len(a["answers"]) == 90 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
+assert len(a["answers"]) == 105 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
 s = json.load(open(f"{d}/summary.json"))
 assert s["benches"][0]["choice"]["model"] == "stub/token" and s["benches"][0]["verdict"] == "DONE", s["benches"]
-b = json.load(open(f"{d}/jb/bench.json"))   # per-model cost and the run total (token, first, p/q-1.2 0.015 each; cheap 0.042 + 0.024)
-assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-train"] == 0.042 and round(b["cost_usd"], 6) == 0.111, b
-assert b["skipped"] == ["stub/~x/y", "stub/p/q-latest"] and "stub/p/q-1.2" in b["benched"], b
+b = json.load(open(f"{d}/jb/bench.json"))   # per-model cost and the run total (token, first, p/q-1.2, p/q-1.2:free 0.015 each; cheap 0.042 + 0.024)
+assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-train"] == 0.042 and round(b["cost_usd"], 6) == 0.126, b
+assert b["skipped"] == ["stub/~x/y", "stub/p/q-latest", "stub/x-latest:free"] and {"stub/p/q-1.2", "stub/p/q-1.2:free"} <= set(b["benched"]), b
 assert not set(b["skipped"]) & ({x["model"] for x in a["answers"]} | {m["model"] for m in b["models"]}), b
 # No agent: one pi, no tools, no chat model, no session; only the bench extension loaded.
 argv = json.loads(open(f"{d}/jb/stdout.txt").readline())["argv"]
