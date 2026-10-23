@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qa [--suite NAME]... [--case ID]... [--model MODEL] [--evals DIR]   factory evals (`just qa`)
+"""octo-feather-qa [--suite NAME]... [--case ID]... [--model MODEL] [--evals DIR] [--kit-ref COMMIT]   factory evals (`just qa`)
 
 Runs the kit's eval cases (evals/<suite>/, shape: scripts/check-evals, which runs first and must
 pass). Each case: its fixture (evals/fixtures/<fixture>) is copied and git-initialized in a scratch
@@ -25,6 +25,13 @@ result.json, and <run-id>/summary.json.
   --suite NAME, --case ID   select cases (repeatable; default every case); unknown names exit 64
   --model MODEL             pi --model override (default: the role's frontmatter model)
   --evals DIR               eval suites dir (default: the kit's evals/)
+  --kit-ref COMMIT          run the cases against the kit at COMMIT: its role files, skills (its committed
+                            .agents/skills, patches applied) and pi-role, from a `git archive` in scratch outside
+                            the repo, bound read-only in the sandbox like the kit, removed after the run; cases,
+                            fixtures, grader and sandbox stay the head's. Shows a kit change's case failing before
+                            it. An unknown COMMIT exits 64; a kit there with no agents/<role>.md (or scripts/pi-role)
+                            fails that case naming the file. Every input.json, result.json and result line
+                            records the kit's full sha (without --kit-ref: the kit's HEAD).
 Exit: 0 every case passed, 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -154,8 +161,8 @@ def qc_sandbox():
     return mod
 
 
-def front(role, key):
-    m = re.search(rf"^{key}:\s*(.+)$", (KIT / "agents" / f"{role}.md").read_text(), re.M)
+def front(kit, role, key):
+    m = re.search(rf"^{key}:\s*(.+)$", (kit / "agents" / f"{role}.md").read_text(), re.M)
     return m.group(1).strip() if m else ""
 
 
@@ -171,8 +178,32 @@ def fixture_copy(src, scratch):
     return repo, head
 
 
-def run_case(qc, evals, suite, case, facts, model, runid, n, out):
+def kit_at(ref):
+    """(kit dir, full sha): the head kit for ref None, else COMMIT's tree archived into scratch (caller removes it)."""
+    git = lambda *a: subprocess.run(["git", "-C", str(KIT), *a], capture_output=True, text=True)
+    if ref is None:
+        return KIT, git("rev-parse", "HEAD").stdout.strip() or None
+    sha = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").stdout.strip()
+    if not sha:
+        die(64, f"--kit-ref {ref}: no such commit in the kit repo {KIT}")
+    d = Path(tempfile.mkdtemp(prefix=f"qa-kit-{sha[:12]}-"))
+    a = subprocess.Popen(["git", "-C", str(KIT), "archive", "--format=tar", sha], stdout=subprocess.PIPE)
+    x = subprocess.run(["tar", "-x", "-C", str(d)], stdin=a.stdout, capture_output=True, text=True)
+    a.stdout.close()
+    if a.wait() or x.returncode:
+        shutil.rmtree(d, ignore_errors=True)
+        die(1, f"--kit-ref {ref}: could not materialize {sha}: {x.stderr.strip()}")
+    return d, sha
+
+
+def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_ref=None, kit_sha=None):
     out.mkdir(parents=True, exist_ok=True)
+    kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": kit_sha}
+    missing = [p for p in (f"agents/{case['role']}.md", "scripts/pi-role") if not (kit / p).is_file()]
+    if missing:
+        (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
+        return finish(out, suite, case, model, 0.0, "FAIL", [f"kit {kit_sha}: no {' '.join(missing)} at that commit; case not run"],
+                      [], None, kits)
     maxc = int(suite.get("max_tool_calls", DEFAULT_MAX_CALLS)); tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
     scratch = Path(tempfile.mkdtemp(prefix=f"qa-{runid}-{n}-"))
     t0 = time.time()
@@ -180,26 +211,33 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out):
         repo, head = fixture_copy(evals / "fixtures" / case["fixture"], scratch)
         task = case["task"]
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
-        role_model = model or front(case["role"], "model")
+        role_model = model or front(kit, case["role"], "model")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
-                                                    "max_tool_calls": maxc, "timeout_s": tmo}, indent=2) + "\n")
+                                                    "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
         cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), "--",
-               str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / f"{case['role']}.md"),
+               str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]
         here = os.getcwd(); os.chdir(repo)
+        ro = os.environ.get("OCTO_FEATHER_QC_RO_BINDS")
+        if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is
+            os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit)) if p)
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-{n}", {"off": GH_OFF})
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
             os.chdir(here)
+            if ro is None:
+                os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
+            else:
+                os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ro
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
     secs = round(time.time() - t0, 1)
     (out / "sandbox.json").write_text(json.dumps(rec, indent=2) + "\n")
     if run is None:
         bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
-        return finish(out, suite, case, role_model, secs, "FAIL", [f"sandbox: proof failed, case not run: {'; '.join(bad)}"], [], None)
+        return finish(out, suite, case, role_model, secs, "FAIL", [f"sandbox: proof failed, case not run: {'; '.join(bad)}"], [], None, kits)
     (out / "transcript.jsonl").write_text(run.stdout)
     (out / "stderr.txt").write_text(run.stderr)
     lines = run.stdout.splitlines()
@@ -222,7 +260,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out):
         problems.append(f"run: model error: {str(errs[0])[:200]}")
     ok = not problems and all(g["status"] == "pass" for g in graded)
     deciding = problems + [g["evidence"] for g in graded if ok or g["status"] != "pass" or problems]
-    return finish(out, suite, case, used, secs, "PASS" if ok else "FAIL", deciding, graded, w)
+    return finish(out, suite, case, used, secs, "PASS" if ok else "FAIL", deciding, graded, w, kits)
 
 
 def safe_json(line):
@@ -232,13 +270,13 @@ def safe_json(line):
         return None
 
 
-def finish(out, suite, case, model, secs, verdict, deciding, graded, w):
+def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
     (out / "grading.json").write_text(json.dumps({"facts": graded, "deciding": deciding}, indent=2) + "\n")
     res = {"suite": suite["suite"], "id": case["id"], "verdict": verdict, "deciding": deciding, "model": model, "seconds": secs,
            "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
-           **({k: case[k] for k in ("should_trigger", "split") if k in case})}
+           **({k: case[k] for k in ("should_trigger", "split") if k in case}), **kits}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
-    stop = f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]"
+    stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]") + f" [kit {kits['kit_sha']}]"
     print(f"{verdict} {suite['suite']}/{case['id']}: {'; '.join(deciding)}{stop}", flush=True)
     return res
 
@@ -253,12 +291,12 @@ def gate_free():
 
 
 def parse(argv):
-    opts = {"suite": [], "case": [], "model": None, "evals": None}
+    opts = {"suite": [], "case": [], "model": None, "evals": None, "kit-ref": None}
     it = iter(argv)
     for a in it:
         if a in ("-h", "--help"):
             print(__doc__.strip()); sys.exit(0)
-        k = a[2:] if a in ("--suite", "--case", "--model", "--evals") else None
+        k = a[2:] if a in ("--suite", "--case", "--model", "--evals", "--kit-ref") else None
         if k is None:
             die(64, f"unknown argument {a!r} (see --help)")
         v = next(it, None)
@@ -294,17 +332,29 @@ def main(argv):
         die(64, f"no case {' '.join(unknown)} in the selected suites")
     if not picked:
         die(64, "no cases selected")
+    kit, sha = kit_at(o["kit-ref"])
+    try:
+        return run_all(o, evals, picked, kit, sha)
+    finally:
+        if kit != KIT:
+            shutil.rmtree(kit, ignore_errors=True)
+
+
+def run_all(o, evals, picked, kit, sha):
     runid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(3)}"
     root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
         [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
     run_dir = root / runid; run_dir.mkdir(parents=True)
-    print(f"qa: run {runid}: {len(picked)} case(s); artifacts {run_dir}", flush=True)
+    print(f"qa: run {runid}: {len(picked)} case(s); kit {sha}" + (f" (--kit-ref {o['kit-ref']})" if o["kit-ref"] else "")
+          + f"; artifacts {run_dir}", flush=True)
     qc = qc_sandbox()
     t0 = time.time()
-    results = [run_case(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"])
+    results = [run_case(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"],
+                        kit, o["kit-ref"], sha)
                for n, (s, c, f) in enumerate(picked, 1)]
     passed = sum(r["verdict"] == "PASS" for r in results)
-    (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "passed": passed, "total": len(results),
+    (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha,
+                                                      "passed": passed, "total": len(results),
                                                       "seconds": round(time.time() - t0, 1), "cases": results}, indent=2) + "\n")
     print(f"qa: {passed}/{len(results)} passed (run {runid}); artifacts {run_dir}")
     return 0 if passed == len(results) else 1
