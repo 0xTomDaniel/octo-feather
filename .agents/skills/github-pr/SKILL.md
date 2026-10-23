@@ -54,6 +54,8 @@ durable workflow artifacts.
   the unit.
 - The PR body starts with the line the tracker skill's `pr-line <key>` prints
   for the lane's parent ticket, and includes `## Summary` and `## Validation`.
+  `octo-feather-lane merge-ask` checks that line, and fails any other line
+  that would close a GitHub issue at merge.
 - Post or update a compact `## octo-feather handoff` PR comment.
 - Do not merge.
 - Do not approve as the owner reviewer.
@@ -76,9 +78,12 @@ durable workflow artifacts.
   `gh pr merge <N> --merge --match-head-commit <head>`.
   Required failed checks remain blockers until fixed or durably waived
   through a repository-approved path.
-- The merge completes the worklane. Then move the lane's parent ticket to done
-  with the tracker skill's `issue-done <key>` (a ticket already done stays
-  done), and stop the lane. Do not assume deployment-named labels exist.
+- The merge completes the worklane. Then move every ticket of the lane and its
+  parent ticket to done, whether or not the tracker already did:
+  `octo-feather-lane done <parent key>` runs the tracker skill's `issue-done`
+  on each sub-issue the parent's `issue-view` lists, then on the parent (a
+  ticket already done stays done), and reads each back. Then stop the lane.
+  Do not assume deployment-named labels exist.
 - Verify the state change landed, whether performed by repository automation
   or by the owning agent. Do not claim a hook succeeded without readback.
 - Record merge and deployment evidence separately. A completion state does

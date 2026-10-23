@@ -5,10 +5,12 @@
 #            the kit's trackers, and no workspace or supervisor starts (fake herdr, tests/start.sh style);
 #   scripts: check-skills (in `just check`) fails a tracker skill missing any tracker script, naming both;
 #   github-issues: each tracker script runs against the offline fake gh (github-pr's scripts/gh), whose
-#            refusal of writes passes through, and against a recording gh for the write arguments;
+#            refusal of writes passes through, and against a recording gh for the write arguments; issue-view
+#            lists sub-issue keys as children and refuses a partial list;
 #   linear: tracker = "linear" makes pi-role pass github-pr and linear to the supervisor, never github-issues, and
 #            linear-cli to no role; each linear script reads and writes through the offline fake linear (linear's
-#            scripts/linear, a JSON store), which refuses any other command; same output shapes as github-issues.
+#            scripts/linear, a JSON store), which refuses any other command; same output shapes as github-issues;
+#            issue-done leaves an issue already done (Canceled) unchanged.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -75,16 +77,21 @@ chmod -x "$t/kit/.agents/skills/github-issues/scripts/pr-line"
 set +e; out="$(python3 "$t/kit/scripts/check-skills" 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 && "$out" == *"tracker script pr-line is not executable"* ]] || fail "check-skills with pr-line not executable: rc=$rc $out"
 
-# github-issues against the offline fake gh: a snapshot of o/r with issue 7 (parent 3, blocked by 4 and 5) and 8.
+# github-issues against the offline fake gh: a snapshot of o/r with issue 3 (sub-issues 7, 8), 7 (parent 3, blocked
+# by 4 and 5) and 8, and 9 whose sub-issue list gh pages (2 of 3 returned).
 GI="$kit/.agents/skills/github-issues/scripts"
 sn="$t/snap"; mkdir -p "$sn/issue" "$t/fake" "$t/rec"
 echo '{"repo": "o/r", "fetched_at": "2026-10-22T00:00:00Z", "counts": {}, "capped": []}' > "$sn/meta.json"
-issue() { # N PARENT BLOCKERS(json list of numbers) [STATE]
+issue() { # N PARENT BLOCKERS(json list of numbers) [STATE] [CHILDREN(json list of numbers)] [CHILD_TOTAL]
+  local ch="${5:-[]}"
   cat > "$sn/issue/$1.json" <<EOF
 {"number": $1, "title": "Issue $1", "body": "body $1", "state": "${4:-OPEN}", "url": "https://github.com/o/r/issues/$1",
- "parent": $2, "blockedBy": {"nodes": $(jq -c 'map({number: .})' <<<"$3"), "totalCount": $(jq length <<<"$3")}}
+ "parent": $2, "blockedBy": {"nodes": $(jq -c 'map({number: .})' <<<"$3"), "totalCount": $(jq length <<<"$3")},
+ "subIssues": {"nodes": $(jq -c 'map({number: ., state: "OPEN", title: "t", url: "u"})' <<<"$ch"), "totalCount": ${6:-$(jq length <<<"$ch")}}}
 EOF
 }
+issue 3 null '[]' OPEN '[7, 8]'
+issue 9 null '[]' OPEN '[7, 8]' 3
 issue 7 '{"number": 3, "title": "Parent", "url": "https://github.com/o/r/issues/3"}' '[4, 5]'
 issue 8 null '[]' CLOSED
 ln -s "$kit/.agents/skills/github-pr/scripts/gh" "$t/fake/gh"
@@ -95,11 +102,13 @@ off() { # WANT SCRIPT ARGS...: run with $ghdir's gh first on PATH; stdout in $ou
   [[ "$rc" == "$want" ]] || fail "${script##*/} $* under $ghdir/gh: want exit $want, got $rc: $out $err"
 }
 off 0 issue-view 7
-[[ "$(jq -c . <<<"$out")" == '{"key":"7","title":"Issue 7","body":"body 7","state":"open","url":"https://github.com/o/r/issues/7","parent":"3","blocked_by":["4","5"]}' ]] \
+[[ "$(jq -c . <<<"$out")" == '{"key":"7","title":"Issue 7","body":"body 7","state":"open","url":"https://github.com/o/r/issues/7","parent":"3","children":[],"blocked_by":["4","5"]}' ]] \
   || fail "issue-view 7: $out"
 off 0 issue-view '#8'
 [[ "$(jq -c '[.key, .state, .parent, .blocked_by]' <<<"$out")" == '["8","done",null,[]]' ]] || fail "issue-view 8: $out"
-off 1 issue-view 9; [[ -z "$out" && "$err" == *"not in snapshot"* ]] || fail "issue-view 9 reason: $out $err"
+off 0 issue-view 3; [[ "$(jq -c .children <<<"$out")" == '["7","8"]' ]] || fail "issue-view 3 children: $out"
+off 1 issue-view 9; [[ -z "$out" && "$err" == *"partial or unreadable sub-issue list"* ]] || fail "issue-view 9, paged sub-issues: $out $err"
+off 1 issue-view 10; [[ -z "$out" && "$err" == *"not in snapshot"* ]] || fail "issue-view 10 reason: $out $err"
 off 1 issue-view ENG-1; [[ "$err" == *"not a GitHub issue key"* ]] || fail "issue-view ENG-1: $err"
 for k in 82 '#82' gh82 https://github.com/o/r/issues/82; do off 0 lane-key "$k"; [[ "$out" == gh82 ]] || fail "lane-key $k: $out"; done
 off 1 lane-key ENG-123; [[ -z "$out" && "$err" == *"not a GitHub issue number"* ]] || fail "lane-key ENG-123: $out $err"
@@ -159,12 +168,13 @@ lin() { # WANT SCRIPT ARGS...: run with the fake linear first on PATH; stdout in
   [[ "$rc" == "$want" ]] || fail "linear ${script##*/} $*: want exit $want, got $rc: $out $err"
 }
 lin 0 issue-view ENG-7
-[[ "$(jq -c . <<<"$out")" == '{"key":"ENG-7","title":"Issue 7","body":"body 7","state":"open","url":"https://linear.app/acme/issue/ENG-7/issue-7","parent":"ENG-3","blocked_by":["ENG-4","ENG-5"]}' ]] \
+[[ "$(jq -c . <<<"$out")" == '{"key":"ENG-7","title":"Issue 7","body":"body 7","state":"open","url":"https://linear.app/acme/issue/ENG-7/issue-7","parent":"ENG-3","children":[],"blocked_by":["ENG-4","ENG-5"]}' ]] \
   || fail "linear issue-view ENG-7: $out"
+lin 0 issue-view ENG-3; [[ "$(jq -c .children <<<"$out")" == '["ENG-7"]' ]] || fail "linear issue-view ENG-3 children: $out"
 lin 0 issue-view eng-8
 [[ "$(jq -c '[.key, .body, .state, .parent, .blocked_by]' <<<"$out")" == '["ENG-8","","done",null,[]]' ]] || fail "linear issue-view eng-8: $out"
 # Same shape as github-issues' issue-view: the same keys, keys as strings.
-[[ "$(jq -c 'keys' <<<"$out")" == '["blocked_by","body","key","parent","state","title","url"]' ]] || fail "linear issue-view keys: $out"
+[[ "$(jq -c 'keys' <<<"$out")" == '["blocked_by","body","children","key","parent","state","title","url"]' ]] || fail "linear issue-view keys: $out"
 lin 1 issue-view ENG-9; [[ -z "$out" && "$err" == *"Entity not found"* ]] || fail "linear issue-view ENG-9: $out $err"
 lin 1 issue-view 82; [[ "$err" == *"not a Linear issue key"* ]] || fail "linear issue-view 82: $err"
 for k in ENG-123 eng-123 https://linear.app/acme/issue/ENG-123/some-title; do lin 0 lane-key "$k"; [[ "$out" == eng-123 ]] || fail "lane-key $k: $out"; done
@@ -191,7 +201,10 @@ lin 0 issue-done ENG-7; [[ -z "$out" && -z "$err" ]] || fail "linear issue-done 
 [[ "$(jq -r '.issues["ENG-7"].state' "$OCTO_FEATHER_LINEAR_STORE")" == Done ]] || fail "issue-done did not move ENG-7 to Done"
 lin 0 issue-view ENG-7; [[ "$(jq -r .state <<<"$out")" == "done" ]] || fail "linear ENG-7 after issue-done: $out"
 lin 0 issue-done ENG-7; [[ -z "$out" && -z "$err" ]] || fail "linear issue-done on a done issue printed: $out $err"
-lin 1 issue-done ENG-99; [[ "$err" == *"Issue not found"* ]] || fail "linear issue-done ENG-99: $err"
+lin 1 issue-done ENG-99; [[ "$err" == *"not found"* ]] || fail "linear issue-done ENG-99: $err"
+# An issue already done stays as it is: Canceled is done, so issue-done leaves it Canceled.
+lin 0 issue-done ENG-8; [[ -z "$out" && -z "$err" && "$(jq -r '.issues["ENG-8"].state' "$OCTO_FEATHER_LINEAR_STORE")" == Canceled ]] \
+  || fail "linear issue-done moved canceled ENG-8: $out $err $(jq -r '.issues["ENG-8"].state' "$OCTO_FEATHER_LINEAR_STORE")"
 # The fake refuses every other command, and works only from its store.
 for c in "issue list" "issue view ENG-7" "issue delete ENG-7" "api query{viewer{id}}" "issue update ENG-7 --label x"; do
   # shellcheck disable=SC2086 # $c is one command line, split into its words

@@ -16,7 +16,7 @@ implementation changes.
 ## Inputs
 
 - Session history for intent and rationale.
-- GitHub issue or draft context for scope.
+- Ticket (the tracker skill's `issue-view`) or draft context for scope.
 - `git status`, `git diff`, and `git diff --staged`.
 - Target repo commit conventions from `AGENTS.md`, README, or contributing
   docs.

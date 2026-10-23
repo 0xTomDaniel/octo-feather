@@ -7,7 +7,7 @@ description: Break a plan, spec, or the current conversation into a set of trace
 
 Break a plan, spec, or conversation into a set of **tickets**: tracer-bullet vertical slices, each declaring the tickets that **block** it.
 
-The issue tracker is GitHub Issues, through the tracker skill.
+The issue tracker is the target's: read, file and close tickets only through the tracker skill's scripts.
 
 ## Process
 
@@ -61,9 +61,9 @@ Before publishing, check each drafted issue body with `octo-feather-lane ticket 
 Publish the approved tickets. **How** depends on the tracker; the tickets are the same either way, only the shape of the blocking edges changes:
 
 - **Local files** → write one file per ticket under `.scratch/<feature-slug>/issues/<NN>-<slug>.md`, numbered from `01` in dependency order (blockers first). Each file's "Blocked by" lists the numbers/titles it depends on. Use the per-ticket file template below: one ticket per file, never a single combined file.
-- **A real issue tracker (GitHub Issues)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers. Use the platform's native blocking relationship where it has one; otherwise set each ticket's "Blocked by" to the blocking issues. If the source was an existing issue, make each ticket its sub-issue (tracker doc's operation). Apply the `ready-for-agent` triage label unless instructed otherwise; the tickets are agent-grabbable by construction.
+- **A real issue tracker (the tracker skill)** → publish one issue per ticket in dependency order (blockers first) so each ticket's blocking edges can reference real identifiers: the tracker skill's `issue-create`, with `--blocked-by` for each blocking ticket and `--parent` the lane's parent ticket, so each ticket is its sub-issue. No label: tracker writes are a ticket filed, commented on and moved to done; the tickets are agent-grabbable by construction.
 
-After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent issue>`; it must exit 0.
+After publishing sub-issues of a parent, run `octo-feather-lane tickets <parent key>`; it must exit 0.
 
 Work the **frontier**: any ticket whose blockers are all done. For a purely linear chain that means top to bottom.
 
