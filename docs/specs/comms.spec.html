@@ -34,7 +34,7 @@
 <p data-acceptance-criterion data-anchor="acceptance-resume-live-space" data-story="story-never-stalls"><span data-acceptance-scenario>Given a parked supervisor whose lane workspace still holds one of its workers' tabs, When the director sends it a message,</span> <span data-acceptance-observable>Then Herdr shows the supervisor resumed in a new tab of that same workspace, and the message it receives names its new pane.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-close-report-first" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor whose pull request merged, When it closes the lane,</span> <span data-acceptance-observable>Then the director's tab shows the supervisor's close report while the supervisor's worktree still exists, and the worktree is gone only after the director removes it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-escalation-content" data-story="story-owner-one-voice"><span data-acceptance-scenario>Given an implementer blocked by a scope conflict its supervisor cannot settle, When the conflict reaches the owner,</span> <span data-acceptance-observable>Then it arrives from the director, naming what is blocked, what was tried, and the options.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor delivering several tickets, When a ticket changes state, then the director opens that ticket on GitHub,</span> <span data-acceptance-observable>Then GitHub shows the ticket's new state, and the lane record holds no ticket entry.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor delivering several tickets, When a ticket changes state, then the director opens that ticket in the target's tracker,</span> <span data-acceptance-observable>Then the tracker shows the ticket's new state, and the lane record holds no ticket entry.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-finding-lines" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor that receives a code-review verdict with two findings, When it consumes the verdict,</span> <span data-acceptance-observable>Then the lane's hand-off log gains one finding line per finding, each naming its source, class and whether it blocks, proven by an integration test: no screen shows it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-lane-archive" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor whose pull request merged, When it closes the lane,</span> <span data-acceptance-observable>Then the lanes directory no longer lists the lane and its archive holds the lane's record and hand-off log unchanged, proven by an integration test: no screen shows it.</span></p>
 
@@ -92,7 +92,7 @@
 <table data-anchor="lane-record-table"><caption>Lane record keys</caption>
 <thead><tr><th>Key</th><th>Value</th></tr></thead>
 <tbody>
-<tr data-anchor="octo-lane-record-key-issue"><td><code>issue</code></td><td>The lane's parent issue, filed by the director</td></tr>
+<tr data-anchor="octo-lane-record-key-issue"><td><code>issue</code></td><td>The lane's key (roles <code>#lane-key</code>), naming its parent issue in the target's tracker, filed by the director</td></tr>
 <tr data-anchor="octo-lane-record-key-repository"><td><code>repository</code></td><td><code>owner/name</code> where the pull request lives</td></tr>
 <tr data-anchor="octo-lane-record-key-goal"><td><code>goal</code></td><td>One line: the lane title</td></tr>
 <tr data-anchor="octo-lane-record-key-pr"><td><code>pr</code></td><td>Pull request number; absent until one opens</td></tr>
@@ -116,7 +116,7 @@ last_handoff_at = "2026-10-19T18:24:09Z"
 waiting_on = ""                        # "", "blocked", "director", or another lane's issue</pre>
 <figcaption data-anchor="octo-lane-record-caption">Current control state, so TOML; what happened goes in the hand-off log.</figcaption>
 </figure>
-<p data-anchor="octo-lane-record-tickets">The record holds no ticket state: tickets live in GitHub Issues only.</p>
+<p data-anchor="octo-lane-record-tickets">The record holds no ticket state: tickets live in the target's tracker only.</p>
 <p data-anchor="octo-lane-record-workers">The record lists no workers: a lane's workers are the agents in its workspace other than the supervisor, with role and ticket read from their names.</p>
 <p data-anchor="octo-lane-record-life-audit">When the director audits lanes it reads every record and writes none: a record is stale when its <code>waiting_on</code> names no listed lane, its supervisor pane is neither live nor named by the latest parked line, or its goal no longer names the lane's scope; the director wakes that supervisor to fix it.</p>
 <p data-anchor="octo-lane-record-life-archive">At close, after its last hand-off line, the supervisor moves the record and hand-off log unchanged into <code>archive/</code>, then reports.</p>

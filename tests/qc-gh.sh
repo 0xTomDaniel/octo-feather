@@ -2,7 +2,7 @@
 # Integration test for the qc judge's GitHub evidence (#34), no network and no model:
 # a fake `gh` outside the sandbox stands in for GitHub (the caller's auth is GH_TOKEN),
 # octo-feather-qc-ghsnap snapshots it before every run, and a fake `pi` judge inside the
-# sandbox reads it through the offline gh (scripts/qc-bin/gh): issue view, pr view --json,
+# sandbox reads it through the offline gh (.agents/skills/github-pr/scripts/gh): issue view, pr view --json,
 # api GET answer; issue comment and api -X POST are refused, counted in the cleanup line
 # and the report. Also: the brief names the evidence, the snapshot is read-only inside,
 # refetched per run and removed after; no GitHub remote skips cleanly; a failed fetch
@@ -144,10 +144,10 @@ run 64 "$st" 5 acceptance-a acceptance-a; grep -q "ids given twice" <<< "$out" |
 
 # A GitHub repo: fetched outside, read-only inside, reads answered, writes refused and counted.
 FAKE_BRIEF='`gh` is an offline, read-only snapshot of o/r' run 0 "$st" 5 acceptance-a
-grep -q "qc sandbox: ok   github: snapshot of o/r at .*issues 2, prs 1, runs 1, branches 1, full views 3; read-only, served by the offline gh ($kit/scripts/qc-bin/gh)" <<< "$out" \
+grep -q "qc sandbox: ok   github: snapshot of o/r at .*issues 2, prs 1, runs 1, branches 1, full views 3; read-only, served by the offline gh ($kit/.agents/skills/github-pr/scripts/gh)" <<< "$out" \
   || fail "no github proof line: $out"
 j="$(judged)"
-grep -q "gh is $kit/scripts/qc-bin/gh" <<< "$j" || fail "judge's gh is not the offline gh: $j"
+grep -q "gh is $kit/.agents/skills/github-pr/scripts/gh" <<< "$j" || fail "judge's gh is not the offline gh: $j"
 grep -q "BRIEF ok" <<< "$j" || fail "brief does not name the GitHub evidence and the history-only rule"
 grep -q "R1 Evidence issue OPEN" <<< "$j" || fail "gh issue view: $j"
 grep -q 'R2 {"isDraft":true,"title":"DraftPR"}' <<< "$j" || fail "gh pr view --json: $j"
@@ -212,7 +212,7 @@ pr2='{"number": 2, "title": "T", "state": "OPEN", "headRefName": "gh1", "baseRef
 echo "$pr2" > "$sn/pr/2.json"; echo "[$pr2]" > "$sn/pr-list.json"
 echo '[{"number": 1, "title": "I", "state": "OPEN", "updatedAt": "x"}]' > "$sn/issue-list.json"
 echo '{"nameWithOwner": "o/r"}' > "$sn/repo.json"
-shim() { local want="$1"; shift; set +e; out="$(OCTO_FEATHER_GHSNAP="$sn" OCTO_FEATHER_GHSNAP_MISS="$t/miss.log" "$kit/scripts/qc-bin/gh" "$@" 2>&1)"; rc=$?; set -e
+shim() { local want="$1"; shift; set +e; out="$(OCTO_FEATHER_GHSNAP="$sn" OCTO_FEATHER_GHSNAP_MISS="$t/miss.log" "$kit/.agents/skills/github-pr/scripts/gh" "$@" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "offline gh $* want exit $want, got $rc: $out"; }
 rm -f "$t/miss.log"; n=0
 for c in "run view 7 --json jobs" "run view 7 --json conclusion,jobs" "pr view 2 --json title,reviews" "pr list --json number,reviews" \

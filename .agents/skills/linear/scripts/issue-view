@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+# issue-view KEY: one issue as JSON {key, title, body, state, url, parent, children, blocked_by}; keys are strings,
+# state open or done (a completed or canceled state is done), parent null when it has none, children its
+# sub-issues' keys. Wraps `linear api`.
+set -euo pipefail
+[[ $# == 1 ]] || { echo "usage: issue-view KEY" >&2; exit 64; }
+[[ "$1" =~ ^[A-Za-z][A-Za-z0-9]*-[0-9]+$ ]] || { echo "issue-view: $1 is not a Linear issue key (TEAM-123)" >&2; exit 1; }
+# Blocked by: relations of type blocks pointing at this issue (its inverseRelations), as `linear issue relation list` reads them.
+query='query IssueView($id: String!) { issue(id: $id) { identifier title description url state { type }
+  parent { identifier } children(first: 250) { nodes { identifier } pageInfo { hasNextPage } }
+  inverseRelations(first: 250) { nodes { type issue { identifier } } } } }'
+out="$(linear api --no-input --variable "id=${1^^}" "$query" 2>&1)" || { echo "issue-view: $out" >&2; exit 1; }
+# A partial sub-issue list would read as the whole: refuse it.
+if jq -e '.data.issue.children.pageInfo.hasNextPage == true' <<<"$out" >/dev/null 2>&1; then
+  echo "issue-view: ${1^^} has more than 250 sub-issues; split the parent" >&2; exit 1
+fi
+jq -e '(.data.issue // empty) | {key: .identifier, title, body: (.description // ""),
+  state: (if .state.type == "completed" or .state.type == "canceled" or .state.type == "duplicate" then "done" else "open" end),
+  url, parent: (.parent.identifier // null), children: [.children.nodes[].identifier], blocked_by: [.inverseRelations.nodes[] | select(.type == "blocks") | .issue.identifier]}' \
+  <<<"$out" 2>/dev/null || { echo "issue-view: linear api printed no issue ${1^^}: $out" >&2; exit 1; }

@@ -1,0 +1,349 @@
+#!/usr/bin/env python3
+"""linear: the kit's offline fake of the linear CLI (schpet/linear-cli), for tests of the linear tracker scripts.
+
+No network and no API key, ever. It answers from, and writes to, one JSON store, $OCTO_FEATHER_LINEAR_STORE:
+  {"workspace": "acme", "default_team": "ENG" (optional, the configured team),
+   "states": [{"name": "Todo", "type": "unstarted"}, ...] (optional, a team workflow; default below),
+   "issues": {"ENG-7": {"title", "description", "state" (a state name), "parent" (key or null),
+                        "blocked_by" (keys), "comments" ([{"id", "body"}])}}}
+It takes only what the tracker scripts run, printing what the real CLI prints:
+  api [--variable K=V]... [DOCUMENT] one query, any operation name or none, answered as Linear's GraphQL API does:
+                                     only the selected fields, against SCHEMA (a subset of Linear's public schema);
+                                     a field or argument outside it is refused by name
+  issue create --title T --description-file F|- [--team K] [--parent K]
+  issue relation add A blocked-by B
+  issue comment add KEY --body-file F|-
+  issue update KEY --state NAME|TYPE
+  --version                          the pinned release (the linear skill's cli-version), needs no store
+and --no-input anywhere. Anything else is refused (exit 2) naming the call. Not found exits 3, like the real CLI.
+"""
+import json, os, re, sys
+
+DEFAULT_STATES = [{"name": "Triage", "type": "triage"}, {"name": "Backlog", "type": "backlog"},
+                  {"name": "Todo", "type": "unstarted"}, {"name": "In Progress", "type": "started"},
+                  {"name": "Done", "type": "completed"}, {"name": "Canceled", "type": "canceled"}]
+KEY = re.compile(r"^([A-Za-z][A-Za-z0-9]*)-([0-9]+)$")
+STORE = os.environ.get("OCTO_FEATHER_LINEAR_STORE", "")
+argv = [a for a in sys.argv[1:] if a != "--no-input"]
+
+
+def refuse(why, code=2):
+    print(f"linear (offline fake): {why}", file=sys.stderr)
+    sys.exit(code)
+
+
+def load():
+    if not STORE:
+        refuse("no store: OCTO_FEATHER_LINEAR_STORE is unset", 1)
+    try:
+        return json.load(open(STORE))
+    except (OSError, ValueError) as e:
+        refuse(f"cannot read store {STORE}: {e}", 1)
+
+
+def save(db):
+    tmp = f"{STORE}.{os.getpid()}"
+    json.dump(db, open(tmp, "w"), indent=2)
+    os.replace(tmp, STORE)
+
+
+def flags(args, known):
+    """(flag -> value, positionals); a flag outside known is refused."""
+    out, pos, i = {}, [], 0
+    while i < len(args):
+        a = args[i]
+        if a.startswith("-"):
+            k, eq, v = a.partition("=")
+            if k not in known:
+                refuse(f"unsupported flag {k} in: linear {' '.join(sys.argv[1:])}")
+            if not eq:
+                i += 1
+                if i >= len(args):
+                    refuse(f"flag {k} needs a value")
+                v = args[i]
+            out.setdefault(k, []).append(v)
+        else:
+            pos.append(a)
+        i += 1
+    return out, pos
+
+
+def issue(db, key):
+    k = key.upper()
+    if k not in db.get("issues", {}):
+        refuse(f"Issue not found: {key}", 3)
+    return k, db["issues"][k]
+
+
+def states(db):
+    return db.get("states") or DEFAULT_STATES
+
+
+def state_type(db, name):
+    return next((s["type"] for s in states(db) if s["name"] == name), "unstarted")
+
+
+def url(db, key, title):
+    slug = re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
+    return f"https://linear.app/{db.get('workspace', 'acme')}/issue/{key}/{slug}"
+
+
+def body(path):
+    return sys.stdin.read() if path == "-" else open(path).read()
+
+
+def one(o, k, default=None):
+    v = o.get(k)
+    return v[-1] if v else default
+
+
+# SCHEMA: the part of Linear's public GraphQL schema the fake serves, type -> field -> (type, arguments).
+# Objects: Issue a key, WorkflowState a state name, IssueRelation (issue, type, relatedIssue), a connection (items, first).
+SCALARS = {"String", "ID", "Float", "Boolean"}
+PAGE = {"first"}
+SCHEMA = {
+    "Query": {"issue": ("Issue!", {"id"})},
+    "Issue": {"id": ("ID!", set()), "identifier": ("String!", set()), "number": ("Float!", set()),
+              "title": ("String!", set()), "description": ("String", set()), "url": ("String!", set()),
+              "state": ("WorkflowState!", set()), "parent": ("Issue", set()), "children": ("IssueConnection!", PAGE),
+              "relations": ("IssueRelationConnection!", PAGE), "inverseRelations": ("IssueRelationConnection!", PAGE)},
+    "WorkflowState": {"id": ("ID!", set()), "name": ("String!", set()), "type": ("String!", set())},
+    "IssueRelation": {"id": ("ID!", set()), "type": ("String!", set()), "issue": ("Issue!", set()),
+                      "relatedIssue": ("Issue!", set())},
+    "IssueConnection": {"nodes": ("[Issue!]!", set()), "pageInfo": ("PageInfo!", set())},
+    "IssueRelationConnection": {"nodes": ("[IssueRelation!]!", set()), "pageInfo": ("PageInfo!", set())},
+    "PageInfo": {"hasNextPage": ("Boolean!", set()), "hasPreviousPage": ("Boolean!", set())},
+}
+TOKEN = re.compile(r'\s+|,|#[^\n]*|(\.\.\.|[{}():!$=\[\]@]|[_A-Za-z][_0-9A-Za-z]*|-?[0-9]+(?:\.[0-9]+)?|"(?:[^"\\]|\\.)*")')
+
+
+def tokens(doc):
+    out, i = [], 0
+    while i < len(doc):
+        m = TOKEN.match(doc, i)
+        if not m:
+            refuse(f"api: Syntax Error: unexpected character {doc[i]!r}")
+        if m.group(1):
+            out.append(m.group(1))
+        i = m.end()
+    return out
+
+
+def parse(doc, var):
+    """One query document -> its selection: [(alias, name, {arg: value}, sub-selection or None)]."""
+    t = tokens(doc) + ["<end>"]
+    p = 0
+
+    def take(want=None):
+        nonlocal p
+        tok = t[p]
+        if want is not None and tok != want:
+            refuse(f"api: Syntax Error: expected {want!r}, found {tok!r}")
+        p += 1
+        return tok
+
+    def value():
+        tok = take()
+        if tok == "$":
+            n = take()
+            if n not in var:
+                refuse(f'api: Variable "${n}" is not given (--variable {n}=...)')
+            return var[n]
+        if tok.startswith('"'):
+            return json.loads(tok)
+        if re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", tok):
+            return json.loads(tok)
+        if tok in ("true", "false", "null"):
+            return json.loads(tok)
+        refuse(f"api: argument value {tok!r} is not served by the fake (a variable, string, number, boolean or null)")
+
+    def selection():
+        take("{")
+        out = []
+        while t[p] != "}":
+            if t[p] in ("...", "@"):
+                refuse("api: fragments and directives are not served by the fake")
+            alias = name = take()
+            if t[p] == ":":
+                take(); name = take()
+            args = {}
+            if t[p] == "(":
+                take()
+                while t[p] != ")":
+                    a = take(); take(":"); args[a] = value()
+                take()
+            out.append((alias, name, args, selection() if t[p] == "{" else None))
+        take("}")
+        return out
+
+    if t[p] in ("mutation", "subscription", "fragment"):
+        refuse(f"api: a {t[p]} is not served by the fake, only a query")
+    if t[p] == "query":
+        take()
+        if t[p] not in ("(", "{"):
+            take()  # the operation name: any name
+        if t[p] == "(":  # variable definitions: values come from --variable
+            while take() != ")":
+                pass
+    sel = selection()
+    if t[p] != "<end>":
+        refuse("api: one query per document")
+    return sel
+
+
+def validate(typ, sel):
+    """Refuse, before anything runs, a selection Linear's API would reject or the fake does not serve."""
+    for alias, name, args, sub in sel:
+        if name == "__typename":
+            continue
+        if name not in SCHEMA[typ]:
+            refuse(f'api: Cannot query field "{name}" on type "{typ}" (the fake serves {typ}: {" ".join(SCHEMA[typ])})')
+        ftype, known = SCHEMA[typ][name]
+        for a in args:
+            if a not in known:
+                refuse(f'api: argument "{a}" on field "{typ}.{name}" is not served by the fake')
+        base = ftype.strip("[]!")
+        if base in SCALARS and sub is not None:
+            refuse(f'api: Field "{name}" must not have a selection since type "{ftype}" has no subfields')
+        if base not in SCALARS and sub is None:
+            refuse(f'api: Field "{name}" of type "{ftype}" must have a selection of subfields')
+        if sub is not None:
+            validate(base, sub)
+
+
+def resolve(db, typ, obj, sel):
+    out = {}
+    for alias, name, args, sub in sel:
+        if name == "__typename":
+            out[alias] = typ; continue
+        ftype = SCHEMA[typ][name][0]
+        base = ftype.strip("[]!")
+        v = field(db, typ, obj, name, args)
+        if base in SCALARS or v is None:
+            out[alias] = v
+        elif ftype.startswith("["):
+            out[alias] = [resolve(db, base, x, sub) for x in v]
+        else:
+            out[alias] = resolve(db, base, v, sub)
+    return out
+
+
+def field(db, typ, obj, name, args):
+    """The value of typ.name on obj: a scalar, or the object the next resolve reads."""
+    issues = db.get("issues", {})
+    if typ == "Query":
+        k = str(args.get("id", "")).upper()
+        if k not in issues:
+            print(json.dumps({"data": {name: None}, "errors": [{"message": "Entity not found: Issue", "path": [name]}]}))
+            sys.exit(1)
+        return k
+    if typ == "Issue":
+        i = issues[obj]
+        page = lambda items: (items, args.get("first", 50))
+        return {"id": lambda: obj, "identifier": lambda: obj, "number": lambda: int(KEY.match(obj).group(2)),
+                "title": lambda: i["title"], "description": lambda: i.get("description"),
+                "url": lambda: url(db, obj, i["title"]), "state": lambda: i.get("state", "Todo"),
+                "parent": lambda: i.get("parent") or None,
+                "children": lambda: page([c for c, x in issues.items() if x.get("parent") == obj]),
+                "relations": lambda: page([(obj, "blocks", c) for c, x in issues.items() if obj in x.get("blocked_by", [])]),
+                "inverseRelations": lambda: page([(b, "blocks", obj) for b in i.get("blocked_by", [])])}[name]()
+    if typ == "WorkflowState":
+        return state_type(db, obj) if name == "type" else obj
+    if typ == "IssueRelation":
+        return {"id": "-".join(obj), "issue": obj[0], "type": obj[1], "relatedIssue": obj[2]}[name]
+    if typ == "PageInfo":
+        return obj if name == "hasNextPage" else False
+    items, first = obj  # a connection
+    return items[:first] if name == "nodes" else len(items) > first
+
+
+def scalar(v):
+    """A --variable value: boolean, number or null when it looks like one, else the string."""
+    try:
+        return json.loads(v) if v in ("true", "false", "null") or re.fullmatch(r"-?[0-9]+(\.[0-9]+)?", v) else v
+    except ValueError:
+        return v
+
+
+def api(args):
+    o, pos = flags(args, {"--variable"})
+    if len(pos) > 1:
+        refuse("api: one DOCUMENT argument, or the document on stdin")
+    doc = pos[0] if pos else sys.stdin.read()
+    var = {k: scalar(v) for k, _, v in (x.partition("=") for x in o.get("--variable", []))}
+    sel = parse(doc, var)
+    validate("Query", sel)
+    print(json.dumps({"data": resolve(load(), "Query", None, sel)}))
+
+
+def create(args):
+    o, pos = flags(args, {"--title", "-t", "--description-file", "--team", "--parent"})
+    title = one(o, "--title") or one(o, "-t")
+    if pos or not title or not one(o, "--description-file"):
+        refuse("issue create: needs --title and --description-file, and no other argument")
+    db = load()
+    team = (one(o, "--team") or db.get("default_team") or "").upper()
+    if not team:
+        refuse("No team given and no default team configured")
+    parent = one(o, "--parent")
+    if parent:
+        parent, _ = issue(db, parent)
+    nums = [int(m.group(2)) for k in db.get("issues", {}) if (m := KEY.match(k)) and m.group(1) == team]
+    key = f"{team}-{max(nums, default=0) + 1}"
+    db.setdefault("issues", {})[key] = {"title": title, "description": body(one(o, "--description-file")),
+                                        "state": "Todo", "parent": parent, "blocked_by": [], "comments": []}
+    save(db)
+    print(f"Creating issue in {team}", file=sys.stderr)
+    print(f"✓ Created issue {key}: {title}\n{url(db, key, title)}")
+
+
+def relation(args):
+    if len(args) != 3 or args[1] != "blocked-by":
+        refuse("issue relation add: only ISSUE blocked-by RELATED is supported")
+    db = load()
+    a, i = issue(db, args[0])
+    b, _ = issue(db, args[2])
+    if b not in i.setdefault("blocked_by", []):
+        i["blocked_by"].append(b)
+    save(db)
+    print(f"✓ Created relation {a} blocked by {b}")
+
+
+def comment(args):
+    o, pos = flags(args, {"--body-file"})
+    if len(pos) != 1 or not one(o, "--body-file"):
+        refuse("issue comment add: needs ISSUE and --body-file")
+    db = load()
+    k, i = issue(db, pos[0])
+    cid = f"c{sum(len(x.get('comments', [])) for x in db['issues'].values()) + 1}"
+    i.setdefault("comments", []).append({"id": cid, "body": body(one(o, "--body-file"))})
+    save(db)
+    print(f"✓ Added comment to issue {pos[0]}\n{url(db, k, i['title'])}#comment-{cid}")
+
+
+def update(args):
+    o, pos = flags(args, {"--state", "-s"})
+    want = one(o, "--state") or one(o, "-s")
+    if len(pos) != 1 or not want:
+        refuse("issue update: only ISSUE --state NAME|TYPE is supported")
+    db = load()
+    k, i = issue(db, pos[0])
+    st = states(db)
+    hit = next((s for s in st if s["name"].lower() == want.lower()), None) or next((s for s in st if s["type"] == want.lower()), None)
+    if hit is None:
+        refuse(f"Unknown workflow state {want!r}; states: {', '.join(s['name'] for s in st)}")
+    i["state"] = hit["name"]
+    save(db)
+    print(f"✓ Updated issue {k}: {i['title']}\n{url(db, k, i['title'])}")
+
+
+if argv == ["--version"]:
+    print(open(os.path.join(os.path.dirname(os.path.realpath(__file__)), "..", "cli-version")).read().strip())
+    sys.exit(0)
+ROUTES = {("api",): api, ("issue", "create"): create, ("issue", "relation", "add"): relation,
+          ("issue", "comment", "add"): comment, ("issue", "update"): update}
+for n in (3, 2, 1):
+    if tuple(argv[:n]) in ROUTES:
+        ROUTES[tuple(argv[:n])](argv[n:])
+        sys.exit(0)
+refuse(f"unsupported command: linear {' '.join(sys.argv[1:])}")

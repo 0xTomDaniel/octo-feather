@@ -18,13 +18,14 @@ criterion with a PR, or a built one without. The spec HTML is never edited.
 
 A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
 append-only, one judgement call per line:
-  {"at": "<UTC ISO, Z>", "lane": "gh<N>", "role": "supervisor",
+  {"at": "<UTC ISO, Z>", "lane": "<lane key>", "role": "supervisor",
    "kind": "clarifies" | "adds" | "weakens", "anchors": ["<data-anchor>"...],
    "criteria": ["<criterion id>"...], "what": "...", "why": "...",
    "passes_as_written": false, "evidence": "<failing command, error, or two
    contradicting spec lines>", "commit": "<optional sha>",
    "denied": {"at": "...", "note": "..."} (optional, written when the owner denies)}
-`check` fails on a line that is not JSON, a missing, empty or whitespace-only field, a role other
+`check` fails on a line that is not JSON, a missing, empty or whitespace-only field, a lane that
+is no tracker's lane key (one some kit tracker skill's lane-key maps to itself: gh12, eng-123), a role other
 than supervisor, passes_as_written not false, an unknown kind, or a criterion id
 in neither the spec nor the spec at accepted_commit. It then compares the spec
 at accepted_commit (git show, from the spec's own repo, so a shallow clone needs
@@ -42,7 +43,7 @@ group by time. Each call shows its spec, lane, role, anchors, criteria, what, wh
 and evidence, and DENIED when the owner denied it. It ends with the count, and a
 line per lane with more than three calls.
 """
-import json, re, subprocess, sys
+import importlib.machinery, importlib.util, json, re, subprocess, sys
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -204,6 +205,24 @@ def call_name(c: dict) -> str:
     return f"call ({'; '.join(parts)})"
 
 
+_LANE_KEYS: dict[str, bool] = {}
+
+
+def is_lane_key(lane: str) -> bool:
+    """A lane key of either tracker: some kit tracker skill's lane-key (pi-role's TRACKERS) returns it unchanged."""
+    if lane not in _LANE_KEYS:
+        root = Path(__file__).resolve().parent.parent
+        loader = importlib.machinery.SourceFileLoader("pi_role", str(root / "scripts" / "pi-role"))
+        pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+        loader.exec_module(pr)
+        skills = root / ".agents" / "skills"
+        _LANE_KEYS[lane] = any(
+            subprocess.run([str(skills / pr.TRACKERS[t] / "scripts" / "lane-key"), lane],
+                           capture_output=True, text=True).stdout.strip() == lane
+            for t in pr.kit_trackers(str(skills)))
+    return _LANE_KEYS[lane]
+
+
 def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
     """The valid calls in log, and an error per bad line naming file, line, the call and fix."""
     calls, errs = [], []
@@ -231,8 +250,8 @@ def read_calls(log: Path, known: set[str]) -> tuple[list[dict], list[str]]:
         line_errs = []
         if not re.fullmatch(r"\d{4}-\d\d-\d\dT\d\d:\d\d(:\d\d(\.\d+)?)?Z", c["at"]):
             line_errs.append(f"at {c['at']!r} is not a UTC ISO time ending in Z")
-        if not re.fullmatch(r"gh\d+", c["lane"]):
-            line_errs.append(f"lane {c['lane']!r} is not gh<N>")
+        if not is_lane_key(c["lane"]):
+            line_errs.append(f"lane {c['lane']!r} is not a lane key of any tracker the kit has (gh12, eng-123)")
         if c["role"] != "supervisor":
             line_errs.append(f"role {c['role']!r}: only the supervisor edits a spec and logs its call")
         if c["passes_as_written"] is not False:
