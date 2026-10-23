@@ -62,5 +62,4 @@ Then classify every check the diff adds or changes (Check: GLOSSARY.md), one lin
 
 `<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
 
-- **exact**: it tests the rule itself. `<rule>` is the rule as stated where it is owned and `<owner>` names that place (a spec criterion id, an ADR, a recorded owner ruling), never the check's own docstring or error; when owners conflict, the latest owner ruling wins. A case escaping an exact check is a defect to fix, still exact.
-- **proxy**: it tests a stand-in that correlates with the rule, however factual what it reads (code tokens for coupling, words for reachability, a regex over prose for intent). A proxy check blocks, class `proxy-check` (docs/adr/0008): `scripts/check-test-surface` read six real module-loading tokens to enforce "tests reach no internals", and tests coupled to internals in other ways kept passing it.
+`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
