@@ -1,0 +1,16 @@
+[
+  {
+    "id": "corrector-fuzzy-lesson",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh9",
+    "task": "Correction lane gh9 for this repo (ADR 0020 factory QA). Trigger: finding class `vague-error-message` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"vague-error-message\", \"blocking\": true, \"summary\": \"`app hello ' '` prints `error: name must not be empty`; it says what failed, not what the user should do next. An error message should tell the user what to do next\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"vague-error-message\", \"blocking\": true, \"summary\": \"src/app/cli.py --json error object only restates the ValueError text; the user is not told what to do next\"} (lane gh7)\nThe lane gh7 reviewer suggested a fix: a `just check` script that fails any `raise` or `print` whose message lacks the word run, use or try.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh9 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  },
+  {
+    "id": "corrector-fact-lesson",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh13",
+    "task": "Correction lane gh13 for this repo (ADR 0020 factory QA). Trigger: finding class `script-not-executable` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"script-not-executable\", \"blocking\": true, \"summary\": \".githooks/pre-commit was committed as mode 100644; git skipped the hook, so `just check` never ran on commit\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"script-not-executable\", \"blocking\": true, \"summary\": \"scripts/release.sh was committed without the exec bit; `./scripts/release.sh` fails with Permission denied\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh13 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  }
+]
