@@ -11,7 +11,7 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals. A kit test runs a script as a command and feeds it inputs, never loads or reads it; review judges this (docs/adr/0008 rung 3).
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
-- Fix a lesson on the highest rung of the ladder in docs/adr/0008: structure, exact check, structured judgment, prose. A check tests its rule itself; one that tests a stand-in (a proxy) is never a check.
+- Fix a lesson on the highest rung of the ladder in docs/adr/0008; only what its rung 2 allows becomes a check.
 - Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.
 
 ## Layout

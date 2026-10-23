@@ -2,6 +2,7 @@
 
 Smoke: agents/corrector.md .skillfile/patches/skills/correct/SKILL.md.patch .agents/skills/correct/
 Removed: the `correct` patch's line "can a script decide this without reading meaning? If not, it's an instruction ... not a check" and corrector.md's restatement of it, both replaced by a pointer to the four-rung ladder in docs/adr/0008 and its exact-versus-proxy test (owner direction 2026-10-23; incident: check-test-surface read only facts and still proxied a coupling rule, so "meaning" let it through).
+Removed (review round 7, duplicated-rule): the exact/proxy definition and its examples restated in agents/corrector.md, the correct patch and folder, and AGENTS.md, each now a pointer to docs/adr/0008 rung 2 ("only what rung 2 allows becomes a check"). No new probe (pointer-only edits; the runs below used the restated text).
 
 Run, 2026-10-23, branch corrector-gh118 with this change in the worktree: `pi-role agents/corrector.md -p <brief>` headless, isolated (`env -i`, PATH = pi, just, uv only, no herdr, `HERDR_SESSION=gh118-smoke-sandbox`, temp HOME and Pi agent dir, `--session-dir` in the run dir), on a copy of evals/fixtures/python-app on branch corrector-gh9. Brief: finding class `vague-error-message` twice (gh5, gh7), plus an inviting fix "a just check script failing any error message lacking run, use or try"; final message one json block `{"rung", "rule", "reads"}` (the owed rung-choice case, docs/owed-evals/118.md).
 
