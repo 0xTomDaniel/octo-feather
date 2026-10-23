@@ -4,7 +4,9 @@
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
 # wrong head, a report with no verdict and a failed write, leaving no comment behind. `merge-ask`
 # passes a complete section and prints it (also through the qc judge's offline gh, github-pr/scripts/gh),
-# fails PR #16's real body (fixture) naming each missing item, and fails each single gap: stale head,
+# fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
+# (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
+# Tracks ENG-123 and no Closes line, and fails with one, spec #acceptance-pr-tracks), stale head,
 # failing or pending check, missing row, Built unequal to the status file or to the qc commits,
 # verdict link to another head or a blocking verdict, untriaged failed criterion. One judged head (spec
 # #acceptance-one-head), on a real git lane: review on J plus qc's status commit H passes with the
@@ -72,7 +74,7 @@ ST=(--status docs/specs/demo.status.json)
 check_ok='[{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}, {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"}]'
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
   {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a acceptance-b (judged ${J:0:12})\", \"messageBody\": \"\"}]"
-printf '{"number": 7, "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
+printf '{"number": 7, "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
 PROOF="${J:0:12} to ${H:0:12}: qc status commits ${H:0:12} change only docs/specs/demo.status.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
@@ -136,9 +138,9 @@ mv "$FAKE_GH/pr/7.json.two" "$t/two.json"
 n="$(writes)"   # merge-ask never writes from here on
 
 # --- merge-ask ---
-body() { # complete section, overridable by env: HEADL JUDGEDL ROWS BUILT FAILED REVIEW
+body() { # complete section, overridable by env: PARENTL HEADL JUDGEDL ROWS BUILT FAILED REVIEW
   cat <<EOF
-Closes #6
+${PARENTL-Closes #6}
 
 ## Summary
 
@@ -188,6 +190,20 @@ set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/.agents/skills/
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \
   ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r, output x |' setpr
 run 0 merge-ask 7 "${ST[@]}"; grep -q "^- acceptance-c: outside" <<<"$out" || fail "triaged fail: $out"
+
+# the parent line (spec #gates-pr-line): the tracker skill's pr-line for the key the PR branch names
+PARENTL="" bad "parent line: missing; add the line \`Closes #6\` (the tracker skill's pr-line 6)"
+PARENTL="Closes #60" bad "parent line: missing; add the line \`Closes #6\`"
+PARENTL=$'Closes #6\nAlso fixes #9' bad "parent line: \`Also fixes #9\` closes GitHub issue #9, not the lane's parent line \`Closes #6\`"
+bad "parent line: cannot name it for branch 'main'" 'd["headRefName"] = "main"'
+# a Linear target's lane (its .octo-feather.toml): Tracks ENG-123 for branch eng-123, no Closes line, passes
+echo 'tracker = "linear"' > .octo-feather.toml
+PARENTL="Tracks ENG-123" setpr 'd["headRefName"] = "eng-123"'; run 0 merge-ask 7 "${ST[@]}"
+[[ "$(head -1 <<<"$out")" == "## Merge ask" ]] || fail "Linear lane with Tracks ENG-123 did not pass: $out"
+bad "parent line: missing; add the line \`Tracks ENG-123\` (the tracker skill's pr-line ENG-123)" 'd["headRefName"] = "eng-123"'
+PARENTL=$'Tracks ENG-123\nCloses #6' bad "parent line: \`Closes #6\` closes GitHub issue #6, not the lane's parent line \`Tracks ENG-123\`" 'd["headRefName"] = "eng-123"'
+PARENTL="Tracks ENG-1234" bad "parent line: missing; add the line \`Tracks ENG-123\`" 'd["headRefName"] = "eng-123"'
+rm .octo-feather.toml
 
 # PR #16's real body: no section, each item named
 cp "$kit/tests/fixtures/lane-merge-ask/pr16.json" "$FAKE_GH/pr/16.json"
@@ -291,4 +307,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix or another closing line fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines, disagreeing verdicts refused; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"

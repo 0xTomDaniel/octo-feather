@@ -111,6 +111,8 @@ def api(args):
         "identifier": k, "title": i["title"], "description": i.get("description"), "url": url(db, k, i["title"]),
         "state": {"type": state_type(db, i.get("state", "Todo"))},
         "parent": {"identifier": i["parent"]} if i.get("parent") else None,
+        "children": {"nodes": [{"identifier": c} for c, x in db["issues"].items() if x.get("parent") == k],
+                     "pageInfo": {"hasNextPage": False}},
         "inverseRelations": {"nodes": [{"type": "blocks", "issue": {"identifier": b}} for b in i.get("blocked_by", [])]}}}}))
 
 

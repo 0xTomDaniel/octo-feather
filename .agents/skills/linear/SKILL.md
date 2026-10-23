@@ -32,10 +32,10 @@ and names the install path when missing: the release binary on `PATH` as
 | --- | --- | --- |
 | `lane-key ID` | Lane key for an issue as the owner writes it (`ENG-123`, `eng-123`, its URL) | `eng-123` |
 | `key-from-branch BRANCH` | Parent issue of a lane branch or a worker branch named after it | `ENG-123` |
-| `issue-view KEY` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `blocked_by` (keys) |
+| `issue-view KEY` | Reads one issue | JSON: `key`, `title`, `body`, `state` (`open` or `done`), `url`, `parent` (key or null), `children` (its sub-issues' keys), `blocked_by` (keys) |
 | `issue-create --title T --body-file F\|- [--parent KEY] [--blocked-by KEY]...` | Files an issue (in the parent's team, else the configured team), optionally a sub-issue of a parent and blocked by others | The new key |
 | `issue-comment KEY [--body-file F\|-]` | Adds a comment (standard input by default) | The comment's url |
-| `issue-done KEY` | Moves the issue to its team's Done (first `completed` state); one already done stays done | Nothing |
+| `issue-done KEY` | Moves the issue to its team's Done (first `completed` state); one already done (completed, canceled or duplicate) stays as it is | Nothing |
 | `pr-line KEY` | The line a lane PR body starts with for its parent issue | `Tracks ENG-123` |
 
 Tracker writes are only these: a ticket filed, commented on, and moved to
