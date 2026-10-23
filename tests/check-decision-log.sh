@@ -91,6 +91,26 @@ expect check-decision-log "$L" "{$head,\"why\":\"x\",$tail,\"n\":NaN}\n" "$L:1: 
 expect check-decision-log "$L" "{$head,\"why\":\"\xff\",$tail}\n" "$L:1: not UTF-8"
 expect check-decision-log "$L" "$ok $ok\n" "$L:1: invalid JSON"
 expect check-decision-log "$L" "{}\n" "$L:1: missing ts" "$L:1: missing why" "$L:1: missing result"
+# Schema patterns are ECMA-262 (JSON Schema 2020-12; #142, #121 D9): \s is ECMA's white space and line
+# terminators, so a field of only U+FEFF fails; U+001C..U+001F, U+0085, U+200B and U+180E are not white space.
+expect check "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
+expect check-decision-log "$L" "{$head,\"why\":\"\\\\u3000\\\\u00a0\\\\u2028\\\\u000b\",$tail}\n" "$L:1: why does not match"
+for c in 001c 001d 001e 001f 0085 200b 180e; do allow "$L" "{$head,\"why\":\"\\\\u$c\",$tail}\n"; done
+# The other constructs ECMA reads differently from Python re: \d \w \b are ASCII, . stops at
+# every line terminator, $ is the end only; a construct ECMA lacks makes the schema unusable.
+set_pattern() { python3 - "$t/$schema" "$1" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1])); s["properties"]["why"]["pattern"] = sys.argv[2]; json.dump(s, open(sys.argv[1], "w"))
+PY
+}
+set_pattern '^\d+$'; expect check-decision-log "$L" "{$head,\"why\":\"\\\\u0663\",$tail}\n" "$L:1: why does not match"
+expect check-decision-log "$L" "{$head,\"why\":\"1\\\\n\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"12\",$tail}\n"
+set_pattern '^\w\b'; expect check-decision-log "$L" "{$head,\"why\":\"\\\\u00e9\",$tail}\n" "$L:1: why does not match"
+allow "$L" "{$head,\"why\":\"a\\\\u00e9\",$tail}\n"; allow "$L" "{$head,\"why\":\"a b\",$tail}\n"
+set_pattern '^a.b$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\u2028b\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085b\",$tail}\n"
+set_pattern '^[\S]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u001c\",$tail}\n"
+set_pattern '^[^\s]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085\",$tail}\n"
+cp "$t.schema" "$t/$schema"
 # The schema file is the one source for the field list and the extra-field policy.
 python3 - "$t/$schema" <<'PY'
 import json, sys
@@ -121,6 +141,8 @@ schema_bad '{"type": "object", "required": ["why"], "patternProperties": {}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": ["string", "null"]}}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": "string", "pattern": "("}}}'
 schema_bad '{"type": "object", "required": ["why"], "additionalProperties": {"type": "string"}}'
+schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": "string", "pattern": "(?P<a>x)"}}}'
+schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": "string", "pattern": "x\\Z"}}}'
 # Fails closed: an unreadable tracked log (a dangling link) fails naming it.
 ln -s missing "$t/$L"; g add -f "$L"; run check-decision-log; unplant "$L"
 [[ "$rc" != 0 ]] && grep -qF "check-decision-log: $L: cannot read" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" \
