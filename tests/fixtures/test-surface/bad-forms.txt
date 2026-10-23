@@ -1,0 +1,8 @@
+source "$kit/scripts/lib"
+. "$kit/scripts/lib"
+true; . ./lib.sh
+if x; then source lib; fi
+python3 -c "import runpy; runpy.run_path(p)"
+python3 -c "m = __import__(\"x\")"
+python3 -c "exec(open(p).read())"
+from importlib.machinery import SourceFileLoader
