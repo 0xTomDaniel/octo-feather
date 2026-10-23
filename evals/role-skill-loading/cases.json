@@ -1,0 +1,53 @@
+[
+  {
+    "id": "implementer-python-ticket",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t1",
+    "task": "Ticket T1 (lane gh1, parent #1): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text).\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t1, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "corrector-repeated-class",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh9",
+    "task": "Correction lane gh9 for this repo (ADR 0020 factory QA). Trigger: finding class `internal-test-surface` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greet_strips imports app.core.greet directly; assert through the CLI\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greeting_text imports app.core.Greeting; constructs and asserts a dataclass, no CLI\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh9 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
+    "id": "reviewer-test-quality",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout",
+      "branch": "implementer-t1",
+      "message": "feat(hello): --shout (T1, hello-shout)"
+    },
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "qc-judge-demo-path",
+    "role": "qc-judge",
+    "fixture": "python-app-shout",
+    "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; and with --json the \"text\" field is `HELLO, ADA!`.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
+  },
+  {
+    "id": "director-file-parent",
+    "role": "director",
+    "fixture": "python-app",
+    "fake_gh": true,
+    "task": "Owner: file the lane parent issue in this repo for \"app hello --shout: upper-cased greeting with a trailing !\" (a small lane from main). Only that step: do not start the lane or spawn anyone.\nSandbox run: there is no Herdr and no octo-feather-state; GitHub is reachable through gh. Put your report as your final message."
+  },
+  {
+    "id": "supervisor-publish-lane",
+    "role": "supervisor",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout",
+      "branch": "gh1",
+      "message": "feat(hello): --shout (T1, hello-shout)"
+    },
+    "origin": true,
+    "fake_gh": true,
+    "task": "Lane gh1 (parent issue #12, \"app hello --shout\"), branch gh1 in this directory, cut from main. The pilot ticket's commit is already integrated on gh1 and `just check` is green on it.\nYour step now: publish the lane: push gh1 to origin and open the lane's draft PR closing #12. Only that step: no workers, no review, no qc.\nSandbox run: there is no Herdr and no octo-feather-state; skip every herdr-say step and lane-record write; GitHub is reachable through gh. Put your report as your final message."
+  }
+]

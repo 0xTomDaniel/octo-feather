@@ -108,6 +108,9 @@ check-refs:
     # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
     if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
+    # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
+    if git ls-files -z .agents/skills agents | xargs -0 grep -nHF -e 'Skill tool' -e 'Skill call'; then
+      echo "check-refs: Skill tool named above; Pi has none: write 'read the \`<name>\` skill (\`../<name>/SKILL.md\`)', vendored skills through .skillfile/patches (#107)" >&2; bad=1; fi
     if grep -nHE 'octo-lite-|\.octo-lite|octo-lite:' "${files[@]}"; then
       echo "check-refs: octo-lite product names above; rename to octo-feather (attribution stays in NOTICE)" >&2; bad=1; fi
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
