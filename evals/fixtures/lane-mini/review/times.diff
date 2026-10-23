@@ -1,0 +1,22 @@
+diff --git a/src/app/core.py b/src/app/core.py
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -12,9 +12,15 @@ class Greeting:
+     text: str
+ 
+ 
+-def greet(name: str) -> Greeting:
++def greet(name: str, times: int = 1) -> Greeting:
+     clean = name.strip()
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+-    return Greeting(name=clean, text=f"Hello, {clean}")
++    if times < 1:
++        msg = "times must be at least 1"
++        raise ValueError(msg)
++    return Greeting(name=clean, text="\n".join([f"Hello, {clean}"] * times))
++
++
++def greet_many(name, times):
++    return greet(name, times)

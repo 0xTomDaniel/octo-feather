@@ -1,0 +1,1066 @@
+[
+  {
+    "id": "impl-prove-json-claim",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The last worker said `app hello --json` is finished and working. Before I tell the owner it is done, confirm that for real and report what you saw."
+  },
+  {
+    "id": "impl-prove-empty-name-claim",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "A teammate says the empty-name case is handled: `app hello '   '` exits 2 with an error instead of greeting nobody. Is that actually true? Tell me, with what shows it."
+  },
+  {
+    "id": "impl-prove-near-read-only",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. From reading src/app/core.py only, without running anything, what text does greet() build for the name Ada? One line."
+  },
+  {
+    "id": "impl-prove-near-test-command",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which command does AGENTS.md give for running the tests? Quote it; do not run it."
+  },
+  {
+    "id": "impl-blast-lowercase-name",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Before this ships: greet() in src/app/core.py is about to start lower-casing the name it returns. What else could that break? Show me the one fact that makes it safe or not by running real code. Leave the repo as it is."
+  },
+  {
+    "id": "impl-blast-rename-json-key",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "I plan to rename the `text` key in `app hello --json` output to `message`. What depends on it, and what would break? Prove it rather than guess. Leave the repo as it is."
+  },
+  {
+    "id": "impl-blast-near-list-callers",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. List every place under src/ that calls greet(, as file:line, nothing else. No analysis, do not run anything."
+  },
+  {
+    "id": "impl-blast-near-explain-term",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not open any file or run anything. In general terms, one sentence: what could break at runtime if a Python function's return type annotation were wrong?"
+  },
+  {
+    "id": "blast-radius-keep-whitespace",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "I am about to drop the `.strip()` in `greet` (src/app/core.py) so names keep their surrounding whitespace. Before I ship that: what else in this repo could it break, beyond that one line, and how sure are you? Do not change any file; answer in a few lines."
+  },
+  {
+    "id": "impl-commit-editorconfig",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Add a `.editorconfig` that sets `indent_style = space` and `indent_size = 4` for `*.py`, and commit it."
+  },
+  {
+    "id": "impl-commit-changelog",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Start a CHANGELOG.md with one entry, '0.1.0: app hello, with --json', and record it in git history."
+  },
+  {
+    "id": "impl-commit-near-show-last",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Show me the subject and author of the last commit, nothing else."
+  },
+  {
+    "id": "impl-commit-near-leave-uncommitted",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Add a `.editorconfig` that sets `indent_style = space` for `*.py`. Do not commit: leave it as an uncommitted change for me to review."
+  },
+  {
+    "id": "impl-github-file-issue",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Open an issue in this project's tracker titled 'hello: support --shout' with a two-line description of the feature."
+  },
+  {
+    "id": "impl-github-pr-status",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Is there an open pull request for this branch on GitHub, and has anyone reviewed it? Tell me."
+  },
+  {
+    "id": "impl-github-near-local-branches",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without any network access, list this repo's local git branches and say which one is checked out."
+  },
+  {
+    "id": "impl-github-near-draft-text",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Write, in your reply only, a two-line description of a --shout flag for `app hello`. Do not file or post it anywhere."
+  },
+  {
+    "id": "impl-ghpr-open-draft",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "This branch has the `--shout` work committed. Put it up on GitHub for review: push it and open the lane's draft pull request, then give me its URL."
+  },
+  {
+    "id": "impl-ghpr-near-commit-msg",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Write, in your reply only, the title and a two-line body you would give a pull request adding `--shout` to `app hello`. Open nothing."
+  },
+  {
+    "id": "impl-ghissues-ticket-scope",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "I'm starting ticket 13 from the issue list. Pull it up and tell me its title, its state and which parent issue it belongs to."
+  },
+  {
+    "id": "impl-ghissues-near-todo",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without any network access, grep this repo for TODO or FIXME comments and list each with its file and line."
+  },
+  {
+    "id": "impl-implement-shout-ticket",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket: `app hello` gains `--shout`, which upper-cases the greeting text, in plain and --json output; nothing else changes. Build it in this repo."
+  },
+  {
+    "id": "impl-implement-two-tickets",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Two tickets for this repo. 1: `app hello --times N` prints the greeting N times, one per line. 2: `--times 0` or less exits 2 with an error. Deliver both."
+  },
+  {
+    "id": "impl-implement-near-already-done",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Is the ticket 'app hello gains --json' already built in this repo? Answer yes or no and quote the line that shows it."
+  },
+  {
+    "id": "impl-implement-near-estimate",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Without writing any code, name the files a `--times N` option for `app hello` would need to touch. One line."
+  },
+  {
+    "id": "impl-nodejs-port-env",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Make the server take its port from the PORT environment variable, falling back to 3000."
+  },
+  {
+    "id": "impl-nodejs-env-file",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "src/config.ts parses .env by hand. Replace that with the runtime's own way of loading an env file, keeping `pnpm serve` working."
+  },
+  {
+    "id": "impl-nodejs-near-python-env",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Make `app hello` fall back to the name in the APP_NAME environment variable when no name is given."
+  },
+  {
+    "id": "impl-nodejs-near-readme-typo",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Fix the spelling mistake 'recieve' in README.md. Change nothing else, and do not commit."
+  },
+  {
+    "id": "impl-pnpm-add-zod",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Add `zod` as a runtime dependency of this project (no code using it yet)."
+  },
+  {
+    "id": "impl-pnpm-lock-sync",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Bump the typescript dev dependency to 5.7.2 and keep the lockfile consistent with package.json."
+  },
+  {
+    "id": "impl-pnpm-near-python-dep",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Add `rich` as a runtime dependency of this project (no code using it yet)."
+  },
+  {
+    "id": "impl-pnpm-near-test-script",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not install anything. Which script in package.json runs the tests, and what does it execute? One line."
+  },
+  {
+    "id": "impl-pull-origin-main",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Bring this branch up to date with the latest origin/main and resolve any conflicts before continuing."
+  },
+  {
+    "id": "impl-pull-upstream-moved",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Main has moved on upstream since this branch was cut. Get those changes into this branch, keeping both sides' intent where they clash."
+  },
+  {
+    "id": "impl-pull-near-log",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without fetching, show the last 3 commits on this branch, one line each."
+  },
+  {
+    "id": "impl-pull-near-new-branch",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Create a local branch `feature/shout` from the current HEAD and switch to it. Nothing else: no fetch, no merge, no commit."
+  },
+  {
+    "id": "impl-python-name-length",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Make `app hello` reject names longer than 40 characters: exit 2 with an error, in plain and --json output."
+  },
+  {
+    "id": "impl-python-ruff-config",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Set this project up so its code is linted and formatted the way the repo's stack expects, and add the command to AGENTS.md."
+  },
+  {
+    "id": "impl-python-near-agents-typo",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "In AGENTS.md, change the first line under the title from 'Small Python app' to 'A small Python app'. Only that edit, no commit."
+  },
+  {
+    "id": "impl-python-near-ts-shout",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Add a `--shout` option to `app hello` that upper-cases the greeting, in plain and --json output."
+  },
+  {
+    "id": "tdd-shout-flag",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Add a `--shout` option to `app hello` that upper-cases the greeting text (plain and --json output). Work test-first, red-green-refactor: write one failing test through the CLI, see it fail, then make it pass. Commit when green."
+  },
+  {
+    "id": "tdd-tab-in-name",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Bug report: `app hello $'Ada\\tLovelace'` keeps the tab in the greeting; inner whitespace should collapse to one space. Fix it, and make sure it can never quietly come back."
+  },
+  {
+    "id": "tdd-near-run-suite",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Run the existing test suite once and tell me how many tests pass and fail."
+  },
+  {
+    "id": "tdd-near-miss-count-tests",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file. Tell me how many test functions tests/test_cli.py defines and which pytest options pyproject.toml sets, in two lines."
+  },
+  {
+    "id": "impl-ts-precise-type",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "greet() in src/core.ts takes `any`. Give it a precise parameter type and fix whatever the compiler then reports."
+  },
+  {
+    "id": "impl-ts-shout",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Add a `--shout` option to `app hello` that upper-cases the greeting, in plain and --json output. Then tell me in one line what changed."
+  },
+  {
+    "id": "impl-ts-near-python-hints",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Add a precise return type annotation to every function in src/app/cli.py that lacks one. No commit."
+  },
+  {
+    "id": "impl-ts-near-node-version",
+    "role": "implementer",
+    "fixture": "ts-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which Node.js version does this repo pin, and where? One line."
+  },
+  {
+    "id": "impl-evalcases-skill-sections",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket T6 (criterion changelog-sections): the changelog skill in this repo should also say that entries under `## Unreleased` are grouped into `### Added`, `### Changed` and `### Fixed`. Make the change and commit it."
+  },
+  {
+    "id": "impl-evalcases-new-repo-skill",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "new ticket, small one: whoever touches src/app/cli.py keeps forgetting that errors exit 2 with a single line on stderr. we want that written down as a repo skill here (cli-errors), declared in AGENTS.md next to python. ship it."
+  },
+  {
+    "id": "impl-evalcases-near-read-skill",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. What rules does this repo's changelog skill set for an entry? List them, one line each."
+  },
+  {
+    "id": "impl-evalcases-near-use-skill",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T7: `app hello --json` gained a `name` field in #9. Add its CHANGELOG.md entry the way this repo wants entries written, and commit. Change nothing else."
+  },
+  {
+    "id": "sup-commit-pr-body",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "You drafted the PR body: write 'Lane gh12: greet-shout and greet-times.' into notes/pr-body.md and commit it on this branch."
+  },
+  {
+    "id": "sup-commit-call-line",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Append this spec call line to docs/specs/greet.calls.jsonl and get it into the branch history: {\"at\": \"2026-10-23T10:00:00Z\", \"role\": \"supervisor\", \"anchor\": \"greet-times\", \"call\": \"N below 1 exits 2\", \"denied\": null}"
+  },
+  {
+    "id": "sup-commit-near-last-touch",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Which commit last touched docs/specs/greet.spec.html? Hash and subject only."
+  },
+  {
+    "id": "sup-commit-near-draft-msg",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not run git. Draft, in your reply only, a one-line commit subject for a change that adds --shout."
+  },
+  {
+    "id": "sup-github-pr-ci",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Check on GitHub whether PR #31 has green CI and an approving review, and tell me."
+  },
+  {
+    "id": "sup-github-close-issue",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh12 merged. Close its parent issue #12 on GitHub with a one-line comment saying so."
+  },
+  {
+    "id": "sup-github-near-status-file",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, read docs/specs/greet.status.json and list the criteria still planned."
+  },
+  {
+    "id": "sup-github-near-draft-comment",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Draft, in your reply only, a one-line comment for issue #12 saying the pilot ticket passed qc. Do not post it."
+  },
+  {
+    "id": "sup-ghpr-merge-head",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh12's PR #31 is ready. What exact head would you merge it at, and with what command? Look it up, do not merge."
+  },
+  {
+    "id": "sup-ghpr-near-diff-stat",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, which files does review/shout.diff change, and how many lines does it add?"
+  },
+  {
+    "id": "sup-ghpr-near-pr-number",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Read notes/lane.toml and tell me which PR number and repository this lane is recorded against. Look nothing up online."
+  },
+  {
+    "id": "sup-ghissues-file-ticket",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket #14 needs a sibling: file a sub-ticket of #12 titled 'hello --times 0 prints nothing', blocked by #14."
+  },
+  {
+    "id": "sup-herdr-tell-worker",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Tell the implementer in pane w2:p3 that ticket #14 is unblocked and it may start."
+  },
+  {
+    "id": "sup-herdr-spawn-worker",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Start an implementer for ticket #14 in a new tab in your space."
+  },
+  {
+    "id": "sup-herdr-near-read-handoffs",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. What kind is the last line of notes/handoffs.jsonl, and when was it written?"
+  },
+  {
+    "id": "sup-herdr-near-lane-field",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. What does notes/lane.toml say the lane waits on, and which PR does it name?"
+  },
+  {
+    "id": "sup-implspec-build-criterion",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The spec docs/specs/greet.spec.html is accepted. Your lane builds criterion greet-shout: deliver it."
+  },
+  {
+    "id": "sup-implspec-docstring-typo",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Fix the typo 'Helo' in src/app/core.py's module docstring."
+  },
+  {
+    "id": "sup-implspec-near-summarize",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Summarize the acceptance criteria of docs/specs/greet.spec.html in two lines."
+  },
+  {
+    "id": "sup-implspec-near-lane-record",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "In notes/lane.toml, set waiting_on to \"director\" and change no other field. Nothing else."
+  },
+  {
+    "id": "sup-push-draft-pr",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Publish this branch and open a draft PR for it."
+  },
+  {
+    "id": "sup-push-refresh-pr",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The PR for this branch is behind: update it to the current head and refresh its body with the latest validation evidence."
+  },
+  {
+    "id": "sup-push-near-ahead-count",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without any network access, how many commits is this branch ahead of main? One number."
+  },
+  {
+    "id": "sup-push-near-local-body",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Write the PR body text 'Lane gh12: greet-shout and greet-times.' into notes/pr-body.md. Local file only: do not push, publish or commit."
+  },
+  {
+    "id": "sup-tickets-break-spec",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Break docs/specs/greet.spec.html's planned criteria into this lane's tickets."
+  },
+  {
+    "id": "sup-tickets-slice-criteria",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The greet spec is accepted and your lane builds greet-shout and greet-times. Cut that work into demoable slices with their blocking order and file them."
+  },
+  {
+    "id": "sup-tickets-near-count",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not file anything. How many acceptance criteria does docs/specs/greet.spec.html list?"
+  },
+  {
+    "id": "sup-tickets-near-mark-done",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket #13 merged: in notes/tickets.md change its state from 'in progress' to 'done'. Only that edit, nothing filed."
+  },
+  {
+    "id": "dir-herdr-poke-idle",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The supervisor in pane w2:p1 (lane gh12) has been idle for 40 minutes with an open mandate. Poke it to investigate."
+  },
+  {
+    "id": "dir-herdr-relay-merge",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The owner just said: merge PR #31 at the head its merge ask named. Relay that to the lane gh12 supervisor, pane w2:p1."
+  },
+  {
+    "id": "dir-herdr-near-lane-wait",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. Read notes/lane.toml and tell me what the lane waits on and its goal."
+  },
+  {
+    "id": "dir-herdr-near-count-findings",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. Which finding class appears twice or more in notes/handoffs.jsonl?"
+  },
+  {
+    "id": "dir-github-file-parent",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "File the parent GitHub issue for a new lane, 'Greet shout and times', building greet-shout and greet-times."
+  },
+  {
+    "id": "dir-github-main-ci",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh12 reports its PR merged. Check main's CI on GitHub and tell me the result."
+  },
+  {
+    "id": "dir-github-near-built",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, read docs/specs/greet.status.json: which criteria are built, and by which PR?"
+  },
+  {
+    "id": "dir-github-near-owner-line",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Write, in your reply only, the one-line owner update for lane gh12 from notes/lane.toml. Post nothing."
+  },
+  {
+    "id": "dir-ghpr-review-state",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The owner asks whether lane gh12's PR #31 has a review verdict comment yet and whether it is still a draft. Find out."
+  },
+  {
+    "id": "dir-ghpr-near-handoff-time",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. From notes/lane.toml alone, when was lane gh12's last handoff, and which pane supervises it?"
+  },
+  {
+    "id": "dir-ghissues-parent-children",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before I close out lane gh12: list the sub-tickets of its parent ticket #12 as the tracker has them now, with each one's state."
+  },
+  {
+    "id": "dir-ghissues-near-tickets-md",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, read notes/tickets.md and say which ticket is blocked, and by what."
+  },
+  {
+    "id": "cor-commit-remove-scratch",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "notes/scratch.txt is a stray file. Remove it and commit the removal."
+  },
+  {
+    "id": "cor-commit-agents-line",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Add 'Run `uv sync` before the first `just check`.' to AGENTS.md's Commands section and land it on this branch."
+  },
+  {
+    "id": "cor-commit-near-show-last",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Show me the subject of the last commit, nothing else."
+  },
+  {
+    "id": "cor-commit-near-draft-msg",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not run git. Draft, in your reply only, the commit subject you would use for a lint that bans print() in app.core."
+  },
+  {
+    "id": "cor-correct-owner-twice",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The owner has corrected agents twice this week for building greeting text in src/app/cli.py instead of app.core. Make that mistake impossible in this repo."
+  },
+  {
+    "id": "cor-correct-repeat-class",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Finding class cli-holds-logic repeated across lanes (notes/handoffs.jsonl). Stop it from happening again."
+  },
+  {
+    "id": "cor-correct-near-count",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. How many finding lines in notes/handoffs.jsonl have class cli-holds-logic? One number."
+  },
+  {
+    "id": "cor-correct-near-one-bug",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "One bug, just this once: change the 'Helo' typo in src/app/core.py's docstring to 'Hello'. No commit."
+  },
+  {
+    "id": "cor-encode-repeated-instruction",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Reviewers keep writing the same note, 'greeting text belongs in app.core', on every PR. Turn that into something that enforces itself."
+  },
+  {
+    "id": "cor-encode-prose-ignored",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "AGENTS.md already says app.core never imports app.cli, and agents keep breaking it anyway. Make the rule stick without adding more prose."
+  },
+  {
+    "id": "cor-encode-near-quote-rule",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Quote the AGENTS.md rule about which module may import which."
+  },
+  {
+    "id": "cor-encode-near-add-command",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Add one line to AGENTS.md's Commands section: '- `uv run ruff check .` the linter.' Only that edit, no commit."
+  },
+  {
+    "id": "cor-writing-tighten-agents",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "AGENTS.md's Rules section reads wordy to agents. Rewrite it tighter for them, same rules, no commit."
+  },
+  {
+    "id": "cor-writing-new-skill",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Add a skill at .agents/skills/greeting-rules/ that tells agents where greeting text lives in this repo. No commit."
+  },
+  {
+    "id": "cor-writing-near-headings",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. List the section headings of AGENTS.md, one per line."
+  },
+  {
+    "id": "cor-writing-near-code-typo",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Change 'Helo' to 'Hello' in src/app/core.py's docstring. Only that edit, no commit."
+  },
+  {
+    "id": "cor-github-near-classes",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, list the distinct finding classes in notes/handoffs.jsonl."
+  },
+  {
+    "id": "cor-github-near-call-line",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Draft, in your reply only, the call line you would list for a check that bans print() in app.core. Post nothing."
+  },
+  {
+    "id": "cor-ghpr-review-comments",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The repeated finding came from review on PR #31. Pull that PR's review comments from GitHub and quote the ones tagged cli-holds-logic."
+  },
+  {
+    "id": "cor-ghpr-verdict-checks",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before you pick a rung: the cli-holds-logic findings came from review of lane gh12's PR #31. On GitHub, read that PR's review verdict comment and its CI checks, and tell me whether the finding still blocks it."
+  },
+  {
+    "id": "corrector-eval-cases-should",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner correction, second time this week: implementers in this repo keep testing `app hello` without its `--json` output. Your fix: a repo skill at .agents/skills/json-output/SKILL.md telling an implementer to cover both outputs, declared in AGENTS.md under Repo skills. Write it, and ship with it what will show, run after run, that an implementer really picks it up when a task needs it. Commit when done."
+  },
+  {
+    "id": "corrector-eval-cases-should-heldout",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The python skill this repo declares never gets read by implementers here, the owner says. Put a repo-local copy at .agents/skills/python/SKILL.md whose description fires on Python edits, and include the proof that it now fires on such tasks while staying quiet on, say, a README typo fix."
+  },
+  {
+    "id": "corrector-eval-cases-near-pytest",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Add a pytest case to tests/test_cli.py asserting `app hello Ada --json` prints valid JSON holding the greeting, run `uv run pytest -q`, and commit when green."
+  },
+  {
+    "id": "corrector-eval-cases-near-field-or-text",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Change nothing. Go through tests/test_cli.py: which tests assert on fields of the CLI's JSON and which match its printed text? One line per test: its name, then `field` or `text`."
+  },
+  {
+    "id": "rev-review-shout-diff",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Review the change in review/shout.diff against this repo's standards and give your verdict."
+  },
+  {
+    "id": "rev-review-times-diff",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Is review/times.diff fit to merge here? Judge it and say why."
+  },
+  {
+    "id": "rev-review-near-count-lines",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not review it. How many lines does review/shout.diff add? One number."
+  },
+  {
+    "id": "rev-review-near-summarize",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. In one line, what does review/times.diff change? No verdict, no judgment."
+  },
+  {
+    "id": "rev-github-fetch-pr",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Fetch PR #31's diff from GitHub and tell me which files it touches."
+  },
+  {
+    "id": "rev-github-pr-threads",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before you judge anything: read the open review threads on PR #31 on GitHub and list them."
+  },
+  {
+    "id": "rev-github-near-local-diff",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Without using GitHub, which files does review/times.diff touch?"
+  },
+  {
+    "id": "rev-github-near-class-tag",
+    "role": "code-reviewer",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which finding class tags already appear in notes/handoffs.jsonl? List them."
+  },
+  {
+    "id": "qc-prove-greet-plain",
+    "role": "qc-judge",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Judge criterion greet-plain of docs/specs/greet.spec.html at HEAD: pass or fail, with the command you ran and its output."
+  },
+  {
+    "id": "qc-prove-greet-json",
+    "role": "qc-judge",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Does this head meet greet-json (docs/specs/greet.spec.html)? Give one verdict with its evidence."
+  },
+  {
+    "id": "qc-prove-near-list-ids",
+    "role": "qc-judge",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Judge nothing. List the acceptance criterion ids in docs/specs/greet.spec.html."
+  },
+  {
+    "id": "qc-prove-near-app-command",
+    "role": "qc-judge",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which command does AGENTS.md give for running the app? Quote it; run nothing."
+  },
+  {
+    "id": "rev-tdd-shout-tests",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh1: the --shout change landed with two new checks at the bottom of tests/test_cli.py. Are they fit to merge as they stand? Give your verdict with reasons."
+  },
+  {
+    "id": "rev-tdd-would-catch",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before we merge: would test_shout_json and test_shout_suffix_is_bang in tests/test_cli.py go red if --shout broke? Judge them and say what you would block."
+  },
+  {
+    "id": "rev-tdd-near-count-tests",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not review anything. How many test functions does tests/test_cli.py define? One number."
+  },
+  {
+    "id": "rev-tdd-near-run-suite",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not judge the tests. Run `uv run pytest -q` here and report how many passed and failed, nothing else."
+  }
+]

@@ -72,3 +72,10 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     (local skills, edited in place)
     agents/supervisor.md quotes the brief format of pstack's orchestrate playbook
     (same pin and license).
+    .agents/skills/eval-cases: a local skill adapting the eval method of
+    Anthropic's skill-creator (anthropics/skills@dbd4588f9e1033efb41dad4bef2f7947c8993d44,
+    skills/skill-creator, by Anthropic, Apache License, Version 2.0):
+    should and near-miss should-not trigger cases, a held-out share scored apart,
+    transcript facts as the grade. Rewritten for Pi and the kit's factory evals; no
+    skill-creator code or text is copied (its runner, description loop and viewer
+    assume Claude Code, docs/adr/0001).

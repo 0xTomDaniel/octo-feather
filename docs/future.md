@@ -12,7 +12,7 @@ octo-lite's installer registered `herdr-wake` as Spec Chat's `wake` provider (`p
 
 ## `just qc` and `just qa`
 
-Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target's product, `just qa` runs factory evals of the kit's own agents and loop. Both are stubs that exit 2. Neither runs inside `just check`, which stays deterministic and free; the gate's guard is check-gate-free (`scripts/check-gate-free`).
+Names decided by Tom (round 8): `just qc` runs the Jev product judge on a target's product, `just qa` runs factory evals of the kit's own agents and loop. `just qc` is the interim product judge (docs/adr/0022). `just qa` runs a pilot: the skill-triggers suite (evals/, scripts/octo-feather-qa, #110); role transcript cases and trigger cases for every skill a role lists are still to come (#108). Neither runs inside `just check`, which stays deterministic and free; the gate's guard is check-gate-free (`scripts/check-gate-free`).
 
 ## Reviewer scope drift (gpt-6.1-sol)
 

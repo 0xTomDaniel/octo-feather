@@ -7,11 +7,25 @@
     "task": "Ticket T1 (lane gh1, parent #1): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text).\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t1, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   },
   {
+    "id": "implementer-skill-ticket",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "branch": "implementer-t4",
+    "task": "Ticket T4 (lane gh4, parent #4): the repo's changelog skill gains a rule: a CHANGELOG.md entry says what a user of `app` sees (a command, a flag, an output), never internal names such as modules, functions or dataclasses. Example: `- app hello NAME --shout prints the greeting upper-cased (#5)`, not `- core.greet takes a shout bool (#5)`.\nAcceptance criterion: changelog-user-facing. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
     "branch": "corrector-gh9",
     "task": "Correction lane gh9 for this repo (ADR 0020 factory QA). Trigger: finding class `internal-test-surface` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greet_strips imports app.core.greet directly; assert through the CLI\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greeting_text imports app.core.Greeting; constructs and asserts a dataclass, no CLI\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh9 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
+    "id": "corrector-repo-skill-rule",
+    "role": "corrector",
+    "fixture": "python-app-skill",
+    "branch": "corrector-gh11",
+    "task": "Correction lane gh11 for this repo (ADR 0020 factory QA). Trigger: finding class `changelog-internal-wording` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"changelog-internal-wording\", \"blocking\": true, \"summary\": \"CHANGELOG.md entry for #5 names core.greet, a shout bool and cli.main; it says how the code changed, not what a user of app sees (app hello NAME --shout)\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"changelog-internal-wording\", \"blocking\": true, \"summary\": \"CHANGELOG.md entry for #7 is about the Greeting dataclass and asdict; users never see app.core, the entry should say what --json now prints\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh11 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
   },
   {
     "id": "reviewer-test-quality",
@@ -22,13 +36,19 @@
       "branch": "implementer-t1",
       "message": "feat(hello): --shout (T1, hello-shout)"
     },
-    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
   },
   {
     "id": "qc-judge-demo-path",
     "role": "qc-judge",
     "fixture": "python-app-shout",
     "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; and with --json the \"text\" field is `HELLO, ADA!`.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
+  },
+  {
+    "id": "qc-judge-no-reviewer-skills",
+    "role": "qc-judge",
+    "fixture": "python-app-shout",
+    "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-plain: Given the app, When `app hello Ada` runs, Then it prints `Hello, Ada`.\n- hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`.\n- hello-wave: Given the app, When `app hello Ada --wave` runs, Then it prints `Hello, Ada, waving`.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
   },
   {
     "id": "director-file-parent",

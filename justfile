@@ -25,8 +25,8 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape.
+check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile.
@@ -188,6 +188,10 @@ spec-chat repo:
 integrate issue +refs:
     octo-feather-integrate "$@"
 
+# Every eval case's shape: required fields, known facts, expectations for each case, no task showing its grade (quality #acceptance-qa-cases-checked).
+check-evals:
+    @python3 "$root/scripts/check-evals"
+
 # Role files: only fields pi-role honours, skills resolve, allowed models (docs/adr/0013).
 check-roles:
     @python3 "$root/scripts/check-roles"
@@ -230,10 +234,10 @@ supervise issue cwd=invocation_directory():
 qc $status $pr +$ids:
     octo-feather-qc "$@"
 
-# Factory QA: evals of the kit's own agents and loop. Not implemented yet (docs/future.md); never inside `just check`.
+# Factory QA: each eval case (evals/) runs its role headless in the qc sandbox; PASS/FAIL per case from transcript facts (octo-feather-qa --help). Never inside `just check`.
 qa *args:
     @[[ "$(check-gate-free --refuse 'just qa (factory evals)')" == "gate-free: ok" ]]
-    @echo "just qa: not implemented yet (factory evals, docs/future.md)" >&2; exit 2
+    octo-feather-qa "$@"
 
 # Print this Herdr session's octo-feather state directory.
 state:
