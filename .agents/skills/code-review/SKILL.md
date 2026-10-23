@@ -55,3 +55,11 @@ Report the findings, each marked **block** or **note**, then one verdict: blocke
 
 - **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 - **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
+
+Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each at column 0 outside code blocks, or the one line `Checks: none`:
+
+`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
+
+`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
+
+`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.

@@ -43,13 +43,9 @@ truncated.` notice) never counts, nor does an ls, a grep or a head of a part. No
 A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
 stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
 
-Case format rule (check-evals --help): graders read STRUCTURED facts, never prose. A verdict a case
-needs is emitted by the producer as data (a machine-readable block list by test or file id; the
-`declared` fact reads one) and graded as a field. Grading meaning by regex over prose is the defect
-class regex-judging-meaning (#107's grade-review.py inferred "blocks" from report headings and
-test-name spelling). A fuzzy question would get a judgment fact, run separately through Pi codemode
-models.classify with one closed question, labelled a judgment in the result and never gating until
-calibrated against owner labels; none is built: every case grades structured producer facts.
+Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
+exact check, rung 3 structured judgment, Who builds what) and docs/adr/0020 (Where the fix goes).
+No judgment fact is built (one would run through Pi codemode models.classify).
 
 Prints one PASS or FAIL line per case with the facts that decided it, then, when any case has a split
 (skill-trigger cases), a train and a held-out score line (passed/total each, summary.json `scores`),
