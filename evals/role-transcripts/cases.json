@@ -22,13 +22,19 @@
       "branch": "implementer-t1",
       "message": "feat(hello): --shout (T1, hello-shout)"
     },
-    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
   },
   {
     "id": "qc-judge-demo-path",
     "role": "qc-judge",
     "fixture": "python-app-shout",
     "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; and with --json the \"text\" field is `HELLO, ADA!`.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
+  },
+  {
+    "id": "qc-judge-no-reviewer-skills",
+    "role": "qc-judge",
+    "fixture": "python-app-shout",
+    "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-plain: Given the app, When `app hello Ada` runs, Then it prints `Hello, Ada`.\n- hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`.\n- hello-wave: Given the app, When `app hello Ada --wave` runs, Then it prints `Hello, Ada, waving`.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
   },
   {
     "id": "director-file-parent",

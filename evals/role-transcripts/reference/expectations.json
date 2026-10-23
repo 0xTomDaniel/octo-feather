@@ -68,12 +68,16 @@
         "skill": "code-review"
       },
       {
-        "fact": "labelled_judgment",
-        "judge": "review (a person or QC judge reads the final report; no script, docs/adr/0008) until #108 owns a structured verdict field",
-        "expect": {
-          "test_shout_json": "blocked as tautological",
-          "test_shout_suffix_is_bang": "blocked as implementation-coupled"
-        }
+        "fact": "declared_includes",
+        "field": "blocking",
+        "items": [
+          {
+            "test": "tests/test_cli.py::test_shout_json"
+          },
+          {
+            "test": "tests/test_cli.py::test_shout_suffix_is_bang"
+          }
+        ]
       }
     ]
   },
@@ -83,6 +87,16 @@
         "fact": "skill_read_before",
         "skill": "principle-prove-it-works",
         "before": "final_message"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-shout",
+            "verdict": "pass"
+          }
+        ]
       }
     ]
   },
@@ -106,6 +120,40 @@
         "fact": "skill_read_before",
         "skill": "github",
         "before": "gh_call"
+      }
+    ]
+  },
+  "qc-judge-no-reviewer-skills": {
+    "facts": [
+      {
+        "fact": "skill_not_read",
+        "skill": "code-review"
+      },
+      {
+        "fact": "skill_not_read",
+        "skill": "blast-radius"
+      },
+      {
+        "fact": "skill_not_read",
+        "skill": "github"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-plain",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-shout",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-wave",
+            "verdict": "fail"
+          }
+        ]
       }
     ]
   }

@@ -902,5 +902,37 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Which command does AGENTS.md give for running the app? Quote it; run nothing."
+  },
+  {
+    "id": "rev-tdd-shout-tests",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh1: the --shout change landed with two new checks at the bottom of tests/test_cli.py. Are they fit to merge as they stand? Give your verdict with reasons."
+  },
+  {
+    "id": "rev-tdd-would-catch",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before we merge: would test_shout_json and test_shout_suffix_is_bang in tests/test_cli.py go red if --shout broke? Judge them and say what you would block."
+  },
+  {
+    "id": "rev-tdd-near-count-tests",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not review anything. How many test functions does tests/test_cli.py define? One number."
+  },
+  {
+    "id": "rev-tdd-near-run-suite",
+    "role": "code-reviewer",
+    "fixture": "python-app-shout",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not judge the tests. Run `uv run pytest -q` here and report how many passed and failed, nothing else."
   }
 ]
