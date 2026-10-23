@@ -25,7 +25,7 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 
 4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7, then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
-   - calls the Skill tool with `tdd` to build the ticket;
+   - builds the ticket with the `tdd` skill (`../tdd/SKILL.md`);
    - merges the integration branch tip into its own branch before reporting done
 
 5. Once an **implementer subagent** completes, merge its work to the integration branch yourself: run `just integrate <parent key> <worker branch or commit>` (docs/adr/0017). It exits non-zero on a conflict or a red `just check` and leaves the branch as it was; hand that to an implementer, then integrate its result.

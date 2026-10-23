@@ -1,0 +1,11 @@
+#!/bin/sh
+# Fake GitHub for gh107 probes: logs argv, answers the few calls a lane start needs.
+echo "gh $*" >> "${FAKE_GH_LOG:-/tmp/fake-gh.log}"
+case "$1 $2" in
+  "auth status") echo "github.com: logged in as probe";;
+  "repo view") echo '{"nameWithOwner":"probe/app"}';;
+  "issue create") echo "https://github.com/probe/app/issues/12";;
+  "pr create") echo "https://github.com/probe/app/pull/13";;
+  "issue view"|"pr view"|"issue list"|"pr list") echo '[]';;
+  *) echo "fake gh: $*" >&2;;
+esac
