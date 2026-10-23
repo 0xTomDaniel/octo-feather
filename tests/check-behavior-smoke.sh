@@ -109,4 +109,11 @@ g checkout -q -b n7 main; mkdir -p "$t/evidence" "$t/docs/owed-evals"
 echo 'Supervisor asks.' >> "$t/agents/supervisor.md"; printf 'Smoke: agents/supervisor.md.\nRemoved: x\n' > "$t/evidence/zz.md"; echo '- x' > "$t/docs/owed-evals/backlog.md"
 g add -A; g commit -qm 'role, smoke ends a sentence'
 run 0 OCTO_FEATHER_BASE=main; has 'evidence evidence/zz.md'
-echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; a role or patch change without a Removed: line fails naming the fix, passes with one; a role path on no Smoke: line fails (gh71, gh67 shapes), a directory token covers its files; the opt-out passes and is printed, one untagged commit or an empty reason fails; #121: a role renamed away fails (N5), skill markdown named with a space or non-ASCII fails (N6), a Smoke: path then a period passes (N7))"
+# A Smoke: line names a path holding a space as written; another spaced path does not stand in for it.
+g checkout -q -b spaced main; mkdir -p "$t/.agents/skills/x" "$t/evidence" "$t/docs/owed-evals"
+echo x > "$t/.agents/skills/x/my notes.md"; echo 'Smoke: .agents/skills/x/my' > "$t/evidence/zz.md"; echo '- x' > "$t/docs/owed-evals/backlog.md"
+g add -A; g commit -qm 'spaced skill md, other path smoked'
+run 1 OCTO_FEATHER_BASE=main; has '#93 missing-behavior-smoke'; has '  .agents/skills/x/my notes.md'
+echo 'Smoke: .agents/skills/x/my notes.md' > "$t/evidence/zz.md"; g commit -qam 'spaced path smoked'
+run 0 OCTO_FEATHER_BASE=main; has 'evidence evidence/zz.md'
+echo "check-behavior-smoke: ok (no git config; absent base skips locally, fails in CI; role change without evidence or docs/owed-evals/*.md fails, docs/future.md no longer counts, with both passes, deleted evidence fails; a role or patch change without a Removed: line fails naming the fix, passes with one; a role path on no Smoke: line fails (gh71, gh67 shapes), a directory token covers its files; the opt-out passes and is printed, one untagged commit or an empty reason fails; #121: a role renamed away fails (N5), skill markdown named with a space or non-ASCII fails (N6), a Smoke: path then a period passes (N7), a Smoke: path holding a space names it, a shorter spaced path does not)"
