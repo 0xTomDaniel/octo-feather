@@ -12,13 +12,16 @@
 # The hand-in stays clean: a worker commit that adds Spec Chat review state
 # (`*.review/`, kept out of git by octo-feather-exclude) or adds the factory
 # recipes `integrate` or `qc` to the target's justfile (they live in the kit's
-# justfile, docs/adr/0017) is refused like a red gate.
+# justfile, docs/adr/0017) is refused like a red gate. Recipes are read as just
+# reads them (`just --dump`: imports included, aliases count) from the lane
+# worktree's own justfile, before and after; only an added name is refused, and
+# a justfile just cannot read is refused (fail closed).
 #
 # TICKET is the lane's parent ticket as the target's tracker writes it (12, ENG-123);
 # the lane key is that tracker skill's lane-key of it (gh12, eng-123; roles spec #lane-key).
 #
 # Exit: 0 integrated and green; 1 conflict; 2 `just check` red; 3 adds review
-#       state or factory recipes; 64 usage, or TICKET has no lane key;
+#       state or factory recipes, or a justfile just cannot read; 64 usage, or TICKET has no lane key;
 #       65 lane worktree not clean; 66 no single lane worktree for the lane key.
 # Does not push.
 set -euo pipefail
@@ -47,6 +50,19 @@ wt="${lanes[0]%%$'\t'*}"; branch="${lanes[0]#*$'\t'}"
 cd "$wt"
 [[ -z "$(git status --porcelain)" ]] || { echo "octo-feather-integrate: $wt has uncommitted changes" >&2; exit 65; }
 start="$(git rev-parse HEAD)"
+# Names `just NAME` runs here (recipes, imported ones included, and aliases), from this worktree's own
+# justfile (just would search parent directories); none without one. Fails, saying why, if just cannot read it.
+recipe_names() {
+  local f n out c=()
+  for n in .[jJ]* [jJ]*; do [[ -e "$n" && ( "${n,,}" == justfile || "${n,,}" == .justfile ) ]] && c+=("$n"); done
+  ((${#c[@]})) || return 0
+  ((${#c[@]} == 1)) || { echo "justfile is ambiguous, just refuses to pick one of: ${c[*]}"; return 1; }
+  f="${c[0]}"
+  out="$(just --justfile "$f" --working-directory . --dump --dump-format json 2>/dev/null)" \
+    || { echo "$f does not parse: $(just --justfile "$f" --working-directory . --dump 2>&1 >/dev/null | head -1)"; return 1; }
+  python3 -c 'import json, sys; d = json.loads(sys.argv[1]); print(*sorted({*d["recipes"], *d["aliases"]}), sep="\n")' "$out"
+}
+before_names="$(recipe_names)" || { echo "hand-in: refused before integrating, lane $branch: $before_names" >&2; exit 3; }
 
 rollback() { git reset -q --hard "$start"; echo "octo-feather-integrate: $branch reset to ${start:0:12}" >&2; }
 
@@ -67,7 +83,12 @@ for ref in "$@"; do
 done
 
 review="$(git diff --name-only --diff-filter=A "$start" HEAD -- ':(glob)**/*.review/**' | head -5 | paste -sd' ' -)"
-recipes="$(git diff "$start" HEAD -- justfile Justfile .justfile | grep -E '^\+(integrate|qc)( [^=]*)?:' | paste -sd' ' - || true)"
+if ! after_names="$(recipe_names)"; then
+  rollback
+  echo "hand-in: $* refused, after integrating: $after_names" >&2
+  exit 3
+fi
+recipes="$(LC_ALL=C comm -13 <(echo "$before_names") <(echo "$after_names") | grep -xE 'integrate|qc' | paste -sd' ' - || true)"
 if [[ -n "$review" || -n "$recipes" ]]; then
   rollback
   [[ -z "$review" ]] || echo "hand-in: $* adds Spec Chat review state ($review); drop it from the commit, it stays local (octo-feather-exclude)" >&2
