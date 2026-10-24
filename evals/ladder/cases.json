@@ -131,5 +131,16 @@
     "fixture": "python-app",
     "branch": "corrector-gh19",
     "task": "Correction lane gh19 for this repo (ADR 0020). Trigger: finding class `report-missing-safety-fact` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T2 named no fact the change is safe because of\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T6 said what changed and that tests pass, but not why the change cannot break other callers\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh19 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; GitHub is unreachable (no gh auth), so anything you would file, write as a draft (repo, title, body) in your final message. Skip every herdr-say step. Final message: your reply. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"issues\": [{\"repo\": \"<owner/name>\", \"dir\": \"<directory in that repo holding the files the issue's fix changes>\", \"title\": \"<title>\"}], \"edited\": [\"<path you changed>\"]}\n```\n(`issues`: one entry per issue you drafted, [] if none; `dir`: relative to that repo's root, no trailing slash; `edited`: every path you changed, [] if none)."
+  },
+  {
+    "id": "reviewer-proxy-blocks",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-proxy-check",
+      "branch": "implementer-t2",
+      "message": "chore(check): tests stay on the CLI surface (T2, tests-through-cli)"
+    },
+    "task": "Review lane gh2, ticket T2 (tests stay on the app's public surface; criterion tests-through-cli: every test drives the app through `app.cli.main` or the installed `app` command, never an internal function, and `just check` fails when a test does not).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   }
 ]
