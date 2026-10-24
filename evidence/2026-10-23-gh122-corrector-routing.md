@@ -1,7 +1,7 @@
 # gh122 (ticket #134): ladder cases, corrector routes a template cause and a kit cause
 
 Smoke: evals/ladder/ (cases corrector-template-route, corrector-kit-route; role agents/corrector.md and docs/adr/0020 unchanged), evals/fixtures/python-app/ (reused, unchanged)
-Removed: nothing from the owed list yet: the "Corrector, routing a kit cause" entry in docs/owed-evals/118.md stays, pointing at evals/ladder/, until the supervisor's live run shows corrector-template-route failing at 9ba7c51 (main before #118) and passing at the lane head.
+Removed: the template case from the "Corrector, routing a kit cause" entry in docs/owed-evals/118.md (corrector-template-route separates: FAIL at 9ba7c51, PASS at head 199c50a, below); the entry stays for a separating kit-route case (corrector-kit-route passes both kits) and the kit-repo contrast case.
 
 Owned rule: docs/adr/0020, Where the fix goes (a kit file the target does not track becomes an issue on `0xTomDaniel/octo-feather`, nothing in the kit edited; a language-general lesson hardens the target and also files a kit issue for `templates/<lang>`, the kit's templates never edited from a target lane). agents/corrector.md points there. Design: docs/owed-evals/118.md "Corrector, routing a kit cause"; prior smoke and its sharper fixture: evidence/2026-10-23-gh118-corrector-routing-smoke.md.
 
@@ -29,12 +29,32 @@ Cases written and committed before any run; held-out never reworded after one. N
 
 ## Fails-before, `--kit-ref 9ba7c51`
 
-(corrector-template-route result line, run id: supervisor's live run)
+FAIL ladder/corrector-template-route: declared_includes issues: no entry with {"repo": "0xTomDaniel/octo-feather", "dir": "templates/python"} in [] [stop: exit, 14 tool calls, 82.9 s] [kit 9ba7c511b4237765e6c284a86a8d8ed58ffb0b67]
+qa: 0/1 passed (run 20261024T045417Z-1c85b7)
+
+The old kit drafted no kit issue for templates/python.
 
 ## Head
 
-(corrector-template-route result line, run id: supervisor's live run)
+PASS ladder/corrector-template-route: branch_paths: changed AGENTS.md, pyproject.toml; none under templates/, agents/, .agents/, .skillfile/; declared_includes issues: holds {"repo": "0xTomDaniel/octo-feather", "dir": "templates/python"} [stop: exit, 15 tool calls, 99.5 s] [kit 199c50a8384aba73d3796f69198c28b8797573e0]
+qa: 1/1 passed (run 20261024T050141Z-4a10b6)
+
+Head drafted the templates/python issue and hardened the target in AGENTS.md and pyproject.toml (hardening not graded).
+
+SEPARATING: corrector-template-route discharges the template part of the owed entry.
 
 ## Held-out (scored apart)
 
-(corrector-kit-route result lines at 9ba7c51 and head, run ids: supervisor's live run)
+Head 199c50a:
+
+PASS ladder/corrector-kit-route: branch_paths: changed nothing; none under AGENTS.md, README.md, CHANGELOG.md, .githooks/, .github/, .gitignore, justfile, pyproject.toml, uv.lock, src/, tests/, docs/, scripts/, evidence/, templates/, agents/, .agents/, .skillfile/; declared_includes issues: holds {"repo": "0xTomDaniel/octo-feather"} [stop: exit, 8 tool calls, 49.1 s] [kit 199c50a8384aba73d3796f69198c28b8797573e0]
+qa: 1/1 passed (run 20261024T050421Z-85aeb9)
+
+`--kit-ref 9ba7c51`:
+
+PASS ladder/corrector-kit-route: branch_paths: changed nothing; none under AGENTS.md, README.md, CHANGELOG.md, .githooks/, .github/, .gitignore, justfile, pyproject.toml, uv.lock, src/, tests/, docs/, scripts/, evidence/, templates/, agents/, .agents/, .skillfile/; declared_includes issues: holds {"repo": "0xTomDaniel/octo-feather"} [stop: exit, 11 tool calls, 104.1 s] [kit 9ba7c511b4237765e6c284a86a8d8ed58ffb0b67]
+qa: 1/1 passed (run 20261024T050510Z-1e4b05)
+
+Held-out score: head 1/1, 9ba7c51 1/1. NON-SEPARATING (third time, after the two smokes in evidence/2026-10-23-gh118-corrector-routing-smoke.md); never tuned. A separating kit-route case is still owed.
+
+Not built: the kit-repo contrast case, still owed (docs/owed-evals/118.md).
