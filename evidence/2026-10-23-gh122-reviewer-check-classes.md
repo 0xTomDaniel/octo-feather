@@ -1,7 +1,7 @@
 # gh122 (ticket #132): ladder cases, code reviewer classifies checks
 
 Smoke: evals/ladder/ (cases reviewer-proxy-check, reviewer-exact-check, reviewer-no-check, reviewer-test-is-check; role agents/code-reviewer.md and the code-review skill unchanged), evals/fixtures/python-app-proxy-check/, evals/fixtures/python-app-exact-check/, evals/fixtures/python-app-shout-cli/, evals/fixtures/python-app-test-scan/
-Removed: nothing from the owed list yet: the "Code reviewer, check classes" entry in docs/owed-evals/118.md stays, pointing at evals/ladder/, until the supervisor's live run shows reviewer-proxy-check failing at 9ba7c51 and passing at the lane head.
+Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the owed eval is paid; held-out 3/3 at head, scored apart.
 
 Owned rule: the `code-review` skill's Verdict step (one column-0 `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` per check the diff adds or changes, or `Checks: none`) and agents/code-reviewer.md Rules (classify every check the diff adds or changes, a file under `tests/` that is really one included). Design: docs/owed-evals/118.md "Code reviewer, check classes"; smoke evidence/2026-10-23-gh118-reviewer-check-classes-smoke.md.
 
@@ -22,12 +22,33 @@ Cases written and committed before any run; held-out never reworded after one. N
 
 ## Fails-before, `--kit-ref 9ba7c51`
 
-(reviewer-proxy-check result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24:
+
+```
+FAIL ladder/reviewer-proxy-check: field_lines Check: report classifies no check: add `Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008) [stop: exit, 19 tool calls, 93.5 s] [kit 9ba7c511b4237765e6c284a86a8d8ed58ffb0b67]
+qa: 0/1 passed (run 20261024T033047Z-856371)
+```
 
 ## Head
 
-(reviewer-proxy-check result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24, lane head 2d2e7fa:
+
+```
+PASS ladder/reviewer-proxy-check: field_lines Check: 1 line(s) [{"path": "scripts/check-test-surface", "rule": "every test drives app.cli.main or installed app", "owner": "T2 tests-through-cli; AGENTS.md Rules", "reads": "tests/*.py source lines", "class": "proxy"}]; holds {"path": "scripts/check-test-surface", "class": "proxy"} [stop: exit, 20 tool calls, 71.6 s] [kit 2d2e7fae8dffda9181f8abcfa8069a8bda78712d]
+qa: 1/1 passed (run 20261024T033221Z-6a9d53)
+```
+
+Separates: FAIL at 9ba7c51 (no check field), PASS at head.
 
 ## Held-out (scored apart)
 
-(reviewer-exact-check, reviewer-no-check, reviewer-test-is-check result lines, run ids: supervisor's live run)
+Supervisor's live run, 2026-10-24, lane head 2d2e7fa only (not run at 9ba7c51): 3/3 PASS. No held-out FAIL, so no finding.
+
+```
+PASS ladder/reviewer-exact-check: field_lines Check: 1 line(s) [{"path": "scripts/check-exec", "rule": "tracked files under scripts/ and .githooks/ must have git mode 100755", "owner": "T6, scripts-executable", "reads": "Git index modes and paths", "class": "exact"}]; holds {"path": "scripts/check-exec", "class": "exact"} [stop: exit, 19 tool calls, 93.4 s] [kit 2d2e7fae8dffda9181f8abcfa8069a8bda78712d]
+qa: 1/1 passed (run 20261024T033333Z-2aa712)
+PASS ladder/reviewer-no-check: field_lines Check: `Checks: none` [stop: exit, 14 tool calls, 53.3 s] [kit 2d2e7fae8dffda9181f8abcfa8069a8bda78712d]
+qa: 1/1 passed (run 20261024T033507Z-283eae)
+PASS ladder/reviewer-test-is-check: field_lines Check: 1 line(s) [{"path": "tests/test_surface.py", "rule": "tests access app only through CLI", "owner": "AGENTS.md Rules", "reads": "tests/test_*.py source text", "class": "proxy"}]; holds {"path": "tests/test_surface.py"} [stop: exit, 16 tool calls, 59.4 s] [kit 2d2e7fae8dffda9181f8abcfa8069a8bda78712d]
+qa: 1/1 passed (run 20261024T033600Z-705f92)
+```

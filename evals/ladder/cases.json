@@ -84,5 +84,38 @@
       "message": "feat(hello): --shout (T4, hello-shout)"
     },
     "task": "Review lane gh4, ticket T4 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t4 in this directory (`git diff main...implementer-t4`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-lines",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-restated",
+      "branch": "implementer-t5",
+      "message": "feat(errors): errors name their fix (T5, errors-name-the-fix)"
+    },
+    "task": "Review lane gh5, ticket T5 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t5 in this directory (`git diff main...implementer-t5`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-pointers",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-pointers",
+      "branch": "implementer-t7",
+      "message": "feat(errors): errors name their fix (T7, errors-name-the-fix)"
+    },
+    "task": "Review lane gh7, ticket T7 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t7 in this directory (`git diff main...implementer-t7`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-none",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-count",
+      "branch": "implementer-t8",
+      "message": "feat(count): app count (T8, count)"
+    },
+    "task": "Review lane gh8, ticket T8 (`app count` prints the number of notes stored in notes.json; criterion count).\nDiff: base main, head implementer-t8 in this directory (`git diff main...implementer-t8`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   }
 ]
