@@ -19,10 +19,11 @@ TOP_KEYS = {"$schema", "$id", "title", "description", "type", "required", "prope
 FIELD_KEYS = {"description", "type", "minLength", "pattern"}
 TYPES = {"string": str}
 # Each pattern compiled with new RegExp(p, "u"), its error kept; each value tested, in order.
+# Property names are schema data: pairs and Maps only, never a plain object keyed by them.
 NODE_JS = r"""
-const q = JSON.parse(require("fs").readFileSync(0, "utf8")), rx = {}, bad = {};
-for (const [k, p] of Object.entries(q.patterns)) { try { rx[k] = new RegExp(p, "u"); } catch (e) { bad[k] = e.message; } }
-process.stdout.write(JSON.stringify({bad, test: Object.keys(bad).length ? [] : q.values.map(([k, v]) => rx[k].test(v))}));
+const q = JSON.parse(require("fs").readFileSync(0, "utf8")), rx = new Map(), bad = new Map();
+for (const [k, p] of q.patterns) { try { rx.set(k, new RegExp(p, "u")); } catch (e) { bad.set(k, e.message); } }
+process.stdout.write(JSON.stringify({bad: [...bad], test: bad.size ? [] : q.values.map(([k, v]) => rx.get(k).test(v))}));
 """
 
 
@@ -111,13 +112,13 @@ def node_tests(patterns, values):
     node = shutil.which("node")
     if not node:
         raise NodeError("node not found on PATH: install node (Pi needs it too)")
-    run = subprocess.run([node, "-e", NODE_JS], input=json.dumps({"patterns": patterns, "values": values}).encode(), capture_output=True)
+    run = subprocess.run([node, "-e", NODE_JS], input=json.dumps({"patterns": list(patterns.items()), "values": values}).encode(), capture_output=True)
     if run.returncode != 0:
         sys.stderr.write(run.stderr.decode("utf-8", "replace"))
         raise NodeError(f"node exited {run.returncode}")
     try:
         res = json.loads(run.stdout)
-        bad, test = res["bad"], res["test"]
+        bad, test = dict(res["bad"]), res["test"]
     except (ValueError, KeyError, TypeError) as e:
         raise NodeError(f"node gave no usable answer: {e}") from None
     if bad:

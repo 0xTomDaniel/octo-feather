@@ -117,6 +117,19 @@ set_pattern '^a++$'; plant "$L" "{$head,\"why\":\"a\",$tail}\n"; run check-decis
 set_pattern $'^a{\u0661}$'; plant "$L" "{$head,\"why\":\"a{\\\\u0661}\",$tail}\n"; run check-decision-log; unplant "$L"
 [[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a{"$'\u0661'"}\$': Invalid regular expression: /^a{"$'\u0661'"}\$/u: Incomplete quantifier" <<<"$out" \
   || { echo "check-decision-log test: pattern ^a{U+0661}\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
+# PR #140 review round 4 (owner: #142): a property named __proto__ is schema data like any other, so its
+# invalid pattern is refused with no tracked log and its valid one is tested.
+set_proto() { cp "$t.schema" "$t/$schema"; python3 - "$t/$schema" "$1" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1])); s["properties"]["__proto__"] = {"type": "string", "pattern": sys.argv[2]}; json.dump(s, open(sys.argv[1], "w"))
+PY
+}
+set_proto '^a++$'; run check-decision-log
+[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property __proto__: pattern '^a++\$': Invalid regular expression: /^a++\$/u: Nothing to repeat" <<<"$out" \
+  || { echo "check-decision-log test: __proto__ pattern ^a++\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
+set_proto '^a$'; expect check-decision-log "$L" "{$head,\"why\":\"x\",$tail,\"__proto__\":\"b\"}\n" "$L:1: __proto__ does not match ^a\$"
+allow "$L" "{$head,\"why\":\"x\",$tail,\"__proto__\":\"a\"}\n"
+cp "$t.schema" "$t/$schema"
 set_pattern '^(a|(b))\2c$'; allow "$L" "{$head,\"why\":\"ac\",$tail}\n"; expect check-decision-log "$L" "{$head,\"why\":\"bc\",$tail}\n" "$L:1: why does not match"
 cp "$t.schema" "$t/$schema"
 # The schema file is the one source for the field list and the extra-field policy.

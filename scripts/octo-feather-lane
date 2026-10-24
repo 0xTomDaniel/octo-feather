@@ -18,9 +18,9 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines markdown() reads as text count (which lines: #144, #121 D10); the last such line is the
+Only lines in the verdict reader's scope count (scope: .agents/skills/code-review/SKILL.md (Verdict step)); the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
-gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
+gate or grader the diff adds or changes (docs/adr/0008, issue #118), in that same scope:
 `Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
 Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
@@ -73,8 +73,9 @@ recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. structure()
-reads the body without fenced code and HTML comments (#145, #121 D18 D21). Checks are
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A ticket body
+is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
+or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
@@ -205,10 +206,8 @@ CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.m
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
-# The Markdown this script reads, no more (#144, #121 D10; #145, #121 D18 D21): a fence opens on a line starting
-# with ``` or ~~~ at column 0 and closes on a column-0 line of only that character, at least as long; a blockquote
-# runs from a column-0 `>` line through the following non-blank lines (lazy continuation) until a blank line or a
-# column-0 fence; an HTML comment runs from `<!--` to `-->`. No lists, indented code or nested containers.
+# The Markdown this script reads, no more. scope: .agents/skills/code-review/SKILL.md (Verdict step) for a verdict
+# report; scope: octo-feather-lane --help (ticket) for a ticket body.
 FENCE = re.compile(r"`{3,}|~{3,}")
 
 
@@ -256,7 +255,7 @@ def outside(text: str) -> list[str]:
 
 
 def verdicts(text: str) -> list[str]:
-    """Every `Verdict: clear|blocking` line outside fenced code blocks and blockquotes, in order."""
+    """Every `Verdict: clear|blocking` line in the verdict reader's scope, in order (scope: .agents/skills/code-review/SKILL.md (Verdict step))."""
     return [m.group(1) for l in outside(text) if (m := VERDICT_LINE.match(l))]   # column 0: `> Verdict:` never matches
 
 
@@ -462,9 +461,9 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"report {args[2]} is empty: pass the code review's report")
     vs = verdicts(report)
     if not vs:
-        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` outside code blocks and quotes (the code-review skill's verdict)")
+        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step))")
     if len(set(vs)) > 1:
-        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line outside code blocks and quotes, the reviewer's final verdict, then rerun")
+        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step)), the reviewer's final verdict, then rerun")
     verdict = vs[-1]
     cls, why = check_lines(report)
     if why:
@@ -842,7 +841,7 @@ def criteria_items(body: str) -> list[str] | None:
 
 
 def structure(body: str) -> list[str]:
-    """BODY's lines that carry the ticket's Markdown structure: fenced code and HTML comments dropped."""
+    """BODY's lines that carry the ticket's Markdown structure (scope: octo-feather-lane --help (ticket))."""
     return [l for l, kind in markdown(body, comments=True) if kind not in ("fence", "comment")]
 
 
