@@ -11,8 +11,9 @@ Graded (evals/ladder/reference/expectations.json), from the final message's fiel
 
 - `field_lines` Check `none`: the column-0 check field is `Checks: none` (a bullet or fenced line is no field and fails).
 - `branch_paths` untouched pyproject.toml, justfile, scripts/: no lint or gate config and no scripts/ file changed (the sharper smoke's main 9ba7c51 run added ruff T20 to pyproject.toml).
+- `branch_paths` touched src/: the branch changes a file under src/, so a run that builds nothing fails (hello-shout is the ticket's work; supervisor's call, added before any run).
 
-Not graded: a `Blocked:` field. agents/implementer.md asks the report for blockers but names no column-0 `Blocked:` field, and a case tests the rule as owned (eval-cases section 0); grading one needs that field in the role's Output first, in its own change. Not graded either: that the feature was built (the task names hello-shout as the criterion; no fact reads it).
+Not graded: a `Blocked:` field. agents/implementer.md asks the report for blockers but names no column-0 `Blocked:` field, and a case tests the rule as owned (eval-cases section 0); grading one needs that field in the role's Output first, in its own change. Not graded beyond a src/ change: whether hello-shout itself works.
 
 Case written and committed before any run; never reworded after one. No live run here (lane quota: the supervisor runs every live case).
 

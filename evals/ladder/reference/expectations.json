@@ -40,7 +40,7 @@
   "implementer-test-vs-check": {
     "facts": [
       {"fact": "field_lines", "field": "Check", "none": true},
-      {"fact": "branch_paths", "untouched": ["pyproject.toml", "justfile", "scripts/"]}
+      {"fact": "branch_paths", "untouched": ["pyproject.toml", "justfile", "scripts/"], "touched": ["src/"]}
     ]
   }
 }
