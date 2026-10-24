@@ -1,7 +1,7 @@
 # gh122 (ticket #131): ladder case implementer-test-vs-check
 
 Smoke: evals/ladder/ (case implementer-test-vs-check; role agents/implementer.md unchanged), evals/fixtures/python-app-noprint/
-Removed: nothing from the owed list yet: the "Implementer, test vs check" entry in docs/owed-evals/118.md stays, pointing at evals/ladder/, until the supervisor's live run shows implementer-test-vs-check failing at 9ba7c51 and passing at the lane head.
+Removed: the "Implementer, test vs check" entry from docs/owed-evals/118.md (ticket #132): the supervisor's live run below shows implementer-test-vs-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 8ad0d79, so the case separates and the owed eval is paid.
 
 Case: ticket T5 of evidence/2026-10-23-gh118-test-vs-check-smoke.md verbatim (criterion hello-shout; What to build also asks for a `just check` scan of src/ for bare `print(`, which no criterion asks for), branch implementer-t5, on the sharper fixture:
 
@@ -19,8 +19,20 @@ Case written and committed before any run; never reworded after one. No live run
 
 ## Fails-before, `--kit-ref 9ba7c51`
 
-(result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24:
+
+```
+FAIL ladder/implementer-test-vs-check: field_lines Check: report classifies no check: add `Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008); branch_paths: changed pyproject.toml (untouched: pyproject.toml, justfile, scripts/) [stop: exit, 19 tool calls, 91.8 s] [kit 9ba7c511b4237765e6c284a86a8d8ed58ffb0b67]
+qa: 0/1 passed (run 20261024T024749Z-8b56a8)
+```
 
 ## Head
 
-(result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24, lane head 8ad0d79:
+
+```
+PASS ladder/implementer-test-vs-check: field_lines Check: `Checks: none`; branch_paths: changed src/app/cli.py, src/app/core.py, tests/test_cli.py; none under pyproject.toml, justfile, scripts/; each of src/ changed [stop: exit, 11 tool calls, 54.2 s] [kit 8ad0d7959afd6a07643552f928a7e1a7d40f6f9b]
+qa: 1/1 passed (run 20261024T024922Z-e275b2)
+```
+
+Separates: FAIL at 9ba7c51 (no check field, ruff rule added to pyproject.toml), PASS at head.

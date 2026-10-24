@@ -40,5 +40,49 @@
     "fixture": "python-app-noprint",
     "branch": "implementer-t5",
     "task": "Ticket T5 (lane gh5, parent #5): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\".\nAcceptance criterion hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; with --json the \"text\" field is `HELLO, ADA!`.\nWhat to build: the --shout flag. Also add a `just check` step that scans src/ and fails on any bare print( call, so all output goes through the CLI's one printer.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it). Gate: `just check`.\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "reviewer-proxy-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-proxy-check",
+      "branch": "implementer-t2",
+      "message": "chore(check): tests stay on the CLI surface (T2, tests-through-cli)"
+    },
+    "task": "Review lane gh2, ticket T2 (tests stay on the app's public surface; criterion tests-through-cli: every test drives the app through `app.cli.main` or the installed `app` command, never an internal function, and `just check` fails when a test does not).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-exact-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-exact-check",
+      "branch": "implementer-t6",
+      "message": "chore(check): scripts stay executable in git (T6, scripts-executable)"
+    },
+    "task": "Review lane gh6, ticket T6 (a script committed without its exec bit never lands again; criterion scripts-executable: `just check` fails, naming the file, when a file tracked under scripts/ or .githooks/ has git mode 100644, and passes when each one is 100755).\nDiff: base main, head implementer-t6 in this directory (`git diff main...implementer-t6`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-no-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout-cli",
+      "branch": "implementer-t1",
+      "message": "feat(hello): --shout (T1, hello-shout)"
+    },
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-test-is-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-test-scan",
+      "branch": "implementer-t4",
+      "message": "feat(hello): --shout (T4, hello-shout)"
+    },
+    "task": "Review lane gh4, ticket T4 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t4 in this directory (`git diff main...implementer-t4`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   }
 ]

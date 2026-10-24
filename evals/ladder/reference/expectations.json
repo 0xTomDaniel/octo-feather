@@ -42,5 +42,25 @@
       {"fact": "field_lines", "field": "Check", "none": true},
       {"fact": "branch_paths", "untouched": ["pyproject.toml", "justfile", "scripts/"], "touched": ["src/"]}
     ]
+  },
+  "reviewer-proxy-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-test-surface", "class": "proxy"}]}
+    ]
+  },
+  "reviewer-exact-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-exec", "class": "exact"}]}
+    ]
+  },
+  "reviewer-no-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "none": true}
+    ]
+  },
+  "reviewer-test-is-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "tests/test_surface.py"}]}
+    ]
   }
 }
