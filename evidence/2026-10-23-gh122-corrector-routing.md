@@ -1,7 +1,7 @@
 # gh122 (ticket #134): ladder cases, corrector routes a template cause and a kit cause
 
 Smoke: evals/ladder/ (cases corrector-template-route, corrector-kit-route; role agents/corrector.md and docs/adr/0020 unchanged), evals/fixtures/python-app/ (reused, unchanged)
-Removed: the template case from the "Corrector, routing a kit cause" entry in docs/owed-evals/118.md (corrector-template-route separates: FAIL at 9ba7c51, PASS at head 199c50a, below); the entry stays for a separating kit-route case (corrector-kit-route passes both kits) and the kit-repo contrast case.
+Removed: the template-issue half of the template route from the "Corrector, routing a kit cause" entry in docs/owed-evals/118.md (corrector-template-route separates on the drafted templates/python issue: FAIL at 9ba7c51, PASS at head 199c50a, below). Still owed there: the target-hardening half (own entry "Corrector, template route, target hardening": ungraded, `branch_paths` has no any-of form and a lint-only `touched` is stricter than docs/adr/0020), a separating kit-route case (corrector-kit-route passes both kits) and the kit-repo contrast case.
 
 Owned rule: docs/adr/0020, Where the fix goes (a kit file the target does not track becomes an issue on `0xTomDaniel/octo-feather`, nothing in the kit edited; a language-general lesson hardens the target and also files a kit issue for `templates/<lang>`, the kit's templates never edited from a target lane). agents/corrector.md points there. Design: docs/owed-evals/118.md "Corrector, routing a kit cause"; prior smoke and its sharper fixture: evidence/2026-10-23-gh118-corrector-routing-smoke.md.
 
@@ -41,7 +41,7 @@ qa: 1/1 passed (run 20261024T050141Z-4a10b6)
 
 Head drafted the templates/python issue and hardened the target in AGENTS.md and pyproject.toml (hardening not graded).
 
-SEPARATING: corrector-template-route discharges the template part of the owed entry.
+SEPARATING: corrector-template-route discharges the template-issue half of the template route only. It grades kit paths untouched and the drafted templates/python issue; it does not grade that the target was hardened, which docs/adr/0020 also requires, so that half stays owed (docs/owed-evals/118.md).
 
 ## Held-out (scored apart)
 

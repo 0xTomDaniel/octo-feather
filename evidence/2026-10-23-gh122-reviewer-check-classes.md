@@ -1,7 +1,7 @@
 # gh122 (ticket #132): ladder cases, code reviewer classifies checks
 
 Smoke: evals/ladder/ (cases reviewer-proxy-check, reviewer-exact-check, reviewer-no-check, reviewer-test-is-check; role agents/code-reviewer.md and the code-review skill unchanged), evals/fixtures/python-app-proxy-check/, evals/fixtures/python-app-exact-check/, evals/fixtures/python-app-shout-cli/, evals/fixtures/python-app-test-scan/
-Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the owed eval is paid; held-out 3/3 at head, scored apart.
+Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the check-class half is paid; held-out 3/3 at head, scored apart. Added in its place: "Code reviewer, a proxy check blocks", still owed (below, Not graded).
 
 Owned rule: the `code-review` skill's Verdict step (one column-0 `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` per check the diff adds or changes, or `Checks: none`) and agents/code-reviewer.md Rules (classify every check the diff adds or changes, a file under `tests/` that is really one included). Design: docs/owed-evals/118.md "Code reviewer, check classes"; smoke evidence/2026-10-23-gh118-reviewer-check-classes-smoke.md.
 
@@ -12,7 +12,11 @@ Cases (role code-reviewer, fixture python-app on main, a `head` fixture committe
 - `reviewer-no-check` (held-out), head python-app-shout-cli, branch implementer-t1: --shout in src/app/cli.py and src/app/core.py, two tests through `app.cli.main` with literal expectations. Expects `Checks: none`.
 - `reviewer-test-is-check` (held-out), head python-app-test-scan, branch implementer-t4: the same --shout change plus `tests/test_surface.py`, a pytest test scanning the other test files' source for app.core imports. Expects Check includes `{path: tests/test_surface.py}`; class not graded (`test-is-check` is the finding tag, the Check line's class stays exact|proxy; no parser change).
 
-Not graded: `Verdict:` lines and finding prose (the verdict label is not owned by this change).
+What each case grades: only the column-0 check field (`Check:` path and, where stated, class; or `Checks: none`). None grades the verdict or a finding tag.
+
+Not graded: `Verdict:` lines and finding prose. Basis: the reviewer's contract declares no column-0 verdict field (code-review Verdict step: "one verdict: blocked if any finding blocks, else clear"); the `Verdict: clear|blocking` line `octo-feather-lane verdict` reads is the supervisor's, not the reviewer's (cf. docs/owed-evals/124.md history), so no declared field exists to grade. So reviewer-proxy-check does not grade the Verdict step's "A proxy check blocks, class `proxy-check`" (#132); that obligation stays owed in docs/owed-evals/118.md ("Code reviewer, a proxy check blocks": a reviewer-owned verdict field or a task-named json verdict would grade it, then FAIL at 9ba7c51, PASS at head).
+
+Note (non-blocking, review at 953a6f8): reviewer-test-is-check grades only the Check line's path, not its class nor the `test-is-check` finding tag, so it is narrower than #132; held-out, so not tuned.
 
 Fixtures checked here (each committed over python-app as the qa harness does, `uv sync --locked`): `just check` exits 0 on every head; planted bad input makes each check fail: `tests/test_bad.py` with `from app.core import greet` exits scripts/check-test-surface 1; a staged 100644 `scripts/x` exits scripts/check-exec 1; the same import in a test file fails tests/test_surface.py under pytest.
 
