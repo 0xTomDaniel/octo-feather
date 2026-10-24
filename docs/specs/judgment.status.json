@@ -3,12 +3,12 @@
   "accepted_commit": "e67a151ab2b777a20fa995129f2f05c13e25b307",
   "criteria": {
     "acceptance-judge-labelled": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 147
     },
     "acceptance-judge-bench": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 147
     },
     "acceptance-judge-advisory": {
       "status": "planned",
