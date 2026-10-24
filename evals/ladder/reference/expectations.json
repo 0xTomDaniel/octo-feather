@@ -80,7 +80,7 @@
   },
   "corrector-template-route": {
     "facts": [
-      {"fact": "branch_paths", "touched": ["pyproject.toml"], "untouched": ["templates/", "agents/", ".agents/", ".skillfile/"]},
+      {"fact": "branch_paths", "untouched": ["templates/", "agents/", ".agents/", ".skillfile/"]},
       {"fact": "declared_includes", "field": "issues", "items": [{"repo": "0xTomDaniel/octo-feather", "dir": "templates/python"}]}
     ]
   },
