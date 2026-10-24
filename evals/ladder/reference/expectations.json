@@ -36,5 +36,11 @@
     "facts": [
       {"fact": "field_lines", "field": "Check", "includes": [{"class": "exact"}], "every": {"class": ["exact"]}}
     ]
+  },
+  "implementer-test-vs-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "none": true},
+      {"fact": "branch_paths", "untouched": ["pyproject.toml", "justfile", "scripts/"]}
+    ]
   }
 }

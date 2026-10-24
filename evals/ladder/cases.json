@@ -33,5 +33,12 @@
     "fixture": "python-app",
     "branch": "implementer-t6",
     "task": "Ticket T6 (lane gh6, parent #6): a script committed without its exec bit never lands again (two lanes lost a git hook that way).\nWhat to build: `just check` fails, naming each file, when a file tracked under scripts/ or .githooks/ is not executable in git.\nAcceptance criterion: scripts-executable: every script under scripts/ and .githooks/ is executable: `just check` fails when a tracked file there has git mode 100644 and passes when each one is 100755. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-test-vs-check",
+    "role": "implementer",
+    "fixture": "python-app-noprint",
+    "branch": "implementer-t5",
+    "task": "Ticket T5 (lane gh5, parent #5): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\".\nAcceptance criterion hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; with --json the \"text\" field is `HELLO, ADA!`.\nWhat to build: the --shout flag. Also add a `just check` step that scans src/ and fails on any bare print( call, so all output goes through the CLI's one printer.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it). Gate: `just check`.\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]
