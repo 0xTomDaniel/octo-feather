@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Integration test for the check-templates gate (#118, templates #acceptance-same-gate): a template's
-# pre-commit hook and CI workflow must run `just check`; a comment does not run it. In a throwaway copy of
+# Integration test for the check-templates gate (owner: docs/specs/templates.spec.html#acceptance-same-gate,
+# #118): the hook and CI workflow lines it reads. In a throwaway copy of
 # the kit's tracked files, each edited line makes `just check-templates` fail or pass. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -35,4 +35,4 @@ expect "$ci" '      - run: just check' '# run: just check'
 expect "$ci" '      - run: just check' '      - run: echo ok # run: just check'
 expect "$ci" '      - run: just check' '      - run: just check-scripts'
 allow "$ci" '      - run: just check' '      - run: just check  # the gate'
-echo "check-templates: ok (the hook and CI run just check on a non-comment line)"
+echo "check-templates: ok (#118 cases: commented and real just check lines in the hook and CI)"

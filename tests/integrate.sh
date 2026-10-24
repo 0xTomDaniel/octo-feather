@@ -49,7 +49,7 @@ before="$(git -C ../pre rev-parse HEAD)"
 run 3 7 w5; [[ "$out" == *"review state"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: tracked review state not refused: $out" >&2; exit 1; }
 g worktree add -q -b w6 ../w6; (cd ../w6 && printf '\nintegrate issue +refs:\n    octo-feather-integrate {{issue}} {{refs}}\n' >> justfile && g commit -qam recipes)
 run 3 7 w6; [[ "$out" == *"factory recipes"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: factory recipe not refused: $out" >&2; exit 1; }
-# #121 D12: the recipe set as just reads it, not a header regex: a quiet recipe, a defaulted parameter, an import.
+# #121 D12: a quiet recipe, a defaulted parameter, an import, an unreadable justfile.
 adds() { g worktree add -q -b "$1" "../$1"; (cd "../$1" && eval "$2" && g add -A && g commit -qm "$1")
   run 3 7 "$1"; [[ "$out" == *"factory recipes to the justfile ($3)"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] \
     || { echo "integrate test: $1 adding $3 not refused: $out" >&2; exit 1; }; }
@@ -58,11 +58,11 @@ adds w9 "printf '\nqc status=\"x\":\n    true\n' >> justfile" qc
 adds w10 "printf 'integrate N:\n    true\n' > ci.just; printf \"\nimport 'ci.just'\n\" >> justfile" integrate
 g worktree add -q -b w11 ../w11; (cd ../w11 && printf '\nfoo:\n\ttrue\n  x\n' >> justfile && g commit -qam broken)
 run 3 7 w11; [[ "$out" == *"justfile does not parse"* && "$(git -C ../pre rev-parse HEAD)" == "$before" ]] || { echo "integrate test: unreadable justfile not refused: $out" >&2; exit 1; }
-# #121 D13: editing a qc recipe the lane already has adds nothing and integrates.
+# #121 D13: a lane qc recipe's parameters edited.
 (cd ../pre && printf '\nqc STATUS:\n    true\n' >> justfile && g commit -qam lane-qc)
 g worktree add -q -b w12 ../w12 octo-feather/gh7; (cd ../w12 && sed -i 's/^qc STATUS:/qc STATUS PR:/' justfile && g commit -qam qc-params)
 run 0 7 w12; grep -q '^qc STATUS PR:' ../pre/justfile || { echo "integrate test: qc parameter edit not integrated: $out" >&2; exit 1; }
-# PR #140 review finding 3 (owner: docs/adr/0017): an alias adds no recipe, so an alias-only hand-in integrates.
+# PR #140 review finding 3 (owner: docs/adr/0017): an alias-only hand-in.
 g worktree add -q -b w13 ../w13 octo-feather/gh7; (cd ../w13 && printf '\nalias integrate := check\n' >> justfile && g commit -qam alias)
 run 0 7 w13; grep -qx 'alias integrate := check' ../pre/justfile || { echo "integrate test: alias-only hand-in not integrated: $out" >&2; exit 1; }
 before="$(git -C ../pre rev-parse HEAD)"

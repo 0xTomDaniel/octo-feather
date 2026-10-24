@@ -12,10 +12,9 @@
 # The hand-in stays clean: a worker commit that adds Spec Chat review state
 # (`*.review/`, kept out of git by octo-feather-exclude) or adds the factory
 # recipes `integrate` or `qc` to the target's justfile (they live in the kit's
-# justfile, docs/adr/0017) is refused like a red gate. Recipes are read as just
-# reads them (`just --dump`: imports included, aliases are no recipes) from the lane
-# worktree's own justfile, before and after; only an added name is refused, and
-# a justfile just cannot read is refused (fail closed).
+# justfile, docs/adr/0017) is refused like a red gate. recipe_names reads the lane
+# worktree's own justfile with `just --dump` (imports included) before and after;
+# the recipe sets are compared (#121 D12 D13); a justfile just cannot read refuses.
 #
 # TICKET is the lane's parent ticket as the target's tracker writes it (12, ENG-123);
 # the lane key is that tracker skill's lane-key of it (gh12, eng-123; roles spec #lane-key).

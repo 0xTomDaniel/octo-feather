@@ -18,8 +18,7 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines outside fenced code blocks and blockquotes count (a lazy continuation line belongs to
-its blockquote, a blank line ends it, CommonMark); the last such line is the
+Only lines markdown() reads as text count (which lines: #144, #121 D10); the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
 gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
 `Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
@@ -67,15 +66,15 @@ with its fix on stderr, exit 1.
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion, nor is <template> content), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion; <template> content: #121 D17), and its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
-only for a target that declares none of these, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Headings, items
-and that line inside fenced code or an HTML comment do not count. Checks are
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. structure()
+reads the body without fenced code and HTML comments (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
@@ -241,7 +240,7 @@ def fence_closes(fence: str, l: str, base: int = 0) -> bool:
 
 
 def interrupts(l: str) -> bool:
-    """L ends an open paragraph, so it is no lazy continuation line (CommonMark): a block start or a blank line."""
+    """Whether L, a block start or a blank line, ends an open paragraph instead of continuing it lazily (#144)."""
     return not l.strip() or bool(NO_PARA.match(l) or ITEM_START.match(l) or QUOTE.match(l) or fence_at(l))
 
 
@@ -324,7 +323,7 @@ def cut_comments(l: str, rest: list[str]) -> tuple[str, str | None]:
 
 
 def outside(text: str) -> list[str]:
-    """The lines outside fenced code blocks and blockquotes, lazy continuation lines included, in order."""
+    """The lines markdown() reads as text, in order."""
     return [l for l, kind in markdown(text) if kind == "text"]
 
 
@@ -983,7 +982,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
-               "script run by its interpreter, e.g. `python harness.py`, when the repo declares no program), "
+               "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
@@ -1066,7 +1065,7 @@ class Surface:
             rel = os.path.normpath(script[2:] if script.startswith("./") else script)
             if TEST_DIR.search(rel):
                 return f"{script} is a test or hook, not the app's surface"
-            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002: the runnable script only for a target with no CLI, HTTP or UI
+            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002 fallback, read as: program() finds none
                 return f"the repo declares a program ({declared}), so the demo runs it, not a script by its interpreter (ADR 0002)"
             return None if rel in self.files else f"{script} is not a script the repo tracks"
         if prog in HTTP:

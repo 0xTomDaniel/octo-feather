@@ -220,7 +220,7 @@ grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "no pre-run
 grep -q "qc sandbox: ok   worktree $PWD is an overlay" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" \
   || fail "no overlay / persistent-writable proof: $out"
 grep -q "qc sandbox: ok   vendored-skill cache: none on the box, nothing bound" <<< "$out" || fail "absent cache: want no bind, no failure: $out"
-# issue-lifecycle#acceptance-qc-interim (#121 D19 D20): one verdict per named criterion, for the judged head.
+# issue-lifecycle#acceptance-qc-interim, #acceptance-one-head (#121 D19 D20): a duplicate id, another head.
 run 3 dup $st 5 acceptance-a acceptance-b                                                       # acceptance-a judged twice
 grep -q "judged more than once: acceptance-a" <<< "$out" || fail "duplicate id not named: $out"
 run 3 head $st 5 acceptance-a                                                                   # report for another head

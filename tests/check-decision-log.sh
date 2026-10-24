@@ -91,13 +91,12 @@ expect check-decision-log "$L" "{$head,\"why\":\"x\",$tail,\"n\":NaN}\n" "$L:1: 
 expect check-decision-log "$L" "{$head,\"why\":\"\xff\",$tail}\n" "$L:1: not UTF-8"
 expect check-decision-log "$L" "$ok $ok\n" "$L:1: invalid JSON"
 expect check-decision-log "$L" "{}\n" "$L:1: missing ts" "$L:1: missing why" "$L:1: missing result"
-# Schema patterns are ECMA-262 (JSON Schema 2020-12; #142, #121 D9): \s is ECMA's white space and line
-# terminators, so a field of only U+FEFF fails; U+001C..U+001F, U+0085, U+200B and U+180E are not white space.
+# Pattern dialect: schemas/decision-log.schema.json's $schema (#142, #121 D9). \S on U+FEFF, U+3000 U+00A0
+# U+2028 U+000B (fail) and U+001C..U+001F, U+0085, U+200B, U+180E (pass).
 expect check "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
 expect check-decision-log "$L" "{$head,\"why\":\"\\\\u3000\\\\u00a0\\\\u2028\\\\u000b\",$tail}\n" "$L:1: why does not match"
 for c in 001c 001d 001e 001f 0085 200b 180e; do allow "$L" "{$head,\"why\":\"\\\\u$c\",$tail}\n"; done
-# The other constructs ECMA reads differently from Python re: \d \w \b are ASCII, . stops at
-# every line terminator, $ is the end only; a construct ECMA lacks makes the schema unusable.
+# The same dialect (#142) on \d \w \b . $ [\S] [^\s] via schema edits, where Python re reads them otherwise.
 set_pattern() { python3 - "$t/$schema" "$1" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1])); s["properties"]["why"]["pattern"] = sys.argv[2]; json.dump(s, open(sys.argv[1], "w"))

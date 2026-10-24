@@ -12,8 +12,8 @@
 # recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
-# demo; a script run by its interpreter demos only a repo declaring no program (ADR 0002); <template> content, fenced code
-# and HTML comments hold no criterion, heading or Expand-contract line (#121 D11 D17 D18 D21); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
+# demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
+# cases (owners: ADR 0002, #145); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
 # draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
@@ -43,7 +43,7 @@ printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not execu
 mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
 chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
-# zz: criteria only inside an inert <template> (nested too) are no elements of the page; acceptance-ok is one.
+# zz: criteria only inside a <template> (nested too), #121 D17; acceptance-ok outside one.
 printf '<template><li data-acceptance-criterion data-anchor="acceptance-zz">x</li><template><p id="in"></p></template>\n<li data-acceptance-criterion data-anchor="acceptance-zz2">y</li></template>\n<ol><li data-acceptance-criterion data-anchor="acceptance-ok">z</li></ol>\n' >"$t/repo/docs/specs/zz.spec.html"
 printf 'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n' >"$t/repo/justfile"
 git -C "$t/repo" init -q -b main . && git -C "$t/repo" add -A
@@ -173,7 +173,7 @@ printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] 
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
 
-# A tracked script run by its interpreter demos only a target with no CLI, HTTP or UI (ADR 0002, #121 D11):
+# Interpreter-run scripts (owner: ADR 0002 fallback, #121 D11):
 # this repo declares programs, so `python3 scripts/octo-feather-lane` (as in the kit) and harness.py are refused.
 d11() { printf '## What to build\n\n`%s` checks.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s`\n' "$1" "$1" >"$t/d11.md"; }
 for c in 'python3 scripts/octo-feather-lane' 'python harness.py' 'bash scripts/octo-feather-lane'; do
@@ -185,14 +185,14 @@ run 1 ticket "$F/110-runnable-script.md"; has "uv run python harness.py score --
 mkdir -p "$t/bare/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/bare/docs/specs/"; cp "$t/repo/harness.py" "$t/bare/"
 printf 'check:\n    true\n' >"$t/bare/justfile"; git -C "$t/bare" init -q -b main . && git -C "$t/bare" add -A
 (cd "$t/bare" && run 0 ticket "$F/110-runnable-script.md" && d11 'python harness.py' && run 0 ticket "$t/d11.md") || exit 1
-# A criterion id is the data-anchor of a data-acceptance-criterion element; <template> content is none (#121 D17).
+# #121 D17: criterion ids inside a <template>.
 for a in acceptance-zz acceptance-zz2; do
   printf '## Acceptance criteria\n\n- [ ] zz#%s: x\n- [ ] demo: `demo a` prints ok\n' "$a" >"$t/d17.md"; run 1 ticket "$t/d17.md"
   has "class: unknown-criterion: zz#$a: no anchor $a in"; has "e.g. zz#acceptance-ok"
 done
 sed -i 's/zz#acceptance-zz2/zz#acceptance-ok/' "$t/d17.md"; run 0 ticket "$t/d17.md"
-# Headings, items and the Expand-contract line inside fenced code or an HTML comment do not count;
-# a fence inside the section does not end it (#121 D18, D21).
+# #121 D18 D21 (#145): headings, items and an Expand-contract line in fenced code or an HTML comment;
+# a fence inside the section.
 for f in '```sh' '~~~' '````'; do
   e="${f%%sh}"
   printf '## Acceptance criteria\n\n%s\n# setup\n## Not a heading\n%s\n\n- [ ] demo#acceptance-a: ok\n- [ ] demo: `demo a` prints ok\n' "$f" "$e" >"$t/d18a.md"
@@ -269,4 +269,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) only in a repo declaring no program; interpreter-run scripts refused where the repo declares one; <template> criteria unknown; fenced (backtick or tilde, 3 or 4) or HTML-commented headings, items and Expand-contract lines ignored, a fence inside the section keeps it; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
