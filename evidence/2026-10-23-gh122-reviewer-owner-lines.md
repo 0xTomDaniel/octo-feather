@@ -1,7 +1,7 @@
 # gh122 (ticket #133): ladder cases, code reviewer names every restatement of an owned rule
 
 Smoke: evals/ladder/ (cases reviewer-owner-lines, reviewer-owner-pointers, reviewer-owner-none; role agents/code-reviewer.md and the code-review skill unchanged), evals/fixtures/docs-rules/, evals/fixtures/docs-rules-restated/, evals/fixtures/docs-rules-pointers/, evals/fixtures/docs-rules-count/
-Removed: nothing from the owed list yet: the "Code reviewer, restatements of an owned rule" entry in docs/owed-evals/124.md stays, pointing at evals/ladder/, until the supervisor's live run shows reviewer-owner-lines failing at 6567cc7 (main before #124) and passing at the lane head.
+Removed: the "Code reviewer, restatements of an owned rule" entry from docs/owed-evals/124.md (ticket #134): the supervisor's live run below shows reviewer-owner-lines FAIL at `--kit-ref 6567cc7` and PASS at lane head 5b5a5c9, so the case separates and the owed eval is paid; held-out 2/2 at head, scored apart. The file keeps its header (no convention deletes an owed-evals file; docs/owed-evals/115.md keeps one with no entry).
 
 Owned rule: the `code-review` skill's Verdict step (for every rule the diff writes or changes where it is owned, one column-0 `Owner: <path>: <rule> | restated: none|<path>:<line>[, ...]`, the whole repo searched, unchanged files included, or `Owners: none`) and agents/code-reviewer.md Output (send the `Owner:` lines or `Owners: none`). Design: docs/owed-evals/124.md; smoke and fixture: evidence/2026-10-23-gh124-owner-lines-smoke.md.
 
@@ -33,12 +33,33 @@ Cases written and committed before any run; held-out never reworded after one. N
 
 ## Fails-before, `--kit-ref 6567cc7`
 
-(reviewer-owner-lines result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24:
+
+```
+FAIL ladder/reviewer-owner-lines: field_lines Owner: report names no owned rule: add `Owners: none`, or one `Owner:` line per owned rule the diff writes or changes [stop: exit, 17 tool calls, 55.8 s] [kit 6567cc7b30ccd90936fa75a1f3146181d046ddae]
+qa: 0/1 passed (run 20261024T040855Z-87d169)
+```
 
 ## Head
 
-(reviewer-owner-lines result line, run id: supervisor's live run)
+Supervisor's live run, 2026-10-24, lane head 5b5a5c9:
+
+```
+PASS ladder/reviewer-owner-lines: field_lines Owner: 3 line(s) [{"path": "docs/adr/0002-errors-name-the-fix.md", "rule": "every error names its corrective command", "restated": ["AGENTS.md", "agents/worker.md", "README.md"]}, {"path": "docs/adr/0002-errors-name-the-fix.md", "rule": "usage errors exit 2", "restated": ["AGENTS.md", "agents/worker.md"]}, {"path": ; holds {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "AGENTS.md"}; {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "agents/worker.md"}; {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "README.md"} [stop: exit, 17 tool calls, 72.2 s] [kit 5b5a5c96d6523ee1a3ba779e875418baff6ad345]
+qa: 1/1 passed (run 20261024T041151Z-d2b580)
+```
+
+Separates: FAIL at 6567cc7 (no Owner field), PASS at head.
 
 ## Held-out (scored apart)
 
-(reviewer-owner-pointers, reviewer-owner-none result lines, run ids: supervisor's live run)
+Supervisor's live run, 2026-10-24, lane head 5b5a5c9 only (not run at 6567cc7): 2/2 PASS. No held-out FAIL, so no finding.
+
+```
+PASS ladder/reviewer-owner-pointers: field_lines Owner: 3 line(s) [{"path": "docs/adr/0002-errors-name-the-fix.md", "rule": "every error names its fixing command", "restated": []}, {"path": "docs/adr/0002-errors-name-the-fix.md", "rule": "usage errors exit 2", "restated": []}, {"path": "docs/adr/0002-errors-name-the-fix.md", "rule": "other errors exit 1", "restate; holds {"path": "docs/adr/0002-errors-name-the-fix.md"}; every line in {"restated": []} [stop: exit, 23 tool calls, 61.1 s] [kit 5b5a5c96d6523ee1a3ba779e875418baff6ad345]
+qa: 1/1 passed (run 20261024T041304Z-1fb1b4)
+PASS ladder/reviewer-owner-none: field_lines Owner: `Owners: none` [stop: exit, 19 tool calls, 46.0 s] [kit 5b5a5c96d6523ee1a3ba779e875418baff6ad345]
+qa: 1/1 passed (run 20261024T041405Z-01259f)
+```
+
+Lines as the qa printer wrote them (it cuts the long field lists), from the supervisor's run output.
