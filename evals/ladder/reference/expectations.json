@@ -62,5 +62,20 @@
     "facts": [
       {"fact": "field_lines", "field": "Check", "includes": [{"path": "tests/test_surface.py"}]}
     ]
+  },
+  "reviewer-owner-lines": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "AGENTS.md"}, {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "agents/worker.md"}, {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "README.md"}]}
+    ]
+  },
+  "reviewer-owner-pointers": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md"}], "every": {"restated": []}}
+    ]
+  },
+  "reviewer-owner-none": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "none": true}
+    ]
   }
 }
