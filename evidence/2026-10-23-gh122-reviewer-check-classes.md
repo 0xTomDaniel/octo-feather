@@ -1,7 +1,7 @@
 # gh122 (ticket #132): ladder cases, code reviewer classifies checks
 
 Smoke: evals/ladder/ (cases reviewer-proxy-check, reviewer-proxy-blocks, reviewer-exact-check, reviewer-no-check, reviewer-test-is-check; role agents/code-reviewer.md and the code-review skill unchanged), evals/fixtures/python-app-proxy-check/, evals/fixtures/python-app-exact-check/, evals/fixtures/python-app-shout-cli/, evals/fixtures/python-app-test-scan/
-Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the check-class half is paid; held-out 3/3 at head, scored apart. Added in its place: "Code reviewer, a proxy check blocks", graded by reviewer-proxy-blocks, owed until that case shows FAIL at 9ba7c51 and PASS at head (below).
+Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the check-class half is paid; held-out 3/3 at head, scored apart. Added in its place: "Code reviewer, a proxy check blocks", graded by reviewer-proxy-blocks; it separated once (FAIL at 9ba7c51, PASS at head 2596103) but the head holds the column-0 Verdict field in 1 of 2 runs (below), so the entry stays until the contract fixes that field and repeated head runs pass.
 
 Owned rule: the `code-review` skill's Verdict step (one column-0 `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` per check the diff adds or changes, or `Checks: none`) and agents/code-reviewer.md Rules (classify every check the diff adds or changes, a file under `tests/` that is really one included). Design: docs/owed-evals/118.md "Code reviewer, check classes"; smoke evidence/2026-10-23-gh118-reviewer-check-classes-smoke.md.
 
@@ -58,15 +58,31 @@ Supervisor's live runs, 2026-10-24, under the combined expectation, before the s
 
 Cause: docs/adr/0008 rung 3 names the reviewer's `Verdict: clear|blocking` field, while the code-review skill's Verdict step fixes the column-0 form only for Check and Owner lines ("one verdict: blocked if any finding blocks, else clear"); gh124 smoke runs 1-2 wrote it as a heading too. Finding class `verdict-heading-not-field`, logged; the director folds it into a correction lane on report field shape. Not tuned.
 
-## reviewer-proxy-blocks (supervisor's live runs, pending)
+## reviewer-proxy-blocks
 
-Expected: FAIL at head, the `verdict-heading-not-field` finding above (the contract does not yet fix the verdict's column-0 form). Reported as the finding, never tuned.
+### Head
 
-Head: TBD (supervisor to paste the result line, kit sha and run id).
+Supervisor's live run, 2026-10-24, lane head 2596103:
 
-`--kit-ref 9ba7c51`: TBD (supervisor to paste the result line and run id).
+```
+PASS ladder/reviewer-proxy-blocks: field_lines Verdict: 1 line(s) [{"text": "blocking"}]; holds {"text": "blocking"} [stop: exit, 22 tool calls, 77.9 s] [kit 25961035aaea8af61fc3d891b357252da7acb0f6]
+qa: 1/1 passed (run 20261024T063904Z-188830)
+```
 
-The owed entry "Code reviewer, a proxy check blocks" in docs/owed-evals/118.md leaves once the contract fixes the verdict's column-0 form and this case shows FAIL at 9ba7c51 and PASS at head.
+### Fails-before, `--kit-ref 9ba7c51`
+
+Supervisor's live run, 2026-10-24:
+
+```
+FAIL ladder/reviewer-proxy-blocks: field_lines Verdict: no column-0 `Verdict:` line with a value outside code blocks [stop: exit, 16 tool calls, 77.6 s] [kit 9ba7c511b4237765e6c284a86a8d8ed58ffb0b67]
+qa: 0/1 passed (run 20261024T064022Z-93fc8b)
+```
+
+This pair separates: FAIL at 9ba7c51 (no column-0 Verdict field), PASS at head.
+
+Head is unstable on this task: the earlier head run 20261024T061942Z-d2714a (combined expectation, same task, head 8653d6e, above) wrote `## Verdict: blocking` as a heading and failed the Verdict grade. So the column-0 Verdict field holds in 1 of 2 head runs (PASS 20261024T063904Z-188830, FAIL 20261024T061942Z-d2714a); gh124 smoke runs 1-2 wrote headings too. Not tuned. Finding class `verdict-heading-not-field` stands: the contract does not fix the verdict's column-0 form.
+
+The owed entry "Code reviewer, a proxy check blocks" in docs/owed-evals/118.md stays: it leaves once the contract fixes the verdict's column-0 field and repeated head runs pass.
 
 ## Held-out (scored apart)
 
