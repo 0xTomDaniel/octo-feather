@@ -110,6 +110,14 @@ allow "$L" "{$head,\"why\":\"a\\\\u00e9\",$tail}\n"; allow "$L" "{$head,\"why\":
 set_pattern '^a.b$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\u2028b\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085b\",$tail}\n"
 set_pattern '^[\S]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u001c\",$tail}\n"
 set_pattern '^[^\s]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085\",$tail}\n"
+# PR #140 review finding 1 (owner: schemas/decision-log.schema.json $schema, #142): ^a++$ is refused naming
+# the property and construct; a backreference is refused as unsupported, never read as a mismatch of "ac".
+set_pattern '^a++$'; plant "$L" "{$head,\"why\":\"a\",$tail}\n"; run check-decision-log; unplant "$L"
+[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a++\$' at offset 3: + with nothing to repeat" <<<"$out" \
+  || { echo "check-decision-log test: pattern ^a++\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
+set_pattern '^(a|(b))\2c$'; plant "$L" "{$head,\"why\":\"ac\",$tail}\n"; run check-decision-log; unplant "$L"
+[[ "$rc" == 2 ]] && grep -qF "unusable schema: property why: pattern '^(a|(b))\\\\2c\$' at offset 8: backreference \\2 is outside the supported subset" <<<"$out" \
+  && ! grep -qF 'why does not match' <<<"$out" || { echo "check-decision-log test: backreference pattern not refused as unsupported" >&2; echo "$out" >&2; exit 1; }
 cp "$t.schema" "$t/$schema"
 # The schema file is the one source for the field list and the extra-field policy.
 python3 - "$t/$schema" <<'PY'
