@@ -117,5 +117,19 @@
       "message": "feat(count): app count (T8, count)"
     },
     "task": "Review lane gh8, ticket T8 (`app count` prints the number of notes stored in notes.json; criterion count).\nDiff: base main, head implementer-t8 in this directory (`git diff main...implementer-t8`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "corrector-template-route",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh17",
+    "task": "Correction lane gh17 for this repo (ADR 0020). Trigger: finding class `float-money` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"float-money\", \"blocking\": true, \"summary\": \"src/app/cart.py `settled()` returns `paid - total == 0.0` on float sums of prices; 0.1 + 0.2 - 0.3 is not 0.0, so an exact payment reads as short\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"float-money\", \"blocking\": true, \"summary\": \"src/app/refund.py closes an order when `remaining == 0.0` after subtracting float refund amounts; a fully refunded order stays open on a rounding residue\"} (lane gh7)\nThe lane gh7 reviewer noted that ruff's RUF069 (float-equality-comparison, a preview rule) flags both lines.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh17 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; GitHub is unreachable (no gh auth), so anything you would file, write as a draft (repo, title, body) in your final message. Skip every herdr-say step. Final message: your reply. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"issues\": [{\"repo\": \"<owner/name>\", \"dir\": \"<directory in that repo holding the files the issue's fix changes>\", \"title\": \"<title>\"}], \"edited\": [\"<path you changed>\"]}\n```\n(`issues`: one entry per issue you drafted, [] if none; `dir`: relative to that repo's root, no trailing slash; `edited`: every path you changed, [] if none)."
+  },
+  {
+    "id": "corrector-kit-route",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh19",
+    "task": "Correction lane gh19 for this repo (ADR 0020). Trigger: finding class `report-missing-safety-fact` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T2 named no fact the change is safe because of\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T6 said what changed and that tests pass, but not why the change cannot break other callers\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh19 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; GitHub is unreachable (no gh auth), so anything you would file, write as a draft (repo, title, body) in your final message. Skip every herdr-say step. Final message: your reply. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"issues\": [{\"repo\": \"<owner/name>\", \"dir\": \"<directory in that repo holding the files the issue's fix changes>\", \"title\": \"<title>\"}], \"edited\": [\"<path you changed>\"]}\n```\n(`issues`: one entry per issue you drafted, [] if none; `dir`: relative to that repo's root, no trailing slash; `edited`: every path you changed, [] if none)."
   }
 ]

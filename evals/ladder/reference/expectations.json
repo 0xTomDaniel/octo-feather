@@ -77,5 +77,17 @@
     "facts": [
       {"fact": "field_lines", "field": "Owner", "none": true}
     ]
+  },
+  "corrector-template-route": {
+    "facts": [
+      {"fact": "branch_paths", "untouched": ["templates/", "agents/", ".agents/", ".skillfile/"]},
+      {"fact": "declared_includes", "field": "issues", "items": [{"repo": "0xTomDaniel/octo-feather", "dir": "templates/python"}]}
+    ]
+  },
+  "corrector-kit-route": {
+    "facts": [
+      {"fact": "branch_paths", "untouched": ["AGENTS.md", "README.md", "CHANGELOG.md", ".githooks/", ".github/", ".gitignore", "justfile", "pyproject.toml", "uv.lock", "src/", "tests/", "docs/", "scripts/", "evidence/", "templates/", "agents/", ".agents/", ".skillfile/"]},
+      {"fact": "declared_includes", "field": "issues", "items": [{"repo": "0xTomDaniel/octo-feather"}]}
+    ]
   }
 }
