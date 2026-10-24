@@ -108,11 +108,17 @@ printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\n\nThe quoted 
 run 0 verdict 7 "$J" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
 python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\nChecks: none\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \
   || fail "fenced report posted the wrong verdict"
-# A lazy continuation line belongs to the blockquote (CommonMark, #121 D10); a blank line ends it.
+# #144, #121 D10: a blank line after a quote, then lazy continuation lines after quotes (below).
 printf '> the implementer wrote:\n\nVerdict: blocking\nChecks: none\n' > "$t/lazyend"
 run 0 verdict 7 "$J" "$t/lazyend"; grep -q "(blocking, head" <<<"$err" || fail "Verdict after a blank line ending the quote: $err"
 printf '> > nested:\n~~~\nVerdict: clear\n~~~\nChecks: none\nVerdict: blocking\n' > "$t/qfence"   # a fence interrupts the quote, ~~~ fences
 run 0 verdict 7 "$J" "$t/qfence"; grep -q "(blocking, head" <<<"$err" || fail "~~~ fence after a quote: $err"
+# PR #140 review finding 2 (owner: CommonMark fenced code, #144): the literal report, its first line indented
+# code, posts; in a list item the fence's indent counts from the item's content.
+printf '    ```\n\nVerdict: clear\nChecks: none\n' > "$t/indented"; : > "$FAKE_GH_LOG"
+run 0 verdict 7 "$J" "$t/indented"; grep -q "(clear, head" <<<"$err" && grep -q '^api -X PATCH' "$FAKE_GH_LOG" || fail "4-space indented backticks read as a fence: $err"
+printf -- '- item:\n\n    ```\n    Verdict: clear\n    ```\nChecks: none\nVerdict: blocking\n' > "$t/itemfence"
+run 0 verdict 7 "$J" "$t/itemfence"; grep -q "(blocking, head" <<<"$err" || fail "fence in a list item not read as one: $err"
 # check classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking verdict, in the header
 printf 'Check: `scripts/check-x`: tests reach no internals (docs/adr/0002) | reads: code tokens in tests/*.sh | class: Proxy\nVerdict: blocking\n' > "$t/proxy"
 run 0 verdict 7 "$J" "$t/proxy"
@@ -351,4 +357,4 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (lazy continuation included, a blank line ends a quote), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"

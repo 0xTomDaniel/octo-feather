@@ -17,12 +17,20 @@ NAME = "decisions.jsonl"
 TOP_KEYS = {"$schema", "$id", "title", "description", "type", "required", "properties", "additionalProperties"}
 FIELD_KEYS = {"description", "type", "minLength", "pattern"}
 TYPES = {"string": str}
-# ECMA-262 WhiteSpace and LineTerminator, the set \s matches (Space_Separator spelled out).
-WS = "\t\n\v\f\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
-LINE_END = "\n\r\u2028\u2029"
-SYNTAX = "^$\\.*+?()[]{}|/-"
-CONTROL = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r"}
-HEX = re.compile(r"x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]{1,6})\}|c([A-Za-z])")
+# The schema's patterns (ECMA-262, its $schema dialect) are parsed against the subset below and
+# emitted as an equivalent Python re: classes as explicit code point ranges, so no Python escape
+# or flag can reinterpret them. Anything else is refused naming the construct.
+MAX = 0x10FFFF
+# ECMA-262 WhiteSpace (Zs spelled out) and LineTerminator: what \s matches.
+WS = [(0x9, 0xD), (0x20, 0x20), (0xA0, 0xA0), (0x1680, 0x1680), (0x2000, 0x200A), (0x2028, 0x2029),
+      (0x202F, 0x202F), (0x205F, 0x205F), (0x3000, 0x3000), (0xFEFF, 0xFEFF)]
+LINE_END = [(0xA, 0xA), (0xD, 0xD), (0x2028, 0x2029)]
+DIGIT = [(0x30, 0x39)]
+WORD = [(0x30, 0x39), (0x41, 0x5A), (0x5F, 0x5F), (0x61, 0x7A)]
+SYNTAX = "^$\\.*+?()[]{}|/"
+CONTROL = {"t": 9, "n": 10, "v": 11, "f": 12, "r": 13}
+HEX = re.compile(r"x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]+)\}|c([A-Za-z])")
+QUANT = re.compile(r"[*+?]|\{(\d+)(,(\d*))?\}")
 
 
 class SchemaError(Exception):
@@ -55,96 +63,156 @@ def load_schema():
         if "pattern" in p:
             if not isinstance(p["pattern"], str):
                 raise SchemaError(f"property {name}: pattern must be a string")
-            p["pattern"] = ecma(p["pattern"])
+            try:
+                p["pattern"] = ecma(p["pattern"])
+            except SchemaError as e:
+                raise SchemaError(f"property {name}: {e}") from None
     return s
 
 
 def ecma(src):
-    """Compile an ECMA-262 pattern (JSON Schema 2020-12 `pattern`) to a Python re with ECMA's meaning:
-    \\s \\S over ECMA white space, \\d \\w \\b ASCII (re.ASCII), . stops at every line terminator,
-    $ only at the end. A construct outside the ECMA syntax handled here is refused, never guessed."""
-    out, i, n = [], 0, len(src)
+    """An Ecma for the schema pattern src (Unicode mode), or SchemaError naming the construct."""
+    n, pos = len(src), 0
 
-    def escape(i, in_class):
-        """(python text, next index, kind) for the escape at src[i] == '\\'; kind 'S' for \\S."""
-        if i + 1 >= n:
-            raise SchemaError(f"pattern {src!r}: ends in a lone backslash")
-        e = src[i + 1]
-        if e == "s":
-            return WS, i + 2, "s"
-        if e == "S":
-            return "", i + 2, "S"
-        if e in "dDwW":
-            return "\\" + e, i + 2, ""
-        if e in "bB":
-            return ("\\x08" if e == "b" else None) if in_class else "\\" + e, i + 2, ""
-        if e in CONTROL:
-            return re.escape(CONTROL[e]), i + 2, ""
-        if e == "0" and not src[i + 2:i + 3].isdigit():
-            return "\\x00", i + 2, ""
-        if e in "123456789" and not in_class:
-            j = i + 1
-            while j < n and src[j].isdigit():
-                j += 1
-            return f"(?:\\{src[i + 1:j]})", j, ""
-        if e in SYNTAX:
-            return re.escape(e), i + 2, ""
-        m = HEX.match(src, i + 1)
-        if m:
-            cp = int(next(g for g in m.groups() if g), 16) if not m.group(4) else ord(m.group(4).upper()) % 32
-            return re.escape(chr(cp)), m.end(), ""
-        return None, i + 2, ""
+    def fail(why):
+        raise SchemaError(f"pattern {src!r} at offset {pos}: {why}")
 
-    while i < n:
-        c = src[i]
-        if c == "\\":
-            text, j, kind = escape(i, False)
-            if text is None:
-                raise SchemaError(f"pattern {src!r}: unsupported escape {src[i:j]}")
-            out.append(f"[{WS}]" if kind == "s" else f"[^{WS}]" if kind == "S" else text)
-            i = j
-        elif c == "[":
-            i += 1
-            neg = src[i:i + 1] == "^"
-            i += neg
-            body, nonws = [], False
-            while i < n and src[i] != "]":
-                if src[i] == "\\":
-                    text, j, kind = escape(i, True)
-                    if text is None:
-                        raise SchemaError(f"pattern {src!r}: unsupported escape {src[i:j]} in a class")
-                    nonws = nonws or kind == "S"
-                    body.append(text)
-                    i = j
-                else:
-                    body.append(src[i] if src[i] == "-" else re.escape(src[i]))
-                    i += 1
-            if i >= n:
-                raise SchemaError(f"pattern {src!r}: unterminated class")
-            i += 1
-            b = "".join(body)
-            if not nonws:  # ECMA: [] matches nothing, [^] any character
-                out.append((f"[^{b}]" if b else "[\\s\\S]") if neg else (f"[{b}]" if b else "(?!)"))
-            elif neg:  # not in the rest and not non-white: white, minus the rest
-                out.append(f"(?![{b}])[{WS}]" if b else f"[{WS}]")
+    def ranges(rs):  # a set of code point ranges as one Python atom
+        body = "".join(f"\\U{lo:08x}" + (f"-\\U{hi:08x}" if hi > lo else "") for lo, hi in rs)
+        return f"[{body}]" if body else "(?!)"
+
+    def invert(rs):
+        out, lo = [], 0
+        for a, b in sorted(rs):
+            if a > lo:
+                out.append((lo, a - 1))
+            lo = max(lo, b + 1)
+        return out + [(lo, MAX)] if lo <= MAX else out
+
+    def escape(in_class):
+        """At a backslash: a list of ranges for a class escape, else one code point."""
+        nonlocal pos
+        e = src[pos + 1:pos + 2]
+        sets = {"d": DIGIT, "w": WORD, "s": WS}
+        if e.lower() in sets:
+            pos += 2
+            return sets[e.lower()] if e.islower() else invert(sets[e.lower()])
+        if e in CONTROL or (in_class and e in "b-"):
+            pos += 2
+            return CONTROL.get(e) or (8 if e == "b" else 0x2D)
+        if e and e in SYNTAX:
+            pos += 2
+            return ord(e)
+        if e == "0" and not src[pos + 2:pos + 3].isdigit():
+            pos += 2
+            return 0
+        if e.isdigit() or e == "k":
+            fail(f"backreference \\{e} is outside the supported subset")
+        if e in ("p", "P"):
+            fail(f"property escape \\{e} is outside the supported subset")
+        m = HEX.match(src, pos + 1)
+        if not m:
+            fail(f"invalid escape \\{e}" if e else "lone backslash at the end")
+        cp = ord(m.group(4)) % 32 if m.group(4) else int(next(g for g in m.groups() if g), 16)
+        pos = m.end()
+        if cp > MAX:
+            fail("code point escape above U+10FFFF")
+        if 0xD800 <= cp <= 0xDFFF:
+            fail("surrogate escape is outside the supported subset")
+        return cp
+
+    def klass():
+        nonlocal pos
+        pos += 1
+        neg = src[pos:pos + 1] == "^"
+        pos += neg
+        rs = []
+
+        def atom():
+            nonlocal pos
+            if pos >= n:
+                fail("unterminated class")
+            if src[pos] == "\\":
+                return escape(True)
+            pos += 1
+            return ord(src[pos - 1])
+
+        while src[pos:pos + 1] != "]":
+            lo = atom()
+            if src[pos:pos + 1] == "-" and src[pos + 1:pos + 2] not in ("]", ""):
+                pos += 1
+                hi = atom()
+                if isinstance(lo, list) or isinstance(hi, list):
+                    fail("class escape as a range end")
+                if lo > hi:
+                    fail("class range out of order")
+                rs.append((lo, hi))
             else:
-                out.append(f"(?:[{b}]|[^{WS}])" if b else f"[^{WS}]")
-        elif c == ".":
-            out.append(f"[^{LINE_END}]")
-            i += 1
-        elif c == "$":
-            out.append(r"\Z")
-            i += 1
-        elif c == "(" and src.startswith("(?", i):
-            g = next((g for g in ("(?:", "(?=", "(?!", "(?<=", "(?<!") if src.startswith(g, i)), None)
-            if g is None:
-                raise SchemaError(f"pattern {src!r}: unsupported group {src[i:i + 4]}")
-            out.append(g)
-            i += len(g)
-        else:
-            out.append(c)
-            i += 1
-    return Ecma(src, re.compile("".join(out), re.ASCII))
+                rs += lo if isinstance(lo, list) else [(lo, lo)]
+        pos += 1
+        return ranges(invert(rs) if neg else rs)
+
+    def term():
+        """(python text, quantifiable) for the term at pos."""
+        nonlocal pos
+        c = src[pos]
+        if c in "^$":
+            pos += 1
+            return ("\\A" if c == "^" else "\\Z"), False
+        if src.startswith(("\\b", "\\B"), pos):
+            pos += 2
+            w = ranges(WORD)  # explicit: Python's \B never matches the empty string
+            either = f"(?<={w})(?={w})|(?<!{w})(?!{w})" if src[pos - 1] == "B" else f"(?<={w})(?!{w})|(?<!{w})(?={w})"
+            return f"(?:{either})", False
+        if src.startswith(("(?=", "(?!", "(?:"), pos) or c == "(":
+            g = src[pos:pos + 3] if src.startswith("(?", pos) else "(?:"
+            if src.startswith("(?", pos) and g not in ("(?=", "(?!", "(?:"):
+                fail(f"group {src[pos:pos + 4]} is outside the supported subset")
+            pos += 3 if src.startswith("(?", pos) else 1
+            body = disjunction()
+            if src[pos:pos + 1] != ")":
+                fail("unterminated group")
+            pos += 1
+            return g + body + ")", g == "(?:"
+        if c == "[":
+            return klass(), True
+        if c == ".":
+            pos += 1
+            return ranges(invert(LINE_END)), True
+        if c == "\\":
+            cp = escape(False)
+            return ranges(cp if isinstance(cp, list) else [(cp, cp)]), True
+        if c in "*+?{}]":
+            fail(f"{c} with nothing to repeat" if c in "*+?{" else f"lone {c}")
+        pos += 1
+        return re.escape(c), True
+
+    def disjunction():
+        nonlocal pos
+        out = []
+        while pos < n and src[pos] != ")":
+            if src[pos] == "|":
+                out.append("|")
+                pos += 1
+                continue
+            text, quantifiable = term()
+            m = QUANT.match(src, pos)
+            if m:
+                if not quantifiable:
+                    fail(f"quantifier {m.group(0)} on an assertion")
+                if m.group(3) and int(m.group(1)) > int(m.group(3)):
+                    fail(f"quantifier {m.group(0)} out of order")
+                pos = m.end()
+                lazy = src[pos:pos + 1] == "?"
+                pos += lazy
+                text = f"(?:{text}){m.group(0)}" + "?" * lazy
+            out.append(text)
+        return "".join(out)
+
+    out = disjunction()
+    if pos < n:
+        fail("unmatched )")
+    return Ecma(src, re.compile(out))
 
 
 class Ecma:

@@ -6,8 +6,8 @@ read-only git only: whether the smoke is adequate is review's judgment.
 
 - Range: merge-base(BASE, HEAD)..HEAD.
 - Role paths: files the range diff changes under agents/*.md, .agents/skills/**.md,
-  .skillfile/patches/** (a rename counts as its old path deleted, #121 N5; names read
-  NUL-separated, so spaces and non-ASCII hold, N6).
+  .skillfile/patches/** (git diff --no-renames -z: a rename reads as its old path
+  deleted, names NUL-separated; #121 N5 N6).
 - Opt-out: a role path is exempt when every non-merge commit in the range touching it
   carries a non-empty `Behaviour-neutral: <reason>` trailer (at least one such commit).
   Each opt-out is printed on every run.
@@ -18,9 +18,7 @@ read-only git only: whether the smoke is adequate is review's judgment.
   deleted, or the incident that justifies it). A fact, never its meaning.
 - Per-path smoke (#93): every such path is named on a `Smoke: <path> ...` line of one of
   those evidence files (a token equal to the path, or a token ending in `/` that is its
-  directory prefix, matched literally so a path may hold spaces; bounded by line start,
-  whitespace, a backtick, comma or semicolon, and ended by whitespace or the line end after
-  an optional backtick, a comma or semicolon, or `.:!?` that ends a sentence). One evidence file no longer covers
+  directory prefix; named() below, token bounds per #121 N7). One evidence file no longer covers
   every path: lanes gh71 (director.md, evidence ran only the corrector) and gh67
   (implementer.md, corrector.md, no run at all) passed with an unrelated smoke file.
   Whether the named run exercised the path stays with review.
@@ -117,7 +115,7 @@ removed = not pruned or any(REMOVED.search(t) for t in texts.values())
 lines = [line for t in texts.values() for line in SMOKE.findall(t)]
 
 
-def named(p):  # p literally, as a whole token: a path may hold spaces; a sentence may end after it (#121 N7)
+def named(p):  # p literally, as one token; its bounds: #121 N7
     return re.compile(r"(?:^|(?<=[\s`,;]))" + re.escape(p) + r"`?(?:[,;]|[.:!?]*`?(?=\s|$))")
 
 

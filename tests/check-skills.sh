@@ -46,7 +46,7 @@ allow "---\nname: qc-good\ndescription: >\n  Does a thing,\n  over two lines.\n-
 allow "---\nname: qc-good\ndescription: |-\n  Does a thing.\nlicense: MIT\n---\n$body"
 allow "---\nname: qc-good\ndescription:\n  Plain, continued on the next line.\n---\n$body"
 allow "---\r\nname: qc-good\r\ndescription: Does a thing.\r\n---\r\n$body"
-# Keys read as YAML reads them (#141, #121 D8): quoted in either style, escapes decoded, spaces before the colon.
+# #141, #121 D8 (owner: skills spec #acceptance-skill-frontmatter): quoted keys, an escape, a space before the colon.
 allow "---\n\"name\": qc-good\ndescription: d\n---\n"
 allow "---\n'name': qc-good\n\"description\" : Does a thing.\n---\n$body"
 allow "---\n\"na\\\\x6de\": qc-good\ndescription: Does a thing.\n---\n$body"

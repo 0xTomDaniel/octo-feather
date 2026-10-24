@@ -18,8 +18,7 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines outside fenced code blocks and blockquotes count (a lazy continuation line belongs to
-its blockquote, a blank line ends it, CommonMark); the last such line is the
+Only lines markdown() reads as text count (which lines: #144, #121 D10); the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
 gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
 `Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
@@ -67,15 +66,15 @@ with its fix on stderr, exit 1.
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion, nor is <template> content), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion; <template> content: #121 D17), and its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
-only for a target that declares none of these, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Headings, items
-and that line inside fenced code or an HTML comment do not count. Checks are
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. structure()
+reads the body without fenced code and HTML comments (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
@@ -206,7 +205,7 @@ CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.m
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
-FENCE = re.compile(r"[ \t]*(`{3,}(?=[^`]*$)|~{3,})")   # a backtick fence's info string holds no backtick (CommonMark)
+FENCE = re.compile(r"(`{3,}(?=[^`]*$)|~{3,})")   # a backtick fence's info string holds no backtick (CommonMark)
 QUOTE = re.compile(r" {0,3}> ?")
 # Blocks that start no paragraph (CommonMark): ATX heading, thematic break, HTML blocks 1 to 6.
 NO_PARA = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$|<(?:!--|\?|![A-Za-z]|/?(?:script|pre|style|textarea|"
@@ -216,17 +215,33 @@ NO_PARA = re.compile(r" {0,3}(?:#{1,6}(?:[ \t]|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$
                      r"track|ul)(?:[ \t/>]|$)))", re.I)
 # A list item that may interrupt a paragraph: not empty, ordered only from 1.
 ITEM_START = re.compile(r" {0,3}(?:[-+*]|1[.)])[ \t]+\S")
+LIST_MARK = re.compile(r"(?:[-+*]|\d{1,9}[.)])(?=[ \t]|$)")
 CODE_SPAN = re.compile(r"(`+)(?!`).*?(?<!`)\1(?!`)")
 
 
-def fence_closes(fence: str, l: str) -> bool:
-    f = FENCE.match(l)
-    return bool(f) and f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence) and not l.strip().strip(fence[0])
+def indent(l: str) -> tuple[int, str]:
+    """(columns of L's leading white space, tabs to the next multiple of 4, the rest of L)."""
+    col, i = 0, 0
+    while i < len(l) and l[i] in " \t":
+        col = col + 4 - col % 4 if l[i] == "\t" else col + 1; i += 1
+    return col, l[i:]
+
+
+def fence_at(l: str, base: int = 0) -> str | None:
+    """The fence L opens in a container whose content starts at column BASE: at most 3 columns in (CommonMark)."""
+    col, rest = indent(l)
+    f = FENCE.match(rest) if base <= col <= base + 3 else None
+    return f.group(1) if f else None
+
+
+def fence_closes(fence: str, l: str, base: int = 0) -> bool:
+    f = fence_at(l, base)
+    return bool(f) and f[0] == fence[0] and len(f) >= len(fence) and not l.strip().strip(fence[0])
 
 
 def interrupts(l: str) -> bool:
-    """L ends an open paragraph, so it is no lazy continuation line (CommonMark): a block start or a blank line."""
-    return not l.strip() or bool(NO_PARA.match(l) or ITEM_START.match(l) or QUOTE.match(l) or (FENCE.match(l) and not re.match(r" {4}", l)))
+    """Whether L, a block start or a blank line, ends an open paragraph instead of continuing it lazily (#144)."""
+    return not l.strip() or bool(NO_PARA.match(l) or ITEM_START.match(l) or QUOTE.match(l) or fence_at(l))
 
 
 def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
@@ -236,6 +251,7 @@ def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
     comes with its inline comments cut out."""
     lines = text.replace("\r\n", "\n").split("\n")
     out, fence, para, qfence, open_cmt = [], None, False, None, None   # para: a blockquote's paragraph is open
+    items, tpara, fbase = [], False, 0   # items: content columns of the open list items; tpara: a paragraph outside quotes
     for i, l in enumerate(lines):
         if open_cmt == "block":   # an HTML comment block runs to the end of the line holding `-->`
             open_cmt = None if "-->" in l else "block"
@@ -245,18 +261,20 @@ def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
                 out.append((l, "comment")); continue
             l, open_cmt = cut_comments(l[l.index("-->") + 3:], lines[i + 1:])
             out.append((l, "text")); continue
+        if fence and l.strip() and indent(l)[0] < fbase:
+            fence = None   # a line outside the list item holding the fence closes both
         if fence:
-            if fence_closes(fence, l):
+            if fence_closes(fence, l, fbase):
                 fence = None
             out.append((l, "fence")); continue
         if QUOTE.match(l):
-            c = l
+            c, tpara = l, False
             while q := QUOTE.match(c):
                 c = c[q.end():]
             if qfence:   # fenced code inside the quote: no paragraph
                 qfence = None if fence_closes(qfence, c) else qfence; para = False
-            elif (f := FENCE.match(c)) and not (para and re.match(r" {4}", c)):
-                qfence, para = f.group(1), False
+            elif f := fence_at(c):
+                qfence, para = f, False
             elif para:
                 para = not interrupts(c) or bool(ITEM_START.match(c) and not NO_PARA.match(c))   # an item holds a paragraph
             else:   # a paragraph starts unless the line is blank, indented code or a block that holds none
@@ -266,8 +284,19 @@ def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
         if para and not interrupts(l):
             out.append((l, "quote")); continue   # a lazy continuation line belongs to the blockquote
         para = False
-        if f := FENCE.match(l):
-            fence = f.group(1); out.append((l, "fence")); continue
+        col, rest = indent(l)
+        if rest and not (tpara and not interrupts(l) and not LIST_MARK.match(rest)):   # a lazy paragraph line keeps its items
+            while items and col < items[-1]:
+                items.pop(); tpara = False
+        base = items[-1] if items else 0
+        if col <= base + 3 and (m := LIST_MARK.match(rest)) and not NO_PARA.match(l) and not (tpara and not ITEM_START.match(l.lstrip())):
+            gap, content = indent(rest[m.end():])   # an item: its content column (CommonMark list items)
+            items.append(col + m.end() + (gap if content and gap <= 4 else 1))
+            base, tpara = items[-1], False
+            col, rest = indent(" " * base + (content if gap <= 4 else rest[m.end() + 1:]))
+        if f := fence_at(" " * col + rest, base):
+            fence, fbase, tpara = f, base, False; out.append((l, "fence")); continue
+        tpara = bool(rest) and (tpara or col < base + 4) and not NO_PARA.match(rest)
         if comments and re.match(r" {0,3}<!--", l):
             open_cmt = None if "-->" in l[l.index("<!--") + 2:] else "block"
             out.append((l, "comment")); continue
@@ -294,7 +323,7 @@ def cut_comments(l: str, rest: list[str]) -> tuple[str, str | None]:
 
 
 def outside(text: str) -> list[str]:
-    """The lines outside fenced code blocks and blockquotes, lazy continuation lines included, in order."""
+    """The lines markdown() reads as text, in order."""
     return [l for l, kind in markdown(text) if kind == "text"]
 
 
@@ -953,7 +982,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
-               "script run by its interpreter, e.g. `python harness.py`, when the repo declares no program), "
+               "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
@@ -1036,7 +1065,7 @@ class Surface:
             rel = os.path.normpath(script[2:] if script.startswith("./") else script)
             if TEST_DIR.search(rel):
                 return f"{script} is a test or hook, not the app's surface"
-            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002: the runnable script only for a target with no CLI, HTTP or UI
+            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002 fallback, read as: program() finds none
                 return f"the repo declares a program ({declared}), so the demo runs it, not a script by its interpreter (ADR 0002)"
             return None if rel in self.files else f"{script} is not a script the repo tracks"
         if prog in HTTP:

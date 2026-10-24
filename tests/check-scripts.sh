@@ -1,7 +1,6 @@
 #!/usr/bin/env bash
-# Integration test for the check-scripts gate (#121 D1 D2): python scripts byte-compile, other
-# scripts go to shellcheck (bash -n without it); a script is python when its shebang runs python. In a throwaway copy
-# of the kit's tracked files, each planted script makes `just check-scripts` fail or pass. Run by `just check`.
+# Integration test for the check-scripts gate (rules: #121 D1 D2). In a throwaway copy of the kit's
+# tracked files, each planted script makes `just check-scripts` fail or pass. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
@@ -32,7 +31,7 @@ expect "$py" 'break'
 expect "$py" 'continue'
 expect "$py" 'yield 1'
 expect "$py" 'nonlocal x'
-# D2: what the shebang runs decides: valid python that is not shell passes, invalid python fails.
+# D2: shebangs that run python: valid python that is not shell, then invalid python.
 body='print("ok")'
 for sb in "$uv" '#!/usr/bin/env -S uv run --quiet --script' '#!/usr/bin/python3' '#!/usr/bin/env -S python3 -u' '#!/usr/bin/env python3.12'; do
   allow "$sb" "$body"
@@ -43,4 +42,4 @@ allow '#!/opt/python3/bin/bash' 'if [ -n "${1:-}" ]; then echo "$1"; fi'
 expect '#!/opt/python3/bin/bash' 'if then fi'
 allow '#!/usr/bin/env bash' 'echo ok'
 expect '#!/usr/bin/env bash' 'if then fi'
-echo "check-scripts: ok (python byte-compiles by what the shebang runs; shell scripts stay shell)"
+echo "check-scripts: ok (#121 D1 D2 cases)"

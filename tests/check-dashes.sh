@@ -1,6 +1,5 @@
 #!/usr/bin/env bash
-# Integration test for the check-dashes gate (#121 D7): no em or en dashes in kit text; exempt upstream
-# copies only: docs/specs/.viz/ and docs/specs/.style/, LICENSE, vendored skills, .skillfile/. In a
+# Integration test for the check-dashes gate (rule and carve-outs: #121 D7). In a
 # throwaway git copy of the kit's tracked files, each planted dash makes `just check-dashes` fail or pass.
 # Run by `just check`.
 set -euo pipefail
@@ -28,7 +27,7 @@ allow() {
   run "$@"
   [[ "$rc" == 0 ]] || { echo "check-dashes test: $1 with '$2' failed just check-dashes" >&2; echo "$out" >&2; exit 1; }
 }
-# Kit specs, their call logs and any other docs/specs/ file are kit text.
+# Kit text outside the #121 D7 carve-outs, docs/specs/ files included.
 expect docs/specs/quality.spec.html "<p>a $em b</p>"
 expect docs/specs/quality.spec.html "<p>a $en b</p>"
 expect docs/specs/quality.calls.jsonl "{\"why\": \"a $em b\"}"
@@ -36,7 +35,7 @@ expect docs/specs/new.calls.jsonl "{\"why\": \"a $en b\"}"
 expect docs/specs/quality.status.json "\"a $em b\""
 expect docs/specs/.vizzy/x.js "// a $em b"
 expect agents/x.md "a $em b"
-# Upstream copies keep upstream wording.
+# The #121 D7 carve-outs.
 allow docs/specs/.viz/runtime.js "// a $em b"
 allow docs/specs/.viz/new.js "// a $en b"
 allow docs/specs/.style/x.css "/* a $em b */"
@@ -45,4 +44,4 @@ allow .skillfile/patches/x.patch "a $em b"
 vend="$(awk '$1 == "github" {print $3; exit}' "$t/Skillfile")"
 allow ".agents/skills/$vend/SKILL.md" "a $em b"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-dashes test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-dashes: ok (docs/specs/ is kit text; only .viz/, .style/, LICENSE, vendored skills and .skillfile/ are exempt)"
+echo "check-dashes: ok (#121 D7 cases: docs/specs/ files fail, the carve-outs pass)"

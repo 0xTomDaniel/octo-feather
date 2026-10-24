@@ -91,13 +91,12 @@ expect check-decision-log "$L" "{$head,\"why\":\"x\",$tail,\"n\":NaN}\n" "$L:1: 
 expect check-decision-log "$L" "{$head,\"why\":\"\xff\",$tail}\n" "$L:1: not UTF-8"
 expect check-decision-log "$L" "$ok $ok\n" "$L:1: invalid JSON"
 expect check-decision-log "$L" "{}\n" "$L:1: missing ts" "$L:1: missing why" "$L:1: missing result"
-# Schema patterns are ECMA-262 (JSON Schema 2020-12; #142, #121 D9): \s is ECMA's white space and line
-# terminators, so a field of only U+FEFF fails; U+001C..U+001F, U+0085, U+200B and U+180E are not white space.
+# Pattern dialect: schemas/decision-log.schema.json's $schema (#142, #121 D9). \S on U+FEFF, U+3000 U+00A0
+# U+2028 U+000B (fail) and U+001C..U+001F, U+0085, U+200B, U+180E (pass).
 expect check "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
 expect check-decision-log "$L" "{$head,\"why\":\"\\\\u3000\\\\u00a0\\\\u2028\\\\u000b\",$tail}\n" "$L:1: why does not match"
 for c in 001c 001d 001e 001f 0085 200b 180e; do allow "$L" "{$head,\"why\":\"\\\\u$c\",$tail}\n"; done
-# The other constructs ECMA reads differently from Python re: \d \w \b are ASCII, . stops at
-# every line terminator, $ is the end only; a construct ECMA lacks makes the schema unusable.
+# The same dialect (#142) on \d \w \b . $ [\S] [^\s] via schema edits, where Python re reads them otherwise.
 set_pattern() { python3 - "$t/$schema" "$1" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1])); s["properties"]["why"]["pattern"] = sys.argv[2]; json.dump(s, open(sys.argv[1], "w"))
@@ -110,6 +109,14 @@ allow "$L" "{$head,\"why\":\"a\\\\u00e9\",$tail}\n"; allow "$L" "{$head,\"why\":
 set_pattern '^a.b$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\u2028b\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085b\",$tail}\n"
 set_pattern '^[\S]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u001c\",$tail}\n"
 set_pattern '^[^\s]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085\",$tail}\n"
+# PR #140 review finding 1 (owner: schemas/decision-log.schema.json $schema, #142): ^a++$ is refused naming
+# the property and construct; a backreference is refused as unsupported, never read as a mismatch of "ac".
+set_pattern '^a++$'; plant "$L" "{$head,\"why\":\"a\",$tail}\n"; run check-decision-log; unplant "$L"
+[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a++\$' at offset 3: + with nothing to repeat" <<<"$out" \
+  || { echo "check-decision-log test: pattern ^a++\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
+set_pattern '^(a|(b))\2c$'; plant "$L" "{$head,\"why\":\"ac\",$tail}\n"; run check-decision-log; unplant "$L"
+[[ "$rc" == 2 ]] && grep -qF "unusable schema: property why: pattern '^(a|(b))\\\\2c\$' at offset 8: backreference \\2 is outside the supported subset" <<<"$out" \
+  && ! grep -qF 'why does not match' <<<"$out" || { echo "check-decision-log test: backreference pattern not refused as unsupported" >&2; echo "$out" >&2; exit 1; }
 cp "$t.schema" "$t/$schema"
 # The schema file is the one source for the field list and the extra-field policy.
 python3 - "$t/$schema" <<'PY'

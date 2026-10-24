@@ -13,7 +13,7 @@ import glob, importlib.machinery, importlib.util, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
 REQUIRED = ("name", "description")
-# A block mapping key as YAML reads it: plain, 'single-quoted' or "double-quoted", spaces before the colon.
+# KEY: a block mapping key, plain or quoted, as YAML reads it (skills spec #acceptance-skill-frontmatter, #141).
 KEY = re.compile(r"""("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z0-9_-]+) *:(?:[ \t]+(.*))?$""")
 # YAML double-quoted escapes: one character, or \x \u \U with 2, 4, 8 hex digits.
 ESCAPES = {"0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r",

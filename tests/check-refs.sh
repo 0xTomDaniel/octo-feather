@@ -87,7 +87,7 @@ g rm -qf --cached agents/x.md; rm "$t/agents/x.md"
 # The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
 expect agents/x.md "Cut branch gh<N>""-<slug> for the lane." "docs/adr/0011"
 expect agents/x.md "else \`octo-feather/""gh<issue-number>""-<slug>\`." "docs/adr/0011"
-# Any placeholder token then a dash and a placeholder, in any kit file but docs/adr/0011, the rule's one owner (#121 N1 N2).
+# The #71 token shapes in kit files, docs/adr/0011 the one exempt (#121 N1 N2).
 expect agents/x.md "Cut branch gh<issue>""-<slug> for the lane." "docs/adr/0011"
 expect scripts/octo-feather-state "# lane branch gh<issue>""-<slug>" "docs/adr/0011"
 expect agents/x.md "Worker branch gh<N>""-<worker>." "docs/adr/0011"

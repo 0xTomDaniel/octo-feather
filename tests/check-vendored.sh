@@ -6,7 +6,7 @@
 # - the gate reads the committed folder (the copy is a git repo; run stages every change):
 #   a drifted, extra or missing vendored file, a committed mode change, or a patch that
 #   no longer matches, fails naming skill and file; untracked files and what git cannot
-#   hold (a FIFO, an empty folder) are not the skill and pass (#143, #121 D16);
+#   hold (a FIFO, an empty folder) pass (cases: #143, #121 D16);
 # - a poisoned cache (a tampered upstream blob matching a tampered vendored
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
 # - --extract spec-chat DEST writes the fetch-only Spec Chat pin offline, exec bits kept;
@@ -69,13 +69,13 @@ chmod -x "$r/.agents/skills/tdd/SKILL.md"; run 0
 gr update-index --chmod=+x .agents/skills/grilling/SKILL.md
 stage=0 run 1; has "check-vendored: grilling: .agents/skills/grilling/SKILL.md has git mode 100755"
 gr update-index --chmod=-x .agents/skills/grilling/SKILL.md; run 0
-# An untracked stray file is not the committed skill: it passes; committed, it fails.
+# #143: an untracked stray file, then committed.
 echo x > "$r/.agents/skills/tdd/STRAY.md"
 stage=0 run 0; has "vendored: ok"
 run 1; has "check-vendored: tdd: .agents/skills/tdd/STRAY.md is not in upstream"
 rm "$r/.agents/skills/tdd/STRAY.md"; run 0
-# Vendored folders hold regular files only: a committed folder symlink, file symlink, and the skill
-# folder itself as a symlink each fail naming skill and path; a FIFO or an empty folder git cannot commit.
+# #143: a committed folder symlink, file symlink, and the skill folder itself as a symlink; a FIFO or an
+# empty folder git cannot commit.
 ln -s ../grilling "$r/.agents/skills/tdd/EXTRA"
 run 1; has "check-vendored: tdd: .agents/skills/tdd/EXTRA is a symlink (to ../grilling)"
 rm "$r/.agents/skills/tdd/EXTRA"; ln -s SKILL.md "$r/.agents/skills/tdd/LINK.md"

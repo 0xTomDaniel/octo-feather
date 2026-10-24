@@ -2,11 +2,10 @@
 """Every vendored skill folder equals upstream at its pin plus its patches (skills spec #acceptance-patch-only).
 
 Gate (default, `just check-vendored`, inside `just check`): no network, ever.
-For each Skillfile `github` entry, the committed .agents/skills/<name>/ (the git
-index: what a commit records, so an untracked file is not the skill) must equal,
-bytes and git file mode, what `skillfile install` produces from the cached upstream
-at the pin plus .skillfile/patches/ (skillfile's generated .meta aside; modes are
-upstream's, patches change text only). Exit 1 names skill and file.
+For each Skillfile `github` entry, compares .agents/skills/<name>/ as the git index
+holds it (bytes and git file mode) with what `skillfile install` produces from the
+cached upstream at the pin plus .skillfile/patches/ (skillfile's generated .meta
+aside; expected modes: upstream's, per #143). Exit 1 names skill and file.
 - Upstream is read from a git object cache keyed by pin SHA and authenticated
   offline: the commit object must hash to the pin, and every tree and blob on the
   way to the entry's files must hash to its object id. Tampered or incomplete: exit 1.

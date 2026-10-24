@@ -30,8 +30,7 @@ check: check-scripts check-refs check-dashes check-skills check-decision-log che
     @echo "just check: ok"
 
 # shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
-# A script is python when its shebang runs python: the interpreter, or env's command after its options,
-# is python/pypy (any version) or `uv run ... --script`.
+# runs_python reads each file's shebang line; which shebangs count as python: #121 D2.
 check-scripts:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -124,9 +123,8 @@ check-refs:
     elif [[ -n "$found" ]]; then
       printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
-    # The lane branch is stated once, in docs/adr/0011, its only owner and the only exempt file (#121 N1 N2): the
-    # owner's #71 strings below: the slugged prefix and the token shape (any placeholder, then a dash and a
-    # placeholder); gh<N>-* passes (docs/adr/0008). The patterns bracket a letter so this justfile does not match itself.
+    # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, the one file not scanned.
+    # The patterns bracket a letter so this justfile does not match itself.
     mapfile -t lane < <(git ls-files | grep -vE '^docs/adr/0011-')
     if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
@@ -138,9 +136,8 @@ check-refs:
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
-# No em or en dashes in kit text, docs/specs/ included (#121 D7). Exempt upstream copies only: docs/specs/.viz/ and
-# docs/specs/.style/ (Spec Chat's vendored runtime and style), LICENSE and vendored skills (the Skillfile's github
-# entries in .agents/skills/, .skillfile/), which keep upstream wording.
+# Dash rule and its upstream carve-outs: #121 D7. Scans tracked files minus docs/specs/.viz/, docs/specs/.style/,
+# LICENSE, the Skillfile's github entries in .agents/skills/ and .skillfile/.
 check-dashes:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -162,7 +159,7 @@ check-decision-log:
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
 # Structure only; each template's own `just check` runs in its repo (deterministic, no network here).
-# Only non-comment text counts: a `#` at line start or after a space starts a comment in both shell and YAML (#118).
+# code() drops `#` comments (line start or after white space) before the hook and CI greps (#118).
 check-templates:
     #!/usr/bin/env bash
     set -euo pipefail
