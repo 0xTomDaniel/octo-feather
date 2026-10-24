@@ -8,7 +8,7 @@ set -euo pipefail
 # A bad log the gate misses would reach check-tests in the copy and rerun this test: stop there.
 [[ -z "${CHECK_DECISION_LOG_TEST_COPY:-}" ]] || { echo "check-decision-log test: nested run in a copy (a planted log passed check-decision-log)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
 g init -q; g add -A; g commit -qm base
@@ -96,7 +96,7 @@ expect check-decision-log "$L" "{}\n" "$L:1: missing ts" "$L:1: missing why" "$L
 expect check "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
 expect check-decision-log "$L" "{$head,\"why\":\"\\\\u3000\\\\u00a0\\\\u2028\\\\u000b\",$tail}\n" "$L:1: why does not match"
 for c in 001c 001d 001e 001f 0085 200b 180e; do allow "$L" "{$head,\"why\":\"\\\\u$c\",$tail}\n"; done
-# The same dialect (#142) on \d \w \b . $ [\S] [^\s] via schema edits, where Python re reads them otherwise.
+# The same dialect (#142) on \d \w \b . $ [\S] [^\s] via schema edits.
 set_pattern() { python3 - "$t/$schema" "$1" <<'PY'
 import json, sys
 s = json.load(open(sys.argv[1])); s["properties"]["why"]["pattern"] = sys.argv[2]; json.dump(s, open(sys.argv[1], "w"))
@@ -109,14 +109,15 @@ allow "$L" "{$head,\"why\":\"a\\\\u00e9\",$tail}\n"; allow "$L" "{$head,\"why\":
 set_pattern '^a.b$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\u2028b\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085b\",$tail}\n"
 set_pattern '^[\S]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u001c\",$tail}\n"
 set_pattern '^[^\s]+$'; expect check-decision-log "$L" "{$head,\"why\":\"a\\\\ufeff\",$tail}\n" "$L:1: why does not match"; allow "$L" "{$head,\"why\":\"a\\\\u0085\",$tail}\n"
-# PR #140 review finding 1 (owner: schemas/decision-log.schema.json $schema, #142): ^a++$ is refused naming
-# the property and construct; a backreference is refused as unsupported, never read as a mismatch of "ac".
+# PR #140 review rounds 2 and 3 (owner: schemas/decision-log.schema.json $schema, #142): ^a++$ and ^a{U+0661}$
+# are refused naming the property and node's error; an unmatched backreference matches empty, so "ac" passes.
 set_pattern '^a++$'; plant "$L" "{$head,\"why\":\"a\",$tail}\n"; run check-decision-log; unplant "$L"
-[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a++\$' at offset 3: + with nothing to repeat" <<<"$out" \
+[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a++\$': Invalid regular expression: /^a++\$/u: Nothing to repeat" <<<"$out" \
   || { echo "check-decision-log test: pattern ^a++\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
-set_pattern '^(a|(b))\2c$'; plant "$L" "{$head,\"why\":\"ac\",$tail}\n"; run check-decision-log; unplant "$L"
-[[ "$rc" == 2 ]] && grep -qF "unusable schema: property why: pattern '^(a|(b))\\\\2c\$' at offset 8: backreference \\2 is outside the supported subset" <<<"$out" \
-  && ! grep -qF 'why does not match' <<<"$out" || { echo "check-decision-log test: backreference pattern not refused as unsupported" >&2; echo "$out" >&2; exit 1; }
+set_pattern $'^a{\u0661}$'; plant "$L" "{$head,\"why\":\"a{\\\\u0661}\",$tail}\n"; run check-decision-log; unplant "$L"
+[[ "$rc" == 2 ]] && grep -qF "check-decision-log: $schema: unusable schema: property why: pattern '^a{"$'\u0661'"}\$': Invalid regular expression: /^a{"$'\u0661'"}\$/u: Incomplete quantifier" <<<"$out" \
+  || { echo "check-decision-log test: pattern ^a{U+0661}\$ not refused as unusable" >&2; echo "$out" >&2; exit 1; }
+set_pattern '^(a|(b))\2c$'; allow "$L" "{$head,\"why\":\"ac\",$tail}\n"; expect check-decision-log "$L" "{$head,\"why\":\"bc\",$tail}\n" "$L:1: why does not match"
 cp "$t.schema" "$t/$schema"
 # The schema file is the one source for the field list and the extra-field policy.
 python3 - "$t/$schema" <<'PY'
@@ -166,6 +167,13 @@ broken() {
 broken python3
 broken git
 grep -qF 'git ls-files exited 2' <<<"$out" || { echo "check-decision-log test: broken git not reported as a git error" >&2; echo "$out" >&2; exit 1; }
+broken node
+grep -qF 'node exited 2; the check cannot pass' <<<"$out" || { echo "check-decision-log test: broken node not reported" >&2; echo "$out" >&2; exit 1; }
+# No node on PATH: fails closed naming the fix.
+mkdir -p "$t.bin"; ln -s "$(command -v git)" "$t.bin/git"
+set +e; out="$(cd "$t" && PATH="$t.bin" "$(command -v python3)" scripts/check-decision-log 2>&1)"; rc=$?; set -e; rm -rf "$t.bin"
+[[ "$rc" == 2 ]] && grep -qF 'check-decision-log: node not found on PATH: install node (Pi needs it too); the check cannot pass' <<<"$out" \
+  || { echo "check-decision-log test: missing node did not fail closed" >&2; echo "$out" >&2; exit 1; }
 rm -f "$t.schema"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-decision-log test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
 echo "check-decision-log: ok (missing why, invalid JSON and non-object lines fail naming FILE:LINE and the field, nested included; valid, untracked and no logs pass; the schema drives fields and extras; adversarial forms and a broken checker fail closed)"

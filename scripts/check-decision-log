@@ -6,10 +6,11 @@ FILE:LINE and the field. The schema file is the one source for the field list.
 
 The validator honours exactly the schema keywords below and refuses any other, so a
 schema edit it cannot enforce fails the gate instead of passing silently.
-Stdlib only, deterministic. Fails closed: a git error, an unreadable log or schema,
+Patterns run in node's RegExp (Unicode mode), one node call for every line.
+Fails closed: a git error, an unreadable log or schema, a missing or failing node,
 or an internal error fails the gate, never reads as ok. Run by `just check`.
 """
-import json, os, re, subprocess, sys
+import json, os, shutil, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = "schemas/decision-log.schema.json"
@@ -17,20 +18,12 @@ NAME = "decisions.jsonl"
 TOP_KEYS = {"$schema", "$id", "title", "description", "type", "required", "properties", "additionalProperties"}
 FIELD_KEYS = {"description", "type", "minLength", "pattern"}
 TYPES = {"string": str}
-# The schema's patterns (ECMA-262, its $schema dialect) are parsed against the subset below and
-# emitted as an equivalent Python re: classes as explicit code point ranges, so no Python escape
-# or flag can reinterpret them. Anything else is refused naming the construct.
-MAX = 0x10FFFF
-# ECMA-262 WhiteSpace (Zs spelled out) and LineTerminator: what \s matches.
-WS = [(0x9, 0xD), (0x20, 0x20), (0xA0, 0xA0), (0x1680, 0x1680), (0x2000, 0x200A), (0x2028, 0x2029),
-      (0x202F, 0x202F), (0x205F, 0x205F), (0x3000, 0x3000), (0xFEFF, 0xFEFF)]
-LINE_END = [(0xA, 0xA), (0xD, 0xD), (0x2028, 0x2029)]
-DIGIT = [(0x30, 0x39)]
-WORD = [(0x30, 0x39), (0x41, 0x5A), (0x5F, 0x5F), (0x61, 0x7A)]
-SYNTAX = "^$\\.*+?()[]{}|/"
-CONTROL = {"t": 9, "n": 10, "v": 11, "f": 12, "r": 13}
-HEX = re.compile(r"x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]+)\}|c([A-Za-z])")
-QUANT = re.compile(r"[*+?]|\{(\d+)(,(\d*))?\}")
+# Each pattern compiled with new RegExp(p, "u"), its error kept; each value tested, in order.
+NODE_JS = r"""
+const q = JSON.parse(require("fs").readFileSync(0, "utf8")), rx = {}, bad = {};
+for (const [k, p] of Object.entries(q.patterns)) { try { rx[k] = new RegExp(p, "u"); } catch (e) { bad[k] = e.message; } }
+process.stdout.write(JSON.stringify({bad, test: Object.keys(bad).length ? [] : q.values.map(([k, v]) => rx[k].test(v))}));
+"""
 
 
 class SchemaError(Exception):
@@ -63,163 +56,7 @@ def load_schema():
         if "pattern" in p:
             if not isinstance(p["pattern"], str):
                 raise SchemaError(f"property {name}: pattern must be a string")
-            try:
-                p["pattern"] = ecma(p["pattern"])
-            except SchemaError as e:
-                raise SchemaError(f"property {name}: {e}") from None
     return s
-
-
-def ecma(src):
-    """An Ecma for the schema pattern src (Unicode mode), or SchemaError naming the construct."""
-    n, pos = len(src), 0
-
-    def fail(why):
-        raise SchemaError(f"pattern {src!r} at offset {pos}: {why}")
-
-    def ranges(rs):  # a set of code point ranges as one Python atom
-        body = "".join(f"\\U{lo:08x}" + (f"-\\U{hi:08x}" if hi > lo else "") for lo, hi in rs)
-        return f"[{body}]" if body else "(?!)"
-
-    def invert(rs):
-        out, lo = [], 0
-        for a, b in sorted(rs):
-            if a > lo:
-                out.append((lo, a - 1))
-            lo = max(lo, b + 1)
-        return out + [(lo, MAX)] if lo <= MAX else out
-
-    def escape(in_class):
-        """At a backslash: a list of ranges for a class escape, else one code point."""
-        nonlocal pos
-        e = src[pos + 1:pos + 2]
-        sets = {"d": DIGIT, "w": WORD, "s": WS}
-        if e.lower() in sets:
-            pos += 2
-            return sets[e.lower()] if e.islower() else invert(sets[e.lower()])
-        if e in CONTROL or (in_class and e in "b-"):
-            pos += 2
-            return CONTROL.get(e) or (8 if e == "b" else 0x2D)
-        if e and e in SYNTAX:
-            pos += 2
-            return ord(e)
-        if e == "0" and not src[pos + 2:pos + 3].isdigit():
-            pos += 2
-            return 0
-        if e.isdigit() or e == "k":
-            fail(f"backreference \\{e} is outside the supported subset")
-        if e in ("p", "P"):
-            fail(f"property escape \\{e} is outside the supported subset")
-        m = HEX.match(src, pos + 1)
-        if not m:
-            fail(f"invalid escape \\{e}" if e else "lone backslash at the end")
-        cp = ord(m.group(4)) % 32 if m.group(4) else int(next(g for g in m.groups() if g), 16)
-        pos = m.end()
-        if cp > MAX:
-            fail("code point escape above U+10FFFF")
-        if 0xD800 <= cp <= 0xDFFF:
-            fail("surrogate escape is outside the supported subset")
-        return cp
-
-    def klass():
-        nonlocal pos
-        pos += 1
-        neg = src[pos:pos + 1] == "^"
-        pos += neg
-        rs = []
-
-        def atom():
-            nonlocal pos
-            if pos >= n:
-                fail("unterminated class")
-            if src[pos] == "\\":
-                return escape(True)
-            pos += 1
-            return ord(src[pos - 1])
-
-        while src[pos:pos + 1] != "]":
-            lo = atom()
-            if src[pos:pos + 1] == "-" and src[pos + 1:pos + 2] not in ("]", ""):
-                pos += 1
-                hi = atom()
-                if isinstance(lo, list) or isinstance(hi, list):
-                    fail("class escape as a range end")
-                if lo > hi:
-                    fail("class range out of order")
-                rs.append((lo, hi))
-            else:
-                rs += lo if isinstance(lo, list) else [(lo, lo)]
-        pos += 1
-        return ranges(invert(rs) if neg else rs)
-
-    def term():
-        """(python text, quantifiable) for the term at pos."""
-        nonlocal pos
-        c = src[pos]
-        if c in "^$":
-            pos += 1
-            return ("\\A" if c == "^" else "\\Z"), False
-        if src.startswith(("\\b", "\\B"), pos):
-            pos += 2
-            w = ranges(WORD)  # explicit: Python's \B never matches the empty string
-            either = f"(?<={w})(?={w})|(?<!{w})(?!{w})" if src[pos - 1] == "B" else f"(?<={w})(?!{w})|(?<!{w})(?={w})"
-            return f"(?:{either})", False
-        if src.startswith(("(?=", "(?!", "(?:"), pos) or c == "(":
-            g = src[pos:pos + 3] if src.startswith("(?", pos) else "(?:"
-            if src.startswith("(?", pos) and g not in ("(?=", "(?!", "(?:"):
-                fail(f"group {src[pos:pos + 4]} is outside the supported subset")
-            pos += 3 if src.startswith("(?", pos) else 1
-            body = disjunction()
-            if src[pos:pos + 1] != ")":
-                fail("unterminated group")
-            pos += 1
-            return g + body + ")", g == "(?:"
-        if c == "[":
-            return klass(), True
-        if c == ".":
-            pos += 1
-            return ranges(invert(LINE_END)), True
-        if c == "\\":
-            cp = escape(False)
-            return ranges(cp if isinstance(cp, list) else [(cp, cp)]), True
-        if c in "*+?{}]":
-            fail(f"{c} with nothing to repeat" if c in "*+?{" else f"lone {c}")
-        pos += 1
-        return re.escape(c), True
-
-    def disjunction():
-        nonlocal pos
-        out = []
-        while pos < n and src[pos] != ")":
-            if src[pos] == "|":
-                out.append("|")
-                pos += 1
-                continue
-            text, quantifiable = term()
-            m = QUANT.match(src, pos)
-            if m:
-                if not quantifiable:
-                    fail(f"quantifier {m.group(0)} on an assertion")
-                if m.group(3) and int(m.group(1)) > int(m.group(3)):
-                    fail(f"quantifier {m.group(0)} out of order")
-                pos = m.end()
-                lazy = src[pos:pos + 1] == "?"
-                pos += lazy
-                text = f"(?:{text}){m.group(0)}" + "?" * lazy
-            out.append(text)
-        return "".join(out)
-
-    out = disjunction()
-    if pos < n:
-        fail("unmatched )")
-    return Ecma(src, re.compile(out))
-
-
-class Ecma:
-    """A schema pattern: its ECMA source and a search with ECMA's meaning."""
-
-    def __init__(self, src, rx):
-        self.pattern, self.search = src, rx.search
 
 
 def no_duplicates(pairs):
@@ -235,7 +72,8 @@ def no_constant(name):
     raise ValueError(f"{name} is not JSON")
 
 
-def line_problems(raw, schema):
+def line_problems(raw, schema, match):
+    """Problems of one log line; MATCH(name, value) says whether value matches property name's pattern."""
     try:
         obj = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates, parse_constant=no_constant)
     except UnicodeDecodeError:
@@ -256,19 +94,50 @@ def line_problems(raw, schema):
         if isinstance(v, str):
             if len(v) < p.get("minLength", 0):
                 out.append(f"empty {name}")
-            elif "pattern" in p and not p["pattern"].search(v):
-                out.append(f"{name} does not match {p['pattern'].pattern}")
+            elif "pattern" in p and not match(name, v):
+                out.append(f"{name} does not match {p['pattern']}")
     if schema.get("additionalProperties", True) is False:
         out += [f"unknown field {k}" for k in sorted(set(obj) - set(props))]
     return out
 
 
+class NodeError(Exception):
+    pass
+
+
+def node_tests(patterns, values):
+    """Node's verdict on PATTERNS {property: pattern} and VALUES [(property, value)]: the list of
+    match results, SchemaError naming an invalid pattern, or NodeError when node cannot answer."""
+    node = shutil.which("node")
+    if not node:
+        raise NodeError("node not found on PATH: install node (Pi needs it too)")
+    run = subprocess.run([node, "-e", NODE_JS], input=json.dumps({"patterns": patterns, "values": values}).encode(), capture_output=True)
+    if run.returncode != 0:
+        sys.stderr.write(run.stderr.decode("utf-8", "replace"))
+        raise NodeError(f"node exited {run.returncode}")
+    try:
+        res = json.loads(run.stdout)
+        bad, test = res["bad"], res["test"]
+    except (ValueError, KeyError, TypeError) as e:
+        raise NodeError(f"node gave no usable answer: {e}") from None
+    if bad:
+        name = sorted(bad)[0]
+        raise SchemaError(f"property {name}: pattern {patterns[name]!r}: {bad[name]}")
+    if not isinstance(test, list) or len(test) != len(values) or not all(isinstance(t, bool) for t in test):
+        raise NodeError("node gave no usable answer: wrong result count")
+    return test
+
+
+def unusable(e):
+    print(f"check-decision-log: {SCHEMA}: unusable schema: {e}; fix the schema, the check cannot pass", file=sys.stderr)
+    return 2
+
+
 def main():
     try:
         schema = load_schema()
-    except (OSError, ValueError, SchemaError, re.error) as e:
-        print(f"check-decision-log: {SCHEMA}: unusable schema: {e}; fix the schema, the check cannot pass", file=sys.stderr)
-        return 2
+    except (OSError, ValueError, SchemaError) as e:
+        return unusable(e)
     git = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], capture_output=True)
     if git.returncode != 0:
         sys.stderr.write(git.stderr.decode("utf-8", "replace"))
@@ -276,20 +145,38 @@ def main():
         return 2
     logs = sorted(p for p in git.stdout.decode("utf-8", "surrogateescape").split("\0") if p and os.path.basename(p) == NAME)
     fields = ", ".join(schema.get("required", []))
-    bad = 0
+    read = []  # (path, lines) or (path, OSError)
     for path in logs:
         try:
             with open(os.path.join(ROOT, path), "rb") as fh:
-                data = fh.read()
+                lines = fh.read().split(b"\n")
         except OSError as e:
-            print(f"check-decision-log: {path}: cannot read: {e}", file=sys.stderr)
-            bad += 1
+            read.append((path, e))
             continue
-        lines = data.split(b"\n")
         if lines[-1] == b"":
             lines.pop()  # the final newline ends the last line, it is not a line
+        read.append((path, lines))
+    # Two passes over the same lines: the first collects the values a pattern tests, node tests them in one call.
+    values = []
+    for _, lines in read:
+        for raw in lines if isinstance(lines, list) else []:
+            line_problems(raw, schema, lambda name, v: values.append((name, v)) or True)
+    patterns = {name: p["pattern"] for name, p in schema.get("properties", {}).items() if "pattern" in p}
+    try:
+        results = iter(node_tests(patterns, values) if patterns else [])
+    except SchemaError as e:
+        return unusable(e)
+    except (OSError, NodeError) as e:
+        print(f"check-decision-log: {e}; the check cannot pass", file=sys.stderr)
+        return 2
+    bad = 0
+    for path, lines in read:
+        if not isinstance(lines, list):
+            print(f"check-decision-log: {path}: cannot read: {lines}", file=sys.stderr)
+            bad += 1
+            continue
         for n, raw in enumerate(lines, 1):
-            for p in line_problems(raw, schema):
+            for p in line_problems(raw, schema, lambda name, v: next(results)):
                 print(f"check-decision-log: {path}:{n}: {p} (each line is one JSON object with string fields {fields}; {SCHEMA})", file=sys.stderr)
                 bad += 1
     if bad:
