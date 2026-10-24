@@ -17,6 +17,12 @@ NAME = "decisions.jsonl"
 TOP_KEYS = {"$schema", "$id", "title", "description", "type", "required", "properties", "additionalProperties"}
 FIELD_KEYS = {"description", "type", "minLength", "pattern"}
 TYPES = {"string": str}
+# ECMA-262 WhiteSpace and LineTerminator, the set \s matches (Space_Separator spelled out).
+WS = "\t\n\v\f\r \xa0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+LINE_END = "\n\r\u2028\u2029"
+SYNTAX = "^$\\.*+?()[]{}|/-"
+CONTROL = {"t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r"}
+HEX = re.compile(r"x([0-9A-Fa-f]{2})|u([0-9A-Fa-f]{4})|u\{([0-9A-Fa-f]{1,6})\}|c([A-Za-z])")
 
 
 class SchemaError(Exception):
@@ -49,8 +55,103 @@ def load_schema():
         if "pattern" in p:
             if not isinstance(p["pattern"], str):
                 raise SchemaError(f"property {name}: pattern must be a string")
-            p["pattern"] = re.compile(p["pattern"])
+            p["pattern"] = ecma(p["pattern"])
     return s
+
+
+def ecma(src):
+    """Compile an ECMA-262 pattern (JSON Schema 2020-12 `pattern`) to a Python re with ECMA's meaning:
+    \\s \\S over ECMA white space, \\d \\w \\b ASCII (re.ASCII), . stops at every line terminator,
+    $ only at the end. A construct outside the ECMA syntax handled here is refused, never guessed."""
+    out, i, n = [], 0, len(src)
+
+    def escape(i, in_class):
+        """(python text, next index, kind) for the escape at src[i] == '\\'; kind 'S' for \\S."""
+        if i + 1 >= n:
+            raise SchemaError(f"pattern {src!r}: ends in a lone backslash")
+        e = src[i + 1]
+        if e == "s":
+            return WS, i + 2, "s"
+        if e == "S":
+            return "", i + 2, "S"
+        if e in "dDwW":
+            return "\\" + e, i + 2, ""
+        if e in "bB":
+            return ("\\x08" if e == "b" else None) if in_class else "\\" + e, i + 2, ""
+        if e in CONTROL:
+            return re.escape(CONTROL[e]), i + 2, ""
+        if e == "0" and not src[i + 2:i + 3].isdigit():
+            return "\\x00", i + 2, ""
+        if e in "123456789" and not in_class:
+            j = i + 1
+            while j < n and src[j].isdigit():
+                j += 1
+            return f"(?:\\{src[i + 1:j]})", j, ""
+        if e in SYNTAX:
+            return re.escape(e), i + 2, ""
+        m = HEX.match(src, i + 1)
+        if m:
+            cp = int(next(g for g in m.groups() if g), 16) if not m.group(4) else ord(m.group(4).upper()) % 32
+            return re.escape(chr(cp)), m.end(), ""
+        return None, i + 2, ""
+
+    while i < n:
+        c = src[i]
+        if c == "\\":
+            text, j, kind = escape(i, False)
+            if text is None:
+                raise SchemaError(f"pattern {src!r}: unsupported escape {src[i:j]}")
+            out.append(f"[{WS}]" if kind == "s" else f"[^{WS}]" if kind == "S" else text)
+            i = j
+        elif c == "[":
+            i += 1
+            neg = src[i:i + 1] == "^"
+            i += neg
+            body, nonws = [], False
+            while i < n and src[i] != "]":
+                if src[i] == "\\":
+                    text, j, kind = escape(i, True)
+                    if text is None:
+                        raise SchemaError(f"pattern {src!r}: unsupported escape {src[i:j]} in a class")
+                    nonws = nonws or kind == "S"
+                    body.append(text)
+                    i = j
+                else:
+                    body.append(src[i] if src[i] == "-" else re.escape(src[i]))
+                    i += 1
+            if i >= n:
+                raise SchemaError(f"pattern {src!r}: unterminated class")
+            i += 1
+            b = "".join(body)
+            if not nonws:  # ECMA: [] matches nothing, [^] any character
+                out.append((f"[^{b}]" if b else "[\\s\\S]") if neg else (f"[{b}]" if b else "(?!)"))
+            elif neg:  # not in the rest and not non-white: white, minus the rest
+                out.append(f"(?![{b}])[{WS}]" if b else f"[{WS}]")
+            else:
+                out.append(f"(?:[{b}]|[^{WS}])" if b else f"[^{WS}]")
+        elif c == ".":
+            out.append(f"[^{LINE_END}]")
+            i += 1
+        elif c == "$":
+            out.append(r"\Z")
+            i += 1
+        elif c == "(" and src.startswith("(?", i):
+            g = next((g for g in ("(?:", "(?=", "(?!", "(?<=", "(?<!") if src.startswith(g, i)), None)
+            if g is None:
+                raise SchemaError(f"pattern {src!r}: unsupported group {src[i:i + 4]}")
+            out.append(g)
+            i += len(g)
+        else:
+            out.append(c)
+            i += 1
+    return Ecma(src, re.compile("".join(out), re.ASCII))
+
+
+class Ecma:
+    """A schema pattern: its ECMA source and a search with ECMA's meaning."""
+
+    def __init__(self, src, rx):
+        self.pattern, self.search = src, rx.search
 
 
 def no_duplicates(pairs):

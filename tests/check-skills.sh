@@ -46,6 +46,11 @@ allow "---\nname: qc-good\ndescription: >\n  Does a thing,\n  over two lines.\n-
 allow "---\nname: qc-good\ndescription: |-\n  Does a thing.\nlicense: MIT\n---\n$body"
 allow "---\nname: qc-good\ndescription:\n  Plain, continued on the next line.\n---\n$body"
 allow "---\r\nname: qc-good\r\ndescription: Does a thing.\r\n---\r\n$body"
+# Keys read as YAML reads them (#141, #121 D8): quoted in either style, escapes decoded, spaces before the colon.
+allow "---\n\"name\": qc-good\ndescription: d\n---\n"
+allow "---\n'name': qc-good\n\"description\" : Does a thing.\n---\n$body"
+allow "---\n\"na\\\\x6de\": qc-good\ndescription: Does a thing.\n---\n$body"
+allow "---\nname : qc-good\ndescription: Does a thing.\n---\n$body"
 # Adversarial forms: body-only after an empty block, keys after the closing ---, no closing ---,
 # leading text or spaces before ---, case and spelling variants, indented (nested) keys,
 # empty quoted, null, comment-only and empty folded values, duplicates, a non-string.
@@ -70,6 +75,13 @@ expect check-skills "---\nname: qc-bad\ndescription: |\n\nlicense: MIT\n---\n$bo
 expect check-skills "---\nname: qc-bad\ndescription: \"unterminated\n---\n$body"
 expect check-skills "---\nname: [qc-bad]\ndescription: Does a thing.\n---\n$body"
 expect check-skills "---\nname: qc-bad\nname: \ndescription: Does a thing.\n---\n$body"
+# Quoted-key neighbours (#141): an empty value, another spelling, a key quoted apart, a duplicate across styles.
+expect check "---\n\"name\": \"\"\ndescription: d\n---\n"
+expect check-skills "---\n\"Name\": qc-bad\ndescription: d\n---\n"
+expect check-skills "---\n\"name \": qc-bad\ndescription: d\n---\n"
+expect check-skills "---\n\"name\":qc-bad\ndescription: d\n---\n"
+expect check-skills "---\nname: qc-bad\n'name': qc-bad\ndescription: d\n---\n"
+expect check-skills "---\n\"description\": d\n---\n"
 expect check-skills ""
 # One bad skill among good ones fails, naming only the bad one.
 plant "---\nname: qc-bad\ndescription:\n---\n$body"
