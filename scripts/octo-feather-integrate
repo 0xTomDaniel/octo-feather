@@ -13,7 +13,7 @@
 # (`*.review/`, kept out of git by octo-feather-exclude) or adds the factory
 # recipes `integrate` or `qc` to the target's justfile (they live in the kit's
 # justfile, docs/adr/0017) is refused like a red gate. Recipes are read as just
-# reads them (`just --dump`: imports included, aliases count) from the lane
+# reads them (`just --dump`: imports included, aliases are no recipes) from the lane
 # worktree's own justfile, before and after; only an added name is refused, and
 # a justfile just cannot read is refused (fail closed).
 #
@@ -50,7 +50,7 @@ wt="${lanes[0]%%$'\t'*}"; branch="${lanes[0]#*$'\t'}"
 cd "$wt"
 [[ -z "$(git status --porcelain)" ]] || { echo "octo-feather-integrate: $wt has uncommitted changes" >&2; exit 65; }
 start="$(git rev-parse HEAD)"
-# Names `just NAME` runs here (recipes, imported ones included, and aliases), from this worktree's own
+# Recipe names (imported ones included; aliases are no recipes) from this worktree's own
 # justfile (just would search parent directories); none without one. Fails, saying why, if just cannot read it.
 recipe_names() {
   local f n out c=()
@@ -60,7 +60,7 @@ recipe_names() {
   f="${c[0]}"
   out="$(just --justfile "$f" --working-directory . --dump --dump-format json 2>/dev/null)" \
     || { echo "$f does not parse: $(just --justfile "$f" --working-directory . --dump 2>&1 >/dev/null | head -1)"; return 1; }
-  python3 -c 'import json, sys; d = json.loads(sys.argv[1]); print(*sorted({*d["recipes"], *d["aliases"]}), sep="\n")' "$out"
+  python3 -c 'import json, sys; print(*sorted(json.loads(sys.argv[1])["recipes"]), sep="\n")' "$out"
 }
 before_names="$(recipe_names)" || { echo "hand-in: refused before integrating, lane $branch: $before_names" >&2; exit 3; }
 

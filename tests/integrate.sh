@@ -62,6 +62,9 @@ run 3 7 w11; [[ "$out" == *"justfile does not parse"* && "$(git -C ../pre rev-pa
 (cd ../pre && printf '\nqc STATUS:\n    true\n' >> justfile && g commit -qam lane-qc)
 g worktree add -q -b w12 ../w12 octo-feather/gh7; (cd ../w12 && sed -i 's/^qc STATUS:/qc STATUS PR:/' justfile && g commit -qam qc-params)
 run 0 7 w12; grep -q '^qc STATUS PR:' ../pre/justfile || { echo "integrate test: qc parameter edit not integrated: $out" >&2; exit 1; }
+# PR #140 review finding 3 (owner: docs/adr/0017): an alias adds no recipe, so an alias-only hand-in integrates.
+g worktree add -q -b w13 ../w13 octo-feather/gh7; (cd ../w13 && printf '\nalias integrate := check\n' >> justfile && g commit -qam alias)
+run 0 7 w13; grep -qx 'alias integrate := check' ../pre/justfile || { echo "integrate test: alias-only hand-in not integrated: $out" >&2; exit 1; }
 before="$(git -C ../pre rev-parse HEAD)"
 g worktree add -q -b w7 ../w7; (cd ../w7 && mkdir -p docs/specs && echo s > docs/specs/a.spec.html && g add docs/specs/a.spec.html && g commit -qm spec)
 run 0 7 w7                                                 # a spec alone stays tracked and integrates
@@ -79,4 +82,4 @@ run 0 ENG-123 lw
 run 64 12 lw; [[ "$out" == *"not a Linear issue key"* ]] || { echo "integrate test: 12 in a Linear target: $out" >&2; exit 1; }
 echo 'tracker = "jira"' > .octo-feather.toml; g commit -qam jira; head="$(git -C ../l123 rev-parse HEAD)"
 run 64 ENG-123 lw; [[ "$out" == *"unknown tracker 'jira'"* && "$(git -C ../l123 rev-parse HEAD)" == "$head" ]] || { echo "integrate test: jira target: $out" >&2; exit 1; }
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused)"
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused)"
