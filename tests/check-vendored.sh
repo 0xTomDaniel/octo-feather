@@ -61,8 +61,7 @@ rm "$r/.agents/skills/sharpen/EXTRA.md"; mv "$t/mocking.md" "$r/.agents/skills/t
 edit "$r/.skillfile/patches/skills/sharpen/SKILL.md.patch" 's.replace("\n-disable-model", "\n disable-model", 1)'
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen/SKILL.md differs"
 cp "$kit/.skillfile/patches/skills/sharpen/SKILL.md.patch" "$r/.skillfile/patches/skills/sharpen/"; run 0
-# A committed mode change fails naming the file, from the disk (chmod +x) or the index only
-# (update-index --chmod, the disk unchanged); reverted, it passes (#143, #121 D16).
+# #143, #121 D16 cases: mode change on the disk (chmod +x) or in the index only (update-index --chmod), then reverted.
 chmod +x "$r/.agents/skills/tdd/SKILL.md"
 run 1; has "check-vendored: tdd: .agents/skills/tdd/SKILL.md has git mode 100755, upstream mattpocock/skills@49dd158"
 chmod -x "$r/.agents/skills/tdd/SKILL.md"; run 0

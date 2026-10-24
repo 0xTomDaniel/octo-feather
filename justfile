@@ -232,7 +232,7 @@ install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
-    for t in herdr pi gh jq git just python3; do
+    for t in herdr pi gh jq git just python3 node; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
