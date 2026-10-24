@@ -113,6 +113,12 @@ printf '> the implementer wrote:\n\nVerdict: blocking\nChecks: none\n' > "$t/laz
 run 0 verdict 7 "$J" "$t/lazyend"; grep -q "(blocking, head" <<<"$err" || fail "Verdict after a blank line ending the quote: $err"
 printf '> > nested:\n~~~\nVerdict: clear\n~~~\nChecks: none\nVerdict: blocking\n' > "$t/qfence"   # a fence interrupts the quote, ~~~ fences
 run 0 verdict 7 "$J" "$t/qfence"; grep -q "(blocking, head" <<<"$err" || fail "~~~ fence after a quote: $err"
+# PR #140 review finding 2 (owner: CommonMark fenced code, #144): the literal report, its first line indented
+# code, posts; in a list item the fence's indent counts from the item's content.
+printf '    ```\n\nVerdict: clear\nChecks: none\n' > "$t/indented"; : > "$FAKE_GH_LOG"
+run 0 verdict 7 "$J" "$t/indented"; grep -q "(clear, head" <<<"$err" && grep -q '^api -X PATCH' "$FAKE_GH_LOG" || fail "4-space indented backticks read as a fence: $err"
+printf -- '- item:\n\n    ```\n    Verdict: clear\n    ```\nChecks: none\nVerdict: blocking\n' > "$t/itemfence"
+run 0 verdict 7 "$J" "$t/itemfence"; grep -q "(blocking, head" <<<"$err" || fail "fence in a list item not read as one: $err"
 # check classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking verdict, in the header
 printf 'Check: `scripts/check-x`: tests reach no internals (docs/adr/0002) | reads: code tokens in tests/*.sh | class: Proxy\nVerdict: blocking\n' > "$t/proxy"
 run 0 verdict 7 "$J" "$t/proxy"

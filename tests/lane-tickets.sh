@@ -202,6 +202,9 @@ for f in '```sh' '~~~' '````'; do
   printf '## What to build\n\nA refactor step.\n\n%s\nExpand-contract: expand\n%s\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n' "$f" "$e" >"$t/d21.md"
   run 1 ticket "$t/d21.md"; has "class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
 done
+# PR #140 review finding 2 (owner: CommonMark fenced code): 4-space indented backticks are indented code, no fence.
+printf '## What to build\n\n    ```\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `demo a` prints ok\n' >"$t/d18d.md"
+run 0 ticket "$t/d18d.md"
 printf '## What to build\n\n<!-- an example:\n## Acceptance criteria\n- demo#acceptance-a: x\n-->\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section\n- [ ] demo: `demo a` prints ok\n' >"$t/d18c.md"
 run 1 ticket "$t/d18c.md"; has "no acceptance item names an acceptance criterion: demo#acceptance is not"
 for c in '<!--\nExpand-contract: expand\n-->' 'Draft <!-- note\nExpand-contract: expand\n-->' '  <!--\n- Expand-contract: expand -->'; do
