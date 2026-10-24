@@ -1,20 +1,22 @@
 # gh122 (ticket #132): ladder cases, code reviewer classifies checks
 
 Smoke: evals/ladder/ (cases reviewer-proxy-check, reviewer-exact-check, reviewer-no-check, reviewer-test-is-check; role agents/code-reviewer.md and the code-review skill unchanged), evals/fixtures/python-app-proxy-check/, evals/fixtures/python-app-exact-check/, evals/fixtures/python-app-shout-cli/, evals/fixtures/python-app-test-scan/
-Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the check-class half is paid; held-out 3/3 at head, scored apart. Added in its place: "Code reviewer, a proxy check blocks", still owed (below, Not graded).
+Removed: the "Code reviewer, check classes" entry from docs/owed-evals/118.md (ticket #133): the supervisor's live run below shows reviewer-proxy-check FAIL at `--kit-ref 9ba7c51` and PASS at lane head 2d2e7fa, so the case separates and the check-class half is paid; held-out 3/3 at head, scored apart. Added in its place: "Code reviewer, a proxy check blocks", now graded by reviewer-proxy-check's Verdict fact, owed until its live runs (below, Verdict fact).
 
 Owned rule: the `code-review` skill's Verdict step (one column-0 `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` per check the diff adds or changes, or `Checks: none`) and agents/code-reviewer.md Rules (classify every check the diff adds or changes, a file under `tests/` that is really one included). Design: docs/owed-evals/118.md "Code reviewer, check classes"; smoke evidence/2026-10-23-gh118-reviewer-check-classes-smoke.md.
 
 Cases (role code-reviewer, fixture python-app on main, a `head` fixture committed over it on the case branch; the brief names the ticket and the diff `main...<branch>` and asks for the verdict report as the final message, never naming checks, classes or fields):
 
-- `reviewer-proxy-check` (train), head python-app-proxy-check, branch implementer-t2: adds `scripts/check-test-surface` (grep of tests/*.py for `from app.core`/`import app.core` and `app.cli._x`, enforcing "tests drive the CLI, call no internal function") and wires it into `just check`. Expects `field_lines` Check includes `{path: scripts/check-test-surface, class: proxy}`.
+- `reviewer-proxy-check` (train), head python-app-proxy-check, branch implementer-t2: adds `scripts/check-test-surface` (grep of tests/*.py for `from app.core`/`import app.core` and `app.cli._x`, enforcing "tests drive the CLI, call no internal function") and wires it into `just check`. Expects `field_lines` Check includes `{path: scripts/check-test-surface, class: proxy}`, and `field_lines` Verdict includes `{text: blocking}` (added after review round 2, below).
 - `reviewer-exact-check` (held-out), head python-app-exact-check, branch implementer-t6: adds `scripts/check-exec` (git index modes under scripts/ and .githooks/, fails on 100644) and wires it in. Expects Check includes `{path: scripts/check-exec, class: exact}`.
 - `reviewer-no-check` (held-out), head python-app-shout-cli, branch implementer-t1: --shout in src/app/cli.py and src/app/core.py, two tests through `app.cli.main` with literal expectations. Expects `Checks: none`.
 - `reviewer-test-is-check` (held-out), head python-app-test-scan, branch implementer-t4: the same --shout change plus `tests/test_surface.py`, a pytest test scanning the other test files' source for app.core imports. Expects Check includes `{path: tests/test_surface.py}`; class not graded (`test-is-check` is the finding tag, the Check line's class stays exact|proxy; no parser change).
 
-What each case grades: only the column-0 check field (`Check:` path and, where stated, class; or `Checks: none`). None grades the verdict or a finding tag.
+What each case grades: the column-0 check field (`Check:` path and, where stated, class; or `Checks: none`); reviewer-proxy-check also grades the column-0 `Verdict:` line. None grades a finding tag.
 
-Not graded: `Verdict:` lines and finding prose. Basis: the reviewer's contract declares no column-0 verdict field (code-review Verdict step: "one verdict: blocked if any finding blocks, else clear"); the `Verdict: clear|blocking` line `octo-feather-lane verdict` reads is the supervisor's, not the reviewer's (cf. docs/owed-evals/124.md history), so no declared field exists to grade. So reviewer-proxy-check does not grade the Verdict step's "A proxy check blocks, class `proxy-check`" (#132); that obligation stays owed in docs/owed-evals/118.md ("Code reviewer, a proxy check blocks": a reviewer-owned verdict field or a task-named json verdict would grade it, then FAIL at 9ba7c51, PASS at head).
+Verdict fact, added after review round 2 on director ruling: reviewer-proxy-check now also expects `{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}`, grading the Verdict step's "A proxy check blocks, class `proxy-check`" (#132). The field is owned: docs/adr/0008 rung 3 names the reviewer's `Verdict: clear|blocking`. `octo-feather-lane fields -` reads a column-0 `Verdict: blocking` as `"fields": {"Verdict": ["blocking"]}` (qa's `field_lines` turns it into `{text: blocking}`), and gives `"fields": {}` for `## Verdict: blocking`, `- Verdict: blocking` and `**Verdict:** blocking`. So a reviewer that writes the verdict as a heading (seen in the gh124 smoke) FAILs. Task text and other cases unchanged. Still not graded: finding prose and finding tags.
+
+The reviewer-proxy-check results under Fails-before and Head below were graded under the old expectation (Check fact only). The two new live runs under the new expectation follow them.
 
 Note (non-blocking, review at 953a6f8): reviewer-test-is-check grades only the Check line's path, not its class nor the `test-is-check` finding tag, so it is narrower than #132; held-out, so not tuned.
 
@@ -42,7 +44,15 @@ PASS ladder/reviewer-proxy-check: field_lines Check: 1 line(s) [{"path": "script
 qa: 1/1 passed (run 20261024T033221Z-6a9d53)
 ```
 
-Separates: FAIL at 9ba7c51 (no check field), PASS at head.
+Separates under the old expectation: FAIL at 9ba7c51 (no check field), PASS at head.
+
+## Verdict fact, new expectation (supervisor's live runs, pending)
+
+`--kit-ref 9ba7c51`: TBD (supervisor to paste the result line and run id).
+
+Head: TBD (supervisor to paste the result line, kit sha and run id).
+
+The owed entry in docs/owed-evals/118.md leaves once these show FAIL at 9ba7c51 and PASS at head.
 
 ## Held-out (scored apart)
 

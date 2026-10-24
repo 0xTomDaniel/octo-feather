@@ -45,7 +45,8 @@
   },
   "reviewer-proxy-check": {
     "facts": [
-      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-test-surface", "class": "proxy"}]}
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-test-surface", "class": "proxy"}]},
+      {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}
     ]
   },
   "reviewer-exact-check": {
