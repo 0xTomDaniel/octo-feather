@@ -15,6 +15,20 @@ place, when the record is missing or either archive target already exists.
                                    comment (marker, head, verdict, findings); prints its URL
   octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
+  octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
+                                   the question's chosen classifier answers it on FILE's text; create, or
+                                   update in place, the PR's one comment for QUESTION, labelled a model judgment
+
+`judge` (spec judgment #boundary-advisory-judge) runs beside a code review: it refuses until the PR has
+its verdict comment. QUESTION is a judgment suite's name without `judgment-` (test-quality, exact-or-proxy,
+ticket-slice, call-evidence); its chosen model is the one evals/judges.json records from the suite's bench.
+The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
+nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
+no agent, in the qa sandbox, moving aliases never called; refused inside a check run), asking only that model.
+The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
+probability), PR head, Review head (the verdict comment's), then the question and the state; prints its URL.
+merge-ask, on pass, prints each such comment as one line under `Model judgments` after the section, beside the
+review verdict; no gate reads one (spec judgment #rule-advisory): merge-ask passes or fails the same without it.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
@@ -543,29 +557,133 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
                      f"push the reviewed head, or name the head the review judged in full")
     judged = at[0]
-    mine = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
-    if len(mine) > 1:
-        raise Refuse(f"PR #{pr} has {len(mine)} verdict comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
     body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n"
+    out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
+    print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
+    print(out)
+    return 0
+
+
+def post_comment(pr: int, repo: str | None, comments: list, marker: str, body: str, what: str) -> tuple[str, str]:
+    """Create, or update in place, PR's one comment starting with MARKER (a WHAT comment): (its URL, created|updated|unchanged)."""
+    mine = [c for c in comments or [] if (c.get("body") or "").lstrip().startswith(marker)]
+    if len(mine) > 1:
+        raise Refuse(f"PR #{pr} has {len(mine)} {what} comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
     api = f"repos/{repo or '{owner}/{repo}'}"
     if mine:
         m = COMMENT_URL.fullmatch(mine[0].get("url") or "")
         if not m:
-            raise Refuse(f"verdict comment has no issuecomment URL ({mine[0].get('url')!r}): delete it, then rerun")
+            raise Refuse(f"{what} comment has no issuecomment URL ({mine[0].get('url')!r}): delete it, then rerun")
         if mine[0]["body"].strip() == body.strip():
-            print(f"verdict: unchanged ({verdict}, head {judged[:12]})", file=sys.stderr); print(mine[0]["url"]); return 0
+            return mine[0]["url"], "unchanged"
         call, said = ["-X", "PATCH", f"{api}/issues/comments/{m.group(3)}"], "updated"
     else:
         call, said = ["-X", "POST", f"{api}/issues/{pr}/comments"], "created"
     with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
         json.dump({"body": body}, f); f.flush()
         out = gh(["api", *call, "--input", f.name, "--jq", ".html_url"],
-                 f"the verdict comment was not {said}; fix the cause (gh auth status, network), then rerun").strip()
+                 f"the {what} comment was not {said}; fix the cause (gh auth status, network), then rerun").strip()
     if not COMMENT_URL.fullmatch(out):
         raise Refuse(f"comment {said} but gh printed no comment URL ({out[:100]!r}): rerun to print it")
-    print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
+    return out, said
+
+
+# --- the advisory judge (spec judgment #boundary-advisory-judge, #rule-advisory, issue #156) ---
+
+JUDGES = KIT / "evals" / "judges.json"
+JUDGMENT_MARKER = "<!-- octo-feather-model-judgment: {} -->"
+JUDGMENT_FIELDS = ("Judgment", "Question", "Model", "Answer", "Confidence", "PR head", "Review head")
+STATE_MAX = 20000   # state characters quoted in the comment (GitHub caps a comment at 65536)
+
+
+def qa_module():
+    """scripts/octo-feather-qa, whose classify() is the one classify path (the bench's): one mechanism, not a second."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_qa", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+@no_traceback
+def cmd_judge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    state_file = None
+    if "--state" in args and args.index("--state") + 1 < len(args):
+        i = args.index("--state"); state_file = args[i + 1]; args = args[:i] + args[i + 2:]
+    if len(args) != 2 or state_file is None:
+        raise Refuse(f"usage: octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(args[0]); qid = args[1]
+    judges = json.loads(JUDGES.read_text())["judges"]
+    if qid not in judges:
+        raise Refuse(f"no judgment question {qid!r}: name one of {', '.join(sorted(judges))} (evals/judges.json)")
+    model = judges[qid]["model"]
+    q = json.loads((KIT / "evals" / f"judgment-{qid}" / "question.json").read_text())
+    suite = json.loads((KIT / "evals" / f"judgment-{qid}" / "suite.json").read_text())
+    try:
+        state = sys.stdin.read() if state_file == "-" else Path(state_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read state {state_file} ({e}): pass the file holding what the question is asked about "
+                     f"(its shape: {q['state_shape']}), or - for stdin")
+    if not state.strip():
+        raise Refuse(f"state {state_file} is empty: pass what the question is asked about (its shape: {q['state_shape']})")
+    d = pr_view(pr, "headRefOid,comments", repo)
+    head = d["headRefOid"]
+    review = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
+    rh = HEAD_LINE.search((review[0].get("body") or "").split("\n### Findings", 1)[0]) if len(review) == 1 else None
+    if not rh:
+        raise Refuse(f"no code review verdict comment on PR #{pr}: the judge answers beside the review; post it first with "
+                     f"`octo-feather-lane verdict {pr} <head> <report>`" + (f" (found {len(review)}, keep one)" if review else ""))
+    gate = subprocess.run([str(KIT / "scripts" / "check-gate-free"), "--refuse", "the advisory judge (octo-feather-lane judge)"],
+                          stdout=subprocess.PIPE, text=True)
+    if gate.stdout.strip() != "gate-free: ok":
+        raise Refuse("refused inside just check, which stays deterministic and free (message above)")
+    qa = qa_module()
+    inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
+           "cases": [{"id": "state", "state": state}], "classifiers": [model]}
+    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}")
+    if problem:
+        raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
+    if model not in (bench.get("benched") or []):
+        why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
+        raise Refuse(f"chosen model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
+                     "check Pi's models and auth, or bench the question again and record its chosen model in evals/judges.json")
+    rows = bench.get("rows") or []
+    _, _, choice, probs, _, ei = rows[0] if rows else (None, None, None, None, None, None)
+    if choice not in q["labels"]:
+        err = (bench.get("errors") or [])[ei] if ei is not None else f"answer {choice!r} is not one of {q['labels']}"
+        raise Refuse(f"{model} gave no answer ({err}): rerun, or check the provider")
+    conf = (probs or [None] * len(q["labels"]))[q["labels"].index(choice)]
+    conf_s = f"{conf:.3f}" if isinstance(conf, (int, float)) else "unreported"
+    fence = "`" * max(3, 1 + max((len(m) for m in re.findall(r"`+", state)), default=0))
+    quoted = state if len(state) <= STATE_MAX else state[:STATE_MAX] + f"\n[... {len(state) - STATE_MAX} more characters]"
+    marker = JUDGMENT_MARKER.format(qid)
+    body = (f"{marker}\n## Model judgment: {qid}\n\nJudgment: {qa.JUDGMENT}\nQuestion: {qid}\nModel: {model}\nAnswer: {choice}\n"
+            f"Confidence: {conf_s}\nPR head: {head}\nReview head: {rh.group(1)}\n"
+            f"State: {Path(state_file).name if state_file != '-' else 'stdin'} (sha256 {hashlib.sha256(state.encode()).hexdigest()[:12]}, "
+            f"{len(state)} characters)\nChosen by: {judges[qid].get('evidence', 'evals/judges.json')}\n\n"
+            f"### Question\n\n{q['question']}\n\n### State\n\n{fence}text\n{quoted.rstrip()}\n{fence}\n")
+    out, said = post_comment(pr, repo, d["comments"], marker, body, f"{qid} judgment")
+    print(f"judge: {said} ({qid}: {choice}, confidence {conf_s}, model judgment by {model})", file=sys.stderr)
     print(out)
     return 0
+
+
+def judgment_lines(comments: list) -> list[str]:
+    """One line per judgment comment on the PR, for the owner beside the review verdict. Read for display only:
+    no gate reads a judge's answer (spec judgment#rule-advisory)."""
+    out = []
+    for c in comments or []:
+        b = (c.get("body") or "").lstrip()
+        m = re.match(r"<!-- octo-feather-model-judgment: ([\w.-]+) -->", b)
+        if not m:
+            continue
+        hdr = b.split("\n### ", 1)[0].split("\n")
+        f = {k: v.strip() for k, v in (l.split(":", 1) for l in hdr if ":" in l) if k in JUDGMENT_FIELDS}
+        if any(k not in f for k in JUDGMENT_FIELDS) or not f["Judgment"].startswith("model judgment"):
+            out.append(f"- {m.group(1)}: unreadable judgment comment, ignored (rerun octo-feather-lane judge): {c.get('url') or '?'}"); continue
+        out.append(f"- {f['Question']}: {f['Answer']}, confidence {f['Confidence']} (model judgment by {f['Model']}, advisory: no gate reads it; "
+                   f"PR head {f['PR head'][:12]}, review head {f['Review head'][:12]}): {c.get('url') or '?'}")
+    return out
 
 
 def load_specs(files: list[str]) -> dict[str, dict]:
@@ -827,6 +945,9 @@ def cmd_merge_ask(args: list[str]) -> int:
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
+        print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
+        print("\n".join(judged_lines))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
     return 0
@@ -1262,6 +1383,7 @@ COMMANDS = {
     "verdict": cmd_verdict,
     "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,
+    "judge": cmd_judge,
     "tickets": cmd_tickets,
     "done": cmd_done,
     "ticket": cmd_ticket,

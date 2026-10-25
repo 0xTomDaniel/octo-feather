@@ -1,0 +1,9 @@
+{
+  "about": "Each judgment question's chosen classifier, read by `octo-feather-lane judge` (spec judgment#boundary-advisory-judge). Key: the question id, its suite evals/judgment-<id>/ without the prefix. model: the classifier the suite's bench chose from train only; evidence: that bench run. Advisory: no gate reads a judge's answer until its question meets a threshold the director accepts (spec judgment#rule-advisory).",
+  "judges": {
+    "test-quality": {"model": "openrouter/respan/span-02", "evidence": "evidence/2026-10-23-gh119-judgment-bench.md"},
+    "exact-or-proxy": {"model": "openrouter/cloudflare/clef", "evidence": "evidence/2026-10-25-gh119-judgment-bench-exact-or-proxy.md"},
+    "ticket-slice": {"model": "openrouter/inception/mercury-decide", "evidence": "evidence/2026-10-25-gh119-judgment-bench-ticket-slice.md"},
+    "call-evidence": {"model": "openrouter/nace-ai/drex-max", "evidence": "evidence/2026-10-24-gh119-judgment-bench-call-evidence.md"}
+  }
+}

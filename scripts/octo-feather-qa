@@ -971,43 +971,14 @@ def run_bench(qc, d, suite, picked, requested, runid, out):
     out.mkdir(parents=True, exist_ok=True)
     q = json.loads((d / "question.json").read_text())
     tmo = int(suite.get("timeout_s", DEFAULT_TIMEOUT))
-    scratch = Path(tempfile.mkdtemp(prefix=f"qa-{runid}-bench-"))
     t0 = time.time()
     res = {"suite": suite["suite"], "kind": "judgment", "question": q["id"], "cases": len(picked)}
-    try:
-        inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
-               "cases": [{"id": c["id"], "state": c["state"]} for c, _ in picked], "classifiers": requested or None}
-        (scratch / BENCH_INPUT).write_text(json.dumps(inp, indent=1) + "\n")
-        ext = BENCH_SOURCE % {"command": BENCH_COMMAND}
-        (scratch / BENCH_EXT).write_text(ext)
-        g = ["git", "-C", str(scratch), "-c", "user.name=octo-feather-qa", "-c", "user.email=qa@octo-feather.invalid",
-             "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"]
-        for a in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "bench input"]):
-            subprocess.run([*g, *a], check=True, capture_output=True)
-        (out / "input.json").write_text(json.dumps(inp, indent=2) + "\n")
-        (out / "extension.js").write_text(ext)
-        cmd = ["timeout", "-k", "10", str(tmo), "pi", "--no-session", "--no-skills", "--no-mcp", "--no-context-files",
-               "--no-prompt-templates", "--no-extensions", "--no-tools", "-e", str(scratch / BENCH_EXT),
-               "-p", f"/{BENCH_COMMAND} {scratch / BENCH_INPUT}"]
-        here = os.getcwd(); os.chdir(scratch)
-        try:
-            run, rec = qc.sandboxed(cmd, f"qa-{runid}-bench", {"off": GH_OFF}, history=False)
-        except SystemExit as e:
-            run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
-        finally:
-            os.chdir(here)
-    finally:
-        shutil.rmtree(scratch, ignore_errors=True)
-    (out / "sandbox.json").write_text(json.dumps(rec, indent=2) + "\n")
+    inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
+           "cases": [{"id": c["id"], "state": c["state"]} for c, _ in picked], "classifiers": requested or None}
+    bench, run, rec, problem = classify(qc, inp, tmo, f"qa-{runid}-bench", out)
     res["seconds"] = round(time.time() - t0, 1)
-    if run is None:
-        bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
-        return bench_end(out, res, f"sandbox: proof failed, bench not run: {'; '.join(bad)}")
-    (out / "stdout.txt").write_text(run.stdout)
-    (out / "stderr.txt").write_text(run.stderr)
-    bench, problem = bench_output(run.stdout)
     if problem:
-        return bench_end(out, res, f"{problem} (pi exit {run.returncode})")
+        return bench_end(out, res, problem)
     models, choice, answers = bench_metrics(bench, picked, q["labels"])
     (out / "answers.json").write_text(json.dumps({"judgment": JUDGMENT, "answers": answers}, indent=1) + "\n")
     lines = bench_report(suite, q, picked, bench, models, choice, requested)
@@ -1016,6 +987,48 @@ def run_bench(qc, d, suite, picked, requested, runid, out):
     res.update(available=bench.get("available"), benched=bench.get("benched"), skipped=bench.get("skipped") or [], models=models, choice=choice,
                cost_usd=sum(m["cost_usd"] for m in models))
     return bench_end(out, res, None if choice else "no classifier answered every train case")
+
+
+def classify(qc, inp, tmo, session, out=None):
+    """The one classify path, the bench's and `octo-feather-lane judge`'s: pi in the qa sandbox (session SESSION, no lane
+    history, offline gh off) runs the BENCH_SOURCE extension's command on INP ({question, labels, criteria: {label: help},
+    cases: [{id, state}], classifiers: [P/ID] or None}), no agent, within TMO seconds. Returns (bench, run, sandbox record,
+    problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+    writes input.json, extension.js, sandbox.json, stdout.txt and stderr.txt there."""
+    scratch = Path(tempfile.mkdtemp(prefix=f"{session}-"))
+    try:
+        (scratch / BENCH_INPUT).write_text(json.dumps(inp, indent=1) + "\n")
+        ext = BENCH_SOURCE % {"command": BENCH_COMMAND}
+        (scratch / BENCH_EXT).write_text(ext)
+        g = ["git", "-C", str(scratch), "-c", "user.name=octo-feather-qa", "-c", "user.email=qa@octo-feather.invalid",
+             "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null"]
+        for a in (["init", "-q", "-b", "main"], ["add", "-A"], ["commit", "-qm", "bench input"]):
+            subprocess.run([*g, *a], check=True, capture_output=True)
+        if out:
+            (out / "input.json").write_text(json.dumps(inp, indent=2) + "\n")
+            (out / "extension.js").write_text(ext)
+        cmd = ["timeout", "-k", "10", str(tmo), "pi", "--no-session", "--no-skills", "--no-mcp", "--no-context-files",
+               "--no-prompt-templates", "--no-extensions", "--no-tools", "-e", str(scratch / BENCH_EXT),
+               "-p", f"/{BENCH_COMMAND} {scratch / BENCH_INPUT}"]
+        here = os.getcwd(); os.chdir(scratch)
+        try:
+            run, rec = qc.sandboxed(cmd, session, {"off": GH_OFF}, history=False)
+        except SystemExit as e:
+            run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
+        finally:
+            os.chdir(here)
+    finally:
+        shutil.rmtree(scratch, ignore_errors=True)
+    if out:
+        (out / "sandbox.json").write_text(json.dumps(rec, indent=2) + "\n")
+    if run is None:
+        bad = [l for l in rec.get("proof", []) if "FAIL" in l] or [rec.get("error", "sandbox did not start")]
+        return None, None, rec, f"sandbox: proof failed, bench not run: {'; '.join(bad)}"
+    if out:
+        (out / "stdout.txt").write_text(run.stdout)
+        (out / "stderr.txt").write_text(run.stderr)
+    bench, problem = bench_output(run.stdout)
+    return bench, run, rec, (f"{problem} (pi exit {run.returncode})" if problem else None)
 
 
 def bench_end(out, res, problem):
