@@ -41,3 +41,27 @@ The spec's scenario starts from a lane head the code reviewer judged; PR #147 ha
 - tests/lane-judge.sh (fake gh at the PATH boundary, stub pi running the real extension command under node in the qa sandbox): refusals write nothing; only the chosen model is asked, on the file's text unchanged; one labelled comment, updated in place; merge-ask shows it beside the review verdict, output otherwise identical; a blocking review fails identically with and without the judgment; a malformed judgment comment changes nothing.
 - tests/lane-merge-ask.sh and tests/qa.sh unchanged and green (verdict and bench behaviour kept through the refactors).
 - `just check`: ok.
+
+## Repair after just qc (calibration status beside each answer)
+
+just qc at e826a8f failed judgment#acceptance-judge-advisory: no run exercised a question below an accepted accuracy/calibration threshold. Built as data plus display, no gate (spec #rule-calibration, #rule-advisory):
+
+- Each judgment suite's `chosen` now carries `held_out` {accuracy, brier} and `threshold` {accuracy_min, brier_max, accepted}, copied from its bench evidence file's full run, `accepted: false` for all four (owner ruling 2026-10-23, issue #151: no question has an accepted threshold yet):
+
+| question | model | held-out accuracy | held-out Brier | proposed threshold | evidence |
+|---|---|---|---|---|---|
+| test-quality | openrouter/respan/span-02 | 1.000 (7/7) | 0.107 | accuracy >= 0.699, Brier <= 0.39 | evidence/2026-10-23-gh119-judgment-bench.md |
+| exact-or-proxy | openrouter/cloudflare/clef | 0.727 (8/11) | 0.344 | accuracy >= 0.584, Brier <= 0.41 | evidence/2026-10-25-gh119-judgment-bench-exact-or-proxy.md |
+| ticket-slice | openrouter/inception/mercury-decide | 1.000 (8/8) | 0.000 | accuracy >= 0.785, Brier <= 0.004 | evidence/2026-10-25-gh119-judgment-bench-ticket-slice.md |
+| call-evidence | openrouter/nace-ai/drex-max | 0.917 (11/12) | 0.235 | accuracy >= 0.549, Brier <= 0.655 | evidence/2026-10-24-gh119-judgment-bench-call-evidence.md |
+
+- scripts/check-evals checks that shape exactly: every key required, no other; accuracy and accuracy_min numbers 0 to 1, brier 0 to 2, brier_max >= 0, accepted a bool (refusals in tests/qa.sh).
+- `judge` writes `Calibration: <status> (held-out accuracy A, Brier B; threshold held-out accuracy >= X and Brier <= Y, accepted | proposed, not accepted)` into the comment; status is `below accepted threshold`, `no accepted threshold` or `meets accepted threshold`. merge-ask's model-judgment line shows it after `advisory: no gate reads it`. Pass or fail still never reads it.
+
+Demo: `bash tests/lane-judge.sh` (fake gh, stub classifiers, the real extension command in the qa sandbox). A kit copy with test-quality's threshold accepted above its held-out score (held-out 0.571, Brier 0.512; threshold >= 0.699, <= 0.39, accepted):
+
+```
+lane-judge: below accepted threshold: answer shown labelled a model judgment, merge-ask ready with and without it
+```
+
+The comment shows `Judgment: model judgment ...`, `Answer: tautological`, `Calibration: below accepted threshold (...)`; merge-ask exits 0 with and without the comment, output identical outside the judgment block. The four real suites each show `no accepted threshold`; an accepted threshold met shows `meets accepted threshold`. Mutation check: forcing the below branch to say "meets" fails the test.

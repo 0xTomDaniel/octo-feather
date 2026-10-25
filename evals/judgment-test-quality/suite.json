@@ -5,6 +5,15 @@
   "timeout_s": 1800,
   "chosen": {
     "model": "openrouter/respan/span-02",
-    "evidence": "evidence/2026-10-23-gh119-judgment-bench.md"
+    "evidence": "evidence/2026-10-23-gh119-judgment-bench.md",
+    "held_out": {
+      "accuracy": 1.0,
+      "brier": 0.107
+    },
+    "threshold": {
+      "accuracy_min": 0.699,
+      "brier_max": 0.39,
+      "accepted": false
+    }
   }
 }

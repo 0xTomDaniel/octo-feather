@@ -5,6 +5,15 @@
   "timeout_s": 1800,
   "chosen": {
     "model": "openrouter/cloudflare/clef",
-    "evidence": "evidence/2026-10-25-gh119-judgment-bench-exact-or-proxy.md"
+    "evidence": "evidence/2026-10-25-gh119-judgment-bench-exact-or-proxy.md",
+    "held_out": {
+      "accuracy": 0.727,
+      "brier": 0.344
+    },
+    "threshold": {
+      "accuracy_min": 0.584,
+      "brier_max": 0.41,
+      "accepted": false
+    }
   }
 }

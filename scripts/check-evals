@@ -9,10 +9,12 @@ copied and git-initialized per run). A suite dir holds:
   suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript" | "judgment",
                                 "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
                                 optional "covers": "role-skills" (skill-trigger only, below),
-                                optional "chosen": {"model": P/ID, "evidence": path} (judgment only: the
-                                classifier its bench chose, read by `octo-feather-lane judge`; ID not a
-                                moving alias, as octo-feather-qa skips them; evidence a file relative to
-                                the dir holding EVALS_DIR)}
+                                optional "chosen": {"model": P/ID, "evidence": path, "held_out": {"accuracy":
+                                0..1, "brier": 0..2}, "threshold": {"accuracy_min": 0..1, "brier_max": >= 0,
+                                "accepted": bool}} (judgment only: the classifier its bench chose, read by
+                                `octo-feather-lane judge`; ID not a moving alias, as octo-feather-qa skips
+                                them; evidence a file relative to the dir holding EVALS_DIR; held_out and
+                                threshold copied from it, accepted false until the director accepts it)}
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out");
                                a role-transcript case may also have
@@ -147,7 +149,9 @@ QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
 J_CASE = {"id", "split", "state"}
 J_EXP = {"label", "reason", "source"}
 J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record, optional
-CHOSEN = {"model", "evidence"}   # a judgment suite's optional chosen classifier
+CHOSEN = {"model", "evidence", "held_out", "threshold"}   # a judgment suite's optional chosen classifier
+HELD_OUT = {"accuracy", "brier"}   # chosen.held_out: the bench's held-out score for the chosen model
+THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # chosen.threshold: proposed (accepted false) or accepted
 MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
 TRIGGER = {"should_trigger", "split"}
@@ -289,7 +293,7 @@ def check_chosen(ch, kind, where, evals, errs):
     if kind != "judgment":
         errs.append(f"{where}: field chosen: only in a judgment suite, got kind {kind!r}"); return
     if not isinstance(ch, dict):
-        errs.append(f"{where}: field chosen: must be an object {{model, evidence}}, got {ch!r}"); return
+        errs.append(f"{where}: field chosen: must be an object {{model, evidence, held_out, threshold}}, got {ch!r}"); return
     for k in sorted(CHOSEN - set(ch)):
         errs.append(f"{where}: field chosen.{k}: missing")
     for k in sorted(set(ch) - CHOSEN):
@@ -307,6 +311,22 @@ def check_chosen(ch, kind, where, evals, errs):
         errs.append(f"{where}: field chosen.evidence: must be a relative path inside the repo, got {ev!r}")
     elif "evidence" in ch and not (evals.parent / ev).is_file():
         errs.append(f"{where}: field chosen.evidence: no file {ev} beside evals/ (in {evals.parent}); name the bench's evidence file")
+    num = lambda v: type(v) in (int, float)
+    for k, keys, rng in (("held_out", HELD_OUT, {"accuracy": 1, "brier": 2}), ("threshold", THRESHOLD, {"accuracy_min": 1, "brier_max": None})):
+        o = ch.get(k)
+        if k not in ch:
+            continue
+        if not isinstance(o, dict):
+            errs.append(f"{where}: field chosen.{k}: must be an object {{{', '.join(sorted(keys))}}}, got {o!r}"); continue
+        for f in sorted(keys - set(o)):
+            errs.append(f"{where}: field chosen.{k}.{f}: missing")
+        for f in sorted(set(o) - keys):
+            errs.append(f"{where}: field chosen.{k}.{f}: unknown field")
+        for f, top in rng.items():
+            if f in o and not (num(o[f]) and 0 <= o[f] and (top is None or o[f] <= top)):
+                errs.append(f"{where}: field chosen.{k}.{f}: must be a number from 0" + (f" to {top}" if top else " up") + f", got {o[f]!r}")
+        if "accepted" in o and type(o["accepted"]) is not bool:
+            errs.append(f"{where}: field chosen.{k}.accepted: must be true or false, got {o['accepted']!r}")
 
 
 def check_judgment(d, cases, exps, errs):

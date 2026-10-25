@@ -5,6 +5,15 @@
   "timeout_s": 1800,
   "chosen": {
     "model": "openrouter/inception/mercury-decide",
-    "evidence": "evidence/2026-10-25-gh119-judgment-bench-ticket-slice.md"
+    "evidence": "evidence/2026-10-25-gh119-judgment-bench-ticket-slice.md",
+    "held_out": {
+      "accuracy": 1.0,
+      "brier": 0.0
+    },
+    "threshold": {
+      "accuracy_min": 0.785,
+      "brier_max": 0.004,
+      "accepted": false
+    }
   }
 }

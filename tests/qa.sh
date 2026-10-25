@@ -674,14 +674,14 @@ bad 'e["t3"]["note"] = "x"' "jb/reference/expectations.json case t3: field note:
 # evidence file that exists beside evals/ (the repo holding it); refused on any other kind.
 mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
 rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
-python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['chosen']={'model': 'stub/p/q-1.2:free', 'evidence': 'evidence/jb.md'}; json.dump(s, open(p, 'w'))" \
+python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['chosen']={'model': 'stub/p/q-1.2:free', 'evidence': 'evidence/jb.md', 'held_out': {'accuracy': 0.5, 'brier': 0.6}, 'threshold': {'accuracy_min': 0.7, 'brier_max': 0.39, 'accepted': True}}; json.dump(s, open(p, 'w'))" \
   "$t/evals/jb/suite.json"
 run 0 "$C" "$t/evals"
-ok_chosen='s["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}'
+ok_chosen='s["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md", "held_out": {"accuracy": 1, "brier": 0}, "threshold": {"accuracy_min": 0.699, "brier_max": 2.403, "accepted": False}}'
 bad "$ok_chosen"'; s["chosen"]["why"] = "x"' "jb/suite.json: field chosen.why: unknown field" "$t/jg-good" jb
 bad "$ok_chosen"'; del s["chosen"]["model"]' "jb/suite.json: field chosen.model: missing" "$t/jg-good" jb
 bad "$ok_chosen"'; del s["chosen"]["evidence"]' "jb/suite.json: field chosen.evidence: missing" "$t/jg-good" jb
-bad 's["chosen"] = "stub/p/q-1.2"' "jb/suite.json: field chosen: must be an object {model, evidence}" "$t/jg-good" jb
+bad 's["chosen"] = "stub/p/q-1.2"' "jb/suite.json: field chosen: must be an object {model, evidence, held_out, threshold}" "$t/jg-good" jb
 for m in stub/~x/y stub/p/q-latest stub/x-latest:free; do
   bad "$ok_chosen"'; s["chosen"]["model"] = "'"$m"'"' "jb/suite.json: field chosen.model: $m is a moving alias" "$t/jg-good" jb
 done
@@ -690,5 +690,20 @@ for m in stub 'stub/' '/x' 'stub/a b' ''; do
 done
 bad "$ok_chosen"'; s["chosen"]["evidence"] = "evidence/none.md"' "jb/suite.json: field chosen.evidence: no file evidence/none.md beside evals/" "$t/jg-good" jb
 bad "$ok_chosen"'; s["chosen"]["evidence"] = "../evidence/jb.md"' "jb/suite.json: field chosen.evidence: must be a relative path inside the repo" "$t/jg-good" jb
+# Its calibration record (copied from the evidence file): held_out {accuracy 0..1, brier 0..2}, threshold {accuracy_min 0..1,
+# brier_max >= 0, accepted bool}, each key required, no other.
+for k in held_out threshold; do
+  bad "$ok_chosen"'; del s["chosen"]["'$k'"]' "jb/suite.json: field chosen.$k: missing" "$t/jg-good" jb
+  bad "$ok_chosen"'; s["chosen"]["'$k'"] = 0.7' "jb/suite.json: field chosen.$k: must be an object {" "$t/jg-good" jb
+  bad "$ok_chosen"'; s["chosen"]["'$k'"]["n"] = 7' "jb/suite.json: field chosen.$k.n: unknown field" "$t/jg-good" jb
+done
+for f in accuracy brier; do bad "$ok_chosen"'; del s["chosen"]["held_out"]["'$f'"]' "jb/suite.json: field chosen.held_out.$f: missing" "$t/jg-good" jb; done
+for f in accuracy_min brier_max accepted; do bad "$ok_chosen"'; del s["chosen"]["threshold"]["'$f'"]' "jb/suite.json: field chosen.threshold.$f: missing" "$t/jg-good" jb; done
+bad "$ok_chosen"'; s["chosen"]["held_out"]["accuracy"] = 1.2' "jb/suite.json: field chosen.held_out.accuracy: must be a number from 0 to 1, got 1.2" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["held_out"]["accuracy"] = "0.9"' "jb/suite.json: field chosen.held_out.accuracy: must be a number from 0 to 1, got '0.9'" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["held_out"]["brier"] = 2.1' "jb/suite.json: field chosen.held_out.brier: must be a number from 0 to 2, got 2.1" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["threshold"]["accuracy_min"] = True' "jb/suite.json: field chosen.threshold.accuracy_min: must be a number from 0 to 1, got True" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["threshold"]["brier_max"] = -0.1' "jb/suite.json: field chosen.threshold.brier_max: must be a number from 0 up, got -0.1" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["threshold"]["accepted"] = "no"' "jb/suite.json: field chosen.threshold.accepted: must be true or false, got 'no'" "$t/jg-good" jb
 bad 's["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}' "trig/suite.json: field chosen: only in a judgment suite"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, chosen classifier: pinned P/ID, moving alias, missing or unknown key, evidence file, judgment suites only)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, chosen classifier: pinned P/ID, moving alias, missing or unknown key, evidence file, held_out and threshold shape, judgment suites only)"
