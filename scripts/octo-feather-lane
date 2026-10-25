@@ -17,24 +17,22 @@ place, when the record is missing or either archive target already exists.
                                    check the PR body's `## Merge ask` section; print it on pass
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
-report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines in the verdict reader's scope count (scope: .agents/skills/code-review/SKILL.md (Verdict step)); the last such line is the
-verdict, and lines that disagree are refused. The report also classifies every check, test
-gate or grader the diff adds or changes (docs/adr/0008, issue #118), in that same scope:
-`Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
-Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
+report, a file or - for stdin. Its fields (the verdict, the check field, the Owner field) and the
+reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
+in scope is the verdict, and lines that disagree are refused. The check field classifies every
+check, test gate or grader the diff adds or changes (docs/adr/0008, issue #118). Refused: no
+verdict, neither check form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
 
-  octo-feather-lane fields REPORT|-   a report's column-0 field lines as JSON (the parser verdict uses)
+  octo-feather-lane fields REPORT|-   a report's field lines as JSON (the parser verdict uses)
 
-`fields` reads the lines outside fenced code blocks as `verdict` does and prints one JSON object:
-"Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field above (errors:
+`fields` reads the lines in `verdict`'s reader scope (Report fields, above) and prints one JSON object:
+"Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
 `verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
-errors} from the code-review skill's `Owner: <path>: <rule> | restated: none|<path>:<line>[, ...]` or
-`Owners: none` (`:<line>` stripped from every path); "fields" {Name: [value...]} for every other
-`Name: value` line at column 0 (Name: a capital, then letters or -). Exit 0; 1 on an unreadable report.
+errors} from the Owner field (`:<line>` stripped from every path); "fields" {Name: [value...]} for every
+other `Name: value` line in scope (Name: a capital, then letters or -). Exit 0; 1 on an unreadable report.
 The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,

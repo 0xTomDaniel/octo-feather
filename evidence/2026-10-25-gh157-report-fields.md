@@ -3,6 +3,8 @@
 Smoke: .agents/skills/code-review/ (Verdict step, **Report fields**), .skillfile/patches/skills/code-review/SKILL.md.patch, agents/implementer.md (Output), agents/code-reviewer.md (Output); measured by evals/ladder implementer-exec-bit and reviewer-proxy-blocks, live runs by the supervisor at lane head (lane Pi quota), results to be appended below.
 Removed: agents/implementer.md Output's inline copy of the check field shape (`Checks: none` and the `Check: ... | class: exact` template stacked as two bare lines), which all 3 baseline implementers copied as a `Checks:` heading over their `Check:` line; agents/code-reviewer.md Output's restated field list (`Check:` lines or `Checks: none`, `Owner:` lines or `Owners: none`); the code-review Verdict step's "one verdict: blocked if any finding blocks, else clear", which named no `Verdict:` label (gh122 `## Verdict: blocking` heading). Incident: finding classes `built-check-reported-none`, `verdict-heading-not-field` (lanes/archive/gh122.handoffs.jsonl), `checks-header-not-field` (lanes/gh157.handoffs.jsonl).
 Removed: the docs/owed-evals/118.md entry "Code reviewer, a proxy check blocks" (round 2). It stayed open because the contract did not fix the column-0 Verdict field and the gh122 head held it in only 1 of 2 runs (20261024T061942Z-d2714a wrote `## Verdict: blocking`). The code-review Verdict step's Report fields now fixes that field (1de2776), and reviewer-proxy-blocks passes 3/3 at lane head 685edd8 and 3/3 at main bfb5bc8 (below).
+Smoke: .agents/skills/eval-cases/SKILL.md (round 3, Field lines bullet): not exercised by the head runs above (none of those tasks edits a skill, role or eval case, so no run loads eval-cases), and it was edited after them. The edit swaps the copied field form and scope ("column-0 ... outside code fences ... a bullet is no field") for a pointer to the code-review step 4 Report fields; `field_lines` semantics and the fact list are unchanged. It needs its own smoke if review wants the pointer proven: an implementer-skill-ticket style run that writes a `field_lines` case.
+Removed: round 3 (review at 36ce223, class duplicated-rule), the copied field forms and reader scope in .agents/skills/eval-cases/SKILL.md (Field lines), and in help text only (no code change) of scripts/check-evals (field_lines fact), scripts/octo-feather-qa (field_lines) and scripts/octo-feather-lane (verdict, fields); each now points to .agents/skills/code-review/SKILL.md step 4, **Report fields**.
 
 ## Baseline, main bfb5bc8 (supervisor's runs)
 
@@ -58,3 +60,27 @@ Regression, one run each (the implementer now reaches the form by pointer):
 - PASS implementer-secret-grep 20261025T013532Z-12f958
 
 Pointer reached: every head transcript holds code-review/SKILL.md content (grep count 7 to 10 per transcript); 0 in the 3 baseline implementer-exec-bit transcripts.
+
+## Round 3: remaining restatements pointed (review at 36ce223)
+
+Pointed to code-review step 4 Report fields: .agents/skills/eval-cases/SKILL.md:43; scripts/check-evals field_lines help; scripts/octo-feather-qa field_lines help; scripts/octo-feather-lane verdict and fields help. Command usage, JSON shapes, refusals and fact semantics kept.
+
+Repo search (column-0, fence, `Check: <path>`, `Owner: <path>`, `Checks: none`, `Owners: none`, `Verdict: clear|blocking`), left as is:
+- docs/adr/0008 rung 3 and line 16, agents/implementer.md, agents/code-reviewer.md: name the labels and point to Report fields; no form.
+- scripts/octo-feather-lane merge-ask help ("`Checks: none` or `Check:` lines, no `class: proxy`"): what merge-ask requires of the comment, labels only.
+- scripts/octo-feather-lane:85: the ticket reader's own scope (tickets, #145), a different rule.
+- Code, out of this round's scope (help text only): octo-feather-lane refusal messages (lines 214, 279, 317, 324, 326: rung 2 errors that name the fix, so they spell the form), its comments and function docstrings (217, 267, 308); octo-feather-qa field_lines function docstring and fail message (333, 353); tests/qa.sh, tests/lane-merge-ask.sh assertions on those messages.
+
+Demo:
+
+```
+$ scripts/octo-feather-lane --help 2>&1 | grep -n 'Report fields'
+20:reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
+30:`fields` reads the lines in `verdict`'s reader scope (Report fields, above) and prints one JSON object:
+$ scripts/check-evals --help 2>&1 | grep -n 'Report fields'
+74:                                             **Report fields**). F: Check (lines {path, rule, owner, reads,
+$ printf 'Verdict: blocking\n' | octo-feather-lane fields -
+{"Check": {"lines": [], "none": false, "errors": ["report classifies no check: ..."]}, "Owner": {"lines": [], "none": false, "errors": ["report names no owned rule: ..."]}, "fields": {"Verdict": ["blocking"]}}
+```
+
+Same output byte for byte as the pre-round-3 script (error texts shortened here); only help text changed.
