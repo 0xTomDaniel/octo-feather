@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 the Verdict step owns the column-0 form of every report field it names (Verdict, Check, Checks: none, Owner), for every role reporting one
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalation (intro line); one Standards pass, no Spec pass (Verdict step, Block); issue #118 the Check lines (Verdict step); issue #124 the Owner lines (Verdict step, Owner paragraphs); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 one owner for report-field form (Verdict step, Report fields); issue #160 the writer side and search width (Verdict step, Owner paragraphs)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -44,15 +44,15 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,43 @@
+@@ -55,35 +41,47 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
 -### 4. Spawn both sub-agents in parallel
+-
+-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
 +### 3. Run the review
  
--Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
--
 -**Standards sub-agent prompt** should include:
 +Work from:
  
@@ -76,33 +76,37 @@
 +Check: scripts/check-test-surface: tests drive the CLI, never an internal function (AGENTS.md Rules) | reads: tests/*.py import lines | class: proxy
 +Owners: none
 +```
++
++`Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
++
++Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
  
 -- The diff command and commit list.
 -- The path or fetched contents of the spec.
 -- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
-+`Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
- 
--If the spec is missing, skip the Spec sub-agent and note this in the final report.
-+Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
- 
--### 5. Aggregate
 +`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
  
--Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
+-If the spec is missing, skip the Spec sub-agent and note this in the final report.
 +`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
  
--End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
+-### 5. Aggregate
 +`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
  
--## Why two axes
+-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
 +Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule, or the one line `Owners: none`:
  
--A change can pass one axis and fail the other:
+-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 +`Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
+ 
+-## Why two axes
++List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
+ 
+-A change can pass one axis and fail the other:
++Search once per part of the rule: each label, value and term it fixes, one grep each, across docs, comments, docstrings, help text, test headers and eval descriptions. A restatement paraphrases, so one phrase finds a share. Failure example: lane gh157 wrote the report-field reader scope here; its first review found 4 restatements, the next two found 3 more (scripts/octo-feather-qa:333, tests/qa.sh:429, tests/lane-merge-ask.sh:106) and 1 more (evals/ladder/suite.json:4).
  
 -- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
 -- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
-+List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
++A writer (implementer, corrector) runs this same search on its own diff before its commit, points every hit, and ends its report with the same `Owner:` lines or `Owners: none`. A fix round for a `duplicated-rule` finding searches again: the finding's sites are a share. Failure example: gh121, gh152 and gh157 writers each fixed only the listed sites, and the next review found more.
  
 -Reporting them separately stops one axis from masking the other.
 +The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:` and `Checks:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.
