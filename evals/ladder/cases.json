@@ -142,5 +142,12 @@
       "message": "chore(check): tests stay on the CLI surface (T2, tests-through-cli)"
     },
     "task": "Review lane gh2, ticket T2 (tests stay on the app's public surface; criterion tests-through-cli: every test drives the app through `app.cli.main` or the installed `app` command, never an internal function, and `just check` fails when a test does not).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "implementer-owned-rule",
+    "role": "implementer",
+    "fixture": "docs-rules",
+    "branch": "implementer-t9",
+    "task": "Ticket T9 (lane gh9, parent #9): error messages name their fix.\nAcceptance criterion errors-name-the-fix: Given no notes.json, When `app list` or `app add x` runs, Then it exits 1 and stderr names the command that fixes it (`app init`); and an unknown command exits 2.\nWhat to build: those error messages, and the rule recorded as docs/adr/0002-errors-name-the-fix.md (every error message names the command that fixes it; a usage error exits 2).\nWorktree: this directory, branch implementer-t9, integration branch main (cut from it). Gate: `just check`.\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]

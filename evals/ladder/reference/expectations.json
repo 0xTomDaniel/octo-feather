@@ -78,6 +78,12 @@
       {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md"}], "every": {"restated": []}}
     ]
   },
+  "implementer-owned-rule": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md"}], "every": {"restated": []}},
+      {"fact": "branch_paths", "touched": ["docs/adr/0002-errors-name-the-fix.md", "README.md"]}
+    ]
+  },
   "reviewer-owner-none": {
     "facts": [
       {"fact": "field_lines", "field": "Owner", "none": true}

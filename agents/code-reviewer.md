@@ -21,7 +21,7 @@ None over the repository. This role mutates nothing.
 
 ## Required inputs
 
-- The diff it was given. A delta review reads the fix delta (base = the last reviewed head) plus the surface it touches, not unchanged code.
+- The diff it was given. A delta review reads the fix delta (base = the last reviewed head) plus the surface it touches, not unchanged code; its owned-rule search still spans the whole repo (`code-review` Verdict step, `Owner:` lines).
 - The target repo `AGENTS.md`, for what validation is supposed to prove.
 
 ## Rules
