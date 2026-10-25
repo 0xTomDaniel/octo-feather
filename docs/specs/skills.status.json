@@ -37,6 +37,14 @@
     "acceptance-tracker-scripts": {
       "status": "built",
       "pr": 103
+    },
+    "acceptance-repo-skill-roles": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verification-pi": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

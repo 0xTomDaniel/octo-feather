@@ -53,6 +53,38 @@
     "acceptance-qa-cases-checked": {
       "status": "built",
       "pr": 111
+    },
+    "acceptance-qc-verify-sandbox": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-created": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-declared": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-launch-fails": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-maintain": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-map-current": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-used": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-verify-view-model": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -25,6 +25,10 @@
     "acceptance-target-agents-md": {
       "status": "built",
       "pr": 16
+    },
+    "acceptance-starter-verify": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

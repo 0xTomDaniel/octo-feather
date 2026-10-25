@@ -21,6 +21,7 @@
 <h2>User stories</h2>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-start-strict">As the owner starting a new project, I pick Python or TypeScript and get a repository whose gate already rejects type errors, lint, structure breaks and failing tests.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-cli-surface">As an implementer, I verify my work through the app's CLI with <code>--json</code>, the same surface the end-to-end tests and the product judge use (ADR 0009).</p>
+<p data-user-story data-user-facing="false" data-anchor="story-starter-verify">As an implementer in a template-born repository, I prove my change by driving the app through the repository's verify skill from its first commit, so no lane has to build one first.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-same-gate">As the owner, the gate an agent runs is the gate the git hook and CI run, so green means the same thing everywhere.</p>
 </section>
 
@@ -33,6 +34,7 @@
 <p data-acceptance-criterion data-anchor="acceptance-same-gate" data-story="story-same-gate" data-project-rule="One gate everywhere"><span data-acceptance-scenario>Given the owner, When any change is pushed from a template-born repository,</span> <span data-acceptance-observable>Then CI runs the same <code>just check</code> the agents and the git hook run, and a red result blocks the pull request.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-target-agents-md" data-story="story-start-strict"><span data-acceptance-scenario>Given the owner with a new repository from either template, When an implementer starts in it,</span> <span data-acceptance-observable>Then the implementer has loaded the repository's AGENTS.md, which names the gate and the repository's own skills.</span></p>
 
+<p data-acceptance-criterion data-anchor="acceptance-starter-verify" data-story="story-starter-verify"><span data-acceptance-scenario>Given the owner with a new repository from either template, When an implementer runs the repository's verify skill end to end on its starter feature,</span> <span data-acceptance-observable>Then the skill launches the app, passes its doctor, drives the app CLI with <code>--json</code> and keeps its evidence after cleanup, and the repository's <code>AGENTS.md</code> names that skill on its <code>Repo skills:</code> line.</span></p>
 </section>
 
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
@@ -52,6 +54,7 @@
 <tr data-anchor="tpl-structure"><td>Structure</td><td>import-linter: the core never imports the CLI</td><td>dependency-cruiser: the core never imports the CLI, no cycles; knip for dead code</td></tr>
 <tr data-anchor="tpl-tests"><td>Tests</td><td>pytest, integration and end-to-end only</td><td>Vitest, integration and end-to-end through the app CLI; Playwright end-to-end when the app has a UI</td></tr>
 <tr data-anchor="tpl-cli"><td>App surface</td><td>An app CLI whose commands print <code>--json</code></td><td>An app CLI whose commands print <code>--json</code></td></tr>
+<tr data-anchor="tpl-verify"><td>Verification</td><td>A verify skill in <code>.agents/skills/</code>, declared on the <code>AGENTS.md</code> <code>Repo skills:</code> line, driving the app CLI, its feature map seeded with the starter command (quality spec <code>#verify-skill</code>)</td><td>A verify skill in <code>.agents/skills/</code>, declared on the <code>AGENTS.md</code> <code>Repo skills:</code> line, driving the app CLI, its feature map seeded with the starter command (quality spec <code>#verify-skill</code>)</td></tr>
 <tr data-anchor="tpl-gate"><td>Gate</td><td><code>just check</code></td><td><code>just check</code></td></tr>
 <tr data-anchor="tpl-hooks"><td>Wiring</td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td><td><code>just setup</code> installs a plain git pre-commit hook (no hook framework); the hook and GitHub Actions run <code>just check</code></td></tr>
 </tbody>
