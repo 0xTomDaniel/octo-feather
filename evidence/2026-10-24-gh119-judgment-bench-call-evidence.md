@@ -201,3 +201,90 @@ From this run's bench.json `models[].cost_usd` (every call, train and held-out) 
 - Chosen from train only: openrouter/nace-ai/drex-max (train 16/21, 0.762, Brier 0.379), no tie. Proposed threshold: held-out accuracy >= 0.549 and Brier <= 0.655. Held-out now 11/12 (0.917), Brier 0.235: meets.
 - Weak question for these models: the majority label (does-not-show) alone scores train 15/21 (0.714) and held-out 9/12 (0.750); the chosen model clears that by one train case. The calibration is overconfident at the top: 16 train answers at p >= 0.9 are right 0.812 of the time.
 - Hardest cases (right answers out of 24 scored models): gh82-owner-pr-tracker 0, gh82-gate-green-linear-ban 0 (held-out), gh56-signed-in-accept-record 2, then gh67-qc-listed-parallel 4 and five more at 5: all does-not-show calls whose evidence is a real failure or contradiction bearing on a line other than the named criterion, or naming only criteria not in the accepted spec. Models answer shows on any evidence that sounds like a failure. drex-max misses 6: five does-not-show (gh82-owner-pr-tracker, gh82-gate-green-linear-ban, gh67-qc-listed-parallel, gh67-tab-headless-reviewer, gh82-issue-view-sub-issues) and one shows (gh67-patch-only-interrogate-folder, train).
+
+## Rebench for the kit's one judgment model (run 20261025T144846Z-9643eb, 2026-10-25)
+
+Owner ruling 2026-10-25 (spec judgment#rule-one-model): one judgment model for every question, openrouter/typesafe/jev-1.13,
+recorded in evals/judgment-model.json (evidence/2026-10-25-gh119-judgment-model.md). This rerun refreshes this suite's
+`calibration` (the kit model's held-out score and proposed threshold, accepted false); the bench shows the kit's model
+beside the question's best-scoring classifier and no longer names a per-question choice. The Respan span-01 models are
+now "skipped: yes/no only" by the probe (a tiny choice question refused, a tiny bool question answered), no longer unavailable.
+
+`scripts/octo-feather-qa --suite judgment-call-evidence` (sandbox proof lines omitted; artifacts $(octo-feather-state)/qa/20261025T144846Z-9643eb/):
+
+```
+evals: ok (8 suites, 272 cases)
+qa: run 20261025T144846Z-9643eb: 33 case(s); kit e19b3c8ada566378f6edd48b94942ed00c1d6105; artifacts /home/exedev/.local/state/octo-feather/qa/20261025T144846Z-9643eb
+qc sandbox: cleanup: agents started 0 (headless pi 0, Herdr panes 0); leftover processes killed 0, left 0 (the kernel kills those as PID 1 exits); session qa-9643eb-bench stopped and deleted; offline gh refusals 0
+bench judgment-call-evidence: question d-call-evidence, labels shows, does-not-show; 33 cases (train 21, held-out 12); every answer is a model judgment (classifier output, advisory: no gate reads it)
+bench judgment-call-evidence: classifiers available (32): openai/gpt-6-luna, openrouter/~perplexity/pplx-decider-latest, openrouter/~typesafe/jev-latest, openrouter/cloudflare/clef, openrouter/cloudflare/clef-flash, openrouter/cloudflare/clef-omni, openrouter/inception/mercury-decide, openrouter/inception/mercury-decide:free, openrouter/jaredpalmer/kev-4b, openrouter/liquid/d1, openrouter/microsoft/microsoft-decision-1, openrouter/nace-ai/drex-v1.5, openrouter/nace-ai/drex-v2.0, openrouter/openai/gpt-6-luna-decisions, openrouter/perplexity/pplx-decider-v1.1-27b, openrouter/respan/span-01, openrouter/respan/span-01-lite, openrouter/respan/span-01-lite:free, openrouter/scaledown/classify-1, openrouter/togethercomputer/tev1-4b-experimental, openrouter/typesafe/jev-1.13, openrouter/typesafe/jev-1.14, openrouter/upstage/solar-decide, openrouter/upstage/solar-decide-flash, openrouter/~perplexity/pplx-decider-flash-latest, openrouter/baseten/elephant-1:free, openrouter/baseten/mammoth-1:free, openrouter/liquid/d1-ultra, openrouter/nace-ai/drex-max, openrouter/perplexity/pplx-decider-flash-v1.2, openrouter/perplexity/pplx-decider-v1.2, openrouter/respan/span-02
+bench judgment-call-evidence: skipped: moving alias (3): openrouter/~perplexity/pplx-decider-latest, openrouter/~typesafe/jev-latest, openrouter/~perplexity/pplx-decider-flash-latest
+bench judgment-call-evidence: skipped: yes/no only openrouter/respan/span-01: a tiny choice question refused, a tiny bool question answered (probability 0.9637); provider: System One API error (400): {"error":{"message":"Respan only accepts noul questions whose instructions and criteria are plain strings (question \"q\")","code":400}}
+bench judgment-call-evidence: skipped: yes/no only openrouter/respan/span-01-lite: a tiny choice question refused, a tiny bool question answered (probability 0.9637); provider: System One API error (400): {"error":{"message":"Respan only accepts noul questions whose instructions and criteria are plain strings (question \"q\")","code":400}}
+bench judgment-call-evidence: skipped: yes/no only openrouter/respan/span-01-lite:free: a tiny choice question refused, a tiny bool question answered (probability 0.9637); provider: System One API error (400): {"error":{"message":"Respan only accepts noul questions whose instructions and criteria are plain strings (question \"q\")","code":400}}
+TRAIN (21 cases; the best and the kit model's threshold are made here):
+  model                                             answered  correct  accuracy  brier   ece     cost_usd   errors
+  openrouter/nace-ai/drex-max                        21/21         16     0.762  0.379   0.232    0.000904  0
+  openrouter/perplexity/pplx-decider-v1.2            21/21         15     0.714  0.298   0.190    0.000299  0
+  openrouter/upstage/solar-decide                    21/21         15     0.714  0.450   0.207    0.001165  0
+  openrouter/liquid/d1-ultra                         21/21         14     0.667  0.426   0.100    0.000560  0
+  openrouter/openai/gpt-6-luna-decisions             21/21         14     0.667  0.458   0.131    0.001551  0
+  openrouter/microsoft/microsoft-decision-1          21/21         14     0.667  0.586   0.301    0.000558  0
+  openrouter/perplexity/pplx-decider-flash-v1.2      21/21         14     0.667  0.614   0.301    0.000150  0
+  openrouter/typesafe/jev-1.13                       21/21         13     0.619  0.615   0.280    0.000945  0
+  openrouter/typesafe/jev-1.14                       21/21         13     0.619  0.630   0.213    0.000945  0
+  openrouter/nace-ai/drex-v2.0                       21/21         13     0.619  0.693   0.403    0.000773  0
+  openrouter/inception/mercury-decide                21/21         13     0.619  0.772   0.401    0.000281  0
+  openrouter/cloudflare/clef-omni                    21/21         12     0.571  0.495   0.095    0.002425  0
+  openrouter/togethercomputer/tev1-4b-experimental   21/21         12     0.571  0.498   0.131    0.000637  0
+  openrouter/jaredpalmer/kev-4b                      21/21         12     0.571  0.515   0.158    0.000541  0
+  openrouter/baseten/mammoth-1:free                  21/21         12     0.571  0.594   0.314    0.000000  0
+  openrouter/inception/mercury-decide:free           21/21         12     0.571  0.777   0.391    0.000000  0
+  openrouter/respan/span-02                          21/21         11     0.524  0.770   0.368    0.000158  0
+  openrouter/cloudflare/clef                         21/21         10     0.476  0.653   0.329    0.003931  0
+  openrouter/liquid/d1                               21/21         10     0.476  0.739   0.386    0.000267  0
+  openrouter/baseten/elephant-1:free                 21/21         10     0.476  0.821   0.426    0.000000  0
+  openrouter/scaledown/classify-1                    21/21          9     0.429  0.643   0.270    0.000903  0
+  openrouter/cloudflare/clef-flash                   21/21          8     0.381  0.618   0.289    0.000311  0
+  openrouter/nace-ai/drex-v1.5                       21/21          8     0.381  1.050   0.517    0.000515  0
+  openrouter/upstage/solar-decide-flash              21/21          7     0.333  0.736   0.409    0.001165  0
+HELD-OUT (12 cases; the measure, never used to pick):
+  model                                             answered  correct  accuracy  brier   ece     cost_usd   errors
+  openrouter/nace-ai/drex-max                        12/12         11     0.917  0.234   0.141    0.000904  0
+  openrouter/perplexity/pplx-decider-v1.2            12/12         10     0.833  0.249   0.093    0.000299  0
+  openrouter/upstage/solar-decide                    12/12          7     0.583  0.624   0.334    0.001165  0
+  openrouter/liquid/d1-ultra                         12/12          8     0.667  0.429   0.236    0.000560  0
+  openrouter/openai/gpt-6-luna-decisions             12/12         11     0.917  0.271   0.239    0.001551  0
+  openrouter/microsoft/microsoft-decision-1          12/12         10     0.833  0.411   0.276    0.000558  0
+  openrouter/perplexity/pplx-decider-flash-v1.2      12/12          8     0.667  0.592   0.308    0.000150  0
+  openrouter/typesafe/jev-1.13                       12/12          9     0.750  0.436   0.173    0.000945  0
+  openrouter/typesafe/jev-1.14                       12/12          9     0.750  0.477   0.221    0.000945  0
+  openrouter/nace-ai/drex-v2.0                       12/12          8     0.667  0.542   0.256    0.000773  0
+  openrouter/inception/mercury-decide                12/12          9     0.750  0.499   0.259    0.000281  0
+  openrouter/cloudflare/clef-omni                    12/12          9     0.750  0.356   0.211    0.002425  0
+  openrouter/togethercomputer/tev1-4b-experimental   12/12          7     0.583  0.614   0.187    0.000637  0
+  openrouter/jaredpalmer/kev-4b                      12/12          6     0.500  0.511   0.098    0.000541  0
+  openrouter/baseten/mammoth-1:free                  12/12          6     0.500  0.507   0.372    0.000000  0
+  openrouter/inception/mercury-decide:free           12/12          9     0.750  0.502   0.260    0.000000  0
+  openrouter/respan/span-02                          12/12          6     0.500  0.684   0.408    0.000158  0
+  openrouter/cloudflare/clef                         12/12          7     0.583  0.599   0.262    0.003931  0
+  openrouter/liquid/d1                               12/12          6     0.500  0.511   0.323    0.000267  0
+  openrouter/baseten/elephant-1:free                 12/12          7     0.583  0.619   0.369    0.000000  0
+  openrouter/scaledown/classify-1                    12/12          7     0.583  0.499   0.211    0.000903  0
+  openrouter/cloudflare/clef-flash                   12/12          7     0.583  0.430   0.245    0.000311  0
+  openrouter/nace-ai/drex-v1.5                       12/12          3     0.250  0.961   0.557    0.000515  0
+  openrouter/upstage/solar-decide-flash              12/12          3     0.250  0.727   0.453    0.001165  0
+  (cost_usd and errors: the model's every call, train and held-out; brier: mean multi-class Brier score, lower is better; ece: expected calibration error over top-probability buckets [0.0, 0.5), [0.5, 0.6), [0.6, 0.7), [0.7, 0.8), [0.8, 0.9), [0.9, 1.0])
+unavailable openai/gpt-6-luna: listed but answered no case: OpenAI Decisions error (404): OpenAI Decisions returned 404
+unavailable openrouter/perplexity/pplx-decider-v1.1-27b: listed but answered no case: System One API error (404): {"error":{"message":"No endpoints found for perplexity/pplx-decider-v1.1-27b.","code":404},"user_id":"user_2j6vR9TdNFKYEGgN6TJb9xZd5EJ"}
+KIT MODEL BESIDE THE BEST (best: highest train accuracy over every train case answered; ties: lower train Brier, lower train cost, name; held-out apart, never used to pick):
+        model                                             train acc  train brier  held-out acc  held-out brier  cost_usd
+  kit   openrouter/typesafe/jev-1.13                          0.619        0.615         0.750           0.436  0.000945
+  best  openrouter/nace-ai/drex-max                           0.762        0.379         0.917           0.234  0.000904
+kit model openrouter/typesafe/jev-1.13 (judgment-model.json): proposed threshold (for the director to accept; until met, the judge stays advisory): held-out accuracy >= 0.409 and held-out brier <= 0.918 (from train only: accuracy_min the Wilson 1.96 lower bound of train accuracy, brier_max train Brier mean + 1.96 standard errors)
+held-out now: accuracy 0.750 (9/12 of 12), brier 0.436, ece 0.173: meets the proposed threshold
+kit model calibration train (top probability bucket: n, mean top probability, accuracy): [0.5, 0.6) n 2 p 0.580 acc 1.000; [0.6, 0.7) n 2 p 0.665 acc 0.500; [0.7, 0.8) n 4 p 0.750 acc 0.500; [0.8, 0.9) n 6 p 0.850 acc 0.667; [0.9, 1.0] n 7 p 0.946 acc 0.571
+kit model calibration held-out (top probability bucket: n, mean top probability, accuracy): [0.6, 0.7) n 3 p 0.647 acc 0.667; [0.7, 0.8) n 2 p 0.720 acc 1.000; [0.8, 0.9) n 2 p 0.850 acc 0.500; [0.9, 1.0] n 5 p 0.952 acc 0.800
+DONE bench judgment-call-evidence: kit model openrouter/typesafe/jev-1.13, best openrouter/nace-ai/drex-max [232.9 s]
+qa: 1/1 bench(es) done (run 20261025T144846Z-9643eb); artifacts /home/exedev/.local/state/octo-feather/qa/20261025T144846Z-9643eb
+```

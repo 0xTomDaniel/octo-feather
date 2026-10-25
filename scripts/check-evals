@@ -9,12 +9,18 @@ copied and git-initialized per run). A suite dir holds:
   suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript" | "judgment",
                                 "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
                                 optional "covers": "role-skills" (skill-trigger only, below),
-                                optional "chosen": {"model": P/ID, "evidence": path, "held_out": {"accuracy":
-                                0..1, "brier": 0..2}, "threshold": {"accuracy_min": 0..1, "brier_max": >= 0,
-                                "accepted": bool}} (judgment only: the classifier its bench chose, read by
-                                `octo-feather-lane judge`; ID not a moving alias, as octo-feather-qa skips
-                                them; evidence a file relative to the dir holding EVALS_DIR; held_out and
-                                threshold copied from it, accepted false until the director accepts it)}
+                                optional "calibration": {"evidence": path, "held_out": {"accuracy": 0..1,
+                                "brier": 0..2}, "threshold": {"accuracy_min": 0..1, "brier_max": >= 0,
+                                "accepted": bool}} (judgment only: the kit's judgment model's calibration on
+                                this question, read by `octo-feather-lane judge`; evidence the bench's file,
+                                relative to the dir holding EVALS_DIR; held_out and threshold copied from it,
+                                accepted false until the director accepts it)}. A suite names no model: no
+                                key "model" or "chosen" at any depth (spec judgment#rule-one-model)
+EVALS_DIR/judgment-model.json  {"model": P/ID, "evidence": path}: the kit's one judgment model, every judgment
+                               question's (spec judgment#rule-one-model), read by octo-feather-qa (the bench
+                               shows it beside each question's best) and `octo-feather-lane judge`; ID not a
+                               moving alias, as octo-feather-qa skips them; evidence a file as above. Required
+                               when EVALS_DIR holds a judgment suite
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out");
                                a role-transcript case may also have
@@ -84,12 +90,13 @@ Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/
                                              by test id, a judge's verdict per criterion id. Fails naming each
                                              O missing
   {"fact": "field_lines", "field": F, optional "none": true, "includes": [O...], "every": {K: [V...]}}
-                                             the FINAL assistant message's column-0 field lines outside code
-                                             fences, parsed by `octo-feather-lane fields` (the parser `verdict`
-                                             uses; a bullet or a fenced line is no field). F: Check (lines
-                                             {path, rule, owner, reads, class}, or `Checks: none`), Owner
-                                             (lines {path, rule, restated: [path...]}, or `Owners: none`;
-                                             `:<line>` stripped), or any other Name (lines {text}). The field
+                                             the FINAL assistant message's field lines, parsed by
+                                             `octo-feather-lane fields` (the parser `verdict` uses; field form
+                                             and reader scope: .agents/skills/code-review/SKILL.md step 4,
+                                             **Report fields**). F: Check (lines {path, rule, owner, reads,
+                                             class}, or its none line), Owner (lines {path, rule, restated:
+                                             [path...]}, or its none line; `:<line>` stripped), or any other
+                                             Name (lines {text}). The field
                                              must be present and well formed (Check, Owner: no parser error),
                                              then: none, it is its one none line (Check, Owner only, alone);
                                              includes, each O (non-empty, string values, keys of F's lines)
@@ -149,9 +156,12 @@ QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
 J_CASE = {"id", "split", "state"}
 J_EXP = {"label", "reason", "source"}
 J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record, optional
-CHOSEN = {"model", "evidence", "held_out", "threshold"}   # a judgment suite's optional chosen classifier
-HELD_OUT = {"accuracy", "brier"}   # chosen.held_out: the bench's held-out score for the chosen model
-THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # chosen.threshold: proposed (accepted false) or accepted
+CALIBRATION = {"evidence", "held_out", "threshold"}   # a judgment suite's optional calibration of the kit's model
+HELD_OUT = {"accuracy", "brier"}   # calibration.held_out: the bench's held-out score for the kit's model
+THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold: proposed (accepted false) or accepted
+MODEL_FILE = "judgment-model.json"   # the kit's one judgment model (spec judgment#rule-one-model)
+MODEL_KEYS = {"model", "evidence"}
+NAMES_MODEL = {"model", "chosen"}   # keys that would name a model in a suite
 MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
 TRIGGER = {"should_trigger", "split"}
@@ -160,11 +170,11 @@ ID = re.compile(r"[a-z0-9][a-z0-9-]*")
 FIX = "fix the case (check-evals --help lists the shape)"
 
 
-def load(path, errs):
+def load(path, errs, holds=None):
     try:
         return json.loads(path.read_text(encoding="utf-8"))
     except FileNotFoundError:
-        errs.append(f"{path}: missing; a suite needs suite.json, cases.json and reference/expectations.json")
+        errs.append(f"{path}: missing; " + (f"it holds {holds}" if holds else "a suite needs suite.json, cases.json and reference/expectations.json"))
     except (OSError, ValueError) as e:
         errs.append(f"{path}: unreadable JSON ({e})")
     return None
@@ -202,7 +212,11 @@ def check_suite(d, evals, errs):
     where = f"{name}/suite.json"
     if not isinstance(suite, dict):
         errs.append(f"{where}: must be a JSON object"); return 0
-    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers", "chosen"}):
+    named = model_keys(suite)
+    for k in named:
+        errs.append(f"{where}: field {k}: a suite names no model; the kit's one judgment model is {MODEL_FILE} "
+                    "(spec judgment#rule-one-model), this question's calibration of it goes in calibration")
+    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers", "calibration"} - set(named)):
         errs.append(f"{where}: field {k}: unknown field")
     if suite.get("suite") != name:
         errs.append(f"{where}: field suite: must equal the dir name {name!r}, got {suite.get('suite')!r}")
@@ -216,8 +230,8 @@ def check_suite(d, evals, errs):
             errs.append(f"{where}: field {k}: must be a positive integer")
     if "covers" in suite and (suite["covers"] != "role-skills" or kind != "skill-trigger"):
         errs.append(f"{where}: field covers: only \"role-skills\", and only in a skill-trigger suite, got {suite['covers']!r}")
-    if "chosen" in suite:
-        check_chosen(suite["chosen"], kind, where, evals, errs)
+    if "calibration" in suite:
+        check_calibration(suite["calibration"], kind, where, evals, errs, named)
     if not isinstance(cases, list):
         errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
     if not isinstance(exps, dict):
@@ -288,45 +302,79 @@ def check_suite(d, evals, errs):
     return len(cases)
 
 
-def check_chosen(ch, kind, where, evals, errs):
-    """A judgment suite's chosen classifier: {model: a pinned <provider>/<id>, evidence: a file beside evals/}."""
+def model_keys(o, at=""):
+    """The dotted paths of every key in O, at any depth, that would name a model (model, chosen)."""
+    if isinstance(o, list):
+        return [p for n, x in enumerate(o) for p in model_keys(x, f"{at}[{n}]")]
+    if not isinstance(o, dict):
+        return []
+    return [p for k, v in o.items() for p in ([f"{at}{k}"] if k in NAMES_MODEL else model_keys(v, f"{at}{k}."))]
+
+
+def check_model_ref(m, field, where, errs):
+    """A classifier P/ID, pinned: not a moving alias (octo-feather-qa's rule, one routing tag ignored)."""
+    if not (isinstance(m, str) and MODEL.fullmatch(m)):
+        errs.append(f"{where}: field {field}: must be a classifier <provider>/<id>, got {m!r}"); return
+    mid = re.sub(r":[^:/]+$", "", m.split("/", 1)[1])
+    if mid.startswith("~") or mid.endswith("-latest"):
+        errs.append(f"{where}: field {field}: {m} is a moving alias (its id starts with ~ or ends in -latest); name a pinned version")
+
+
+def check_evidence(ev, field, where, evals, errs):
+    if not (isinstance(ev, str) and PATH.fullmatch(ev)):
+        errs.append(f"{where}: field {field}: must be a relative path inside the repo, got {ev!r}")
+    elif not (evals.parent / ev).is_file():
+        errs.append(f"{where}: field {field}: no file {ev} beside evals/ (in {evals.parent}); name the bench's evidence file")
+
+
+def check_model_file(evals, errs):
+    """EVALS/judgment-model.json: {model: a pinned P/ID, evidence: a file beside evals/}."""
+    where = MODEL_FILE
+    o = load(evals / MODEL_FILE, errs, f"the kit's one judgment model {{model, evidence}} (spec judgment#rule-one-model)")
+    if o is None:
+        return
+    if not isinstance(o, dict):
+        errs.append(f"{where}: must be a JSON object {{model, evidence}}"); return
+    for k in sorted(MODEL_KEYS - set(o)):
+        errs.append(f"{where}: field {k}: missing")
+    for k in sorted(set(o) - MODEL_KEYS):
+        errs.append(f"{where}: field {k}: unknown field")
+    if "model" in o:
+        check_model_ref(o["model"], "model", where, errs)
+    if "evidence" in o:
+        check_evidence(o["evidence"], "evidence", where, evals, errs)
+
+
+def check_calibration(ch, kind, where, evals, errs, named=()):
+    """A judgment suite's calibration of the kit's model: {evidence: a file beside evals/, held_out, threshold}."""
     if kind != "judgment":
-        errs.append(f"{where}: field chosen: only in a judgment suite, got kind {kind!r}"); return
+        errs.append(f"{where}: field calibration: only in a judgment suite, got kind {kind!r}"); return
     if not isinstance(ch, dict):
-        errs.append(f"{where}: field chosen: must be an object {{model, evidence, held_out, threshold}}, got {ch!r}"); return
-    for k in sorted(CHOSEN - set(ch)):
-        errs.append(f"{where}: field chosen.{k}: missing")
-    for k in sorted(set(ch) - CHOSEN):
-        errs.append(f"{where}: field chosen.{k}: unknown field")
-    m = ch.get("model")
-    if "model" in ch and not (isinstance(m, str) and MODEL.fullmatch(m)):
-        errs.append(f"{where}: field chosen.model: must be a classifier <provider>/<id>, got {m!r}")
-    elif "model" in ch:
-        mid = re.sub(r":[^:/]+$", "", m.split("/", 1)[1])   # octo-feather-qa's moving-alias rule, one routing tag ignored
-        if mid.startswith("~") or mid.endswith("-latest"):
-            errs.append(f"{where}: field chosen.model: {m} is a moving alias (its id starts with ~ or ends in -latest); "
-                        "name the pinned version the bench chose")
-    ev = ch.get("evidence")
-    if "evidence" in ch and not (isinstance(ev, str) and PATH.fullmatch(ev)):
-        errs.append(f"{where}: field chosen.evidence: must be a relative path inside the repo, got {ev!r}")
-    elif "evidence" in ch and not (evals.parent / ev).is_file():
-        errs.append(f"{where}: field chosen.evidence: no file {ev} beside evals/ (in {evals.parent}); name the bench's evidence file")
+        errs.append(f"{where}: field calibration: must be an object {{evidence, held_out, threshold}}, got {ch!r}"); return
+    for k in sorted(CALIBRATION - set(ch)):
+        errs.append(f"{where}: field calibration.{k}: missing")
+    for k in sorted(set(ch) - CALIBRATION):
+        if f"calibration.{k}" not in named:
+            errs.append(f"{where}: field calibration.{k}: unknown field")
+    if "evidence" in ch:
+        check_evidence(ch["evidence"], "calibration.evidence", where, evals, errs)
     num = lambda v: type(v) in (int, float)
     for k, keys, rng in (("held_out", HELD_OUT, {"accuracy": 1, "brier": 2}), ("threshold", THRESHOLD, {"accuracy_min": 1, "brier_max": None})):
         o = ch.get(k)
         if k not in ch:
             continue
         if not isinstance(o, dict):
-            errs.append(f"{where}: field chosen.{k}: must be an object {{{', '.join(sorted(keys))}}}, got {o!r}"); continue
+            errs.append(f"{where}: field calibration.{k}: must be an object {{{', '.join(sorted(keys))}}}, got {o!r}"); continue
         for f in sorted(keys - set(o)):
-            errs.append(f"{where}: field chosen.{k}.{f}: missing")
+            errs.append(f"{where}: field calibration.{k}.{f}: missing")
         for f in sorted(set(o) - keys):
-            errs.append(f"{where}: field chosen.{k}.{f}: unknown field")
+            if f"calibration.{k}.{f}" not in named:
+                errs.append(f"{where}: field calibration.{k}.{f}: unknown field")
         for f, top in rng.items():
             if f in o and not (num(o[f]) and 0 <= o[f] and (top is None or o[f] <= top)):
-                errs.append(f"{where}: field chosen.{k}.{f}: must be a number from 0" + (f" to {top}" if top else " up") + f", got {o[f]!r}")
+                errs.append(f"{where}: field calibration.{k}.{f}: must be a number from 0" + (f" to {top}" if top else " up") + f", got {o[f]!r}")
         if "accepted" in o and type(o["accepted"]) is not bool:
-            errs.append(f"{where}: field chosen.{k}.accepted: must be true or false, got {o['accepted']!r}")
+            errs.append(f"{where}: field calibration.{k}.accepted: must be true or false, got {o['accepted']!r}")
 
 
 def check_judgment(d, cases, exps, errs):
@@ -566,9 +614,16 @@ def main(argv):
     if not evals.is_dir():
         print(f"check-evals: no evals dir {evals}", file=sys.stderr); return 2
     errs, n, suites = [], 0, 0
+    judgment = False
     for d in sorted(p for p in evals.iterdir() if p.is_dir() and p.name != "fixtures"):
         suites += 1
         n += check_suite(d, evals, errs)
+        try:
+            judgment |= json.loads((d / "suite.json").read_text(encoding="utf-8")).get("kind") == "judgment"
+        except (OSError, ValueError, AttributeError):
+            pass
+    if judgment or (evals / MODEL_FILE).exists():
+        check_model_file(evals, errs)
     if errs:
         for e in errs:
             print(f"check-evals: {e}", file=sys.stderr)

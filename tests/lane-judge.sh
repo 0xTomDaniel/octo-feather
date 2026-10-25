@@ -2,11 +2,11 @@
 # Integration test for scripts/octo-feather-lane judge and its line in merge-ask (spec judgment
 # #acceptance-judge-advisory, #rule-advisory, issue #156), no network, no model: a fake `gh` holds PR #7 of
 # o/r and logs every call; a stub `pi` runs the judge's classify extension command for real under node
-# with stub classifiers at the model registry (the chosen model's id among them), in the qa sandbox, so
+# with stub classifiers at the model registry (the kit's judgment model among them), in the qa sandbox, so
 # it needs unprivileged user namespaces (`unshare -rm`) as tests/qa.sh does.
 # Proves: `judge` refuses before the code review's verdict comment exists, an unknown question, an
-# unreadable or empty state and an unavailable chosen model, writing nothing; it asks only the question's
-# chosen model (its suite.json `chosen`) on the state file's text, posts one marked comment labelled a model
+# unreadable or empty state and an unavailable kit model, writing nothing; it asks every question of the kit's one
+# judgment model (evals/judgment-model.json, spec judgment#rule-one-model) alone, on the state file's text, posts one marked comment labelled a model
 # judgment with the answer and its confidence, and updates it in place on rerun; merge-ask prints it
 # beside the review verdict, and passes or fails exactly as without it (a blocking review still fails,
 # whatever the judgment says; a malformed judgment comment changes nothing).
@@ -54,10 +54,11 @@ EOF
 cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
 # Stub pi: an extension command (-e EXT -p "/cmd args") runs for real under node with stub classifiers at the
-# model registry: the four judgment suites' chosen models (test-quality's openrouter/respan/span-02 among them) and stub/other. Each picks the label
-# after PICK= in the state at 0.87. A call to stub/other kills the run (only the chosen model may be asked); a
+# model registry: the kit's judgment model ($STUB_KIT, read by the test from evals/judgment-model.json), span-02, drex-max,
+# clef, mercury-decide and stub/other. Each picks the label after PICK= in the state at 0.87. A call to any but the kit's
+# model kills the run (only the kit's model may be asked); a
 # state other than $STUB_WANT, when set, is refused (the state must be the file's text, unchanged). STUB_NO_CHOSEN=1
-# lists only stub/other. As pi's print mode, an extension's process.stdout goes to stderr.
+# lists all but the kit's model. As pi's print mode, an extension's process.stdout goes to stderr.
 import subprocess, sys
 a = sys.argv[1:]; prompt = a[a.index("-p") + 1]
 if not (prompt.startswith("/") and "-e" in a):
@@ -67,13 +68,15 @@ harness = """import {pathToFileURL} from "node:url";
 const [ext, name, args] = process.argv.slice(1);
 const cmds = {};
 (await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
-const chosen = [["openrouter", "respan/span-02"], ["openrouter", "nace-ai/drex-max"], ["openrouter", "cloudflare/clef"], ["openrouter", "inception/mercury-decide"]];
-const ids = (process.env.STUB_NO_CHOSEN ? [] : chosen).concat([["stub", "other"]]);
+const k = process.env.STUB_KIT, cut = k.indexOf("/");
+const kit = [[k.slice(0, cut), k.slice(cut + 1)]];
+const others = [["openrouter", "respan/span-02"], ["openrouter", "nace-ai/drex-max"], ["openrouter", "cloudflare/clef"], ["openrouter", "inception/mercury-decide"], ["stub", "other"]].filter(([pv, id]) => pv + "/" + id !== k);
+const ids = (process.env.STUB_NO_CHOSEN ? [] : kit).concat(others);
 const models = ids.map(([provider, id]) => ({type: "classifier", provider, id, name: id, api: "stub", input: ["text"]}));
 const modelRegistry = {
   getAvailableOfType: async (type) => (type === "classifier" ? models : []),
   classify: async (m, {state, questions}) => {
-    if (m.id === "other") process.exit(5);
+    if (m.provider + "/" + m.id !== process.env.STUB_KIT) process.exit(5);
     if (process.env.STUB_WANT !== undefined && state !== process.env.STUB_WANT)
       return {provider: m.provider, model: m.id, answers: {}, stopReason: "error", errorMessage: "stub: state is not the file's text"};
     const answers = {};
@@ -107,6 +110,12 @@ esac
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 chmod +x "$t/bin/gh" "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$PATH"
+# The kit's one judgment model, as recorded (spec judgment#rule-one-model): the stub lists it and refuses any other.
+M="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model"])' "$kit/evals/judgment-model.json")"; export STUB_KIT="$M"
+# A real suite's calibration may change with every rebench; what the rule fixes is its status: no accepted threshold
+# (owner ruling 2026-10-23, issue #151). Exact numbers are asserted only in the kit copy below, whose values the test writes.
+N='[0-9]\.[0-9]{3}'
+CAL="no accepted threshold \(held-out accuracy $N, Brier $N; threshold held-out accuracy >= $N and Brier <= $N, proposed, not accepted\)"
 
 # The lane worktree: origin/main B, the judged head J, qc's status commit H (the PR head).
 R="$t/repo"; mkdir -p "$R/docs/specs"; cd "$R"
@@ -143,7 +152,7 @@ run 1 judge 7 test-quality --state "$t/nope"; grep -q "cannot read state $t/nope
 : > "$t/empty"; run 1 judge 7 test-quality --state "$t/empty"; grep -q "state $t/empty is empty" <<<"$err" || fail "empty state: $err"
 run 1 judge 7 test-quality; grep -q "usage: octo-feather-lane judge PR QUESTION --state FILE" <<<"$err" || fail "usage: $err"
 STUB_NO_CHOSEN=1 run 1 judge 7 test-quality --state "$t/state"
-grep -q "chosen model openrouter/respan/span-02 is not an available classifier (available: stub/other)" <<<"$err" || fail "chosen unavailable: $err"
+grep -qF "the kit's judgment model $M is not an available classifier (available: " <<<"$err" && ! grep -qF "available: $M" <<<"$err" || fail "kit model unavailable: $err"
 [[ "$(writes)" == "$n" ]] || fail "a refusal wrote"
 
 # --- the merge ask, ready without any judgment ---
@@ -166,25 +175,25 @@ edit "d['body'] = open('$t/body').read()"
 run 0 merge-ask 7 "${ST[@]}"; without="$out"
 grep -qi "model judgment" <<<"$without" && fail "a judgment shown with none posted: $without"
 
-# --- judge: the chosen model alone answers the state file's text; one labelled comment ---
+# --- judge: the kit's model alone answers the state file's text; one labelled comment ---
 STUB_WANT="$(cat "$t/state"; echo .)"; STUB_WANT="${STUB_WANT%.}"; export STUB_WANT   # the text, its trailing newline kept
 run 0 judge 7 test-quality --state "$t/state"
 [[ "$out" == "https://github.com/o/r/pull/7#issuecomment-1002" ]] || fail "judge printed $out"
-grep -qF "judge: created (test-quality: tautological, confidence 0.870, model judgment by openrouter/respan/span-02; calibration: no accepted threshold (held-out accuracy 1.000, Brier 0.107; threshold held-out accuracy >= 0.699 and Brier <= 0.390, proposed, not accepted))" <<<"$err" || fail "judge said: $err"
-python3 - "$FAKE_GH/pr/7.json" "$H" "$J" <<'EOF' || fail "judgment comment body: $(cat "$FAKE_GH/pr/7.json")"
-import json, sys; b = json.load(open(sys.argv[1]))["comments"][1]["body"]
+grep -qxE "judge: created \(test-quality: tautological, confidence 0\.870, model judgment by ${M//./\\.}; calibration: $CAL\)" <<<"$err" || fail "judge said: $err"
+python3 - "$FAKE_GH/pr/7.json" "$H" "$J" "$M" "$CAL" <<'EOF' || fail "judgment comment body: $(cat "$FAKE_GH/pr/7.json")"
+import json, re, sys; b = json.load(open(sys.argv[1]))["comments"][1]["body"]
 for want in ("<!-- octo-feather-model-judgment: test-quality -->\n", "\nJudgment: model judgment", "\nQuestion: test-quality\n",
-             "\nModel: openrouter/respan/span-02\n", "\nAnswer: tautological\n", "\nConfidence: 0.870\n",
-             "\nCalibration: no accepted threshold (held-out accuracy 1.000, Brier 0.107; threshold held-out accuracy >= 0.699 and Brier <= 0.390, proposed, not accepted)\n",
+             f"\nModel: {sys.argv[4]}\n", "\nAnswer: tautological\n", "\nConfidence: 0.870\n",
              f"\nPR head: {sys.argv[2]}\n", f"\nReview head: {sys.argv[3]}\n", "assert add(1, 2) == add(1, 2)"):
     assert want in b, (want, b)
+assert re.search("^Calibration: " + sys.argv[5] + "$", b, re.M), b
 EOF
 [[ "$(writes)" == "$((n + 1))" ]] || fail "judge wrote $(( $(writes) - n )) times"
 
 # --- merge-ask shows it beside the review verdict; ready the same ---
 run 0 merge-ask 7 "${ST[@]}"; with="$out"
-line="- test-quality: tautological, confidence 0.870 (model judgment by openrouter/respan/span-02, advisory: no gate reads it; calibration: no accepted threshold (held-out accuracy 1.000, Brier 0.107; threshold held-out accuracy >= 0.699 and Brier <= 0.390, proposed, not accepted); PR head ${H:0:12}, review head ${J:0:12}): https://github.com/o/r/pull/7#issuecomment-1002"
-grep -qxF -- "$line" <<<"$with" || fail "merge-ask did not show the judgment: $with"
+line="$(grep -xE -- "- test-quality: tautological, confidence 0\.870 \(model judgment by ${M//./\\.}, advisory: no gate reads it; calibration: $CAL; PR head ${H:0:12}, review head ${J:0:12}\): https://github\.com/o/r/pull/7#issuecomment-1002" <<<"$with")" \
+  || fail "merge-ask did not show the judgment: $with"
 python3 - "$with" "$without" "$line" <<'EOF' || fail "judgment not beside the review, or more changed: $with"
 import sys; w, wo, line = sys.argv[1:]; ls = w.split("\n"); r = ls.index(line) - 1
 assert ls[r] == "Model judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):", ls[r]
@@ -195,7 +204,7 @@ EOF
 # --- rerun: updated in place, one judgment comment ---
 printf 'Test:\ndef test_add():\n    assert add(1, 2) == 3\nPICK=ok\n' > "$t/state2"
 STUB_WANT="$(cat "$t/state2"; echo .)"; STUB_WANT="${STUB_WANT%.}"
-run 1 judge 7 test-quality --state "$t/state"; grep -q "openrouter/respan/span-02 gave no answer (stub: state is not the file's text)" <<<"$err" || fail "stub state check: $err"
+run 1 judge 7 test-quality --state "$t/state"; grep -qF "$M gave no answer (stub: state is not the file's text)" <<<"$err" || fail "stub state check: $err"
 run 0 judge 7 test-quality --state "$t/state2"
 [[ "$out" == "https://github.com/o/r/pull/7#issuecomment-1002" && "$(judgments)" == 1 ]] || fail "rerun not in place: $out, $(judgments)"
 grep -q '^api -X PATCH repos/{owner}/{repo}/issues/comments/1002 ' "$FAKE_GH_LOG" || fail "no PATCH of 1002: $(cat "$FAKE_GH_LOG")"
@@ -227,24 +236,20 @@ edit "d['comments'] = d['comments'][:1]"   # the malformed judgment gone
 unset STUB_WANT
 # The kit's four real suites: no question has an accepted threshold (owner ruling 2026-10-23, issue #151).
 declare -A pick=([call-evidence]=shows [exact-or-proxy]=exact [test-quality]=tautological [ticket-slice]=slice)
-declare -A cal=(
-  [call-evidence]="no accepted threshold (held-out accuracy 0.917, Brier 0.235; threshold held-out accuracy >= 0.549 and Brier <= 0.655, proposed, not accepted)"
-  [exact-or-proxy]="no accepted threshold (held-out accuracy 0.727, Brier 0.344; threshold held-out accuracy >= 0.584 and Brier <= 0.410, proposed, not accepted)"
-  [test-quality]="no accepted threshold (held-out accuracy 1.000, Brier 0.107; threshold held-out accuracy >= 0.699 and Brier <= 0.390, proposed, not accepted)"
-  [ticket-slice]="no accepted threshold (held-out accuracy 1.000, Brier 0.000; threshold held-out accuracy >= 0.785 and Brier <= 0.004, proposed, not accepted)")
 for q in call-evidence exact-or-proxy test-quality ticket-slice; do
   printf 'state for %s\nPICK=%s\n' "$q" "${pick[$q]}" > "$t/state-$q"
   run 0 judge 7 "$q" --state "$t/state-$q"
-  python3 - "$FAKE_GH/pr/7.json" "$q" "${pick[$q]}" "${cal[$q]}" <<'EOF' || fail "$q judgment comment: $(cat "$FAKE_GH/pr/7.json")"
-import json, sys; p, q, a, cal = sys.argv[1:]
+  python3 - "$FAKE_GH/pr/7.json" "$q" "${pick[$q]}" "$CAL" "$M" <<'EOF' || fail "$q judgment comment: $(cat "$FAKE_GH/pr/7.json")"
+import json, re, sys; p, q, a, cal, m = sys.argv[1:]
 b = next(c["body"] for c in json.load(open(p))["comments"] if c["body"].startswith(f"<!-- octo-feather-model-judgment: {q} -->"))
-for want in ("\nJudgment: model judgment", f"\nAnswer: {a}\n", f"\nCalibration: {cal}\n"):
+for want in ("\nJudgment: model judgment", f"\nModel: {m}\n", f"\nAnswer: {a}\n"):
     assert want in b, (want, b)
+assert re.search("^Calibration: " + cal + "$", b, re.M), b
 EOF
 done
 ready
 for q in call-evidence exact-or-proxy test-quality ticket-slice; do
-  grep -qF -- "- $q: ${pick[$q]}, confidence 0.870 (model judgment by " <<<"$with" && grep -qF -- "advisory: no gate reads it; calibration: ${cal[$q]}; PR head" <<<"$with" \
+  grep -qE -- "^- $q: ${pick[$q]}, confidence 0\.870 \(model judgment by ${M//./\\.}, advisory: no gate reads it; calibration: $CAL; PR head " <<<"$with" \
     || fail "merge-ask did not show $q's calibration: $with"
 done
 
@@ -252,21 +257,21 @@ done
 # the kit, copied, with test-quality's threshold accepted above its held-out score. The answer is still shown, labelled
 # a model judgment, with "below accepted threshold"; merge-ask is ready with and without it.
 K="$t/kit"; mkdir -p "$K"; cp -r "$kit/scripts" "$kit/evals" "$kit/evidence" "$kit/agents" "$kit/.agents" "$K/"
-calib() { python3 -c 'import json,sys; p=sys.argv[1]; s=json.load(open(p)); s["chosen"].update(held_out=json.loads(sys.argv[2]), threshold=json.loads(sys.argv[3])); json.dump(s, open(p, "w"))' \
+calib() { python3 -c 'import json,sys; p=sys.argv[1]; s=json.load(open(p)); s["calibration"].update(held_out=json.loads(sys.argv[2]), threshold=json.loads(sys.argv[3])); json.dump(s, open(p, "w"))' \
   "$K/evals/judgment-test-quality/suite.json" "$1" "$2"; "$K/scripts/check-evals" "$K/evals" >/dev/null || fail "the copied suite is malformed"; }
 calib '{"accuracy": 0.571, "brier": 0.512}' '{"accuracy_min": 0.699, "brier_max": 0.39, "accepted": true}'
 L="$K/scripts/octo-feather-lane"
 below="below accepted threshold (held-out accuracy 0.571, Brier 0.512; threshold held-out accuracy >= 0.699 and Brier <= 0.390, accepted)"
 run 0 judge 7 test-quality --state "$t/state-test-quality"
-grep -qF "judge: updated (test-quality: tautological, confidence 0.870, model judgment by openrouter/respan/span-02; calibration: $below)" <<<"$err" || fail "judge said: $err"
+grep -qF "judge: updated (test-quality: tautological, confidence 0.870, model judgment by $M; calibration: $below)" <<<"$err" || fail "judge said: $err"
 b="$(python3 -c 'import json,sys; print(next(c["body"] for c in json.load(open(sys.argv[1]))["comments"] if c["body"].startswith("<!-- octo-feather-model-judgment: test-quality -->")))' "$FAKE_GH/pr/7.json")"
 grep -qx "Judgment: model judgment.*" <<<"$b" && grep -qx "Answer: tautological" <<<"$b" && grep -qxF "Calibration: $below" <<<"$b" || fail "below-threshold comment: $b"
 ready
-grep -qF -- "- test-quality: tautological, confidence 0.870 (model judgment by openrouter/respan/span-02, advisory: no gate reads it; calibration: $below; PR head ${H:0:12}, review head ${J:0:12}): " <<<"$with" \
+grep -qF -- "- test-quality: tautological, confidence 0.870 (model judgment by $M, advisory: no gate reads it; calibration: $below; PR head ${H:0:12}, review head ${J:0:12}): " <<<"$with" \
   || fail "merge-ask did not show the below-threshold judgment: $with"
 echo "lane-judge: below accepted threshold: answer shown labelled a model judgment, merge-ask ready with and without it"
 calib '{"accuracy": 0.8, "brier": 0.2}' '{"accuracy_min": 0.699, "brier_max": 0.39, "accepted": true}'
 run 0 judge 7 test-quality --state "$t/state-test-quality"
 grep -qF "calibration: meets accepted threshold (held-out accuracy 0.800, Brier 0.200; threshold held-out accuracy >= 0.699 and Brier <= 0.390, accepted))" <<<"$err" || fail "meets: $err"
 ready
-echo "lane-judge: ok (refusals before a verdict comment, unknown question, missing or empty state, chosen model unavailable: no write; the chosen model alone answers the state file's text; one comment labelled model judgment with answer and confidence, updated in place; merge-ask shows it beside the review verdict and passes or fails the same without it; a malformed judgment comment changes nothing; calibration status per question: no accepted threshold for the four real suites, below and meets an accepted threshold, merge-ask ready the same)"
+echo "lane-judge: ok (refusals before a verdict comment, unknown question, missing or empty state, the kit's model unavailable: no write; the kit's one judgment model (evals/judgment-model.json) alone answers every question on the state file's text; one comment labelled model judgment with answer and confidence, updated in place; merge-ask shows it beside the review verdict and passes or fails the same without it; a malformed judgment comment changes nothing; calibration status per question: no accepted threshold for the four real suites, below and meets an accepted threshold, merge-ask ready the same)"
