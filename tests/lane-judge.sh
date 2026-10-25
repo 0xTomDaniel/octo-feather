@@ -6,7 +6,7 @@
 # it needs unprivileged user namespaces (`unshare -rm`) as tests/qa.sh does.
 # Proves: `judge` refuses before the code review's verdict comment exists, an unknown question, an
 # unreadable or empty state and an unavailable chosen model, writing nothing; it asks only the question's
-# chosen model (evals/judges.json) on the state file's text, posts one marked comment labelled a model
+# chosen model (its suite.json `chosen`) on the state file's text, posts one marked comment labelled a model
 # judgment with the answer and its confidence, and updates it in place on rerun; merge-ask prints it
 # beside the review verdict, and passes or fails exactly as without it (a blocking review still fails,
 # whatever the judgment says; a malformed judgment comment changes nothing).
@@ -137,7 +137,7 @@ printf 'Checks: none\nVerdict: clear\n' > "$t/report"
 run 0 verdict 7 "${J:0:7}" "$t/report"; url="$out"
 n="$(writes)"
 run 1 judge 7 vibes --state "$t/state"
-grep -q "no judgment question 'vibes': name one of call-evidence, exact-or-proxy, test-quality, ticket-slice (evals/judges.json)" <<<"$err" || fail "unknown question: $err"
+grep -q "no judgment question 'vibes': name one of call-evidence, exact-or-proxy, test-quality, ticket-slice (evals/judgment-<question>/)" <<<"$err" || fail "unknown question: $err"
 run 1 judge 7 test-quality --state "$t/nope"; grep -q "cannot read state $t/nope" <<<"$err" || fail "missing state: $err"
 : > "$t/empty"; run 1 judge 7 test-quality --state "$t/empty"; grep -q "state $t/empty is empty" <<<"$err" || fail "empty state: $err"
 run 1 judge 7 test-quality; grep -q "usage: octo-feather-lane judge PR QUESTION --state FILE" <<<"$err" || fail "usage: $err"

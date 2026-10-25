@@ -513,14 +513,14 @@ fl FAIL fonone 'field_lines Blocked: no column-0 `Blocked:` line with a value ou
 grep -E '^FAIL fl/fonone: ' <<< "$out" | grep -qF 'field_lines Owner:' && fail "fonone: Owners: none failed: $out"
 
 # Shape check: each defect names the case and the field; the evals refuse a malformed suite (exit 2).
-bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c) and expectations (e), expect WANT
+bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
   rm -rf "$t/evals"; cp -r "${3:-$t/good}" "$t/evals"
   python3 - "$t/evals/${4:-trig}" "$1" <<'EOF'
 import json, sys
 d, code = sys.argv[1:]
-c = json.load(open(f"{d}/cases.json")); e = json.load(open(f"{d}/reference/expectations.json"))
+c = json.load(open(f"{d}/cases.json")); e = json.load(open(f"{d}/reference/expectations.json")); s = json.load(open(f"{d}/suite.json"))
 exec(code)
-json.dump(c, open(f"{d}/cases.json", "w")); json.dump(e, open(f"{d}/reference/expectations.json", "w"))
+json.dump(c, open(f"{d}/cases.json", "w")); json.dump(e, open(f"{d}/reference/expectations.json", "w")); json.dump(s, open(f"{d}/suite.json", "w"))
 EOF
   run 1 "$C" "$t/evals"; grep -qF "$2" <<< "$out" || fail "shape check missed: want '$2', got: $out"
 }
@@ -670,4 +670,25 @@ run 0 "$C" "$t/evals"
 bad 'e["t3"]["labelled_by"] = " "' "jb/reference/expectations.json case t3: field labelled_by: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["relabel"] = "two\nlines"' "jb/reference/expectations.json case t3: field relabel: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["note"] = "x"' "jb/reference/expectations.json case t3: field note: unknown field" "$t/jg-good" jb
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel)"
+# A judgment suite's chosen classifier (suite.json "chosen", read by octo-feather-lane judge): a pinned P/ID and an
+# evidence file that exists beside evals/ (the repo holding it); refused on any other kind.
+mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
+rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
+python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['chosen']={'model': 'stub/p/q-1.2:free', 'evidence': 'evidence/jb.md'}; json.dump(s, open(p, 'w'))" \
+  "$t/evals/jb/suite.json"
+run 0 "$C" "$t/evals"
+ok_chosen='s["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}'
+bad "$ok_chosen"'; s["chosen"]["why"] = "x"' "jb/suite.json: field chosen.why: unknown field" "$t/jg-good" jb
+bad "$ok_chosen"'; del s["chosen"]["model"]' "jb/suite.json: field chosen.model: missing" "$t/jg-good" jb
+bad "$ok_chosen"'; del s["chosen"]["evidence"]' "jb/suite.json: field chosen.evidence: missing" "$t/jg-good" jb
+bad 's["chosen"] = "stub/p/q-1.2"' "jb/suite.json: field chosen: must be an object {model, evidence}" "$t/jg-good" jb
+for m in stub/~x/y stub/p/q-latest stub/x-latest:free; do
+  bad "$ok_chosen"'; s["chosen"]["model"] = "'"$m"'"' "jb/suite.json: field chosen.model: $m is a moving alias" "$t/jg-good" jb
+done
+for m in stub 'stub/' '/x' 'stub/a b' ''; do
+  bad "$ok_chosen"'; s["chosen"]["model"] = "'"$m"'"' "jb/suite.json: field chosen.model: must be a classifier <provider>/<id>, got '$m'" "$t/jg-good" jb
+done
+bad "$ok_chosen"'; s["chosen"]["evidence"] = "evidence/none.md"' "jb/suite.json: field chosen.evidence: no file evidence/none.md beside evals/" "$t/jg-good" jb
+bad "$ok_chosen"'; s["chosen"]["evidence"] = "../evidence/jb.md"' "jb/suite.json: field chosen.evidence: must be a relative path inside the repo" "$t/jg-good" jb
+bad 's["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}' "trig/suite.json: field chosen: only in a judgment suite"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, chosen classifier: pinned P/ID, moving alias, missing or unknown key, evidence file, judgment suites only)"

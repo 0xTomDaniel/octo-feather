@@ -21,7 +21,7 @@ place, when the record is missing or either archive target already exists.
 
 `judge` (spec judgment #boundary-advisory-judge) runs beside a code review: it refuses until the PR has
 its verdict comment. QUESTION is a judgment suite's name without `judgment-` (test-quality, exact-or-proxy,
-ticket-slice, call-evidence); its chosen model is the one evals/judges.json records from the suite's bench.
+ticket-slice, call-evidence); its chosen model is the suite's suite.json `chosen` (the classifier its bench chose).
 The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
 nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
 no agent, in the qa sandbox, moving aliases never called; refused inside a check run), asking only that model.
@@ -590,7 +590,7 @@ def post_comment(pr: int, repo: str | None, comments: list, marker: str, body: s
 
 # --- the advisory judge (spec judgment #boundary-advisory-judge, #rule-advisory, issue #156) ---
 
-JUDGES = KIT / "evals" / "judges.json"
+EVALS = KIT / "evals"
 JUDGMENT_MARKER = "<!-- octo-feather-model-judgment: {} -->"
 JUDGMENT_FIELDS = ("Judgment", "Question", "Model", "Answer", "Confidence", "PR head", "Review head")
 STATE_MAX = 20000   # state characters quoted in the comment (GitHub caps a comment at 65536)
@@ -613,12 +613,16 @@ def cmd_judge(args: list[str]) -> int:
     if len(args) != 2 or state_file is None:
         raise Refuse(f"usage: octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(args[0]); qid = args[1]
-    judges = json.loads(JUDGES.read_text())["judges"]
-    if qid not in judges:
-        raise Refuse(f"no judgment question {qid!r}: name one of {', '.join(sorted(judges))} (evals/judges.json)")
-    model = judges[qid]["model"]
-    q = json.loads((KIT / "evals" / f"judgment-{qid}" / "question.json").read_text())
-    suite = json.loads((KIT / "evals" / f"judgment-{qid}" / "suite.json").read_text())
+    suites = {p.parent.name[len("judgment-"):]: json.loads(p.read_text()) for p in sorted(EVALS.glob("judgment-*/suite.json"))}
+    suites = {k: s for k, s in suites.items() if s.get("kind") == "judgment"}
+    if qid not in suites:
+        raise Refuse(f"no judgment question {qid!r}: name one of {', '.join(sorted(suites))} (evals/judgment-<question>/)")
+    suite = suites[qid]
+    if not isinstance(suite.get("chosen"), dict) or not suite["chosen"].get("model"):
+        raise Refuse(f"question {qid} has no chosen model: bench it (just qa --suite judgment-{qid}) and record "
+                     f"`chosen` in evals/judgment-{qid}/suite.json (shape: scripts/check-evals --help)")
+    model = suite["chosen"]["model"]
+    q = json.loads((EVALS / f"judgment-{qid}" / "question.json").read_text())
     try:
         state = sys.stdin.read() if state_file == "-" else Path(state_file).read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
@@ -646,7 +650,7 @@ def cmd_judge(args: list[str]) -> int:
     if model not in (bench.get("benched") or []):
         why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
         raise Refuse(f"chosen model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
-                     "check Pi's models and auth, or bench the question again and record its chosen model in evals/judges.json")
+                     f"check Pi's models and auth, or bench the question again and record its chosen model in evals/judgment-{qid}/suite.json")
     rows = bench.get("rows") or []
     _, _, choice, probs, _, ei = rows[0] if rows else (None, None, None, None, None, None)
     if choice not in q["labels"]:
@@ -660,7 +664,7 @@ def cmd_judge(args: list[str]) -> int:
     body = (f"{marker}\n## Model judgment: {qid}\n\nJudgment: {qa.JUDGMENT}\nQuestion: {qid}\nModel: {model}\nAnswer: {choice}\n"
             f"Confidence: {conf_s}\nPR head: {head}\nReview head: {rh.group(1)}\n"
             f"State: {Path(state_file).name if state_file != '-' else 'stdin'} (sha256 {hashlib.sha256(state.encode()).hexdigest()[:12]}, "
-            f"{len(state)} characters)\nChosen by: {judges[qid].get('evidence', 'evals/judges.json')}\n\n"
+            f"{len(state)} characters)\nChosen by: {suite['chosen'].get('evidence', f'evals/judgment-{qid}/suite.json')}\n\n"
             f"### Question\n\n{q['question']}\n\n### State\n\n{fence}text\n{quoted.rstrip()}\n{fence}\n")
     out, said = post_comment(pr, repo, d["comments"], marker, body, f"{qid} judgment")
     print(f"judge: {said} ({qid}: {choice}, confidence {conf_s}, model judgment by {model})", file=sys.stderr)

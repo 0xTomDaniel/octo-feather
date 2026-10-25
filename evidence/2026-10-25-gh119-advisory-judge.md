@@ -5,11 +5,11 @@ Every answer below is a model judgment: advisory, no gate reads it (owner ruling
 
 ## What was built
 
-- `octo-feather-lane judge PR QUESTION --state FILE|-`: refuses until the PR has the code review's verdict comment; asks only the question's chosen classifier (evals/judges.json) on the caller's state text, through `scripts/octo-feather-qa`'s `classify()` (the bench's Pi extension command, no agent, qa sandbox, moving aliases never called); creates, or updates in place, one comment per question marked `<!-- octo-feather-model-judgment: <id> -->` with `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's probability), PR head, Review head, the question and the state.
+- `octo-feather-lane judge PR QUESTION --state FILE|-`: refuses until the PR has the code review's verdict comment; asks only the question's chosen classifier (its suite.json `chosen`) on the caller's state text, through `scripts/octo-feather-qa`'s `classify()` (the bench's Pi extension command, no agent, qa sandbox, moving aliases never called); creates, or updates in place, one comment per question marked `<!-- octo-feather-model-judgment: <id> -->` with `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's probability), PR head, Review head, the question and the state.
 - `octo-feather-lane merge-ask`: after its pass is decided, prints each judgment comment as one line under `Model judgments (advisory ...)`, after the section that holds `Review verdict:`. Pass or fail never reads it.
 - One comment mechanism: verdict's create-or-update-in-place code is now `post_comment()`, used by both.
 - One classify mechanism: the bench's sandboxed run is now `classify()` in scripts/octo-feather-qa, used by the bench and the judge.
-- Chosen models as data: evals/judges.json (test-quality openrouter/respan/span-02, exact-or-proxy openrouter/cloudflare/clef, ticket-slice openrouter/inception/mercury-decide, call-evidence openrouter/nace-ai/drex-max, each with its bench evidence file). A field in each suite.json would be refused by scripts/check-evals (unknown field), which this ticket may not change.
+- Chosen models as data: each judgment suite's suite.json `chosen` {model, evidence}, shape checked by scripts/check-evals (judgment suites only, a pinned P/ID per the moving-alias rule, the evidence file exists) (test-quality openrouter/respan/span-02, exact-or-proxy openrouter/cloudflare/clef, ticket-slice openrouter/inception/mercury-decide, call-evidence openrouter/nace-ai/drex-max, each with its bench evidence file).
 
 ## Smoke: one real classify on a real PR #147 state
 
