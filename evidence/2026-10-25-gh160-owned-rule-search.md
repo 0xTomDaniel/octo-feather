@@ -41,4 +41,9 @@ Graded fact (declared `rung`) PASS both sides; the smoke is read from the final 
 
 ## Review round 1 (head 63bae88, class duplicated-rule)
 
-Removed: agents/corrector.md and agents/code-reviewer.md clauses that restated code-review step 4 `Owner:` paragraphs (writer search on its own diff, point every hit; whole-repo scope), and this file's summaries of them; each now points to step 4, `Owner:` paragraphs. Role wiring (when to read step 4, where it lives) kept. No rerun: the instruction each role reaches is the same step 4 text the head runs above read (corrector 5c9312 read code-review/SKILL.md), so the edit is pointer-only.
+Removed: agents/corrector.md and agents/code-reviewer.md clauses that restated code-review step 4 `Owner:` paragraphs, and this file's summaries of them; each now points to step 4, `Owner:` paragraphs. Role wiring (when to read step 4, where it lives) kept. No rerun: the instruction each role reaches is the same step 4 text the head runs above read (corrector 5c9312 read code-review/SKILL.md), so the edit is pointer-only.
+
+## Review round 2 (head a48be95, class duplicated-rule)
+
+Removed: the code-review patch reason line's issue #160 clause, which restated step 4 `Owner:` paragraphs; it now names the issue and points (Verdict step, Owner paragraphs). The #118, #124 and #157 clauses on the same line, also restating, point the same way (writer search, not listed by review). Also this file's round 1 Removed line, whose parenthesis restated them. Patch payload unchanged; `just check-vendored` ok. Pointer-only, no rerun.
+Removed: the same reason line's ADR 0007 clause restating the Verdict step's Block rule and its ADR 0015 clause restating the escalation route; each now names the decision and points (Verdict step, Block; intro line). Owner ruling relayed by supervisor, round 2. Pointer-only, no rerun.
