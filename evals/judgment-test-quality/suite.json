@@ -1,7 +1,7 @@
 {
   "suite": "judgment-test-quality",
   "kind": "judgment",
-  "description": "Judgment question (a) test quality (spec judgment#questions): is a test tautological, implementation-coupled or ok? The labelled set (question.json, cases.json, hidden reference/expectations.json; director-owned, never tuned) benched on every classifier Pi lists as available: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, one model chosen and a gating threshold proposed from train only. Every answer is a model judgment: advisory, no gate reads it.",
+  "description": "Judgment question (a) test quality (spec judgment#questions): is a test tautological, implementation-coupled or ok? The labelled set (question.json, cases.json, hidden reference/expectations.json; director-owned, never tuned) benched on every classifier Pi lists as available: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside the question's best-scoring classifier, and a gating threshold for the kit's model proposed from train only. Every answer is a model judgment: advisory, no gate reads it.",
   "timeout_s": 1800,
   "calibration": {
     "evidence": "evidence/2026-10-23-gh119-judgment-bench.md",
