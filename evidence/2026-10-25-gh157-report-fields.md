@@ -3,7 +3,7 @@
 Smoke: .agents/skills/code-review/ (Verdict step, **Report fields**), .skillfile/patches/skills/code-review/SKILL.md.patch, agents/implementer.md (Output), agents/code-reviewer.md (Output); measured by evals/ladder implementer-exec-bit and reviewer-proxy-blocks, live runs by the supervisor at lane head (lane Pi quota), results to be appended below.
 Removed: agents/implementer.md Output's inline copy of the check field shape (`Checks: none` and the `Check: ... | class: exact` template stacked as two bare lines), which all 3 baseline implementers copied as a `Checks:` heading over their `Check:` line; agents/code-reviewer.md Output's restated field list (`Check:` lines or `Checks: none`, `Owner:` lines or `Owners: none`); the code-review Verdict step's "one verdict: blocked if any finding blocks, else clear", which named no `Verdict:` label (gh122 `## Verdict: blocking` heading). Incident: finding classes `built-check-reported-none`, `verdict-heading-not-field` (lanes/archive/gh122.handoffs.jsonl), `checks-header-not-field` (lanes/gh157.handoffs.jsonl).
 Removed: the docs/owed-evals/118.md entry "Code reviewer, a proxy check blocks" (round 2). It stayed open because the contract did not fix the column-0 Verdict field and the gh122 head held it in only 1 of 2 runs (20261024T061942Z-d2714a wrote `## Verdict: blocking`). The code-review Verdict step's Report fields now fixes that field (1de2776), and reviewer-proxy-blocks passes 3/3 at lane head 685edd8 and 3/3 at main bfb5bc8 (below).
-Smoke: .agents/skills/eval-cases/SKILL.md (round 3, Field lines bullet), loaded at head by two live runs, supervisor's, `--kit-ref 50a1bad`: PASS skill-triggers/impl-evalcases-skill-sections 20261025T024143Z-ee8ea9 (implementer, eval-cases head content at tool call 2 of 2) and PASS skill-triggers/corrector-eval-cases-should 20261025T024158Z-7067ce (corrector, tool call 3 of 4). Limit: these prove the changed skill loads at head; no run yet follows its field_lines pointer to code-review Report fields while writing a field_lines case (owed, docs/owed-evals/157.md; scratch case and its non-informative FAILs: Round 4 below).
+Smoke: .agents/skills/eval-cases/SKILL.md (round 3, Field lines bullet): pointer followed while authoring a field_lines case, supervisor's live run 20261025T030732Z-414fc9 at `--kit-ref 2cf607d` (implementer in a kit copy: eval-cases read at tool call 2, `grep -n -A25 "Report fields" .agents/skills/code-review/SKILL.md` at call 5 returned Report fields, case written with `field_lines` Check `none: true` at calls 8-10); base contrast 20261025T032234Z-434a4d at bfb5bc8 (code-review never read or grepped in 27 calls). Both graded FAIL, only on `skill_read code-review`: that fact takes a full SKILL.md load, and a section grep never counts. The pointer-follow is read from the transcript (call 5's result), not graded. Details: Round 5 below. Loads only: impl-evalcases-skill-sections 20261025T024143Z-ee8ea9, corrector-eval-cases-should 20261025T024158Z-7067ce (Round 4).
 Removed: round 3 (review at 36ce223, class duplicated-rule), the copied field forms and reader scope in .agents/skills/eval-cases/SKILL.md (Field lines), and in help text only (no code change) of scripts/check-evals (field_lines fact), scripts/octo-feather-qa (field_lines) and scripts/octo-feather-lane (verdict, fields); each now points to .agents/skills/code-review/SKILL.md step 4, **Report fields**.
 
 ## Baseline, main bfb5bc8 (supervisor's runs)
@@ -123,3 +123,91 @@ reference/expectations.json:
 ```
 
 Observation (run 20261025T023848Z-15afcd): `printf '**Checks:** none\n' | octo-feather-lane fields -` gives Check errors `["report classifies no check: add `Checks: none` ..."]`, the absent-field message, without naming the bold label it saw. The corrector there proposed a rung 2 error naming that shape. Not changed here (no code in this lane's scope); recorded in docs/owed-evals/157.md.
+
+## Round 5 (review at 2cf607d): pointer followed while authoring a field_lines case
+
+Supervisor's live runs, scratch suite `/tmp/gh157/smoke-evals/s157` (this replaces the round 4 corrector scratch case there). Fixtures `kit-2cf607d` and `kit-bfb5bc8` are `git archive <ref>` of the kit, so the role edits a writable kit copy. Run: `just qa --evals /tmp/gh157/smoke-evals --case impl-field-case-<ref> --kit-ref <ref>`.
+
+### Head, `--kit-ref 2cf607d`, run 20261025T030732Z-414fc9: graded FAIL, pointer followed
+
+Graded: `skill_read eval-cases` held (tool call 2, a full read of eval-cases/SKILL.md); `skill_read code-review` FAILed: "no load of code-review/SKILL.md (its full content in a tool result) in 12 tool calls". The cause is that my expectation was stricter than the behaviour asked: the fact counts only a full SKILL.md load, and the implementer read the pointed section with grep, which never counts.
+
+Read from the transcript, not graded:
+
+- call 2: `read .agents/skills/eval-cases/SKILL.md` (head content, with the round 3 pointer).
+- call 5: `grep -n -A25 "Report fields" .agents/skills/code-review/SKILL.md`. Its result begins:
+
+```
+59:**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
+...
+67-`Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, ... a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
+```
+
+  (lines 59-77 returned: the pointer followed to the owner.)
+- call 7: bold vs plain through `scripts/octo-feather-lane fields -`: `**Checks:** none` gives `"Check": {"none": false, "errors": ["report classifies no check: ..."]}`, plain `Checks: none` gives `"Check": {"none": true, "errors": []}`.
+- calls 8-10: wrote the case into evals/ladder (cases.json, reference/expectations.json `{"fact": "field_lines", "field": "Check", "none": true}`, suite.json).
+- calls 11-12: `scripts/check-evals`, then `just check` in the copy, which hit the 900 s case timeout.
+
+### Base, `--kit-ref bfb5bc8`, run 20261025T032234Z-434a4d: graded FAIL, path absent
+
+eval-cases loaded (tool call 2); code-review/SKILL.md never read or grepped in 27 calls (0 matches for `code-review/SKILL.md` or `Report fields` in the transcript): the base eval-cases spelled out the field form itself, and the case was written from that text. FAIL on the same fact.
+
+So the changed path (eval-cases pointer to code-review step 4 Report fields) is used at head while authoring a field_lines case, and absent at base. The graded fact did not separate the two (both FAIL): it cannot see a section read.
+
+### Scratch case, for reproduction
+
+suite.json:
+
+```json
+{"suite": "s157", "kind": "role-transcript", "description": "gh157 smoke: an implementer authoring a field_lines eval case in a kit copy loads eval-cases and follows its field-form pointer to the code-review skill's Report fields.", "max_tool_calls": 40, "timeout_s": 900}
+```
+
+cases.json:
+
+```json
+[
+ {
+  "id": "impl-field-case-2cf607d",
+  "role": "implementer",
+  "fixture": "kit-2cf607d",
+  "task": "Ticket T9 (lane gh9, parent #9) in this repo (the kit): implementers keep ending their report with a bold `**Checks:** none`, which the supervisor's reader drops as no field. What to build: a new train case in evals/ladder, id implementer-checks-bold, role implementer, fixture python-app, whose task asks for a small CLI change that needs no check, and whose expectation grades the implementer's check field so the bold form fails and the plain form passes. Acceptance: `scripts/check-evals` passes with the new case. Worktree: this directory, branch main. Sandbox run: no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message."
+ },
+ {
+  "id": "impl-field-case-bfb5bc8",
+  "role": "implementer",
+  "fixture": "kit-bfb5bc8",
+  "task": "Ticket T9 (lane gh9, parent #9) in this repo (the kit): implementers keep ending their report with a bold `**Checks:** none`, which the supervisor's reader drops as no field. What to build: a new train case in evals/ladder, id implementer-checks-bold, role implementer, fixture python-app, whose task asks for a small CLI change that needs no check, and whose expectation grades the implementer's check field so the bold form fails and the plain form passes. Acceptance: `scripts/check-evals` passes with the new case. Worktree: this directory, branch main. Sandbox run: no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message."
+ }
+]
+```
+
+reference/expectations.json:
+
+```json
+{
+ "impl-field-case-2cf607d": {
+  "facts": [
+   {
+    "fact": "skill_read",
+    "skill": "eval-cases"
+   },
+   {
+    "fact": "skill_read",
+    "skill": "code-review"
+   }
+  ]
+ },
+ "impl-field-case-bfb5bc8": {
+  "facts": [
+   {
+    "fact": "skill_read",
+    "skill": "eval-cases"
+   },
+   {
+    "fact": "skill_read",
+    "skill": "code-review"
+   }
+  ]
+ }
+}
+```
