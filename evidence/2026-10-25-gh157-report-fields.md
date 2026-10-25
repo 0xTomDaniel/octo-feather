@@ -211,3 +211,19 @@ reference/expectations.json:
  }
 }
 ```
+
+## Round 6 (review at f5567ea): sweep of every tracked file type
+
+Pointed: evals/ladder/suite.json description (text only; no case, expectation or bound changed). Removed "column-0" from the implementer-secret-grep, implementer-test-vs-check (`Blocked:`), reviewer-proxy-check, reviewer-proxy-blocks and reviewer-owner-lines descriptions, plus "a bullet or fenced line is no field" and "a `## Verdict:` heading is no field". Added one sentence pointing to .agents/skills/code-review/SKILL.md step 4, Report fields. Case values kept (`Checks: none`, `class: exact`, `blocking`, the paths, the `restated:` files). `scripts/check-evals` ok.
+
+Sweep: `git grep -nE 'column[- ]0|no field|fenced|outside (code|a )?(block|fence)' -- . ':!docs/specs' ':!evidence'`, then `\bbullets?\b|\bheadings?\b|\bbold\b` filtered to verdict/check/field/report/owner, then `Verdict:|Checks: none|Owners: none|Check: <|column` over templates/, docs/ (not specs or owed-evals), GLOSSARY.md, AGENTS.md, tests/. Each hit, kept with the reason:
+
+- .agents/skills/code-review/SKILL.md:59,67,83 and its patch: the owner.
+- .agents/skills/eval-cases/SKILL.md:42, scripts/check-evals:57, scripts/octo-feather-qc:103, evals/ladder/cases.json:7,14,21,126,133, evals/role-transcripts/cases.json:39,45,51: "one fenced json block", the `declared` fact's json-block shape, a different rule (and case tasks, never reworded).
+- docs/adr/0008:7,16: rung 3 names the fields and points to Report fields; line 16 names the `Check:`/`Checks: none` labels on the merge ask, no form.
+- scripts/octo-feather-lane:85 and tests/lane-tickets.sh:15,194: the ticket reader's own scope (#145), a different rule.
+- scripts/octo-feather-lane:70 ("tracer bullet"), .agents/skills/improve-codebase-architecture/HTML-REPORT.md, docs/adr/0019, scripts/check-gate-free:58, tests/fixtures/lane-tickets/bodies/41-*.md, the code-review patch's upstream `## Standards` line: other meanings of bullet or heading.
+- scripts/octo-feather-lane:267 (code comment), scripts/octo-feather-qa:354 (fail message): code, a rung 2 message naming the fix; the lane may not change code.
+- tests/lane-merge-ask.sh:88-155,170,219,267-292 and tests/qa.sh:445-472: literal test inputs, expectations and their one-line case annotations (e.g. `# a fence interrupts the quote, ~~~ fences` labels its printf); concrete examples a test needs, per the round 4 review.
+- tests/*.sh:539/359 summary echo lines: test output text listing what passed.
+- templates/: no hits. docs/specs/ (read only, not edited): no hits for column-0, `Verdict:` or `Checks:` (only CSS grid columns, runtime.js).
