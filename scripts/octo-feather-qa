@@ -42,8 +42,9 @@ truncated (structuredContent.truncated, or its `[Showing lines`, `[N more lines 
 truncated.` notice) never counts, nor does an ls, a grep or a head of a part. No command text is read.
 A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
 stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
-So do `field_lines` (the final message's column-0 field lines, parsed by running the head kit's
-`octo-feather-lane fields -` on it, the parser `octo-feather-lane verdict` uses) and `branch_paths` (the
+So do `field_lines` (the final message's field lines, parsed by running the head kit's
+`octo-feather-lane fields -` on it, the parser `octo-feather-lane verdict` uses; field form and
+reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**) and `branch_paths` (the
 watcher's qa_branch event when pi ends: every path the case repo changed against main's commit at setup,
 committed, uncommitted or untracked, files git does not ignore).
 
@@ -329,8 +330,9 @@ def holds(line, item):
 
 
 def judge_fields(fact, final, last):
-    """The final message's column-0 field F, parsed by `octo-feather-lane fields` (one parser, verdict's): present and
-    well formed, then none, includes and every (check-evals --help)."""
+    """The final message's field F, parsed by `octo-feather-lane fields` (one parser, verdict's; form and scope:
+    .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
+    every (check-evals --help)."""
     f = fact["field"]
     head = f"field_lines {f}"
     st, text = final_text(head, final, last)

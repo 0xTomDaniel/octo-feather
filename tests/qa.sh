@@ -426,8 +426,8 @@ assert "origin=1" in o and re.search(r"gh=/tmp/\S+/bin/gh", o), o
 assert json.load(open(f"{d}/setup/input.json"))["task"].count("{repo}") == 1, "input.json should keep the case's task as written"
 EOF
 
-# field_lines: the final message's column-0 field lines as `octo-feather-lane fields` parses them (a bullet or a fenced
-# line is no field); branch_paths: what the case repo changed against main at setup, committed or not.
+# field_lines: the final message's field lines as `octo-feather-lane fields` parses them (form and scope:
+# .agents/skills/code-review/SKILL.md step 4, Report fields); branch_paths: what the case repo changed against main at setup, committed or not.
 mkdir -p "$t/fl/fl/reference" "$t/fl/fixtures"; cp -r "$t/good/fixtures/fx" "$t/fl/fixtures/"
 echo '{"suite": "fl", "kind": "role-transcript", "description": "stub field lines, branch paths", "max_tool_calls": 10, "timeout_s": 60}' > "$t/fl/fl/suite.json"
 python3 - "$t/fl/fl" <<'EOF'
