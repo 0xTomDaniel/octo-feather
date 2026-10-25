@@ -8,7 +8,11 @@ EVALS_DIR (default: the kit's evals/) holds one dir per suite plus fixtures/ (on
 copied and git-initialized per run). A suite dir holds:
   suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript" | "judgment",
                                 "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
-                                optional "covers": "role-skills" (skill-trigger only, below)}
+                                optional "covers": "role-skills" (skill-trigger only, below),
+                                optional "chosen": {"model": P/ID, "evidence": path} (judgment only: the
+                                classifier its bench chose, read by `octo-feather-lane judge`; ID not a
+                                moving alias, as octo-feather-qa skips them; evidence a file relative to
+                                the dir holding EVALS_DIR)}
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out");
                                a role-transcript case may also have
@@ -143,6 +147,8 @@ QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
 J_CASE = {"id", "split", "state"}
 J_EXP = {"label", "reason", "source"}
 J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record, optional
+CHOSEN = {"model", "evidence"}   # a judgment suite's optional chosen classifier
+MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
 TRIGGER = {"should_trigger", "split"}
 SPLITS = {"train", "held-out"}
@@ -192,7 +198,7 @@ def check_suite(d, evals, errs):
     where = f"{name}/suite.json"
     if not isinstance(suite, dict):
         errs.append(f"{where}: must be a JSON object"); return 0
-    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers"}):
+    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers", "chosen"}):
         errs.append(f"{where}: field {k}: unknown field")
     if suite.get("suite") != name:
         errs.append(f"{where}: field suite: must equal the dir name {name!r}, got {suite.get('suite')!r}")
@@ -206,6 +212,8 @@ def check_suite(d, evals, errs):
             errs.append(f"{where}: field {k}: must be a positive integer")
     if "covers" in suite and (suite["covers"] != "role-skills" or kind != "skill-trigger"):
         errs.append(f"{where}: field covers: only \"role-skills\", and only in a skill-trigger suite, got {suite['covers']!r}")
+    if "chosen" in suite:
+        check_chosen(suite["chosen"], kind, where, evals, errs)
     if not isinstance(cases, list):
         errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
     if not isinstance(exps, dict):
@@ -274,6 +282,31 @@ def check_suite(d, evals, errs):
     if suite.get("covers") == "role-skills" and kind == "skill-trigger":
         check_coverage(name, cases, exps, evals, errs)
     return len(cases)
+
+
+def check_chosen(ch, kind, where, evals, errs):
+    """A judgment suite's chosen classifier: {model: a pinned <provider>/<id>, evidence: a file beside evals/}."""
+    if kind != "judgment":
+        errs.append(f"{where}: field chosen: only in a judgment suite, got kind {kind!r}"); return
+    if not isinstance(ch, dict):
+        errs.append(f"{where}: field chosen: must be an object {{model, evidence}}, got {ch!r}"); return
+    for k in sorted(CHOSEN - set(ch)):
+        errs.append(f"{where}: field chosen.{k}: missing")
+    for k in sorted(set(ch) - CHOSEN):
+        errs.append(f"{where}: field chosen.{k}: unknown field")
+    m = ch.get("model")
+    if "model" in ch and not (isinstance(m, str) and MODEL.fullmatch(m)):
+        errs.append(f"{where}: field chosen.model: must be a classifier <provider>/<id>, got {m!r}")
+    elif "model" in ch:
+        mid = re.sub(r":[^:/]+$", "", m.split("/", 1)[1])   # octo-feather-qa's moving-alias rule, one routing tag ignored
+        if mid.startswith("~") or mid.endswith("-latest"):
+            errs.append(f"{where}: field chosen.model: {m} is a moving alias (its id starts with ~ or ends in -latest); "
+                        "name the pinned version the bench chose")
+    ev = ch.get("evidence")
+    if "evidence" in ch and not (isinstance(ev, str) and PATH.fullmatch(ev)):
+        errs.append(f"{where}: field chosen.evidence: must be a relative path inside the repo, got {ev!r}")
+    elif "evidence" in ch and not (evals.parent / ev).is_file():
+        errs.append(f"{where}: field chosen.evidence: no file {ev} beside evals/ (in {evals.parent}); name the bench's evidence file")
 
 
 def check_judgment(d, cases, exps, errs):
