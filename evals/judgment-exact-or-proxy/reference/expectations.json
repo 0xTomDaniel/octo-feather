@@ -1,0 +1,190 @@
+{
+  "justfile-check-scripts": {
+    "label": "exact",
+    "reason": "owned: quality#recipe-check@5f8fca3 \"In the kit: script syntax\". Tests the owned rule itself: parses or shellchecks each script's syntax. Defects: D1 top-level `return 1`/`break` parse but do not compile (escape); D2 a python script whose shebang lacks the word python goes to shellcheck (over-refusal).",
+    "source": "justfile:32-49@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-refs-claude-files": {
+    "label": "exact",
+    "reason": "owned: overview#acceptance-pi-only@5f8fca3 \"adds a Claude or Codex instruction file or projection to the kit\"; docs/adr/0001@5f8fca3 \"no `CLAUDE.md`, no `.claude` or `.codex` projections\". Tests the owned rule itself: the tracked file list against the instruction files and projections. No defect found (nested CLAUDE.md, docs/.claude/, CLAUDE.LOCAL.MD, .codex/ refused).",
+    "source": "justfile:51-54,60-61@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-refs-linear-word": {
+    "label": "proxy",
+    "reason": "owned: docs/adr/0004@5f8fca3 \"every tracker step is a `gh` call\"; overview#is-tracker@5f8fca3 \"Linear or a second tracker\". Stand-in: the owned rule is about the tracker in use, not a word; the capitalised word Linear stands in for using Linear (or a second tracker) as the tracker: a Jira step passes, the adjective `Linear scans` is refused. Same shape as check-refs-claude-codex-words. quality#recipe-check@5f8fca3 (\"Pi-only and GitHub-only references\") only describes the gate; ADR 0004 and overview#is-tracker own the rule (the tracker). Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "justfile:62-64@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-refs-claude-codex-words": {
+    "label": "proxy",
+    "reason": "owned: overview#acceptance-pi-only@5f8fca3 \"adds a Claude or Codex instruction file or projection to the kit\"; docs/adr/0001@5f8fca3 \"`AGENTS.md` is the only instruction file\". Stand-in (director's flip): the owned rule bans instruction files and projections, not words; the words claude/codex in file text stand in for them (the English word codex is refused, a projection under another name is not this scan's business). quality#recipe-check@5f8fca3 (\"Pi-only and GitHub-only references\") only describes the gate; ADR 0001 and overview#acceptance-pi-only own the rule (files). Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "justfile:62-62,65-67@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-refs-retired-words": {
+    "label": "exact",
+    "reason": "owned: overview#acceptance-retired-words@5f8fca3 \"adds kit text outside GLOSSARY.md and vendored skills that calls the top agent operator or the person human\". Tests the owned rule itself: the rule is about kit text naming, and the case-insensitive word scan reads that text outside the owned exemptions. No defect found (operator, Meta-Operators, humans refused; humanity passes; GLOSSARY exempt).",
+    "source": "justfile:68-82,105-107@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-refs-lane-branch-strings": {
+    "label": "exact",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/71 \"Keep lane-branch only as a plain literal string check\"; docs/adr/0011@5f8fca3 \"exactly `gh<issue>` with no prefix or suffix\". Tests the owned rule itself: the owner-confirmed #71 scope reduces the lane-branch rule to a literal string ban, and the check greps exactly those fixed strings. Fuzzed this round against the owned rule: N1 `gh<issue>-<slug>` escapes, the fold kept only `gh<N>-<` (escape); N2 README.md, AGENTS.md, docs/ exempt (escape); N3 other prefixes and suffixes (escape, low); N4 a worker branch `gh<N>-<worker>` refused (over-refusal, low) (/tmp/defects/gh119-b-newly-exact.md). #71 is the latest owner ruling on the lane-branch rule and wins over ADR 0011's branch-name reading (director correction 2026-10-23T04:27:34Z: keep lane-branch strings, exact by owned rulings). Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "justfile:108-110@5f8fca3",
+    "labelled_by": "director"
+  },
+  "justfile-check-dashes": {
+    "label": "exact",
+    "reason": "owned: quality#recipe-check@5f8fca3 \"no dashes\". Tests the owned rule itself: the U+2013/U+2014 bytes in tracked files. Defect: D7 all of docs/specs/ is exempt, not only Spec Chat's vendored runtime (escape).",
+    "source": "justfile:116-127@5f8fca3",
+    "labelled_by": "director"
+  },
+  "justfile-check-templates": {
+    "label": "proxy",
+    "reason": "owned: templates#acceptance-same-gate@5f8fca3 \"CI runs the same just check the agents and the git hook run\"; docs/adr/0017@5f8fca3 \"`check-templates` fails a template without them\". Stand-in: the owned rule says hook and CI run `just check`; the check greps for the string (a hook naming it in a comment passes). The recipe headers (ADR 0017) it reads directly; mixed, so proxy.",
+    "source": "justfile:137-151@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-gate-free": {
+    "label": "proxy",
+    "reason": "owned: quality#acceptance-gate-no-model@5f8fca3 \"makes a recipe inside just check reach the product judge or the factory evals\". Stand-in: the owned rule is reachability; the recipe closure is structural but the qa/qc/jev word scan over bodies stands in for reaching them (words for reachability).",
+    "source": "scripts/check-gate-free:1-21,46-47@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-skills-frontmatter": {
+    "label": "exact",
+    "reason": "owned: skills#acceptance-skill-frontmatter@5f8fca3 \"adds a skill without a name or description in its frontmatter\". Tests the owned rule itself: parses the frontmatter for non-empty name and description. Defect: D8 a quoted YAML key reads as missing (over-refusal).",
+    "source": "scripts/check-skills:1-16@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-decision-log-schema": {
+    "label": "exact",
+    "reason": "owned: quality#acceptance-decision-log-schema@5f8fca3 \"a decision log line missing its why field\"; docs/adr/0010@5f8fca3 \"validated by a JSON schema inside `just check`\". Tests the owned rule itself: validates each line against the schema. Defect: D9 `\\S` runs as Python re, not ECMA-262 (U+FEFF escapes; U+001C/U+0085 over-refused).",
+    "source": "scripts/check-decision-log:1-19@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-roles-frontmatter": {
+    "label": "exact",
+    "reason": "owned: roles#acceptance-unknown-key@5f8fca3 \"adds a frontmatter key the launcher does not honour to a role file\"; docs/adr/0013@5f8fca3 \"rejects any other key, any unknown tool or model, and any listed skill that does not resolve\". Tests the owned rule itself: the frontmatter fields against what pi-role honours and the allowed lists. No defect found (unknown model, key, skill, same-family reviewer refused).",
+    "source": "scripts/check-roles:1-20@5f8fca3",
+    "labelled_by": "director"
+  },
+  "check-behavior-smoke-presence": {
+    "label": "exact",
+    "reason": "owned: docs/adr/0008@5f8fca3 \"`just check` checks the presence half of this paragraph on a branch\"; docs/adr/0008@5f8fca3 \"The check reads the path on the line, never the run\". Tests the owned rule itself (director's flip): ADR 0008 owns only the presence half (evidence and owed-eval files in the diff, a `Smoke:` line naming each path, `Removed:` line), and that is what the check reads; whether the run exercised the path is owned by review. Fuzzed this round against the owned rule: N5 a role file renamed out of agents/ passes (escape); N6 role or skill paths with spaces or non-ASCII names pass (escape); N7 `Smoke: <path>.` refused (over-refusal, low) (/tmp/defects/gh119-b-newly-exact.md). Director final ruling: smoke-presence exact. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "scripts/check-behavior-smoke:1-40@5f8fca3",
+    "labelled_by": "director"
+  },
+  "lane-verdict-line": {
+    "label": "exact",
+    "reason": "owned: agents/code-reviewer.md@5f8fca3 \"Judge one diff's code quality and return a verdict.\"; docs/adr/0008@7686766 \"the reviewer's `Verdict: clear|blocking`\"; roles#role-code-reviewer@5f8fca3 \"returns a verdict with class-tagged findings\"; issue-lifecycle#acceptance-merge-ask-evidence@5f8fca3 \"links the review verdict\". Tests the owned rule itself: the verdict the reviewer returns is read from its report's Verdict line. Defect: D10 a lazy blockquote continuation counts as the verdict (escape). Director final ruling: the Verdict line is a structured producer field defined in the reviewer contract (agents/code-reviewer.md; its `clear|blocking` labels are written in ADR 0008 on gh118 at 7686766, unmerged). Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "scripts/octo-feather-lane:13-23,174-195,365-371@5f8fca3",
+    "labelled_by": "director"
+  },
+  "ticket-demo-surface": {
+    "label": "exact",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/47#issuecomment-6330432086 \"demo is last and names a backticked repo surface (not the gate alone)\"; docs/adr/0019@5f8fca3 \"or the target's runnable script when it has none\". Tests the owned rule itself (director keeps exact): resolves the demo program against what the repo declares, never the gate alone. Defect: D11 an interpreter-run script passes in a repo that has a CLI, against ADR 0019's 'when it has none' (escape). The #47 owner ruling owns it; the owner's later \"delete 1 2 and 3\" (2026-10-23T02:37:51Z) deleted only names() among the ticket checks, so #47 stays the latest ruling here. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "scripts/octo-feather-lane:61-67,761-768,847-883@5f8fca3",
+    "labelled_by": "director"
+  },
+  "integrate-hand-in-refusal": {
+    "label": "exact",
+    "reason": "owned: docs/adr/0017@5f8fca3 \"refuses (exit 3, rolled back) a worker commit that adds either recipe to the target's justfile or adds Spec Chat review state\". Tests the owned rule itself: the hand-in diff for added review-state files and added recipe headers. Defects: D12 `@qc:`, `qc status=\"x\":`, an imported justfile pass (escape); D13 editing an existing qc header refused (over-refusal).",
+    "source": "scripts/octo-feather-integrate:12-18,58-63@5f8fca3",
+    "labelled_by": "director"
+  },
+  "gh107-grade-skill-before-target": {
+    "label": "proxy",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/107 \"a transcript-graded probe shows an implementer reading `tdd` before writing a test\". Stand-in: the owned rule is a read before a test write; bash command text stands in for both (`ls tdd/SKILL.md` counts as a read, `cp x tests/` is no write).",
+    "source": "evals/role-skill-loading/probe/grade.py:1-45@8bec1b3",
+    "labelled_by": "director"
+  },
+  "gh108-qa-transcript-grader": {
+    "label": "proxy",
+    "reason": "owned: quality#recipe-qa@038fd12 \"a harness whose grader reads facts from the Pi transcript\"; quality#acceptance-qa-skill-triggers@038fd12 \"each passing only on whether the role read it\". Stand-in: the owned fact is whether the role read the skill; bash command words stand in for reads and test writes (`ls tdd/SKILL.md` is a read, `cp x tests/` no write).",
+    "source": "scripts/octo-feather-qa:14-18,68-106@038fd12",
+    "labelled_by": "director"
+  },
+  "owned-rules-lane-branch": {
+    "label": "proxy",
+    "reason": "owned: docs/adr/0011@40942b2 \"exactly `gh<issue>` with no prefix or suffix\"; docs/adr/0008@61b9f22 \"It may never use a phrase list or regex over prose to decide what the text means\". Stand-in: at 40942b2 no owner reduced the rule to literal strings (that came with #71); the regex over prose stands in for restating the branch rule (`gh<N>-$slug` or a paraphrase passes).",
+    "source": "scripts/check-owned-rules:1-11,42-55,179-187@40942b2",
+    "labelled_by": "director"
+  },
+  "check-test-surface": {
+    "label": "proxy",
+    "reason": "owned: quality#acceptance-public-surfaces@5f8fca3 \"calls no internal function or module directly\"; docs/adr/0002@5f8fca3 \"never unit-test internals\". Stand-in: the owned rule is no coupling to internals; loader and source tokens stand in for it (reading a script's source as text passes).",
+    "source": "scripts/check-test-surface:1-24,38-44@5f8fca3",
+    "labelled_by": "director"
+  },
+  "ticket-what-to-build-names-demo": {
+    "label": "proxy",
+    "reason": "owned: owner in director session ~/.pi/agent/sessions/--home-exedev-src-octo-feather--/2026-10-19T17-11-11-341Z_a603c330-b441-4a3b-b253-73f726c90c86.jsonl line 2177 at 2026-10-23T02:37:51Z \"delete 1 2 and 3\"; director ask in director session ~/.pi/agent/sessions/--home-exedev-src-octo-feather--/2026-10-19T17-11-11-341Z_a603c330-b441-4a3b-b253-73f726c90c86.jsonl line 2166 at 2026-10-23T02:35:38Z \"a regex over the \"What to build\" prose stands in for \"the demo runs this ticket's behavior\"\"; director.handoffs.jsonl at 2026-10-23T02:38:05Z \"owner: delete check-test-surface (#118), ticket names() (#118), tracker-prose.sh (#82 rework)\"; issue-lifecycle#acceptance-tracer-tickets@5f8fca3 \"ends on a demo path through the app's CLI, HTTP or UI\". Stand-in (director's final flip): the owner's later ruling (item 2 of the ask it answers) deleted names() as a regex over What to build standing in for the demo running this ticket's behaviour; it overrides the earlier #47 strip ruling (https://github.com/0xTomDaniel/octo-feather/issues/47#issuecomment-6330432086) that kept the check. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "scripts/octo-feather-lane:67-68,753-757,771-774,784-791@5f8fca3",
+    "labelled_by": "director",
+    "relabel": "proposed exact, relabelled proxy by the director (final flip, 2026-10-23): the owner's later \"delete 1 2 and 3\" (director session line 2177 at 2026-10-23T02:37:51Z) deleted names() as a stand-in, overriding the earlier #47 strip ruling"
+  },
+  "gh82-tracker-prose": {
+    "label": "proxy",
+    "reason": "owned: owner in director session ~/.pi/agent/sessions/--home-exedev-src-octo-feather--/2026-10-19T17-11-11-341Z_a603c330-b441-4a3b-b253-73f726c90c86.jsonl line 2177 at 2026-10-23T02:37:51Z \"delete 1 2 and 3\"; director ask in director session ~/.pi/agent/sessions/--home-exedev-src-octo-feather--/2026-10-19T17-11-11-341Z_a603c330-b441-4a3b-b253-73f726c90c86.jsonl line 2166 at 2026-10-23T02:35:38Z \"a regex over role prose for `gh issue` commands. \"Open a new issue on GitHub\" already gets past it.\"; lanes/gh82.handoffs.jsonl at 2026-10-23T03:40:13Z \"delete tests/tracker-prose.sh (owner-approved)\"; skills#tracker-role-line@0732ed7 \"Role prose and every other kit skill say \"the tracker skill\" and never name gh issue commands or Linear\"; issue-lifecycle#acceptance-no-github-issue@0732ed7 \"none filed since by an agent for that lane\". Stand-in (director's final flip): the owner approved deleting it as a proxy (item 3 of the ask it answers): words in role prose stand in for no agent filing a GitHub issue for a Linear lane (\"Open a new issue on GitHub\" passes). The latest owner ruling wins over the earlier reading of tracker-role-line as a naming rule. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "tests/tracker-prose.sh:1-7,38-46@0732ed7",
+    "labelled_by": "director",
+    "relabel": "proposed exact, relabelled proxy by the director (final flip, 2026-10-23): the owner approved deleting tests/tracker-prose.sh as a proxy (\"delete 1 2 and 3\", director session line 2177 at 2026-10-23T02:37:51Z)"
+  },
+  "gh107-grade-review": {
+    "label": "proxy",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/107 \"a code reviewer given a fixture with one tautological test and one internally coupled test blocks both\". Stand-in: the owned rule is the reviewer's blocking verdict on each test; `block` words and headings over free prose stand in for it.",
+    "source": "evals/role-skill-loading/probe/grade-review.py:1-29@649faad",
+    "labelled_by": "director"
+  },
+  "owned-rules-merge-authority": {
+    "label": "proxy",
+    "reason": "owned: docs/adr/0007@40942b2 \"is stated once, in spec `#gates-merge`, and every other document points there\"; docs/adr/0008@61b9f22 \"after `scripts/check-owned-rules` needed three rounds of phrase fixes; its meaning rules were deleted\". Stand-in: the owned rule is no restated copy (meaning); a phrase list over prose stands in for it, and the owner deleted it as a meaning rule.",
+    "source": "scripts/check-owned-rules:1-11,19-41,179-187@40942b2",
+    "labelled_by": "director"
+  },
+  "owned-rules-long-wait": {
+    "label": "proxy",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/71 \"delete the merge-authority and long-wait rules with their fixtures/tests (meaning checks\"; docs/adr/0008@61b9f22 \"It may never use a phrase list or regex over prose to decide what the text means\". Stand-in: two phrases over prose stand in for restating the long-wait rule; the owner-confirmed #71 scope names it a meaning check.",
+    "source": "scripts/check-owned-rules:1-11,56-74,179-187@40942b2",
+    "labelled_by": "director"
+  },
+  "owned-rules-spec-calls": {
+    "label": "proxy",
+    "reason": "owned: docs/adr/0008@61b9f22 \"after `scripts/check-owned-rules` needed three rounds of phrase fixes; its meaning rules were deleted\"; issue-lifecycle#gates-call-rules@40942b2 \"No evidence, no call\". Stand-in: the owned call rules live in #gates-spec-calls; a phrase regex over prose stands in for paraphrasing them (its own negatives say the same things and pass).",
+    "source": "scripts/check-owned-rules:1-11,75-121,179-187@40942b2",
+    "labelled_by": "director"
+  },
+  "ticket-internal-wording": {
+    "label": "proxy",
+    "reason": "owned: issue-lifecycle#acceptance-tracer-tickets@ac060f9 \"none is a layer-only ticket outside a wide refactor's expand-and-contract sequence\"; lanes/archive/gh40.handoffs.jsonl at 2026-10-22T01:26:04Z \"owner ruling: delete INTERNAL wording regex\". Stand-in: the owned rule is no layer-only ticket (meaning); layer phrases over What to build stand in for it, and the owner deleted the regex as such.",
+    "source": "scripts/octo-feather-lane:59-63,656-660,672-676@ac060f9",
+    "labelled_by": "director"
+  },
+  "check-vendored": {
+    "label": "exact",
+    "reason": "owned: skills#acceptance-patch-only@61b9f22 \"re-applying the pinned upstream with its patches reproduces the committed skill\". Tests the owned rule itself: byte-compares each vendored folder with the offline install at the pin plus patches. Defect: D16 a committed mode change passes (escape, low).",
+    "source": "`scripts/check-vendored:1-15,173-195,324-353@61b9f22`",
+    "labelled_by": "director"
+  },
+  "lane-ticket-criterion-id": {
+    "label": "exact",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/47#issuecomment-6330432086 \"criterion anchor resolves\"; issue-lifecycle#acceptance-tracer-tickets@61b9f22 \"every ticket names the acceptance criteria it serves\". Tests the owned rule itself: parses the spec for data-acceptance-criterion anchors and matches each item's id. Defects: D17 a criterion in a `<template>` counts (escape, low); D18 fences ignored in the section parser (over-refusal and escape). The #47 owner ruling owns it; the owner's later \"delete 1 2 and 3\" (2026-10-23T02:37:51Z) deleted only names() among the ticket checks, so #47 stays the latest ruling here. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "`scripts/octo-feather-lane:57-61,638-638,643-651,678-693,696-726@61b9f22`",
+    "labelled_by": "director"
+  },
+  "octo-feather-qc-report-shape": {
+    "label": "exact",
+    "reason": "owned: docs/adr/0022@61b9f22 \"a report that does not name exactly the claimed ids\"; issue-lifecycle#qc-interim@61b9f22 \"reports one pass or fail with the command and its output\". Tests the owned rule itself: parses the judge's json block for exactly the named ids, each pass/fail with command and output. Defects: D19 a duplicate id collapses (escape); D20 a wrong head passes (escape, low).",
+    "source": "`scripts/octo-feather-qc:1-9,36-36,101-104,341-349@61b9f22`",
+    "labelled_by": "director"
+  },
+  "expand-contract-waiver": {
+    "label": "exact",
+    "reason": "owned: https://github.com/0xTomDaniel/octo-feather/issues/47#issuecomment-6330432086 \"and the Expand-contract waiver\"; docs/adr/0019@61b9f22 \"except `to-tickets`' wide-refactor expand-contract sequence\". Tests the owned rule itself: the strip ruling keeps the waiver line as the structural fact, and the check reads that line and its step word. Defect: D21 the line inside a code fence or HTML comment still waives (escape). The #47 owner ruling owns it; the owner's later \"delete 1 2 and 3\" (2026-10-23T02:37:51Z) deleted only names() among the ticket checks, so #47 stays the latest ruling here. Conflict rule (director, 2026-10-23): the latest owner ruling wins; a criterion or ADR outranks a table that only describes the gate.",
+    "source": "`scripts/octo-feather-lane:69-69,639-639,727-733@61b9f22`",
+    "labelled_by": "director"
+  }
+}

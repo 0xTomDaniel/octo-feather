@@ -18,14 +18,24 @@ place, when the record is missing or either archive target already exists.
 
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin, with a line `Verdict: clear` or `Verdict: blocking`.
-Only lines outside fenced code blocks and blockquotes count; the last such line is the
+Only lines in the verdict reader's scope count (scope: .agents/skills/code-review/SKILL.md (Verdict step)); the last such line is the
 verdict, and lines that disagree are refused. The report also classifies every check, test
-gate or grader the diff adds or changes (docs/adr/0008, issue #118), at column 0 outside fences:
+gate or grader the diff adds or changes (docs/adr/0008, issue #118), in that same scope:
 `Checks: none`, or one line per check `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`.
 Refused: neither form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
+
+  octo-feather-lane fields REPORT|-   a report's column-0 field lines as JSON (the parser verdict uses)
+
+`fields` reads the lines outside fenced code blocks as `verdict` does and prints one JSON object:
+"Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field above (errors:
+`verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
+errors} from the code-review skill's `Owner: <path>: <rule> | restated: none|<path>:<line>[, ...]` or
+`Owners: none` (`:<line>` stripped from every path); "fields" {Name: [value...]} for every other
+`Name: value` line at column 0 (Name: a capital, then letters or -). Exit 0; 1 on an unreadable report.
+The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
 when the PR head is not the judged head, the git repo of the current directory (the lane
@@ -66,14 +76,16 @@ with its fix on stderr, exit 1.
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion; <template> content: #121 D17), and its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
-[project.scripts] name, a tracked script run by its interpreter, e.g. `python harness.py`,
-for a target with no CLI, HTTP or UI, ADR 0002), curl/http to an http(s) URL, or playwright; never the gate alone
+[project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. Checks are
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A ticket body
+is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
+or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
@@ -204,23 +216,56 @@ CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.m
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
-def outside(text: str) -> list[str]:
-    """The lines outside fenced code blocks, in order (a blockquote's `> ` prefix keeps it off column 0)."""
-    out, fence = [], None
+# The Markdown this script reads, no more. scope: .agents/skills/code-review/SKILL.md (Verdict step) for a verdict
+# report; scope: octo-feather-lane --help (ticket) for a ticket body.
+FENCE = re.compile(r"`{3,}|~{3,}")
+
+
+def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
+    """Each line of TEXT with its kind, `fence`, `quote`, `comment` or `text`, in the scope above. With COMMENTS
+    a line holding only comment is `comment` and any other line comes with its comments cut out."""
+    out, fence, quote, cmt = [], None, False, False   # cmt: an HTML comment is open
     for l in text.replace("\r\n", "\n").split("\n"):
-        f = re.match(r"\s{0,3}(`{3,}|~{3,})", l)
         if fence:
-            if f and f.group(1)[0] == fence[0] and len(f.group(1)) >= len(fence) and not l.strip().strip(fence[0]):
+            s = l.rstrip(" \t")
+            if len(s) >= len(fence) and s == fence[0] * len(s):
                 fence = None
-            continue
-        if f:
-            fence = f.group(1); continue
-        out.append(l)
+            out.append((l, "fence")); continue
+        was, t = cmt, l
+        if comments:
+            t, cmt = cut_comments(l, cmt)
+            if (was or t != l) and not t.strip():
+                out.append((l, "comment")); continue
+        if not was and (f := FENCE.match(t)):
+            fence, quote = f.group(0), False
+            out.append((l, "fence")); continue
+        quote = (quote or (not was and t.startswith(">"))) and bool(t.strip())
+        out.append((t, "quote" if quote else "text"))
     return out
 
 
+def cut_comments(l: str, open_: bool) -> tuple[str, bool]:
+    """(L with its HTML comments cut, whether one is open at its end), OPEN_ if one is open at its start."""
+    out, i = "", 0
+    while True:
+        if open_:
+            e = l.find("-->", i)
+            if e < 0:
+                return out, True
+            i, open_ = e + 3, False
+        s = l.find("<!--", i)
+        if s < 0:
+            return out + l[i:], False
+        out, i, open_ = out + l[i:s], s + 4, True
+
+
+def outside(text: str) -> list[str]:
+    """The lines markdown() reads as text, in order."""
+    return [l for l, kind in markdown(text) if kind == "text"]
+
+
 def verdicts(text: str) -> list[str]:
-    """Every `Verdict: clear|blocking` line outside fenced code blocks and blockquotes, in order."""
+    """Every `Verdict: clear|blocking` line in the verdict reader's scope, in order (scope: .agents/skills/code-review/SKILL.md (Verdict step))."""
     return [m.group(1) for l in outside(text) if (m := VERDICT_LINE.match(l))]   # column 0: `> Verdict:` never matches
 
 
@@ -252,6 +297,60 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
         why.append("report has `Checks: none` and `Check:` lines; keep the `Check:` lines, one per added or changed check")
     lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
     return lines, why
+
+
+OWNER_LINE = re.compile(r"^Owner:[ \t]*(.*?)\s*$")
+OWNER_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*restated:\s*(\S[^|]*?)")
+OWNERS_LINE = re.compile(r"^Owners:[ \t]*(.*?)\s*$")
+FIELD_LINE = re.compile(r"^([A-Z][A-Za-z-]*):[ \t]*(.*?)\s*$")
+AT_LINE = re.compile(r":\d+$")   # `<path>:<line>`: the path alone
+
+
+def owner_lines(text: str) -> tuple[list[dict], bool, list[str]]:
+    """(Owner lines as {path, rule, restated}, `Owners: none` given, why unusable) (code-review skill, Verdict step)."""
+    owners, nones, why = [], [], []
+    for l in outside(text):
+        if m := OWNERS_LINE.match(l):
+            nones.append(m.group(1))
+        elif m := OWNER_LINE.match(l):
+            s = OWNER_SHAPE.fullmatch(m.group(1))
+            rest = [AT_LINE.sub("", x.strip().strip("`")) for x in s.group(3).split(",")] if s else []
+            if not s or not all(rest):
+                why.append(f"owner line `{l.strip()}` is not `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`"); continue
+            owners.append({"path": AT_LINE.sub("", s.group(1)), "rule": s.group(2),
+                           "restated": [] if rest == ["none"] else list(dict.fromkeys(rest))})
+    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
+    if bad_none:
+        why.append(f"`Owners: {bad_none[0]}`; `Owners:` takes only `none`; name each owned rule on its own `Owner:` line")
+    if not owners and not nones and not why:
+        why.append("report names no owned rule: add `Owners: none`, or one `Owner:` line per owned rule the diff writes or changes")
+    if owners and nones:
+        why.append("report has `Owners: none` and `Owner:` lines; keep the `Owner:` lines")
+    return owners, bool(nones) and not bad_none and not owners, why
+
+
+def cmd_fields(args: list[str]) -> int:
+    if len(args) != 1:
+        raise Refuse(f"usage: octo-feather-lane fields REPORT|- (got {' '.join(args) or 'nothing'})")
+    try:
+        report = sys.stdin.read() if args[0] == "-" else Path(args[0]).read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read report {args[0]} ({e}): pass a report file, or - for stdin")
+    cls, cwhy = check_lines(report)
+    checks = []
+    for c in cls if cls != ["Checks: none"] else []:
+        path, rule, reads, kind = CHECK_SHAPE.fullmatch(c[len("Check: "):]).groups()
+        o = OWNED.fullmatch(rule)
+        checks.append({"path": path, "rule": o.group(1), "owner": o.group(2).strip(), "reads": reads, "class": kind})
+    owners, onone, owhy = owner_lines(report)
+    other = {}
+    for l in outside(report):
+        m = FIELD_LINE.match(l)
+        if m and m.group(1) not in ("Check", "Checks", "Owner", "Owners"):
+            other.setdefault(m.group(1), []).append(m.group(2))
+    print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
+                      "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
+    return 0
 
 
 def gh(args: list[str], fix: str) -> str:
@@ -426,9 +525,9 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"report {args[2]} is empty: pass the code review's report")
     vs = verdicts(report)
     if not vs:
-        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` outside code blocks and quotes (the code-review skill's verdict)")
+        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step))")
     if len(set(vs)) > 1:
-        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line outside code blocks and quotes, the reviewer's final verdict, then rerun")
+        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step)), the reviewer's final verdict, then rerun")
     verdict = vs[-1]
     cls, why = check_lines(report)
     if why:
@@ -746,13 +845,21 @@ DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 
 class Anchors(HTMLParser):
     def __init__(self):
-        super().__init__(); self.ids = set(); self.criteria = set()
+        super().__init__(); self.ids = set(); self.criteria = set(); self.inert = 0
 
     def handle_starttag(self, tag, attrs):
+        if tag == "template":   # an inert <template>'s content is no element of the page
+            self.inert += 1
+        if self.inert:
+            return
         self.ids.update(v for k, v in attrs if k in ("id", "data-anchor") and v)
         a = dict(attrs)
         if "data-acceptance-criterion" in a and a.get("data-anchor"):
             self.criteria.add(a["data-anchor"])   # a criterion id: the data-anchor of a criterion element
+
+    def handle_endtag(self, tag):
+        if tag == "template" and self.inert:
+            self.inert -= 1
 
 
 def specs_dir() -> Path:
@@ -781,7 +888,7 @@ def spec_anchors(specs: Path, slug: str, cache: dict) -> "Anchors | None":
 
 def criteria_items(body: str) -> list[str] | None:
     """The `## Acceptance criteria` list items (continuation lines joined); None if no such section."""
-    lines, items, inside = body.replace("\r\n", "\n").split("\n"), [], False
+    lines, items, inside = structure(body), [], False
     found = False
     for line in lines:
         if re.match(r"^#{1,6}\s", line):
@@ -795,6 +902,11 @@ def criteria_items(body: str) -> list[str] | None:
         elif items:
             items[-1] += " " + line.strip()
     return items if found else None
+
+
+def structure(body: str) -> list[str]:
+    """BODY's lines that carry the ticket's Markdown structure (scope: octo-feather-lane --help (ticket))."""
+    return [l for l, kind in markdown(body, comments=True) if kind not in ("fence", "comment")]
 
 
 def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
@@ -828,7 +940,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
-    ec = EXPAND.search(body)
+    ec = EXPAND.search("\n".join(structure(body)))
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
         return out
     if ec:
@@ -861,7 +973,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
 SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
-               "script run by its interpreter, e.g. `python harness.py`), "
+               "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
                "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
 
@@ -913,6 +1025,11 @@ class Surface:
         except (OSError, ValueError, ImportError):
             pass
 
+    def program(self) -> str:
+        """A program the repo declares (an executable, a recipe other than the gate's, a bin), '' if none."""
+        recipes = sorted(f"just {r}" for r in self.recipes if not NOT_DEMO_RECIPES.fullmatch(r))
+        return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
+
     def runs(self, cmd: str) -> tuple[list[str], str]:
         """(the surface invocation of each stage of CMD on the repo's surface, why the others are not)."""
         invs, whys = [], []
@@ -939,6 +1056,8 @@ class Surface:
             rel = os.path.normpath(script[2:] if script.startswith("./") else script)
             if TEST_DIR.search(rel):
                 return f"{script} is a test or hook, not the app's surface"
+            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002 fallback, read as: program() finds none
+                return f"the repo declares a program ({declared}), so the demo runs it, not a script by its interpreter (ADR 0002)"
             return None if rel in self.files else f"{script} is not a script the repo tracks"
         if prog in HTTP:
             return None if any(re.match(r"https?://", a) for a in args) else f"{prog} without an http(s) URL"
@@ -1141,6 +1260,7 @@ def cmd_ticket(args: list[str]) -> int:
 COMMANDS = {
     "archive": cmd_archive,
     "verdict": cmd_verdict,
+    "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,
     "tickets": cmd_tickets,
     "done": cmd_done,

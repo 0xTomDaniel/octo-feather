@@ -12,7 +12,8 @@
 # recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
-# demo; `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
+# demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
+# cases (owners: ADR 0002, #145); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
 # draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
@@ -42,6 +43,8 @@ printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not execu
 mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
 chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
+# zz: criteria only inside a <template> (nested too), #121 D17; acceptance-ok outside one.
+printf '<template><li data-acceptance-criterion data-anchor="acceptance-zz">x</li><template><p id="in"></p></template>\n<li data-acceptance-criterion data-anchor="acceptance-zz2">y</li></template>\n<ol><li data-acceptance-criterion data-anchor="acceptance-ok">z</li></ol>\n' >"$t/repo/docs/specs/zz.spec.html"
 printf 'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n' >"$t/repo/justfile"
 git -C "$t/repo" init -q -b main . && git -C "$t/repo" add -A
 
@@ -52,7 +55,7 @@ F = pathlib.Path(sys.argv[1])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107, 110], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 iss = {}
 for p, subs in parents.items():
@@ -116,7 +119,7 @@ hasnt() { ! grep -qF -- "$1" <<<"$out" || fail "${2:-output} has '$1': $out"; }
 # assignment with $(...), `uv run app` from pyproject, a justfile recipe plus curl to a URL,
 # pnpm exec playwright), and an Expand-contract ticket without a demo.
 run 0 tickets 100
-for n in 101 102 103 104 105 106 107 110; do has "$n: ok"; done; has "100: 8 of 8 tickets pass"
+for n in 101 102 103 104 105 106 107; do has "$n: ok"; done; has "100: 7 of 7 tickets pass"
 run 0 tickets '#100'
 
 # #10's real body: layer-only-ticket and the fix; its sibling passes; exit 1.
@@ -169,6 +172,45 @@ run 1 ticket - <"$F/41-judge-story-anchor.md"; has "stdin: class: no-criterion: 
 printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section anchor\n- [ ] demo: `demo a` prints ok\n' >"$t/section.md"
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
+
+# Interpreter-run scripts (owner: ADR 0002 fallback, #121 D11):
+# this repo declares programs, so `python3 scripts/octo-feather-lane` (as in the kit) and harness.py are refused.
+d11() { printf '## What to build\n\n`%s` checks.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s`\n' "$1" "$1" >"$t/d11.md"; }
+for c in 'python3 scripts/octo-feather-lane' 'python harness.py' 'bash scripts/octo-feather-lane'; do
+  d11 "$c"; run 1 ticket "$t/d11.md"; has "$t/d11.md: class: layer-only-ticket: demo runs no surface the repo declares (\`$c\`: "
+  has "the repo declares a program"
+done
+run 1 ticket "$F/110-runnable-script.md"; has "uv run python harness.py score --json\`: the repo declares a program"
+# A repo with no declared program (no executable, no recipe but its gate, no bin) demos through its script.
+mkdir -p "$t/bare/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/bare/docs/specs/"; cp "$t/repo/harness.py" "$t/bare/"
+printf 'check:\n    true\n' >"$t/bare/justfile"; git -C "$t/bare" init -q -b main . && git -C "$t/bare" add -A
+(cd "$t/bare" && run 0 ticket "$F/110-runnable-script.md" && d11 'python harness.py' && run 0 ticket "$t/d11.md") || exit 1
+# #121 D17: criterion ids inside a <template>.
+for a in acceptance-zz acceptance-zz2; do
+  printf '## Acceptance criteria\n\n- [ ] zz#%s: x\n- [ ] demo: `demo a` prints ok\n' "$a" >"$t/d17.md"; run 1 ticket "$t/d17.md"
+  has "class: unknown-criterion: zz#$a: no anchor $a in"; has "e.g. zz#acceptance-ok"
+done
+sed -i 's/zz#acceptance-zz2/zz#acceptance-ok/' "$t/d17.md"; run 0 ticket "$t/d17.md"
+# #121 D18 D21 (#145): headings, items and an Expand-contract line in fenced code or an HTML comment;
+# a fence inside the section.
+for f in '```sh' '~~~' '````'; do
+  e="${f%%sh}"
+  printf '## Acceptance criteria\n\n%s\n# setup\n## Not a heading\n%s\n\n- [ ] demo#acceptance-a: ok\n- [ ] demo: `demo a` prints ok\n' "$f" "$e" >"$t/d18a.md"
+  run 0 ticket "$t/d18a.md"
+  printf '## What to build\n\nAn example:\n\n%s\n## Acceptance criteria\n\n- demo#acceptance-a: x\n%s\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section\n- [ ] demo: `demo a` prints ok\n' "$f" "$e" >"$t/d18b.md"
+  run 1 ticket "$t/d18b.md"; has "no acceptance item names an acceptance criterion: demo#acceptance is not"
+  printf '## What to build\n\nA refactor step.\n\n%s\nExpand-contract: expand\n%s\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n' "$f" "$e" >"$t/d21.md"
+  run 1 ticket "$t/d21.md"; has "class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
+done
+# PR #140 review finding 2 (owner: markdown()'s scope, #145): 4-space indented backticks open no fence.
+printf '## What to build\n\n    ```\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `demo a` prints ok\n' >"$t/d18d.md"
+run 0 ticket "$t/d18d.md"
+printf '## What to build\n\n<!-- an example:\n## Acceptance criteria\n- demo#acceptance-a: x\n-->\n\n## Acceptance criteria\n\n- [ ] demo#acceptance: the section\n- [ ] demo: `demo a` prints ok\n' >"$t/d18c.md"
+run 1 ticket "$t/d18c.md"; has "no acceptance item names an acceptance criterion: demo#acceptance is not"
+for c in '<!--\nExpand-contract: expand\n-->' 'Draft <!-- note\nExpand-contract: expand\n-->' '  <!--\n- Expand-contract: expand -->'; do
+  printf "## What to build\n\nA refactor step.\n\n$c\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n" >"$t/d21c.md"
+  run 1 ticket "$t/d21c.md"; has "class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
+done
 
 # The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
 # asked is one the snapshot CLI fetches.
@@ -223,4 +265,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

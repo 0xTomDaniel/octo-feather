@@ -1,0 +1,13 @@
+{
+  "id": "c-ticket-slice",
+  "question": "Is this ticket, as written, a real end-to-end slice: one thin change carried through every layer it needs to something a user can run or see, with a demo that exercises that change (slice), rather than work confined to one layer, a deferred user-facing part, or a demo that is unrelated or only the gate going green (layer-only)?",
+  "labels": [
+    "slice",
+    "layer-only"
+  ],
+  "label_help": {
+    "slice": "delivers a user-runnable or user-visible change (command, recipe, gate behaviour, CI run, agent behaviour) and its demo exercises that change; a stated Expand-contract step also counts. Agent behaviour counts: a role or prompt change whose demo runs the agent (e.g. scripts/pi-role on a fixture) and shows the changed behaviour is a slice.",
+    "layer-only": "stops at one layer (schema, storage, adapter, contract or doc text), defers the user-facing part, or demos only an unrelated command or the gate staying green."
+  },
+  "state_shape": "The ticket body as filed or drafted, no title (What to build, Acceptance criteria, Blocked by). No review, qc or owner verdict."
+}

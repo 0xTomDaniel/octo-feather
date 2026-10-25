@@ -101,7 +101,8 @@ if [[ -n "${OCTO_FEATHER_GHSNAP:-}" ]]; then
   chmod -R u+w "$OCTO_FEATHER_GHSNAP" 2>/dev/null; touch "$OCTO_FEATHER_GHSNAP/x" 2>/dev/null && echo "ESCAPE snapshot writable"
   echo hacked 2>/dev/null > "$OCTO_FEATHER_GHSNAP/issue/1.json" && echo "ESCAPE snapshot item writable"
 fi
-printf '```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "gh issue view 1", "output": "ok", "why": "history only: shown"}]}\n```\n'
+h="$(grep -o 'head [0-9a-f]\{40\}' <<< "$*" | head -1 | cut -d' ' -f2)"   # the judged head, from the brief
+printf '```json\n{"head": "%s", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "gh issue view 1", "output": "ok", "why": "history only: shown"}]}\n```\n' "$h"
 EOF
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash

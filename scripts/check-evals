@@ -77,6 +77,25 @@ Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/
                                              every key of O equal (other keys free): a reviewer's block list
                                              by test id, a judge's verdict per criterion id. Fails naming each
                                              O missing
+  {"fact": "field_lines", "field": F, optional "none": true, "includes": [O...], "every": {K: [V...]}}
+                                             the FINAL assistant message's column-0 field lines outside code
+                                             fences, parsed by `octo-feather-lane fields` (the parser `verdict`
+                                             uses; a bullet or a fenced line is no field). F: Check (lines
+                                             {path, rule, owner, reads, class}, or `Checks: none`), Owner
+                                             (lines {path, rule, restated: [path...]}, or `Owners: none`;
+                                             `:<line>` stripped), or any other Name (lines {text}). The field
+                                             must be present and well formed (Check, Owner: no parser error),
+                                             then: none, it is its one none line (Check, Owner only, alone);
+                                             includes, each O (non-empty, string values, keys of F's lines)
+                                             matches a line (key equal; a list key holds the value); every, each
+                                             line's K is one of [V...] (a list key: each element; [] allows none).
+                                             Fails on a run stopped before its final message
+  {"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}
+                                             the paths the case repo changed against main's commit at setup (its
+                                             working tree: HEAD's commits, uncommitted and untracked files git does
+                                             not ignore), read by the watcher when pi ends: untouched, none is P or
+                                             under P (P ending in /: a dir); touched, each P has one. At least
+                                             one key; P a relative path. Fails on a run stopped before it ended
 Why facts read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
 exact check, rung 3 structured judgment, Who builds what); where a fix goes: docs/adr/0020 (Where the
 fix goes). No judgment fact exists yet (one would run through Pi codemode models.classify); every case
@@ -107,7 +126,12 @@ from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
-         "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"}}
+         "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
+         "field_lines": {"field"}, "branch_paths": set()}
+OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
+FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # else {"text"}
+FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*")
+PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
 NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # a before target reachable only with that case field
 SETUP = {"branch", "head", "origin", "fake_gh"}   # optional, role-transcript cases only
@@ -435,7 +459,7 @@ def check_exp(at, exp, errs):
             errs.append(f"{fa}: field fact: unknown fact type {t!r}; known: {sorted(FACTS)}"); continue
         for k in sorted(FACTS[t] - set(f)):
             errs.append(f"{fa}: field {k}: missing")
-        for k in sorted(set(f) - FACTS[t] - {"fact"}):
+        for k in sorted(set(f) - FACTS[t] - OPTIONAL.get(t, set()) - {"fact"}):
             errs.append(f"{fa}: field {k}: unknown field for {t}")
         sk = f.get("skill")
         if "skill" in f and not (isinstance(sk, str) and re.fullmatch(r"[a-z0-9-]+", sk)
@@ -453,8 +477,33 @@ def check_exp(at, exp, errs):
                 isinstance(f["items"], list) and f["items"] and all(isinstance(o, dict) and o and all(
                     isinstance(k, str) and k and isinstance(v, str) for k, v in o.items()) for o in f["items"])):
             errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
+        if t == "field_lines":
+            check_fields(fa, f, errs)
+        if t == "branch_paths":
+            if not set(f) & OPTIONAL[t]:
+                errs.append(f"{fa}: field untouched: missing (give untouched, touched or both)")
+            for k in sorted(set(f) & OPTIONAL[t]):
+                if not (isinstance(f[k], list) and f[k] and all(isinstance(p, str) and PATH.fullmatch(p) for p in f[k])):
+                    errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
         if "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+def check_fields(fa, f, errs):
+    """A field_lines fact: field a field name, then none, includes and every as --help states them."""
+    fld = f.get("field")
+    if "field" in f and not (isinstance(fld, str) and FIELD_NAME.fullmatch(fld) and fld not in ("Checks", "Owners")):
+        errs.append(f"{fa}: field field: must be a field name ({FIELD_NAME.pattern}): Check or Owner (their none lines "
+                    f"too), or another, got {fld!r}"); return
+    keys = FIELD_KEYS.get(fld, {"text"})
+    if "none" in f and (f["none"] is not True or fld not in FIELD_KEYS or {"includes", "every"} & set(f)):
+        errs.append(f"{fa}: field none: only true, only for Check or Owner, and without includes or every")
+    if "includes" in f and not (isinstance(f["includes"], list) and f["includes"] and all(
+            isinstance(o, dict) and o and all(k in keys and isinstance(v, str) and v for k, v in o.items()) for o in f["includes"])):
+        errs.append(f"{fa}: field includes: must be a non-empty list of non-empty objects of string values, keys from {sorted(keys)}")
+    if "every" in f and not (isinstance(f["every"], dict) and f["every"] and all(
+            k in keys and isinstance(v, list) and all(isinstance(x, str) and x for x in v) for k, v in f["every"].items())):
+        errs.append(f"{fa}: field every: must be a non-empty object of string lists, keys from {sorted(keys)}")
 
 
 def main(argv):

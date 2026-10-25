@@ -3,8 +3,10 @@
 # (scripts/check-vendored) on a throwaway copy of the kit's Skillfile, lock,
 # patches and skill folders, against a copy of the warm cache:
 # - the gate passes with no network namespace (it never needs to dial out);
-# - a drifted, extra or missing vendored file, or a patch that no longer
-#   matches, fails naming skill and file;
+# - the gate reads the committed folder (the copy is a git repo; run stages every change):
+#   a drifted, extra or missing vendored file, a committed mode change, or a patch that
+#   no longer matches, fails naming skill and file; untracked files and what git cannot
+#   hold (a FIFO, an empty folder) pass (cases: #143, #121 D16);
 # - a poisoned cache (a tampered upstream blob matching a tampered vendored
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
 # - --extract spec-chat DEST writes the fetch-only Spec Chat pin offline, exec bits kept;
@@ -22,6 +24,8 @@ cp "$kit/scripts/check-vendored" "$r/scripts/"
 cp -r "$kit/.skillfile/patches" "$r/.skillfile/"
 cp -r "$kit/.agents/skills" "$r/.agents/"
 cp -r "$src" "$t/c/octo-feather/"; chmod -R u+w "$t/c"
+gr() { git -C "$r" -c user.name=t -c user.email=t@t "$@"; }
+gr init -q; gr add -A; gr commit -qm base
 export XDG_CACHE_HOME="$t/c"
 # Network-namespace proofs (gate never dials out; stalled proxy) need Linux user namespaces:
 # run them where `unshare` works, else name the skip. Every other case runs everywhere.
@@ -32,7 +36,9 @@ stallok=0; if unshare -rn sh -c 'ip link set lo up' 2>/dev/null; then stallok=1
   else skipped+=("stalled and dripping proxy fetch (needs unshare -rn and ip)"); fi
 # Portable in-place edit: edit FILE PYTHON-EXPR-ON-s (no sed -i).
 edit() { python3 -c 'import sys; p = sys.argv[1]; s = open(p).read(); s = eval(sys.argv[2]); open(p, "w").write(s)' "$1" "$2"; }
-run() { local want="$1"; shift; set +e; out="$("$@" just -f "$r/justfile" check-vendored 2>&1)"; rc=$?; set -e
+# run WANT [PREFIX...]: stage every change in the copy (as a commit records it), then the gate; stage=0 skips staging.
+stage=1
+run() { local want="$1"; shift; [[ $stage == 0 ]] || gr add -A; set +e; out="$("$@" just -f "$r/justfile" check-vendored 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || { echo "check-vendored test: want exit $want, got $rc: $out" >&2; exit 1; }; }
 has() { grep -qF -- "$1" <<<"$out" || { echo "check-vendored test: output lacks '$1': $out" >&2; exit 1; }; }
 # Clean copy, no network at all: passes.
@@ -55,8 +61,20 @@ rm "$r/.agents/skills/sharpen/EXTRA.md"; mv "$t/mocking.md" "$r/.agents/skills/t
 edit "$r/.skillfile/patches/skills/sharpen/SKILL.md.patch" 's.replace("\n-disable-model", "\n disable-model", 1)'
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen/SKILL.md differs"
 cp "$kit/.skillfile/patches/skills/sharpen/SKILL.md.patch" "$r/.skillfile/patches/skills/sharpen/"; run 0
-# Vendored folders hold regular files only: a folder symlink, a file symlink, a FIFO, an empty folder,
-# and the skill folder itself as a symlink each fail naming skill and path.
+# #143, #121 D16 cases: mode change on the disk (chmod +x) or in the index only (update-index --chmod), then reverted.
+chmod +x "$r/.agents/skills/tdd/SKILL.md"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/SKILL.md has git mode 100755, upstream mattpocock/skills@49dd158"
+chmod -x "$r/.agents/skills/tdd/SKILL.md"; run 0
+gr update-index --chmod=+x .agents/skills/grilling/SKILL.md
+stage=0 run 1; has "check-vendored: grilling: .agents/skills/grilling/SKILL.md has git mode 100755"
+gr update-index --chmod=-x .agents/skills/grilling/SKILL.md; run 0
+# #143: an untracked stray file, then committed.
+echo x > "$r/.agents/skills/tdd/STRAY.md"
+stage=0 run 0; has "vendored: ok"
+run 1; has "check-vendored: tdd: .agents/skills/tdd/STRAY.md is not in upstream"
+rm "$r/.agents/skills/tdd/STRAY.md"; run 0
+# #143: a committed folder symlink, file symlink, and the skill folder itself as a symlink; a FIFO or an
+# empty folder git cannot commit.
 ln -s ../grilling "$r/.agents/skills/tdd/EXTRA"
 run 1; has "check-vendored: tdd: .agents/skills/tdd/EXTRA is a symlink (to ../grilling)"
 rm "$r/.agents/skills/tdd/EXTRA"; ln -s SKILL.md "$r/.agents/skills/tdd/LINK.md"
@@ -65,9 +83,9 @@ rm "$r/.agents/skills/tdd/LINK.md"; mv "$r/.agents/skills/tdd/tests.md" "$t/"; l
 run 1; has "check-vendored: tdd: .agents/skills/tdd/tests.md is a symlink"
 rm "$r/.agents/skills/tdd/tests.md"; mv "$t/tests.md" "$r/.agents/skills/tdd/"
 mkfifo "$r/.agents/skills/tdd/PIPE"
-run 1; has "check-vendored: tdd: .agents/skills/tdd/PIPE is a special file"
+run 0; has "vendored: ok"   # git cannot commit a FIFO: not the skill
 rm "$r/.agents/skills/tdd/PIPE"; mkdir -p "$r/.agents/skills/tdd/empty/deeper"
-run 1; has "check-vendored: tdd: .agents/skills/tdd/empty/deeper is an empty folder"
+run 0; has "vendored: ok"   # nor an empty folder
 rm -r "$r/.agents/skills/tdd/empty"; mv "$r/.agents/skills/sharpen" "$t/sharpen"; ln -s "$t/sharpen" "$r/.agents/skills/sharpen"
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen is a symlink"
 rm "$r/.agents/skills/sharpen"; mv "$t/sharpen" "$r/.agents/skills/"; run 0
@@ -123,7 +141,7 @@ rm -rf "$t/c/octo-feather/skillfile/bin"
 for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
 fi
 for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
-ran="pinned Spec Chat written and uncached, drift, symlinks, special files, empty folders, poisoned and missing cache"
+ran="pinned Spec Chat written and uncached, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
 [[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
 [[ $stallok == 1 ]] && ran="$ran, silent and dripping proxy"
 echo "check-vendored test: ok ($ran)"
