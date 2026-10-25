@@ -467,6 +467,51 @@ assert "origin=1" in o and re.search(r"gh=/tmp/\S+/bin/gh", o), o
 assert json.load(open(f"{d}/setup/input.json"))["task"].count("{repo}") == 1, "input.json should keep the case's task as written"
 EOF
 
+# field_lines: the final message's column-0 field lines as `octo-feather-lane fields` parses them (a bullet or a fenced
+# line is no field); branch_paths: what the case repo changed against main at setup, committed or not.
+mkdir -p "$t/fl/fl/reference" "$t/fl/fixtures"; cp -r "$t/good/fixtures/fx" "$t/fl/fixtures/"
+echo '{"suite": "fl", "kind": "role-transcript", "description": "stub field lines, branch paths", "max_tool_calls": 10, "timeout_s": 60}' > "$t/fl/fl/suite.json"
+python3 - "$t/fl/fl" <<'EOF'
+import json, sys
+d = sys.argv[1]
+G = "git -c user.name=t -c user.email=t@t.invalid -c commit.gpgsign=false"
+case = lambda i, steps, **kw: dict({"id": i, "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(steps)}, **kw)
+chk = "Check: `scripts/check-exec`: every script is executable (criterion exec-bit) | reads: git index modes | class: %s"
+none = {"fact": "field_lines", "field": "Check", "none": True}
+exact = {"fact": "field_lines", "field": "Check", "every": {"class": ["exact"]}}
+has = {"fact": "field_lines", "field": "Check", "includes": [{"class": "exact", "path": "scripts/check-exec"}], "every": {"class": ["exact"]}}
+keep = {"fact": "branch_paths", "untouched": ["scripts/", "justfile"], "touched": ["src/"]}
+cases = [
+  (case("fnone", [["bash", "mkdir -p src && echo x > src/a.py && " + G + " add -A && " + G + " commit -qm a && echo y > src/b.py"],
+                  ["say", "Done.\n\nChecks: none\nBlocked: the scan (no criterion asks for it)"]]),
+   [none, exact, {"fact": "field_lines", "field": "Blocked"}, keep]),
+  (case("fbullet", [["say", "Done.\n\n- **Checks:** none."]]), [none]),
+  (case("ffenced", [["say", "Done.\n\n```\nChecks: none\n```"]]), [exact]),
+  (case("fexact", [["bash", "mkdir -p scripts && echo x > scripts/check-exec"], ["say", "Done.\n" + chk % "exact"]]), [has, keep]),
+  (case("fproxy", [["say", "Done.\n" + chk % "proxy"]]), [exact]),
+  (case("fowner", [["say", "Checks: none\nOwner: docs/adr/0099-x.md:3: the rule | restated: README.md:4, `AGENTS.md:9`\n"
+                            "Owner: docs/adr/0099-x.md: a second rule | restated: skills/s.md:2"]]),
+   [{"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0099-x.md", "restated": p} for p in
+                                                           ("README.md", "AGENTS.md", "skills/s.md")]}]),
+  (case("fonone", [["say", "Owners: none\nBlocked:"]]), [{"fact": "field_lines", "field": "Owner", "none": True},
+                                                        {"fact": "field_lines", "field": "Blocked"}]),
+]
+json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
+json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
+EOF
+cp -r "$t/fl" "$t/fl-good"
+run 1 "$Q" --evals "$t/fl"
+fl() { grep -E "^$1 fl/$2: " <<< "$out" | grep -qF "$3" || fail "fl $2: want $1 with '$3': $out"; }
+fl PASS fnone 'field_lines Check: `Checks: none`; field_lines Check: `Checks: none`; every line in {"class": ["exact"]}; field_lines Blocked: 1 line(s) [{"text": "the scan (no criterion asks for it)"}]; branch_paths: changed src/a.py, src/b.py; none under scripts/, justfile; each of src/ changed'
+fl FAIL fbullet 'field_lines Check: report classifies no check'
+fl FAIL ffenced 'field_lines Check: report classifies no check'
+fl FAIL fexact 'branch_paths: changed scripts/check-exec (untouched: scripts/, justfile)'
+grep -E '^FAIL fl/fexact: ' <<< "$out" | grep -qF 'field_lines Check:' && fail "fexact: a well-formed exact Check line failed: $out"
+fl FAIL fproxy 'field_lines Check: [{"path": "scripts/check-exec", "rule": "every script is executable", "owner": "criterion exec-bit", "reads": "git index modes", "class": "proxy"}] outside {"class": ["exact"]}'
+fl PASS fowner 'holds {"path": "docs/adr/0099-x.md", "restated": "README.md"}; {"path": "docs/adr/0099-x.md", "restated": "AGENTS.md"}; {"path": "docs/adr/0099-x.md", "restated": "skills/s.md"}'
+fl FAIL fonone 'field_lines Blocked: no column-0 `Blocked:` line with a value outside code blocks'
+grep -E '^FAIL fl/fonone: ' <<< "$out" | grep -qF 'field_lines Owner:' && fail "fonone: Owners: none failed: $out"
+
 # Shape check: each defect names the case and the field; the evals refuse a malformed suite (exit 2).
 bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c) and expectations (e), expect WANT
   rm -rf "$t/evals"; cp -r "${3:-$t/good}" "$t/evals"
@@ -519,6 +564,16 @@ bad 'c[0]["should_trigger"] = False' "case reads: field should_trigger: false, b
 bad 'e["reads"]["facts"].append({"fact": "attempt_blocked", "kind": "vibes"})' "case reads fact #2: field kind: must be one of ['credential', 'herdr', 'lane_state'], got 'vibes'"
 bad 'e["reads"]["facts"].append({"fact": "declared", "field": "", "in": []})' "case reads fact #2: field field: must be a non-empty string"
 bad 'e["reads"]["facts"].append({"fact": "declared", "field": "rung", "in": [1]})' "case reads fact #2: field in: must be a non-empty list of strings"
+bad 'del e["fnone"]["facts"][0]["field"]' "case fnone fact #1: field field: missing" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][0]["lines"] = 1' "case fnone fact #1: field lines: unknown field for field_lines" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][0]["field"] = "Checks"' "case fnone fact #1: field field: must be a field name" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][0]["none"] = "yes"' "case fnone fact #1: field none: only true" "$t/fl-good" fl
+bad 'e["fexact"]["facts"][0]["includes"] = [{"klass": "exact"}]' "case fexact fact #1: field includes: must be a non-empty list of non-empty objects of string values, keys from" "$t/fl-good" fl
+bad 'e["fexact"]["facts"][0]["every"] = {"class": "exact"}' "case fexact fact #1: field every: must be a non-empty object of string lists" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][3] = {"fact": "branch_paths"}' "case fnone fact #4: field untouched: missing" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][3]["untouched"] = "scripts/"' "case fnone fact #4: field untouched: must be a non-empty list of relative paths" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][3]["touched"] = ["../x"]' "case fnone fact #4: field touched: must be a non-empty list of relative paths" "$t/fl-good" fl
+bad 'e["fnone"]["facts"][3]["paths"] = []' "case fnone fact #4: field paths: unknown field for branch_paths" "$t/fl-good" fl
 bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody.md"
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
@@ -615,4 +670,4 @@ run 0 "$C" "$t/evals"
 bad 'e["t3"]["labelled_by"] = " "' "jb/reference/expectations.json case t3: field labelled_by: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["relabel"] = "two\nlines"' "jb/reference/expectations.json case t3: field relabel: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["note"] = "x"' "jb/reference/expectations.json case t3: field note: unknown field" "$t/jg-good" jb
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel)"

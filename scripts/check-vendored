@@ -2,9 +2,10 @@
 """Every vendored skill folder equals upstream at its pin plus its patches (skills spec #acceptance-patch-only).
 
 Gate (default, `just check-vendored`, inside `just check`): no network, ever.
-For each Skillfile `github` entry, .agents/skills/<name>/ must be byte-identical
-to what `skillfile install` produces from the cached upstream at the pin plus
-.skillfile/patches/ (skillfile's generated .meta aside). Exit 1 names skill and file.
+For each Skillfile `github` entry, compares .agents/skills/<name>/ as the git index
+holds it (bytes and git file mode) with what `skillfile install` produces from the
+cached upstream at the pin plus .skillfile/patches/ (skillfile's generated .meta
+aside; expected modes: upstream's, per #143). Exit 1 names skill and file.
 - Upstream is read from a git object cache keyed by pin SHA and authenticated
   offline: the commit object must hash to the pin, and every tree and blob on the
   way to the entry's files must hash to its object id. Tampered or incomplete: exit 1.
@@ -195,6 +196,47 @@ def files(d):
     return out, odd
 
 
+def committed(name):
+    """(rel path -> bytes and rel path -> git mode of every file the git index holds under
+    .agents/skills/<name>, skillfile's generated files aside; rel path -> why, for an entry a
+    vendored folder cannot hold: a symlink (file or folder), a submodule, an unmerged path)."""
+    d = f"{SKILLS}/{name}"
+    r = subprocess.run(["git", "-C", root, "ls-files", "-s", "-z", "--", f":(literal){d}"], capture_output=True)
+    gd = subprocess.run(["git", "-C", root, "rev-parse", "--absolute-git-dir"], capture_output=True, text=True)
+    if r.returncode or gd.returncode:
+        die(f"git cannot read the index of {root}: {(r.stderr or gd.stderr.encode()).decode(errors='replace').strip()}; "
+            f"the gate compares the committed skill folders")
+    out, modes, odd, blobs = {}, {}, {}, {}
+    for rec in r.stdout.split(b"\0"):
+        if not rec:
+            continue
+        meta, path = rec.split(b"\t", 1)
+        mode, oid, stage = meta.decode().split()
+        path = path.decode("utf-8", "surrogateescape")
+        rel = "." if path == d else path[len(d) + 1:]
+        if stage != "0":
+            odd[rel] = "is unmerged"
+        elif mode == "120000":
+            blobs[rel] = (mode, oid)
+        elif mode == "160000":
+            odd[rel] = "is a submodule"
+        elif rel not in GENERATED:
+            blobs[rel] = (mode, oid)
+    o = Objects(gd.stdout.strip())
+    try:
+        for rel, (mode, oid) in blobs.items():
+            data = o.get(oid, "blob")
+            if mode == "120000":
+                odd[rel] = f"is a symlink (to {data.decode(errors='replace')})"
+            else:
+                out[rel], modes[rel] = data, mode
+    except Unauthentic as e:
+        die(f"{name}: the git index of {root} names a blob git cannot read: {e}")
+    finally:
+        o.close()
+    return out, modes, odd
+
+
 def bounded(cmd, timeout=None, **kw):
     """Run cmd under one wall-clock bound, TIMEOUT, in its own process group: on expiry the whole
     group (git's remote helpers included) is killed. timeout overrides TIMEOUT. Returns the CompletedProcess or None on timeout."""
@@ -295,11 +337,12 @@ def gate(ents, vendored):
         for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
             if kind == "local" and os.path.isdir(os.path.join(root, src)):
                 shutil.copytree(os.path.join(root, src), os.path.join(work, src), symlinks=True)
+        upmodes = {}
         for _, name, source, path in vendored:
             if not os.path.isdir(gitdir(source)):
                 die(f"{name}: upstream {source} is not cached at {gitdir(source)}; {FETCH}")
             try:
-                tree = upstream(source, path)
+                tree = upstream(source, path, upmodes.setdefault(name, {}))
             except Unauthentic as e:
                 die(f"{name}: cached upstream {source} {path} fails authentication: {e}; {FETCH}")
             repo, sha = source.split("@", 1)
@@ -324,7 +367,7 @@ def gate(ents, vendored):
         bad = 0
         for _, name, source, path in vendored:
             want_files, made_odd = files(os.path.join(work, SKILLS, name))
-            have, odd = files(os.path.join(root, SKILLS, name))
+            have, have_modes, odd = committed(name)
             origin = f"{source.split('@')[0]}@{source.split('@')[1][:7]} {path} plus .skillfile/patches/skills/{name}/"
             for rel, why in sorted(made_odd.items()):
                 print(f"{TAG}: {name}: skillfile's install of {origin} has {rel}, which {why}", file=sys.stderr); bad += 1
@@ -344,6 +387,9 @@ def gate(ents, vendored):
                                              "upstream+patch", "committed", lineterm="", n=1)
                     for line in list(d)[:20]:
                         print(f"    {line}", file=sys.stderr)
+                elif have_modes[rel] != upmodes[name].get(rel, "100644"):
+                    print(f"{TAG}: {name}: {shown} has git mode {have_modes[rel]}, upstream {origin} has "
+                          f"{upmodes[name].get(rel, '100644')}", file=sys.stderr)
                 else:
                     continue
                 bad += 1

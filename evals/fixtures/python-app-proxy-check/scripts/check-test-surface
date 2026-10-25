@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# Tests drive the app through its CLI, never an internal function (AGENTS.md Rules, ticket T2):
+# fail on any test that imports app.core or calls a private app.cli helper.
+set -euo pipefail
+status=0
+while IFS= read -r hit; do
+  echo "check-test-surface: $hit: drive the app through app.cli.main or the app command" >&2
+  status=1
+done < <(grep -nE '^\s*(from app\.core|import app\.core)\b|app\.cli\._[a-z]' tests/*.py || true)
+exit "$status"

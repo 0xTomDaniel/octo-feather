@@ -93,9 +93,12 @@ cat > "$t/bin/pi" <<'EOF'
 # Fake judge: FAKE_QC picks the reply; `escape` tries every way out and prints ESCAPE per success.
 [[ "${1:-}" == --version ]] && exit 0
 [[ -z "${LINEAR_API_KEY+x}" ]] || echo "LINEAR KEY IN JUDGE ENV"   # remote#acceptance-linear-key-qc
-ok='```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "ok", "why": "shown"}]}\n```\n'
+h="$(grep -o 'head [0-9a-f]\{40\}' <<< "$*" | head -1 | cut -d' ' -f2)"   # the judged head, from the brief
+ok='```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "ok", "why": "shown"}]}\n```\n'
 case "$FAKE_QC" in
-  mixed) printf 'done\n```json\n{"head": "x", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
+  dup) printf '```json\n{"head": "%s", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "a", "output": "ok"}, {"id": "acceptance-a", "verdict": "fail", "command": "a", "output": "no"}, {"id": "acceptance-b", "verdict": "pass", "command": "b", "output": "ok"}]}\n```\n' "$h" ;;
+  head) printf "${ok//$h/0000000000000000000000000000000000000000}" ;;
+  mixed) printf 'done\n```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
   garbage) echo "I think it works." ;;
   argv) python3 -c 'import json, sys; print("ARGV", json.dumps(sys.argv[1:]))' "$@"; printf "$ok" ;;
   hang) exec sleep 3040@TOK@ ;;
@@ -217,6 +220,12 @@ grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "no pre-run
 grep -q "qc sandbox: ok   worktree $PWD is an overlay" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" \
   || fail "no overlay / persistent-writable proof: $out"
 grep -q "qc sandbox: ok   vendored-skill cache: none on the box, nothing bound" <<< "$out" || fail "absent cache: want no bind, no failure: $out"
+# issue-lifecycle#acceptance-qc-interim, #acceptance-one-head (#121 D19 D20): a duplicate id, another head.
+run 3 dup $st 5 acceptance-a acceptance-b                                                       # acceptance-a judged twice
+grep -q "judged more than once: acceptance-a" <<< "$out" || fail "duplicate id not named: $out"
+run 3 head $st 5 acceptance-a                                                                   # report for another head
+grep -q "report head '0000000000000000000000000000000000000000' is not the judged head $before" <<< "$out" || fail "wrong head not named: $out"
+[[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain)" ]] || fail "unusable report changed the status file"
 
 # --no-sandbox: printed, report written, status never changes.
 run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox

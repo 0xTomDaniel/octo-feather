@@ -29,17 +29,39 @@ default:
 check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
     @echo "just check: ok"
 
-# shellcheck when installed, else bash -n; python scripts byte-compile.
+# shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
+# runs_python reads each file's shebang line; which shebangs count as python: #121 D2.
 check-scripts:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
+    runs_python() {
+      local l w i=0 x; IFS= read -r l < "$1" || true
+      [[ "$l" == '#!'* ]] || return 1
+      read -ra w <<<"${l#??}"
+      if [[ "${w[0]:-}" == */env || "${w[0]:-}" == env ]]; then
+        for ((i = 1; i < ${#w[@]}; i++)); do
+          case "${w[i]}" in
+            -u|--unset|-C|--chdir) i=$((i + 1)) ;;
+            -S?*) w[i]="${w[i]#-S}"; break ;;
+            -*|*=*) ;;
+            *) break ;;
+          esac
+        done
+      fi
+      x="${w[i]:-}"; x="${x##*/}"
+      [[ "$x" =~ ^(python|pypy)[0-9.]*$ ]] && return 0
+      [[ "$x" == uv && "${w[i + 1]:-}" == run ]] || return 1
+      for x in "${w[@]:i + 2}"; do [[ "$x" == --script ]] && return 0; done
+      return 1
+    }
     files=(); py=()
     for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
       [[ -f "$f" ]] || continue   # tests/fixtures/ holds data, not scripts
-      if head -1 "$f" | grep -q python; then py+=("$f"); else files+=("$f"); fi
+      if runs_python "$f"; then py+=("$f"); else files+=("$f"); fi
     done
-    for f in "${py[@]}"; do python3 -c 'import ast,sys; ast.parse(open(sys.argv[1]).read(), sys.argv[1])' "$f"; done
+    # compile(), not ast.parse: byte-compile refuses what parses but cannot run (top-level return, break, yield).
+    for f in "${py[@]}"; do python3 -c 'import sys; compile(open(sys.argv[1], "rb").read(), sys.argv[1], "exec", dont_inherit=True)' "$f"; done
     echo "python: ok (${#py[@]} files)"
     if command -v shellcheck >/dev/null; then
       shellcheck -S warning "${files[@]}"; echo "scripts: shellcheck ok (${#files[@]} files)"
@@ -51,7 +73,8 @@ check-scripts:
 # No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
 # LICENSE, this justfile (docs/ also covers docs/specs/) and
-# .skillfile/ patches, which quote the upstream lines they remove.
+# .skillfile/ patches, which quote the upstream lines they remove. The lane branch default
+# exempts only docs/adr/0011 (below).
 check-refs:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -100,8 +123,10 @@ check-refs:
     elif [[ -n "$found" ]]; then
       printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
-    # The lane branch is stated once, in docs/adr/0011: fixed strings of a slugged branch default, no regex (docs/adr/0008).
-    if grep -nHF -e 'octo-feather/gh<' -e 'gh<N>-<' "${files[@]}"; then
+    # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, the one file not scanned.
+    # The patterns bracket a letter so this justfile does not match itself.
+    mapfile -t lane < <(git ls-files | grep -vE '^docs/adr/0011-')
+    if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
     # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
     if git ls-files -z .agents/skills agents | xargs -0 grep -nHF -e 'Skill tool' -e 'Skill call'; then
@@ -111,15 +136,14 @@ check-refs:
     [[ "$bad" == 0 ]] && echo "refs: ok (${#files[@]} files)"
     exit "$bad"
 
-# No em or en dashes in kit text. Exempt upstream copies: docs/specs/ (Spec Chat's vendored runtime), LICENSE and
-# vendored skills (the Skillfile's github entries in .agents/skills/, .skillfile/patches/),
-# which keep upstream wording.
+# Dash rule and its upstream carve-outs: #121 D7. Scans tracked files minus docs/specs/.viz/, docs/specs/.style/,
+# LICENSE, the Skillfile's github entries in .agents/skills/ and .skillfile/.
 check-dashes:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
+    mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/\.(viz|style)/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
     if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
@@ -135,17 +159,19 @@ check-decision-log:
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
 # Structure only; each template's own `just check` runs in its repo (deterministic, no network here).
+# code() drops `#` comments (line start or after white space) before the hook and CI greps (#118).
 check-templates:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
+    code() { sed -E 's/(^|[[:space:]])#.*//' "$1"; }
     n=0
     for t in templates/*/; do
       t="${t%/}"
       grep -q '^Repo skills:' "$t/AGENTS.md" || { echo "check-templates: $t/AGENTS.md lacks a 'Repo skills:' line" >&2; exit 1; }
       grep -q '^check:' "$t/justfile" && grep -q '^integrate ' "$t/justfile" && grep -q '^q[c] ' "$t/justfile" || { echo "check-templates: $t/justfile needs check, integrate and product-judge recipes (docs/adr/0022)" >&2; exit 1; }
-      [[ -x "$t/.githooks/pre-commit" ]] && grep -q 'just check' "$t/.githooks/pre-commit" || { echo "check-templates: $t/.githooks/pre-commit must run just check" >&2; exit 1; }
-      grep -q 'run: just check' "$t/.github/workflows/check.yml" || { echo "check-templates: $t CI must run just check" >&2; exit 1; }
+      [[ -x "$t/.githooks/pre-commit" ]] && grep -qE '(^|[^[:alnum:]_-])just check([^[:alnum:]_-]|$)' <(code "$t/.githooks/pre-commit") || { echo "check-templates: $t/.githooks/pre-commit must run just check" >&2; exit 1; }
+      grep -qE 'run: just check([^[:alnum:]_-]|$)' <(code "$t/.github/workflows/check.yml") || { echo "check-templates: $t CI must run just check" >&2; exit 1; }
       n=$((n + 1))
     done
     echo "templates: ok ($n)"
@@ -206,7 +232,7 @@ install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
-    for t in herdr pi gh jq git just python3; do
+    for t in herdr pi gh jq git just python3 node; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done

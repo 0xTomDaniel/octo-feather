@@ -6,7 +6,8 @@ read-only git only: whether the smoke is adequate is review's judgment.
 
 - Range: merge-base(BASE, HEAD)..HEAD.
 - Role paths: files the range diff changes under agents/*.md, .agents/skills/**.md,
-  .skillfile/patches/**.
+  .skillfile/patches/** (git diff --no-renames -z: a rename reads as its old path
+  deleted, names NUL-separated; #121 N5 N6).
 - Opt-out: a role path is exempt when every non-merge commit in the range touching it
   carries a non-empty `Behaviour-neutral: <reason>` trailer (at least one such commit).
   Each opt-out is printed on every run.
@@ -17,7 +18,7 @@ read-only git only: whether the smoke is adequate is review's judgment.
   deleted, or the incident that justifies it). A fact, never its meaning.
 - Per-path smoke (#93): every such path is named on a `Smoke: <path> ...` line of one of
   those evidence files (a token equal to the path, or a token ending in `/` that is its
-  directory prefix; backticks and commas stripped). One evidence file no longer covers
+  directory prefix; named() below, token bounds per #121 N7). One evidence file no longer covers
   every path: lanes gh71 (director.md, evidence ran only the corrector) and gh67
   (implementer.md, corrector.md, no run at all) passed with an unrelated smoke file.
   Whether the named run exercised the path stays with review.
@@ -49,7 +50,7 @@ ci = bool(os.environ.get("CI") or os.environ.get("GITHUB_ACTIONS"))
 
 
 def git(*args):
-    r = subprocess.run(["git", "-C", root, *args], capture_output=True, text=True)
+    r = subprocess.run(["git", "-C", root, *args], capture_output=True, encoding="utf-8", errors="surrogateescape")
     return r.stdout if r.returncode == 0 else None
 
 
@@ -77,19 +78,19 @@ base = next((c for c in cands if commit(c)), None) or no_base(f"no base ref ({',
 mb = (git("merge-base", base, head) or "").strip() or no_base(f"no merge base of {base} and {a.head} (shallow clone?)")
 rng = f"{mb}..{head}"
 
-changed = git("diff", "--name-only", mb, head).split()
+changed = [f for f in git("diff", "--name-only", "--no-renames", "-z", mb, head).split("\0") if f]
 roles = [f for f in changed if ROLE.match(f)]
 if not roles:
     print(f"behavior smoke: ok (no role path changed since {mb[:7]})")
     sys.exit(0)
 
 # One pass over the range's non-merge commits: sha, message trailer, files.
-log = git("log", "--no-merges", "--name-only", "--format=%x00%H%x01%B%x01", rng)
+log = git("log", "--no-merges", "--no-renames", "-z", "--name-only", "--format=%x02%H%x01%B%x01", rng)
 touching = {f: [] for f in roles}  # role path -> [(sha, reason or None)]
-for rec in log.split("\0")[1:]:
+for rec in log.split("\x02")[1:]:
     sha, body, files = rec.split("\x01", 2)
     m = TRAILER.search(body)
-    for f in files.split():
+    for f in files.partition("\0\n")[2].split("\0"):
         if f in touching:
             touching[f].append((sha, m.group(1).strip() if m else None))
 
@@ -105,15 +106,21 @@ if not need:
     print(f"behavior smoke: ok ({len(roles)} role paths, all opted out)")
     sys.exit(0)
 
-am = git("diff", "--name-only", "--no-renames", "--diff-filter=AM", mb, head).split()
+am = [f for f in git("diff", "--name-only", "--no-renames", "-z", "--diff-filter=AM", mb, head).split("\0") if f]
 evidence = [f for f in am if EVIDENCE.match(f)]
 owed = [f for f in am if OWED.match(f)]
 pruned = [f for f in need if PRUNE.match(f)]
 texts = {f: git("show", f"{head}:{f}") or "" for f in evidence}
 removed = not pruned or any(REMOVED.search(t) for t in texts.values())
-tokens = {tok.strip("`,;") for t in texts.values() for line in SMOKE.findall(t) for tok in line.replace(",", " ").split()}
-tokens.discard("")
-unsmoked = [f for f in need if not any(f == t or (t.endswith("/") and f.startswith(t)) for t in tokens)]
+lines = [line for t in texts.values() for line in SMOKE.findall(t)]
+
+
+def named(p):  # p literally, as one token; its bounds: #121 N7
+    return re.compile(r"(?:^|(?<=[\s`,;]))" + re.escape(p) + r"`?(?:[,;]|[.:!?]*`?(?=\s|$))")
+
+
+unsmoked = [f for f in need if not any(named(p).search(line) for p in [f] + [f[:i + 1] for i, c in enumerate(f) if c == "/"]
+                                       for line in lines)]
 if evidence and owed and removed and not unsmoked:
     print(f"behavior smoke: ok ({len(need)} role paths, evidence {', '.join(evidence)}, owed evals {', '.join(owed)}"
           f"{f', {len(exempt)} opted out' if exempt else ''})")

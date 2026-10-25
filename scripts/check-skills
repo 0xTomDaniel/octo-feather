@@ -13,7 +13,13 @@ import glob, importlib.machinery, importlib.util, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
 REQUIRED = ("name", "description")
-KEY = re.compile(r"([A-Za-z0-9_-]+):(?:[ \t]+(.*))?$")
+# KEY: a block mapping key, plain or quoted, as YAML reads it (skills spec #acceptance-skill-frontmatter, #141).
+KEY = re.compile(r"""("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z0-9_-]+) *:(?:[ \t]+(.*))?$""")
+# YAML double-quoted escapes: one character, or \x \u \U with 2, 4, 8 hex digits.
+ESCAPES = {"0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r",
+           "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\", "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029"}
+HEX = {"x": 2, "u": 4, "U": 8}
+DQ_ESCAPE = re.compile(r"\\(?:([xuU])([0-9A-Fa-f]*)|(.))")
 BLOCK = re.compile(r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$")
 NULLS = {"", "~", "null", "Null", "NULL"}
 # Spec skills#tracker-scripts: the same names in every tracker skill.
@@ -44,6 +50,25 @@ def tracker_problems():
             elif not os.access(p, os.X_OK):
                 out.append((skill, f"tracker script {s} is not executable (chmod +x .agents/skills/{skill}/scripts/{s})"))
     return out, have
+
+
+def key_name(raw):
+    """The key a plain or quoted YAML scalar spells: quotes removed, escapes decoded."""
+    if raw[0] == "'":
+        return raw[1:-1].replace("''", "'")
+    if raw[0] != '"':
+        return raw
+
+    def one(m):
+        if m.group(1):
+            n = HEX[m.group(1)]
+            if len(m.group(2)) < n:
+                raise ValueError(f"bad escape in key {raw}")
+            return chr(int(m.group(2)[:n], 16)) + m.group(2)[n:]
+        if m.group(3) not in ESCAPES:
+            raise ValueError(f"bad escape in key {raw}")
+        return ESCAPES[m.group(3)]
+    return DQ_ESCAPE.sub(one, raw[1:-1])
 
 
 def scalar_empty(inline, cont):
@@ -79,9 +104,14 @@ def problems(path):
     found = {}
     for i, line in enumerate(block):
         m = KEY.match(line)
-        if not m or m.group(1) not in REQUIRED:
+        if not m:
             continue
-        key = m.group(1)
+        try:
+            key = key_name(m.group(1))
+        except (ValueError, OverflowError) as e:
+            return [str(e)]
+        if key not in REQUIRED:
+            continue
         if key in found:
             return [f"duplicate {key}"]
         cont = []

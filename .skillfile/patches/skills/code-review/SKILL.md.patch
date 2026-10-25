@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1)
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1); issue #121 the scope the verdict reader reads (director ruling 2026-10-23)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -44,7 +44,7 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,31 @@
+@@ -55,35 +41,33 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
@@ -101,3 +101,5 @@
 +`Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
 +
 +List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
++
++The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:` and `Checks:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.

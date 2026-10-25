@@ -1,0 +1,30 @@
+# The one gate (AGENTS.md): agents, .githooks/pre-commit and CI run `just check`.
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+# Recipe arguments reach the shell as "$@", never as pasted text.
+set positional-arguments
+
+default:
+    @just --list
+
+# Install dependencies and the git hook.
+setup:
+    uv sync --locked
+    git config core.hooksPath .githooks
+
+# Lint, format, types, import boundaries, integration and E2E tests.
+check:
+    uv run --locked ruff check .
+    uv run --locked ruff format --check .
+    uv run --locked basedpyright
+    uv run --locked lint-imports
+    uv run --locked pytest -q
+    ./scripts/check-exec
+
+# Integrate worker commits onto lane gh<N> (octo-feather kit script on PATH).
+integrate issue +refs:
+    octo-feather-integrate "$@"
+
+# Product QC on the lane head: passed criteria become built (octo-feather kit script on PATH; never in check).
+qc $status $pr +$ids:
+    octo-feather-qc "$@"
