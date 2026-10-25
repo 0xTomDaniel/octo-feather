@@ -2,6 +2,7 @@
 
 Smoke: .agents/skills/code-review/ (Verdict step, **Report fields**), .skillfile/patches/skills/code-review/SKILL.md.patch, agents/implementer.md (Output), agents/code-reviewer.md (Output); measured by evals/ladder implementer-exec-bit and reviewer-proxy-blocks, live runs by the supervisor at lane head (lane Pi quota), results to be appended below.
 Removed: agents/implementer.md Output's inline copy of the check field shape (`Checks: none` and the `Check: ... | class: exact` template stacked as two bare lines), which all 3 baseline implementers copied as a `Checks:` heading over their `Check:` line; agents/code-reviewer.md Output's restated field list (`Check:` lines or `Checks: none`, `Owner:` lines or `Owners: none`); the code-review Verdict step's "one verdict: blocked if any finding blocks, else clear", which named no `Verdict:` label (gh122 `## Verdict: blocking` heading). Incident: finding classes `built-check-reported-none`, `verdict-heading-not-field` (lanes/archive/gh122.handoffs.jsonl), `checks-header-not-field` (lanes/gh157.handoffs.jsonl).
+Removed: the docs/owed-evals/118.md entry "Code reviewer, a proxy check blocks" (round 2). It stayed open because the contract did not fix the column-0 Verdict field and the gh122 head held it in only 1 of 2 runs (20261024T061942Z-d2714a wrote `## Verdict: blocking`). The code-review Verdict step's Report fields now fixes that field (1de2776), and reviewer-proxy-blocks passes 3/3 at lane head 685edd8 and 3/3 at main bfb5bc8 (below).
 
 ## Baseline, main bfb5bc8 (supervisor's runs)
 
@@ -35,6 +36,25 @@ The `Checks:` heading is refused; the heading, bullet and bold Verdict give no `
 
 `just check-vendored`: ok (code-review = upstream pin plus regenerated patch).
 
-## Head (supervisor's live runs, pending)
+## Head (supervisor's live runs, `--kit-ref 685edd8` = bfb5bc8 + 1de2776, serial)
 
-To append: `just qa --case implementer-exec-bit` and `--case reviewer-proxy-blocks` at lane head, a few runs each; regression worth one run each, since the implementer now reads the field form by pointer: implementer-test-vs-check (`Checks: none`), implementer-secret-grep.
+implementer-exec-bit, 3/3 PASS (before: 0/3 at bfb5bc8). Separates.
+
+- PASS 20261025T012529Z-2d0c2c
+- PASS 20261025T012658Z-092c02
+- PASS 20261025T012842Z-51fa6d
+
+reviewer-proxy-blocks, 3/3 PASS (before: 3/3 at bfb5bc8; 1 of 2 at gh122 head, run 20261024T061942Z-d2714a, `## Verdict: blocking`).
+
+- PASS 20261025T013047Z-fccddb
+- PASS 20261025T013150Z-bfabd0
+- PASS 20261025T013304Z-2b85ef
+
+reviewer-proxy-blocks does not separate this round: it passed 3/3 at main before the change too. Its failing shape (the heading) is on record only from the gh122 run; this round shows the head holds the field, not that the change caused it.
+
+Regression, one run each (the implementer now reaches the form by pointer):
+
+- PASS implementer-test-vs-check 20261025T013442Z-e8abd6 (`Checks: none`)
+- PASS implementer-secret-grep 20261025T013532Z-12f958
+
+Pointer reached: every head transcript holds code-review/SKILL.md content (grep count 7 to 10 per transcript); 0 in the 3 baseline implementer-exec-bit transcripts.
