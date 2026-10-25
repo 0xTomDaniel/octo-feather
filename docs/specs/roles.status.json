@@ -41,6 +41,10 @@
     "acceptance-supervise-layout-linear": {
       "status": "built",
       "pr": 103
+    },
+    "acceptance-codemode-every-role": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
