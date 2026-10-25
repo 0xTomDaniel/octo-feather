@@ -46,3 +46,4 @@ Removed: agents/corrector.md and agents/code-reviewer.md clauses that restated c
 ## Review round 2 (head a48be95, class duplicated-rule)
 
 Removed: the code-review patch reason line's issue #160 clause, which restated step 4 `Owner:` paragraphs; it now names the issue and points (Verdict step, Owner paragraphs). The #118, #124 and #157 clauses on the same line, also restating, point the same way (writer search, not listed by review). Also this file's round 1 Removed line, whose parenthesis restated them. Patch payload unchanged; `just check-vendored` ok. Pointer-only, no rerun.
+Removed: the same reason line's ADR 0007 clause restating the Verdict step's Block rule and its ADR 0015 clause restating the escalation route; each now names the decision and points (Verdict step, Block; intro line). Owner ruling relayed by supervisor, round 2. Pointer-only, no rerun.
