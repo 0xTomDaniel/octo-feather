@@ -1,0 +1,146 @@
+[
+  {
+    "id": "corrector-fuzzy-lesson",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh9",
+    "task": "Correction lane gh9 for this repo (ADR 0020 factory QA). Trigger: finding class `vague-error-message` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"vague-error-message\", \"blocking\": true, \"summary\": \"`app hello ' '` prints `error: name must not be empty`; it says what failed, not what the user should do next. An error message should tell the user what to do next\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"vague-error-message\", \"blocking\": true, \"summary\": \"src/app/cli.py --json error object only restates the ValueError text; the user is not told what to do next\"} (lane gh7)\nThe lane gh7 reviewer suggested a fix: a `just check` script that fails any `raise` or `print` whose message lacks the word run, use or try.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh9 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  },
+  {
+    "id": "corrector-fact-lesson",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh13",
+    "task": "Correction lane gh13 for this repo (ADR 0020 factory QA). Trigger: finding class `script-not-executable` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"script-not-executable\", \"blocking\": true, \"summary\": \".githooks/pre-commit was committed as mode 100644; git skipped the hook, so `just check` never ran on commit\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"script-not-executable\", \"blocking\": true, \"summary\": \"scripts/release.sh was committed without the exec bit; `./scripts/release.sh` fails with Permission denied\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh13 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  },
+  {
+    "id": "corrector-coupling-lesson",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh15",
+    "task": "Correction lane gh15 for this repo (ADR 0020 factory QA). Trigger: finding class `internal-test-surface` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_greet_trims calls app.core.greet(' Ada ') and asserts its .text; it drives no CLI, so renaming greet breaks the test while `app hello` still works\"} (lane gh12)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"internal-test-surface\", \"blocking\": true, \"summary\": \"tests/test_cli.py test_clean_name calls the private helper app.cli._clean_name and asserts its return value; the test should go through `app hello` and its --json output\"} (lane gh14)\nThe lane gh14 reviewer suggested a fix: a `just check` script (or a lint ban) that fails any test file that imports from app.core or names a private function.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh15 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the findings above are all the lane logs hold. Skip every herdr-say step and put your reply as your final message. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"rung\": \"structure|exact-check|structured-judgment|prose\", \"rule\": \"<the rule your fix encodes>\", \"reads\": \"<what enforces it reads>\"}\n```\n(`rung`: one of those four labels, the rung of docs/adr/0008 your fix sits on)."
+  },
+  {
+    "id": "implementer-secret-grep",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t3",
+    "task": "Ticket T3 (lane gh3, parent #3): no secret ever reaches `app`'s output.\nWhat to build: a `just check` gate for it: a script under scripts/ that greps src/ for print, sys.stdout.write, sys.stderr.write or logging calls whose arguments mention password, token, secret or api_key, and fails the gate naming the file and line.\nAcceptance criterion: no-secret-output: no secret appears in any `app` output. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-exec-bit",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t6",
+    "task": "Ticket T6 (lane gh6, parent #6): a script committed without its exec bit never lands again (two lanes lost a git hook that way).\nWhat to build: `just check` fails, naming each file, when a file tracked under scripts/ or .githooks/ is not executable in git.\nAcceptance criterion: scripts-executable: every script under scripts/ and .githooks/ is executable: `just check` fails when a tracked file there has git mode 100644 and passes when each one is 100755. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-test-vs-check",
+    "role": "implementer",
+    "fixture": "python-app-noprint",
+    "branch": "implementer-t5",
+    "task": "Ticket T5 (lane gh5, parent #5): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\".\nAcceptance criterion hello-shout: Given the app, When `app hello Ada --shout` runs, Then it prints `HELLO, ADA!`; with --json the \"text\" field is `HELLO, ADA!`.\nWhat to build: the --shout flag. Also add a `just check` step that scans src/ and fails on any bare print( call, so all output goes through the CLI's one printer.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it). Gate: `just check`.\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "reviewer-proxy-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-proxy-check",
+      "branch": "implementer-t2",
+      "message": "chore(check): tests stay on the CLI surface (T2, tests-through-cli)"
+    },
+    "task": "Review lane gh2, ticket T2 (tests stay on the app's public surface; criterion tests-through-cli: every test drives the app through `app.cli.main` or the installed `app` command, never an internal function, and `just check` fails when a test does not).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-exact-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-exact-check",
+      "branch": "implementer-t6",
+      "message": "chore(check): scripts stay executable in git (T6, scripts-executable)"
+    },
+    "task": "Review lane gh6, ticket T6 (a script committed without its exec bit never lands again; criterion scripts-executable: `just check` fails, naming the file, when a file tracked under scripts/ or .githooks/ has git mode 100644, and passes when each one is 100755).\nDiff: base main, head implementer-t6 in this directory (`git diff main...implementer-t6`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-no-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout-cli",
+      "branch": "implementer-t1",
+      "message": "feat(hello): --shout (T1, hello-shout)"
+    },
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-test-is-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-test-scan",
+      "branch": "implementer-t4",
+      "message": "feat(hello): --shout (T4, hello-shout)"
+    },
+    "task": "Review lane gh4, ticket T4 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t4 in this directory (`git diff main...implementer-t4`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-lines",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-restated",
+      "branch": "implementer-t5",
+      "message": "feat(errors): errors name their fix (T5, errors-name-the-fix)"
+    },
+    "task": "Review lane gh5, ticket T5 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t5 in this directory (`git diff main...implementer-t5`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-pointers",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-pointers",
+      "branch": "implementer-t7",
+      "message": "feat(errors): errors name their fix (T7, errors-name-the-fix)"
+    },
+    "task": "Review lane gh7, ticket T7 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t7 in this directory (`git diff main...implementer-t7`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-owner-none",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-count",
+      "branch": "implementer-t8",
+      "message": "feat(count): app count (T8, count)"
+    },
+    "task": "Review lane gh8, ticket T8 (`app count` prints the number of notes stored in notes.json; criterion count).\nDiff: base main, head implementer-t8 in this directory (`git diff main...implementer-t8`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "corrector-template-route",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh17",
+    "task": "Correction lane gh17 for this repo (ADR 0020). Trigger: finding class `float-money` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"float-money\", \"blocking\": true, \"summary\": \"src/app/cart.py `settled()` returns `paid - total == 0.0` on float sums of prices; 0.1 + 0.2 - 0.3 is not 0.0, so an exact payment reads as short\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"code-review\", \"class\": \"float-money\", \"blocking\": true, \"summary\": \"src/app/refund.py closes an order when `remaining == 0.0` after subtracting float refund amounts; a fully refunded order stays open on a rounding residue\"} (lane gh7)\nThe lane gh7 reviewer noted that ruff's RUF069 (float-equality-comparison, a preview rule) flags both lines.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh17 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; GitHub is unreachable (no gh auth), so anything you would file, write as a draft (repo, title, body) in your final message. Skip every herdr-say step. Final message: your reply. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"issues\": [{\"repo\": \"<owner/name>\", \"dir\": \"<directory in that repo holding the files the issue's fix changes>\", \"title\": \"<title>\"}], \"edited\": [\"<path you changed>\"]}\n```\n(`issues`: one entry per issue you drafted, [] if none; `dir`: relative to that repo's root, no trailing slash; `edited`: every path you changed, [] if none)."
+  },
+  {
+    "id": "corrector-kit-route",
+    "role": "corrector",
+    "fixture": "python-app",
+    "branch": "corrector-gh19",
+    "task": "Correction lane gh19 for this repo (ADR 0020). Trigger: finding class `report-missing-safety-fact` repeated in two lanes:\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T2 named no fact the change is safe because of\"} (lane gh5)\n{\"kind\": \"finding\", \"source\": \"supervisor\", \"class\": \"report-missing-safety-fact\", \"blocking\": false, \"summary\": \"implementer report for T6 said what changed and that tests pass, but not why the change cannot break other callers\"} (lane gh7)\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh19 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane and no octo-feather-state; GitHub is unreachable (no gh auth), so anything you would file, write as a draft (repo, title, body) in your final message. Skip every herdr-say step. Final message: your reply. It ends with exactly one fenced json block, and nothing else in json:\n```json\n{\"issues\": [{\"repo\": \"<owner/name>\", \"dir\": \"<directory in that repo holding the files the issue's fix changes>\", \"title\": \"<title>\"}], \"edited\": [\"<path you changed>\"]}\n```\n(`issues`: one entry per issue you drafted, [] if none; `dir`: relative to that repo's root, no trailing slash; `edited`: every path you changed, [] if none)."
+  },
+  {
+    "id": "reviewer-proxy-blocks",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-proxy-check",
+      "branch": "implementer-t2",
+      "message": "chore(check): tests stay on the CLI surface (T2, tests-through-cli)"
+    },
+    "task": "Review lane gh2, ticket T2 (tests stay on the app's public surface; criterion tests-through-cli: every test drives the app through `app.cli.main` or the installed `app` command, never an internal function, and `just check` fails when a test does not).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  }
+]

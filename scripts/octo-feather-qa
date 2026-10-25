@@ -42,6 +42,10 @@ truncated (structuredContent.truncated, or its `[Showing lines`, `[N more lines 
 truncated.` notice) never counts, nor does an ls, a grep or a head of a part. No command text is read.
 A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
 stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
+So do `field_lines` (the final message's column-0 field lines, parsed by running the head kit's
+`octo-feather-lane fields -` on it, the parser `octo-feather-lane verdict` uses) and `branch_paths` (the
+watcher's qa_branch event when pi ends: every path the case repo changed against main's commit at setup,
+committed, uncommitted or untracked, files git does not ignore).
 
 Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
 exact check, rung 3 structured judgment, Who builds what) and docs/adr/0020 (Where the fix goes).
@@ -308,6 +312,90 @@ def judge_includes(fact, final, last):
     return "pass", f"{head}: holds {'; '.join(json.dumps(it) for it in items)}"
 
 
+def final_text(head, final, last):
+    """(status, text): the final assistant message's text, status None; open before the run's end."""
+    if not final:
+        return "open", f"{head}: read once pi ends"
+    stop, text = last or (None, None)
+    if stop not in (None, "exit"):
+        return "fail", f"{head}: run stopped ({stop}) before its final message"
+    if text is None:
+        return "fail", f"{head}: no final assistant message"
+    return None, text
+
+
+def holds(line, item):
+    return all(v in line.get(k, ()) if isinstance(line.get(k), list) else line.get(k) == v for k, v in item.items())
+
+
+def judge_fields(fact, final, last):
+    """The final message's column-0 field F, parsed by `octo-feather-lane fields` (one parser, verdict's): present and
+    well formed, then none, includes and every (check-evals --help)."""
+    f = fact["field"]
+    head = f"field_lines {f}"
+    st, text = final_text(head, final, last)
+    if st:
+        return st, text
+    p = subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "fields", "-"], input=text, capture_output=True, text=True)
+    try:
+        got = json.loads(p.stdout)
+    except ValueError:
+        return "fail", f"{head}: octo-feather-lane fields exited {p.returncode}: {p.stderr.strip()[:200]}"
+    if f in ("Check", "Owner"):
+        rec = got[f]
+        if rec["errors"]:
+            return "fail", f"{head}: {'; '.join(rec['errors'])}"
+        lines = rec["lines"]
+    else:
+        lines = [{"text": v} for v in got["fields"].get(f, []) if v]
+        if not lines:
+            return "fail", f"{head}: no column-0 `{f}:` line with a value outside code blocks"
+    show_ = lambda ls: json.dumps(ls)[:300]
+    if fact.get("none"):
+        if not rec["none"]:
+            return "fail", f"{head}: {len(lines)} {f} line(s) {show_(lines)}, want `{f}s: none`"
+        return "pass", f"{head}: `{f}s: none`"
+    missing = [it for it in fact.get("includes", []) if not any(holds(l, it) for l in lines)]
+    if missing:
+        return "fail", f"{head}: no line with {'; '.join(json.dumps(m) for m in missing)} in {show_(lines)}"
+    every = fact.get("every", {})
+    off = [l for l in lines if not all(all(x in v for x in l.get(k, [])) if isinstance(l.get(k), list) else l.get(k) in v
+                                       for k, v in every.items())]
+    if off:
+        return "fail", f"{head}: {show_(off)} outside {json.dumps(every)}"
+    said = f"`{f}s: none`" if f in ("Check", "Owner") and not lines else f"{len(lines)} line(s) {show_(lines)}"
+    return "pass", f"{head}: {said}" + (f"; holds {'; '.join(json.dumps(i) for i in fact['includes'])}" if fact.get("includes") else "") \
+        + (f"; every line in {json.dumps(every)}" if every else "")
+
+
+def under(path, p):
+    return path.startswith(p) if p.endswith("/") else path == p
+
+
+def judge_branch(fact, final, last, lines):
+    """The paths the case repo changed against main at setup (the watcher's qa_branch event): none under untouched,
+    one under each touched."""
+    head = "branch_paths"
+    if not final:
+        return "open", f"{head}: read once pi ends"
+    stop = (last or (None, None))[0]
+    if stop not in (None, "exit"):
+        return "fail", f"{head}: run stopped ({stop}) before it ended"
+    ev = next((e for e in (safe_json(l) for l in reversed(lines or [])) if isinstance(e, dict) and e.get("type") == "qa_branch"), None)
+    if ev is None:
+        return "fail", f"{head}: no qa_branch record from the watcher"
+    paths = ev["paths"]
+    hit = [p for p in paths if any(under(p, u) for u in fact.get("untouched", []))]
+    if hit:
+        return "fail", f"{head}: changed {', '.join(hit)} (untouched: {', '.join(fact['untouched'])})"
+    lack = [t for t in fact.get("touched", []) if not any(under(p, t) for p in paths)]
+    if lack:
+        return "fail", f"{head}: nothing changed under {', '.join(lack)} (changed: {', '.join(paths) or 'nothing'})"
+    return "pass", f"{head}: changed {', '.join(paths) or 'nothing'}" + (
+        f"; none under {', '.join(fact['untouched'])}" if fact.get("untouched") else "") + (
+        f"; each of {', '.join(fact['touched'])} changed" if fact.get("touched") else "")
+
+
 def judge(fact, calls, final, runs=(), last=None, marks=None, lines=None):
     """(status, text): status pass, fail, or open (undecided so far; only when not final).
     marks: fs_marks of the run (the first tool call index of each filesystem target); lines: the event stream
@@ -316,6 +404,10 @@ def judge(fact, calls, final, runs=(), last=None, marks=None, lines=None):
         return judge_declared(fact, final, last)
     if fact["fact"] == "declared_includes":
         return judge_includes(fact, final, last)
+    if fact["fact"] == "field_lines":
+        return judge_fields(fact, final, last)
+    if fact["fact"] == "branch_paths":
+        return judge_branch(fact, final, last, lines)
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], list(runs), final, fact.get("live", ()))
     t, s, n = fact["fact"], fact["skill"], len(calls)
@@ -452,6 +544,7 @@ def watch(argv):
     cmd = argv[argv.index("--") + 1:]
     env, origin, log = prep(setup)
     known = set(git_out("rev-list", "--all").split())
+    main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base: main as set up
     snap = snapshot(origin, log)
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, start_new_session=True, env=env)
     why = []
@@ -491,6 +584,8 @@ def watch(argv):
         if len(seen) >= maxc:
             stop("max_tool_calls"); break
     rc = p.wait(); timer.cancel()
+    paths = (git_out("diff", "-z", "--name-only", "--no-renames", main0) + "\0" + git_out("ls-files", "-z", "-o", "--exclude-standard")).split("\0")
+    print(json.dumps({"type": "qa_branch", "base": main0, "paths": sorted(set(p for p in paths if p))}), flush=True)
     print(json.dumps({"type": "qa_watch", "stop": why[0] if why else "exit", "exit": rc, "tool_calls": len(seen)}), flush=True)
     return 0 if why else rc
 

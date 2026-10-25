@@ -1,0 +1,98 @@
+{
+  "corrector-fuzzy-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "structured-judgment", "prose"]
+      }
+    ]
+  },
+  "corrector-fact-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "exact-check"]
+      }
+    ]
+  },
+  "corrector-coupling-lesson": {
+    "facts": [
+      {
+        "fact": "declared",
+        "field": "rung",
+        "in": ["structure", "structured-judgment", "prose"]
+      }
+    ]
+  },
+  "implementer-secret-grep": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "every": {"class": ["exact"]}},
+      {"fact": "branch_paths", "untouched": ["scripts/", "justfile"]}
+    ]
+  },
+  "implementer-exec-bit": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"class": "exact"}], "every": {"class": ["exact"]}}
+    ]
+  },
+  "implementer-test-vs-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "none": true},
+      {"fact": "branch_paths", "untouched": ["pyproject.toml", "justfile", "scripts/"], "touched": ["src/"]}
+    ]
+  },
+  "reviewer-proxy-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-test-surface", "class": "proxy"}]}
+    ]
+  },
+  "reviewer-proxy-blocks": {
+    "facts": [
+      {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}
+    ]
+  },
+  "reviewer-exact-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-exec", "class": "exact"}]}
+    ]
+  },
+  "reviewer-no-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "none": true}
+    ]
+  },
+  "reviewer-test-is-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "tests/test_surface.py"}]}
+    ]
+  },
+  "reviewer-owner-lines": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "AGENTS.md"}, {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "agents/worker.md"}, {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "README.md"}]}
+    ]
+  },
+  "reviewer-owner-pointers": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md"}], "every": {"restated": []}}
+    ]
+  },
+  "reviewer-owner-none": {
+    "facts": [
+      {"fact": "field_lines", "field": "Owner", "none": true}
+    ]
+  },
+  "corrector-template-route": {
+    "facts": [
+      {"fact": "branch_paths", "untouched": ["templates/", "agents/", ".agents/", ".skillfile/"]},
+      {"fact": "declared_includes", "field": "issues", "items": [{"repo": "0xTomDaniel/octo-feather", "dir": "templates/python"}]}
+    ]
+  },
+  "corrector-kit-route": {
+    "facts": [
+      {"fact": "branch_paths", "untouched": ["AGENTS.md", "README.md", "CHANGELOG.md", ".githooks/", ".github/", ".gitignore", "justfile", "pyproject.toml", "uv.lock", "src/", "tests/", "docs/", "scripts/", "evidence/", "templates/", "agents/", ".agents/", ".skillfile/"]},
+      {"fact": "declared_includes", "field": "issues", "items": [{"repo": "0xTomDaniel/octo-feather"}]}
+    ]
+  }
+}
