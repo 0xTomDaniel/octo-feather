@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1); issue #121 the scope the verdict reader reads (director ruling 2026-10-23)
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalate with --parent; block only on a documented standards breach or a named simplification, so one Standards pass, no Spec pass; issue #118 the verdict classifies each added or changed check exact or proxy, a repo-text scan under tests/ counted as a check (docs/adr/0008); issue #124 the verdict lists, per owned rule the diff writes, every restatement in the repo (docs/adr/0008 rung 1); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 the Verdict step owns the column-0 form of every report field it names (Verdict, Check, Checks: none, Owner), for every role reporting one
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -44,15 +44,15 @@
  
  Search the repo for every file that documents how code should be written. When `CODING_STANDARDS.md` or `CONTRIBUTING.md` exists, it must be on the list.
  
-@@ -55,35 +41,33 @@
+@@ -55,35 +41,43 @@
  - **Middle Man**: a class or function that mostly just delegates onward. → cut it, call the real target direct.
  - **Refused Bequest**: a subclass or implementer that ignores or overrides most of what it inherits. → drop the inheritance, use composition.
  
 -### 4. Spawn both sub-agents in parallel
--
--Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
 +### 3. Run the review
  
+-Issue both sub-agent calls together, in the foreground, and aggregate the reports they return.
+-
 -**Standards sub-agent prompt** should include:
 +Work from:
  
@@ -62,44 +62,47 @@
  - The brief: "Report, per file/hunk where relevant, (a) every place the diff violates a documented standard: cite the standard (file + the rule); and (b) any baseline smell you spot: name it and quote the hunk. Distinguish hard violations from judgement calls: documented-standard breaches can be hard, but baseline smells are always judgement calls, and a documented repo standard overrides the baseline. Skip anything tooling enforces. Under 400 words."
  
 -**Spec sub-agent prompt** should include:
--
--- The diff command and commit list.
--- The path or fetched contents of the spec.
--- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
--
--If the spec is missing, skip the Spec sub-agent and note this in the final report.
--
--### 5. Aggregate
--
--Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
--
--End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
--
--## Why two axes
--
--A change can pass one axis and fail the other:
 +### 4. Verdict (octo-feather)
- 
--- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
--- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
-+Report the findings, each marked **block** or **note**, then one verdict: blocked if any finding blocks, else clear.
- 
--Reporting them separately stops one axis from masking the other.
++
++Report the findings, each marked **block** or **note**, then the verdict: the one line `Verdict: blocking` if any finding blocks, else `Verdict: clear`.
++
 +- **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 +- **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 +
-+Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each at column 0 outside code blocks, or the one line `Checks: none`:
++**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 +
++```
++Verdict: blocking
++Check: scripts/check-test-surface: tests drive the CLI, never an internal function (AGENTS.md Rules) | reads: tests/*.py import lines | class: proxy
++Owners: none
++```
+ 
+-- The diff command and commit list.
+-- The path or fetched contents of the spec.
+-- The brief: "Report: (a) requirements the spec asked for that are missing or partial; (b) behaviour in the diff that wasn't asked for (scope creep); (c) requirements that look implemented but where the implementation looks wrong. Quote the spec line for each finding. Under 400 words."
++`Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
+ 
+-If the spec is missing, skip the Spec sub-agent and note this in the final report.
++Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
+ 
+-### 5. Aggregate
 +`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
-+
+ 
+-Present the two reports under `## Standards` and `## Spec` headings, verbatim or lightly cleaned. Do **not** merge or rerank findings, because the two axes are deliberately separate (see _Why two axes_).
 +`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
-+
+ 
+-End with a one-line summary: total findings per axis, and the worst issue _within each axis_ (if any). Don't pick a single winner across axes: that's the reranking the separation exists to prevent.
 +`<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
-+
-+Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule at column 0 outside code blocks, or the one line `Owners: none`:
-+
+ 
+-## Why two axes
++Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule, or the one line `Owners: none`:
+ 
+-A change can pass one axis and fail the other:
 +`Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
-+
+ 
+-- Code that follows every standard but implements the wrong thing → **Standards pass, Spec fail.**
+-- Code that does exactly what the issue asked but breaks the project's conventions → **Spec pass, Standards fail.**
 +List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
-+
+ 
+-Reporting them separately stops one axis from masking the other.
 +The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:` and `Checks:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.

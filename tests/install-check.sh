@@ -5,14 +5,19 @@
 #     pinned v3.1.0 and the install path (release binary, or npx @schpet/linear-cli);
 #   the linear skill's fake linear on PATH (reports the pin): linear ok, exit 0; a linear reporting another
 #     release: listed with the wanted v3.1.0, exit 1;
-#   GitHub target (no config): linear never checked.
-# herdr, pi and gh are stubs (gh signed in), so only the tracker line decides the exit. Run by `just check`.
+#   GitHub target (no config): linear never checked;
+#   pi at the kit's pin (pi-version): its version line ok; pi reporting another release: WRONG VERSION naming
+#     the pin and the npm install command, exit 1.
+# herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
+# the exit. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "install-check test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$t/home" "$t/old"
-for x in herdr pi gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
+pin="$(tr -d '[:space:]' <"$kit/pi-version")"
+for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
+printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
 printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* "$t/old/linear"
 cp "$(command -v just)" "$t/bin/just"   # its own dir goes on the recipe's PATH: the test's, never one holding a linear
 # PATH without any linear: every dir holding one is dropped (the recipe adds HOME/.local/bin: HOME is a fresh dir).
@@ -36,4 +41,9 @@ check 1 "$lin_target" "$t/old"
 grep -qE '^linear WRONG VERSION .* reports 3\.0\.0, want v3\.1\.0; .*npx @schpet/linear-cli' <<<"$out" || fail "Linear target, linear 3.0.0: $out"
 check 0 "$gh_target" ""
 grep -q '^tracker github-issues ' <<<"$out" && ! grep -qi linear <<<"$out" || fail "GitHub target checked linear: $out"
-echo "install-check: ok (Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear)"
+grep -qx "pi     version $pin ok (pi-version)" <<<"$out" || fail "pi at the pin: no ok version line: $out"
+printf '#!/bin/sh\necho 0.0.1\n' >"$t/bin/pi"
+check 1 "$gh_target" ""
+grep -qx "pi     WRONG VERSION $t/bin/pi reports 0.0.1, want $pin (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin" <<<"$out" \
+  || fail "pi 0.0.1: no WRONG VERSION line naming the pin and the install command: $out"
+echo "install-check: ok (pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear)"

@@ -103,7 +103,7 @@ run 0 verdict 7 "$J" - < "$t/report"   # stdin, back to clear
 [[ "$(writes)" == 3 && "$(comments)" == 1 ]] || fail "third run: $(writes) writes, $(comments) comments"
 run 0 verdict 7 "$J" "$t/report"; [[ "$(writes)" == 3 ]] || fail "unchanged rerun wrote"
 grep -q unchanged <<<"$err" || fail "unchanged rerun not said: $err"
-# the verdict is the last line outside fences and quotes (review of 39515df, class verdict-parsing)
+# the verdict is the last line in the reader scope, .agents/skills/code-review/SKILL.md step 4 Report fields (review of 39515df, class verdict-parsing)
 printf 'Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\n\nThe quoted run predates the fix commit.\nChecks: none\nVerdict: blocking\n' > "$t/fenced"
 run 0 verdict 7 "$J" "$t/fenced"; grep -q "(blocking, head" <<<"$err" || fail "fenced Verdict: clear was taken: $err"
 python3 -c 'import json,sys; b=json.load(open(sys.argv[1]))["comments"][0]["body"]; assert "\nVerdict: blocking\nChecks: none\n\n### Findings" in b, b' "$FAKE_GH/pr/7.json" \

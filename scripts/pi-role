@@ -34,6 +34,8 @@ global skill folder never leaks into a role: only listed skills load.
 Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
+Pi always gets --extension for the kit's extensions/resume-on-error.ts
+(docs/adr/0023).
 """
 import hashlib, json, os, re, subprocess, sys, tomllib
 
@@ -46,6 +48,8 @@ HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR
 TRACKERS = {"github": "github-issues", "linear": "linear"}
 DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
+# The kit's Pi extension every role loads, in the kit's extensions/ (issue #152).
+EXTENSION = "resume-on-error.ts"
 
 
 def parse(path):
@@ -118,6 +122,7 @@ def launch(path, to_file=False):
         args += ["--tools", ",".join(fm["tools"])] if fm["tools"] else ["--no-tools"]
     args += ["--no-mcp", "--no-skills"]
     roots = skill_roots(path)
+    args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", EXTENSION)]
     tracker = tracker_skill(roots[0])
     for s in fm.get("skills", []):
         s = tracker if s == TRACKER_SLOT else s
