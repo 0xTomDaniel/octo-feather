@@ -64,6 +64,7 @@ Each one is put to a classifier model as one closed question, and its answer cou
 <p data-anchor="rule-overturn">A label the owner overturns changes the set, and the question's bench and choice are rerun.</p>
 <p data-anchor="rule-held-out">Held-out cases never shape a question's wording or its model choice; they give the score its threshold is judged on.</p>
 <p data-anchor="rule-calibration">Calibration means a model's confidence tracks how often it is right on that question.</p>
+<p data-anchor="rule-available">An available classifier, wherever this spec names one, is a pinned classifier that can accept the question's form; one that cannot is listed with its provider error.</p>
 <p data-anchor="rule-advisory">A judge is advisory until its question's held-out accuracy and calibration meet a threshold the lane proposes and the director accepts; until then no gate reads its answer.</p>
 </section>
 
