@@ -330,8 +330,9 @@ def holds(line, item):
 
 
 def judge_fields(fact, final, last):
-    """The final message's column-0 field F, parsed by `octo-feather-lane fields` (one parser, verdict's): present and
-    well formed, then none, includes and every (check-evals --help)."""
+    """The final message's field F, parsed by `octo-feather-lane fields` (one parser, verdict's; form and scope:
+    .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
+    every (check-evals --help)."""
     f = fact["field"]
     head = f"field_lines {f}"
     st, text = final_text(head, final, last)

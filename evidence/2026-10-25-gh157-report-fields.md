@@ -3,7 +3,7 @@
 Smoke: .agents/skills/code-review/ (Verdict step, **Report fields**), .skillfile/patches/skills/code-review/SKILL.md.patch, agents/implementer.md (Output), agents/code-reviewer.md (Output); measured by evals/ladder implementer-exec-bit and reviewer-proxy-blocks, live runs by the supervisor at lane head (lane Pi quota), results to be appended below.
 Removed: agents/implementer.md Output's inline copy of the check field shape (`Checks: none` and the `Check: ... | class: exact` template stacked as two bare lines), which all 3 baseline implementers copied as a `Checks:` heading over their `Check:` line; agents/code-reviewer.md Output's restated field list (`Check:` lines or `Checks: none`, `Owner:` lines or `Owners: none`); the code-review Verdict step's "one verdict: blocked if any finding blocks, else clear", which named no `Verdict:` label (gh122 `## Verdict: blocking` heading). Incident: finding classes `built-check-reported-none`, `verdict-heading-not-field` (lanes/archive/gh122.handoffs.jsonl), `checks-header-not-field` (lanes/gh157.handoffs.jsonl).
 Removed: the docs/owed-evals/118.md entry "Code reviewer, a proxy check blocks" (round 2). It stayed open because the contract did not fix the column-0 Verdict field and the gh122 head held it in only 1 of 2 runs (20261024T061942Z-d2714a wrote `## Verdict: blocking`). The code-review Verdict step's Report fields now fixes that field (1de2776), and reviewer-proxy-blocks passes 3/3 at lane head 685edd8 and 3/3 at main bfb5bc8 (below).
-Smoke: .agents/skills/eval-cases/SKILL.md (round 3, Field lines bullet): not exercised by the head runs above (none of those tasks edits a skill, role or eval case, so no run loads eval-cases), and it was edited after them. The edit swaps the copied field form and scope ("column-0 ... outside code fences ... a bullet is no field") for a pointer to the code-review step 4 Report fields; `field_lines` semantics and the fact list are unchanged. It needs its own smoke if review wants the pointer proven: an implementer-skill-ticket style run that writes a `field_lines` case.
+Smoke: .agents/skills/eval-cases/SKILL.md (round 3, Field lines bullet), loaded at head by two live runs, supervisor's, `--kit-ref 50a1bad`: PASS skill-triggers/impl-evalcases-skill-sections 20261025T024143Z-ee8ea9 (implementer, eval-cases head content at tool call 2 of 2) and PASS skill-triggers/corrector-eval-cases-should 20261025T024158Z-7067ce (corrector, tool call 3 of 4). Limit: these prove the changed skill loads at head; no run yet follows its field_lines pointer to code-review Report fields while writing a field_lines case (owed, docs/owed-evals/157.md; scratch case and its non-informative FAILs: Round 4 below).
 Removed: round 3 (review at 36ce223, class duplicated-rule), the copied field forms and reader scope in .agents/skills/eval-cases/SKILL.md (Field lines), and in help text only (no code change) of scripts/check-evals (field_lines fact), scripts/octo-feather-qa (field_lines) and scripts/octo-feather-lane (verdict, fields); each now points to .agents/skills/code-review/SKILL.md step 4, **Report fields**.
 
 ## Baseline, main bfb5bc8 (supervisor's runs)
@@ -84,3 +84,42 @@ $ printf 'Verdict: blocking\n' | octo-feather-lane fields -
 ```
 
 Same output byte for byte as the pre-round-3 script (error texts shortened here); only help text changed.
+
+## Round 4 (review at 50a1bad)
+
+Reader scope pointed, comments and docstring only (no code or assertion change): scripts/octo-feather-qa `judge_fields` docstring, tests/qa.sh field_lines comment, tests/lane-merge-ask.sh verdict comment, each to .agents/skills/code-review/SKILL.md step 4, Report fields. Refusal messages and literal test expectations kept (rung 2 fix messages; concrete test examples).
+
+eval-cases smoke, supervisor's live runs, recorded as run:
+
+- PASS skill-triggers/impl-evalcases-skill-sections, `--kit-ref 50a1bad`, 20261025T024143Z-ee8ea9: "skill_read eval-cases: loaded at tool call 2 of 2" (run stops once decided).
+- PASS skill-triggers/corrector-eval-cases-should, `--kit-ref 50a1bad`, 20261025T024158Z-7067ce: "skill_read eval-cases: loaded at tool call 3 of 4".
+- FAIL scratch s157/corrector-field-case-pointer, 50a1bad x2 (20261025T023756Z-15db63, 20261025T023848Z-15afcd) and bfb5bc8 x1 (20261025T024009Z-752fa2): "no load of eval-cases/SKILL.md". Non-informative: the corrector rightly routed to the kit (docs/adr/0020 Where the fix goes: the cause, kit role and skill files, is untracked in the target), drafted a kit issue and loaded neither skill. The case is wrong for this question, not the head.
+
+Scratch case, for reproduction (`/tmp/gh157/smoke-evals/s157/`, fixtures copied from evals/fixtures, `scripts/octo-feather-qa --evals /tmp/gh157/smoke-evals --case corrector-field-case-pointer`):
+
+suite.json:
+
+```json
+{"suite": "s157", "kind": "role-transcript", "description": "gh157 smoke: a corrector writing an eval case on a report field loads eval-cases and follows its field-form pointer to the code-review skill's Report fields.", "max_tool_calls": 30, "timeout_s": 900}
+```
+
+cases.json:
+
+```json
+[
+ {
+  "id": "corrector-field-case-pointer",
+  "role": "corrector",
+  "fixture": "python-app",
+  "task": "Owner correction, second time this week: implementers in this repo end their report with `**Checks:** none` in bold, and the supervisor's reader drops it as no field at all. Fix it so it stops, and ship with it the eval case that grades the implementer's check field run after run. Commit when done. Sandbox run: no Herdr and no supervisor pane; skip every herdr-say step and put your reply as your final message."
+ }
+]
+```
+
+reference/expectations.json:
+
+```json
+{"corrector-field-case-pointer": {"facts": [{"fact": "skill_read", "skill": "eval-cases"}, {"fact": "skill_read", "skill": "code-review"}]}}
+```
+
+Observation (run 20261025T023848Z-15afcd): `printf '**Checks:** none\n' | octo-feather-lane fields -` gives Check errors `["report classifies no check: add `Checks: none` ..."]`, the absent-field message, without naming the bold label it saw. The corrector there proposed a rung 2 error naming that shape. Not changed here (no code in this lane's scope); recorded in docs/owed-evals/157.md.
