@@ -9,8 +9,8 @@ Removed: nothing deleted. Incident: class `duplicated-rule`, 8 finding lines aft
 
 - Rung 1 (structure) already holds the rule's owner (docs/adr/0008 rung 1); nothing structural stops prose in a comment or help text from restating it.
 - Rung 2 not taken: telling a restatement from a pointer is a text-similarity stand-in, a proxy (brief; docs/adr/0008 rung 2).
-- Rung 3, structured judgment, both sides: the code-review skill's Verdict step (step 4, `Owner:` paragraphs) now has writers (implementer, corrector) run the reviewer's owned-rule search on their own diff before commit and report the same `Owner:` field; agents/implementer.md and agents/corrector.md point there, docs/adr/0008 rung 3 names the field (corrected in place). The reader (`octo-feather-lane fields`) already parses it; no new check.
-- Rung 4, instruction with failure example: search once per part of the rule (gh157 rounds), and a fix round searches again (gh121, gh152, gh157). agents/code-reviewer.md: a delta review's owned-rule search still spans the whole repo.
+- Rung 3, structured judgment, both sides: writer side added to the code-review skill's Verdict step (step 4, `Owner:` paragraphs); agents/implementer.md and agents/corrector.md point there, docs/adr/0008 rung 3 names the field (corrected in place). The reader (`octo-feather-lane fields`) already parses it; no new check.
+- Rung 4, instruction with failure examples (gh157; gh121, gh152, gh157): the same step 4 `Owner:` paragraphs. agents/code-reviewer.md Required inputs points there for a delta review.
 
 ## Runs
 
@@ -38,3 +38,7 @@ Graded fact (declared `rung`) PASS both sides; the smoke is read from the final 
 
 - head 20261025T151947Z-5c9312: code-review/SKILL.md in 10 transcript events; final message holds `Owner: AGENTS.md: every tracked file under .githooks/ or starting with #! is committed as mode 100755 | restated: none` (Owner errors: none).
 - base 20261025T152109Z-aa49d5: code-review/SKILL.md in 0 events; Owner errors: "report names no owned rule".
+
+## Review round 1 (head 63bae88, class duplicated-rule)
+
+Removed: agents/corrector.md and agents/code-reviewer.md clauses that restated code-review step 4 `Owner:` paragraphs (writer search on its own diff, point every hit; whole-repo scope), and this file's summaries of them; each now points to step 4, `Owner:` paragraphs. Role wiring (when to read step 4, where it lives) kept. No rerun: the instruction each role reaches is the same step 4 text the head runs above read (corrector 5c9312 read code-review/SKILL.md), so the edit is pointer-only.
