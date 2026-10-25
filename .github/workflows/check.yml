@@ -20,4 +20,12 @@ jobs:
       # network step runs first, on its own: the pinned skillfile binary (sha256-checked) and each
       # Skillfile pin commit (fetch-only entries included) from github.com, every call time-bounded. The gate then reads them offline.
       - run: just vendored-fetch
+      # Pi for tests/resume-on-error.sh (real Pi through pi-role, a fake local provider, no credential): the second
+      # network step. Node 22.x, whose latest is above Pi's engines floor (>= 22.19); exactly the Pi release in
+      # pi-version, the pin `just install-check` holds the box to. npm, not Pi's installer, because only npm takes
+      # a version; its transitive dependencies are not pinned (Pi's README).
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      - run: npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$(tr -d '[:space:]' < pi-version)"
       - run: just check
