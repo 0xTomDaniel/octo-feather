@@ -34,8 +34,8 @@ global skill folder never leaks into a role: only listed skills load.
 Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
-Pi always gets --extension for the kit's extensions/resume-on-error.ts, which
-resumes or reports a run stopped by a provider error (docs/adr/0023).
+Pi always gets --extension for the kit's extensions/resume-on-error.ts
+(docs/adr/0023).
 """
 import hashlib, json, os, re, subprocess, sys, tomllib
 

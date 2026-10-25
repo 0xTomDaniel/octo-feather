@@ -10,7 +10,8 @@
 #   down      errors throughout: 3 resume rounds then stop; exactly one --parent line naming
 #             agent, pane, error and "stopped"
 #   normal    an answer: one request, no resume, nothing sent
-#   idle      mid-backoff Pi is idle (get_state isStreaming false) and takes an abort at once
+#   idle      mid-backoff Pi is idle (get_state isStreaming false), an abort is answered at once and
+#             Pi stays usable; the resume still fires after the backoff (docs/adr/0023 Takeover)
 #   takeover  a prompt sent mid-backoff runs at once; no scheduled resume follows, nothing sent
 #   headless  pi-role -p, errors throughout: exits non-zero promptly, no resume, nothing sent
 # Cases run one after another, one real pi process at a time: each case's pi has exited before the
@@ -111,7 +112,13 @@ elif case == "idle":
     ab = wait(response("abort"), 2, "the abort response")
     dt = time.time() - t0
     if not ab.get("success") or dt > 1.5: die(f"abort mid-backoff: {ab} after {dt:.2f}s")
-    print(f"mid-backoff isStreaming false, abort answered in {dt:.2f}s")
+    send({"type": "get_state", "id": "s2"})
+    st = wait(response("get_state"), 2, "get_state after the abort")
+    if st.get("data", {}).get("isStreaming") is not False: die(f"Pi not usable after the abort: {st}")
+    wait(settled, 6, "the resume run's settle after the 3 s backoff")
+    drain(0.5)
+    if requests() != 2 or resumed() != 1: die(f"after the backoff: {requests()} requests, {resumed()} resumes; want 2 and 1")
+    print(f"mid-backoff isStreaming false, abort answered in {dt:.2f}s, Pi usable; resume fired after the backoff")
 elif case == "takeover":
     wait(settled, 30, "the error settle")
     t0 = time.time(); time.sleep(0.5)
@@ -169,7 +176,8 @@ provider 0; pane normal 0.3,0.6,0.9
 said_after 1; [[ ! -s "$t/said" ]] || fail "normal: parent was messaged: $(cat "$t/said")"
 echo "case normal: ok ($detail, parent not messaged)"
 
-provider -1; pane idle 3
+provider -1; pane idle 3,30
+said_after 1; [[ ! -s "$t/said" ]] || fail "idle: parent was messaged: $(cat "$t/said")"
 echo "case idle: ok ($detail)"
 
 provider 1; pane takeover 3

@@ -236,7 +236,7 @@ install-check target=invocation_directory():
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
-    # Pi at the kit's pin (pi-version), the release CI installs and tests/resume-on-error.sh requires.
+    # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
       v="$(pi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
