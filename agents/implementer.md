@@ -54,12 +54,4 @@ Stop on a ticket that contradicts the spec, a missing environment, or work that 
 
 ## Output
 
-Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, the check field, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. The check field is plain lines at column 0, exactly as `octo-feather-lane verdict` reads them, never a bullet, bold or a code block: the one line
-
-Checks: none
-
-or, for each check a criterion asked you to build, one line
-
-Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact
-
-(fields: the `code-review` skill's Verdict step). Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
+Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, the check field, validation run and its result, and blockers to your supervisor with `herdr-say --parent`. The check field is a `Check:` line, class exact, for each check a criterion asked you to build, else `Checks: none`. Before writing it, read the **Report fields** of step 4 of the `code-review` skill (`code-review/SKILL.md` in the skills folder that holds your `commit` skill): it owns the form, and the reader refuses any other. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`). Then stop, whatever the last exit. Text left in your own pane is not reported.
