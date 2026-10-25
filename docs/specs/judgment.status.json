@@ -7,8 +7,8 @@
       "pr": 147
     },
     "acceptance-judge-bench": {
-      "status": "built",
-      "pr": 147
+      "status": "planned",
+      "pr": null
     },
     "acceptance-judge-advisory": {
       "status": "planned",
