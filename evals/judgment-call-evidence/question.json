@@ -1,0 +1,13 @@
+{
+ "id": "d-call-evidence",
+ "question": "Does this spec call's evidence show that the accepted criterion it names cannot pass with the spec as written?",
+ "labels": [
+  "shows",
+  "does-not-show"
+ ],
+ "label_help": {
+  "shows": "the evidence (a failing command, an error, or two lines in force that contradict) establishes that the named accepted criterion cannot be met as the spec is written; a contradiction created by an owner-ruled correction in force counts",
+  "does-not-show": "the evidence is absent, states a preference or new scope, bears on a different line than the named criterion, names only criteria not in the accepted spec, or is a contradiction the lane's own unruled edit creates"
+ },
+ "state_shape": "each named criterion's text as accepted (or '(not in the accepted spec)'), then the call's kind, what, why and evidence fields verbatim; never passes_as_written or any owner decision"
+}

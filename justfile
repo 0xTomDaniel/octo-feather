@@ -89,10 +89,14 @@ check-refs:
     #   vendored skills (Skillfile github entries) and .skillfile/: upstream wording and quotes of it.
     #   docs/specs/.viz/, docs/specs/.style/: Spec Chat's vendored runtime and style (NOTICE).
     #   LICENSE: the upstream Apache-2.0 text.
+    #   judgment suites' label data (evals/judgment-*/ cases.json, reference/expectations.json, REPORT.md): frozen
+    #   quotes of history the cases are taken from; the rest of each suite stays scanned (owner ruling 2026-10-25).
+    #   The lane-branch scan below skips them too.
+    labels='evals/judgment-[^/]+/(cases\.json|reference/expectations\.json|REPORT\.md)$'
     # Exempt quotes of frozen or upstream text, not kit naming: each a (file, exact quote)
     # pair in the table below, removed only in that file, then the rest of its line is scanned.
     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
-    mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$)")
+    mapfile -t own < <(git ls-files | grep -vE "^(\.agents/skills/(${vend%|})/|\.skillfile/|docs/specs/\.(viz|style)/|GLOSSARY\.md\$|LICENSE\$|$labels)")
     # Fails closed: grep exit 0 or 1 and perl exit 0 are the only scans; match is perl output, no match none,
     # any other exit a scanner error that fails the check.
     retired='\b(meta-)?[o]perators?\b|\b[h]umans?\b'
@@ -123,9 +127,9 @@ check-refs:
     elif [[ -n "$found" ]]; then
       printf '%s\n' "$found"
       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
-    # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, the one file not scanned.
+    # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, not scanned (nor the judgment label data above).
     # The patterns bracket a letter so this justfile does not match itself.
-    mapfile -t lane < <(git ls-files | grep -vE '^docs/adr/0011-')
+    mapfile -t lane < <(git ls-files | grep -vE "^(docs/adr/0011-|$labels)")
     if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
     # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).

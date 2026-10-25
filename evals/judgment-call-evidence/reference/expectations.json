@@ -1,0 +1,201 @@
+{
+  "gh54-public-surfaces-library": {
+    "label": "shows",
+    "reason": "pilot target exposes only a library function, so a test that must drive the CLI, HTTP or UI cannot integration-test it; contradicts ADR 0002 in force",
+    "source": "docs/specs/quality.calls.jsonl:1@main(5f8fca3) (call at 2026-10-20T17:26:55Z, lane gh54); criterion text: docs/specs/quality.spec.html@aec0fe6",
+    "labelled_by": "director"
+  },
+  "gh54-fresh-green-library-tests": {
+    "label": "does-not-show",
+    "reason": "criterion is the fresh template gate passing; nothing in the evidence shows that gate fails as written",
+    "source": "docs/specs/templates.calls.jsonl:1@main(5f8fca3) (call at 2026-10-20T17:26:55Z, lane gh54); criterion text: docs/specs/templates.spec.html@aec0fe6",
+    "labelled_by": "director"
+  },
+  "gh56-signed-in-accept-record": {
+    "label": "does-not-show",
+    "reason": "evidence is a real failure of acceptance recording (octo-feather-accepted exit 1), but the named criterion (spec loads with Accept control) still passes",
+    "source": "docs/specs/remote.calls.jsonl:1@main(5f8fca3) (call at 2026-10-20T17:59:08Z, lane gh56); criterion text: docs/specs/remote.spec.html@529b1be",
+    "labelled_by": "director"
+  },
+  "gh56-fresh-green-hand-in-recipes": {
+    "label": "does-not-show",
+    "reason": "hand-in repo gaining recipes says nothing about a fresh template gate failing",
+    "source": "docs/specs/templates.calls.jsonl:2@main(5f8fca3) (call at 2026-10-20T18:09:35Z, lane gh56); criterion text: docs/specs/templates.spec.html@349e28d",
+    "labelled_by": "director"
+  },
+  "gh79-index-links-credit": {
+    "label": "does-not-show",
+    "reason": "evidence says the text named a source, \"not a behaviour\"; index links pass unchanged",
+    "source": "docs/specs/index.calls.jsonl:1@98cb755 (call at 2026-10-22T18:03:46Z, lane gh79); criterion text: docs/specs/index.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh79-portable-upstream-sentence": {
+    "label": "does-not-show",
+    "reason": "provenance scrub; no failing command or contradiction bearing on acceptance-portable",
+    "source": "docs/specs/overview.calls.jsonl:1@98cb755 (call at 2026-10-22T18:03:46Z, lane gh79); criterion text: docs/specs/overview.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh79-notice-upstream-comparison": {
+    "label": "does-not-show",
+    "reason": "provenance scrub; NOTICE criterion passes as written",
+    "source": "docs/specs/skills.calls.jsonl:1@98cb755 (call at 2026-10-22T18:03:46Z, lane gh79); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh79-only-listed-provenance": {
+    "label": "does-not-show",
+    "reason": "provenance scrub; only-listed criterion passes as written",
+    "source": "docs/specs/skills.calls.jsonl:2@98cb755 (call at 2026-10-22T18:03:46Z, lane gh79); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh80-prompt-eval-owed-evals-home": {
+    "label": "shows",
+    "reason": "owner-ordered correction (#80) in force moves owed evals to docs/owed-evals/, so the criterion's docs/future.md line contradicts ADR 0008 and check-behavior-smoke (director ruling: an owner-ruled correction counts as shows)",
+    "source": "docs/specs/quality.calls.jsonl:2@main(5f8fca3) (call at 2026-10-22T18:16:04Z, lane gh80); criterion text: docs/specs/quality.spec.html@bfb3a92",
+    "labelled_by": "director",
+    "relabel": "proposed does-not-show, relabelled shows by the director (2026-10-23): a contradiction created by an owner-ruled correction in force (#80) counts as shows"
+  },
+  "gh82-lane-no-tickets-linear": {
+    "label": "shows",
+    "reason": "criterion requires the director to open the ticket on GitHub; on a Linear target, now in scope by corrected ADR 0004/0011, it cannot pass",
+    "source": "docs/specs/comms.calls.jsonl:1@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/comms.spec.html@44c4c92",
+    "labelled_by": "director"
+  },
+  "gh82-kickoff-merge-linear": {
+    "label": "shows",
+    "reason": "accepted kickoff/merge criteria require GitHub parent issues; corrected ADR 0004 makes a Linear target valid where they cannot pass",
+    "source": "docs/specs/issue-lifecycle.calls.jsonl:1@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/issue-lifecycle.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh82-owner-pr-tracker": {
+    "label": "does-not-show",
+    "reason": "owner-pr criterion (one PR with verdict and checks) is tracker-neutral and passes on a Linear target; evidence cites non-criterion lines",
+    "source": "docs/specs/overview.calls.jsonl:1@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/overview.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh82-gate-green-linear-ban": {
+    "label": "does-not-show",
+    "reason": "evidence quotes recipe-check wording vs ADR; it does not show just check red, so gate-green is not shown unpassable",
+    "source": "docs/specs/quality.calls.jsonl:3@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/quality.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh82-linear-key-remote": {
+    "label": "does-not-show",
+    "reason": "every named criterion is new (none in the accepted spec); evidence shows missing scope, not an accepted criterion failing",
+    "source": "docs/specs/remote.calls.jsonl:2@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/remote.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh82-supervise-layout-linear": {
+    "label": "does-not-show",
+    "reason": "only a new criterion is named; layout text vs ADR 0011 is scope for Linear, no accepted criterion shown failing",
+    "source": "docs/specs/roles.calls.jsonl:1@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/roles.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh82-tracker-skills-section": {
+    "label": "does-not-show",
+    "reason": "all named criteria are new; evidence argues for a new Tracker section, an addition",
+    "source": "docs/specs/skills.calls.jsonl:1@12cdf46 (call at 2026-10-22T18:44:26Z, lane gh82); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-one-head-parallel-qc": {
+    "label": "shows",
+    "reason": "acceptance-qc-interim requires the report from a code reviewer started fresh, contradicting the qc-judge role and corrected ADR 0022 in force",
+    "source": "docs/specs/issue-lifecycle.calls.jsonl:1@main(5f8fca3) (call at 2026-10-22T19:01:14Z, lane gh67); criterion text: docs/specs/issue-lifecycle.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-qc-listed-parallel": {
+    "label": "does-not-show",
+    "reason": "merge ask can still show the product judge verdict per criterion; evidence cites qaqc-when and recipe-qc, not this criterion",
+    "source": "docs/specs/quality.calls.jsonl:3@main(5f8fca3) (call at 2026-10-22T19:01:14Z, lane gh67); criterion text: docs/specs/quality.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh67-tab-headless-reviewer": {
+    "label": "does-not-show",
+    "reason": "tab vs headless reviewer sameness still passes; the cited contradiction is with reviewer-patch and role lines",
+    "source": "docs/specs/roles.calls.jsonl:1@main(5f8fca3) (call at 2026-10-22T19:01:14Z, lane gh67); criterion text: docs/specs/roles.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-notice-skill-moves": {
+    "label": "does-not-show",
+    "reason": "vendoring new skills with NOTICE entries passes acceptance-notice; contradiction is in skill rows",
+    "source": "docs/specs/skills.calls.jsonl:1@main(5f8fca3) (call at 2026-10-22T19:01:14Z, lane gh67); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-patch-only-interrogate-folder": {
+    "label": "shows",
+    "reason": "skillfile cannot pin references without SKILL.md, so the spec as written (references only) cannot reproduce from pin plus patches",
+    "source": "docs/specs/skills.calls.jsonl:2@main(5f8fca3) (call at 2026-10-22T19:39:40Z, lane gh67); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-only-listed-blast-radius-patch": {
+    "label": "shows",
+    "reason": "probe shows Pi hides a disable-model-invocation skill, so with patch \"none\" the implementer lacks a listed skill",
+    "source": "docs/specs/skills.calls.jsonl:3@main(5f8fca3) (call at 2026-10-22T19:42:58Z, lane gh67); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh67-patch-only-writing-for-agents": {
+    "label": "shows",
+    "reason": "just check red on check-refs with the unpatched upstream text the spec (patch \"none\") requires",
+    "source": "docs/specs/skills.calls.jsonl:4@main(5f8fca3) (call at 2026-10-22T19:49:04Z, lane gh67); criterion text: docs/specs/skills.spec.html@e3237b6",
+    "labelled_by": "director"
+  },
+  "gh82-gate-green-check-refs-error": {
+    "label": "shows",
+    "reason": "check-refs fails on any Linear reference while ADR 0004 in force makes Linear a tracker, so the gate cannot be green",
+    "source": "docs/specs/quality.calls.jsonl:5@8b72f41 (call at 2026-10-22T21:59:57Z, lane gh82); criterion text: docs/specs/quality.spec.html@175aaef",
+    "labelled_by": "director"
+  },
+  "gh82-install-linear-cli": {
+    "label": "does-not-show",
+    "reason": "named criterion is not in the accepted spec; a dangling pointer to install notes is a wording fix",
+    "source": "docs/specs/remote.calls.jsonl:3@8b72f41 (call at 2026-10-22T21:59:57Z, lane gh82); criterion text: docs/specs/remote.spec.html@bfb3a92",
+    "labelled_by": "director"
+  },
+  "gh82-vendor-linear-cli": {
+    "label": "does-not-show",
+    "reason": "duplication with an upstream skill is a preference; no named criterion is in the accepted spec",
+    "source": "docs/specs/skills.calls.jsonl:6@8b72f41 (call at 2026-10-22T21:59:57Z, lane gh82); criterion text: docs/specs/skills.spec.html@72c31e1",
+    "labelled_by": "director"
+  },
+  "gh82-linear-cli-loaded-by-none": {
+    "label": "does-not-show",
+    "reason": "\"two mechanisms\" is a one-mechanism preference; no accepted criterion shown failing",
+    "source": "docs/specs/skills.calls.jsonl:7@b2ecf90 (call at 2026-10-22T22:22:45Z, lane gh82); criterion text: docs/specs/skills.spec.html@72c31e1",
+    "labelled_by": "director"
+  },
+  "gh82-issue-view-sub-issues": {
+    "label": "does-not-show",
+    "reason": "real two-line contradiction, but the named criterion (gate fails on a missing tracker script) passes as written",
+    "source": "docs/specs/skills.calls.jsonl:8@3fb3b0c (call at 2026-10-23T00:07:03Z, lane gh82); criterion text: docs/specs/skills.spec.html@a26a417",
+    "labelled_by": "director"
+  },
+  "gh108-qa-runner-criteria": {
+    "label": "does-not-show",
+    "reason": "all named criteria new; just qa exiting 2 does not stop acceptance-prompt-eval (owed until just qa runs) from passing",
+    "source": "docs/specs/quality.calls.jsonl:4@d7255fc (call at 2026-10-23T01:19:14Z, lane gh108); criterion text: docs/specs/quality.spec.html@175aaef",
+    "labelled_by": "director"
+  },
+  "gh108-qa-skill-triggers": {
+    "label": "does-not-show",
+    "reason": "new criterion; finding 60 motivates scope, not an accepted criterion failing",
+    "source": "docs/specs/quality.calls.jsonl:5@d7255fc (call at 2026-10-23T01:19:14Z, lane gh108); criterion text: docs/specs/quality.spec.html@175aaef",
+    "labelled_by": "director"
+  },
+  "gh108-only-listed-eval-cases": {
+    "label": "does-not-show",
+    "reason": "contradiction is with a line this lane adds (quality-eval-authoring); only-listed passes as accepted",
+    "source": "docs/specs/skills.calls.jsonl:5@d7255fc (call at 2026-10-23T01:19:14Z, lane gh108); criterion text: docs/specs/skills.spec.html@72c31e1",
+    "labelled_by": "director"
+  },
+  "gh107-only-listed-reviewer-tdd": {
+    "label": "does-not-show",
+    "reason": "reviewer skill change does not touch the implementer-skills criterion; contradiction is created by the lane",
+    "source": "docs/specs/skills.calls.jsonl:5@a4fbb14 (call at 2026-10-23T01:44:54Z, lane gh107); criterion text: docs/specs/skills.spec.html@72c31e1",
+    "labelled_by": "director"
+  },
+  "gh107-patch-only-reason-column": {
+    "label": "does-not-show",
+    "reason": "header vs new first lines is a mismatch the lane itself makes; patch-only passes as written",
+    "source": "docs/specs/skills.calls.jsonl:6@a4fbb14 (call at 2026-10-23T01:44:54Z, lane gh107); criterion text: docs/specs/skills.spec.html@72c31e1",
+    "labelled_by": "director"
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "suite": "judgment-exact-or-proxy",
+  "kind": "judgment",
+  "description": "Judgment question (b) exact or proxy (spec judgment#questions): does a check test its rule itself, as stated where the rule is owned, or a stand-in that only correlates with it? The labelled set (question.json, cases.json, hidden reference/expectations.json; director-owned, never tuned) benched on every classifier Pi lists as available: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside the question's best-scoring classifier, and a gating threshold for the kit's model proposed from train only. Every answer is a model judgment: advisory, no gate reads it.",
+  "timeout_s": 1800,
+  "calibration": {
+    "evidence": "evidence/2026-10-25-gh119-judgment-bench-exact-or-proxy.md",
+    "held_out": {
+      "accuracy": 0.818,
+      "brier": 0.218
+    },
+    "threshold": {
+      "accuracy_min": 0.584,
+      "brier_max": 0.468,
+      "accepted": false
+    }
+  }
+}

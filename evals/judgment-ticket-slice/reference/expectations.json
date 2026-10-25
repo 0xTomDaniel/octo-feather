@@ -1,0 +1,134 @@
+{
+  "c-3-pi-role-approve": {
+    "label": "slice",
+    "reason": "one behaviour (agent spawn passes Pi's trust dialog) through pi-role and herdr-spawn, CLI test and live spawn demo",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/3",
+    "labelled_by": "director"
+  },
+  "c-6-ci-runs-check": {
+    "label": "slice",
+    "reason": "CI workflow runs the gate on PRs; demo is the real GitHub run going red then green on the lane PR",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/6",
+    "labelled_by": "director"
+  },
+  "c-9-resume-live-space": {
+    "label": "slice",
+    "reason": "changes resume behaviour of herdr-say end to end with CLI tests; demo is the gate's test line, weak but tied to the change; director ruling 2026-10-23: stays slice",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/9 (qc history-only note 'gate-only demos' on #9 #10: $(octo-feather-state)/lanes/archive/gh40.handoffs.jsonl at 2026-10-22T01:45:28Z)",
+    "labelled_by": "director"
+  },
+  "c-12-spec-chat-recipe": {
+    "label": "slice",
+    "reason": "new recipe a maintainer runs, links installed, git clean, demo runs it against the real clone",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/12",
+    "labelled_by": "director"
+  },
+  "c-22-new-repo": {
+    "label": "slice",
+    "reason": "just new-repo creates a target repo; live demo from each template passes its own setup and check",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/22",
+    "labelled_by": "director"
+  },
+  "c-42-gate-retired-words": {
+    "label": "slice",
+    "reason": "gate behaviour change a user sees (just check fails naming the fix), demo runs the gate on bad files",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/42",
+    "labelled_by": "director"
+  },
+  "c-46-lane-archive": {
+    "label": "slice",
+    "reason": "new octo-feather-lane archive command, test and demo run it on a seeded record",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/46",
+    "labelled_by": "director"
+  },
+  "c-48-merge-ask": {
+    "label": "slice",
+    "reason": "merge-ask and verdict commands, demo runs merge-ask on the lane's own PR",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/48",
+    "labelled_by": "director"
+  },
+  "c-62-spec-call-guard": {
+    "label": "slice",
+    "reason": "spec call guard in the gate, demo runs octo-feather-spec-status check on an unlogged edit then a logged one",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/62",
+    "labelled_by": "director"
+  },
+  "c-75-say-parked-worker": {
+    "label": "slice",
+    "reason": "herdr-say guard change through its CLI with fake herdr; demo is the test run, tied to the change",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/75",
+    "labelled_by": "director"
+  },
+  "c-97-tracker-pilot": {
+    "label": "slice",
+    "reason": "pilot through config, pi-role and gate; demo runs pi-role in a fixture target both ways",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/97",
+    "labelled_by": "director"
+  },
+  "c-110-qa-pilot": {
+    "label": "slice",
+    "reason": "pilot creates just qa and demos it running one suite end to end; the program it creates is the user surface; director ruling 2026-10-23: stays slice",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/110 (ticket check refused its demo, director-authorized; kit issue #109)",
+    "labelled_by": "director"
+  },
+  "c-10-contracts-text": {
+    "label": "layer-only",
+    "reason": "contract and doc text agreement only, demo is the gate green; no changed merge or teardown behaviour demonstrated",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/10; named layer-only in #40 body and $(octo-feather-state)/lanes/archive/gh23.handoffs.jsonl at 2026-10-19T21:34:45Z",
+    "labelled_by": "director"
+  },
+  "c-draft-private-schema-printf": {
+    "label": "layer-only",
+    "reason": "private schema only, no externally visible behaviour, demo is an unrelated printf",
+    "source": "$(octo-feather-state)/qc/294ac1d2f4fb2134e284b098fbd260f4c49333ce-20261020T011438Z-073525.json criteria[acceptance-tracer-tickets].command (qc judge's draft); finding gh40.handoffs.jsonl at 2026-10-20T01:16:37Z",
+    "labelled_by": "director"
+  },
+  "c-draft-archive-persistence": {
+    "label": "layer-only",
+    "reason": "persistence layer only, command wiring deferred, demo lists tickets unrelated to archive",
+    "source": "$(octo-feather-state)/qc/4a95d106366c6c3584496c483bc838420540b225-20261020T071509Z-5d7938.json criteria[acceptance-tracer-tickets].command (qc judge's draft); finding gh40.handoffs.jsonl at 2026-10-20T13:43:05Z",
+    "labelled_by": "director"
+  },
+  "c-draft-sqlite-deferred-cli": {
+    "label": "layer-only",
+    "reason": "tables and repository functions, CLI deferred to a separate delivery, demo is an unchanged existing command",
+    "source": "$(octo-feather-state)/qc/39515dfea54f491210e9411a9b77a454e4e64161-20261021T210939Z-6795da.json criteria[acceptance-tracer-tickets].command (qc judge's draft); finding gh40.handoffs.jsonl at 2026-10-21T21:11:15Z",
+    "labelled_by": "director"
+  },
+  "c-draft-persistence-table": {
+    "label": "layer-only",
+    "reason": "persistence table only, user-facing part deferred, demo is a regression run of an unrelated command",
+    "source": "$(octo-feather-state)/qc/19fc66a4fe54e2a585001600b18081e42c689e4b-20261022T013311Z-c26f7a.json criteria[acceptance-tracer-tickets].command (qc judge's draft); finding gh40.handoffs.jsonl at 2026-10-22T01:34:58Z",
+    "labelled_by": "director"
+  },
+  "c-draft-storage-repository": {
+    "label": "layer-only",
+    "reason": "storage tables and repository layer, no CLI/HTTP/UI change, wiring later, demo unrelated",
+    "source": "$(octo-feather-state)/qc/1b5cfa618c581743b6620a9d377ffb9922f8d736-20261022T015306Z-9523c5.json criteria[acceptance-tracer-tickets].command (qc judge's draft)",
+    "labelled_by": "director"
+  },
+  "c-72-checks-facts-text": {
+    "label": "layer-only",
+    "reason": "mostly ADR, role and patch text plus rule deletions; demo is the gate green, no changed corrector or check behaviour exercised; director ruling 2026-10-23: deleting checks changes gate behaviour, but its demo is the gate green, which does not exercise the deletion",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/72",
+    "labelled_by": "director"
+  },
+  "c-draft-storage-adapter": {
+    "label": "layer-only",
+    "reason": "internal storage table and adapter only, no user-facing change, demo is an unchanged command",
+    "source": "$(octo-feather-state)/qc/cb82fe53747a81772b96f6c7d63b43db31d29a1c-20261022T023608Z-e4e915.json criteria[acceptance-tracer-tickets].command (qc judge's draft); finding gh40.handoffs.jsonl at 2026-10-22T02:38:11Z",
+    "labelled_by": "director"
+  },
+  "c-86-reviewer-quality-only": {
+    "label": "slice",
+    "reason": "changes the code reviewer's behaviour (skills, block bar); its demo runs the reviewer via scripts/pi-role on a fixture diff and shows the changed behaviour (director ruling 2026-10-23)",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/86 (sub-issue of #67)",
+    "labelled_by": "director"
+  },
+  "c-87-prune-patches": {
+    "label": "layer-only",
+    "reason": "the change is skill and patch text; its demo only shows check-vendored reproducing patches, not the changed agent behaviour (director ruling 2026-10-23)",
+    "source": "https://github.com/0xTomDaniel/octo-feather/issues/87 (sub-issue of #67)",
+    "labelled_by": "director"
+  }
+}

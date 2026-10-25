@@ -1,0 +1,18 @@
+{
+  "spec": "judgment.spec.html",
+  "accepted_commit": "e67a151ab2b777a20fa995129f2f05c13e25b307",
+  "criteria": {
+    "acceptance-judge-labelled": {
+      "status": "built",
+      "pr": 147
+    },
+    "acceptance-judge-bench": {
+      "status": "built",
+      "pr": 147
+    },
+    "acceptance-judge-advisory": {
+      "status": "built",
+      "pr": 147
+    }
+  }
+}

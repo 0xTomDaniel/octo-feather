@@ -28,11 +28,13 @@ expect() {
   grep -qF "$3" <<<"$out" || { echo "check-refs test: $1 did not report: $3" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$1" <<<"$out" || { echo "check-refs test: $1 not named in the output" >&2; exit 1; }
 }
-# allow FILE CONTENT: appending CONTENT to tracked FILE keeps check-refs green; the copy is restored after.
+# allow FILE CONTENT: FILE (new, or a tracked file CONTENT is appended to) keeps check-refs green; the copy is restored after.
 allow() {
-  cp "$t/$1" "$t/.allow-old"; printf '%s\n' "$2" >> "$t/$1"
+  local old=""; [[ -e "$t/$1" ]] && { old="$t/.allow-old"; cp "$t/$1" "$old"; }
+  mkdir -p "$t/$(dirname "$1")"; printf '%s\n' "$2" >> "$t/$1"; g add -f "$1"
   set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
-  mv "$t/.allow-old" "$t/$1"
+  if [[ -n "$old" ]]; then mv "$old" "$t/$1"; g add "$1"
+  else g rm -qf --cached "$1"; rm -rf "${t:?}/$1"; rmdir -p "$t/$(dirname "$1")" 2>/dev/null || true; fi
   [[ "$rc" == 0 ]] || { echo "check-refs test: $1 with '$2' failed check-refs" >&2; echo "$out" >&2; exit 1; }
 }
 expect docs/x.md "The $op spawns one supervisor per lane." "$words"
@@ -100,7 +102,18 @@ expect justfile "# lane branch gh<N>""-<slug>" "docs/adr/0011"
 allow docs/adr/0011-herdr-layout.md "Rejected: \`octo-feather/""gh<issue>""-<slug>\` and gh<N>""-<slug>."
 allow agents/supervisor.md "The lane branch is \`gh<N>\`: see docs/adr/0011. Worker branches gh<N>-* never match."
 allow README.md "Worker branches gh<N>-* and gh<issue>-*, never the lane."
+# Judgment suites' label data quote frozen history: only cases.json, reference/expectations.json and REPORT.md
+# of evals/judgment-*/ skip the retired-words and lane-branch scans; the suite's other files and other suites do not.
+lb="Cut branch gh<N>""-<slug> for the lane."
+for f in cases.json reference/expectations.json REPORT.md; do
+  allow "evals/judgment-x/$f" "\"state\": \"calls the top agent $op or the person $hu\""
+  allow "evals/judgment-x/$f" "\"state\": \"$lb\""
+done
+for f in evals/judgment-x/suite.json evals/judgment-x/question.json evals/judgment-x/sources/t/x.sh evals/role-x/cases.json evals/judgment-x/cases.md; do
+  expect "$f" "\"state\": \"calls the top agent $op\"" "$words"
+  expect "$f" "\"state\": \"$lb\"" "docs/adr/0011"
+done
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
-echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi; a broken scanner fails closed)"
+echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi; a broken scanner fails closed; judgment label data exempt, the rest of the suite scanned)"
