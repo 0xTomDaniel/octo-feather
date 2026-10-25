@@ -69,3 +69,5 @@ Then, for every rule the diff writes or changes where it is owned (owners: docs/
 `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
 
 List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
+
+The verdict reader (`octo-feather-lane verdict`) counts `Verdict:`, `Check:` and `Checks:` lines only at column 0, outside a column-0 ``` or ~~~ fence (closed by a column-0 run of the same character, at least as long) and outside a column-0 `>` blockquote with its lazy continuation lines up to a blank line or a column-0 fence. Lists and indented code are not read as containers.
