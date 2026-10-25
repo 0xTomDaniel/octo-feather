@@ -16,17 +16,18 @@ place, when the record is missing or either archive target already exists.
   octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
-                                   the question's chosen classifier answers it on FILE's text; create, or
+                                   the kit's judgment model answers it on FILE's text; create, or
                                    update in place, the PR's one comment for QUESTION, labelled a model judgment
 
 `judge` (spec judgment #boundary-advisory-judge) runs beside a code review: it refuses until the PR has
 its verdict comment. QUESTION is a judgment suite's name without `judgment-` (test-quality, exact-or-proxy,
-ticket-slice, call-evidence); its chosen model is the suite's suite.json `chosen` (the classifier its bench chose).
+ticket-slice, call-evidence); every question is asked of the kit's one judgment model, evals/judgment-model.json
+`model` (spec judgment#rule-one-model).
 The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
 nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
 no agent, in the qa sandbox, moving aliases never called; refused inside a check run), asking only that model.
 The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
-probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `chosen`, proposed or
+probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
 accepted, and its status: below accepted threshold, no accepted threshold or meets accepted threshold; spec judgment
 #rule-calibration), PR head, Review head (the verdict comment's), then the question and the state; prints its URL.
 merge-ask, on pass, prints each such comment as one line under `Model judgments` after the section, beside the
@@ -604,16 +605,16 @@ def qa_module():
     return mod
 
 
-def calibration(chosen: dict, qid: str) -> str:
-    """The question's calibration status (spec judgment#rule-calibration) from its suite.json chosen: held-out accuracy
-    and Brier against its threshold, proposed or accepted. Display only: no gate reads it (#rule-advisory)."""
-    ho, th = chosen.get("held_out"), chosen.get("threshold")
+def calibration(cal: dict, qid: str) -> str:
+    """The question's calibration status (spec judgment#rule-calibration) from its suite.json calibration: the kit model's
+    held-out accuracy and Brier against its threshold, proposed or accepted. Display only: no gate reads it (#rule-advisory)."""
+    ho, th = cal.get("held_out"), cal.get("threshold")
     try:
         acc, brier = float(ho["accuracy"]), float(ho["brier"])
         amin, bmax, accepted = float(th["accuracy_min"]), float(th["brier_max"]), th["accepted"]
     except (TypeError, KeyError, ValueError):
         raise Refuse(f"question {qid} has no calibration record: copy its bench's held-out accuracy and Brier and its threshold "
-                     f"into evals/judgment-{qid}/suite.json chosen (shape: scripts/check-evals --help)")
+                     f"into evals/judgment-{qid}/suite.json calibration (shape: scripts/check-evals --help)")
     if accepted is not True:
         status = "no accepted threshold"
     elif acc >= amin and brier <= bmax:
@@ -638,11 +639,14 @@ def cmd_judge(args: list[str]) -> int:
     if qid not in suites:
         raise Refuse(f"no judgment question {qid!r}: name one of {', '.join(sorted(suites))} (evals/judgment-<question>/)")
     suite = suites[qid]
-    if not isinstance(suite.get("chosen"), dict) or not suite["chosen"].get("model"):
-        raise Refuse(f"question {qid} has no chosen model: bench it (just qa --suite judgment-{qid}) and record "
-                     f"`chosen` in evals/judgment-{qid}/suite.json (shape: scripts/check-evals --help)")
-    model = suite["chosen"]["model"]
-    cal = calibration(suite["chosen"], qid)
+    try:
+        model = qa_module().judgment_model(EVALS)   # the one reader of the one record (spec judgment#rule-one-model)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"no kit judgment model ({e}): record it in evals/judgment-model.json (shape: scripts/check-evals --help)")
+    if not isinstance(suite.get("calibration"), dict):
+        raise Refuse(f"question {qid} has no calibration of the kit's model {model}: bench it (just qa --suite judgment-{qid}) "
+                     f"and record `calibration` in evals/judgment-{qid}/suite.json (shape: scripts/check-evals --help)")
+    cal = calibration(suite["calibration"], qid)
     q = json.loads((EVALS / f"judgment-{qid}" / "question.json").read_text())
     try:
         state = sys.stdin.read() if state_file == "-" else Path(state_file).read_text(encoding="utf-8")
@@ -669,9 +673,11 @@ def cmd_judge(args: list[str]) -> int:
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
     if model not in (bench.get("benched") or []):
-        why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
-        raise Refuse(f"chosen model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
-                     f"check Pi's models and auth, or bench the question again and record its chosen model in evals/judgment-{qid}/suite.json")
+        yn = next((e for m, e, _ in bench.get("yesno") or [] if m == model), None)
+        why = ("a moving alias, never called" if model in (bench.get("skipped") or []) else
+               f"yes/no only (a choice question refused: {yn})" if yn is not None else "not an available classifier")
+        raise Refuse(f"the kit's judgment model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
+                     f"check Pi's models and auth, or rebench and record another in evals/judgment-model.json")
     rows = bench.get("rows") or []
     _, _, choice, probs, _, ei = rows[0] if rows else (None, None, None, None, None, None)
     if choice not in q["labels"]:
@@ -685,7 +691,8 @@ def cmd_judge(args: list[str]) -> int:
     body = (f"{marker}\n## Model judgment: {qid}\n\nJudgment: {qa.JUDGMENT}\nQuestion: {qid}\nModel: {model}\nAnswer: {choice}\n"
             f"Confidence: {conf_s}\nCalibration: {cal}\nPR head: {head}\nReview head: {rh.group(1)}\n"
             f"State: {Path(state_file).name if state_file != '-' else 'stdin'} (sha256 {hashlib.sha256(state.encode()).hexdigest()[:12]}, "
-            f"{len(state)} characters)\nChosen by: {suite['chosen'].get('evidence', f'evals/judgment-{qid}/suite.json')}\n\n"
+            f"{len(state)} characters)\nModel record: evals/judgment-model.json\n"
+            f"Calibrated by: {suite['calibration'].get('evidence', f'evals/judgment-{qid}/suite.json')}\n\n"
             f"### Question\n\n{q['question']}\n\n### State\n\n{fence}text\n{quoted.rstrip()}\n{fence}\n")
     out, said = post_comment(pr, repo, d["comments"], marker, body, f"{qid} judgment")
     print(f"judge: {said} ({qid}: {choice}, confidence {conf_s}, model judgment by {model}; calibration: {cal})", file=sys.stderr)

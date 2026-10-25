@@ -3,16 +3,15 @@
   "kind": "judgment",
   "description": "Judgment question (a) test quality (spec judgment#questions): is a test tautological, implementation-coupled or ok? The labelled set (question.json, cases.json, hidden reference/expectations.json; director-owned, never tuned) benched on every classifier Pi lists as available: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, one model chosen and a gating threshold proposed from train only. Every answer is a model judgment: advisory, no gate reads it.",
   "timeout_s": 1800,
-  "chosen": {
-    "model": "openrouter/respan/span-02",
+  "calibration": {
     "evidence": "evidence/2026-10-23-gh119-judgment-bench.md",
     "held_out": {
       "accuracy": 1.0,
-      "brier": 0.107
+      "brier": 0.123
     },
     "threshold": {
       "accuracy_min": 0.699,
-      "brier_max": 0.39,
+      "brier_max": 0.381,
       "accepted": false
     }
   }

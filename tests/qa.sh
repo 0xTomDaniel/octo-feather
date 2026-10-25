@@ -40,14 +40,15 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
     # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
     # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
     # p/q-1.2 and p/q-1.2:free (pinned, an OpenRouter routing tag), broken never answers, the moving aliases ~x/y,
-    # p/q-latest and x-latest:free (the tag ignored) kill the run if called;
+    # p/q-latest and x-latest:free (the tag ignored) kill the run if called; yesno refuses every choice question
+    # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier);
     # a state holding STUB-DIE kills the run. As pi's print mode, an extension's process.stdout goes to stderr.
     name, _, args = prompt[1:].partition(" ")
     harness = """import {pathToFileURL} from "node:url";
 const [ext, name, args] = process.argv.slice(1);
 const cmds = {};
 (await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
-const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2", "x-latest:free", "p/q-1.2:free"];
+const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2", "x-latest:free", "p/q-1.2:free", "yesno"];
 const aliases = ["~x/y", "p/q-latest", "x-latest:free"];   // moving aliases: a call to one kills the run
 const models = ids.map((id) => ({type: "classifier", provider: "stub", id, name: id, api: "stub", input: ["text"]}));
 const cost = (id, state) => id === "cheap-train" ? (state.startsWith("case h") ? 0.01 : 0.001) : id === "cheap-total" ? (state.startsWith("case h") ? 0 : 0.002) : 0.001;
@@ -56,6 +57,9 @@ const modelRegistry = {
   classify: async (m, {state, questions}) => {
     if (aliases.includes(m.id)) process.exit(4);
     if (m.id === "broken") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub provider down"};
+    if (m.id === "yesno") return Object.values(questions).every((q) => q.type === "bool")
+      ? {provider: "stub", model: m.id, answers: Object.fromEntries(Object.keys(questions).map((k) => [k, {type: "bool", probability: 0.9}])), stopReason: "stop"}
+      : {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: 'Stub API error (400): {"message":"stub accepts only bool questions (question \\"q\\")"}'};
     if (typeof state !== "string") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub: state must be a string"};
     if (state.includes("STUB-DIE")) process.exit(3);
     const answers = {};
@@ -596,22 +600,32 @@ json.dump({i: {"label": lb, "reason": f"SECRET-REASON {i}", "source": "tests/qa.
           open(f"{d}/reference/expectations.json", "w"))
 EOF
 echo '{"suite": "jb", "kind": "judgment", "description": "stub judgment", "timeout_s": 60}' > "$t/jg/jb/suite.json"
+# The kit's one judgment model (spec judgment#rule-one-model): stub/first, not the question's best (token).
+mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
+echo '{"model": "stub/first", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 cp -r "$t/jg" "$t/jg-good"
 run 0 "$Q" --evals "$t/jg"
 jl() { grep -qF -- "$1" <<< "$out" || fail "bench: no '$1' in: $out"; }
 jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every answer is a model judgment"
-jl "bench jb: classifiers available (10): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free"
+jl "bench jb: classifiers available (11): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free, stub/yesno"
 jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/p/q-latest, stub/x-latest:free"
 grep -m1 "skipped: moving alias" <<< "$out"
+# Yes/no only, by the probe's two results (a tiny choice question refused, a tiny bool one answered): skipped, its
+# provider error quoted verbatim, neither scored nor listed unavailable; broken (both refused) stays unavailable.
+jl 'bench jb: skipped: yes/no only stub/yesno: a tiny choice question refused, a tiny bool question answered (probability 0.9); provider: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
+! grep -E "unavailable stub/yesno|^  stub/yesno " <<< "$out" || fail "bench: a yes/no-only classifier scored or listed unavailable: $out"
 [[ "$(grep -A7 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2:free 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
 [[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2:free 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
 jl "unavailable stub/broken: listed but answered no case: stub provider down"
-jl "chosen stub/token (from train only"
-jl "held-out accuracy >= 0.468 and held-out brier <= 0.687"
-jl "held-out now: accuracy 0.333 (1/3 of 3), brier 0.880, ece 0.467: does not meet the proposed threshold"
-jl "DONE bench jb: chosen stub/token"
+# The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+[[ "$(grep -A3 '^KIT MODEL BESIDE THE BEST (best: highest train accuracy' <<< "$out" | tail -2 | tr -s ' ')" == \
+   $' kit stub/first 0.500 1.000 0.333 1.333 0.015000\n best stub/token 0.750 0.380 0.333 0.880 0.015000' ]] || fail "bench: kit beside best wrong: $out"
+jl "kit model stub/first (judgment-model.json): proposed threshold (for the director to accept; until met, the judge stays advisory): held-out accuracy >= 0.254 and held-out brier <= 1.591"
+jl "held-out now: accuracy 0.333 (1/3 of 3), brier 1.333, ece 0.667: meets the proposed threshold"
+! grep -q "^chosen" <<< "$out" || fail "bench: a per-question choice named: $out"
+jl "DONE bench jb: kit model stub/first, best stub/token"
 grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "bench: not run in the qa sandbox: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 for f in input.json extension.js stdout.txt stderr.txt sandbox.json answers.json bench.json report.txt; do [[ -e "$d/jb/$f" ]] || fail "bench artifact $f missing"; done
@@ -622,11 +636,16 @@ d = sys.argv[1]
 a = json.load(open(f"{d}/jb/answers.json"))
 assert len(a["answers"]) == 105 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
 s = json.load(open(f"{d}/summary.json"))
-assert s["benches"][0]["choice"]["model"] == "stub/token" and s["benches"][0]["verdict"] == "DONE", s["benches"]
+assert s["benches"][0]["best"]["model"] == "stub/token" and s["benches"][0]["verdict"] == "DONE", s["benches"]
+k = s["benches"][0]["kit_model"]
+assert k["model"] == "stub/first" and k["scored"] and k["threshold"] == {"accuracy_min": 0.254, "brier_max": 1.591} and k["held_out"] == {"accuracy": 0.333, "brier": 1.333}, k
+assert "choice" not in s["benches"][0], s["benches"][0]
 b = json.load(open(f"{d}/jb/bench.json"))   # per-model cost and the run total (token, first, p/q-1.2, p/q-1.2:free 0.015 each; cheap 0.042 + 0.024)
 assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-train"] == 0.042 and round(b["cost_usd"], 6) == 0.126, b
 assert b["skipped"] == ["stub/~x/y", "stub/p/q-latest", "stub/x-latest:free"] and {"stub/p/q-1.2", "stub/p/q-1.2:free"} <= set(b["benched"]), b
 assert not set(b["skipped"]) & ({x["model"] for x in a["answers"]} | {m["model"] for m in b["models"]}), b
+assert b["skipped_yes_no"] == [{"model": "stub/yesno", "choice_error": 'Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}', "bool_probability": 0.9}], b
+assert "stub/yesno" not in b["benched"] + [x["model"] for x in a["answers"]] + [m["model"] for m in b["models"]], b
 # No agent: one pi, no tools, no chat model, no session; only the bench extension loaded.
 argv = json.loads(open(f"{d}/jb/stdout.txt").readline())["argv"]
 for x in ("--no-tools", "--no-extensions", "--no-session", "--no-skills", "--no-mcp"):
@@ -636,18 +655,28 @@ assert argv[argv.index("-p") + 1].startswith("/octo-feather-bench "), argv
 EOF
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
-jl "DONE bench jb: chosen stub/first"
+jl "DONE bench jb: kit model stub/first, best stub/first"
 # A --classifier naming a moving alias: skipped the same way, never called (a call kills the stub run), never chosen.
 run 0 "$Q" --evals "$t/jg" --classifier stub/p/q-latest --classifier stub/~x/y --classifier stub/p/q-1.2
 jl "bench jb: benched only --classifier stub/p/q-latest, stub/~x/y, stub/p/q-1.2"
 jl "bench jb: skipped: moving alias (2): stub/~x/y, stub/p/q-latest"
-jl "DONE bench jb: chosen stub/p/q-1.2"
+grep -qE "^  kit +stub/first +not scored: not benched$" <<< "$out" || fail "bench: kit model not benched not shown: $out"
+jl "DONE bench jb: kit model stub/first not scored (not benched), best stub/p/q-1.2"
 ! grep -q "not available" <<< "$out" || fail "bench: a skipped alias named not available: $out"
 python3 -c "import json,sys; b=json.load(open(sys.argv[1])); assert b['skipped'] == ['stub/~x/y', 'stub/p/q-latest'] and b['benched'] == ['stub/p/q-1.2'], b" \
   "$(ls -dt "$t"/out/*/ | head -1)/jb/bench.json" || fail "bench: --classifier aliases not recorded skipped"
 # Ties on train accuracy and Brier break on train cost only: cheap-train costs less on train, more in all.
 run 0 "$Q" --evals "$t/jg" --classifier stub/cheap-total --classifier stub/cheap-train
-jl "DONE bench jb: chosen stub/cheap-train"
+jl "DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train"
+# The kit's model benched but unscored fails the bench: it has no calibration to propose (broken: every case refused;
+# yesno: yes/no only).
+echo '{"model": "stub/broken", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
+run 1 "$Q" --evals "$t/jg"
+jl "FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: stub provider down)"
+echo '{"model": "stub/yesno", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
+run 1 "$Q" --evals "$t/jg" --classifier stub/yesno --classifier stub/first
+jl "FAILED bench jb: the kit's judgment model stub/yesno was not scored (yes/no only)"
+cp "$t/jg-good/judgment-model.json" "$t/jg/judgment-model.json"
 # A pi that dies before the command prints its result: the bench fails, naming it.
 python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-DIE'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
 run 1 "$Q" --evals "$t/jg" --classifier stub/first
@@ -670,40 +699,57 @@ run 0 "$C" "$t/evals"
 bad 'e["t3"]["labelled_by"] = " "' "jb/reference/expectations.json case t3: field labelled_by: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["relabel"] = "two\nlines"' "jb/reference/expectations.json case t3: field relabel: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["note"] = "x"' "jb/reference/expectations.json case t3: field note: unknown field" "$t/jg-good" jb
-# A judgment suite's chosen classifier (suite.json "chosen", read by octo-feather-lane judge): a pinned P/ID and an
-# evidence file that exists beside evals/ (the repo holding it); refused on any other kind.
-mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
+# A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
+# evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
 rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
-python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['chosen']={'model': 'stub/p/q-1.2:free', 'evidence': 'evidence/jb.md', 'held_out': {'accuracy': 0.5, 'brier': 0.6}, 'threshold': {'accuracy_min': 0.7, 'brier_max': 0.39, 'accepted': True}}; json.dump(s, open(p, 'w'))" \
+python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['calibration']={'evidence': 'evidence/jb.md', 'held_out': {'accuracy': 0.5, 'brier': 0.6}, 'threshold': {'accuracy_min': 0.7, 'brier_max': 0.39, 'accepted': True}}; json.dump(s, open(p, 'w'))" \
   "$t/evals/jb/suite.json"
 run 0 "$C" "$t/evals"
-ok_chosen='s["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md", "held_out": {"accuracy": 1, "brier": 0}, "threshold": {"accuracy_min": 0.699, "brier_max": 2.403, "accepted": False}}'
-bad "$ok_chosen"'; s["chosen"]["why"] = "x"' "jb/suite.json: field chosen.why: unknown field" "$t/jg-good" jb
-bad "$ok_chosen"'; del s["chosen"]["model"]' "jb/suite.json: field chosen.model: missing" "$t/jg-good" jb
-bad "$ok_chosen"'; del s["chosen"]["evidence"]' "jb/suite.json: field chosen.evidence: missing" "$t/jg-good" jb
-bad 's["chosen"] = "stub/p/q-1.2"' "jb/suite.json: field chosen: must be an object {model, evidence, held_out, threshold}" "$t/jg-good" jb
-for m in stub/~x/y stub/p/q-latest stub/x-latest:free; do
-  bad "$ok_chosen"'; s["chosen"]["model"] = "'"$m"'"' "jb/suite.json: field chosen.model: $m is a moving alias" "$t/jg-good" jb
-done
-for m in stub 'stub/' '/x' 'stub/a b' ''; do
-  bad "$ok_chosen"'; s["chosen"]["model"] = "'"$m"'"' "jb/suite.json: field chosen.model: must be a classifier <provider>/<id>, got '$m'" "$t/jg-good" jb
-done
-bad "$ok_chosen"'; s["chosen"]["evidence"] = "evidence/none.md"' "jb/suite.json: field chosen.evidence: no file evidence/none.md beside evals/" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["evidence"] = "../evidence/jb.md"' "jb/suite.json: field chosen.evidence: must be a relative path inside the repo" "$t/jg-good" jb
+ok_cal='s["calibration"] = {"evidence": "evidence/jb.md", "held_out": {"accuracy": 1, "brier": 0}, "threshold": {"accuracy_min": 0.699, "brier_max": 2.403, "accepted": False}}'
+bad "$ok_cal"'; s["calibration"]["why"] = "x"' "jb/suite.json: field calibration.why: unknown field" "$t/jg-good" jb
+bad "$ok_cal"'; del s["calibration"]["evidence"]' "jb/suite.json: field calibration.evidence: missing" "$t/jg-good" jb
+bad 's["calibration"] = "stub/p/q-1.2"' "jb/suite.json: field calibration: must be an object {evidence, held_out, threshold}" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["evidence"] = "evidence/none.md"' "jb/suite.json: field calibration.evidence: no file evidence/none.md beside evals/" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["evidence"] = "../evidence/jb.md"' "jb/suite.json: field calibration.evidence: must be a relative path inside the repo" "$t/jg-good" jb
+# No suite names a model (spec judgment#rule-one-model): a model or chosen key at any depth is refused, naming the one place.
+one="a suite names no model; the kit's one judgment model is judgment-model.json"
+bad "$ok_cal"'; s["calibration"]["model"] = "stub/first"' "jb/suite.json: field calibration.model: $one" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["held_out"]["model"] = "stub/first"' "jb/suite.json: field calibration.held_out.model: $one" "$t/jg-good" jb
+bad 's["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}' "jb/suite.json: field chosen: $one" "$t/jg-good" jb
+bad 's["model"] = "stub/first"' "jb/suite.json: field model: $one" "$t/jg-good" jb
 # Its calibration record (copied from the evidence file): held_out {accuracy 0..1, brier 0..2}, threshold {accuracy_min 0..1,
 # brier_max >= 0, accepted bool}, each key required, no other.
 for k in held_out threshold; do
-  bad "$ok_chosen"'; del s["chosen"]["'$k'"]' "jb/suite.json: field chosen.$k: missing" "$t/jg-good" jb
-  bad "$ok_chosen"'; s["chosen"]["'$k'"] = 0.7' "jb/suite.json: field chosen.$k: must be an object {" "$t/jg-good" jb
-  bad "$ok_chosen"'; s["chosen"]["'$k'"]["n"] = 7' "jb/suite.json: field chosen.$k.n: unknown field" "$t/jg-good" jb
+  bad "$ok_cal"'; del s["calibration"]["'$k'"]' "jb/suite.json: field calibration.$k: missing" "$t/jg-good" jb
+  bad "$ok_cal"'; s["calibration"]["'$k'"] = 0.7' "jb/suite.json: field calibration.$k: must be an object {" "$t/jg-good" jb
+  bad "$ok_cal"'; s["calibration"]["'$k'"]["n"] = 7' "jb/suite.json: field calibration.$k.n: unknown field" "$t/jg-good" jb
 done
-for f in accuracy brier; do bad "$ok_chosen"'; del s["chosen"]["held_out"]["'$f'"]' "jb/suite.json: field chosen.held_out.$f: missing" "$t/jg-good" jb; done
-for f in accuracy_min brier_max accepted; do bad "$ok_chosen"'; del s["chosen"]["threshold"]["'$f'"]' "jb/suite.json: field chosen.threshold.$f: missing" "$t/jg-good" jb; done
-bad "$ok_chosen"'; s["chosen"]["held_out"]["accuracy"] = 1.2' "jb/suite.json: field chosen.held_out.accuracy: must be a number from 0 to 1, got 1.2" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["held_out"]["accuracy"] = "0.9"' "jb/suite.json: field chosen.held_out.accuracy: must be a number from 0 to 1, got '0.9'" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["held_out"]["brier"] = 2.1' "jb/suite.json: field chosen.held_out.brier: must be a number from 0 to 2, got 2.1" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["threshold"]["accuracy_min"] = True' "jb/suite.json: field chosen.threshold.accuracy_min: must be a number from 0 to 1, got True" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["threshold"]["brier_max"] = -0.1' "jb/suite.json: field chosen.threshold.brier_max: must be a number from 0 up, got -0.1" "$t/jg-good" jb
-bad "$ok_chosen"'; s["chosen"]["threshold"]["accepted"] = "no"' "jb/suite.json: field chosen.threshold.accepted: must be true or false, got 'no'" "$t/jg-good" jb
-bad 's["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}' "trig/suite.json: field chosen: only in a judgment suite"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), unavailable named, choice and threshold from train, --classifier, ties on train cost only, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, chosen classifier: pinned P/ID, moving alias, missing or unknown key, evidence file, held_out and threshold shape, judgment suites only)"
+for f in accuracy brier; do bad "$ok_cal"'; del s["calibration"]["held_out"]["'$f'"]' "jb/suite.json: field calibration.held_out.$f: missing" "$t/jg-good" jb; done
+for f in accuracy_min brier_max accepted; do bad "$ok_cal"'; del s["calibration"]["threshold"]["'$f'"]' "jb/suite.json: field calibration.threshold.$f: missing" "$t/jg-good" jb; done
+bad "$ok_cal"'; s["calibration"]["held_out"]["accuracy"] = 1.2' "jb/suite.json: field calibration.held_out.accuracy: must be a number from 0 to 1, got 1.2" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["held_out"]["accuracy"] = "0.9"' "jb/suite.json: field calibration.held_out.accuracy: must be a number from 0 to 1, got '0.9'" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["held_out"]["brier"] = 2.1' "jb/suite.json: field calibration.held_out.brier: must be a number from 0 to 2, got 2.1" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["threshold"]["accuracy_min"] = True' "jb/suite.json: field calibration.threshold.accuracy_min: must be a number from 0 to 1, got True" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["threshold"]["brier_max"] = -0.1' "jb/suite.json: field calibration.threshold.brier_max: must be a number from 0 up, got -0.1" "$t/jg-good" jb
+bad "$ok_cal"'; s["calibration"]["threshold"]["accepted"] = "no"' "jb/suite.json: field calibration.threshold.accepted: must be true or false, got 'no'" "$t/jg-good" jb
+bad 's["calibration"] = {"evidence": "evidence/jb.md"}' "trig/suite.json: field calibration: only in a judgment suite"
+# The one place (EVALS/judgment-model.json, spec judgment#rule-one-model): required beside a judgment suite, {model: a
+# pinned P/ID, evidence: a file beside evals/}, no other key.
+badm() {   # badm PY_EDIT WANT: edit a fresh judgment copy's judgment-model.json (m), expect WANT
+  rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
+  python3 -c 'import json,sys; p=sys.argv[1]; m=json.load(open(p)); exec(sys.argv[2]); json.dump(m, open(p, "w"))' "$t/evals/judgment-model.json" "$1"
+  run 1 "$C" "$t/evals"; grep -qF "$2" <<< "$out" || fail "model file check missed: want '$2', got: $out"
+}
+rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"; rm "$t/evals/judgment-model.json"
+run 1 "$C" "$t/evals"; grep -qF "$t/evals/judgment-model.json: missing; it holds the kit's one judgment model {model, evidence}" <<< "$out" || fail "no model file: $out"
+badm 'del m["model"]' "judgment-model.json: field model: missing"
+badm 'del m["evidence"]' "judgment-model.json: field evidence: missing"
+badm 'm["why"] = "x"' "judgment-model.json: field why: unknown field"
+for m in stub/~x/y stub/p/q-latest stub/x-latest:free; do
+  badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: $m is a moving alias"
+done
+for m in stub 'stub/' '/x' 'stub/a b' ''; do
+  badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
+done
+badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, moving aliases skipped (catalogue and --classifier), yes/no-only skipped by its probe results (choice refused, bool answered) with the provider error, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json: required, pinned P/ID, moving alias, missing or unknown key, evidence file)"
