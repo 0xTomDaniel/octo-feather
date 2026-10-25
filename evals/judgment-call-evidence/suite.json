@@ -5,6 +5,15 @@
   "timeout_s": 1800,
   "chosen": {
     "model": "openrouter/nace-ai/drex-max",
-    "evidence": "evidence/2026-10-24-gh119-judgment-bench-call-evidence.md"
+    "evidence": "evidence/2026-10-24-gh119-judgment-bench-call-evidence.md",
+    "held_out": {
+      "accuracy": 0.917,
+      "brier": 0.235
+    },
+    "threshold": {
+      "accuracy_min": 0.549,
+      "brier_max": 0.655,
+      "accepted": false
+    }
   }
 }
