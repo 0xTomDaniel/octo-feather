@@ -70,6 +70,10 @@
       "status": "built",
       "pr": 49
     },
+    "acceptance-merge-ask-no-criterion": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-merge-approved-head": {
       "status": "built",
       "pr": 103
