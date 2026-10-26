@@ -1,7 +1,7 @@
 # gh178: vendored verification skills under Pi, Python starter verify-app
 
 Smoke: .agents/skills/create-verification-skill/ .skillfile/patches/skills/create-verification-skill/SKILL.md.patch agents/implementer.md (one headless implementer run, below: the role listed the skill, loaded it by name and followed the patched text to make verify-app)
-Smoke: .agents/skills/maintain-verification-skill/ .skillfile/patches/skills/maintain-verification-skill/SKILL.md.patch (not run as a role: the supervisor holds headless runs for box load; proof is `just check-vendored` reproducing the folder and the grep below; its role-transcript eval is owed, docs/owed-evals/136.md)
+Smoke: .agents/skills/maintain-verification-skill/ .skillfile/patches/skills/maintain-verification-skill/SKILL.md.patch (run as a role: `just qa` case evals/role-transcripts implementer-verify-pass, FAIL at --kit-ref 8451938, PASS at 25089bd; section "Live smoke: maintain-verification-skill" below)
 Removed: from both vendored skills, upstream's `disable-model-invocation: true`, every `.cursor/skills/` path and slash command (`/create-verification-skill`, `/maintain-verification-skill`), "ask the user" and "Point the user at", maintain's concurrent read-only subagents ("One read-only subagent per feature file, launched concurrently") and "one PR" of corrections. Nothing removed from agents/implementer.md.
 
 ## Vendoring
@@ -10,6 +10,40 @@ Removed: from both vendored skills, upstream's `disable-model-invocation: true`,
 - `just check-vendored`: `vendored: ok (20 skills equal authenticated upstream at pin plus patches; skillfile v1.9.2, offline)`.
 - skills#acceptance-verification-pi: `grep -rn "cursor\|subagent\| /[a-z]" .agents/skills/{create,maintain}-verification-skill` finds no `.cursor/`, no slash command and no subagent start: two hits, create's "/tmp is private" (run state) and maintain's "Pi has no subagents" (the serial read); `grep -rnw PR` in maintain finds none. Both name `.agents/skills`, load by name, the supervisor with `herdr-say --parent`.
 - evals/skill-triggers: 8 cases (should and near-miss should-not, train and held-out, per skill), approved by the supervisor; not run (box load), owed in docs/owed-evals/136.md.
+
+## Live smoke: maintain-verification-skill (`just qa`, implementer-verify-pass)
+
+Run by the supervisor, one at a time, in the qa sandbox (no live Herdr, no GitHub, no creds; sandbox lines `ok`). Fixture evals/fixtures/python-app-verify-drift: verify-app's hello map and helper say a blank name exits 1, source and tests say 2. Model anthropic/claude-opus-5-5.
+
+Before, `just qa --suite role-transcripts --case implementer-verify-pass --kit-ref 8451938` (log /tmp/gh136-sup/qa-before.log, run 20261026T202619Z-34b2ef, artifacts ~/.local/state/octo-feather/qa/20261026T202619Z-34b2ef):
+
+```
+FAIL role-transcripts/implementer-verify-pass: skill_read_before maintain-verification-skill edit: first edit at tool call 11 of 22 (edit /tmp/qa-34b2ef-1-l1e_10v_/repo/.agents/skills/verify-app/features/hello.md), no load of maintain-verification-skill/SKILL.md (its full content in a tool result) in 22 tool calls [stop: exit, 22 tool calls, 117.3 s] [kit 8451938bc467fb18f012228c938869c3fb5c1ecf]
+qa: 0/1 passed (run 20261026T202619Z-34b2ef); artifacts /home/exedev/.local/state/octo-feather/qa/20261026T202619Z-34b2ef
+```
+
+Caveat from its transcript: the kit at 8451938 has no maintain-verification-skill, so the role ran `find / -name maintain-verification-skill` (call 6) and at call 8 cat'ed a copy from the integration clone /home/exedev/src/octo-feather-gh136, which the sandbox leaves readable. The grader did not count it (not the run's kit), so the FAIL stands on the kit, but the before run did see a version of the skill. Kit source trees readable from the qa sandbox are a sandbox gap, not this ticket's.
+
+After, `just qa --suite role-transcripts --case implementer-verify-pass` (kit 25089bd; log /tmp/gh136-sup/qa-after.log, run 20261026T202817Z-31ff10, artifacts ~/.local/state/octo-feather/qa/20261026T202817Z-31ff10):
+
+```
+PASS role-transcripts/implementer-verify-pass: skill_read_before maintain-verification-skill edit: loaded at tool call 1 of 15 (read /home/exedev/src/octo-feather-gh136-w178/.agents/skills/maintain-verification-skill/SKILL.md), before first edit at tool call 7 of 15 (edit .agents/skills/verify-app/scripts/verify-app); skill_read_before commit git_commit: loaded at tool call 12 of 15 (...), before first git_commit at tool call 14 of 15 (...); branch_paths: changed .agents/skills/verify-app/features/hello.md, .agents/skills/verify-app/scripts/verify-app; none under src/, tests/, pyproject.toml, uv.lock, AGENTS.md, justfile, .githooks/, .github/; each of .agents/skills/verify-app/ changed; declared outcome: "changed", one of ["changed"] [stop: exit, 15 tool calls, 99.2 s] [kit 25089bd3b58be6b212138d33b0f768818c1ada87]
+qa: 1/1 passed (run 20261026T202817Z-31ff10); artifacts /home/exedev/.local/state/octo-feather/qa/20261026T202817Z-31ff10
+```
+
+What the role did in the head run (transcript.jsonl, 15 tool calls):
+
+- 1: read maintain-verification-skill/SKILL.md.
+- 2-3: serial source read, no subagents: git status and file list, then in one shell verify-app SKILL.md, features/README.md, features/hello.md, scripts/verify-app, src/app/*.py, justfile, pyproject.toml, tests/test_cli.py. Noted the drift: cli.py returns 2 on a blank name, the test asserts 2, map and helper say 1.
+- 4: live helper run, `verify-app run` with its own run and evidence folders, plus `app hello` by hand from a scratch dir: doctor ok, json/text/trimmed PASS, empty-json and empty-text FAIL (exit 2).
+- 5: grepped the kit spec anchors the map links (acceptance-cli-json, acceptance-starter-verify): no exit code fixed there, so map drift, not a product bug.
+- 6: read eval-cases (judged not applicable: target repo, no `evals/`).
+- 7-8: edits, scripts/verify-app (blank-name cases expect 2) and features/hello.md (exit 2 in sub-features and drive steps; the gotcha that told argparse usage errors apart by exit code now says by output).
+- 9-11: live re-run plus `just check`; first re-run hit a transient `uv sync` I/O error in the sandbox overlay, retry: doctor ok, 5/5 PASS, run state removed, evidence kept.
+- 12-13: read commit skill and code-review step 4, owned-rule `git grep` for other exit-code restatements (none left).
+- 14: commit 6249294 on implementer-t5, `fix(verify-app): blank name exits 2, not 1`. 15: tmp cleanup.
+
+Final json block `{"outcome": "changed"}`; report `Checks: none`, `Owner: src/app/cli.py: blank name exits 2 | restated: ...hello.md..., ...verify-app...`. No src/, tests/ or AGENTS.md edit.
 
 ## Generation run (create-verification-skill under Pi, verify-app)
 
