@@ -117,6 +117,34 @@ on PARENT, whether or not the tracker already did (one already done stays as it 
 back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
 named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
 
+  octo-feather-lane spend          the spend ledger's totals, then the OpenRouter reconcile
+  octo-feather-lane spend record [--lane NAME]
+                                   append the model calls given as JSON lines on stdin to the ledger
+
+`spend` (spec spend) reads the ledger, $(octo-feather-state)/spend.jsonl: append-only JSON lines, one per
+model call, {at, lane, purpose, model, input_tokens, output_tokens, cost_usd}. It prints totals by UTC day,
+lane, purpose and model: dollars, calls, tokens, and calls with unknown cost (cost_usd null) counted apart
+(spec spend#rule-cost). Then the reconcile, per window: OpenRouter's usage for the key, the ledger's dollars
+on openrouter/* models over the same window, and the gap = OpenRouter minus ledger (spec spend#rule-gap). The
+windows are OpenRouter's key usage windows (GET /api/v1/key usage_daily, usage_weekly, usage_monthly,
+openrouter.ai/openapi.json): today = the current UTC day from 00:00Z, this week = the current UTC week starting
+Monday 00:00Z, this month = the current UTC calendar month from day 1 00:00Z. The key is OPENROUTER_API_KEY,
+else `openrouter.key` in ~/.pi/agent/auth.json (a `!command` key runs the command, as Pi does); it is never
+printed. OPENROUTER_API_BASE overrides the API base (default https://openrouter.ai/api/v1). No key, or an
+unreachable or failing endpoint, prints the reason in the reconcile section; the totals still print, exit 0.
+No budget: nothing is blocked (spec spend#rule-no-budget).
+
+`spend record` is the ledger's one writer: each call path appends through it. Each stdin line is a JSON object:
+model (provider/id, e.g. openrouter/qwen/qwen3-8b) and purpose (e.g. bench, judge, a role name), strings;
+input_tokens and output_tokens, integers >= 0; cost_usd, the provider's reported cost in USD, or null or absent
+when unreported; at, optional ISO 8601 time of the call (default now, UTC). The lane is --lane NAME (for callers
+that lost the HERDR_* env, e.g. in a sandbox), else the lane record in $(octo-feather-state)/lanes/*.toml whose
+`supervisor` pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, e.g. w37 for supervisor "w37:p2"), else
+null: no lane (spec spend#rule-lane). Records only grow (spec spend#rule-append): all lines of one call are
+appended in one locked write, so concurrent writers never interleave. It never fails its caller: a line it
+cannot read, or a ledger it cannot write, prints one stderr line naming the unrecorded spend, and it exits 0
+(spec spend#rule-write-fails).
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
@@ -1410,6 +1438,232 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
+# --- spend (spec spend, issue #185) ---
+
+SPEND_INT = ("input_tokens", "output_tokens")
+
+
+def state_dir() -> Path:
+    return lanes_dir().parent
+
+
+def spend_lane(lanes: Path) -> str | None:
+    """The lane whose supervisor pane is in the caller's Herdr space (spec spend#rule-lane), else None."""
+    space = os.environ.get("HERDR_WORKSPACE_ID", "")
+    if not space:
+        return None
+    import tomllib
+    for rec in sorted(lanes.glob("*.toml")):
+        try:
+            sup = tomllib.loads(rec.read_text(encoding="utf-8")).get("supervisor")
+        except (OSError, ValueError):
+            continue
+        if isinstance(sup, str) and sup.split(":", 1)[0] == space:
+            return rec.stem
+    return None
+
+
+def spend_line(raw: str, lane: str | None) -> dict:
+    """One ledger record from one stdin line; ValueError names what is wrong."""
+    import datetime as dt
+    o = json.loads(raw)
+    if not isinstance(o, dict):
+        raise ValueError("not a JSON object")
+    for k in ("model", "purpose"):
+        if not isinstance(o.get(k), str) or not o[k].strip():
+            raise ValueError(f"{k} must be a non-empty string")
+    if "/" not in o["model"]:
+        raise ValueError("model must be provider/id")
+    for k in SPEND_INT:
+        if type(o.get(k)) is not int or o[k] < 0:
+            raise ValueError(f"{k} must be an integer >= 0")
+    cost = o.get("cost_usd")
+    if cost is not None and (type(cost) not in (int, float) or cost < 0 or cost != cost):
+        raise ValueError("cost_usd must be a number >= 0 or null")
+    at = o.get("at")
+    if at is None:
+        at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif not isinstance(at, str) or spend_time(at) is None:
+        raise ValueError("at must be an ISO 8601 time")
+    return {"at": at, "lane": lane, "purpose": o["purpose"], "model": o["model"],
+            "input_tokens": o["input_tokens"], "output_tokens": o["output_tokens"], "cost_usd": cost}
+
+
+def spend_time(at: str):
+    """AT as an aware UTC datetime (naive counts as UTC), or None."""
+    import datetime as dt
+    try:
+        t = dt.datetime.fromisoformat(at.replace("Z", "+00:00") if at.endswith("Z") else at)
+    except ValueError:
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)).astimezone(dt.timezone.utc)
+
+
+def spend_record(args: list[str]) -> int:
+    def unrecorded(why: str, recs: list[dict]) -> None:
+        known = sum(r["cost_usd"] for r in recs if r["cost_usd"] is not None)
+        unknown = sum(r["cost_usd"] is None for r in recs)
+        what = f"{len(recs)} call(s), ${known:.6f}" + (f" + {unknown} of unknown cost" if unknown else "") if recs else "the call(s) on stdin"
+        print(f"octo-feather-lane spend record: spend unrecorded ({what}): {why}", file=sys.stderr)
+    recs: list[dict] = []
+    ledger = "the ledger"
+    try:
+        if args[:1] == ["--lane"] and len(args) == 2 and NAME.fullmatch(args[1]):
+            lane = args[1]
+        elif not args:
+            lane = None
+        else:
+            unrecorded(f"usage: octo-feather-lane spend record [--lane NAME] (got {' '.join(args)})", [])
+            return 0
+        ledger = state_dir() / "spend.jsonl"
+        if lane is None:
+            lane = spend_lane(ledger.parent / "lanes")
+        bad = []
+        for n, raw in enumerate(sys.stdin.read().splitlines(), 1):
+            if not raw.strip():
+                continue
+            try:
+                recs.append(spend_line(raw, lane))
+            except ValueError as e:   # JSONDecodeError included
+                bad.append(f"line {n}: {e}")
+        if bad:
+            unrecorded(f"{len(bad)} unreadable stdin line(s) skipped ({'; '.join(bad)})", [])
+        if not recs:
+            return 0
+        data = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs).encode()
+        import fcntl
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(ledger, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            view = memoryview(data)
+            while view:
+                view = view[os.write(fd, view):]
+        finally:
+            os.close(fd)
+    except Exception as e:
+        unrecorded(f"cannot write {ledger} ({e})", recs)
+    return 0
+
+
+def openrouter_key() -> str:
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if key:
+        return key
+    auth = Path.home() / ".pi" / "agent" / "auth.json"
+    try:
+        key = json.loads(auth.read_text(encoding="utf-8")).get("openrouter", {}).get("key", "")
+    except FileNotFoundError:
+        raise Refuse(f"no OpenRouter key: OPENROUTER_API_KEY is unset and {auth} does not exist")
+    except (OSError, ValueError, AttributeError) as e:
+        raise Refuse(f"cannot read {auth} ({type(e).__name__})")
+    if isinstance(key, str) and key.startswith("!"):
+        try:
+            key = subprocess.run(key[1:], shell=True, capture_output=True, text=True, timeout=30, check=True).stdout
+        except (OSError, subprocess.SubprocessError) as e:
+            raise Refuse(f"the `!` key command in {auth} failed ({type(e).__name__})")
+    if not isinstance(key, str) or not key.strip():
+        raise Refuse(f"no OpenRouter key: OPENROUTER_API_KEY is unset and {auth} has no openrouter.key")
+    return key.strip()
+
+
+def openrouter_usage() -> dict:
+    """{daily, weekly, monthly} USD from GET <base>/key; Refuse with the reason (never the key)."""
+    import urllib.request, urllib.error
+    key = openrouter_key()
+    url = os.environ.get("OPENROUTER_API_BASE", "").rstrip("/") or "https://openrouter.ai/api/v1"
+    url += "/key"
+    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+    try:
+        with urllib.request.urlopen(req, timeout=20) as r:
+            body = json.loads(r.read().decode("utf-8"))
+    except urllib.error.HTTPError as e:
+        raise Refuse(f"GET {url}: HTTP {e.code} {e.reason}")
+    except (urllib.error.URLError, OSError) as e:
+        raise Refuse(f"GET {url}: unreachable ({getattr(e, 'reason', e)})")
+    except ValueError as e:
+        raise Refuse(f"GET {url}: not JSON ({e})")
+    data = body.get("data") if isinstance(body, dict) else None
+    out = {}
+    for w in ("daily", "weekly", "monthly"):
+        v = data.get(f"usage_{w}") if isinstance(data, dict) else None
+        if type(v) not in (int, float):
+            raise Refuse(f"GET {url}: no numeric data.usage_{w} in the reply")
+        out[w] = float(v)
+    return out
+
+
+def cmd_spend(args: list[str]) -> int:
+    if args[:1] == ["record"]:
+        return spend_record(args[1:])
+    if args:
+        raise Refuse(f"usage: octo-feather-lane spend | spend record [--lane NAME] (got {' '.join(args)})")
+    import datetime as dt
+    ledger = state_dir() / "spend.jsonl"
+    recs, skipped = [], 0
+    try:
+        lines = ledger.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read the ledger {ledger} ({e}): fix its permissions, then rerun")
+    for raw in lines:
+        try:
+            r = json.loads(raw)
+            r["_t"] = spend_time(r["at"])
+            if r["_t"] is None or not isinstance(r.get("model"), str):
+                raise ValueError
+            recs.append(r)
+        except (ValueError, TypeError, KeyError):
+            skipped += 1
+
+    def money(v: float) -> str:
+        return f"-${-v:.6f}" if v < 0 else f"${v:.6f}"
+
+    def table(title: str, key) -> None:
+        print(f"\nBy {title}:")
+        groups: dict = {}
+        for r in recs:
+            g = groups.setdefault(key(r), [0.0, 0, 0, 0, 0])
+            if r.get("cost_usd") is None:
+                g[2] += 1
+            else:
+                g[0] += float(r["cost_usd"])
+            g[1] += 1; g[3] += int(r.get("input_tokens") or 0); g[4] += int(r.get("output_tokens") or 0)
+        if not groups:
+            print("  (none)")
+        for k in sorted(groups, key=str):
+            usd, n, unk, i, o = groups[k]
+            print(f"  {k:<32} {money(usd):>12}  calls {n:>5}  unknown cost {unk:>4}  tokens in {i} out {o}")
+
+    print(f"Spend ledger: {ledger} ({len(recs)} calls" + (f", {skipped} unreadable lines skipped" if skipped else "") + ")")
+    table("day (UTC)", lambda r: r["_t"].date().isoformat())
+    table("lane", lambda r: r.get("lane") or "(no lane)")
+    table("purpose", lambda r: r.get("purpose") or "(none)")
+    table("model", lambda r: r["model"])
+
+    now = dt.datetime.now(dt.timezone.utc)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    starts = {"daily": ("today", day), "weekly": ("this week", day - dt.timedelta(days=day.weekday())),
+              "monthly": ("this month", day.replace(day=1))}
+    print("\nOpenRouter reconcile (OpenRouter's key usage windows, UTC: today from 00:00Z, this week from Monday 00:00Z, "
+          "this month from day 1 00:00Z; gap = OpenRouter minus ledger):")
+    try:
+        usage = openrouter_usage()
+    except Refuse as e:
+        usage = None
+        print(f"  OpenRouter unavailable: {e}")
+    print(f"  {'window':<11} {'openrouter':>12} {'ledger':>12} {'gap':>12}")
+    for w, (label, start) in starts.items():
+        mine = [r for r in recs if r["model"].startswith("openrouter/") and start <= r["_t"] <= now]
+        led = sum(float(r["cost_usd"]) for r in mine if r.get("cost_usd") is not None)
+        unk = sum(r.get("cost_usd") is None for r in mine)
+        theirs = money(usage[w]) if usage else "n/a"
+        gap = money(usage[w] - led) if usage else "n/a"
+        print(f"  {label:<11} {theirs:>12} {money(led):>12} {gap:>12}" + (f"  ({unk} ledger calls of unknown cost)" if unk else ""))
+    return 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "verdict": cmd_verdict,
@@ -1419,6 +1673,7 @@ COMMANDS = {
     "tickets": cmd_tickets,
     "done": cmd_done,
     "ticket": cmd_ticket,
+    "spend": cmd_spend,
 }
 
 
