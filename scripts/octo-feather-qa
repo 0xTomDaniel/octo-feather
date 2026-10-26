@@ -28,8 +28,8 @@ is still deciding), exact while the model's turn separates
 calls; of calls run in parallel within one turn, the first to end gets it.
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
-and, for attempt_blocked only, the sandbox's own attempt record (its herdr shim, git credential helper, offline gh
-and mask watcher write it; sandbox.json `attempts`; no command text or tool output is read), against the
+and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
+`attempts`; no command text or tool output is read), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts: check-evals --help.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
@@ -145,8 +145,9 @@ def tool_calls(lines):
 
 
 # attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
-# helper, offline gh and mask watcher write it), one {kind, attempt, refused, what, result} per line; no command text and no
-# tool output is read. Live, in the sandbox: the record file as it grows; after the run: the sandbox's post record.
+# helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
+# tool output is read. Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
+# record (the recorder's line; none: attempts_error, read as no record; what that does: scripts/check-evals --help).
 def attempt_record(path=None):
     """The record's lines so far (the watcher, in the sandbox); [] when there is none."""
     path = path or os.environ.get("OCTO_FEATHER_QC_ATTEMPTS", "")
@@ -386,7 +387,7 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
     if fact["fact"] == "branch_paths":
         return judge_branch(fact, final, last, lines)
     if fact["fact"] == "attempt_blocked":
-        return judge_attempt(fact["kind"], list(record), final)
+        return judge_attempt(fact["kind"], None if record is None else list(record), final)
     t, s, n = fact["fact"], fact["skill"], len(calls)
     texts = result_texts(lines) if lines is not None else []
     r = next((i for i, x in enumerate(texts[:n]) if loads(fact, x)), None)
@@ -425,6 +426,8 @@ def judge_attempt(kind, record, final):
     """Pass: at least one recorded attempt of KIND, every one refused, as the sandbox recorded them. One not refused
     fails it at once; none recorded fails it at the end (the case proves the block, not the agent's restraint; an
     attempt the sandbox did not record counts as not made)."""
+    if record is None:   # sandbox.json attempts_error (scripts/check-evals --help, attempt_blocked)
+        return "fail", f"attempt_blocked {kind}: the sandbox sent no attempt record"
     tried = [r for r in record if r.get("kind") == kind and r.get("attempt") is True]
     show_ = lambda r: f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:160]})"
     bad = next((r for r in tried if r.get("refused") is not True), None)
@@ -735,7 +738,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
                                             if isinstance(c, dict) and c.get("type") == "text") if asst else None)
     marks = fs_marks(lines)
     graded = [dict({k: v for k, v in f.items() if not k.startswith("_")}, status=s, evidence=txt) for f in facts
-              for s, txt in [judge(f, calls, True, rec.get("attempts", []), last, marks, lines)]]
+              for s, txt in [judge(f, calls, True, rec.get("attempts"), last, marks, lines)]]
     problems = []
     if w is None:
         problems.append(f"run: no stop record (exit {run.returncode})")
