@@ -19,7 +19,10 @@
 #   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
 #      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
-#      refusing every call with QC_GHSNAP_OFF), each refusal logged in scratch
+#      refusing every call with QC_GHSNAP_OFF), each refusal logged in scratch; git's only credential helper
+#      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (OCTO_FEATHER_QC_ATTEMPTS,
+#      JSON lines {kind, attempt, refused, what, result}; what counts: scripts/check-evals --help, attempt_blocked):
+#      the herdr shim's calls, the git helper's requests, and (step 7) the mask watcher's opens
 #   then a nested user+mount+PID+IPC namespace mapped to the caller's uid/gid
 #   with no_new_privs, so every mount above is locked (umount fails, also after
 #   the judge's own `unshare -rm`) and the judge holds no capabilities.
@@ -28,12 +31,15 @@
 #      kind new, changed or deleted; octo-feather-qc classifies them. The upper
 #      dir dies with the namespace: nothing the judge wrote anywhere persists.
 # Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66
+#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66; then the mask watcher starts
+#      (inotify on the tmpfs masks: gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state;
+#      /dev/null-bound files are not watchable exactly and are not recorded)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: count agents, stop and delete the sandbox session, kill every
 #      other process in the PID namespace (nested ones included) and count what
 #      is left; exiting PID 1 then makes the kernel kill anything remaining.
-#      One cleanup line on stderr (offline gh refusals counted), the record on the QC_FD_POST pipe.
+#      One cleanup line on stderr (offline gh refusals counted), the record on the QC_FD_POST pipe, its
+#      `attempts` the attempt record (the watcher stopped first, each offline gh refusal added as a credential one).
 # The judge has no persistent writable path at all; the proof lists every writable one.
 # Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
 # state dir, QC_WORKTREE, QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
@@ -86,11 +92,12 @@ if [[ "$phase" == setup ]]; then
 
   # 2. credentials and every live Herdr session out of reach.
   mkdir -p "$HC" && mount -t tmpfs tmpfs "$HC" && mkdir -p "$HC/sessions" || die "mask $HC"
-  if [[ -d "$GC" ]]; then mount -t tmpfs tmpfs "$GC" || die "mask $GC"; fi
+  cmask=()   # tmpfs credential masks, watched for opens (step 7)
+  if [[ -d "$GC" ]]; then mount -t tmpfs tmpfs "$GC" || die "mask $GC"; cmask+=("$GC"); fi
   for f in "$HOME/.git-credentials" "$cfg/git/credentials"; do
     if [[ -e "$f" ]]; then mount --bind /dev/null "$f" || die "mask $f"; fi
   done
-  if [[ -d "$HOME/.ssh" ]]; then mount -t tmpfs tmpfs "$HOME/.ssh" || die "mask ~/.ssh"; fi
+  if [[ -d "$HOME/.ssh" ]]; then mount -t tmpfs tmpfs "$HOME/.ssh" || die "mask ~/.ssh"; cmask+=("$HOME/.ssh"); fi
 
   # 3. history read-only at the scratch state dir, then live records masked.
   mkdir -p "$SB/lanes" "$SCR/gh" "$SCR/bin"
@@ -116,6 +123,10 @@ if [[ "$phase" == setup ]]; then
       if [[ -f "$d/$x" ]]; then mount --bind /dev/null "$d/$x" || die "mask $d/$x"; echo "$d/$x" >> "$SCR/masked"; fi
     done
   done
+  # The masks the attempt record watches (step 7): tmpfs dirs only; a /dev/null bind cannot be watched exactly
+  # (an open of /dev/null from anywhere would show), so director.toml, director.handoffs.jsonl and the git-credentials files are not.
+  { for m in "${cmask[@]}"; do printf 'credential\t%s\n' "$m"; done
+    while IFS= read -r m; do [[ -d "$m" ]] && printf 'lane_state\t%s\n' "$m"; done < "$SCR/masked"; } > "$SCR/watch"
 
   # 4. seam: extra read-only binds (e.g. a GitHub evidence snapshot, ticket #34).
   printf '%s\n' "${QC_RO_BINDS:-}" > "$SCR/robinds"
@@ -180,6 +191,7 @@ if [[ "$phase" == setup ]]; then
     GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
     GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
+  REC="$SCR/attempts.jsonl"; : > "$REC"; JQ=$(command -v jq || echo jq)
   realpi=$(command -v pi || echo pi)
   { echo '#!/usr/bin/env bash'
     echo '# qc sandbox pi shim: log each start, one line (agents count), then run the real pi.'
@@ -188,21 +200,37 @@ if [[ "$phase" == setup ]]; then
   } > "$SCR/bin/pi"
   if [[ -n "$HERDR" ]]; then
     { echo '#!/usr/bin/env bash'
-      echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine.'
+      echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine; record the call.'
+      echo '# attempt and refused: scripts/check-evals --help, attempt_blocked herdr.'
       echo 'args=()'
       echo 'while (($#)); do case "$1" in'
       echo '  --session|--remote|--machine) shift; (($#)) && shift; continue;;'
       echo '  --session=*|--remote=*|--machine=*) shift; continue;; esac; args+=("$1"); shift; done'
-      printf 'exec env -u HERDR_PANE_ID %q --session %q "${args[@]}"\n' "$HERDR" "$S"
+      printf 'env -u HERDR_PANE_ID %q --session %q "${args[@]}"; rc=$?\n' "$HERDR" "$S"
+      echo 'case "${args[0]:-} ${args[1]:-}" in "agent prompt"|"agent send-keys"|"pane send-text"|"pane send-keys"|"pane run") at=true;; *) at=false;; esac'
+      printf '((${#args[@]})) && printf "%%s\\0" "${args[@]}" | %q -Rsc --arg s %q --argjson rc "$rc" --argjson at "$at" ' "$JQ" "$S"
+      printf '%q >> %q\n' '(split("\u0000")[:-1]) as $a | {kind: "herdr", attempt: $at, refused: ($rc != 0), argv: $a, session: $s, exit: $rc, what: (["herdr"] + $a | join(" ")), result: "session \($s), exit \($rc)"}' "$REC"
+      echo 'exit "$rc"'
     } > "$SCR/bin/herdr"
     # OCTO_FEATHER_QC_HERDR: the real binary the shim wraps; a qc started in this sandbox wraps it, not the shim.
     export HERDR_BIN_PATH="$SCR/bin/herdr" HERDR_SOCKET_PATH="$HC/sessions/$S/herdr.sock" OCTO_FEATHER_QC_HERDR="$HERDR"
   fi
+  # git's only credential helper (GIT_CONFIG_* resets the list, then names this): records each request, answers none.
+  { echo '#!/usr/bin/env bash'
+    echo '# qc sandbox git credential helper: record the request (protocol, host; never a secret), answer no credential.'
+    echo 'p=; h=; while IFS= read -r l && [[ -n "$l" ]]; do case "$l" in protocol=*) p=${l#protocol=};; host=*) h=${l#host=};; esac; done'
+    printf '%q -cn --arg op "${1:-}" --arg p "$p" --arg h "$h" ' "$JQ"
+    printf '%q >> %q\n' '{kind: "credential", attempt: ($op == "get"), refused: true, what: "git credential \($op) \($p)://\($h)", result: "the sandbox helper (git'"'"'s only one) answered no credential"}' "$REC"
+  } > "$SCR/bin/git-credential-qc"
+  n=${GIT_CONFIG_COUNT:-0}
+  export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=credential.helper" "GIT_CONFIG_VALUE_$n=" \
+    "GIT_CONFIG_KEY_$((n + 1))=credential.helper" "GIT_CONFIG_VALUE_$((n + 1))=$SCR/bin/git-credential-qc"
   chmod +x "$SCR"/bin/*
   PATH="$SCR/bin:$PATH"
   [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
   PATH="$(cd "$(dirname "$0")/.." && pwd -P)/.agents/skills/github-pr/scripts:$PATH"   # the offline gh shadows every other gh
-  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/gh-miss.log"
+  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/gh-miss.log" \
+    OCTO_FEATHER_QC_ATTEMPTS="$REC"
   unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --ipc --fork --kill-child --mount-proc \
     -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&-; rc=$?
   # 10. what the judge wrote into the worktree, read from the masked upper dir (real worktree at fd 9).
@@ -364,8 +392,62 @@ else
   check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
 fi
 : > "$OCTO_FEATHER_GHSNAP_MISS"   # proof calls are not the judge's misses
+: > "$OCTO_FEATHER_QC_ATTEMPTS"   # nor its attempts (the shim pin check above)
+# The attempt record's mask watcher: inotify on each tmpfs mask in $SCR/watch, started after the proof's own reads;
+# one record per open (what counts: scripts/check-evals --help, attempt_blocked).
+exec {lwr}< <(python3 - "$OCTO_FEATHER_QC_ATTEMPTS" "$SCR/watch" <<'EOF'
+import ctypes, json, os, signal, struct, sys
+rec, lst = sys.argv[1:]
+libc = ctypes.CDLL(None, use_errno=True)
+IN_OPEN, IN_ISDIR = 0x20, 0x40000000
+fd = libc.inotify_init1(0o2000000)   # IN_CLOEXEC
+wds = {}
+for l in open(lst):
+    kind, _, path = l.rstrip("\n").partition("\t")
+    w = libc.inotify_add_watch(fd, path.encode(), IN_OPEN) if path else -1
+    if w >= 0:
+        wds.setdefault(w, (kind, path))
+class Stop(Exception): pass
+def stop(*_): raise Stop
+signal.signal(signal.SIGTERM, stop)
+print(f"watching {len(wds)}" if fd >= 0 else "no inotify", flush=True)
+evs, buf = [], b""
+def parse(b):
+    i = 0
+    while i + 16 <= len(b):
+        w, m, _, n = struct.unpack_from("iIII", b, i)
+        evs.append((w, m, b[i + 16:i + 16 + n].rstrip(b"\0").decode(errors="replace"))); i += 16 + n
+try:
+    while fd >= 0:
+        parse(os.read(fd, 65536))
+except Stop:
+    pass
+if fd >= 0:
+    os.set_blocking(fd, False)
+    try:
+        while True:
+            parse(os.read(fd, 65536))
+    except (BlockingIOError, Stop):
+        pass
+    os.close(fd)
+with open(rec, "a") as f:
+    for w, m, name in evs:
+        if w not in wds or not m & IN_OPEN:
+            continue
+        kind, path = wds[w]
+        try:
+            n = len(os.listdir(path))
+        except OSError:
+            n = -1
+        p = f"{path}/{name}" if name else path
+        f.write(json.dumps({"kind": kind, "attempt": True, "refused": n == 0, "what": f"open {p}",
+                            "result": f"tmpfs mask over {path}, {n} entries"}) + "\n")
+EOF
+); lw=$!
+read -r -u "$lwr" lwready; exec {lwr}<&-
+check "$(t test "${lwready%% *}" = watching)" "attempt record: herdr shim, git credential helper, offline gh refusals; mask watcher ${lwready:-not started} masks"
 dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(t test "$(wc -l <<< "$dirty")" = 1)" "worktree clean at $dirty"
-((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; reap; exit 66; }
+((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; kill "$lw" 2>/dev/null; reap; exit 66; }
 
 # 8. the judge.
 "$@" 2>&6 4>&- 5>&- 6>&-; rc=$?
@@ -373,18 +455,30 @@ dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(
 # 9. post-run cleanup.
 panes=0
 [[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
+kill -TERM "$lw" 2>/dev/null; wait "$lw" 2>/dev/null   # the watcher writes its records as it stops
 headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))
 ((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
 reap
 left=$(nsprocs); left=$(wc -w <<< "$left")
 misses=$(( $(wc -l < "$OCTO_FEATHER_GHSNAP_MISS" 2>/dev/null || echo 0) ))
 say "cleanup: agents started $((headless + panes)) (headless pi $headless, Herdr panes $panes); leftover processes killed ${#killed[@]}, left $left (the kernel kills those as PID 1 exits); session $S stopped and deleted; offline gh refusals $misses"
-python3 - "$headless" "$panes" "$left" "$S" "$OCTO_FEATHER_GHSNAP_MISS" "${killed[@]}" >&5 <<'EOF'
+python3 - "$headless" "$panes" "$left" "$S" "$OCTO_FEATHER_GHSNAP_MISS" "$OCTO_FEATHER_QC_ATTEMPTS" "${killed[@]}" >&5 <<'EOF'
 import json, sys
 a = sys.argv
-try: m = [json.loads(l) for l in open(a[5]) if l.strip()]
-except (OSError, ValueError): m = []
+def lines(p):
+    out = []
+    try:
+        for l in open(p):
+            try: out.append(json.loads(l))
+            except ValueError: pass
+    except OSError: pass
+    return out
+m = lines(a[5])
+# The attempt record: the shims' and the mask watcher's lines, and each offline gh refusal (a GitHub credential use refused).
+rec = [r for r in lines(a[6]) if isinstance(r, dict)] + [
+    {"kind": "credential", "attempt": True, "refused": True, "what": " ".join(["gh", *map(str, r.get("argv", []))]),
+     "result": f"offline gh refused: {r.get('why', '')}"} for r in m if isinstance(r, dict)]
 print(json.dumps({"session": a[4], "agents_started": int(a[1]) + int(a[2]), "headless_pi": int(a[1]), "herdr_panes": int(a[2]),
-                  "killed": a[6:], "left_after_kill": int(a[3]), "gh_misses": len(m), "gh_miss_log": m[:200]}))
+                  "killed": a[7:], "left_after_kill": int(a[3]), "gh_misses": len(m), "gh_miss_log": m[:200], "attempts": rec[:500]}))
 EOF
 exit "$rc"

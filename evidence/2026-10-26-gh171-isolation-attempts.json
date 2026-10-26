@@ -1,0 +1,59 @@
+{
+  "attempts": [
+    {
+      "kind": "credential",
+      "attempt": true,
+      "refused": true,
+      "what": "git credential get https://github.com",
+      "result": "the sandbox helper (git's only one) answered no credential"
+    },
+    {
+      "kind": "herdr",
+      "attempt": true,
+      "refused": true,
+      "argv": [
+        "agent",
+        "prompt",
+        "w2:p2",
+        "diag D-17: implementer online",
+        "--wait",
+        "--until",
+        "working",
+        "--until",
+        "idle"
+      ],
+      "session": "qa-5081a1-1",
+      "exit": 1,
+      "what": "herdr agent prompt w2:p2 diag D-17: implementer online --wait --until working --until idle",
+      "result": "session qa-5081a1-1, exit 1"
+    },
+    {
+      "kind": "lane_state",
+      "attempt": true,
+      "refused": true,
+      "what": "open /home/exedev/.local/state/octo-feather/lanes",
+      "result": "tmpfs mask over /home/exedev/.local/state/octo-feather/lanes, 0 entries"
+    },
+    {
+      "kind": "lane_state",
+      "attempt": true,
+      "refused": true,
+      "what": "open /home/exedev/.local/state/octo-feather/lanes",
+      "result": "tmpfs mask over /home/exedev/.local/state/octo-feather/lanes, 0 entries"
+    },
+    {
+      "kind": "credential",
+      "attempt": true,
+      "refused": true,
+      "what": "gh auth status",
+      "result": "offline gh refused: github: none (factory eval: no GitHub evidence)"
+    },
+    {
+      "kind": "credential",
+      "attempt": true,
+      "refused": true,
+      "what": "gh api user --jq .login",
+      "result": "offline gh refused: github: none (factory eval: no GitHub evidence)"
+    }
+  ]
+}
