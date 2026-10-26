@@ -84,7 +84,7 @@ I built the `verify-app` skill and committed it on `verify-skill` as **92eafdcfc
 - **Checks:** none (no enforcement checks were asked for or built).
 ```
 
-Its commit 92eafdc was copied into templates/python/ (.agents/skills/verify-app/, AGENTS.md `Repo skills: python, verify-app`). Edits after generation: SKILL.md "human output" became "plain text output" (check-refs retired word); the helper's `check` now prints each case's stdout, stderr and exit code under its PASS/FAIL line (the demo shows the drive's JSON), SKILL.md Drive says so.
+Its commit 92eafdc was copied into templates/python/ (.agents/skills/verify-app/, AGENTS.md `Repo skills: python, verify-app`). Edits after generation: SKILL.md lost a check-refs retired word ("plain text output" now); the helper's `check` now prints each case's stdout, stderr and exit code under its PASS/FAIL line (the demo shows the drive's JSON), SKILL.md Drive says so.
 
 ## Demo (templates#acceptance-starter-verify, Python)
 
