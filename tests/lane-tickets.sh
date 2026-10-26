@@ -9,13 +9,13 @@
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
 # class; a demo passes only through a surface the repo declares (tracked executable, justfile
-# recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
+# recipe as `just --dump` lists it, #172; pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
 # cases (owners: ADR 0002, #145); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
-# draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
+# draft, usage, no just or an unreadable justfile) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -27,7 +27,7 @@ unset GH_REPO GH_TOKEN FAKE_GH
 mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs"
 # The only PATH: $t/bin (the fake gh) and $t/sys (the tools this test and the scripts run).
 # No host directory is on it, so a host gh (a CI runner's, asking for GH_TOKEN) is never reached.
-for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head; do
+for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head just; do
   p="$(command -v "$c")" || fail "tool $c not found on the host"; ln -s "$p" "$t/sys/$c"
 done
 export PATH="$t/sys"
@@ -185,6 +185,30 @@ run 1 ticket "$F/110-runnable-script.md"; has "uv run python harness.py score --
 mkdir -p "$t/bare/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/bare/docs/specs/"; cp "$t/repo/harness.py" "$t/bare/"
 printf 'check:\n    true\n' >"$t/bare/justfile"; git -C "$t/bare" init -q -b main . && git -C "$t/bare" add -A
 (cd "$t/bare" && run 0 ticket "$F/110-runnable-script.md" && d11 'python harness.py' && run 0 ticket "$t/d11.md") || exit 1
+# #172 (s20): a `just` demo passes exactly when `just --dump` lists the recipe (defaulted parameters,
+# attribute lines, imports, aliases), never by a justfile header regex; gh136's install-check regression.
+mkdir -p "$t/jrepo/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/jrepo/docs/specs/"
+printf 'import "more.just"\nalias ic := install-check\nalias c := check\n\ncheck:\n    true\n\n[private]\nhidden:\n    true\n\n# doc\n[no-cd]\ninstall-check flag="x":\n    true\n\n@quiet a b="2" +rest="":\n    true\n' >"$t/jrepo/justfile"
+printf 'demo:\n    true\n' >"$t/jrepo/more.just"; git -C "$t/jrepo" init -q -b main . && git -C "$t/jrepo" add -A
+jd() { printf '## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s` exits 0\n' "$1" >"$t/jd.md"; }
+cd "$t/jrepo"
+for c in 'just install-check' 'just install-check flag=y' 'just demo' 'just hidden' 'just ic' 'just quiet 1' 'just --yes demo'; do
+  jd "$c"; run 0 ticket - <"$t/jd.md"; [[ "$out" == "stdin: ok" ]] || fail "$c: $out"
+done
+jd 'just nosuch'; run 1 ticket - <"$t/jd.md"; has "(\`just nosuch\`: no justfile recipe nosuch in $t/jrepo)"
+# A module recipe is `just MOD RECIPE`, as just runs it (just 1.21 runs modules only unstable, and refuses MOD::RECIPE).
+mkdir -p "$t/jrepo/sub"; printf 'inner:\n    true\n' >"$t/jrepo/sub/mod.just"; printf 'mod sub\n' >>"$t/jrepo/justfile"
+jd 'just sub inner'; JUST_UNSTABLE=1 run 0 ticket - <"$t/jd.md"
+jd 'just sub::inner'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub::inner\`: no justfile recipe sub::inner in $t/jrepo)"
+sed -i '$d' "$t/jrepo/justfile"   # drop the mod line: the cases below run without JUST_UNSTABLE
+jd 'just c'; run 1 ticket - <"$t/jd.md"; has "(\`just c\`: just c is a gate or factory recipe, not the app)"
+# Fails closed, never a fallback: a justfile just cannot read, or no just, is exit 2 naming why.
+mkdir -p "$t/nojust"; cp -P "$t/sys"/* "$t/nojust/"; rm "$t/nojust/just"   # the hermetic PATH less just
+jd 'just demo'; PATH="$t/nojust" run 2 ticket - <"$t/jd.md"; has "cannot read the justfile's recipes ($t/jrepo/justfile): just is not on PATH"; hasnt ": ok"
+jd 'curl https://example.com'; PATH="$t/nojust" run 0 ticket - <"$t/jd.md"   # no just demo: justfile never read
+printf 'broken (:\n' >>"$t/jrepo/justfile"
+jd 'just demo'; run 2 ticket - <"$t/jd.md"; has "cannot read the justfile's recipes ($t/jrepo/justfile): just --dump: error:"; hasnt ": ok"
+cd "$t/repo"
 # #121 D17: criterion ids inside a <template>.
 for a in acceptance-zz acceptance-zz2; do
   printf '## Acceptance criteria\n\n- [ ] zz#%s: x\n- [ ] demo: `demo a` prints ok\n' "$a" >"$t/d17.md"; run 1 ticket "$t/d17.md"
@@ -265,4 +289,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
