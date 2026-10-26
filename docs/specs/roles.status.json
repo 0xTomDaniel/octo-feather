@@ -1,6 +1,6 @@
 {
   "spec": "roles.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "c2cf665361eef5eb95a46f809ba1777bbce0ecea",
   "criteria": {
     "acceptance-tab-headless-same": {
       "status": "built",
