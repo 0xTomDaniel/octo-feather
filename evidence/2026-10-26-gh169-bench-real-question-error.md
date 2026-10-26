@@ -68,3 +68,14 @@ Facts read from the artifacts (run 20261026T170625Z-83d123/judgment-ticket-slice
 and no "bool" (no stand-in question sent); the command's stdout bench line has keys available, benched, skipped,
 errors, rows (no yesno); bench.json has no skipped_yes_no, span-01 `available: false` with `first_error` equal to the
 command's errors[0], the provider's errorMessage on the real choice question.
+
+## Follow-up: whole provider errors, unclassified wording, lane reason
+
+- BENCH_SOURCE `err()` no longer cuts an error at 400 characters: the listed error is the provider's whole text
+  (dedup by full string as before). Every recorded bench run in `$(octo-feather-state)/qa/*/*/stdout.txt` was read: no
+  error in any `errors` list reached 400 characters, so no classifier's listed error text changes in those runs.
+  No new bench run: the command's output changes only by the dropped cut.
+- The "unclassified id" report line says "benched (scored where it answered)": span-01 above was benched and answered
+  nothing, so "benched and scored" was false for it.
+- `octo-feather-lane judge`: the dead `yesno` read and its "yes/no only" reason are gone; a kit model not benched is
+  "a moving alias, never called" (bench `skipped`) or "not an available classifier".

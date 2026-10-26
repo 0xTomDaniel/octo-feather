@@ -39,7 +39,7 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
     # and run its command for real under node, with stub classifiers at the model registry: token picks the PICK=<label>
     # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
     # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
-    # p/q-1.2 and p/q-latest, broken never answers, the moving aliases the test's classifiers.json lists (~x/y,
+    # p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
     # x-latest:free, p/q-1.2:free) kill the run if called; yesno refuses every choice question
     # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
     # kills the run (the bench asks only the real question, no stand-in probe);
@@ -57,7 +57,7 @@ const modelRegistry = {
   getAvailableOfType: async (type) => (type === "classifier" ? models : []),
   classify: async (m, {state, questions}) => {
     if (aliases.includes(m.id)) process.exit(4);
-    if (m.id === "broken") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub provider down"};
+    if (m.id === "broken") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub provider down " + "x".repeat(400) + " end"};
     if (Object.values(questions).some((q) => q.type !== "choice")) process.exit(5);
     if (m.id === "yesno") return Object.values(questions).every((q) => q.type === "bool")
       ? {provider: "stub", model: m.id, answers: Object.fromEntries(Object.keys(questions).map((k) => [k, {type: "bool", probability: 0.9}])), stopReason: "stop"}
@@ -619,7 +619,7 @@ jl() { grep -qF -- "$1" <<< "$out" || fail "bench: no '$1' in: $out"; }
 jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every answer is a model judgment"
 jl "bench jb: classifiers available (11): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free, stub/yesno"
 jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/x-latest:free, stub/p/q-1.2:free; never called, ruling (classifiers.json owner): stub ruling, tests/qa.sh"
-jl "bench jb: unclassified id (1): stub/cheap-total; benched and scored, in neither list of classifiers.json"
+jl "bench jb: unclassified id (1): stub/cheap-total; benched (scored where it answered), in neither list of classifiers.json"
 # yesno answers only bool questions (rule: octo-feather-qa --help, a classifier that answered no case); a question not a
 # choice kills the stub run.
 jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
@@ -628,7 +628,8 @@ jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {
    $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-latest 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
 [[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-latest 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
-jl "unavailable stub/broken: listed but answered no case: stub provider down"
+# The provider's whole error, however long (rule: octo-feather-qa --help).
+grep -qxF "unavailable stub/broken: listed but answered no case: stub provider down $(printf 'x%.0s' {1..400}) end" <<< "$out" || fail "bench: broken's error not whole: $out"
 # The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
 [[ "$(grep -A3 '^KIT MODEL BESIDE THE BEST (best: highest train accuracy' <<< "$out" | tail -2 | tr -s ' ')" == \
    $' kit stub/first 0.500 1.000 0.333 1.333 0.015000\n best stub/token 0.750 0.380 0.333 0.880 0.015000' ]] || fail "bench: kit beside best wrong: $out"
@@ -684,7 +685,7 @@ jl "DONE bench jb: kit model stub/first not scored (not benched), best stub/chea
 # yesno: cannot accept the question's form, every case refused).
 echo '{"model": "stub/broken", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 run 1 "$Q" --evals "$t/jg"
-jl "FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: stub provider down)"
+jl "FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: stub provider down $(printf 'x%.0s' {1..400}) end)"
 echo '{"model": "stub/yesno", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 run 1 "$Q" --evals "$t/jg" --classifier stub/yesno --classifier stub/first
 jl "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "

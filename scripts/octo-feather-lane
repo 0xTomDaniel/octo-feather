@@ -673,9 +673,7 @@ def cmd_judge(args: list[str]) -> int:
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
     if model not in (bench.get("benched") or []):
-        yn = next((e for m, e, _ in bench.get("yesno") or [] if m == model), None)
-        why = ("a moving alias, never called" if model in (bench.get("skipped") or []) else
-               f"yes/no only (a choice question refused: {yn})" if yn is not None else "not an available classifier")
+        why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
         raise Refuse(f"the kit's judgment model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
                      f"check Pi's models and auth, or rebench and record another in evals/judgment-model.json")
     rows = bench.get("rows") or []

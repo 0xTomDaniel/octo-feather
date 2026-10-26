@@ -80,7 +80,7 @@ ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --class
 goes as the case's state string, the one shape every classifier takes (some accept no other object than their
 own). A moving alias (an id EVALS/classifiers.json lists in moving_alias, exact P/ID, never judged by its name) is
 never called nor scored: the report lists it as "skipped: moving alias" with that file's owner ruling, bench.json
-`skipped` records it and `skipped_ruling` the ruling. An id in neither of its lists is benched and scored as usual,
+`skipped` records it and `skipped_ruling` the ruling. An id in neither of its lists is benched as usual (scored where it answered),
 flagged on the report's "unclassified id" line and in bench.json `unclassified`, for the owner to rule there (never
 eligible as the kit's model: check-evals). classify never throws, so stopReason and
 errorMessage are kept. A classifier that answered no case of the real question (one that cannot accept its form, or
@@ -815,7 +815,7 @@ export default function (pi) {
       const skipped = listed.filter(moving).map(name);
       const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
       const errors = [];
-      const err = (e) => { const s = String(e).slice(0, 400); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+      const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
       const r4 = (x) => (typeof x === "number" ? Math.round(x * 1e4) / 1e4 : null);
       const one = async (mi, ci) => {
         let r;
@@ -985,7 +985,7 @@ def bench_report(suite, q, cases, bench, models, best, kit, requested, ruled):
                    f"called, ruling ({CLASSIFIERS} owner): {ruled['owner']}")
     unclassified = unclassified_ids(bench, ruled)
     if unclassified:
-        out.append(f"bench {suite['suite']}: unclassified id ({len(unclassified)}): {', '.join(unclassified)}; benched and scored, "
+        out.append(f"bench {suite['suite']}: unclassified id ({len(unclassified)}): {', '.join(unclassified)}; benched (scored where it answered), "
                    f"in neither list of {CLASSIFIERS}, never the kit's model until the owner rules it there")
     ok = sorted((m for m in models if m["available"]), key=lambda m: (-(m["train"]["accuracy"] or 0), m["train"]["brier"] or 9, m["model"]))
     w = max([len(m["model"]) for m in models] + [5])
