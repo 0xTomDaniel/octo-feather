@@ -170,7 +170,11 @@ esac
 [[ "${a[*]}" == "agent prompt "* ]] && { echo "pane_not_found: ${a[2]}" >&2; exit 1; }   # no such pane in the session
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
-chmod +x "$t/bin/pi" "$t/bin/herdr"
+# A slow test runner (#170): the watcher's pytest collection in the spec fixture (the only one with specs/) takes 1.5 s,
+# longer than the stub's 0.5 s turn, so the next call's write always lands before it ends; test_write must still go to
+# the call whose end the snapshot was taken at.
+printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$(command -v uv)" > "$t/bin/uv"
+chmod +x "$t/bin/pi" "$t/bin/herdr" "$t/bin/uv"
 export PATH="$t/bin:$kit/scripts:$PATH"
 echo "fixture" > "$t/evals/fixtures/fx/README.md"
 cat > "$t/evals/trig/suite.json" <<'EOF'

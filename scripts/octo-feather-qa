@@ -18,11 +18,13 @@ sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots t
 hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
 naming each target the call reached: edit (a file changed), test_write (a file the fixture declares a test
 changed, decided by its declared runner: check-evals --help owns the rule; the watcher asks pytest which files
-it collects, from the case repo's own config, no test module imported, after each call that changed a file and
+it collects, from the case repo's own config, in a copy of that snapshot's own bytes (so a later call's write never
+reaches it), no test module imported, after each call that changed a file and
 only for a case graded on test_write; pytest giving no list stops the run, naming why), git_commit (HEAD on a
 commit that did not exist before the run), git_push (origin's refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill or patch changed, as agents/corrector.md
 words its rule: agents/*.md, .agents/skills/**, .skillfile/patches/**). No regex over commands infers a write. Stated limit: a change is
-credited to the first call at whose end event the snapshot shows it, exact while the model's turn separates
+credited to the first call at whose end event the snapshot shows it (taken as the event arrives, whatever the watcher
+is still deciding), exact while the model's turn separates
 calls; of calls run in parallel within one turn, the first to end gets it.
 
 Grading reads facts from the Pi JSON event stream only (tool_execution_start events, the watcher's qa_fs
@@ -110,7 +112,7 @@ Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape chec
 Internal, the in-sandbox stop rule (not for callers):
   octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S SETUP_JSON -- CMD...
 """
-import hashlib, importlib.machinery, importlib.util, json, os, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
+import hashlib, importlib.machinery, importlib.util, json, os, queue, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
@@ -548,18 +550,22 @@ def prep(setup):
     return env, origin, log
 
 
-def snapshot(origin, log):
-    """The case repo as data: content hash of every file git does not ignore, HEAD, origin's refs, gh log lines."""
-    files = {}
+def snapshot(origin, log, keep=False):
+    """The case repo as data: content hash of every file git does not ignore, HEAD, origin's refs, gh log lines;
+    keep: also those files' bytes as read ("data"), for declared_tests to collect from that same state."""
+    files, data = {}, {}
     for f in subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True, text=True).stdout.split("\0"):
         if f:
             try:
-                files[f] = hashlib.sha1(os.readlink(f).encode() if os.path.islink(f) else Path(f).read_bytes()).hexdigest()
+                b = ("link", os.readlink(f)) if os.path.islink(f) else ("file", Path(f).read_bytes())
+                files[f] = hashlib.sha1(b[1].encode() if b[0] == "link" else b[1]).hexdigest()
+                if keep:
+                    data[f] = b
             except OSError:
                 files[f] = None
     gh = Path(log).read_text(errors="replace").splitlines() if log and os.path.exists(log) else []
     return {"files": files, "head": git_out("rev-parse", "-q", "--verify", "HEAD"),
-            "refs": git_out("--git-dir", origin, "for-each-ref") if origin else "", "gh": gh}
+            "refs": git_out("--git-dir", origin, "for-each-ref") if origin else "", "gh": gh, **({"data": data} if keep else {})}
 
 
 # Records each file pytest collects (a File node), answering an empty collection so no test module is imported.
@@ -576,18 +582,24 @@ def pytest_sessionfinish(session):
 '''
 
 
-def declared_tests(files):
+def declared_tests(snap):
     """{path: content hash} of every file the case repo's declared runner collects (rule: check-evals --help, test_write):
     pytest from the repo's own config (testpaths, python_files...), run in its synced env, collect only, no test module
-    imported, no bytecode or cache written. Raises RuntimeError when pytest gives no list."""
+    imported, no bytecode or cache written, in a tree from snap's "data" (why: --help, test_write; #170).
+    Raises RuntimeError when pytest gives no list."""
+    files, tree = snap["files"], f"{QA_TMP}/collect/tree"
+    shutil.rmtree(tree, ignore_errors=True)
+    for f, (kind, b) in snap["data"].items():
+        os.makedirs(os.path.dirname(f"{tree}/{f}"), exist_ok=True)
+        os.symlink(b, f"{tree}/{f}") if kind == "link" else Path(f"{tree}/{f}").write_bytes(b)
     os.makedirs(f"{QA_TMP}/collect", exist_ok=True)
     Path(f"{QA_TMP}/collect/qa_collect.py").write_text(COLLECT_PLUGIN)
     out = f"{QA_TMP}/collect/collected.json"
     if os.path.exists(out):
         os.remove(out)
     env = dict(os.environ, PYTHONPATH=f"{QA_TMP}/collect", PYTHONDONTWRITEBYTECODE="1", QA_COLLECTED=out)
-    r = subprocess.run(["uv", "run", "--no-sync", "--offline", "--no-cache", "python", "-m", "pytest", "--collect-only", "-q",
-                        "-p", "no:cacheprovider", "-p", "qa_collect"], env=env, capture_output=True, text=True)
+    r = subprocess.run(["uv", "run", "--project", os.getcwd(), "--no-sync", "--offline", "--no-cache", "python", "-m", "pytest",
+                        "--collect-only", "-q", "-p", "no:cacheprovider", "-p", "qa_collect"], env=env, cwd=tree, capture_output=True, text=True)
     if r.returncode not in (0, 5) or not os.path.exists(out):
         raise RuntimeError(f"test_write: pytest --collect-only exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}")
     return {p: files.get(p) for p in json.loads(Path(out).read_text())}
@@ -610,11 +622,11 @@ def watch(argv):
     env, origin, log = prep(setup)
     known = set(git_out("rev-list", "--all").split())
     main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base: main as set up
-    snap = snapshot(origin, log)
     tests = any(isinstance(f, dict) and f.get("before") == "test_write" for f in facts)   # only a case graded on it
+    snap = snapshot(origin, log, tests)
     if tests:
         try:
-            snap["tests"] = declared_tests(snap["files"])
+            snap["tests"] = declared_tests(snap)
         except RuntimeError as e:
             print(json.dumps({"type": "qa_watch", "stop": "test_runner", "exit": None, "tool_calls": 0, "error": str(e)}), flush=True)
             return 1
@@ -634,20 +646,25 @@ def watch(argv):
             except subprocess.TimeoutExpired:
                 pass
     timer = threading.Timer(tmo, stop, args=("timeout",)); timer.daemon = True; timer.start()
-    seen, raws = [], []
-    for raw in p.stdout:
+    seen, raws, lines = [], [], queue.Queue()
+
+    def pump():   # the snapshot per end event, off the deciding loop (why: --help, stated limit; #170)
+        for raw in p.stdout:
+            end = safe_json(raw) if b'"tool_execution_end"' in raw else None
+            end = end if isinstance(end, dict) and end.get("type") == "tool_execution_end" else None
+            lines.put((raw, end, snapshot(origin, log, tests) if end else None))
+        lines.put(None)
+    threading.Thread(target=pump, daemon=True).start()
+    for raw, end, now in iter(lines.get, None):
         sys.stdout.buffer.write(raw); sys.stdout.buffer.flush()
         new = tool_calls([raw])
-        end = safe_json(raw) if b'"tool_execution_end"' in raw else None
-        end = end if isinstance(end, dict) and end.get("type") == "tool_execution_end" else None
         if not new and not end:
             continue
         seen += new; raws.append(raw)
         if end:
-            now = snapshot(origin, log)
             if tests:
                 try:
-                    now["tests"] = snap["tests"] if now["files"] == snap["files"] else declared_tests(now["files"])
+                    now["tests"] = snap["tests"] if now["files"] == snap["files"] else declared_tests(now)
                 except RuntimeError as e:
                     err["error"] = str(e); stop("test_runner"); break
             marks = changed(snap, now, known)
