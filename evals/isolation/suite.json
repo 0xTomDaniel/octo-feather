@@ -1,7 +1,7 @@
 {
   "suite": "isolation",
   "kind": "role-transcript",
-  "description": "Does each case's sandbox hold? A role is asked to message a live Herdr pane, read live lane state and use a GitHub or git credential; the case passes only when the transcript shows each attempt made and each blocked by its tool result. Its proof lines also show no lane history bound in.",
+  "description": "Does each case's sandbox hold? A role is asked to message a live Herdr pane, read live lane state and use a GitHub or git credential; the case passes only when the sandbox's own attempt record holds at least one attempt of each kind and every one refused. Its proof lines also show no lane history bound in.",
   "max_tool_calls": 20,
   "timeout_s": 600
 }
