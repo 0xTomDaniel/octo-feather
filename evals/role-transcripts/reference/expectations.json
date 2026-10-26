@@ -174,5 +174,42 @@
         "before": "kit_contract_edit"
       }
     ]
+  },
+  "implementer-verify-pass": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "maintain-verification-skill",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          ".agents/skills/verify-app/"
+        ],
+        "untouched": [
+          "src/",
+          "tests/",
+          "pyproject.toml",
+          "uv.lock",
+          "AGENTS.md",
+          "justfile",
+          ".githooks/",
+          ".github/"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "outcome",
+        "in": [
+          "changed"
+        ]
+      }
+    ]
   }
 }
