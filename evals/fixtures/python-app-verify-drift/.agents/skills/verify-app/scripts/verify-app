@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# verify-app: drive the `app` CLI the way a user does and keep the proof.
+# Usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run
+# Run state: $VERIFY_APP_RUN_DIR. Evidence: $VERIFY_APP_EVIDENCE_DIR.
+# Both default outside the git dir, under ${TMPDIR:-/tmp}.
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo=$(cd "$script_dir/../../../.." && pwd)
+repo_key=$(printf '%s' "$repo" | cksum | cut -d' ' -f1)
+base="${TMPDIR:-/tmp}/verify-app.$(id -u).$repo_key"
+run_dir="${VERIFY_APP_RUN_DIR:-$base/run}"
+evidence_dir="${VERIFY_APP_EVIDENCE_DIR:-$base/evidence}"
+state="$run_dir/state"
+features="hello"
+
+say() { printf 'verify-app: %s\n' "$*"; }
+die() {
+    printf 'verify-app: %s\n' "$*" >&2
+    exit 1
+}
+
+# Prove a folder is writable by writing to it; `test -w` lies under some sandboxes.
+writable() {
+    local dir=$1 probe
+    mkdir -p "$dir" 2>/dev/null || return 1
+    probe="$dir/.verify-app-probe.$$"
+    { : >"$probe"; } 2>/dev/null || return 1
+    rm -f "$probe"
+}
+
+load_state() {
+    [[ -f $state ]] || die "no run state at $state: run 'verify-app launch' first"
+    # shellcheck source=/dev/null
+    . "$state"
+}
+
+cmd_setup() {
+    command -v uv >/dev/null || die "uv not on PATH"
+    say "installing deps in $repo (uv sync --locked)"
+    (cd "$repo" && uv sync --locked)
+}
+
+cmd_launch() {
+    writable "$run_dir" || die "cannot write run state folder: $run_dir"
+    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    cmd_setup
+    local app py rev
+    app="$repo/.venv/bin/app"
+    py="$repo/.venv/bin/python"
+    [[ -x $app ]] || die "app command not installed at $app after setup"
+    rev=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    mkdir -p "$run_dir/scratch"
+    {
+        printf 'APP=%q\n' "$app"
+        printf 'PY=%q\n' "$py"
+        printf 'REPO=%q\n' "$repo"
+        printf 'REV=%q\n' "$rev"
+        printf 'LAUNCHED=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } >"$state" || die "cannot write run state file: $state"
+    [[ -s $state ]] || die "run state file is empty: $state"
+    say "ready: app=$app rev=$rev"
+    say "run state: $run_dir"
+    say "evidence:  $evidence_dir"
+}
+
+# APP, PY, REPO, REV come from the state file.
+# shellcheck disable=SC2153
+cmd_doctor() {
+    load_state
+    local ok=0 out version origin rev
+    report() { printf '%-8s %s\n' "$1" "$2"; }
+    if [[ -x $APP ]]; then report ok "app command $APP"; else
+        report FAIL "app command missing: $APP"
+        ok=1
+    fi
+    if out=$("$APP" --help 2>&1) && grep -q 'hello' <<<"$out"; then
+        report ok "'app --help' lists hello"
+    else
+        report FAIL "'app --help' failed or lacks hello"
+        ok=1
+    fi
+    version=$("$PY" -c 'import importlib.metadata as m; print(m.version("app"))' 2>&1) || ok=1
+    report info "app version $version"
+    origin=$("$PY" -c 'import app; print(app.__file__)' 2>&1) || ok=1
+    if [[ $origin == "$REPO/src/"* ]]; then report ok "app imports from this checkout: $origin"; else
+        report FAIL "app imports from elsewhere: $origin"
+        ok=1
+    fi
+    rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    if [[ $rev == "$REV" ]]; then report ok "checkout at launch rev $REV"; else
+        report WARN "checkout moved: launched at $REV, now $rev (relaunch)"
+    fi
+    if [[ -d $run_dir/scratch ]]; then report ok "scratch cwd $run_dir/scratch"; else
+        report FAIL "scratch cwd missing"
+        ok=1
+    fi
+    return "$ok"
+}
+
+# One isolated case: fresh empty cwd, captured argv, stdout, stderr, exit code.
+# case_run <dir> <name> <arg>...
+case_run() {
+    local dir=$1 name=$2
+    shift 2
+    local cwd="$run_dir/scratch/$name" code=0
+    rm -rf "$cwd" && mkdir -p "$cwd"
+    printf '%q ' app "$@" >"$dir/$name.cmd"
+    echo >>"$dir/$name.cmd"
+    (cd "$cwd" && "$APP" "$@") >"$dir/$name.stdout" 2>"$dir/$name.stderr" || code=$?
+    echo "$code" >"$dir/$name.exit"
+    # Side effect check: the CLI writes no files where it runs.
+    find "$cwd" -mindepth 1 >"$dir/$name.files"
+}
+
+# check <dir> <name> <python-expr over j (stdout JSON or None), out, err, code>
+check() {
+    local dir=$1 name=$2 expr=$3 verdict
+    verdict=$(
+        "$PY" - "$dir" "$name" "$expr" <<'EOF'
+import json, pathlib, sys
+d, n, expr = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+out = (d / f"{n}.stdout").read_text()
+err = (d / f"{n}.stderr").read_text()
+code = int((d / f"{n}.exit").read_text())
+files = (d / f"{n}.files").read_text()
+try:
+    j = json.loads(out)
+except ValueError:
+    j = None
+print("PASS" if eval(expr) and files == "" else "FAIL")
+EOF
+    )
+    printf '%s %s: %s\n' "$verdict" "$name" "$(cat "$dir/$name.cmd")" | tee -a "$dir/summary.txt"
+    # Show what the user saw: stdout and stderr, then the exit code.
+    sed 's/^/    stdout: /' "$dir/$name.stdout"
+    sed 's/^/    stderr: /' "$dir/$name.stderr"
+    printf '    exit: %s\n' "$(cat "$dir/$name.exit")"
+    [[ $verdict == PASS ]]
+}
+
+drive_hello() {
+    local dir="$evidence_dir/hello" fails=0
+    rm -rf "$dir" && mkdir -p "$dir"
+    echo "hello @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
+    case_run "$dir" json hello Ada --json
+    check "$dir" json 'code == 0 and err == "" and j == {"name": "Ada", "text": "Hello, Ada"}' || fails=1
+    case_run "$dir" text hello Ada
+    check "$dir" text 'code == 0 and err == "" and out == "Hello, Ada\n"' || fails=1
+    case_run "$dir" trimmed hello '  Ada  ' --json
+    check "$dir" trimmed 'code == 0 and j == {"name": "Ada", "text": "Hello, Ada"}' || fails=1
+    case_run "$dir" empty-json hello '  ' --json
+    check "$dir" empty-json 'code == 1 and err == "" and isinstance(j, dict) and set(j) == {"error"} and j["error"]' || fails=1
+    case_run "$dir" empty-text hello '  '
+    check "$dir" empty-text 'code == 1 and out == "" and err.startswith("error: ")' || fails=1
+    say "hello evidence: $dir"
+    return "$fails"
+}
+
+cmd_drive() {
+    local feature=${1:-}
+    [[ -n $feature ]] || die "usage: verify-app drive <feature> (features: $features)"
+    load_state
+    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    case $feature in
+    hello) drive_hello ;;
+    *) die "unknown feature '$feature' (features: $features)" ;;
+    esac
+}
+
+cmd_cleanup() {
+    # Nothing runs in the background: the CLI exits per case. Remove only our run state.
+    if [[ -e $run_dir ]]; then
+        rm -rf "$run_dir/scratch" "$state"
+        rmdir "$run_dir" 2>/dev/null || true
+        say "removed run state $run_dir"
+    fi
+    say "evidence kept at $evidence_dir"
+}
+
+cmd_run() {
+    local code=0
+    cmd_launch
+    cmd_doctor | tee "$evidence_dir/doctor.txt" || code=1
+    if [[ $code == 0 ]]; then cmd_drive hello || code=1; fi
+    cmd_cleanup
+    [[ -d $evidence_dir ]] || die "evidence folder gone after cleanup: $evidence_dir"
+    ls -laR "$evidence_dir"
+    if [[ $code == 0 ]]; then say "run PASS"; else say "run FAIL"; fi
+    return "$code"
+}
+
+case ${1:-} in
+setup) cmd_setup ;;
+launch) cmd_launch ;;
+doctor) cmd_doctor ;;
+drive)
+    shift
+    cmd_drive "$@"
+    ;;
+cleanup) cmd_cleanup ;;
+run) cmd_run ;;
+*) die "usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run" ;;
+esac

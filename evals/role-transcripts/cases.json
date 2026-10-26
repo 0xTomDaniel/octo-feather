@@ -14,6 +14,13 @@
     "task": "Ticket T4 (lane gh4, parent #4): the repo's changelog skill gains a rule: a CHANGELOG.md entry says what a user of `app` sees (a command, a flag, an output), never internal names such as modules, functions or dataclasses. Example: `- app hello NAME --shout prints the greeting upper-cased (#5)`, not `- core.greet takes a shout bool (#5)`.\nAcceptance criterion: changelog-user-facing. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   },
   {
+    "id": "implementer-verify-pass",
+    "role": "implementer",
+    "fixture": "python-app-verify-drift",
+    "branch": "implementer-t5",
+    "task": "Ticket T5 (lane gh5, parent #5): nobody has gone over this repo's verify skill since it was written. Do a full pass over it: every feature it maps, checked against the source and against the running app, and bring whatever is out of date back in line on this branch.\nAcceptance criterion: verify-pass. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead. It ends with exactly one fenced json block naming the pass's outcome, and nothing else in json:\n```json\n{\"outcome\": \"clean\" or \"changed\" or \"blocked\"}\n```"
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
