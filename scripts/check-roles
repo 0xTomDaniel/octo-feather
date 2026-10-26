@@ -56,7 +56,9 @@ for role in ROLES:
     if "thinking" in fm and fm["thinking"] not in THINKING:
         err(f"{rel}: thinking `{fm['thinking']}` not one of {sorted(THINKING)}")
     for t in lst(fm.get("tools", "")):
-        if t not in TOOLS:
+        if t == "codemode":
+            err(f"{rel}: tools lists `codemode`; delete it, pi-role adds it, every role gets it (spec roles#fm-tools)")
+        elif t not in TOOLS:
             err(f"{rel}: unknown tool `{t}`; allowed {sorted(TOOLS)}")
     for s in lst(fm.get("skills", "")):
         if s == "{tracker}":  # pi-role loads the target's tracker skill here (spec skills#tracker)

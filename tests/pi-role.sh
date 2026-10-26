@@ -32,4 +32,20 @@ child pane
 for kv in "${route[@]}"; do
   grep -qx "$kv" "$t/env.pane" || { echo "pi-role test: pane launch child lacks $kv" >&2; exit 1; }
 done
-echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them)"
+# #175 (roles#launch-codemode): every role's --tools is its role file's tools plus codemode.
+ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
+for rt in director:$ro code-reviewer:$ro qc-judge:$ro supervisor:$rw implementer:$rw corrector:$rw; do
+  role="${rt%%:*}"; want="${rt#*:}"
+  got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print(a[a.index("--tools")+1] if "--tools" in a else "none")')"
+  [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }
+done
+
+# roles#fm-tools: a role file listing codemode fails check-roles, naming the file and the tool.
+# A fixture kit: the real scripts and skills, a director whose tools list codemode.
+mkdir -p "$t/kit/scripts" "$t/kit/.agents"
+cp "$kit/scripts/check-roles" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp -r "$kit/agents" "$t/kit/"
+ln -s "$kit/.agents/skills" "$t/kit/.agents/skills"
+sed -i 's/^tools: .*/tools: read, grep, find, ls, bash, codemode/' "$t/kit/agents/director.md"
+if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role listing codemode" >&2; exit 1; fi
+grep -q 'agents/director.md: .*`codemode`.*every role gets it' "$t/cr" || { echo "pi-role test: check-roles did not name the file and codemode: $(cat "$t/cr")" >&2; exit 1; }
+echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; every role's --tools is its tools plus codemode; check-roles refuses a role listing codemode)"
