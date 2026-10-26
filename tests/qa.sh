@@ -42,7 +42,7 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
     # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
     # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
     # p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
-    # x-latest:free, p/q-1.2:free) kill the run if called; yesno refuses every choice question
+    # x-latest:free, p/q-1.2:free) and the listed yes/no-only ynr kill the run if called; yesno (not listed) refuses every choice question
     # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
     # kills the run (the bench asks only the real question, no stand-in probe);
     # a state holding STUB-DIE kills the run, one holding STUB-REFUSE is refused. As pi's print mode, an extension's process.stdout goes to stderr.
@@ -51,8 +51,8 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
 const [ext, name, args] = process.argv.slice(1);
 const cmds = {};
 (await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
-const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2", "x-latest:free", "p/q-1.2:free", "yesno"];
-const aliases = ["~x/y", "x-latest:free", "p/q-1.2:free"];   // listed moving aliases: a call to one kills the run
+const ids = ["token", "first", "broken", "cheap-train", "cheap-total", "~x/y", "p/q-latest", "p/q-1.2", "x-latest:free", "p/q-1.2:free", "yesno", "ynr"];
+const aliases = ["~x/y", "x-latest:free", "p/q-1.2:free", "ynr"];   // listed moving aliases and yes/no only: a call to one kills the run
 const models = ids.map((id) => ({type: "classifier", provider: "stub", id, name: id, api: "stub", input: ["text"]}));
 const cost = (id, state) => id === "cheap-train" ? (state.startsWith("case h") ? 0.01 : 0.001) : id === "cheap-total" ? (state.startsWith("case h") ? 0 : 0.002) : 0.001;
 const modelRegistry = {
@@ -626,9 +626,10 @@ echo '{"suite": "jb", "kind": "judgment", "description": "stub judgment", "timeo
 mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
 echo '{"model": "stub/first", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 # Stub classifiers.json (rules: check-evals --help, octo-feather-qa --help): p/q-1.2:free listed a moving alias,
-# p/q-latest and m-current pinned, cheap-total in neither.
+# ynr listed yes/no only, p/q-latest and m-current pinned, cheap-total in none.
 cat > "$t/jg/classifiers.json" <<'JSON'
 {"owner": "stub ruling, tests/qa.sh", "moving_alias": ["stub/~x/y", "stub/x-latest:free", "stub/p/q-1.2:free"],
+ "yes_no_only": {"stub/ynr": {"ruling": "stub yes/no ruling", "error": "stub bool only (400)", "evidence": "stub run"}},
  "pinned": {"stub/token": "r", "stub/first": "r", "stub/broken": "r", "stub/cheap-train": "r", "stub/p/q-1.2": "r",
             "stub/p/q-latest": "r", "stub/yesno": "r", "stub/m-current": "r"}}
 JSON
@@ -636,13 +637,14 @@ cp -r "$t/jg" "$t/jg-good"
 run 0 "$Q" --evals "$t/jg"
 jl() { grep -qF -- "$1" <<< "$out" || fail "bench: no '$1' in: $out"; }
 jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every answer is a model judgment"
-jl "bench jb: classifiers available (11): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free, stub/yesno"
+jl "bench jb: classifiers available (12): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free, stub/yesno, stub/ynr"
 jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/x-latest:free, stub/p/q-1.2:free; never called, ruling (classifiers.json owner): stub ruling, tests/qa.sh"
-jl "bench jb: unclassified id (1): stub/cheap-total; benched (scored where it answered), in neither list of classifiers.json"
-# yesno answers only bool questions (rule: octo-feather-qa --help, a classifier that answered no case); a question not a
+jl "bench jb: skipped: yes/no only stub/ynr; never called, ruling (classifiers.json yes_no_only): stub yes/no ruling; provider error (stub run): stub bool only (400)"
+jl "bench jb: unclassified id (1): stub/cheap-total; benched (scored where it answered), in no list of classifiers.json"
+# yesno, not listed answers only bool questions (rule: octo-feather-qa --help, a classifier that answered no case); a question not a
 # choice kills the stub run.
 jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
-! grep -E "^  stub/yesno |yes/no only" <<< "$out" || fail "bench: a yes/no-only classifier scored or skipped: $out"
+! grep -E "^  stub/(yesno|ynr) |yes/no only stub/yesno|unavailable stub/ynr" <<< "$out" || fail "bench: a yes/no-only classifier scored, or skipped unlisted: $out"
 [[ "$(grep -A7 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-latest 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
 [[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
@@ -672,7 +674,8 @@ assert k["model"] == "stub/first" and k["scored"] and k["threshold"] == {"accura
 assert "choice" not in s["benches"][0], s["benches"][0]
 b = json.load(open(f"{d}/jb/bench.json"))   # per-model cost and the run total (token, first, p/q-1.2, p/q-latest 0.015 each; cheap 0.042 + 0.024)
 assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-train"] == 0.042 and round(b["cost_usd"], 6) == 0.126, b
-assert b["skipped"] == ["stub/~x/y", "stub/x-latest:free", "stub/p/q-1.2:free"] and {"stub/p/q-1.2", "stub/p/q-latest"} <= set(b["benched"]), b
+assert b["skipped"] == ["stub/~x/y", "stub/x-latest:free", "stub/p/q-1.2:free", "stub/ynr"] and {"stub/p/q-1.2", "stub/p/q-latest"} <= set(b["benched"]), b
+assert b["skipped_yes_no_only"] == {"stub/ynr": {"ruling": "stub yes/no ruling", "error": "stub bool only (400)", "evidence": "stub run"}}, b
 assert b["skipped_ruling"] == "stub ruling, tests/qa.sh" and b["unclassified"] == ["stub/cheap-total"] and "stub/cheap-total" in b["benched"], b
 assert not set(b["skipped"]) & ({x["model"] for x in a["answers"]} | {m["model"] for m in b["models"]}), b
 y = next(m for m in b["models"] if m["model"] == "stub/yesno")
@@ -687,15 +690,16 @@ EOF
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
 jl "DONE bench jb: kit model stub/first, best stub/first"
-# A --classifier naming a listed moving alias (rule: octo-feather-qa --help; a call kills the stub run).
-run 0 "$Q" --evals "$t/jg" --classifier stub/p/q-latest --classifier stub/p/q-1.2:free --classifier stub/p/q-1.2
-jl "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2"
+# A --classifier naming a listed moving alias or yes/no only (rule: octo-feather-qa --help; a call kills the stub run).
+run 0 "$Q" --evals "$t/jg" --classifier stub/p/q-latest --classifier stub/p/q-1.2:free --classifier stub/p/q-1.2 --classifier stub/ynr
+jl "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr"
+jl "bench jb: skipped: yes/no only stub/ynr; never called"
 jl "bench jb: skipped: moving alias (1): stub/p/q-1.2:free; never called"
 ! grep -q "unclassified id" <<< "$out" || fail "bench: an unclassified flag with every benched id pinned: $out"
 grep -qE "^  kit +stub/first +not scored: not benched$" <<< "$out" || fail "bench: kit model not benched not shown: $out"
 jl "DONE bench jb: kit model stub/first not scored (not benched), best stub/p/q-1.2"
 ! grep -q "not available" <<< "$out" || fail "bench: a skipped alias named not available: $out"
-python3 -c "import json,sys; b=json.load(open(sys.argv[1])); assert b['skipped'] == ['stub/p/q-1.2:free'] and b['benched'] == ['stub/p/q-latest', 'stub/p/q-1.2'] and b['unclassified'] == [], b" \
+python3 -c "import json,sys; b=json.load(open(sys.argv[1])); assert b['skipped'] == ['stub/p/q-1.2:free', 'stub/ynr'] and b['benched'] == ['stub/p/q-latest', 'stub/p/q-1.2'] and b['unclassified'] == [], b" \
   "$(ls -dt "$t"/out/*/ | head -1)/jb/bench.json" || fail "bench: --classifier aliases not recorded skipped"
 # Ties on train accuracy and Brier break on train cost only: cheap-train costs less on train, more in all.
 run 0 "$Q" --evals "$t/jg" --classifier stub/cheap-total --classifier stub/cheap-train
@@ -787,6 +791,7 @@ badm 'm["why"] = "x"' "judgment-model.json: field why: unknown field"
 for m in stub/~x/y stub/p/q-1.2:free; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: $m is a moving alias in classifiers.json (owner: stub ruling, tests/qa.sh)"
 done
+badm 'm["model"] = "stub/ynr"' "judgment-model.json: field model: stub/ynr is yes/no only in classifiers.json (ruling: stub yes/no ruling)"
 badm 'm["model"] = "stub/cheap-total"' "judgment-model.json: field model: stub/cheap-total is not in classifiers.json pinned"
 for m in stub/p/q-latest stub/m-current; do   # pinned ids named -latest and -current (rule: check-evals --help)
   rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
@@ -801,7 +806,7 @@ badc() {   # badc PY_EDIT WANT: edit a fresh judgment copy's classifiers.json (o
 }
 rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"; rm "$t/evals/classifiers.json"
 run 1 "$C" "$t/evals"; grep -qF "$t/evals/classifiers.json: missing; it holds every catalogue classifier ruled" <<< "$out" || fail "no classifiers file: $out"
-for k in owner moving_alias pinned; do badc 'del o["'$k'"]' "classifiers.json: field $k: missing"; done
+for k in owner moving_alias yes_no_only pinned; do badc 'del o["'$k'"]' "classifiers.json: field $k: missing"; done
 badc 'o["why"] = "x"' "classifiers.json: field why: unknown field"
 badc 'o["owner"] = " "' "classifiers.json: field owner: must be the ruling's source, one non-empty line"
 badc 'o["pinned"]["stub"] = "r"' "classifiers.json: field pinned.stub: must be a classifier <provider>/<id>, got 'stub'"
@@ -810,8 +815,18 @@ badc 'o["pinned"] = list(o["pinned"])' "classifiers.json: field pinned: must be 
 badc 'o["moving_alias"] = "stub/~x/y"' "classifiers.json: field moving_alias: must be a list of classifier ids"
 badc 'o["pinned"]["stub/~x/y"] = "r"' "classifiers.json: field pinned.stub/~x/y: stub/~x/y already listed in moving_alias"
 badc 'o["moving_alias"].append("stub/~x/y")' "classifiers.json: field moving_alias[3]: stub/~x/y already listed in moving_alias"
+badc 'o["yes_no_only"] = ["stub/ynr"]' "classifiers.json: field yes_no_only: must be an object {<provider>/<id>: {ruling, error, evidence}}"
+badc 'o["yes_no_only"]["stub"] = o["yes_no_only"]["stub/ynr"]' "classifiers.json: field yes_no_only.stub: must be a classifier <provider>/<id>, got 'stub'"
+badc 'o["yes_no_only"]["stub/~x/y"] = o["yes_no_only"]["stub/ynr"]' "classifiers.json: field yes_no_only.stub/~x/y: stub/~x/y already listed in moving_alias"
+badc 'o["pinned"]["stub/ynr"] = "r"' "classifiers.json: field pinned.stub/ynr: stub/ynr already listed in yes_no_only"
+badc 'o["yes_no_only"]["stub/ynr"] = "r"' "classifiers.json: field yes_no_only.stub/ynr: must be an object {ruling, error, evidence}, got 'r'"
+for k in ruling error evidence; do
+  badc 'del o["yes_no_only"]["stub/ynr"]["'$k'"]' "classifiers.json: field yes_no_only.stub/ynr.$k: missing"
+  badc 'o["yes_no_only"]["stub/ynr"]["'$k'"] = " "' "classifiers.json: field yes_no_only.stub/ynr.$k: must be"
+done
+badc 'o["yes_no_only"]["stub/ynr"]["why"] = "x"' "classifiers.json: field yes_no_only.stub/ynr.why: unknown field"
 for m in stub 'stub/' '/x' 'stub/a b' ''; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
 done
 badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (octo-feather-qa --help; catalogue and --classifier), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json shape (check-evals --help); classifiers.json shape (check-evals --help))"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (octo-feather-qa --help; catalogue and --classifier; moving alias and yes/no only skipped, never called), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json shape (check-evals --help); classifiers.json shape (check-evals --help))"
