@@ -18,9 +18,13 @@ copied and git-initialized per run). A suite dir holds:
                                 key "model" or "chosen" at any depth (spec judgment#rule-one-model)
 EVALS_DIR/judgment-model.json  {"model": P/ID, "evidence": path}: the kit's one judgment model, every judgment
                                question's (spec judgment#rule-one-model), read by octo-feather-qa (the bench
-                               shows it beside each question's best) and `octo-feather-lane judge`; ID not a
-                               moving alias, as octo-feather-qa skips them; evidence a file as above. Required
-                               when EVALS_DIR holds a judgment suite
+                               shows it beside each question's best) and `octo-feather-lane judge`; P/ID one of
+                               classifiers.json's pinned, never a listed moving alias (exact id, no name shape);
+                               evidence a file as above. Required when EVALS_DIR holds a judgment suite
+EVALS_DIR/classifiers.json     {"owner": the ruling's source, one non-empty line, "moving_alias": [P/ID...],
+                               "pinned": [P/ID...]}: every catalogue classifier, ruled (spec judgment#rule-available);
+                               no id in both lists, none twice; read by octo-feather-qa's bench (its --help).
+                               Required beside judgment-model.json
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out");
                                a role-transcript case may also have
@@ -161,6 +165,8 @@ HELD_OUT = {"accuracy", "brier"}   # calibration.held_out: the bench's held-out 
 THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold: proposed (accepted false) or accepted
 MODEL_FILE = "judgment-model.json"   # the kit's one judgment model (spec judgment#rule-one-model)
 MODEL_KEYS = {"model", "evidence"}
+CLASSIFIERS = "classifiers.json"   # every catalogue classifier ruled moving alias or pinned (spec judgment#rule-available)
+CLASSIFIER_KEYS = {"owner", "moving_alias", "pinned"}
 NAMES_MODEL = {"model", "chosen"}   # keys that would name a model in a suite
 MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
@@ -311,13 +317,47 @@ def model_keys(o, at=""):
     return [p for k, v in o.items() for p in ([f"{at}{k}"] if k in NAMES_MODEL else model_keys(v, f"{at}{k}."))]
 
 
-def check_model_ref(m, field, where, errs):
-    """A classifier P/ID, pinned: not a moving alias (octo-feather-qa's rule, one routing tag ignored)."""
+def check_model_ref(m, field, where, errs, ruled):
+    """A classifier P/ID, pinned: in RULED's pinned list, never in its moving_alias list (exact id, no name shape)."""
     if not (isinstance(m, str) and MODEL.fullmatch(m)):
         errs.append(f"{where}: field {field}: must be a classifier <provider>/<id>, got {m!r}"); return
-    mid = re.sub(r":[^:/]+$", "", m.split("/", 1)[1])
-    if mid.startswith("~") or mid.endswith("-latest"):
-        errs.append(f"{where}: field {field}: {m} is a moving alias (its id starts with ~ or ends in -latest); name a pinned version")
+    if ruled is None:
+        return
+    if m in ruled["moving_alias"]:
+        errs.append(f"{where}: field {field}: {m} is a moving alias in {CLASSIFIERS} (owner: {ruled['owner']}); name a pinned one")
+    elif m not in ruled["pinned"]:
+        errs.append(f"{where}: field {field}: {m} is not in {CLASSIFIERS} pinned; name a pinned one or rule it there")
+
+
+def check_classifiers(evals, errs):
+    """EVALS/classifiers.json: {owner, moving_alias, pinned}. Returns it when well formed, else None."""
+    where = CLASSIFIERS
+    o = load(evals / CLASSIFIERS, errs, "every catalogue classifier ruled {owner, moving_alias, pinned} (spec judgment#rule-available)")
+    if o is None:
+        return None
+    if not isinstance(o, dict):
+        errs.append(f"{where}: must be a JSON object {{owner, moving_alias, pinned}}"); return None
+    n = len(errs)
+    for k in sorted(CLASSIFIER_KEYS - set(o)):
+        errs.append(f"{where}: field {k}: missing")
+    for k in sorted(set(o) - CLASSIFIER_KEYS):
+        errs.append(f"{where}: field {k}: unknown field")
+    if "owner" in o and not (isinstance(o["owner"], str) and o["owner"].strip() and "\n" not in o["owner"]):
+        errs.append(f"{where}: field owner: must be the ruling's source, one non-empty line, got {o['owner']!r}")
+    seen = {}
+    for k in ("moving_alias", "pinned"):
+        if k not in o:
+            continue
+        if not isinstance(o[k], list):
+            errs.append(f"{where}: field {k}: must be a list of classifier ids <provider>/<id>, got {o[k]!r}"); continue
+        for i, m in enumerate(o[k]):
+            if not (isinstance(m, str) and MODEL.fullmatch(m)):
+                errs.append(f"{where}: field {k}[{i}]: must be a classifier <provider>/<id>, got {m!r}")
+            elif m in seen:
+                errs.append(f"{where}: field {k}[{i}]: {m} already listed in {seen[m]}")
+            else:
+                seen[m] = k
+    return o if len(errs) == n else None
 
 
 def check_evidence(ev, field, where, evals, errs):
@@ -328,8 +368,9 @@ def check_evidence(ev, field, where, evals, errs):
 
 
 def check_model_file(evals, errs):
-    """EVALS/judgment-model.json: {model: a pinned P/ID, evidence: a file beside evals/}."""
+    """EVALS/judgment-model.json: {model: a pinned P/ID (classifiers.json), evidence: a file beside evals/}."""
     where = MODEL_FILE
+    ruled = check_classifiers(evals, errs)
     o = load(evals / MODEL_FILE, errs, f"the kit's one judgment model {{model, evidence}} (spec judgment#rule-one-model)")
     if o is None:
         return
@@ -340,7 +381,7 @@ def check_model_file(evals, errs):
     for k in sorted(set(o) - MODEL_KEYS):
         errs.append(f"{where}: field {k}: unknown field")
     if "model" in o:
-        check_model_ref(o["model"], "model", where, errs)
+        check_model_ref(o["model"], "model", where, errs, ruled)
     if "evidence" in o:
         check_evidence(o["evidence"], "evidence", where, evals, errs)
 
