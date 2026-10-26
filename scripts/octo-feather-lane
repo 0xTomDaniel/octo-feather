@@ -1052,8 +1052,7 @@ RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
 ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
 RULING = re.compile(r"owner ruling\s+\S.*", re.I)
 # The fix text for a rule item (scope: --help (ticket)).
-RULE_FORM = ("`rule: <rule> (<owner>)`, the rule as stated where it is owned, the owner an ADR of this repo "
-             "(`docs/adr/NNNN` or `ADR NNNN`) or `owner ruling <date and/or issue>` (docs/adr/0008)")
+RULE_FORM = "`rule: <rule> (<owner>)`, owner kinds: octo-feather-lane --help (ticket)"
 
 
 def rule_why_not(rest: str, adr: Path) -> str | None:
