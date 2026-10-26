@@ -18,7 +18,8 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   description  one line for owners; pi-role ignores it
   model        --model
   thinking     --thinking
-  tools        --tools (built-in Pi tools only)
+  tools        --tools (built-in Pi tools only; spec roles#launch-codemode);
+               an empty list stays --no-tools
   skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018);
                {tracker} is the target's tracker skill: `tracker` in
                .octo-feather.toml at the working directory's checkout top,
@@ -119,7 +120,7 @@ def launch(path, to_file=False):
     if fm.get("thinking"):
         args += ["--thinking", fm["thinking"]]
     if "tools" in fm:
-        args += ["--tools", ",".join(fm["tools"])] if fm["tools"] else ["--no-tools"]
+        args += ["--tools", ",".join(fm["tools"] + ["codemode"])] if fm["tools"] else ["--no-tools"]
     args += ["--no-mcp", "--no-skills"]
     roots = skill_roots(path)
     args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", EXTENSION)]
