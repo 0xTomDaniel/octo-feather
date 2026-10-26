@@ -1,0 +1,223 @@
+#!/usr/bin/env bash
+# verify-app: drive the `app` CLI the way a user does and keep the proof.
+# Usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run
+# Run state: $VERIFY_APP_RUN_DIR. Evidence: $VERIFY_APP_EVIDENCE_DIR.
+# Both default outside the git dir, under ${TMPDIR:-/tmp}.
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+repo=$(cd "$script_dir/../../../.." && pwd)
+repo_key=$(printf '%s' "$repo" | cksum | cut -d' ' -f1)
+base="${TMPDIR:-/tmp}/verify-app.$(id -u).$repo_key"
+run_dir="${VERIFY_APP_RUN_DIR:-$base/run}"
+evidence_dir="${VERIFY_APP_EVIDENCE_DIR:-$base/evidence}"
+state="$run_dir/state"
+features="hello"
+
+say() { printf 'verify-app: %s\n' "$*"; }
+die() {
+    printf 'verify-app: %s\n' "$*" >&2
+    exit 1
+}
+
+# Prove a folder is writable by writing to it; `test -w` lies under some sandboxes.
+writable() {
+    local dir=$1 probe
+    mkdir -p "$dir" 2>/dev/null || return 1
+    probe="$dir/.verify-app-probe.$$"
+    { : >"$probe"; } 2>/dev/null || return 1
+    rm -f "$probe"
+}
+
+load_state() {
+    [[ -f $state ]] || die "no run state at $state: run 'verify-app launch' first"
+    # shellcheck source=/dev/null
+    . "$state"
+}
+
+cmd_setup() {
+    command -v node >/dev/null || die "node not on PATH"
+    command -v pnpm >/dev/null || die "pnpm not on PATH"
+    say "installing deps in $repo (pnpm install --frozen-lockfile)"
+    (cd "$repo" && pnpm install --frozen-lockfile)
+}
+
+cmd_launch() {
+    writable "$run_dir" || die "cannot write run state folder: $run_dir"
+    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    cmd_setup
+    local app bin rev node
+    # package.json "bin": {"app": "src/cli.ts"}; Node runs it directly (type stripping, no build step).
+    bin=$(cd "$repo" && node -e 'process.stdout.write(require("./package.json").bin.app)')
+    [[ -f $repo/$bin ]] || die "app bin missing at $repo/$bin"
+    node=$(command -v node)
+    # The `app` command as a package manager's bin shim runs it: node <bin file> "$@".
+    app="$run_dir/bin/app"
+    mkdir -p "$run_dir/bin" "$run_dir/scratch"
+    printf '#!/bin/sh\nexec %q %q "$@"\n' "$node" "$repo/$bin" >"$app" || die "cannot write app command: $app"
+    chmod +x "$app"
+    rev=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    {
+        printf 'APP=%q\n' "$app"
+        printf 'BIN=%q\n' "$repo/$bin"
+        printf 'NODE=%q\n' "$node"
+        printf 'REPO=%q\n' "$repo"
+        printf 'REV=%q\n' "$rev"
+        printf 'LAUNCHED=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    } >"$state" || die "cannot write run state file: $state"
+    [[ -s $state ]] || die "run state file is empty: $state"
+    say "ready: app=$app bin=$repo/$bin rev=$rev"
+    say "run state: $run_dir"
+    say "evidence:  $evidence_dir"
+}
+
+# APP, BIN, NODE, REPO, REV come from the state file.
+# shellcheck disable=SC2153
+cmd_doctor() {
+    load_state
+    local ok=0 out code=0 version engines rev
+    report() { printf '%-8s %s\n' "$1" "$2"; }
+    if [[ -x $APP ]]; then report ok "app command $APP"; else
+        report FAIL "app command missing: $APP"
+        ok=1
+    fi
+    if [[ $BIN == "$REPO/src/"* && -f $BIN ]]; then report ok "app runs this checkout's bin: $BIN"; else
+        report FAIL "app bin not in this checkout: $BIN"
+        ok=1
+    fi
+    engines=$(cd "$REPO" && "$NODE" -e 'process.stdout.write(require("./package.json").engines.node)')
+    if "$NODE" -e '
+        const [want, have] = [process.argv[1].replace(/^>=/, ""), process.versions.node];
+        const n = (v) => v.split(".").map(Number);
+        const [a, b] = [n(have), n(want)];
+        for (let i = 0; i < 3; i++) { const d = (a[i] ?? 0) - (b[i] ?? 0); if (d) process.exit(d > 0 ? 0 : 1); }
+    ' "$engines"; then report ok "node $("$NODE" --version) meets engines $engines"; else
+        report FAIL "node $("$NODE" --version) below engines $engines (no type stripping)"
+        ok=1
+    fi
+    # No --help: `app` with no command prints the usage line and exits 64.
+    out=$("$APP" 2>&1) || code=$?
+    if [[ $code == 64 ]] && grep -q 'usage: app hello' <<<"$out"; then
+        report ok "'app' usage lists hello (exit 64)"
+    else
+        report FAIL "'app' usage check: exit $code, output: $out"
+        ok=1
+    fi
+    version=$(cd "$REPO" && "$NODE" -e 'process.stdout.write(require("./package.json").version)' 2>&1) || ok=1
+    report info "app version $version"
+    rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
+    if [[ $rev == "$REV" ]]; then report ok "checkout at launch rev $REV"; else
+        report WARN "checkout moved: launched at $REV, now $rev (relaunch)"
+    fi
+    if [[ -d $run_dir/scratch ]]; then report ok "scratch cwd $run_dir/scratch"; else
+        report FAIL "scratch cwd missing"
+        ok=1
+    fi
+    return "$ok"
+}
+
+# One isolated case: fresh empty cwd, captured argv, stdout, stderr, exit code.
+# case_run <dir> <name> <arg>...
+case_run() {
+    local dir=$1 name=$2
+    shift 2
+    local cwd="$run_dir/scratch/$name" code=0
+    rm -rf "$cwd" && mkdir -p "$cwd"
+    printf '%q ' app "$@" >"$dir/$name.cmd"
+    echo >>"$dir/$name.cmd"
+    (cd "$cwd" && "$APP" "$@") >"$dir/$name.stdout" 2>"$dir/$name.stderr" || code=$?
+    echo "$code" >"$dir/$name.exit"
+    # Side effect check: the CLI writes no files where it runs.
+    find "$cwd" -mindepth 1 >"$dir/$name.files"
+}
+
+# check <dir> <name> <JS expression over j (stdout JSON or null), out, err, code>
+check() {
+    local dir=$1 name=$2 expr=$3 verdict
+    verdict=$(
+        "$NODE" -e '
+const fs = require("node:fs");
+const [d, n, expr] = process.argv.slice(1);
+const read = (ext) => fs.readFileSync(`${d}/${n}.${ext}`, "utf8");
+const [out, err, code, files] = [read("stdout"), read("stderr"), Number(read("exit")), read("files")];
+let j = null;
+try { j = JSON.parse(out); } catch {}
+const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+console.log(new Function("j", "out", "err", "code", "same", `return (${expr});`)(j, out, err, code, same) && files === "" ? "PASS" : "FAIL");
+' "$dir" "$name" "$expr"
+    )
+    printf '%s %s: %s\n' "$verdict" "$name" "$(cat "$dir/$name.cmd")" | tee -a "$dir/summary.txt"
+    # Show what the user saw: stdout and stderr, then the exit code.
+    sed 's/^/    stdout: /' "$dir/$name.stdout"
+    sed 's/^/    stderr: /' "$dir/$name.stderr"
+    printf '    exit: %s\n' "$(cat "$dir/$name.exit")"
+    [[ $verdict == PASS ]]
+}
+
+drive_hello() {
+    local dir="$evidence_dir/hello" fails=0
+    rm -rf "$dir" && mkdir -p "$dir"
+    echo "hello @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
+    case_run "$dir" json hello Ada --json
+    check "$dir" json 'code === 0 && err === "" && same(j, {name: "Ada", text: "Hello, Ada"})' || fails=1
+    case_run "$dir" text hello Ada
+    check "$dir" text 'code === 0 && err === "" && out === "Hello, Ada\n"' || fails=1
+    case_run "$dir" trimmed hello '  Ada  ' --json
+    check "$dir" trimmed 'code === 0 && same(j, {name: "Ada", text: "Hello, Ada"})' || fails=1
+    case_run "$dir" empty-json hello '  ' --json
+    check "$dir" empty-json 'code === 2 && err === "" && j !== null && same(Object.keys(j), ["error"]) && j.error !== ""' || fails=1
+    case_run "$dir" empty-text hello '  '
+    check "$dir" empty-text 'code === 2 && out === "" && err.startsWith("error: ")' || fails=1
+    case_run "$dir" no-name hello
+    check "$dir" no-name 'code === 64 && out === "" && err.startsWith("usage: app hello")' || fails=1
+    say "hello evidence: $dir"
+    return "$fails"
+}
+
+cmd_drive() {
+    local feature=${1:-}
+    [[ -n $feature ]] || die "usage: verify-app drive <feature> (features: $features)"
+    load_state
+    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    case $feature in
+    hello) drive_hello ;;
+    *) die "unknown feature '$feature' (features: $features)" ;;
+    esac
+}
+
+cmd_cleanup() {
+    # Nothing runs in the background: the CLI exits per case. Remove only our run state.
+    if [[ -e $run_dir ]]; then
+        rm -rf "$run_dir/scratch" "$state"
+        rm -f "$run_dir/bin/app"
+        rmdir "$run_dir/bin" 2>/dev/null || true
+        rmdir "$run_dir" 2>/dev/null || true
+        say "removed run state $run_dir"
+    fi
+    say "evidence kept at $evidence_dir"
+}
+
+cmd_run() {
+    local code=0
+    cmd_launch
+    cmd_doctor | tee "$evidence_dir/doctor.txt" || code=1
+    if [[ $code == 0 ]]; then cmd_drive hello || code=1; fi
+    cmd_cleanup
+    [[ -d $evidence_dir ]] || die "evidence folder gone after cleanup: $evidence_dir"
+    ls -laR "$evidence_dir"
+    if [[ $code == 0 ]]; then say "run PASS"; else say "run FAIL"; fi
+    return "$code"
+}
+
+case ${1:-} in
+setup) cmd_setup ;;
+launch) cmd_launch ;;
+doctor) cmd_doctor ;;
+drive)
+    shift
+    cmd_drive "$@"
+    ;;
+cleanup) cmd_cleanup ;;
+run) cmd_run ;;
+*) die "usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run" ;;
+esac
