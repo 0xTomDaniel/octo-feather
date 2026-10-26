@@ -603,11 +603,12 @@ echo '{"suite": "jb", "kind": "judgment", "description": "stub judgment", "timeo
 # The kit's one judgment model (spec judgment#rule-one-model): stub/first, not the question's best (token).
 mkdir -p "$t/evidence"; echo bench > "$t/evidence/jb.md"
 echo '{"model": "stub/first", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
-# Every classifier ruled (spec judgment#rule-available), exact ids, no name shape: p/q-1.2:free listed a moving alias,
-# p/q-latest and m-current pinned; cheap-total in neither list (benched, flagged unclassified).
+# Stub classifiers.json (rules: check-evals --help, octo-feather-qa --help): p/q-1.2:free listed a moving alias,
+# p/q-latest and m-current pinned, cheap-total in neither.
 cat > "$t/jg/classifiers.json" <<'JSON'
 {"owner": "stub ruling, tests/qa.sh", "moving_alias": ["stub/~x/y", "stub/x-latest:free", "stub/p/q-1.2:free"],
- "pinned": ["stub/token", "stub/first", "stub/broken", "stub/cheap-train", "stub/p/q-1.2", "stub/p/q-latest", "stub/yesno", "stub/m-current"]}
+ "pinned": {"stub/token": "r", "stub/first": "r", "stub/broken": "r", "stub/cheap-train": "r", "stub/p/q-1.2": "r",
+            "stub/p/q-latest": "r", "stub/yesno": "r", "stub/m-current": "r"}}
 JSON
 cp -r "$t/jg" "$t/jg-good"
 run 0 "$Q" --evals "$t/jg"
@@ -663,7 +664,7 @@ EOF
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
 jl "DONE bench jb: kit model stub/first, best stub/first"
-# A --classifier naming a listed moving alias: skipped the same way, never called (a call kills the stub run), never chosen.
+# A --classifier naming a listed moving alias (rule: octo-feather-qa --help; a call kills the stub run).
 run 0 "$Q" --evals "$t/jg" --classifier stub/p/q-latest --classifier stub/p/q-1.2:free --classifier stub/p/q-1.2
 jl "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2"
 jl "bench jb: skipped: moving alias (1): stub/p/q-1.2:free; never called"
@@ -741,8 +742,7 @@ bad "$ok_cal"'; s["calibration"]["threshold"]["accuracy_min"] = True' "jb/suite.
 bad "$ok_cal"'; s["calibration"]["threshold"]["brier_max"] = -0.1' "jb/suite.json: field calibration.threshold.brier_max: must be a number from 0 up, got -0.1" "$t/jg-good" jb
 bad "$ok_cal"'; s["calibration"]["threshold"]["accepted"] = "no"' "jb/suite.json: field calibration.threshold.accepted: must be true or false, got 'no'" "$t/jg-good" jb
 bad 's["calibration"] = {"evidence": "evidence/jb.md"}' "trig/suite.json: field calibration: only in a judgment suite"
-# The one place (EVALS/judgment-model.json, spec judgment#rule-one-model): required beside a judgment suite, {model: a
-# pinned P/ID, evidence: a file beside evals/}, no other key.
+# The one place (EVALS/judgment-model.json, spec judgment#rule-one-model; shape: check-evals --help).
 badm() {   # badm PY_EDIT WANT: edit a fresh judgment copy's judgment-model.json (m), expect WANT
   rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
   python3 -c 'import json,sys; p=sys.argv[1]; m=json.load(open(p)); exec(sys.argv[2]); json.dump(m, open(p, "w"))' "$t/evals/judgment-model.json" "$1"
@@ -757,12 +757,12 @@ for m in stub/~x/y stub/p/q-1.2:free; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: $m is a moving alias in classifiers.json (owner: stub ruling, tests/qa.sh)"
 done
 badm 'm["model"] = "stub/cheap-total"' "judgment-model.json: field model: stub/cheap-total is not in classifiers.json pinned"
-for m in stub/p/q-latest stub/m-current; do   # pinned: no name shape refuses them
+for m in stub/p/q-latest stub/m-current; do   # pinned ids named -latest and -current (rule: check-evals --help)
   rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
   python3 -c 'import json,sys; p=sys.argv[1]; m=json.load(open(p)); m["model"]=sys.argv[2]; json.dump(m, open(p, "w"))' "$t/evals/judgment-model.json" "$m"
   run 0 "$C" "$t/evals"
 done
-# classifiers.json shape: {owner: one non-empty line, moving_alias, pinned: lists of P/ID}, no id in both or twice.
+# classifiers.json shape (rule: check-evals --help).
 badc() {   # badc PY_EDIT WANT: edit a fresh judgment copy's classifiers.json (o), expect WANT
   rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
   python3 -c 'import json,sys; p=sys.argv[1]; o=json.load(open(p)); exec(sys.argv[2]); json.dump(o, open(p, "w"))' "$t/evals/classifiers.json" "$1"
@@ -773,11 +773,14 @@ run 1 "$C" "$t/evals"; grep -qF "$t/evals/classifiers.json: missing; it holds ev
 for k in owner moving_alias pinned; do badc 'del o["'$k'"]' "classifiers.json: field $k: missing"; done
 badc 'o["why"] = "x"' "classifiers.json: field why: unknown field"
 badc 'o["owner"] = " "' "classifiers.json: field owner: must be the ruling's source, one non-empty line"
-badc 'o["pinned"][1] = 7' "classifiers.json: field pinned[1]: must be a classifier <provider>/<id>, got 7"
+badc 'o["pinned"]["stub"] = "r"' "classifiers.json: field pinned.stub: must be a classifier <provider>/<id>, got 'stub'"
+badc 'o["pinned"]["stub/first"] = " "' "classifiers.json: field pinned.stub/first: must be its pinning ruling's source, one non-empty line"
+badc 'o["pinned"] = list(o["pinned"])' "classifiers.json: field pinned: must be an object {<provider>/<id>: its ruling's source}"
 badc 'o["moving_alias"] = "stub/~x/y"' "classifiers.json: field moving_alias: must be a list of classifier ids"
-badc 'o["pinned"].append("stub/~x/y")' "classifiers.json: field pinned[8]: stub/~x/y already listed in moving_alias"
+badc 'o["pinned"]["stub/~x/y"] = "r"' "classifiers.json: field pinned.stub/~x/y: stub/~x/y already listed in moving_alias"
+badc 'o["moving_alias"].append("stub/~x/y")' "classifiers.json: field moving_alias[3]: stub/~x/y already listed in moving_alias"
 for m in stub 'stub/' '/x' 'stub/a b' ''; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
 done
 badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, listed moving aliases skipped with their ruling (catalogue and --classifier, exact id, no name shape), an id in neither list benched and flagged unclassified, yes/no-only skipped by its probe results (choice refused, bool answered) with the provider error, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json: required, pinned P/ID, listed moving alias or unpinned refused, -latest and -current pinned accepted, missing or unknown key, evidence file; classifiers.json: required, missing or unknown key, empty owner, non-id entry, id listed twice)"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (octo-feather-qa --help; catalogue and --classifier), yes/no-only skipped by its probe results (choice refused, bool answered) with the provider error, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json shape (check-evals --help); classifiers.json shape (check-evals --help))"

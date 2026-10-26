@@ -919,11 +919,11 @@ MODEL_FILE = "judgment-model.json"   # in the evals dir: the kit's one judgment 
 BEST_RULE = "highest train accuracy over every train case answered; ties: lower train Brier, lower train cost, name"
 
 
-CLASSIFIERS = "classifiers.json"   # in the evals dir: every catalogue classifier ruled moving alias or pinned
+CLASSIFIERS = "classifiers.json"   # in the evals dir (shape: check-evals --help)
 
 
 def classifier_lists(evals):
-    """EVALS/classifiers.json {owner, moving_alias, pinned} (its shape: check-evals --help)."""
+    """EVALS/classifiers.json, parsed (its shape: check-evals --help)."""
     return json.loads((Path(evals) / CLASSIFIERS).read_text())
 
 

@@ -5,35 +5,7 @@
     "openrouter/~perplexity/pplx-decider-latest",
     "openrouter/~perplexity/pplx-decider-flash-latest"
   ],
-  "pinned": [
-    "openai/gpt-6-luna",
-    "openrouter/baseten/elephant-1:free",
-    "openrouter/baseten/mammoth-1:free",
-    "openrouter/cloudflare/clef",
-    "openrouter/cloudflare/clef-flash",
-    "openrouter/cloudflare/clef-omni",
-    "openrouter/inception/mercury-decide",
-    "openrouter/inception/mercury-decide:free",
-    "openrouter/jaredpalmer/kev-4b",
-    "openrouter/liquid/d1",
-    "openrouter/liquid/d1-ultra",
-    "openrouter/microsoft/microsoft-decision-1",
-    "openrouter/nace-ai/drex-max",
-    "openrouter/nace-ai/drex-v1.5",
-    "openrouter/nace-ai/drex-v2.0",
-    "openrouter/openai/gpt-6-luna-decisions",
-    "openrouter/perplexity/pplx-decider-flash-v1.2",
-    "openrouter/perplexity/pplx-decider-v1.1-27b",
-    "openrouter/perplexity/pplx-decider-v1.2",
-    "openrouter/respan/span-01",
-    "openrouter/respan/span-01-lite",
-    "openrouter/respan/span-01-lite:free",
-    "openrouter/respan/span-02",
-    "openrouter/scaledown/classify-1",
-    "openrouter/togethercomputer/tev1-4b-experimental",
-    "openrouter/typesafe/jev-1.13",
-    "openrouter/typesafe/jev-1.14",
-    "openrouter/upstage/solar-decide",
-    "openrouter/upstage/solar-decide-flash"
-  ]
+  "pinned": {
+    "openrouter/typesafe/jev-1.13": "spec judgment#rule-one-model; evals/judgment-model.json; evidence/2026-10-25-gh119-judgment-model.md"
+  }
 }

@@ -53,3 +53,21 @@ bench.json (benched, skipped, skipped_ruling, unclassified), then the models in 
 {'benched': ['openrouter/typesafe/jev-1.13', 'openrouter/typesafe/jev-1.14'], 'skipped': ['openrouter/~typesafe/jev-latest'], 'skipped_ruling': "owner 2026-10-23 to the director: 'remove Jev latest from the bench'; director generalization the same night, gh119 gate bench-aliases 2026-10-23T23:11:59Z (lanes/archive/gh119.handoffs.jsonl): 'bench pinned versions only; ~ and -latest ids skipped as moving alias', owner did not object; spec judgment#rule-one-model", 'unclassified': ['openrouter/typesafe/jev-1.14']}
 ['openrouter/typesafe/jev-1.13', 'openrouter/typesafe/jev-1.14']
 ```
+
+## Review fix (d6e4cf4 review, 2026-10-26)
+
+pinned is now `{P/ID: its pinning ruling's source}`, holding only the recorded ruling: openrouter/typesafe/jev-1.13
+(spec judgment#rule-one-model; evals/judgment-model.json; evidence/2026-10-25-gh119-judgment-model.md). The other 28
+non-alias catalogue ids are in neither list: benched and flagged unclassified (octo-feather-qa --help). Bench code path
+unchanged (comments/docstring only), so no new bench run.
+
+Demo: tmp copy of evals/ + evidence/, judgment-model.json naming openrouter/cloudflare/clef:
+
+```
+$ scripts/check-evals "$d/evals"
+check-evals: judgment-model.json: field model: openrouter/cloudflare/clef is not in classifiers.json pinned; name a pinned one or rule it there
+check-evals: 1 problem(s) above; fix the case (check-evals --help lists the shape)
+exit=1
+$ scripts/check-evals evals
+evals: ok (8 suites, 273 cases)
+```
