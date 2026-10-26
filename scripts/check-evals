@@ -19,12 +19,16 @@ copied and git-initialized per run). A suite dir holds:
 EVALS_DIR/judgment-model.json  {"model": P/ID, "evidence": path}: the kit's one judgment model, every judgment
                                question's (spec judgment#rule-one-model), read by octo-feather-qa (the bench
                                shows it beside each question's best) and `octo-feather-lane judge`; P/ID one of
-                               classifiers.json's pinned, never a listed moving alias (exact id, no name shape);
+                               classifiers.json's pinned, never a listed moving alias or yes/no-only model (exact
+                               id, no name shape);
                                evidence a file as above. Required when EVALS_DIR holds a judgment suite
 EVALS_DIR/classifiers.json     {"owner": the moving_alias ruling's source, one non-empty line, "moving_alias":
-                               [P/ID...], "pinned": {P/ID: its pinning ruling's source, one non-empty line}}:
-                               only ids with a recorded ruling (spec judgment#rule-available); no id in both,
-                               none twice; read by octo-feather-qa's bench (its --help: ids in neither).
+                               [P/ID...], "yes_no_only": {P/ID: {"ruling": its ruling's source, "error": its
+                               verbatim provider error on a real choice question, "evidence": where that error
+                               is recorded; ruling and evidence one non-empty line, error non-empty}}, "pinned":
+                               {P/ID: its pinning ruling's source, one non-empty line}}: only ids with a
+                               recorded ruling (spec judgment#rule-available); no id in two lists, none twice;
+                               read by octo-feather-qa's bench (its --help: skipped ids, ids in none).
                                Required beside judgment-model.json
   cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
                                case also has should_trigger (bool) and split ("train" | "held-out");
@@ -171,8 +175,9 @@ HELD_OUT = {"accuracy", "brier"}   # calibration.held_out: the bench's held-out 
 THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold: proposed (accepted false) or accepted
 MODEL_FILE = "judgment-model.json"   # the kit's one judgment model (spec judgment#rule-one-model)
 MODEL_KEYS = {"model", "evidence"}
-CLASSIFIERS = "classifiers.json"   # every catalogue classifier ruled moving alias or pinned (spec judgment#rule-available)
-CLASSIFIER_KEYS = {"owner", "moving_alias", "pinned"}
+CLASSIFIERS = "classifiers.json"   # every catalogue classifier ruled moving alias, yes/no only or pinned (spec judgment#rule-available)
+CLASSIFIER_KEYS = {"owner", "moving_alias", "yes_no_only", "pinned"}
+YES_NO_KEYS = ("ruling", "error", "evidence")   # each yes_no_only entry's fields
 NAMES_MODEL = {"model", "chosen"}   # keys that would name a model in a suite
 MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
@@ -328,13 +333,16 @@ def model_keys(o, at=""):
 
 
 def check_model_ref(m, field, where, errs, ruled):
-    """A classifier P/ID, pinned: in RULED's pinned list, never in its moving_alias list (exact id, no name shape)."""
+    """A classifier P/ID, pinned: in RULED's pinned list, never in its moving_alias or yes_no_only list (exact id, no name shape)."""
     if not (isinstance(m, str) and MODEL.fullmatch(m)):
         errs.append(f"{where}: field {field}: must be a classifier <provider>/<id>, got {m!r}"); return
     if ruled is None:
         return
     if m in ruled["moving_alias"]:
         errs.append(f"{where}: field {field}: {m} is a moving alias in {CLASSIFIERS} (owner: {ruled['owner']}); name a pinned one")
+    elif m in ruled["yes_no_only"]:
+        errs.append(f"{where}: field {field}: {m} is yes/no only in {CLASSIFIERS} (ruling: {ruled['yes_no_only'][m]['ruling']}); "
+                    f"name a pinned one")
     elif m not in ruled["pinned"]:
         errs.append(f"{where}: field {field}: {m} is not in {CLASSIFIERS} pinned; name a pinned one or rule it there")
 
@@ -342,11 +350,11 @@ def check_model_ref(m, field, where, errs, ruled):
 def check_classifiers(evals, errs):
     """EVALS/classifiers.json (shape: --help). Returns it when well formed, else None."""
     where = CLASSIFIERS
-    o = load(evals / CLASSIFIERS, errs, "every catalogue classifier ruled {owner, moving_alias, pinned} (spec judgment#rule-available)")
+    o = load(evals / CLASSIFIERS, errs, "every catalogue classifier ruled {owner, moving_alias, yes_no_only, pinned} (spec judgment#rule-available)")
     if o is None:
         return None
     if not isinstance(o, dict):
-        errs.append(f"{where}: must be a JSON object {{owner, moving_alias, pinned}}"); return None
+        errs.append(f"{where}: must be a JSON object {{owner, moving_alias, yes_no_only, pinned}}"); return None
     n = len(errs)
     for k in sorted(CLASSIFIER_KEYS - set(o)):
         errs.append(f"{where}: field {k}: missing")
@@ -361,7 +369,22 @@ def check_classifiers(evals, errs):
                 errs.append(f"{where}: field pinned.{m}: must be its pinning ruling's source, one non-empty line, got {src!r}")
     elif "pinned" in o:
         errs.append(f"{where}: field pinned: must be an object {{<provider>/<id>: its ruling's source}}, got {o['pinned']!r}")
-    for k in ("moving_alias", "pinned"):
+    if isinstance(o.get("yes_no_only"), dict):
+        for m, y in o["yes_no_only"].items():
+            at = f"yes_no_only.{m}"
+            if not isinstance(y, dict):
+                errs.append(f"{where}: field {at}: must be an object {{{', '.join(YES_NO_KEYS)}}}, got {y!r}"); continue
+            for k in YES_NO_KEYS:
+                if k not in y:
+                    errs.append(f"{where}: field {at}.{k}: missing")
+                elif not (isinstance(y[k], str) and y[k].strip() and (k == "error" or "\n" not in y[k])):
+                    errs.append(f"{where}: field {at}.{k}: must be " + ("the verbatim provider error, non-empty" if k == "error" else
+                                f"its {k}'s source, one non-empty line") + f", got {y[k]!r}")
+            for k in sorted(set(y) - set(YES_NO_KEYS)):
+                errs.append(f"{where}: field {at}.{k}: unknown field")
+    elif "yes_no_only" in o:
+        errs.append(f"{where}: field yes_no_only: must be an object {{<provider>/<id>: {{{', '.join(YES_NO_KEYS)}}}}}, got {o['yes_no_only']!r}")
+    for k in ("moving_alias", "yes_no_only", "pinned"):
         if k not in o:
             continue
         if k == "moving_alias" and not isinstance(o[k], list):

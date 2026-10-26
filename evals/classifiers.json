@@ -5,6 +5,23 @@
     "openrouter/~perplexity/pplx-decider-latest",
     "openrouter/~perplexity/pplx-decider-flash-latest"
   ],
+  "yes_no_only": {
+    "openrouter/respan/span-01": {
+      "ruling": "owner 2026-10-25: 'We won't use models that only answer yes/no, they must also be able to classify.' (director.handoffs.jsonl 2026-10-25T14:06:03Z; gh119 gate merge-ask 2026-10-25T14:18:46Z, lanes/archive/gh119.handoffs.jsonl); director 2026-10-26 on #169: binary questions stay allowed, yes/no-only models excluded from every bench; spec judgment#rule-available",
+      "error": "System One API error (400): {\"error\":{\"message\":\"Respan only accepts noul questions whose instructions and criteria are plain strings (question \\\"q\\\")\",\"code\":400}}",
+      "evidence": "evidence/2026-10-26-gh169-bench-real-question-error.md (qa run 20261026T170625Z-83d123, judgment-ticket-slice)"
+    },
+    "openrouter/respan/span-01-lite": {
+      "ruling": "owner 2026-10-25: 'We won't use models that only answer yes/no, they must also be able to classify.' (director.handoffs.jsonl 2026-10-25T14:06:03Z; gh119 gate merge-ask 2026-10-25T14:18:46Z, lanes/archive/gh119.handoffs.jsonl); director 2026-10-26 on #169: binary questions stay allowed, yes/no-only models excluded from every bench; spec judgment#rule-available",
+      "error": "System One API error (400): {\"error\":{\"message\":\"Respan only accepts noul questions whose instructions and criteria are plain strings (question \\\"q\\\")\",\"code\":400}}",
+      "evidence": "qa run 20261025T020619Z-f2d2ec/judgment-ticket-slice/stdout.txt (state dir), every row's error"
+    },
+    "openrouter/respan/span-01-lite:free": {
+      "ruling": "owner 2026-10-25: 'We won't use models that only answer yes/no, they must also be able to classify.' (director.handoffs.jsonl 2026-10-25T14:06:03Z; gh119 gate merge-ask 2026-10-25T14:18:46Z, lanes/archive/gh119.handoffs.jsonl); director 2026-10-26 on #169: binary questions stay allowed, yes/no-only models excluded from every bench; spec judgment#rule-available",
+      "error": "System One API error (400): {\"error\":{\"message\":\"Respan only accepts noul questions whose instructions and criteria are plain strings (question \\\"q\\\")\",\"code\":400}}",
+      "evidence": "qa run 20261025T020619Z-f2d2ec/judgment-ticket-slice/stdout.txt (state dir), every row's error"
+    }
+  },
   "pinned": {
     "openrouter/typesafe/jev-1.13": "spec judgment#rule-one-model; evals/judgment-model.json; evidence/2026-10-25-gh119-judgment-model.md"
   }
