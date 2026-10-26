@@ -39,3 +39,42 @@ fixture's declaration rather than because its path looks like a test. (Model run
 - `order`, `fsonly`, `contract` now run in a python-app copy (pytest declared); marks unchanged.
 - check-evals: `case order fact #1: field before: test_write needs fixture fx to declare its tests`, and fx2 via head.
 - Red before: `declared` FAILed under the regex (README counted as test_write at call 2); the check-evals cases exited 0.
+
+## #170 defect fix: deterministic test_write (lane gh167, branch implementer-gh170)
+
+Report (implementer-gh169): `rt "declared"` sometimes marked tests/test_y.py test_write ("qa test: rt artifacts wrong").
+
+Root cause, two halves of one fault: test_write was decided from a different repo state than the snapshot it was
+credited to.
+- `declared_tests` ran pytest in the live case repo after the snapshot was taken, and paired the collected paths with
+  that snapshot's hashes. The stub (as Pi) does not wait for the watcher: its next call (`specs/cli_check.py`) landed
+  during collection, pytest collected it, the snapshot had no hash for it (None), so the tests map differed and the
+  earlier call (tests/test_y.py) got test_write.
+- The watcher took each snapshot only when its loop reached the end line, i.e. after the previous collection finished.
+  A slow collection (>0.5 s, the stub's turn) put later calls' writes into an earlier call's snapshot. Shown by fixing
+  only the first half under a forced delay: `first test_write at tool call 3 of 5 (read .../tdd/SKILL.md)`.
+
+Fix (scripts/octo-feather-qa, watcher only, classify() untouched): a reader thread snapshots at each end event as it
+arrives (bytes kept), and pytest collects in a tree written from that snapshot's own bytes (`uv run --project <repo>`,
+cwd the tree). No retry, sleep or assertion change.
+
+Forced interleaving (tests/qa.sh, kept): a uv shim makes `--collect-only` in the spec fixture take 1.5 s, longer than
+the stub's 0.5 s turn, so the next write always lands during collection.
+- Before (watcher at f746f31, shim on): red, every time it was run (2 of 2):
+  `FAIL rt/declared: skill_read_before tdd test_write: first test_write at tool call 2 of 5 (bash echo r > tests/README.md)`
+- After: `bash tests/qa.sh` x10 loop:
+
+```
+run 1: ok (qa: ok)
+run 2: ok (qa: ok)
+run 3: ok (qa: ok)
+run 4: ok (qa: ok)
+run 5: ok (qa: ok)
+run 6: ok (qa: ok)
+run 7: ok (qa: ok)
+run 8: ok (qa: ok)
+run 9: ok (qa: ok)
+run 10: ok (qa: ok)
+```
+
+10 of 10 passed. `just check` ok.
