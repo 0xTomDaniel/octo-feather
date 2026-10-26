@@ -18,8 +18,8 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   description  one line for owners; pi-role ignores it
   model        --model
   thinking     --thinking
-  tools        --tools (built-in Pi tools only) plus codemode (spec
-               roles#launch-codemode); an empty list stays --no-tools
+  tools        --tools (built-in Pi tools only; spec roles#launch-codemode);
+               an empty list stays --no-tools
   skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018);
                {tracker} is the target's tracker skill: `tracker` in
                .octo-feather.toml at the working directory's checkout top,
