@@ -41,8 +41,9 @@ if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a j
     # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
     # p/q-1.2 and p/q-latest, broken never answers, the moving aliases the test's classifiers.json lists (~x/y,
     # x-latest:free, p/q-1.2:free) kill the run if called; yesno refuses every choice question
-    # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier);
-    # a state holding STUB-DIE kills the run. As pi's print mode, an extension's process.stdout goes to stderr.
+    # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
+    # kills the run (the bench asks only the real question, no stand-in probe);
+    # a state holding STUB-DIE kills the run, one holding STUB-REFUSE is refused. As pi's print mode, an extension's process.stdout goes to stderr.
     name, _, args = prompt[1:].partition(" ")
     harness = """import {pathToFileURL} from "node:url";
 const [ext, name, args] = process.argv.slice(1);
@@ -57,11 +58,13 @@ const modelRegistry = {
   classify: async (m, {state, questions}) => {
     if (aliases.includes(m.id)) process.exit(4);
     if (m.id === "broken") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub provider down"};
+    if (Object.values(questions).some((q) => q.type !== "choice")) process.exit(5);
     if (m.id === "yesno") return Object.values(questions).every((q) => q.type === "bool")
       ? {provider: "stub", model: m.id, answers: Object.fromEntries(Object.keys(questions).map((k) => [k, {type: "bool", probability: 0.9}])), stopReason: "stop"}
       : {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: 'Stub API error (400): {"message":"stub accepts only bool questions (question \\"q\\")"}'};
     if (typeof state !== "string") return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub: state must be a string"};
     if (state.includes("STUB-DIE")) process.exit(3);
+    if (state.includes("STUB-REFUSE")) return {provider: "stub", model: m.id, answers: {}, stopReason: "error", errorMessage: "stub refused this state"};
     const answers = {};
     for (const [k, q] of Object.entries(questions)) {
       const L = Object.keys(q.criteria);
@@ -617,10 +620,10 @@ jl "bench jb: question q-ab, labels a, b; 15 cases (train 12, held-out 3); every
 jl "bench jb: classifiers available (11): stub/token, stub/first, stub/broken, stub/cheap-train, stub/cheap-total, stub/~x/y, stub/p/q-latest, stub/p/q-1.2, stub/x-latest:free, stub/p/q-1.2:free, stub/yesno"
 jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/x-latest:free, stub/p/q-1.2:free; never called, ruling (classifiers.json owner): stub ruling, tests/qa.sh"
 jl "bench jb: unclassified id (1): stub/cheap-total; benched and scored, in neither list of classifiers.json"
-# Yes/no only, by the probe's two results (a tiny choice question refused, a tiny bool one answered): skipped, its
-# provider error quoted verbatim, neither scored nor listed unavailable; broken (both refused) stays unavailable.
-jl 'bench jb: skipped: yes/no only stub/yesno: a tiny choice question refused, a tiny bool question answered (probability 0.9); provider: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
-! grep -E "unavailable stub/yesno|^  stub/yesno " <<< "$out" || fail "bench: a yes/no-only classifier scored or listed unavailable: $out"
+# yesno answers only bool questions (rule: octo-feather-qa --help, a classifier that answered no case); a question not a
+# choice kills the stub run.
+jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
+! grep -E "^  stub/yesno |yes/no only" <<< "$out" || fail "bench: a yes/no-only classifier scored or skipped: $out"
 [[ "$(grep -A7 '^TRAIN (12 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-latest 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
 [[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
@@ -641,7 +644,7 @@ python3 - "$d" <<'EOF' || fail "bench artifacts wrong"
 import json, sys
 d = sys.argv[1]
 a = json.load(open(f"{d}/jb/answers.json"))
-assert len(a["answers"]) == 105 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
+assert len(a["answers"]) == 120 and all(x["judgment"].startswith("model judgment") for x in a["answers"]), a["answers"][:2]
 s = json.load(open(f"{d}/summary.json"))
 assert s["benches"][0]["best"]["model"] == "stub/token" and s["benches"][0]["verdict"] == "DONE", s["benches"]
 k = s["benches"][0]["kit_model"]
@@ -652,8 +655,8 @@ assert {m["model"]: round(m["cost_usd"], 6) for m in b["models"]}["stub/cheap-tr
 assert b["skipped"] == ["stub/~x/y", "stub/x-latest:free", "stub/p/q-1.2:free"] and {"stub/p/q-1.2", "stub/p/q-latest"} <= set(b["benched"]), b
 assert b["skipped_ruling"] == "stub ruling, tests/qa.sh" and b["unclassified"] == ["stub/cheap-total"] and "stub/cheap-total" in b["benched"], b
 assert not set(b["skipped"]) & ({x["model"] for x in a["answers"]} | {m["model"] for m in b["models"]}), b
-assert b["skipped_yes_no"] == [{"model": "stub/yesno", "choice_error": 'Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}', "bool_probability": 0.9}], b
-assert "stub/yesno" not in b["benched"] + [x["model"] for x in a["answers"]] + [m["model"] for m in b["models"]], b
+y = next(m for m in b["models"] if m["model"] == "stub/yesno")
+assert "skipped_yes_no" not in b and not y["available"] and y["first_error"] == 'Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}', (b, y)
 # No agent: one pi, no tools, no chat model, no session; only the bench extension loaded.
 argv = json.loads(open(f"{d}/jb/stdout.txt").readline())["argv"]
 for x in ("--no-tools", "--no-extensions", "--no-session", "--no-skills", "--no-mcp"):
@@ -678,14 +681,22 @@ python3 -c "import json,sys; b=json.load(open(sys.argv[1])); assert b['skipped']
 run 0 "$Q" --evals "$t/jg" --classifier stub/cheap-total --classifier stub/cheap-train
 jl "DONE bench jb: kit model stub/first not scored (not benched), best stub/cheap-train"
 # The kit's model benched but unscored fails the bench: it has no calibration to propose (broken: every case refused;
-# yesno: yes/no only).
+# yesno: cannot accept the question's form, every case refused).
 echo '{"model": "stub/broken", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 run 1 "$Q" --evals "$t/jg"
 jl "FAILED bench jb: the kit's judgment model stub/broken was not scored (answered 0 of 12 train cases, first error: stub provider down)"
 echo '{"model": "stub/yesno", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-model.json"
 run 1 "$Q" --evals "$t/jg" --classifier stub/yesno --classifier stub/first
-jl "FAILED bench jb: the kit's judgment model stub/yesno was not scored (yes/no only)"
+jl "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
 cp "$t/jg-good/judgment-model.json" "$t/jg/judgment-model.json"
+# A classifier that answers some cases is benched and scored as before, its unanswered cases counted (first refuses a
+# STUB-REFUSE state), never listed unavailable.
+python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-REFUSE'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
+run 1 "$Q" --evals "$t/jg" --classifier stub/first
+grep -A3 '^TRAIN (12 cases' <<< "$out" | grep -qE '^  stub/first +11/12 ' || fail "bench: a partly answering classifier not scored: $out"
+jl "errors stub/first: 1 case(s) unanswered, first: stub refused this state"
+! grep -q "unavailable stub/first" <<< "$out" || fail "bench: a partly answering classifier listed unavailable: $out"
+cp "$t/jg-good/jb/cases.json" "$t/jg/jb/cases.json"
 # A pi that dies before the command prints its result: the bench fails, naming it.
 python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-DIE'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
 run 1 "$Q" --evals "$t/jg" --classifier stub/first
@@ -783,4 +794,4 @@ for m in stub 'stub/' '/x' 'stub/a b' ''; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
 done
 badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (octo-feather-qa --help; catalogue and --classifier), yes/no-only skipped by its probe results (choice refused, bool answered) with the provider error, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json shape (check-evals --help); classifiers.json shape (check-evals --help))"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, missing role file named, unknown ref 64, attempt_blocked blocked/unblocked/never attempted, declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load = full SKILL.md content in any tool result (read, cat; never ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (octo-feather-qa --help; catalogue and --classifier), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, ties on train cost only, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json shape (check-evals --help); classifiers.json shape (check-evals --help))"
