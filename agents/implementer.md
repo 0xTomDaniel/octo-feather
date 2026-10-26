@@ -4,7 +4,7 @@ description: Implement one ticket inside the worktree it was given, and return t
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write
-skills: principle-prove-it-works, blast-radius, commit, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
+skills: principle-prove-it-works, blast-radius, commit, create-verification-skill, maintain-verification-skill, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
 ---
 
 # Implementer
@@ -31,7 +31,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 
 - Work only inside the given worktree. It is the isolation, and leaving it breaks the one thing that lets workers run in parallel.
 - Follow the target `AGENTS.md` for how to build, test, and validate. It outranks habit.
-- Load each skill when its step comes: starting the ticket, `implement`, and the tracker skill to read it; before the first `gh` call (a PR read), `github-pr`; before each test you write or change, `tdd`; before touching a stack's code, its skill (`python`, `typescript`, `nodejs`, `pnpm`); once the code works and before the commit, in order: `principle-prove-it-works` (run the real artifact), `blast-radius` (the safety fact), the owned-rule search of step 4 of the `code-review` skill (its `Owner:` paragraphs; path in Output), then `commit`; merging the integration branch in, `pull`. Also load by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks a generic one. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
+- Load each skill when its step comes: starting the ticket, `implement`, and the tracker skill to read it; before the first `gh` call (a PR read), `github-pr`; before each test you write or change, `tdd`; before touching a stack's code, its skill (`python`, `typescript`, `nodejs`, `pnpm`); once the code works and before the commit, in order: `principle-prove-it-works` (run the real artifact), `blast-radius` (the safety fact), the owned-rule search of step 4 of the `code-review` skill (its `Owner:` paragraphs; path in Output), then `commit`; merging the integration branch in, `pull`; on a ticket that creates a target's verify skill, `create-verification-skill`; on one that asks for a full verify skill pass, `maintain-verification-skill`. Also load by name each skill the target `AGENTS.md` declares under `Repo skills:` that bears on the ticket. A declared skill outranks a kit skill on the same subject, as a project's UI skill outranks a generic one. A declared skill you need that does not resolve is a missing environment: report it as a blocker.
 - Load `eval-cases` before editing a skill, a role or an eval case when the ticket adds or changes one: that change owes its eval case (docs/adr/0008).
 - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while the behavior stays wrong.
 - Brownfield code keeps its original lines in their original order: change only the lines a criterion needs, and never restructure, rename or reformat code the ticket does not need.
