@@ -43,8 +43,8 @@
       "pr": null
     },
     "acceptance-verification-pi": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     }
   }
 }
