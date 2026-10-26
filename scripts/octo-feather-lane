@@ -130,7 +130,7 @@ windows are OpenRouter's key usage windows (GET /api/v1/key usage_daily, usage_w
 openrouter.ai/openapi.json): today = the current UTC day from 00:00Z, this week = the current UTC week starting
 Monday 00:00Z, this month = the current UTC calendar month from day 1 00:00Z. The key is OPENROUTER_API_KEY,
 else `openrouter.key` in ~/.pi/agent/auth.json (a `!command` key runs the command, as Pi does); it is never
-printed. OPENROUTER_API_BASE overrides the API base (default https://openrouter.ai/api/v1). No key, or an
+printed: `curl` makes the call, the key on its stdin config, never in argv. No key, or an
 unreachable or failing endpoint, prints the reason in the reconcile section; the totals still print, exit 0.
 No budget: nothing is blocked (spec spend#rule-no-budget).
 
@@ -1568,19 +1568,23 @@ def openrouter_key() -> str:
 
 
 def openrouter_usage() -> dict:
-    """{daily, weekly, monthly} USD from GET <base>/key; Refuse with the reason (never the key)."""
-    import urllib.request, urllib.error
+    """{daily, weekly, monthly} USD from GET /api/v1/key; Refuse with the reason (never the key)."""
     key = openrouter_key()
-    url = os.environ.get("OPENROUTER_API_BASE", "").rstrip("/") or "https://openrouter.ai/api/v1"
-    url += "/key"
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {key}"})
+    url = "https://openrouter.ai/api/v1/key"
+    auth = key.replace("\\", "\\\\").replace('"', '\\"')
     try:
-        with urllib.request.urlopen(req, timeout=20) as r:
-            body = json.loads(r.read().decode("utf-8"))
-    except urllib.error.HTTPError as e:
-        raise Refuse(f"GET {url}: HTTP {e.code} {e.reason}")
-    except (urllib.error.URLError, OSError) as e:
-        raise Refuse(f"GET {url}: unreachable ({getattr(e, 'reason', e)})")
+        r = subprocess.run(["curl", "-sS", "--max-time", "20", "--config", "-", "-w", "\n%{http_code}", url],
+                           input=f'header = "Authorization: Bearer {auth}"\n', capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Refuse(f"GET {url}: curl failed ({type(e).__name__})")
+    if r.returncode != 0:
+        why = (r.stderr.strip().splitlines() or [f"curl exit {r.returncode}"])[-1]
+        raise Refuse(f"GET {url}: unreachable ({why})")
+    text, _, code = r.stdout.rpartition("\n")
+    if code != "200":
+        raise Refuse(f"GET {url}: HTTP {code}")
+    try:
+        body = json.loads(text)
     except ValueError as e:
         raise Refuse(f"GET {url}: not JSON ({e})")
     data = body.get("data") if isinstance(body, dict) else None
@@ -1646,8 +1650,7 @@ def cmd_spend(args: list[str]) -> int:
     day = now.replace(hour=0, minute=0, second=0, microsecond=0)
     starts = {"daily": ("today", day), "weekly": ("this week", day - dt.timedelta(days=day.weekday())),
               "monthly": ("this month", day.replace(day=1))}
-    print("\nOpenRouter reconcile (OpenRouter's key usage windows, UTC: today from 00:00Z, this week from Monday 00:00Z, "
-          "this month from day 1 00:00Z; gap = OpenRouter minus ledger):")
+    print("\nOpenRouter reconcile (windows and gap: `octo-feather-lane --help`, spend):")
     try:
         usage = openrouter_usage()
     except Refuse as e:
