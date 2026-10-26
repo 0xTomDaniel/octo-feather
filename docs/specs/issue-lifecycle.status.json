@@ -35,8 +35,8 @@
       "pr": 24
     },
     "acceptance-tracer-tickets": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 180
     },
     "acceptance-pilot-alone": {
       "status": "planned",
