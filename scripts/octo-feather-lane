@@ -25,7 +25,7 @@ ticket-slice, call-evidence); every question is asked of the kit's one judgment 
 `model` (spec judgment#rule-one-model).
 The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
 nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
-no agent, in the qa sandbox, moving aliases never called; refused inside a check run), asking only that model.
+no agent, in the qa sandbox; what it calls: octo-feather-qa --help; refused inside a check run), asking only that model.
 The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
 probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
 accepted, and its status: below accepted threshold, no accepted threshold or meets accepted threshold; spec judgment
