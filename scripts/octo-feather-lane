@@ -98,7 +98,12 @@ a status entry built with the PR) with no row is refused naming the criterion ta
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion; <template> content: #121 D17), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion; <template> content: #121 D17), or, serving none, names the rule it
+serves and that rule's owner (spec #lanes-tickets) in an item `rule: <rule> (<owner>)`, the `<rule> (<owner>)`
+form of the review's Check lines (docs/adr/0008): the rule non-empty, the owner an ADR of the repo
+(`docs/adr/NNNN...` or `ADR NNNN`, naming exactly one docs/adr/NNNN-*.md) or `owner ruling <date and/or issue>`;
+a rule item with no owner, an unknown ADR, an empty rule or another owner fails class unowned-rule, and
+beside a criterion id it is allowed, not required. Its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
@@ -1043,6 +1048,31 @@ ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
 CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
 EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
 DEMO = re.compile(r"^\**demo:\**\s*", re.I)
+RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
+ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
+RULING = re.compile(r"owner ruling\s+\S.*", re.I)
+# The fix text for a rule item (scope: --help (ticket)).
+RULE_FORM = ("`rule: <rule> (<owner>)`, the rule as stated where it is owned, the owner an ADR of this repo "
+             "(`docs/adr/NNNN` or `ADR NNNN`) or `owner ruling <date and/or issue>` (docs/adr/0008)")
+
+
+def rule_why_not(rest: str, adr: Path) -> str | None:
+    """Why the rule item `rule: REST` names no owned rule, None if it does; ADR: the repo's docs/adr."""
+    o = OWNED.fullmatch(rest)   # the review's Check-line form, `<rule> (<owner>)`
+    if not o:
+        return ("empty rule" if re.fullmatch(r"(\([^()]*\))?", rest) else f"`rule: {rest[:80]}` names no owner in parentheses")
+    owner = o.group(2).strip()
+    if RULING.fullmatch(owner):
+        return None
+    a = ADR_OWNER.fullmatch(owner)
+    if not a:
+        return f"owner `{owner}` is neither an ADR nor an owner ruling"
+    hits = sorted(adr.glob(f"{a.group(2) or a.group(3)}-*.md")) if adr.is_dir() else []
+    if a.group(1):
+        hits = [h for h in hits if f"docs/adr/{h.name}".startswith(a.group(1))]
+    if len(hits) != 1:
+        return f"owner `{owner}` names {'no' if not hits else len(hits)} ADR file{'s' if len(hits) > 1 else ''} in {adr}"
+    return None
 
 
 class Anchors(HTMLParser):
@@ -1118,12 +1148,18 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
     items = criteria_items(body); section = items is not None
     if not section:
         fail("no-criterion", "no `## Acceptance criteria` section",
-             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` and the last `demo: ` with a backticked command")
+             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` "
+             f"(or, serving no criterion, an item {RULE_FORM}) and the last `demo: ` with a backticked command")
         items = []
     ids = list(dict.fromkeys((m.group(1), m.group(2)) for m in (CRITERION.match(i) for i in items) if m))
-    if section and not ids:
+    rules = [(r.group(1).strip(), rule_why_not(r.group(1).strip(), specs.parent / "adr")) for r in (RULE.match(i) for i in items) if r]
+    for rest, why in rules:
+        if why:
+            fail("unowned-rule", why, f"write the rule item as {RULE_FORM}")
+    if section and not ids and not rules:
         fail("no-criterion", "no acceptance item names a criterion id",
-             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html")
+             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html; "
+             f"or, serving no criterion, add an item {RULE_FORM}")
     crit, other = [], []
     for slug, anchor in ids:
         have = spec_anchors(specs, slug, cache)
