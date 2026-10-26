@@ -184,7 +184,7 @@ done
 rt "- [ ] demo#acceptance-a: x
 - [ ] rule: a rule beside a criterion (ADR 0017)
 - [ ] demo: \`demo a\` prints ok"; run 0 ticket "$t/rule.md"
-rf="fix: write the rule item as \`rule: <rule> (<owner>)\`"
+rf="fix: write the rule item as \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
 for c in 'integrate adds no recipe|`rule: integrate adds no recipe` names no owner in parentheses' \
          'integrate adds no recipe (docs/adr/9999)|owner `docs/adr/9999` names no ADR file in' \
          'integrate adds no recipe (ADR 0099)|owner `ADR 0099` names no ADR file in' \
@@ -194,7 +194,7 @@ for c in 'integrate adds no recipe|`rule: integrate adds no recipe` names no own
          'integrate adds no recipe (owner ruling)|owner `owner ruling` is neither an ADR nor an owner ruling'; do
   rt "- [ ] rule: ${c%%|*}
 - [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
-  has "$t/rule.md: class: unowned-rule: ${c#*|}"; has "$rf"; hasnt "class: no-criterion"
+  has "$t/rule.md: class: unowned-rule: ${c#*|}"; has "$rf"; hasnt "class: no-criterion"; hasnt "ADR NNNN"; hasnt "owner ruling <"
 done
 rt "- [ ] demo#acceptance-a: x
 - [ ] rule: no owner here
@@ -207,7 +207,10 @@ rt "- [ ] rule: integrate adds no recipe (docs/adr/0017)
 rt "- [ ] some item
 - [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
 has "class: no-criterion: no acceptance item names a criterion id; fix: start each item with the criterion it serves"
-has "or, serving no criterion, add an item \`rule: <rule> (<owner>)\`"
+has "or, serving no criterion, add an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
+hasnt "ADR NNNN"; hasnt "owner ruling <"
+rm "$t/rule.md"; run 1 ticket - <<<"no section"
+has "(or, serving no criterion, an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket))"; hasnt "ADR NNNN"
 
 # Interpreter-run scripts (owner: ADR 0002 fallback, #121 D11):
 # this repo declares programs, so `python3 scripts/octo-feather-lane` (as in the kit) and harness.py are refused.
