@@ -28,7 +28,7 @@
     },
     "acceptance-director-tools": {
       "status": "built",
-      "pr": 16
+      "pr": 179
     },
     "acceptance-supervise-layout": {
       "status": "built",
@@ -43,8 +43,8 @@
       "pr": 103
     },
     "acceptance-codemode-every-role": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 179
     }
   }
 }
