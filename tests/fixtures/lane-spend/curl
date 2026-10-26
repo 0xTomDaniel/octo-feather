@@ -1,0 +1,17 @@
+#!/usr/bin/env bash
+# Fake curl for tests/lane-spend.sh: OpenRouter's GET /api/v1/key. Logs argv to $FAKE_CURL_DIR/argv.
+# Reads the Bearer key from the --config on stdin; sk-test-123 gets the usage windows, any other key 401.
+# FAKE_CURL_EXIT set: fails as an unreachable host does, with that exit.
+set -euo pipefail
+d="${FAKE_CURL_DIR:?}"
+printf '%s\n' "$*" >>"$d/argv"
+cfg="$(cat)"
+if [[ -n "${FAKE_CURL_EXIT:-}" ]]; then
+  echo "curl: (7) Failed to connect to openrouter.ai port 443" >&2; exit "$FAKE_CURL_EXIT"
+fi
+[[ "${*: -1}" == https://openrouter.ai/api/v1/key ]] || { echo "fake curl: unexpected URL ${*: -1}" >&2; exit 3; }
+if grep -qxF 'header = "Authorization: Bearer sk-test-123"' <<<"$cfg"; then
+  printf '{"data":{"label":"x","usage":9,"usage_daily":1.5,"usage_weekly":2.5,"usage_monthly":4.0}}\n200'
+else
+  printf '{"error":{"code":401}}\n401'
+fi
