@@ -57,7 +57,7 @@ for role in ROLES:
         err(f"{rel}: thinking `{fm['thinking']}` not one of {sorted(THINKING)}")
     for t in lst(fm.get("tools", "")):
         if t == "codemode":
-            err(f"{rel}: tools lists `codemode`; delete it, pi-role adds it, every role gets it (spec roles#fm-tools)")
+            err(f"{rel}: tools lists `codemode`; delete it, pi-role adds it (spec roles#fm-tools)")
         elif t not in TOOLS:
             err(f"{rel}: unknown tool `{t}`; allowed {sorted(TOOLS)}")
     for s in lst(fm.get("skills", "")):
