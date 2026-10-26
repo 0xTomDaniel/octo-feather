@@ -80,17 +80,16 @@ ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --class
 goes as the case's state string, the one shape every classifier takes (some accept no other object than their
 own). A moving alias (an id EVALS/classifiers.json lists in moving_alias, exact P/ID, never judged by its name) is
 never called nor scored: the report lists it as "skipped: moving alias" with that file's owner ruling, bench.json
-`skipped` records it and `skipped_ruling` the ruling. An id in neither of its lists is benched and scored as usual,
+`skipped` records it and `skipped_ruling` the ruling. An id in neither of its lists is benched as usual (scored where it answered),
 flagged on the report's "unclassified id" line and in bench.json `unclassified`, for the owner to rule there (never
 eligible as the kit's model: check-evals). classify never throws, so stopReason and
-errorMessage are kept. A classifier that answered no case is probed with one tiny choice question and one tiny bool
-question: choice refused while bool answered makes it yes/no only (a fact from the two results; Pi's ModelInfo has no
-capability field, and no error text is parsed): skipped like a moving alias, neither scored nor listed unavailable,
-the report's "skipped: yes/no only" line quoting the choice probe's provider error verbatim, bench.json
-`skipped_yes_no`. Its JSON output line is graded here against
+errorMessage are kept. A classifier that answered no case of the real question (one that cannot accept its form, or
+any other failure: no error text is parsed) is listed unavailable with that question's provider error, no stand-in
+probe (spec judgment#rule-available; owner ruling on #169: a model that only answers yes/no is not used, it must
+also classify). Its JSON output line is graded here against
 reference/expectations.json, never shown to it. Prints the classifiers available, then a TRAIN and a HELD-OUT table
 per answering model (answered, correct, accuracy, Brier, ECE over top-probability buckets, cost from result.usage,
-errors), each other listed model that answered nothing as unavailable with its error, then the kit's one judgment
+errors), each unavailable one (above), then the kit's one judgment
 model (EVALS/judgment-model.json, spec judgment#rule-one-model) beside the question's best-scoring classifier
 (from train only: best train accuracy over all train cases, ties lower train Brier, lower train cost, name), the
 kit model's proposed threshold (from its train answers: held-out
@@ -795,11 +794,9 @@ Z = 1.96   # the threshold's 95% bounds
 JUDGMENT = "model judgment (classifier output, advisory: no gate reads it)"
 # The bench as a Pi extension command, run by `pi -e <this> -p "/octo-feather-bench <input path>"`: no agent, no chat
 # model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
-# 4 calls at once; the state is the case's state string; a moving alias (INP aliases, exact P/ID) is skipped. A
-# classifier that answered no case is probed: one tiny choice question and one tiny bool question; choice refused while bool answered is yes/no only, a fact
-# from the two results (Pi's ModelInfo has no capability field), its rows dropped, never scored. One stdout line {"bench":
-# {available, benched, skipped, yesno, errors, rows}}, rows [model, case, choice, probabilities in label order, cost, error
-# index]; yesno [[model, the choice probe's provider error verbatim, the bool probe's probability]].
+# 4 calls at once; the state is the case's state string; a moving alias (INP aliases, exact P/ID) is skipped. One
+# stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+# order, cost, error index].
 BENCH_SOURCE = """import { readFileSync, writeSync } from "node:fs";
 export default function (pi) {
   pi.registerCommand("%(command)s", {
@@ -818,7 +815,7 @@ export default function (pi) {
       const skipped = listed.filter(moving).map(name);
       const q = {type: "choice", instructions: inp.question, criteria: inp.criteria};
       const errors = [];
-      const err = (e) => { const s = String(e).slice(0, 400); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+      const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
       const r4 = (x) => (typeof x === "number" ? Math.round(x * 1e4) / 1e4 : null);
       const one = async (mi, ci) => {
         let r;
@@ -835,30 +832,11 @@ export default function (pi) {
       let next = 0;
       const lane = async () => { while (next < jobs.length) { const k = next++; all_rows[k] = await one(...jobs[k]); } };
       await Promise.all([lane(), lane(), lane(), lane()]);
-      // Yes/no only, decided by two probe results, never by reading error text: a classifier that answered no case
-      // takes one tiny choice question and one tiny bool question; choice refused while bool answered = yes/no only.
-      const probe = {state: "blue", instructions: "Does the text name a colour?"};
-      const yesno = [];
-      for (const [mi, m] of ms.entries()) {
-        if (all_rows.some((r) => r[0] === mi && r[2] !== null)) continue;
-        const c = await reg.classify(m, {state: probe.state, questions: {q: {type: "choice", instructions: probe.instructions,
-          criteria: {colour: "it names a colour", other: "it names something else"}}}});
-        const ca = c && c.answers ? c.answers.q : undefined;
-        if (c && c.stopReason === "stop" && ca) continue;
-        const b = await reg.classify(m, {state: probe.state, questions: {q: {type: "bool", instructions: probe.instructions,
-          criteria: {true: "it names a colour", false: "it names something else"}}}});
-        const ba = b && b.answers ? b.answers.q : undefined;
-        if (b && b.stopReason === "stop" && ba && typeof ba.probability === "number")
-          yesno.push([mi, String((c && (c.errorMessage || c.stopReason)) || "no result"), r4(ba.probability)]);
-      }
-      const out = yesno.map((y) => y[0]);
-      const kept = ms.map((m, mi) => mi).filter((mi) => !out.includes(mi));
-      const rows = all_rows.filter((r) => !out.includes(r[0])).map((r) => [kept.indexOf(r[0]), ...r.slice(1)]);
+      const rows = all_rows;
       const used = [...new Set(rows.map((r) => r[5]).filter((e) => e !== null))];
       const errs = used.map((e) => errors[e]);
       rows.forEach((r) => { if (r[5] !== null) r[5] = used.indexOf(r[5]); });
-      const bench = {available: all.map(name), benched: kept.map((mi) => name(ms[mi])), skipped,
-                     yesno: yesno.map(([mi, e, p]) => [name(ms[mi]), e, p]), errors: errs, rows};
+      const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows};
       // Pi keeps stdout for itself in print mode (an extension's process.stdout goes to stderr): write fd 1 directly.
       const buf = Buffer.from(JSON.stringify({bench}) + "\\n");
       const nap = new Int32Array(new SharedArrayBuffer(4));
@@ -928,8 +906,8 @@ def classifier_lists(evals):
 
 
 def unclassified_ids(bench, ruled):
-    """The listed classifiers called (benched or yes/no only) in neither list of classifiers.json."""
-    return [m for m in (bench.get("benched") or []) + [y[0] for y in bench.get("yesno") or []] if m not in ruled["pinned"]]
+    """The listed classifiers called (benched) in neither list of classifiers.json."""
+    return [m for m in bench.get("benched") or [] if m not in ruled["pinned"]]
 
 
 def judgment_model(evals):
@@ -969,8 +947,7 @@ def bench_metrics(bench, cases, labels, kit_model=None):
         kit = {"model": kit_model, "scored": c is not None}
         if c is None:
             k = next((m for m in models if m["model"] == kit_model), None)
-            yn = [y[0] for y in bench.get("yesno") or []]
-            kit["why"] = (("yes/no only" if kit_model in yn else "a moving alias" if kit_model in (bench.get("skipped") or [])
+            kit["why"] = (("a moving alias" if kit_model in (bench.get("skipped") or [])
                            else "not benched") if k is None else f"answered {k['train']['answered']} of {n_train} train cases"
                           + (f", first error: {k['first_error']}" if k["first_error"] else ""))
         else:
@@ -1001,19 +978,15 @@ def bench_report(suite, q, cases, bench, models, best, kit, requested, ruled):
            f"held-out {n['held-out']}); every answer is a {JUDGMENT}",
            f"bench {suite['suite']}: classifiers available ({len(bench.get('available') or [])}): {', '.join(bench.get('available') or []) or 'none'}"]
     if requested:
-        miss = [m for m in requested if m not in (bench.get("benched") or []) + (bench.get("skipped") or [])
-                + [y[0] for y in bench.get("yesno") or []]]
+        miss = [m for m in requested if m not in (bench.get("benched") or []) + (bench.get("skipped") or [])]
         out.append(f"bench {suite['suite']}: benched only --classifier {', '.join(requested)}" + (f" (not available: {', '.join(miss)})" if miss else ""))
     if bench.get("skipped"):
         out.append(f"bench {suite['suite']}: skipped: moving alias ({len(bench['skipped'])}): {', '.join(bench['skipped'])}; never "
                    f"called, ruling ({CLASSIFIERS} owner): {ruled['owner']}")
     unclassified = unclassified_ids(bench, ruled)
     if unclassified:
-        out.append(f"bench {suite['suite']}: unclassified id ({len(unclassified)}): {', '.join(unclassified)}; benched and scored, "
+        out.append(f"bench {suite['suite']}: unclassified id ({len(unclassified)}): {', '.join(unclassified)}; benched (scored where it answered), "
                    f"in neither list of {CLASSIFIERS}, never the kit's model until the owner rules it there")
-    for m, err, p in bench.get("yesno") or []:
-        out.append(f"bench {suite['suite']}: skipped: yes/no only {m}: a tiny choice question refused, a tiny bool question "
-                   f"answered (probability {p}); provider: {err}")
     ok = sorted((m for m in models if m["available"]), key=lambda m: (-(m["train"]["accuracy"] or 0), m["train"]["brier"] or 9, m["model"]))
     w = max([len(m["model"]) for m in models] + [5])
     for s, what in (("train", "the best and the kit model's threshold are made here"), ("held-out", "the measure, never used to pick")):
@@ -1074,11 +1047,10 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
     lines = bench_report(suite, q, picked, bench, models, best, kit, requested, ruled)
     (out / "report.txt").write_text("\n".join(lines) + "\n")
     print("\n".join(lines), flush=True)
-    yesno = [{"model": m, "choice_error": e, "bool_probability": p} for m, e, p in bench.get("yesno") or []]
     res.update(available=bench.get("available"), benched=bench.get("benched"), skipped=bench.get("skipped") or [],
                skipped_ruling=ruled["owner"] if bench.get("skipped") else None,
                unclassified=unclassified_ids(bench, ruled),
-               skipped_yes_no=yesno, models=models, best=best, kit_model=kit, cost_usd=sum(m["cost_usd"] for m in models))
+               models=models, best=best, kit_model=kit, cost_usd=sum(m["cost_usd"] for m in models))
     asked = not requested or kit_model in requested   # --classifier without the kit's model: it is not benched, by request
     problem = ("no classifier answered every train case" if not best else
                f"the kit's judgment model {kit_model} was not scored ({kit['why']})" if asked and not kit["scored"] else None)
