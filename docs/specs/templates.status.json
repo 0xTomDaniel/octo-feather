@@ -1,6 +1,6 @@
 {
   "spec": "templates.spec.html",
-  "accepted_commit": "bfb3a92",
+  "accepted_commit": "cbd9bfadcaf3aa1b47f3bfa9c215b6d315155483",
   "criteria": {
     "acceptance-fresh-green": {
       "status": "built",
