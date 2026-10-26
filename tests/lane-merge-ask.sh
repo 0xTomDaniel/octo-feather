@@ -356,4 +356,71 @@ echo '{"number": 7}' > "$FAKE_GH/pr/7.json"; run 1 merge-ask 7 "${ST[@]}"; grep 
 cp "$t/two.json" "$FAKE_GH/pr/7.json"; run 1 verdict 7 "$H" "$t/report"
 grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two marker comments: $err"
 [[ "$(writes)" == "$n" ]] || fail "a merge-ask or refused verdict wrote"
-echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails)"
+
+# a lane that builds no criterion (spec #lanes-one-head, #acceptance-merge-ask-no-criterion): PR #8, commit N
+# off main, no qc commit; Built: none, Failed: none, no rows: passes on head, checks, parent line and the
+# review verdict alone, --status optional; the verdict's head is the judged head
+N="$(on "$B" sh -c 'sed -i 2s/.*/two/ app.py; git commit -qam "fix: a rule"')"
+pr8() { # HEAD EXTRA_COMMITS_JSON BODY [PY]
+  python3 - "$FAKE_GH/pr/8.json" "$t/pr8.keep" "$1" "$2" "$3" "$check_ok" "$N" "${4:-}" <<'EOF'
+import json, os, sys; p, keep, head, extra, body, checks, n, py = sys.argv[1:]
+d = json.load(open(keep)) if os.path.exists(keep) else {"comments": []}
+d.update(number=8, headRefName="gh6", headRefOid=head, body=body, statusCheckRollup=json.loads(checks),
+         commits=[{"oid": n, "messageHeadline": "fix: a rule", "messageBody": ""}] + json.loads(extra or "[]"))
+exec(py); json.dump(d, open(p, "w"))
+EOF
+}
+nbody() { # section of a no-criterion lane, overridable: HEADL JUDGEDL TABLE BUILT FAILED
+  cat <<EOF
+Closes #6
+
+## Merge ask
+
+Head: ${HEADL-${N:0:12}}
+Checks: check, ci/x pass
+${JUDGEDL-}
+${TABLE-}
+Review verdict: ${url8-}
+Built: ${BUILT-none}
+${FAILED-Failed: none}
+EOF
+}
+pr8 "$N" "" "$(nbody)"; run 0 verdict 8 "$N" "$t/report"; url8="$out"; cp "$FAKE_GH/pr/8.json" "$t/pr8.keep"   # PR #8 with its clear verdict
+HDR=$'| criterion | qc verdict | judged | evidence |\n|---|---|---|---|'
+for tbl in "" "$HDR"; do
+  for st in "" "${ST[*]}"; do
+    TABLE="$tbl" pr8 "$N" "" "$(TABLE="$tbl" nbody)"; run 0 merge-ask 8 $st
+    [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Built: none" <<<"$out" || fail "no-criterion lane (table '${tbl:0:5}', status '$st') did not pass: $out"
+  done
+done
+# each item still checked: head, checks, parent line, review verdict
+HEADL="${OTHER:0:12}" pr8 "$N" "" "$(HEADL="${OTHER:0:12}" nbody)"; run 1 merge-ask 8; grep -q "Head: names ${OTHER:0:12}" <<<"$err" || fail "no-criterion stale head: $err"
+pr8 "$N" "" "$(nbody)" 'd["statusCheckRollup"][0]["conclusion"] = "FAILURE"'; run 1 merge-ask 8; grep -q "Checks: failing" <<<"$err" || fail "no-criterion failing check: $err"
+pr8 "$N" "" "$(nbody | sed 1d)"; run 1 merge-ask 8; grep -q "parent line: missing" <<<"$err" || fail "no-criterion parent line: $err"
+pr8 "$N" "" "$(nbody)" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Verdict: clear', 'Verdict: blocking')"
+run 1 merge-ask 8; grep -q "Review verdict: blocking, not clear" <<<"$err" || fail "no-criterion blocking verdict: $err"
+pr8 "$N" "" "$(nbody)" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('\\nChecks: none\\n', '\\n')"
+run 1 merge-ask 8; grep -q "carries no usable check classification" <<<"$err" || fail "no-criterion unclassified verdict: $err"
+! grep -q "criterion table\|qc: built" <<<"$err" || fail "no-criterion lane asked for a table or a qc commit: $err"
+# the verdict names another head: a code commit after it has no proof; a clean main merge needs its proof line
+NF="$(on "$N" sh -c 'echo three >> app.py; git commit -qam "fix: more"')"
+HEADL="${NF:0:12}" pr8 "$NF" "[{\"oid\": \"$NF\", \"messageHeadline\": \"fix: more\", \"messageBody\": \"\"}]" "$(HEADL="${NF:0:12}" nbody)"
+run 1 merge-ask 8; grep -q "Judged: commit ${NF:0:12} 'fix: more' after the judged head ${N:0:12} changes app.py" <<<"$err" || fail "no-criterion verdict on another head passed: $err"
+NM="$(on "$N" git merge -q --no-edit "$M1")"
+HEADL="${NM:0:12}" pr8 "$NM" "[{\"oid\": \"$NM\", \"messageHeadline\": \"Merge main\", \"messageBody\": \"\"}]" "$(HEADL="${NM:0:12}" nbody)"
+run 1 merge-ask 8; grep -q "Judged: missing; add the check's proof line .Judged: ${N:0:12} to ${NM:0:12}: no qc status commit; clean merge of main ${NM:0:12}: lane diff identical" <<<"$err" || fail "no-criterion merge without proof: $err"
+proof8="$(sed -n 's/.*add the check.s proof line `Judged: \(.*\)`$/\1/p' <<<"$err")"
+HEADL="${NM:0:12}" pr8 "$NM" "[{\"oid\": \"$NM\", \"messageHeadline\": \"Merge main\", \"messageBody\": \"\"}]" "$(HEADL="${NM:0:12}" JUDGEDL="Judged: $proof8" nbody)"
+run 0 merge-ask 8; grep -qF "Judged: $proof8" <<<"$out" || fail "no-criterion clean merge with proof: $out"
+# a lane that claims a criterion with no rows is still refused naming the table (#acceptance-merge-ask-evidence)
+qc8='[{"oid": "4444444444444444444444444444444444444444", "messageHeadline": "qc: built acceptance-a (judged 0123456789ab)", "messageBody": ""}]'
+for tbl in "" "$HDR"; do
+  want="criterion table: $([[ -z "$tbl" ]] && echo missing || echo 'no rows')"
+  pr8 "$N" "$qc8" "$(TABLE="$tbl" nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "qc commit, no rows ('$want'): $err"
+  pr8 "$N" "" "$(TABLE="$tbl" BUILT=demo#acceptance-a nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "Built id, no rows ('$want'): $err"
+  pr8 "$N" "" "$(TABLE="$tbl" FAILED=$'Failed:\n- acceptance-c: repair ticket #9' nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "Failed id, no rows ('$want'): $err"
+  sed 's/"planned", "pr": null/"built", "pr": 8/' docs/specs/demo.status.json > "$t/s8.json"
+  pr8 "$N" "" "$(TABLE="$tbl" nbody)"; run 1 merge-ask 8 --status "$t/s8.json"; grep -q "$want" <<<"$err" || fail "status entry built with the PR, no rows ('$want'): $err"
+done
+pr8 "$N" "" "$(BUILT=acceptance-a nbody)"; run 1 merge-ask 8; grep -q "name the lane's status file" <<<"$err" || fail "criterion lane with no --status: $err"
+echo "lane-merge-ask: ok (verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
