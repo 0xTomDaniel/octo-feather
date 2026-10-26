@@ -71,8 +71,8 @@
       "pr": 49
     },
     "acceptance-merge-ask-no-criterion": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 180
     },
     "acceptance-merge-approved-head": {
       "status": "built",
