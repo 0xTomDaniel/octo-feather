@@ -57,8 +57,13 @@ Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/
                                              S loaded (as above) before the first tool call that reached
                                              T, decided from the filesystem (the watcher snapshots the case
                                              repo after each call), never from command text: test_write (a
-                                             test path changed), edit (any file git does not ignore
-                                             changed), git_commit (HEAD on a new commit), git_push (origin's
+                                             file the case repo's fixture declares a test changed: one its
+                                             declared runner collects, pytest from its own config, any name
+                                             the config collects, never a path shape; the fixture, or head's
+                                             when the case has head, must declare its tests: a pyproject.toml
+                                             [tool.pytest.ini_options] testpaths, a non-empty list of
+                                             strings, and a uv.lock so setup installs the runner), edit
+                                             (any file git does not ignore changed), git_commit (HEAD on a new commit), git_push (origin's
                                              refs changed; needs origin), gh_call (the fake gh ran; needs
                                              fake_gh), kit_contract_edit (a role, skill or patch
                                              changed, as agents/corrector.md words it: agents/*.md,
@@ -123,9 +128,9 @@ or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill wit
 case id without expectations or the reverse, a skill-trigger case whose facts disagree with
 should_trigger, a "covers": "role-skills" suite missing a case for a role's skill (below), a malformed
 branch, head, origin or fake_gh (or one outside a role-transcript suite), a git_push without origin or
-a gh_call without fake_gh, or a task that leaks its grade, exactly: it holds one of the case's facts as
-data (a JSON object embedded in the task that parses equal to a fact object, key order and whitespace
-ignored) or the path of a skill it is graded on, matched by whole path component (<skill>/SKILL.md or
+a gh_call without fake_gh, a test_write whose fixture declares no tests (naming the fixture), or a task
+that leaks its grade, exactly: it holds one of the case's facts as data (a JSON object embedded in the
+task that parses equal to a fact object, key order and whitespace ignored) or the path of a skill it is graded on, matched by whole path component (<skill>/SKILL.md or
 skills/<skill>, so implement-spec/SKILL.md never matches skill implement). No other wording rule: a hint
 in other words is for review.
 Coverage: in a suite with "covers": "role-skills", every skill each kit role lists (agents/<role>.md
@@ -293,6 +298,10 @@ def check_suite(d, evals, errs):
             if k and c.get(k) is not True:
                 errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: {f['before']} "
                             f"needs the case's {k}: true (nothing else can reach it)")
+            fx = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")
+            if isinstance(f, dict) and f.get("before") == "test_write" and isinstance(fx, str) and not declares_tests(evals, fx):
+                errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: test_write needs fixture "
+                            f"{fx} to declare its tests (pyproject.toml [tool.pytest.ini_options] testpaths, and uv.lock); it declares none")
         kinds = {f.get("fact") for f in exp["facts"] if isinstance(f, dict)}
         if kind == "skill-trigger" and isinstance(c.get("should_trigger"), bool):
             if c["should_trigger"] and not kinds & {"skill_read", "skill_read_before"}:
@@ -542,6 +551,19 @@ def pi_role():
     mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
     loader.exec_module(mod)
     return mod
+
+
+def declares_tests(evals, name):
+    """The fixture declares its tests (test_write's rule, --help): its pyproject.toml's [tool.pytest.ini_options]
+    testpaths, a non-empty list of strings, and a uv.lock. A missing fixture dir is reported elsewhere."""
+    fx = evals / "fixtures" / name
+    if not (re.fullmatch(r"[A-Za-z0-9._-]+", name) and fx.is_dir()):
+        return True
+    try:
+        tp = tomllib.loads((fx / "pyproject.toml").read_text(encoding="utf-8")).get("tool", {}).get("pytest", {}).get("ini_options", {}).get("testpaths")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(tp, list) and bool(tp) and all(isinstance(p, str) and p for p in tp) and (fx / "uv.lock").is_file()
 
 
 def fixture_trackers(evals, errs):

@@ -18,6 +18,8 @@ Q="$kit/scripts/octo-feather-qa"; C="$kit/scripts/check-evals"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "qa test: $*" >&2; exit 1; }
 export TMPDIR="$t/tmp"; mkdir "$TMPDIR"
+# uv's package cache stays the box's (a pytest fixture's runner installs from it, as `just setup` would).
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir)}"
 # A throwaway HOME: the sandbox masks its (empty) live state, never the box's.
 export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
@@ -371,6 +373,12 @@ dl FAIL earlyrb 'skill_read_before tdd final_message: target never reached (run 
 # before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
 mkdir -p "$t/rt/rt/reference" "$t/rt/fixtures/fx2/tests"; cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/"
 echo "head" > "$t/rt/fixtures/fx2/README.md"; echo "def test_y(): pass" > "$t/rt/fixtures/fx2/tests/test_y.py"
+# test_write (rule: check-evals --help): py is the kit's python-app; spec declares testpaths specs and python_files
+# *_check.py, so tests/test_*.py is not one of its tests.
+cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/py"; cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/spec"
+mkdir "$t/rt/fixtures/spec/specs"; echo 'def test_a(): pass' > "$t/rt/fixtures/spec/specs/base_check.py"
+sed -i 's/^testpaths = \["tests"\]$/testpaths = ["specs"]\npython_files = ["*_check.py"]/' "$t/rt/fixtures/spec/pyproject.toml"
+grep -q '^python_files = \["\*_check.py"\]$' "$t/rt/fixtures/spec/pyproject.toml" || fail "spec fixture: python_files not declared"
 echo '{"suite": "rt", "kind": "role-transcript", "description": "stub role transcripts", "max_tool_calls": 30, "timeout_s": 60}' > "$t/rt/rt/suite.json"
 python3 - "$t/rt/rt" <<'EOF'
 import json, sys
@@ -385,12 +393,12 @@ cases = [
   # order: tdd read, test write, commit read, commit, push, gh call, github-pr read; github-pr comes after its gh call.
   (case("order", [["read", "@tdd"], ["bash", "mkdir -p tests && printf 'def test_x(): pass\\n' > tests/test_x.py"],
                   ["read", "@commit"], ["bash", G + " add -A && " + G + " commit -qm x"], ["bash", "git push -q origin HEAD"],
-                  ["bash", "gh pr create --title x"], ["read", "@github-pr"]], branch="impl-t1", origin=True, fake_gh=True),
+                  ["bash", "gh pr create --title x"], ["read", "@github-pr"]], branch="impl-t1", origin=True, fake_gh=True, fixture="py"),
    [rb("tdd", "test_write"), rb("commit", "test_write"), rb("commit", "git_commit"), rb("tdd", "git_push"),
     rb("github-pr", "gh_call"), rb("python", "edit"), rb("commit", "final_message"), fx]),   # fx: open to the end, so all 7 run
   # a write the commands never name as one: python writes the test file; a read-only command that names tests/ with > is none.
   (case("fsonly", [["bash", "ls tests/ 2>&1 > /dev/null; cat README.md > /dev/null"], ["read", "@tdd"],
-                   ["bash", "python3 -c \"import os; os.makedirs('tests'); open('tests/test_z.py', 'w').write('x')\""]]),
+                   ["bash", "python3 -c \"open('tests/test_z.py', 'w').write('x')\""]], fixture="py"),
    [rb("tdd", "test_write"), rb("tdd", "edit"), fx]),
   # A load is the full SKILL.md content in a tool result: an ls, grep, head of a part, a read of another tdd/SKILL.md,
   # a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated never count.
@@ -417,11 +425,16 @@ cases = [
   # file is an edit only.
   # A target never reached fails the read before it (test_write here), read or not.
   (case("contract", [["bash", "mkdir -p agents/notes && echo x > agents/notes/a.md && echo x > docs.md"], ["read", "@commit"],
-                     ["bash", "mkdir -p .agents/skills/x && echo y > .agents/skills/x/SKILL.md"]]),
+                     ["bash", "mkdir -p .agents/skills/x && echo y > .agents/skills/x/SKILL.md"]], fixture="py"),
    [rb("commit", "edit"), rb("commit", "kit_contract_edit"), rb("commit", "test_write")]),
   (case("roleedit", [["bash", "mkdir -p agents && echo r > agents/x.md"], ["bash", "echo z >> AGENTS.md"],
                      ["bash", "mkdir -p .skillfile/patches && echo p > .skillfile/patches/p.patch"]]),
    [rb("tdd", "kit_contract_edit"), fx]),
+  # Only a declared test counts: tests/README.md and tests/test_y.py (outside spec's declaration) are edits, specs/cli_check.py
+  # (any name the declaration collects) is a test_write.
+  (case("declared", [["bash", "echo r > tests/README.md"], ["read", "@tdd"], ["bash", "echo 'def test_y(): pass' > tests/test_y.py"],
+                     ["bash", "echo 'def test_c(): pass' > specs/cli_check.py"]], fixture="spec"),
+   [rb("tdd", "test_write"), fx]),
 ]
 json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
 json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
@@ -430,7 +443,7 @@ cp -r "$t/rt" "$t/rt-good"
 run 1 "$Q" --evals "$t/rt"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 rl() { grep -E "^$1 rt/$2: " <<< "$out" || fail "rt $2: want $1: $out"; }
-rl FAIL order >/dev/null; rl FAIL partial >/dev/null; rl FAIL contract >/dev/null; rl FAIL roleedit >/dev/null; rl PASS fsonly >/dev/null; rl PASS setup >/dev/null; rl PASS incl >/dev/null
+rl FAIL order >/dev/null; rl PASS declared >/dev/null; rl FAIL partial >/dev/null; rl FAIL contract >/dev/null; rl FAIL roleedit >/dev/null; rl PASS fsonly >/dev/null; rl PASS setup >/dev/null; rl PASS incl >/dev/null
 rl FAIL partial | grep -q "skill_read tdd: no load of tdd/SKILL.md (its full content in a tool result) in 5 tool calls" \
   || fail "partial: an ls, grep, head, a read elsewhere, a cut-short read or a truncated cat counted: $out"
 rl PASS loads | grep -q "skill_read commit: loaded at tool call 2 of [0-9] (bash cat README.md .*/commit/SKILL.md); skill_read python: loaded at tool call 3 of [0-9] (read .*/../python/SKILL.md); skill_read github-pr: loaded at tool call 4 of [0-9] (read [^/].*; skill_read github-issues: loaded at tool call 5 of [0-9] (read .*/github-issues/SKILL.md)" \
@@ -454,6 +467,10 @@ assert [e["marks"] for e in fs] == [["edit", "test_write"], ["git_commit"], ["gi
 assert fs[-1]["gh"] == ["gh pr create --title x"], fs[-1]
 g = {f.get("before"): f["evidence"] for f in json.load(open(f"{d}/fsonly/grading.json"))["facts"]}
 assert "first test_write at tool call 4 of 4" in g["test_write"] and "first edit at tool call 4 of 4" in g["edit"], g
+fs = [json.loads(l)["marks"] for l in open(f"{d}/declared/transcript.jsonl") if '"qa_fs"' in l]
+assert fs == [["edit"], ["edit"], ["edit", "test_write"]], fs   # tests/README.md, tests/test_y.py, specs/cli_check.py
+g = json.load(open(f"{d}/declared/grading.json"))["facts"][0]
+assert g["status"] == "pass" and "first test_write at tool call 5 of 5 (bash echo 'def test_c(): pass' > specs/cli_check.py)" in g["evidence"], g
 assert all(not k.startswith("_") for f in json.load(open(f"{d}/partial/grading.json"))["facts"] for k in f), "private keys in grading"
 g = {f.get("before"): (f["status"], f["evidence"]) for f in json.load(open(f"{d}/contract/grading.json"))["facts"]}
 assert g["edit"][0] == "fail" and "first edit at tool call 2 of 4" in g["edit"][1], g
@@ -563,6 +580,8 @@ bad 'c[4]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.bran
 bad 'c[4]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
 bad 'del c[0]["origin"]' "case order fact #4: field before: git_push needs the case's origin: true" "$t/rt-good" rt
 bad 'del c[0]["fake_gh"]' "case order fact #5: field before: gh_call needs the case's fake_gh: true" "$t/rt-good" rt
+bad 'c[0]["fixture"] = "fx"' "case order fact #1: field before: test_write needs fixture fx to declare its tests" "$t/rt-good" rt
+bad 'c[0]["head"] = {"fixture": "fx2", "branch": "hb", "message": "m"}' "case order fact #1: field before: test_write needs fixture fx2 to declare its tests" "$t/rt-good" rt
 bad 'e["order"]["facts"][0]["before"] = "lunch"' "case order fact #1: field before: must be one of" "$t/rt-good" rt
 bad 'e["incl"]["facts"][0]["items"] = [{"test": 1}]' "case incl fact #1: field items: must be a non-empty list of non-empty objects of string values" "$t/rt-good" rt
 bad 'e["incl"]["facts"][0]["items"] = []' "case incl fact #1: field items: must be a non-empty list" "$t/rt-good" rt

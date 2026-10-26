@@ -16,9 +16,11 @@ never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh fi
 answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo (content
 hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
-naming each target the call reached: edit (a file changed), test_write (a test path changed: tests/,
-test_*, *_test.*), git_commit (HEAD on a commit that did not exist before the run), git_push (origin's
-refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill or patch changed, as agents/corrector.md
+naming each target the call reached: edit (a file changed), test_write (a file the fixture declares a test
+changed, decided by its declared runner: check-evals --help owns the rule; the watcher asks pytest which files
+it collects, from the case repo's own config, no test module imported, after each call that changed a file and
+only for a case graded on test_write; pytest giving no list stops the run, naming why), git_commit (HEAD on a
+commit that did not exist before the run), git_push (origin's refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill or patch changed, as agents/corrector.md
 words its rule: agents/*.md, .agents/skills/**, .skillfile/patches/**). No regex over commands infers a write. Stated limit: a change is
 credited to the first call at whose end event the snapshot shows it, exact while the model's turn separates
 calls; of calls run in parallel within one turn, the first to end gets it.
@@ -113,7 +115,6 @@ SELF = KIT / "scripts" / "octo-feather-qa"
 GH_OFF = "github: none (factory eval: no GitHub evidence)"
 DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
 SAMPLE_SEED = "octo-feather-qa"
-TEST_PATH = re.compile(r"(^|/)tests?/|(^|/)test_[^/]*$|_test\.[A-Za-z]+$")
 # kit_contract_edit: exactly the files agents/corrector.md's "before editing a role, skill or patch" guards, repo-root relative.
 CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+)$")
 
@@ -558,11 +559,41 @@ def snapshot(origin, log):
             "refs": git_out("--git-dir", origin, "for-each-ref") if origin else "", "gh": gh}
 
 
+# Records each file pytest collects (a File node), answering an empty collection so no test module is imported.
+COLLECT_PLUGIN = '''import json, os, pytest
+seen = []
+@pytest.hookimpl(tryfirst=True)
+def pytest_make_collect_report(collector):
+    if isinstance(collector, pytest.File):
+        seen.append(os.path.relpath(collector.path))
+        return pytest.CollectReport(collector.nodeid, "passed", None, [])
+def pytest_sessionfinish(session):
+    with open(os.environ["QA_COLLECTED"], "w") as f:
+        json.dump(seen, f)
+'''
+
+
+def declared_tests(files):
+    """{path: content hash} of every file the case repo's declared runner collects (rule: check-evals --help, test_write):
+    pytest from the repo's own config (testpaths, python_files...), run in its synced env, collect only, no test module
+    imported, no bytecode or cache written. Raises RuntimeError when pytest gives no list."""
+    os.makedirs(f"{QA_TMP}/collect", exist_ok=True)
+    Path(f"{QA_TMP}/collect/qa_collect.py").write_text(COLLECT_PLUGIN)
+    out = f"{QA_TMP}/collect/collected.json"
+    if os.path.exists(out):
+        os.remove(out)
+    env = dict(os.environ, PYTHONPATH=f"{QA_TMP}/collect", PYTHONDONTWRITEBYTECODE="1", QA_COLLECTED=out)
+    r = subprocess.run(["uv", "run", "--no-sync", "--offline", "--no-cache", "python", "-m", "pytest", "--collect-only", "-q",
+                        "-p", "no:cacheprovider", "-p", "qa_collect"], env=env, capture_output=True, text=True)
+    if r.returncode not in (0, 5) or not os.path.exists(out):
+        raise RuntimeError(f"test_write: pytest --collect-only exited {r.returncode}: {(r.stdout + r.stderr).strip()[-300:]}")
+    return {p: files.get(p) for p in json.loads(Path(out).read_text())}
+
+
 def changed(old, new, known):
     """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
-    tests = lambda s: {k: v for k, v in s["files"].items() if TEST_PATH.search(k)}
     contract = lambda s: {k: v for k, v in s["files"].items() if CONTRACT_PATH.match(k)}
-    return [m for m, hit in (("edit", old["files"] != new["files"]), ("test_write", tests(old) != tests(new)),
+    return [m for m, hit in (("edit", old["files"] != new["files"]), ("test_write", old.get("tests") != new.get("tests")),
                              ("git_commit", new["head"] != old["head"] and new["head"] not in known),
                              ("git_push", new["refs"] != old["refs"]), ("gh_call", len(new["gh"]) > len(old["gh"])),
                              ("kit_contract_edit", contract(old) != contract(new))) if hit]
@@ -577,8 +608,15 @@ def watch(argv):
     known = set(git_out("rev-list", "--all").split())
     main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base: main as set up
     snap = snapshot(origin, log)
+    tests = any(isinstance(f, dict) and f.get("before") == "test_write" for f in facts)   # only a case graded on it
+    if tests:
+        try:
+            snap["tests"] = declared_tests(snap["files"])
+        except RuntimeError as e:
+            print(json.dumps({"type": "qa_watch", "stop": "test_runner", "exit": None, "tool_calls": 0, "error": str(e)}), flush=True)
+            return 1
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, start_new_session=True, env=env)
-    why = []
+    why, err = [], {}
 
     def stop(reason):
         if not why:
@@ -604,6 +642,11 @@ def watch(argv):
         seen += new; raws.append(raw)
         if end:
             now = snapshot(origin, log)
+            if tests:
+                try:
+                    now["tests"] = snap["tests"] if now["files"] == snap["files"] else declared_tests(now["files"])
+                except RuntimeError as e:
+                    err["error"] = str(e); stop("test_runner"); break
             marks = changed(snap, now, known)
             if marks:
                 ev = {"type": "qa_fs", "toolCallId": end.get("toolCallId"), "marks": marks, "gh": now["gh"][len(snap["gh"]):]}
@@ -617,7 +660,7 @@ def watch(argv):
     rc = p.wait(); timer.cancel()
     paths = (git_out("diff", "-z", "--name-only", "--no-renames", main0) + "\0" + git_out("ls-files", "-z", "-o", "--exclude-standard")).split("\0")
     print(json.dumps({"type": "qa_branch", "base": main0, "paths": sorted(set(p for p in paths if p))}), flush=True)
-    print(json.dumps({"type": "qa_watch", "stop": why[0] if why else "exit", "exit": rc, "tool_calls": len(seen)}), flush=True)
+    print(json.dumps({"type": "qa_watch", "stop": why[0] if why else "exit", "exit": rc, "tool_calls": len(seen), **err}), flush=True)
     return 0 if why else rc
 
 
@@ -756,6 +799,8 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         problems.append(f"run: no stop record (exit {run.returncode})")
     elif w["stop"] == "exit" and w["exit"] != 0:
         problems.append(f"run: pi exited {w['exit']} on its own")
+    if w and w.get("error"):
+        problems.append(f"run: {w['error']}")
     if not asst:
         problems.append("run: no assistant message in the transcript")
     errs = [m.get("errorMessage") or m.get("stopReason") for m in asst if m.get("stopReason") == "error"]
