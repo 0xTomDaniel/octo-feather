@@ -1,0 +1,22 @@
+{
+  "spec": "spend.spec.html",
+  "accepted_commit": "941d16bf3c02acb8fe40f3a19dcc5f99b0b09527",
+  "criteria": {
+    "acceptance-spend-bench": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-spend-judge": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-spend-reconcile": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-spend-agents": {
+      "status": "planned",
+      "pr": null
+    }
+  }
+}
