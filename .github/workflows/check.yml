@@ -19,6 +19,15 @@ jobs:
       - uses: extractions/setup-just@v2
       # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
+      # The spec-chat pin is a private repo: its read-only deploy key, used for that repo's URL only.
+      - env:
+          SPEC_CHAT_DEPLOY_KEY: ${{ secrets.SPEC_CHAT_DEPLOY_KEY }}
+        run: |
+          install -d -m 700 ~/.ssh
+          (umask 077 && printf '%s\n' "$SPEC_CHAT_DEPLOY_KEY" > ~/.ssh/id_spec_chat)
+          ssh-keyscan github.com >> ~/.ssh/known_hosts
+          printf 'Host github-spec-chat\n  HostName github.com\n  User git\n  IdentityFile ~/.ssh/id_spec_chat\n  IdentitiesOnly yes\n' >> ~/.ssh/config
+          git config --global url."git@github-spec-chat:0xTomDaniel/spec-chat".insteadOf "https://github.com/0xTomDaniel/spec-chat"
       # The gate calls no network service (docs/specs/quality.spec.html#boundary-gate), so the one
       # network step runs first, on its own: the pinned skillfile binary (sha256-checked) and each
       # Skillfile pin commit (fetch-only entries included) from github.com, every call time-bounded. The gate then reads them offline.
