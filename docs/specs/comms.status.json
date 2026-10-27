@@ -41,6 +41,34 @@
     "acceptance-lane-archive": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-report-lanes": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-owner-queue": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-lane-numbers": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-gate-time": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-owner-caught": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-any-target": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-unreadable": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
