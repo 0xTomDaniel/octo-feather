@@ -1,0 +1,2 @@
+{"state": "OPEN", "isDraft": false, "headRefOid": "aaaa9aaaa9aaaa9aaaa9aaaa9aaaa9aaaa9aaaa9", "statusCheckRollup": [
+  {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}]}

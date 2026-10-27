@@ -1,0 +1,22 @@
+report at NOW (STATE/lanes)
+lane lane-a: issue gh1 o/a "Implementer working"
+  started: 2026-10-20T08:00:00Z (AGE ago)
+  pr: #5 unread: GitHub: gh pr view 5 failed (error connecting to api.github.com): check PR #5 exists in o/a, and gh auth status
+  running: w5:p1 lane-a done (supervisor)
+  running: w5:p2 implementer-gh2 working
+  waits: waiting_on "", last hand-off 2026-10-20T09:30:00Z (AGE ago)
+  waits: worker implementer-gh2 w5:p2 working
+  log lane-a.handoffs.jsonl: 1 unparsable line (2)
+lane lane-b: issue gh3 o/b "Escalated to the director"
+  started: 2026-10-21T10:00:00Z (AGE ago)
+  pr: #5 unread: GitHub: gh pr view 5 failed (error connecting to api.github.com): check PR #5 exists in o/b, and gh auth status
+  running: w6:p1 lane-b idle (supervisor)
+  waits: waiting_on "director", last hand-off 2026-10-21T11:15:00Z (AGE ago)
+  log lane-b.handoffs.jsonl: none
+lane lane-c: issue gh4 o/a "Merge ask awaits the owner"
+  started: 2026-10-22T12:00:00Z (AGE ago)
+  pr: #9 unread: GitHub: gh pr view 9 failed (error connecting to api.github.com): check PR #9 exists in o/a, and gh auth status
+  running: w7:p1 lane-c done (supervisor)
+  waits: waiting_on "", last hand-off 2026-10-22T14:00:00Z (AGE ago)
+  waits: owner gate merge asked 2026-10-22T14:00:00Z (AGE ago)
+unread: GitHub (lane-a), GitHub (lane-b), GitHub (lane-c)

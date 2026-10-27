@@ -1,0 +1,7 @@
+[
+  {"name": "lane-a", "pane_id": "w5:p1", "workspace_id": "w5", "agent_status": "done"},
+  {"name": "implementer-gh2", "pane_id": "w5:p2", "workspace_id": "w5", "agent_status": "working"},
+  {"name": "lane-b", "pane_id": "w6:p1", "workspace_id": "w6", "agent_status": "idle"},
+  {"name": "lane-c", "pane_id": "w7:p1", "workspace_id": "w7", "agent_status": "done"},
+  {"pane_id": "w1:p1", "workspace_id": "w1", "agent_status": "idle"}
+]
