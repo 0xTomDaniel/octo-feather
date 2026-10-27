@@ -108,11 +108,28 @@ the repo's own public surface (ADR 0009): after env assignments and runners (uv 
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
 imports, aliases and `just MOD RECIPE` included, never a header regex; no just or a justfile
-it cannot read is exit 2, #172), a package.json bin or pyproject
+it cannot read is exit 2, #172; the recipes are the ones just itself says it runs, in the repo,
+dependencies included, none a gate or factory recipe: just parses the words beside --completions, and
+unless it objects to more than their recipe words and overrides (a subcommand such as --show, --list or
+--command runs no recipe), dry-runs them with --verbose, naming each recipe; executing nothing,
+evaluating no backtick; every option, parameter and default is just's to read, and anything just refuses,
+-q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's just-version is
+the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A ticket body
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
+command the ticket itself creates when the ticket declares it exactly in a line
+``Creates: `<path>` `` (repo-relative, the script or file the demo runs, e.g. scripts/new-cmd or bin/x;
+a leading ./ is dropped), one backticked value, the line repeatable: a demo stage passes when its
+program, after env assignments and runners, is exactly that path (written with a /, e.g. ./run for a
+top-level file, and stands for itself, never an interpreter or HTTP tool by its basename). A declared
+path that already exists still passes. A just recipe is never declared (owner ruling #240, C): an
+existing one is a demo as above, needing no Creates; one the justfile lacks is created in an earlier
+ticket, or the demo runs the path it runs. Class bad-creates: a value not one backticked path, empty,
+`just ...`, absolute, with `..`, not normalized, or under tests/ or a hook dir. Class unused-creates: a declared path no demo stage runs (an
+Expand-contract ticket runs none). A demo of an undeclared command the repo lacks stays
+layer-only-ticket, its fix naming the Creates form. A ticket body
 is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
 or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
@@ -174,7 +191,7 @@ Exit 0; 1 on any argument.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -1088,6 +1105,12 @@ GATE = re.compile(r"just\s+check(-[a-z-]+)?")
 ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
 CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
 EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
+CREATES = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Creates:\**[ \t]*(.*?)\s*$", re.M | re.I)
+# The fix text for a Creates line (scope: --help (ticket)).
+CREATES_FORM = "`Creates: `<path>``, form: octo-feather-lane --help (ticket)"
+# The fix for a `Creates: `just ...`` line (scope: --help (ticket)).
+CREATES_JUST_FIX = ("an existing recipe needs no Creates; an absent recipe cannot be declared: create it in an earlier ticket, "
+                    "or demo through the path it runs, declared as " + CREATES_FORM)
 DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
 ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
@@ -1218,12 +1241,24 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
+    creates, used = {}, set()   # each declared path -> as written
+    for v in dict.fromkeys(CREATES.findall("\n".join(structure(body)))):
+        d, why = creates_why_not(v)
+        if why:
+            fail("bad-creates", f"Creates {why}", CREATES_JUST_FIX if d == "just" else "declare a repo-relative path outside tests/, as " + CREATES_FORM)
+        else:
+            creates.setdefault(d, v)
+    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it",
+                           f"make the demo's program exactly the declared path, or drop the line; {CREATES_FORM}")
+                      for d in creates if d not in used]
     ec = EXPAND.search("\n".join(structure(body)))
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
+        unused()
         return out
     if ec:
         fail("layer-only-ticket", f"Expand-contract line names `{ec.group(1)}`",
              "write `Expand-contract: expand`, `migrate` or `contract` (the wide refactor's step), or drop it and end on a demo")
+        unused()
         return out
     last = items[-1] if items else ""
     fix = ("end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI "
@@ -1239,11 +1274,57 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
             fail("layer-only-ticket", f"demo is the gate alone (`{cmds[0]}`)", fix)
         else:
             surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
-            runs = [surf.runs(c) for c in cmds]
+            runs = [surf.runs(c, creates, used) for c in cmds]
             invs = [i for r in runs for i in r[0]]
             if not invs:
                 fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
+    unused()
     return out
+
+
+def q(v: str) -> str:
+    """V as a Markdown code span."""
+    return f"`` {v} ``" if "`" in v else f"`{v}`"
+
+
+def creates_why_not(v: str) -> tuple[str, str | None]:
+    """(the path a `Creates:` value V declares, why V declares none, None if it does; "just" for a just recipe)."""
+    m = re.fullmatch(r"`([^`]*)`", v)
+    if not m:
+        return "", f"value {q(v)} is not one backticked path"
+    d = m.group(1).strip()
+    if d == "":
+        return "", f"{q(m.group(1))} has an empty value"
+    if d.split()[0] == "just":
+        return "just", f"`{d}` declares a just recipe, not a path (owner ruling #240, C)"
+    if re.search(r"\s", d):
+        return "", f"`{d}` is not one path (no arguments or spaces)"
+    if os.path.isabs(d) or ".." in d.split("/"):
+        return "", f"`{d}` is not repo-relative (no leading /, no ..)"
+    rel = d[2:] if d.startswith("./") else d
+    if os.path.normpath(rel) != rel:
+        return "", f"`{d}` is not a normalized path (no //, /./ or trailing /)"
+    if TEST_DIR.search(rel):
+        return "", f"`{d}` is under a test or hook directory, not the app's surface"
+    return rel, None
+
+
+@functools.cache
+def gate_free_module():
+    """scripts/check-gate-free, whose just_runs() is the one source of what a just command line runs (with the gate's marker)."""
+    loader = importlib.machinery.SourceFileLoader("check_gate_free", str(KIT / "scripts" / "check-gate-free"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_gate_free", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def created(words: list[str], creates) -> str | None:
+    """The declared path of CREATES that a stage's program WORDS (env and runners dropped) runs exactly, None if none."""
+    if not words:
+        return None
+    prog = words[0]
+    rel = prog[2:] if prog.startswith("./") else prog
+    return rel if "/" in prog and rel in creates else None
 
 
 # A demo goes through the repo's own public surface (ADR 0009): a program the repo declares,
@@ -1253,7 +1334,9 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
                "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
-               "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
+               "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
+               + ", the demo running that path; or, for one step of a wide refactor, add the line "
+               "`Expand-contract: expand|migrate|contract`")
 
 
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
@@ -1276,6 +1359,7 @@ class Surface:
 
     def __init__(self, root: Path):
         self.root, self.exec_paths, self.exec_names, self._recipes, self.bins = root, set(), set(), None, set()
+        self.justfile, self._just = None, {}
         self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
         ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
         for line in ls.stdout.splitlines():
@@ -1312,7 +1396,7 @@ class Surface:
             c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
             if not c:
                 return self._recipes
-            f = self.root / c[0]
+            f = self.justfile = self.root / c[0]
             why = lambda w: Unchecked(f"cannot read the justfile's recipes ({f}): {w}, then rerun")
             if len(c) > 1:
                 raise why(f"justfile is ambiguous, just refuses to pick one of: {' '.join(c)}; keep one")
@@ -1342,16 +1426,43 @@ class Surface:
         recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
         return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
 
-    def runs(self, cmd: str) -> tuple[list[str], str]:
-        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not)."""
+    def runs(self, cmd: str, creates=(), used: set | None = None) -> tuple[list[str], str]:
+        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not).
+        A stage whose program is exactly a path of CREATES (the ticket's `Creates:` lines) is on it
+        too, and that path goes into USED."""
         invs, whys = [], []
         for stage in re.split(r"\|\||&&|[|;]", strip_subst(cmd)):
             why, words = self.stage_why_not(stage)
-            if why is None:
+            if (d := created(words, creates)) is not None:
+                if used is not None:
+                    used.add(d)
+                invs.append(d)   # a created path stands for itself, never read by its basename
+            elif why is None:
                 invs.append(invocation(words))
             else:
                 whys.append(why)
         return invs, "; ".join(dict.fromkeys(whys)) or "empty command"
+
+    def just_why(self, args: list[str]) -> str | None:
+        """Why `just ARGS` is no demo, None if it is one, as just itself answers in ROOT (check-gate-free
+        just_runs, the one source): the recipes it runs, dependencies included, none a gate or factory recipe."""
+        key = tuple(args)
+        if key in self._just:
+            return self._just[key]
+        self.recipes   # no just or an unreadable justfile: exit 2, before any run
+        cmd = " ".join(["just", *args])
+        if not self.justfile:
+            res = f"no justfile in {self.root}"
+        else:
+            try:
+                names, why = gate_free_module().just_runs(args, self.root)
+            except subprocess.TimeoutExpired:
+                names, why = None, "just did not answer in 60s"
+            g = next((n for n in names or () if NOT_DEMO_RECIPES.fullmatch(n)), None)
+            res = (f"just answers: {why}" if names is None else
+                   f"{cmd} runs {g}, a gate or factory recipe, not the app" if g else None)
+        self._just[key] = res
+        return res
 
     def stage_why_not(self, stage: str) -> tuple[str | None, list[str]]:
         words = program_words(stage)
@@ -1376,20 +1487,7 @@ class Surface:
         if prog == "playwright" or prog.endswith("/playwright"):
             return None
         if prog == "just":
-            words = [a for a in args if not a.startswith("-")]
-            rec = words[0] if words else ""
-            if not rec:
-                return "`just` with no recipe"
-            if NOT_DEMO_RECIPES.fullmatch(rec):
-                return f"just {rec} is a gate or factory recipe, not the app"
-            recipes = self.recipes
-            for w in words[1:]:   # `just MOD RECIPE`: what every just with modules runs (1.21 refuses MOD::RECIPE)
-                if rec not in self.modules:
-                    break
-                rec = f"{rec} {w}"
-            if rec not in recipes:
-                return f"no justfile recipe {rec} in {self.root}"
-            return f"just {rec} is a gate or factory recipe, not the app" if not_demo(recipes[rec]) else None
+            return self.just_why(args)
         if "/" in prog:
             rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
             if os.path.isabs(prog):
@@ -1442,7 +1540,7 @@ def invocation(words: list[str]) -> str:
         words = words[words.index(script_arg(words)):]
     prog, args = words[0], [a for a in words[1:] if not a.startswith("-")]
     name = prog.rsplit("/", 1)[-1]
-    if name in HTTP:
+    if prog in HTTP:   # as word_why_not reads it: a bare name, never a path's basename
         url = next(a for a in args if re.match(r"https?://", a))
         return re.sub(r"^https?://[^/]*", "", url).split("?")[0].split("#")[0] or "/"
     if name == "playwright":
