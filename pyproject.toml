@@ -7,7 +7,7 @@ requires-python = ">=3.10"
 dependencies = []
 
 [dependency-groups]
-dev = ["pytest==9.1.1", "pytest-xdist==3.8.0"]
+dev = ["basedpyright==1.40.2", "pytest==9.1.1", "pytest-xdist==3.8.0", "ruff==0.17.1"]
 
 [tool.uv]
 package = false
@@ -16,3 +16,33 @@ package = false
 testpaths = ["tests/gate"]
 # Every item's duration, failures with their captured output, junit xml for the trend line (tests/gate/conftest.py).
 addopts = "--strict-markers --durations=0 --junitxml=.pytest_cache/junit.xml"
+
+# Kit Python lint, format and types: templates/python's config as written there (#244), run by
+# `octo-feather-lint` over every tracked *.py and Python-shebang file (check-lint, check-format, check-types).
+[tool.ruff]
+line-length = 100
+# Out of the kit's Python file set, each once with its reason (the template's own extend-exclude names its
+# copy of tests/gate/conftest.py, which the kit does lint):
+extend-exclude = [
+  "evals/",      # eval fixtures and judgment sources: deliberately flawed data the cases grade
+  "templates/",  # each template runs its own gate in its own repo
+  "evidence/",   # frozen records of past runs
+  # vendored skills (Skillfile github entries): upstream code, changed only through .skillfile/patches
+  ".agents/skills/{tdd,implement,implement-spec,to-tickets,grill-with-docs,grilling,domain-modeling,code-review,writing-for-agents,correct,improve-codebase-architecture,codebase-design,principle-prove-it-works,blast-radius,sharpen,principle-encode-lessons-in-structure,interrogate,linear-cli}/",
+]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "COM812",  # conflicts with the formatter
+  "CPY001",  # no per-file copyright headers
+  "D",       # docstrings are optional; names carry intent
+  "S101",    # pytest asserts
+  "S603",    # E2E tests run the app as a subprocess
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001", "PLR2004"]  # tests are not a package; exit codes are literal
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
