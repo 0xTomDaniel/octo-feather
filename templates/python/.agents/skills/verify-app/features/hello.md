@@ -7,6 +7,8 @@ Criteria (kit templates spec, until this repo has its own specs, whose criteria 
 - [acceptance-cli-json](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-cli-json)
 - [acceptance-starter-verify](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-starter-verify)
 
+Drive criterion: `templates#acceptance-cli-json`
+
 ## Sub-features
 
 - `hello-json` greets with `--json`.

@@ -64,11 +64,16 @@ Proof standards:
 - No mocks: the app has no external boundary.
 - Report a skipped case as skipped, never as proved through a different case.
 
-Evidence lives at `$VERIFY_APP_EVIDENCE_DIR`: `doctor.txt` (from `run`) and one folder per driven feature.
+Evidence lives at `$VERIFY_APP_EVIDENCE_DIR`: `doctor.txt` (from `run`) and one folder per driven feature. That folder is scratch: the next drive of the feature replaces it.
+
+The kept record is this repo's evidence store (octo-feather quality spec `#evidence-store`), outside the repo and both folders above: every `drive`, passed or failed, appends one record through the kit's `octo-feather-evidence` (on PATH with the kit's `scripts/`; a drive fails without it) and prints `verify-app: evidence record <id> (criterion <spec>#<anchor>; ...)`. The record holds the feature folder's files as outputs and names the commit, the criterion, the contract and fixture versions:
+
+- The criterion is the one the feature file's `Drive criterion:` line names; the helper passes the feature file's line linking it as the criterion's text, for when this repo's specs lack it.
+- Read a criterion's records at a commit: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` (`--json` for data). Where the store lives and the record format: `octo-feather-evidence --help`.
 
 ## Cleanup
 
-`verify-app cleanup` removes the scratch dirs, the `bin/app` command and the state file, then the run dir if empty. Nothing is killed: the helper never leaves a process running, and never kills by name. Evidence is never removed; cleanup prints where it stays. Run cleanup after every failed attempt too.
+`verify-app cleanup` removes the scratch dirs, the `bin/app` command and the state file, then the run dir if empty. Nothing is killed: the helper never leaves a process running, and never kills by name. Evidence is never removed, and the evidence store is never touched; cleanup prints where the evidence folder stays. Run cleanup after every failed attempt too.
 
 ## Features
 
