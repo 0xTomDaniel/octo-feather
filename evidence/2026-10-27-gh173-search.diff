@@ -1,0 +1,461 @@
+1c1
+< ## Layout  /EVALS_DIR|suite\.json|cases\.json|expectations\.json|question\.json|judgment-model\.json|classifiers\.json|fixtures//  61 hits
+---
+> ## Layout  /EVALS_DIR|suite\.json|cases\.json|expectations\.json|question\.json|judgment-model\.json|classifiers\.json|fixtures//  56 hits
+9d8
+< evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+11d9
+< evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+13d10
+< evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+15d11
+< evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+34,41c30,36
+< scripts/octo-feather-qa:64: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+< scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+< scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+< scripts/octo-feather-qa:855: """EVALS/classifiers.json, parsed (its schema: the eval-cases skill, Judgment model and classifiers)."""
+< scripts/octo-feather-qa:860: """The listed classifiers called (benched) in no list of classifiers.json (the skipped ones never are)."""
+< scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+< scripts/octo-feather-qa:870: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+< scripts/octo-feather-qa:992: available classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
+---
+> scripts/octo-feather-qa:63: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+> scripts/octo-feather-qa:67: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+> scripts/octo-feather-qa:851: """EVALS/classifiers.json, parsed (its schema: the eval-cases skill, Judgment model and classifiers)."""
+> scripts/octo-feather-qa:856: """The benched classifiers in no list of classifiers.json (rule: schema, Bench, Classes)."""
+> scripts/octo-feather-qa:861: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+> scripts/octo-feather-qa:866: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+> scripts/octo-feather-qa:988: available classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
+53,60c48,55
+< tests/qa.sh:582: bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
+< tests/qa.sh:670: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+< tests/qa.sh:696: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+< tests/qa.sh:788: A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
+< tests/qa.sh:821: The one place (EVALS/judgment-model.json, spec judgment#rule-one-model; shape: schema.md, Judgment model and classifiers).
+< tests/qa.sh:822: badm PY_EDIT WANT: edit a fresh judgment copy's judgment-model.json (m), expect WANT
+< tests/qa.sh:842: classifiers.json shape (rule: schema.md, Judgment model and classifiers).
+< tests/qa.sh:843: badc PY_EDIT WANT: edit a fresh judgment copy's classifiers.json (o), expect WANT
+---
+> tests/qa.sh:580: bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
+> tests/qa.sh:668: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+> tests/qa.sh:694: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier, token (schema.md, Bench).
+> tests/qa.sh:797: A model or chosen key in suite.json, nested and top-level (rule: schema.md, Suite).
+> tests/qa.sh:818: The one place (EVALS/judgment-model.json, spec judgment#rule-one-model; shape: schema.md, Judgment model and classifiers).
+> tests/qa.sh:819: badm PY_EDIT WANT: edit a fresh judgment copy's judgment-model.json (m), expect WANT
+> tests/qa.sh:839: classifiers.json shape (rule: schema.md, Judgment model and classifiers).
+> tests/qa.sh:840: badc PY_EDIT WANT: edit a fresh judgment copy's classifiers.json (o), expect WANT
+63c58
+< ## Suite  /max_tool_calls|timeout_s|\bcovers\b|\bkind\b|\bchosen\b|any depth|names? (no |a )?model/  65 hits
+---
+> ## Suite  /max_tool_calls|timeout_s|\bcovers\b|\bkind\b|\bchosen\b|any depth|names? (no |a )?model/  61 hits
+103c98
+< evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases, each in train and held-out (covers:
+---
+> evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases (covers:
+106,107d100
+< scripts/check-evals:48: keys that would name a model in a suite
+< scripts/check-evals:193: """The dotted paths of every key in O, at any depth, that would name a model (model, chosen)."""
+113,115c106,108
+< scripts/octo-feather-qa:56: A judgment suite (kind judgment, spec judgment#acceptance; schema: Judgment suite) is a bench, not facts: its
+< scripts/octo-feather-qa:59: chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
+< scripts/octo-feather-qa:110: helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
+---
+> scripts/octo-feather-qa:55: A judgment suite (kind judgment, spec judgment#acceptance; schema: Judgment suite) is a bench, not facts: its
+> scripts/octo-feather-qa:58: chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
+> scripts/octo-feather-qa:108: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox), one {kind, attempt, refused,
+125,128c118,119
+< tests/qa.sh:267: Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+< tests/qa.sh:396: `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.
+< tests/qa.sh:789: evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
+< tests/qa.sh:800: No suite names a model (spec judgment#rule-one-model): a model or chosen key at any depth is refused, naming the one place.
+---
+> tests/qa.sh:395: `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.
+> tests/qa.sh:797: A model or chosen key in suite.json, nested and top-level (rule: schema.md, Suite).
+145,146c136
+< scripts/check-evals:330: """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+< scripts/check-evals:410: """A role-transcript case's repo setup fields."""
+---
+> scripts/check-evals:410: """A role-transcript case's repo setup fields (rule: schema.md, Case)."""
+152,157c142,148
+< scripts/octo-feather-qa:37: Prints one PASS or FAIL line per case with the facts that decided it, then, when any case has a split
+< scripts/octo-feather-qa:43: --sample N                of the selected cases run only N, stratified by should_trigger and split
+< scripts/octo-feather-qa:404: octo-feather-qa fake GitHub (a case's fake_gh): logs argv, answers the few calls a lane start needs.
+< scripts/octo-feather-qa:1111: """n of picked, stratified by (should_trigger, split): each stratum shuffled with a fixed seed, then one
+< scripts/octo-feather-qa:1112: from each in turn; should_trigger true/train and false/held-out lead, so 2 picks hold one of each."""
+< scripts/octo-feather-qa:1132: """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+---
+> scripts/octo-feather-qa:36: Prints one PASS or FAIL line per case with the facts that decided it, then, when any case has a split
+> scripts/octo-feather-qa:42: --sample N                of the selected cases run only N, stratified by should_trigger and split
+> scripts/octo-feather-qa:401: octo-feather-qa fake GitHub (a case's fake_gh): logs argv, answers the few calls a lane start needs.
+> scripts/octo-feather-qa:871: """Per benched model: scores per split; the question's best-scoring classifier and the kit's model's proposed
+> scripts/octo-feather-qa:1107: """n of picked, stratified by (should_trigger, split): each stratum shuffled with a fixed seed, then one
+> scripts/octo-feather-qa:1108: from each in turn; should_trigger true/train and false/held-out lead, so 2 picks hold one of each."""
+> scripts/octo-feather-qa:1128: """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+163c154
+< tests/qa.sh:415: Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads by Pi `read` only,
+---
+> tests/qa.sh:414: Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads, before targets,
+165c156
+< ## Facts  /skill_read|skill_not_read|attempt_blocked|declared_includes|\bdeclared\b|field_lines|branch_paths|never reached|vacuous|fact is decided|closed (fact )?list/  64 hits
+---
+> ## Facts  /skill_read|skill_not_read|attempt_blocked|declared_includes|\bdeclared\b|field_lines|branch_paths|never reached|vacuous|fact is decided|closed (fact )?list/  62 hits
+199,200c190
+< evals/skill-triggers/suite.json:4: Graded only by skill_read / skill_not_read.
+< evals/skill-triggers/suite.json:4: A run stops once every fact is decided, or at the tool-call or time bound.
+---
+> evals/skill-triggers/suite.json:4: Graded only by skill_read / skill_not_read (schema.md, Facts).
+203c193
+< scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
+---
+> scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
+205,215c195,205
+< scripts/octo-feather-qa:29: A fact is decided when the schema's Facts section says (a skill_read_before once its target is reached; a
+< scripts/octo-feather-qa:33: Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
+< scripts/octo-feather-qa:109: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
+< scripts/octo-feather-qa:171: """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md, as skill_text reads it
+< scripts/octo-feather-qa:223: """declared (schema, Final JSON)."""
+< scripts/octo-feather-qa:237: """declared_includes (schema, Final JSON)."""
+< scripts/octo-feather-qa:315: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+< scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+< scripts/octo-feather-qa:386: """attempt_blocked KIND over the sandbox's RECORD (rule: schema, Attempt record)."""
+< scripts/octo-feather-qa:504: """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
+< scripts/octo-feather-qa:510: branch_paths' base: main as set up
+---
+> scripts/octo-feather-qa:29: A fact is decided when the schema's Facts section says.
+> scripts/octo-feather-qa:32: Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
+> scripts/octo-feather-qa:108: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox), one {kind, attempt, refused,
+> scripts/octo-feather-qa:168: """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md, as skill_text reads it
+> scripts/octo-feather-qa:220: """declared (schema, Final JSON)."""
+> scripts/octo-feather-qa:234: """declared_includes (schema, Final JSON)."""
+> scripts/octo-feather-qa:312: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+> scripts/octo-feather-qa:337: (skill loads: schema, Skill load); record: the sandbox's attempt record (attempt_blocked)."""
+> scripts/octo-feather-qa:383: """attempt_blocked KIND over the sandbox's RECORD (rule: schema, Attempt record)."""
+> scripts/octo-feather-qa:501: """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
+> scripts/octo-feather-qa:507: branch_paths' base (schema, Branch paths)
+224,230c214,219
+< tests/qa.sh:395: declared (schema.md, Final JSON):
+< tests/qa.sh:412: A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+< tests/qa.sh:416: before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
+< tests/qa.sh:469: A target never reached fails the read before it (test_write here), read or not.
+< tests/qa.sh:476: Only a declared test counts: tests/README.md and tests/test_y.py (outside spec's declaration) are edits, specs/cli_check.py
+< tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+< ## Skill load  /truncat|normaliz|CRLF|full (SKILL\.md )?content|skill load|a load\b/  16 hits
+---
+> tests/qa.sh:394: declared (schema.md, Final JSON):
+> tests/qa.sh:411: A read whose target is never reached (rule: schema.md, Facts, skill_read_before): final_message unreached when the run is cut off.
+> tests/qa.sh:415: declared_includes (rules: schema.md, Case, Skill load, Before targets, Final JSON). A scripted stub runs real commands.
+> tests/qa.sh:467: test_write never reached here, tdd read or not (rule: schema.md, Facts, skill_read_before).
+> tests/qa.sh:535: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+> ## Skill load  /truncat|normaliz|CRLF|full (SKILL\.md )?content|skill load|a load\b/  15 hits
+233c222
+< evals/role-transcripts/suite.json:4: the case passes when its transcript shows each listed skill loaded before the step it serves, that step reached in the run, and where the case needs a verdict, the role's final message carrying it (fa
+---
+> evals/role-transcripts/suite.json:4: a listed skill loaded before the step it serves and, where the case needs a verdict, the role's final message carrying it (facts and what each reads:
+236,239c225,228
+< scripts/octo-feather-qa:142: """The SKILL.md as the kit under test holds it, normalized: CRLF as LF, trailing newlines dropped (a tool may
+< scripts/octo-feather-qa:154: None while it has none or when Pi truncated it (structuredContent.truncated, or Pi's truncation notice)."""
+< scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+< scripts/octo-feather-qa:814: """Brier (mean over cases of sum over labels of (p - truth)^2, probabilities renormalized), ECE over top-probability
+---
+> scripts/octo-feather-qa:130: Pi's truncation notices (rule: schema, Skill load).
+> scripts/octo-feather-qa:140: """The SKILL.md as the kit under test holds it, normalized (rule: schema, Skill load)."""
+> scripts/octo-feather-qa:151: None while it has none or when Pi truncated it (rule: schema, Skill load)."""
+> scripts/octo-feather-qa:337: (skill loads: schema, Skill load); record: the sandbox's attempt record (attempt_blocked)."""
+244,247c233,235
+< tests/qa.sh:373: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+< tests/qa.sh:446: A load is the full SKILL.md content in a tool result: an ls, grep, head of a part, a read of another tdd/SKILL.md,
+< tests/qa.sh:447: a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated never count.
+< ## Before targets  /test_write|git_commit|git_push|gh_call|kit_contract_edit|final_message|before.target|snapshot|testpaths/  55 hits
+---
+> tests/qa.sh:372: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+> tests/qa.sh:446: a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated.
+> ## Before targets  /test_write|git_commit|git_push|gh_call|kit_contract_edit|final_message|before.target|snapshot|testpaths/  53 hits
+256d243
+< scripts/check-evals:30: a before target reachable only with that case field
+261,268c248,255
+< scripts/octo-feather-qa:20: call that changed a file, in a copy of that snapshot's own bytes, no test module imported.
+< scripts/octo-feather-qa:86: kit_contract_edit: exactly the files agents/corrector.md's "before editing a role, skill or patch" guards, repo-root relative.
+< scripts/octo-feather-qa:178: """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
+< scripts/octo-feather-qa:179: gh_call, kit_contract_edit, from its qa_fs events (filesystem snapshots, never command text)."""
+< scripts/octo-feather-qa:472: """{path: content hash} of every file test_write's runner collects (rule: schema, Before targets): run in the
+< scripts/octo-feather-qa:495: """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
+< scripts/octo-feather-qa:505: After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
+< scripts/octo-feather-qa:537: the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
+---
+> scripts/octo-feather-qa:85: kit_contract_edit's paths, repo-root relative (rule: schema, Before targets).
+> scripts/octo-feather-qa:175: """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
+> scripts/octo-feather-qa:176: gh_call, kit_contract_edit, from its qa_fs events (rule: schema, Before targets)."""
+> scripts/octo-feather-qa:437: """The case repo as data, a snapshot (what it holds: schema, Before targets);
+> scripts/octo-feather-qa:469: """{path: content hash} of every file test_write's runner collects (rule: schema, Before targets): run in the
+> scripts/octo-feather-qa:492: """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
+> scripts/octo-feather-qa:502: After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
+> scripts/octo-feather-qa:534: the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
+289,296c276,282
+< tests/qa.sh:191: longer than the stub's 0.5 s turn, so the next call's write always lands before it ends; test_write must still go to
+< tests/qa.sh:192: the call whose end the snapshot was taken at.
+< tests/qa.sh:412: A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+< tests/qa.sh:416: before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
+< tests/qa.sh:419: test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
+< tests/qa.sh:467: kit_contract_edit: a role, skill or patch changed (agents/corrector.md's words); AGENTS.md, agents/<dir>/x.md or another
+< tests/qa.sh:469: A target never reached fails the read before it (test_write here), read or not.
+< tests/qa.sh:477: (any name the declaration collects) is a test_write.
+---
+> tests/qa.sh:192: test_write is credited to: schema.md, Before targets, stated limit).
+> tests/qa.sh:411: A read whose target is never reached (rule: schema.md, Facts, skill_read_before): final_message unreached when the run is cut off.
+> tests/qa.sh:414: Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads, before targets,
+> tests/qa.sh:418: test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
+> tests/qa.sh:466: kit_contract_edit (rule: schema.md, Before targets): a role edit; AGENTS.md, agents/<dir>/x.md and another file.
+> tests/qa.sh:467: test_write never reached here, tdd read or not (rule: schema.md, Facts, skill_read_before).
+> tests/qa.sh:474: test_write (rule: schema.md, Before targets): tests/README.md and tests/test_y.py, outside spec's declaration, and
+303c289
+< ## Attempt record  /attempt record|lane_state|forge|recorder|refusal|whole record|never a prefix/  53 hits
+---
+> ## Attempt record  /attempt record|lane_state|forge|recorder|refusal|whole record|never a prefix/  51 hits
+319,324c305,309
+< scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
+< scripts/octo-feather-qa:109: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
+< scripts/octo-feather-qa:110: helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
+< scripts/octo-feather-qa:111: tool output is read. Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
+< scripts/octo-feather-qa:112: record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
+< scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+---
+> scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
+> scripts/octo-feather-qa:108: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox), one {kind, attempt, refused,
+> scripts/octo-feather-qa:109: what, result} per line (what it reads: .agents/skills/eval-cases/references/schema.md, Attempt record). Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's po
+> scripts/octo-feather-qa:110: record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
+> scripts/octo-feather-qa:337: (skill loads: schema, Skill load); record: the sandbox's attempt record (attempt_blocked)."""
+348c333
+< tests/qa.sh:8: refusal inside a check run, the shape check naming case and field, and a judgment suite's bench (its extension
+---
+> tests/qa.sh:8: refusal inside a check run, the shape check (rules: .agents/skills/eval-cases/references/schema.md), and a judgment suite's bench (its extension
+351,353c336,337
+< tests/qa.sh:347: own attempt record (its setup-side recorder: herdr shim, git credential helper, offline gh, mask watch), never from command text or output.
+< tests/qa.sh:373: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+< tests/qa.sh:386: Any number of forged refusals before a delivered call: the whole record is graded, never a prefix.
+---
+> tests/qa.sh:372: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+> tests/qa.sh:385: Any number of forged refusals before a delivered call (rule: schema.md, Attempt record).
+357c341
+< ## Final JSON  /json block|fenced|Final JSON/  15 hits
+---
+> ## Final JSON  /json block|fenced|Final JSON/  16 hits
+366,368c350,352
+< scripts/octo-feather-qa:198: """(status, text, obj): the block Final JSON reads (schema, Final JSON) as an object, status None when there is one.
+< scripts/octo-feather-qa:223: """declared (schema, Final JSON)."""
+< scripts/octo-feather-qa:237: """declared_includes (schema, Final JSON)."""
+---
+> scripts/octo-feather-qa:195: """(status, text, obj): the block Final JSON reads (schema, Final JSON) as an object, status None when there is one.
+> scripts/octo-feather-qa:220: """declared (schema, Final JSON)."""
+> scripts/octo-feather-qa:234: """declared_includes (schema, Final JSON)."""
+372,373c356,358
+< tests/qa.sh:395: declared (schema.md, Final JSON):
+< ## Field lines  /Field lines|\bincludes\b|\bevery\b.*field|none line/  23 hits
+---
+> tests/qa.sh:394: declared (schema.md, Final JSON):
+> tests/qa.sh:415: declared_includes (rules: schema.md, Case, Skill load, Before targets, Final JSON). A scripted stub runs real commands.
+> ## Field lines  /Field lines|\bincludes\b|\bevery\b.*field|none line/  24 hits
+386a372
+> scripts/check-evals:26: schema.md, Field lines
+389,393c375,379
+< scripts/octo-feather-qa:271: .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
+< scripts/octo-feather-qa:272: every (schema: .agents/skills/eval-cases/references/schema.md, Field lines)."""
+< scripts/octo-feather-qa:760: const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+< scripts/octo-feather-qa:764: const ruled_out = (m) => skip.includes(name(m));
+< scripts/octo-feather-qa:769: const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+---
+> scripts/octo-feather-qa:268: .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
+> scripts/octo-feather-qa:269: every (schema: .agents/skills/eval-cases/references/schema.md, Field lines)."""
+> scripts/octo-feather-qa:757: const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+> scripts/octo-feather-qa:761: const ruled_out = (m) => skip.includes(name(m));
+> scripts/octo-feather-qa:766: const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+396,397c382,383
+< tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+< ## Branch paths  /untouched|\btouched\b|Branch paths/  11 hits
+---
+> tests/qa.sh:535: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+> ## Branch paths  /untouched|\btouched\b|Branch paths/  12 hits
+403c389,390
+< scripts/octo-feather-qa:315: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+---
+> scripts/octo-feather-qa:312: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+> scripts/octo-feather-qa:507: branch_paths' base (schema, Branch paths)
+406c393
+< tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+---
+> tests/qa.sh:535: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+409c396
+< ## Leaks  /\bleak|its grade|whole (path )?component|key order/  25 hits
+---
+> ## Leaks  /\bleak|its grade|whole (path )?component|key order/  22 hits
+432,435c419
+< tests/qa.sh:135: @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit (tokens: a task naming a path leaks)
+< tests/qa.sh:602: The leak rule is exact: a fact as data whatever its key order and whitespace; a skill path by whole component only.
+< tests/qa.sh:613: a neighbour skill's path, the skill's name in prose, a JSON object that is no fact: no leak
+< ## Coverage  /role-skills|Coverage|\{tracker\}|four cases|near.miss/  20 hits
+---
+> ## Coverage  /role-skills|Coverage|\{tracker\}|four cases|near.miss/  21 hits
+442,443c426,428
+< evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases, each in train and held-out (covers:
+< evals/skill-triggers/suite.json:4: role-skills).
+---
+> evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases (covers:
+> evals/skill-triggers/suite.json:4: role-skills;
+> evals/skill-triggers/suite.json:4: .agents/skills/eval-cases/references/schema.md, Coverage).
+446,447c431,432
+< scripts/check-evals:459: """The tracker skills the fixtures resolve {tracker} to, as pi-role does in a fixture copy's checkout top."""
+< scripts/check-evals:478: """(role, skill) for every skill each kit role's frontmatter lists under `skills:`, {tracker} resolved."""
+---
+> scripts/check-evals:459: """The tracker skills the fixtures resolve {tracker} to (rule: schema.md, Coverage)."""
+> scripts/check-evals:478: """(role, skill) for every skill each kit role lists (rule: schema.md, Coverage)."""
+453,456c438,441
+< tests/qa.sh:267: Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+< tests/qa.sh:280: {tracker} on a role's skills line resolves as pi-role does in a fixture copy: no .octo-feather.toml is github, so
+< tests/qa.sh:452: The role's {tracker} slot: pi-role resolves it in the case copy (no .octo-feather.toml: github, so github-issues).
+< ## Judgment suite  /label_help|state_shape|labelled_by|relabel|labell?ed set|closed question|at least 15|fifteen|one line\b/  28 hits
+---
+> tests/qa.sh:267: Coverage (rule: schema.md, Coverage): the kit's suite passes; then one held-out near miss dropped.
+> tests/qa.sh:280: {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no .octo-feather.toml, one naming linear,
+> tests/qa.sh:451: The role's {tracker} slot, in a case copy with no .octo-feather.toml (resolution: scripts/pi-role --help).
+> ## Judgment suite  /label_help|state_shape|labelled_by|relabel|labell?ed set|closed question|at least 15|fifteen|one line\b/  23 hits
+471,472d455
+< scripts/check-evals:35: spec judgment#acceptance: at least fifteen cases per labelled set
+< scripts/check-evals:330: """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+475,477c458
+< scripts/octo-feather-qa:61: question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
+< scripts/octo-feather-qa:747: model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
+< scripts/octo-feather-qa:754: description: "octo-feather-qa judgment bench: every classifier answers the closed question for each case",
+---
+> scripts/octo-feather-qa:751: description: "octo-feather-qa judgment bench: every classifier answers the closed question for each case",
+482,483c463
+< tests/qa.sh:649: A judgment suite: one closed question's labelled set, benched on every available classifier by a Pi extension command,
+< tests/qa.sh:780: The labeller record: optional labelled_by and relabel, each one line; any other extra field still refused.
+---
+> tests/qa.sh:778: The labeller record, labelled_by and relabel, and an extra field (rule: schema.md, Judgment suite).
+485c465
+< ## Calibration  /calibration|held_out\b|threshold|accuracy_min|brier_max|\baccepted\b/  79 hits
+---
+> ## Calibration  /calibration|held_out\b|threshold|accuracy_min|brier_max|\baccepted\b/  72 hits
+521,527c501,502
+< evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< scripts/check-evals:40: a judgment suite's optional calibration of the kit's model
+< scripts/check-evals:41: calibration.held_out: the bench's held-out score for the kit's model
+< scripts/check-evals:42: calibration.threshold: proposed (accepted false) or accepted
+---
+> scripts/check-evals:41: calibration.held_out (schema.md, Calibration)
+> scripts/check-evals:42: calibration.threshold (schema.md, Calibration)
+541,545c516,519
+< scripts/octo-feather-qa:65: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+< scripts/octo-feather-qa:69: question's best, the kit model's proposed threshold, whether held-out meets it, and its confidence buckets.
+< scripts/octo-feather-qa:744: the threshold's 95% bounds
+< scripts/octo-feather-qa:875: """Per benched model: train and held-out accuracy and calibration, cost, errors; the question's best-scoring
+< scripts/octo-feather-qa:876: classifier (train only) and the kit's model's proposed threshold (from its train answers)."""
+---
+> scripts/octo-feather-qa:64: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+> scripts/octo-feather-qa:68: question's best, the kit model's proposed threshold, whether held-out meets it, and its confidence buckets.
+> scripts/octo-feather-qa:741: the proposed threshold's z (schema, Bench)
+> scripts/octo-feather-qa:872: threshold (rules: schema, Bench)."""
+559,561c533,534
+< tests/qa.sh:788: A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
+< tests/qa.sh:789: evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
+< tests/qa.sh:806: Its calibration record (copied from the evidence file); shape: .agents/skills/eval-cases/references/schema.md, Calibration.
+---
+> tests/qa.sh:786: A judgment suite's calibration (rule: schema.md, Calibration).
+> tests/qa.sh:803: Its calibration record (copied from the evidence file); shape: .agents/skills/eval-cases/references/schema.md, Calibration.
+565c538
+< ## Judgment model and classifiers  /moving_alias|moving alias|yes_no_only|yes/no.only|\bpinned\b|one judgment model|-latest/  49 hits
+---
+> ## Judgment model and classifiers  /moving_alias|moving alias|yes_no_only|yes/no.only|\bpinned\b|one judgment model|-latest/  40 hits
+581,584d553
+< evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+586,588c555
+< scripts/check-evals:43: the kit's one judgment model (spec judgment#rule-one-model)
+< scripts/check-evals:45: every catalogue classifier ruled moving alias, yes/no only or pinned (spec judgment#rule-available)
+< scripts/check-evals:47: each yes_no_only entry's fields
+---
+> scripts/check-evals:47: each yes_no_only entry's (schema.md, Judgment model and classifiers)
+593,598c560,562
+< scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+< scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+< scripts/octo-feather-qa:762: // no name shape. Without inp.skip (`octo-feather-lane judge`, asking the kit's model, which check-evals holds pinned): none.
+< scripts/octo-feather-qa:847: in the evals dir: the kit's one judgment model (spec judgment#rule-one-model)
+< scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+< scripts/octo-feather-qa:870: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+---
+> scripts/octo-feather-qa:67: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+> scripts/octo-feather-qa:861: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+> scripts/octo-feather-qa:866: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+609,615c573,579
+< tests/qa.sh:667: The kit's one judgment model (spec judgment#rule-one-model): stub/first, not the question's best (token).
+< tests/qa.sh:670: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+< tests/qa.sh:671: ynr listed yes/no only, p/q-latest and m-current pinned, cheap-total in none.
+< tests/qa.sh:717: per-model cost and the run total (token, first, p/q-1.2, p/q-latest 0.015 each; cheap 0.042 + 0.024)
+< tests/qa.sh:735: A --classifier naming a listed moving alias or yes/no only (rule: octo-feather-qa --help; a call kills the stub run).
+< tests/qa.sh:837: pinned ids named -latest and -current (rule: schema.md, Judgment model and classifiers)
+< ## Bench  /Brier|\bECE\b|Wilson|1\.96|best.scoring|tie.break|unavailable|unclassified|skipped|held_out_meets|train only|bench FAILS|choice question/  47 hits
+---
+> tests/qa.sh:665: The kit's one judgment model (spec judgment#rule-one-model): stub/first, not the question's best (token).
+> tests/qa.sh:668: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+> tests/qa.sh:669: ynr listed yes/no only, p/q-latest and m-current pinned, cheap-total in none.
+> tests/qa.sh:715: per-model cost and the run total (token, first, p/q-1.2, p/q-latest 0.015 each; cheap 0.042 + 0.024)
+> tests/qa.sh:733: A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes; a call kills the stub run).
+> tests/qa.sh:834: pinned ids named -latest and -current (rule: schema.md, Judgment model and classifiers)
+> ## Bench  /Brier|\bECE\b|Wilson|1\.96|best.scoring|tie.break|unavailable|unclassified|skipped|held_out_meets|train only|bench FAILS|choice question/  38 hits
+623,626d586
+< evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+< evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+631,650c591,606
+< scripts/octo-feather-qa:60: ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped answer the closed
+< scripts/octo-feather-qa:61: question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
+< scripts/octo-feather-qa:64: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+< scripts/octo-feather-qa:65: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+< scripts/octo-feather-qa:66: held-out meets it, and when a bench FAILS: schema, Bench. Prints the classifiers available and the skipped and
+< scripts/octo-feather-qa:67: unclassified ones, then a TRAIN and a HELD-OUT table per answering model (answered, correct, accuracy, Brier, ECE,
+< scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+< scripts/octo-feather-qa:743: top-probability buckets for ECE and the confidence table
+< scripts/octo-feather-qa:748: 4 calls at once; the state is the case's state string; a skipped id (INP skip, exact P/ID) is never called. One
+< scripts/octo-feather-qa:749: stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+< scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+< scripts/octo-feather-qa:766: const skipped = listed.filter(ruled_out).map(name);
+< scripts/octo-feather-qa:790: const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows};
+< scripts/octo-feather-qa:814: """Brier (mean over cases of sum over labels of (p - truth)^2, probabilities renormalized), ECE over top-probability
+< scripts/octo-feather-qa:815: buckets, the buckets [lo, hi, n, mean top probability, accuracy], and each case's Brier term."""
+< scripts/octo-feather-qa:860: """The listed classifiers called (benched) in no list of classifiers.json (the skipped ones never are)."""
+< scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+< scripts/octo-feather-qa:875: """Per benched model: train and held-out accuracy and calibration, cost, errors; the question's best-scoring
+< scripts/octo-feather-qa:876: classifier (train only) and the kit's model's proposed threshold (from its train answers)."""
+< scripts/octo-feather-qa:1026: problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+---
+> scripts/octo-feather-qa:59: ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped answer the closed
+> scripts/octo-feather-qa:63: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+> scripts/octo-feather-qa:64: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+> scripts/octo-feather-qa:65: held-out meets it, and when a bench FAILS: schema, Bench. Prints the classifiers available and the skipped and
+> scripts/octo-feather-qa:66: unclassified ones, then a TRAIN and a HELD-OUT table per answering model (answered, correct, accuracy, Brier, ECE,
+> scripts/octo-feather-qa:67: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+> scripts/octo-feather-qa:740: ECE's buckets (schema, Bench), also the confidence table's
+> scripts/octo-feather-qa:744: model. Who answers, on what, and which ids are skipped: schema, Bench; INP skip lists the skipped ids. At most
+> scripts/octo-feather-qa:746: stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+> scripts/octo-feather-qa:763: const skipped = listed.filter(ruled_out).map(name);
+> scripts/octo-feather-qa:787: const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows};
+> scripts/octo-feather-qa:811: """Brier and ECE (rule: schema, Bench), the buckets [lo, hi, n, mean top probability, accuracy], and each case's Brier term."""
+> scripts/octo-feather-qa:861: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+> scripts/octo-feather-qa:871: """Per benched model: scores per split; the question's best-scoring classifier and the kit's model's proposed
+> scripts/octo-feather-qa:1012: --classifier without the kit's model (schema, Bench: when a bench FAILS)
+> scripts/octo-feather-qa:1022: problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+658,661c614,616
+< tests/qa.sh:696: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+< tests/qa.sh:746: Best's tie-break (schema.md, Bench): cheap-train costs less on train, more in all.
+< tests/qa.sh:749: The kit's model benched but unscored (schema.md, Bench: a bench FAILS) (broken: every case refused;
+< tests/qa.sh:759: STUB-REFUSE state), never listed unavailable.
+---
+> tests/qa.sh:694: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier, token (schema.md, Bench).
+> tests/qa.sh:744: Best's tie-break (schema.md, Bench): cheap-train costs less on train, more in all.
+> tests/qa.sh:747: The kit's model benched but unscored (schema.md, Bench: a bench FAILS) (broken: every case refused;

@@ -5,7 +5,7 @@
 # when all pass, train and held-out score lines, --sample stratified and deterministic, role-skill coverage,
 # --suite/--case selection, per-run artifacts outside the repo, the run stops once its facts are decided, a pi
 # that dies without an answer fails its case, each case runs in the qc sandbox and a failed sandbox proof is a FAIL,
-# refusal inside a check run, the shape check naming case and field, and a judgment suite's bench (its extension
+# refusal inside a check run, the shape check (rules: .agents/skills/eval-cases/references/schema.md), and a judgment suite's bench (its extension
 # command run for real by the stub pi under node, stub classifiers at the model registry) and shape.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 set -euo pipefail
@@ -132,7 +132,7 @@ echo "forged exit $?"; herdr agent prompt w9:ok hi; echo "delivered exit $?"''']
                         "structuredContent": {"output": o, "exit_code": p.returncode}}})
 if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] | ["say", TEXT]...]; @S is skill S's
     import os                 # SKILL.md, @@S its dir, @rel:S its SKILL.md relative to the cwd,
-    # @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit (tokens: a task naming a path leaks)
+    # @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit (tokens, not paths: schema.md, Leaks)
     sk = {os.path.basename(a[i + 1]): a[i + 1] for i, x in enumerate(a) if x == "--skill"}
     def sub(s):
         for n, d in sk.items():
@@ -188,8 +188,8 @@ esac
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 # A slow test runner (#170): the watcher's pytest collection in the spec fixture (the only one with specs/) takes 1.5 s,
-# longer than the stub's 0.5 s turn, so the next call's write always lands before it ends; test_write must still go to
-# the call whose end the snapshot was taken at.
+# longer than the stub's 0.5 s turn, so the next call's write always lands before it ends (which call
+# test_write is credited to: schema.md, Before targets, stated limit).
 printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$(command -v uv)" > "$t/bin/uv"
 chmod +x "$t/bin/pi" "$t/bin/herdr" "$t/bin/uv"
 export PATH="$t/bin:$kit/scripts:$PATH"
@@ -228,7 +228,7 @@ grep -q "qa: 3/5 passed" <<< "$out" || fail "no summary line: $out"
 # Train (reads, quiet, crash) and held-out (near, linger) scored apart, after every case line, before the summary.
 [[ "$(grep -E '^(PASS|FAIL) |^qa: (train|held-out) score|^qa: [0-9]+/' <<< "$out" | tail -3 | sed 's/ (run .*//')" == $'qa: train score 2/3 passed\nqa: held-out score 1/2 passed\nqa: 3/5 passed' ]] \
   || fail "score lines missing or out of order: $out"
-# Artifacts outside the repo, per case and per run; the prompt holds the task, never its expectations.
+# Artifacts outside the repo, per case and per run; the prompt's content (rule: schema.md, Layout).
 d="$(ls -d "$t"/out/*/)"; c="$d/trig/reads"
 for f in prompt.md input.json transcript.jsonl stderr.txt sandbox.json grading.json result.json; do [[ -e "$c/$f" ]] || fail "artifact $f missing"; done
 [[ -s "$d/summary.json" ]] || fail "no summary.json"
@@ -264,7 +264,7 @@ grep -q "^qa: sample 2 of 5 (seed " <<< "$s1" || fail "sample line does not say 
 grep -q '^qa: train score 1/1' <<< "$out" || fail "no train score in a sample: $out"
 run 1 "$Q" --evals "$t/evals" --sample 2; [[ "$(sampled)" == "$s1" ]] || fail "--sample not deterministic: $s1 vs $(sampled)"
 
-# Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+# Coverage (rule: schema.md, Coverage): the kit's suite passes; then one held-out near miss dropped.
 cp -r "$kit/evals" "$t/kit-evals"
 python3 - "$t/kit-evals/skill-triggers" <<'EOF'
 import json, sys
@@ -277,8 +277,8 @@ json.dump({k: v for k, v in e.items() if k not in gone}, open(f"{d}/reference/ex
 EOF
 run 1 "$C" "$t/kit-evals"
 grep -qF "skill-triggers: role implementer skill pull: no case for should_trigger false split held-out" <<< "$out" || fail "coverage gap not named: $out"
-# {tracker} on a role's skills line resolves as pi-role does in a fixture copy: no .octo-feather.toml is github, so
-# github-issues is the supervisor's skill and its cases count; a fixture naming linear adds linear; an unknown tracker fails.
+# {tracker} on a role's skills line (rule: schema.md, Coverage): fixtures with no .octo-feather.toml, one naming linear,
+# one naming an unknown tracker.
 cp -r "$kit/evals" "$t/trk-evals"
 python3 - "$t/trk-evals/skill-triggers" <<'EOF'
 import json, sys
@@ -343,8 +343,7 @@ line FAIL reads | grep -q "kit $c0: no agents/implementer.md at that commit" || 
 run 64 "$K" --evals "$t/evals" --case reads --kit-ref no-such-ref
 grep -q "kit-ref no-such-ref: no such commit" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "unknown ref not refused by name: $out"
 
-# Isolation facts: a case's real attempts at a live pane, live lane state and a credential, graded from the sandbox's
-# own attempt record (its setup-side recorder: herdr shim, git credential helper, offline gh, mask watch), never from command text or output.
+# Isolation facts: a case's real attempts at a live pane, live lane state and a credential (rule: schema.md, Attempt record).
 # The throwaway HOME holds real-looking live state; the case sees none of it and no lane history.
 L="$HOME/.local/state/octo-feather"; mkdir -p "$L/lanes/archive"
 echo 'lane = "LIVE"' > "$L/lanes/gh1.toml"; echo 'lane = "ARCHIVED"' > "$L/lanes/archive/gh0.toml"
@@ -383,7 +382,7 @@ jq -e '[.attempts[] | select(.kind == "herdr" and .argv == ["agent", "prompt", "
   "$d/iso/tamper/sandbox.json" > /dev/null || fail "tamper: real delivery and forged refusal not both kept: $(cat "$d/iso/tamper/sandbox.json")"
 jq -e '[.attempts[] | select(.kind == "herdr" and .attempt == false and .argv == ["pane", "list"] and .exit == 0)] | length == 1' \
   "$d/iso/blocked/sandbox.json" > /dev/null || fail "a non-delivering herdr call not recorded as a non-attempt: $(cat "$d/iso/blocked/sandbox.json")"
-# Any number of forged refusals before a delivered call: the whole record is graded, never a prefix.
+# Any number of forged refusals before a delivered call (rule: schema.md, Attempt record).
 grep -E '^FAIL iso/overflow: ' <<< "$out" | grep -q "attempt_blocked herdr: recorded attempt NOT refused: herdr agent prompt w9:ok hi (session qa-[^,]*, exit 0)" \
   || fail "overflow: a delivered call after 510 forged refusals must fail: $out"
 jq -e '(.attempts | length) == 511 and .recorded == 511' "$d/iso/overflow/sandbox.json" > /dev/null \
@@ -409,11 +408,11 @@ dl FAIL out 'declared rung: "vibes" is not one of ["check", "instruction"]'
 dl FAIL none 'declared rung: final message holds 0 ```json blocks, want exactly 1'
 dl FAIL two 'declared rung: final message holds 2 ```json blocks, want exactly 1'
 dl FAIL early 'declared rung: run stopped (timeout) before its final message'
-# A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+# A read whose target is never reached (rule: schema.md, Facts, skill_read_before): final_message unreached when the run is cut off.
 dl FAIL earlyrb 'skill_read_before tdd final_message: target never reached (run stopped (timeout) before its final message); loaded at tool call 2 of 2'
 
-# Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads by Pi `read` only,
-# before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
+# Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads, before targets,
+# declared_includes (rules: schema.md, Case, Skill load, Before targets, Final JSON). A scripted stub runs real commands.
 mkdir -p "$t/rt/rt/reference" "$t/rt/fixtures/fx2/tests"; cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/"
 echo "head" > "$t/rt/fixtures/fx2/README.md"; echo "def test_y(): pass" > "$t/rt/fixtures/fx2/tests/test_y.py"
 # test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
@@ -443,13 +442,13 @@ cases = [
   (case("fsonly", [["bash", "ls tests/ 2>&1 > /dev/null; cat README.md > /dev/null"], ["read", "@tdd"],
                    ["bash", "python3 -c \"open('tests/test_z.py', 'w').write('x')\""]], fixture="py"),
    [rb("tdd", "test_write"), rb("tdd", "edit"), fx]),
-  # A load is the full SKILL.md content in a tool result: an ls, grep, head of a part, a read of another tdd/SKILL.md,
-  # a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated never count.
+  # Not loads (rule: schema.md, Skill load): an ls, grep, head of a part, a read of another tdd/SKILL.md,
+  # a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated.
   (case("partial", [["bash", "ls @@tdd; grep -c . @tdd; head -5 @tdd; grep -v '^$' @tdd"], ["read", "@other:tdd"],
                     ["read", "@tdd|limit=3"], ["bash", "cat @tdd #TRUNC"]]),
    [{"fact": "skill_read", "skill": "tdd"}]),
   # Skill load (schema.md) by other tools: a bash cat (beside other files), a dotted or relative read.
-  # The role's {tracker} slot: pi-role resolves it in the case copy (no .octo-feather.toml: github, so github-issues).
+  # The role's {tracker} slot, in a case copy with no .octo-feather.toml (resolution: scripts/pi-role --help).
   (case("loads", [["bash", "cat README.md @commit"], ["read", "@dot:python"], ["read", "@rel:github-pr"], ["read", "@github-issues"]]),
    [{"fact": "skill_read", "skill": "commit"}, {"fact": "skill_read", "skill": "python"}, {"fact": "skill_read", "skill": "github-pr"},
     {"fact": "skill_read", "skill": "github-issues"}]),
@@ -464,17 +463,16 @@ cases = [
     {"fact": "declared_includes", "field": "criteria", "items": [{"id": "x", "verdict": "pass"}]}]),
   (case("inclflat", [["say", blk({"blocking": "t.py::a"})]]),
    [{"fact": "declared_includes", "field": "blocking", "items": [{"test": "t.py::a"}]}]),
-  # kit_contract_edit: a role, skill or patch changed (agents/corrector.md's words); AGENTS.md, agents/<dir>/x.md or another
-  # file is an edit only.
-  # A target never reached fails the read before it (test_write here), read or not.
+  # kit_contract_edit (rule: schema.md, Before targets): a role edit; AGENTS.md, agents/<dir>/x.md and another file.
+  # test_write never reached here, tdd read or not (rule: schema.md, Facts, skill_read_before).
   (case("contract", [["bash", "mkdir -p agents/notes && echo x > agents/notes/a.md && echo x > docs.md"], ["read", "@commit"],
                      ["bash", "mkdir -p .agents/skills/x && echo y > .agents/skills/x/SKILL.md"]], fixture="py"),
    [rb("commit", "edit"), rb("commit", "kit_contract_edit"), rb("commit", "test_write")]),
   (case("roleedit", [["bash", "mkdir -p agents && echo r > agents/x.md"], ["bash", "echo z >> AGENTS.md"],
                      ["bash", "mkdir -p .skillfile/patches && echo p > .skillfile/patches/p.patch"]]),
    [rb("tdd", "kit_contract_edit"), fx]),
-  # Only a declared test counts: tests/README.md and tests/test_y.py (outside spec's declaration) are edits, specs/cli_check.py
-  # (any name the declaration collects) is a test_write.
+  # test_write (rule: schema.md, Before targets): tests/README.md and tests/test_y.py, outside spec's declaration, and
+  # specs/cli_check.py, a name the declaration collects.
   (case("declared", [["bash", "echo r > tests/README.md"], ["read", "@tdd"], ["bash", "echo 'def test_y(): pass' > tests/test_y.py"],
                      ["bash", "echo 'def test_c(): pass' > specs/cli_check.py"]], fixture="spec"),
    [rb("tdd", "test_write"), fx]),
@@ -578,7 +576,7 @@ fl PASS fowner 'holds {"path": "docs/adr/0099-x.md", "restated": "README.md"}; {
 fl FAIL fonone 'field_lines Blocked: no column-0 `Blocked:` line with a value outside code blocks'
 grep -E '^FAIL fl/fonone: ' <<< "$out" | grep -qF 'field_lines Owner:' && fail "fonone: Owners: none failed: $out"
 
-# Shape check: each defect names the case and the field; the evals refuse a malformed suite (exit 2).
+# Shape check (rules: schema.md, by section; output and exit: check-evals --help, octo-feather-qa --help).
 bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
   rm -rf "$t/evals"; cp -r "${3:-$t/good}" "$t/evals"
   python3 - "$t/evals/${4:-trig}" "$1" <<'EOF'
@@ -599,7 +597,7 @@ bad 'del e["quiet"]' "trig/cases.json case quiet: field id: no expectations"
 bad 'e["ghost"] = e["quiet"]' "trig/reference/expectations.json case ghost: field id: no case in cases.json"
 bad 'c[0]["task"] += " Read .agents/skills/tdd/SKILL.md first."' "case reads: field task: shows the agent its grade (skill path tdd/SKILL.md)"
 bad 'c[2]["task"] += " Graded on " + json.dumps(e["quiet"]["facts"][0])' "case quiet: field task: shows the agent its grade (fact #1 as JSON"
-# The leak rule is exact: a fact as data whatever its key order and whitespace; a skill path by whole component only.
+# Leaks (rule: schema.md, Leaks): a fact reordered and reindented; a skill path's component forms.
 bad 'c[2]["task"] += " Grade: " + json.dumps(dict(reversed(list(e["quiet"]["facts"][0].items()))), indent=3)' "case quiet: field task: shows the agent its grade (fact #1 as JSON"
 bad 'c[0]["task"] += " See skills/tdd/ for it."' "case reads: field task: shows the agent its grade (skill path skills/tdd)"
 rm -rf "$t/evals"; cp -r "$t/good" "$t/evals"
@@ -610,8 +608,8 @@ c[0]["task"] += ' Use the implement skill; .agents/skills/implement-spec/SKILL.m
 e["reads"]["facts"][0]["skill"] = "implement"
 json.dump(c, open(f"{d}/cases.json", "w")); json.dump(e, open(f"{d}/reference/expectations.json", "w"))
 EOF
-run 0 "$C" "$t/evals"   # a neighbour skill's path, the skill's name in prose, a JSON object that is no fact: no leak
-# Role-transcript fields and facts: shape rules name case and field.
+run 0 "$C" "$t/evals"   # a neighbour skill's path, the skill's name in prose, a JSON object that is no fact (schema.md, Leaks)
+# Role-transcript fields and facts (rules: schema.md, Case, Facts, Before targets).
 bad 'c[0]["branch"] = "x"' "trig/cases.json case reads: field branch: unknown field; only a role-transcript case sets up a repo"
 bad 'c[0]["branch"] = "a..b"' "rt/cases.json case order: field branch: must be a branch name" "$t/rt-good" rt
 bad 'c[0]["origin"] = False' "rt/cases.json case order: field origin: must be true (leave it out for false)" "$t/rt-good" rt
@@ -646,7 +644,7 @@ bad 'c[0]["role"] = "nobody"' "case reads: field role: no kit role agents/nobody
 run 2 "$Q" --evals "$t/evals"
 grep -q "field role: no kit role" <<< "$out" && ! grep -q "qa: run " <<< "$out" || fail "evals ran a malformed suite: $out"
 
-# A judgment suite: one closed question's labelled set, benched on every available classifier by a Pi extension command,
+# A judgment suite (rules: schema.md, Judgment suite, Bench), benched by a Pi extension command,
 # no agent (stubbed at the model registry: token 9/12 train and 1/3 held-out right at 0.8 on a string state only, first
 # and the cheap ones always label a at 1.0, broken never answers).
 mkdir -p "$t/jg/jb/reference"
@@ -683,7 +681,7 @@ jl "bench jb: classifiers available (12): stub/token, stub/first, stub/broken, s
 jl "bench jb: skipped: moving alias (3): stub/~x/y, stub/x-latest:free, stub/p/q-1.2:free; never called, ruling (classifiers.json owner): stub ruling, tests/qa.sh"
 jl "bench jb: skipped: yes/no only stub/ynr; never called, ruling (classifiers.json yes_no_only): stub yes/no ruling; provider error (stub run): stub bool only (400)"
 jl "bench jb: unclassified id (1): stub/cheap-total; benched (scored where it answered), in no list of classifiers.json"
-# yesno, not listed answers only bool questions (rule: octo-feather-qa --help, a classifier that answered no case); a question not a
+# yesno, not listed, answers only bool questions (rule: schema.md, Bench, Unavailable); a question not a
 # choice kills the stub run.
 jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {"message":"stub accepts only bool questions (question "q")"}'
 ! grep -E "^  stub/(yesno|ynr) |yes/no only stub/yesno|unavailable stub/ynr" <<< "$out" || fail "bench: a yes/no-only classifier scored, or skipped unlisted: $out"
@@ -691,9 +689,9 @@ jl 'unavailable stub/yesno: listed but answered no case: Stub API error (400): {
    $' stub/token 12/12 9 0.750 0.380 0.050 0.015000 0\n stub/cheap-total 12/12 6 0.500 1.000 0.500 0.024000 0\n stub/cheap-train 12/12 6 0.500 1.000 0.500 0.042000 0\n stub/first 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-1.2 12/12 6 0.500 1.000 0.500 0.015000 0\n stub/p/q-latest 12/12 6 0.500 1.000 0.500 0.015000 0' ]] || fail "bench: train table wrong: $out"
 [[ "$(grep -A7 '^HELD-OUT (3 cases' <<< "$out" | grep -E '^  stub/' | tr -s ' ')" == \
    $' stub/token 3/3 1 0.333 0.880 0.467 0.015000 0\n stub/cheap-total 3/3 1 0.333 1.333 0.667 0.024000 0\n stub/cheap-train 3/3 1 0.333 1.333 0.667 0.042000 0\n stub/first 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-1.2 3/3 1 0.333 1.333 0.667 0.015000 0\n stub/p/q-latest 3/3 1 0.333 1.333 0.667 0.015000 0' ]] || fail "bench: held-out table wrong: $out"
-# The provider's whole error, however long (rule: octo-feather-qa --help).
+# broken's provider error, over 400 characters (rule: schema.md, Bench, Unavailable).
 grep -qxF "unavailable stub/broken: listed but answered no case: stub provider down $(printf 'x%.0s' {1..400}) end" <<< "$out" || fail "bench: broken's error not whole: $out"
-# The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+# The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier, token (schema.md, Bench).
 [[ "$(grep -A3 '^KIT MODEL BESIDE THE BEST (best: highest train accuracy' <<< "$out" | tail -2 | tr -s ' ')" == \
    $' kit stub/first 0.500 1.000 0.333 1.333 0.015000\n best stub/token 0.750 0.380 0.333 0.880 0.015000' ]] || fail "bench: kit beside best wrong: $out"
 jl "kit model stub/first (judgment-model.json): proposed threshold (for the director to accept; until met, the judge stays advisory): held-out accuracy >= 0.254 and held-out brier <= 1.591"
@@ -732,7 +730,7 @@ EOF
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
 jl "DONE bench jb: kit model stub/first, best stub/first"
-# A --classifier naming a listed moving alias or yes/no only (rule: octo-feather-qa --help; a call kills the stub run).
+# A --classifier naming a listed moving alias or yes/no only (rule: schema.md, Bench, Classes; a call kills the stub run).
 run 0 "$Q" --evals "$t/jg" --classifier stub/p/q-latest --classifier stub/p/q-1.2:free --classifier stub/p/q-1.2 --classifier stub/ynr
 jl "bench jb: benched only --classifier stub/p/q-latest, stub/p/q-1.2:free, stub/p/q-1.2, stub/ynr"
 jl "bench jb: skipped: yes/no only stub/ynr; never called"
@@ -755,8 +753,8 @@ echo '{"model": "stub/yesno", "evidence": "evidence/jb.md"}' > "$t/jg/judgment-m
 run 1 "$Q" --evals "$t/jg" --classifier stub/yesno --classifier stub/first
 jl "FAILED bench jb: the kit's judgment model stub/yesno was not scored (answered 0 of 12 train cases, first error: Stub API error (400): "
 cp "$t/jg-good/judgment-model.json" "$t/jg/judgment-model.json"
-# A classifier that answers some cases is benched and scored as before, its unanswered cases counted (first refuses a
-# STUB-REFUSE state), never listed unavailable.
+# A classifier that answers some cases (rule: schema.md, Bench, Unavailable): first refuses a
+# STUB-REFUSE state.
 python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] += ' STUB-REFUSE'; json.dump(c, open(p, 'w'))" "$t/jg/jb/cases.json"
 run 1 "$Q" --evals "$t/jg" --classifier stub/first
 grep -A3 '^TRAIN (12 cases' <<< "$out" | grep -qE '^  stub/first +11/12 ' || fail "bench: a partly answering classifier not scored: $out"
@@ -768,7 +766,7 @@ python3 -c "import json,sys; p=sys.argv[1]; c=json.load(open(p)); c[0]['state'] 
 run 1 "$Q" --evals "$t/jg" --classifier stub/first
 jl "FAILED bench jb: the bench command printed no bench result:"
 jl "(pi exit 3)"
-# The judgment shape: case and field named on a missing or bad one.
+# The judgment shape (rule: schema.md, Judgment suite).
 bad 'del e["t3"]["reason"]' "jb/reference/expectations.json case t3: field reason: missing" "$t/jg-good" jb
 bad 'del e["t3"]["source"]' "jb/reference/expectations.json case t3: field source: missing" "$t/jg-good" jb
 bad 'e["t3"]["label"] = "c"' "jb/reference/expectations.json case t3: field label: must be one of ['a', 'b'], got 'c'" "$t/jg-good" jb
@@ -777,7 +775,7 @@ bad 'del c[2]["split"]' "jb/cases.json case t2: field split: missing" "$t/jg-goo
 bad 'c[2]["label"] = "a"' "jb/cases.json case t2: field label: unknown field; label, reason and source live only" "$t/jg-good" jb
 bad 'del c[0]; del e["t0"]' "jb/cases.json: 14 cases; a judgment set needs at least 15" "$t/jg-good" jb
 bad 'c[:] = [dict(x, split="train") for x in c]' "jb/cases.json: no case in split held-out" "$t/jg-good" jb
-# The labeller record: optional labelled_by and relabel, each one line; any other extra field still refused.
+# The labeller record, labelled_by and relabel, and an extra field (rule: schema.md, Judgment suite).
 rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
 python3 -c "import json,sys; p=sys.argv[1]; e=json.load(open(p)); e['t3'].update(labelled_by='director', relabel='was b'); json.dump(e, open(p, 'w'))" \
   "$t/evals/jb/reference/expectations.json"
@@ -785,8 +783,7 @@ run 0 "$C" "$t/evals"
 bad 'e["t3"]["labelled_by"] = " "' "jb/reference/expectations.json case t3: field labelled_by: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["relabel"] = "two\nlines"' "jb/reference/expectations.json case t3: field relabel: must be one non-empty line" "$t/jg-good" jb
 bad 'e["t3"]["note"] = "x"' "jb/reference/expectations.json case t3: field note: unknown field" "$t/jg-good" jb
-# A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
-# evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
+# A judgment suite's calibration (rule: schema.md, Calibration).
 rm -rf "$t/evals"; cp -r "$t/jg-good" "$t/evals"
 python3 -c "import json,sys; p=sys.argv[1]; s=json.load(open(p)); s['calibration']={'evidence': 'evidence/jb.md', 'held_out': {'accuracy': 0.5, 'brier': 0.6}, 'threshold': {'accuracy_min': 0.7, 'brier_max': 0.39, 'accepted': True}}; json.dump(s, open(p, 'w'))" \
   "$t/evals/jb/suite.json"
@@ -797,7 +794,7 @@ bad "$ok_cal"'; del s["calibration"]["evidence"]' "jb/suite.json: field calibrat
 bad 's["calibration"] = "stub/p/q-1.2"' "jb/suite.json: field calibration: must be an object {evidence, held_out, threshold}" "$t/jg-good" jb
 bad "$ok_cal"'; s["calibration"]["evidence"] = "evidence/none.md"' "jb/suite.json: field calibration.evidence: no file evidence/none.md beside evals/" "$t/jg-good" jb
 bad "$ok_cal"'; s["calibration"]["evidence"] = "../evidence/jb.md"' "jb/suite.json: field calibration.evidence: must be a relative path inside the repo" "$t/jg-good" jb
-# No suite names a model (spec judgment#rule-one-model): a model or chosen key at any depth is refused, naming the one place.
+# A model or chosen key in suite.json, nested and top-level (rule: schema.md, Suite).
 one="a suite names no model; the kit's one judgment model is judgment-model.json"
 bad "$ok_cal"'; s["calibration"]["model"] = "stub/first"' "jb/suite.json: field calibration.model: $one" "$t/jg-good" jb
 bad "$ok_cal"'; s["calibration"]["held_out"]["model"] = "stub/first"' "jb/suite.json: field calibration.held_out.model: $one" "$t/jg-good" jb
