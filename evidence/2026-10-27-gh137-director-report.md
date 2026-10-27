@@ -15,6 +15,8 @@ owner-caught-stranded-unseen x2, owner-caught-waits-invisible, owner-caught-gate
 
 ## Smoke
 
+The smoke below ran on e433add's wording (restated conditions); this commit only replaces the restated conditions with pointers to the same anchors (`#report-what`, `#handoff-director-finding`), not the instruction the case exercises. No new runs.
+
 Isolated: `scripts/octo-feather-qa` (qc sandbox, proof lines all `ok`, per-run scratch state dir, no Herdr, offline gh). Main side via `--kit-ref 8255ab90dfd1` (main's agents/director.md; main's `octo-feather-lane` has no `report`), branch side at the working tree (kit label a34639c, lane tip). Case added temporarily to evals/role-transcripts (text below), then removed. Rerun: add the case and expectation below, then
 
 ```
