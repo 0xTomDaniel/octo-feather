@@ -11,8 +11,11 @@
 #               implementer with the model, tokens and Pi's cost (spend#acceptance-spend-agents)
 #   role-unset  no OCTO_FEATHER_ROLE, no Herdr space: the extension's purpose fallback, no lane
 #   pi-role     the implementer role launched through scripts/pi-role (which loads the extension) as
-#               a pane launch does (herdr-spawn's role env), JSON mode, in lane gh149's space: its message under gh149 and
-#               implementer
+#               a pane launch does, JSON mode, in lane gh149's space, no OCTO_FEATHER_ROLE: its message under
+#               gh149 and implementer (spend#writer-agent)
+#   headless    pi-role -p (issue #189), no OCTO_FEATHER_ROLE: implementer in lane gh149's space records
+#               under gh149 and implementer; code-reviewer in space w99, no lane's, under no lane and
+#               code-reviewer (spend#rule-lane, spend#writer-agent)
 #   zero-priced fake/free, its catalog rates all 0 (rule: extensions/spend-ledger.ts header, Cost):
 #               `spend` shows it at $0, its call counted under unknown cost (spend#rule-cost)
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
@@ -115,9 +118,9 @@ row "$s" purpose agent 0.170000 1 0 150 10
 echo "case role-unset: ok (purpose agent, no lane)"
 
 # pi-role: no -e here; pi-role loads the extension. Not -p: a headless pi-role run drops the Herdr
-# space (scripts/pi-role HEADLESS_UNSET), a pane launch keeps it. OCTO_FEATHER_ROLE as herdr-spawn sets it.
+# space (scripts/pi-role HEADLESS_UNSET), a pane launch keeps it. No OCTO_FEATHER_ROLE: the role file names the purpose.
 set +e
-out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer "$kit/scripts/pi-role" "$kit/agents/implementer.md" --model fake/fake \
+out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID=w37 "$kit/scripts/pi-role" "$kit/agents/implementer.md" --model fake/fake \
   --no-session --mode json "answer" 2>"$t/err")"; rc=$?
 set -e
 [[ "$rc" == 0 && "$out" == *fake-answer-ok* ]] || fail "pi-role: exit $rc: $(cat "$t/err")"
@@ -128,14 +131,34 @@ row "$s" purpose implementer 0.484000 4 0 407 43
 row "$s" model fake/fake 0.650000 4 0 550 50
 echo "case pi-role: ok (pi-role launch recorded under gh149 and implementer)"
 
+# headless: pi-role -p drops HERDR_WORKSPACE_ID (#77); the spend still finds the lane. No OCTO_FEATHER_ROLE.
+headless() { local space="$1" role="$2"
+  set +e
+  out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID="$space" "$kit/scripts/pi-role" "$kit/agents/$role.md" --model fake/fake \
+    --no-session -p "answer" 2>"$t/err")"; rc=$?
+  set -e
+  [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "headless $role: exit $rc, answer '$out': $(cat "$t/err")"; }
+headless w37 implementer
+calls 6
+s="$(spend)"
+row "$s" lane gh149 0.654000 5 0 557 53
+row "$s" purpose implementer 0.654000 5 0 557 53
+headless w99 code-reviewer
+calls 7
+s="$(spend)"
+row "$s" lane '\(no lane\)' 0.340000 2 0 300 20
+row "$s" purpose code-reviewer 0.170000 1 0 150 10
+row "$s" lane gh149 0.654000 5 0 557 53
+echo "case headless: ok (implementer in w37 under gh149 and implementer; code-reviewer in w99 under no lane and code-reviewer)"
+
 # zero-priced: fake/free answers with the same usage (150 in, 10 out); Pi reports $0, spend counts it as unknown cost.
 model=fake/free run "answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
 [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "zero-priced: exit $rc, answer '$out': $(cat "$t/err")"
-calls 6
+calls 8
 s="$(spend)"
 row "$s" model fake/free 0.000000 1 1 150 10
-row "$s" lane gh149 0.484000 5 1 557 53
-row "$s" model fake/fake 0.650000 4 0 550 50
+row "$s" lane gh149 0.654000 6 1 707 63
+row "$s" model fake/fake 0.990000 6 0 850 70
 echo "case zero-priced: ok (fake/free: \$0.000000, 1 call of unknown cost, 150 in 10 out; fake/fake priced as before)"
 
 # unwritable: the ledger path is a directory.
