@@ -3,20 +3,20 @@
   "accepted_commit": "941d16bf3c02acb8fe40f3a19dcc5f99b0b09527",
   "criteria": {
     "acceptance-spend-bench": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 188
     },
     "acceptance-spend-judge": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 188
     },
     "acceptance-spend-reconcile": {
       "status": "built",
       "pr": 188
     },
     "acceptance-spend-agents": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 188
     }
   }
 }
