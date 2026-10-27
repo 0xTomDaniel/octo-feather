@@ -51,3 +51,10 @@ the prose of scripts/*, tests/*.sh (comments), evals/*/suite.json descriptions, 
 
 - Diff is comment, docstring, help and description only (`git diff -U0 scripts/` non-comment lines: none).
 - `just check`: ok. `bash tests/qa.sh`: qa: ok.
+
+## Round 2 (supervisor widened scope)
+
+- .agents/skills/eval-cases/SKILL.md:42: the never-reached pointer now cites schema Facts (was Before targets). Pointer
+  only, no behaviour change, so no eval case owed.
+- justfile:221: check-evals recipe comment keeps its purpose, rule summary replaced by a schema.md pointer.
+- octo-feather-lane refusal literal left as is (supervisor ruling).
