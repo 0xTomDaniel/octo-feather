@@ -54,10 +54,6 @@
       "status": "built",
       "pr": 111
     },
-    "acceptance-qc-verify-sandbox": {
-      "status": "planned",
-      "pr": null
-    },
     "acceptance-verify-created": {
       "status": "planned",
       "pr": null
@@ -83,6 +79,18 @@
       "pr": null
     },
     "acceptance-verify-view-model": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-contract": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-evidence-record": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-evidence-read": {
       "status": "planned",
       "pr": null
     }
