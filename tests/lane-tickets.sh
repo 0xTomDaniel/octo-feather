@@ -224,6 +224,9 @@ run 1 ticket "$F/110-runnable-script.md"; has "uv run python harness.py score --
 mkdir -p "$t/bare/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/bare/docs/specs/"; cp "$t/repo/harness.py" "$t/bare/"
 printf 'check:\n    true\n' >"$t/bare/justfile"; git -C "$t/bare" init -q -b main . && git -C "$t/bare" add -A
 (cd "$t/bare" && run 0 ticket "$F/110-runnable-script.md" && d11 'python harness.py' && run 0 ticket "$t/d11.md") || exit 1
+# A module's gate is no declared program either: the script demo still passes (#172 final review).
+mkdir -p "$t/bare/sub"; printf 'check:\n    true\n' >"$t/bare/sub/mod.just"; printf 'mod sub\n' >"$t/bare/justfile"; git -C "$t/bare" add -A
+(cd "$t/bare" && JUST_UNSTABLE=1 run 0 ticket "$t/d11.md") || exit 1
 # #172 (s20): a `just` demo passes exactly when `just --dump` lists the recipe (defaulted parameters,
 # attribute lines, imports, aliases), never by a justfile header regex; gh136's install-check regression.
 mkdir -p "$t/jrepo/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/jrepo/docs/specs/"
@@ -236,8 +239,11 @@ for c in 'just install-check' 'just install-check flag=y' 'just demo' 'just hidd
 done
 jd 'just nosuch'; run 1 ticket - <"$t/jd.md"; has "(\`just nosuch\`: no justfile recipe nosuch in $t/jrepo)"
 # A module recipe is `just MOD RECIPE`, as just runs it (just 1.21 runs modules only unstable, and refuses MOD::RECIPE).
-mkdir -p "$t/jrepo/sub"; printf 'inner:\n    true\n' >"$t/jrepo/sub/mod.just"; printf 'mod sub\n' >>"$t/jrepo/justfile"
+mkdir -p "$t/jrepo/sub"; printf 'alias c := check\ninner:\n    true\ncheck:\n    true\n' >"$t/jrepo/sub/mod.just"; printf 'mod sub\n' >>"$t/jrepo/justfile"
 jd 'just sub inner'; JUST_UNSTABLE=1 run 0 ticket - <"$t/jd.md"
+# A module's gate, or a module alias to it, is the gate whatever path names it (#172 final review).
+jd 'just sub check'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub check\`: just sub check is a gate or factory recipe, not the app)"
+jd 'just sub c'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub c\`: just sub c is a gate or factory recipe, not the app)"
 jd 'just sub::inner'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub::inner\`: no justfile recipe sub::inner in $t/jrepo)"
 sed -i '$d' "$t/jrepo/justfile"   # drop the mod line: the cases below run without JUST_UNSTABLE
 jd 'just c'; run 1 ticket - <"$t/jd.md"; has "(\`just c\`: just c is a gate or factory recipe, not the app)"
@@ -328,4 +334,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

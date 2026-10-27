@@ -1221,6 +1221,11 @@ RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), 
 INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno", "bun", "Rscript"}
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
+
+
+def not_demo(recipe: str) -> bool:
+    """RECIPE (`MOD RECIPE` or `MOD::RECIPE` too) is a gate or factory recipe: its own name, whatever module path names it."""
+    return bool(NOT_DEMO_RECIPES.fullmatch(re.split(r"\s+|::", recipe)[-1]))
 TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
 
 
@@ -1293,7 +1298,7 @@ class Surface:
 
     def program(self) -> str:
         """A program the repo declares (an executable, a recipe other than the gate's, a bin), '' if none."""
-        recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not NOT_DEMO_RECIPES.fullmatch(to))
+        recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
         return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
 
     def runs(self, cmd: str) -> tuple[list[str], str]:
@@ -1343,7 +1348,7 @@ class Surface:
                 rec = f"{rec} {w}"
             if rec not in recipes:
                 return f"no justfile recipe {rec} in {self.root}"
-            return f"just {rec} is a gate or factory recipe, not the app" if NOT_DEMO_RECIPES.fullmatch(recipes[rec]) else None
+            return f"just {rec} is a gate or factory recipe, not the app" if not_demo(recipes[rec]) else None
         if "/" in prog:
             rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
             if os.path.isabs(prog):
