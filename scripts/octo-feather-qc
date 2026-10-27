@@ -161,9 +161,10 @@ def oauth_warning():
     return None
 
 
-def sandboxed(judge, session, gh, history=True):
+def sandboxed(judge, session, gh, history=True, kit=None):
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
-    history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa)."""
+    history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
+    test, kept readable while other repos are masked (default this kit)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
@@ -185,7 +186,7 @@ def sandboxed(judge, session, gh, history=True):
     want = [worktree, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
-    env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree,
+    env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree, QC_KIT=str(kit or KIT),
                QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
                # inside a qc sandbox `herdr` is its shim: wrap the real binary it names
                QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
