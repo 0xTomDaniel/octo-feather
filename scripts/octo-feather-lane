@@ -133,7 +133,7 @@ named with its reason on stderr, after the others were tried; exit 1, rerun afte
 
   octo-feather-lane report         every open lane of this session: its pull request, agents and waits
 
-`report` (spec comms #factory-report) reads and writes nothing. It reads each lanes/*.toml record of
+`report` (spec comms #factory-report) writes nothing. It reads each lanes/*.toml record of
 the state dir (archive/ skipped) and the hand-off log beside it, `herdr agent list`, and for a record
 with `pr`, `gh pr view` in the repository the record names. It prints `report at <now>`, then per lane:
 
