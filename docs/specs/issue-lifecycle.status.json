@@ -35,8 +35,8 @@
       "pr": 24
     },
     "acceptance-tracer-tickets": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 180
     },
     "acceptance-pilot-alone": {
       "status": "planned",
@@ -69,6 +69,10 @@
     "acceptance-merge-ask-evidence": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-merge-ask-no-criterion": {
+      "status": "built",
+      "pr": 180
     },
     "acceptance-merge-approved-head": {
       "status": "built",

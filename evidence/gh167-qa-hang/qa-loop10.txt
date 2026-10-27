@@ -1,0 +1,11 @@
+run 1: exit 0 in 137 s
+run 2: exit 0 in 142 s
+run 3: exit 0 in 198 s
+run 4: exit 0 in 171 s
+run 5: exit 0 in 134 s
+run 6: exit 0 in 124 s
+run 7: exit 0 in 124 s
+run 8: exit 0 in 117 s
+run 9: exit 0 in 118 s
+run 10: exit 0 in 120 s
+loop: 10/10 green

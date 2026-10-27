@@ -8,14 +8,14 @@
 # the offline fake linear (.agents/skills/linear/scripts/linear, a JSON store). Proves: a parent whose tickets all name criteria
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
-# class; a demo passes only through a surface the repo declares (tracked executable, justfile
-# recipe, pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
+# class; rule tickets pass or fail as octo-feather-lane --help (ticket) says; a demo passes only through a surface the repo declares (tracked executable, justfile
+# recipe as `just --dump` lists it, #172; pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
 # cases (owners: ADR 0002, #145); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
-# draft, usage) exit 2 naming the fix, no traceback, nothing reported as passed, no file
+# draft, usage, no just or an unreadable justfile) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -27,7 +27,7 @@ unset GH_REPO GH_TOKEN FAKE_GH
 mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs"
 # The only PATH: $t/bin (the fake gh) and $t/sys (the tools this test and the scripts run).
 # No host directory is on it, so a host gh (a CI runner's, asking for GH_TOKEN) is never reached.
-for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head; do
+for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head just; do
   p="$(command -v "$c")" || fail "tool $c not found on the host"; ln -s "$p" "$t/sys/$c"
 done
 export PATH="$t/sys"
@@ -42,6 +42,7 @@ printf '#!/bin/sh\necho ok\n' >"$t/repo/bin/demo"; cp "$t/repo/bin/demo" "$t/rep
 printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not executable (ADR 0002)
 mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
 chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
+mkdir -p "$t/repo/docs/adr"; printf '# Integration is a script\n' >"$t/repo/docs/adr/0017-integration-is-a-script.md"   # the owner rule tickets name
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
 # zz: criteria only inside a <template> (nested too), #121 D17; acceptance-ok outside one.
 printf '<template><li data-acceptance-criterion data-anchor="acceptance-zz">x</li><template><p id="in"></p></template>\n<li data-acceptance-criterion data-anchor="acceptance-zz2">y</li></template>\n<ol><li data-acceptance-criterion data-anchor="acceptance-ok">z</li></ol>\n' >"$t/repo/docs/specs/zz.spec.html"
@@ -55,7 +56,7 @@ F = pathlib.Path(sys.argv[1])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199], 70: [101, 108]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 iss = {}
 for p, subs in parents.items():
@@ -173,6 +174,44 @@ printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] 
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
 
+# Rule tickets (spec #lanes-tickets; form: octo-feather-lane --help (ticket)).
+run 0 tickets 70; has "108: ok"; has "70: 2 of 2 tickets pass"
+rt() { printf '## What to build\n\nA rule fix.\n\n## Acceptance criteria\n\n%s\n' "$1" >"$t/rule.md"; }
+for o in 'docs/adr/0017' 'docs/adr/0017-integration-is-a-script.md' 'ADR 0017' 'owner ruling 2026-10-23, #121' 'owner ruling #121'; do
+  rt "- [ ] rule: integrate adds no integrate or qc recipe to a repo the kit did not create ($o)
+- [ ] demo: \`demo a\` prints ok"; run 0 ticket "$t/rule.md"; [[ "$out" == "$t/rule.md: ok" ]] || fail "rule ticket ($o): $out"
+done
+rt "- [ ] demo#acceptance-a: x
+- [ ] rule: a rule beside a criterion (ADR 0017)
+- [ ] demo: \`demo a\` prints ok"; run 0 ticket "$t/rule.md"
+rf="fix: write the rule item as \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
+for c in 'integrate adds no recipe|`rule: integrate adds no recipe` names no owner in parentheses' \
+         'integrate adds no recipe (docs/adr/9999)|owner `docs/adr/9999` names no ADR file in' \
+         'integrate adds no recipe (ADR 0099)|owner `ADR 0099` names no ADR file in' \
+         'integrate adds no recipe (docs/adr/0017-wrong-name.md)|owner `docs/adr/0017-wrong-name.md` names no ADR file in' \
+         '(docs/adr/0017)|empty rule' '|empty rule' \
+         'integrate adds no recipe (the supervisor)|owner `the supervisor` is neither an ADR nor an owner ruling' \
+         'integrate adds no recipe (owner ruling)|owner `owner ruling` is neither an ADR nor an owner ruling'; do
+  rt "- [ ] rule: ${c%%|*}
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
+  has "$t/rule.md: class: unowned-rule: ${c#*|}"; has "$rf"; hasnt "class: no-criterion"; hasnt "ADR NNNN"; hasnt "owner ruling <"
+done
+rt "- [ ] demo#acceptance-a: x
+- [ ] rule: no owner here
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"; has "class: unowned-rule: \`rule: no owner here\` names no owner"
+rt "- [ ] rule: integrate adds no recipe (docs/adr/0017)"; run 1 ticket "$t/rule.md"
+has "$t/rule.md: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"; hasnt "no-criterion"
+rt "- [ ] rule: integrate adds no recipe (docs/adr/0017)
+- [ ] demo: \`printf ok\`"; run 1 ticket "$t/rule.md"; has "class: layer-only-ticket: demo runs no surface the repo declares"
+# Neither a criterion id nor a rule item: no-criterion, its fix naming both forms.
+rt "- [ ] some item
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
+has "class: no-criterion: no acceptance item names a criterion id; fix: start each item with the criterion it serves"
+has "or, serving no criterion, add an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
+hasnt "ADR NNNN"; hasnt "owner ruling <"
+rm "$t/rule.md"; run 1 ticket - <<<"no section"
+has "(or, serving no criterion, an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket))"; hasnt "ADR NNNN"
+
 # Interpreter-run scripts (owner: ADR 0002 fallback, #121 D11):
 # this repo declares programs, so `python3 scripts/octo-feather-lane` (as in the kit) and harness.py are refused.
 d11() { printf '## What to build\n\n`%s` checks.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s`\n' "$1" "$1" >"$t/d11.md"; }
@@ -185,6 +224,36 @@ run 1 ticket "$F/110-runnable-script.md"; has "uv run python harness.py score --
 mkdir -p "$t/bare/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/bare/docs/specs/"; cp "$t/repo/harness.py" "$t/bare/"
 printf 'check:\n    true\n' >"$t/bare/justfile"; git -C "$t/bare" init -q -b main . && git -C "$t/bare" add -A
 (cd "$t/bare" && run 0 ticket "$F/110-runnable-script.md" && d11 'python harness.py' && run 0 ticket "$t/d11.md") || exit 1
+# A module's gate is no declared program either: the script demo still passes (#172 final review).
+mkdir -p "$t/bare/sub"; printf 'check:\n    true\n' >"$t/bare/sub/mod.just"; printf 'mod sub\n' >"$t/bare/justfile"; git -C "$t/bare" add -A
+(cd "$t/bare" && JUST_UNSTABLE=1 run 0 ticket "$t/d11.md") || exit 1
+# #172 (s20): a `just` demo passes exactly when `just --dump` lists the recipe (defaulted parameters,
+# attribute lines, imports, aliases), never by a justfile header regex; gh136's install-check regression.
+mkdir -p "$t/jrepo/docs/specs"; cp "$t/repo/docs/specs/demo.spec.html" "$t/jrepo/docs/specs/"
+printf 'import "more.just"\nalias ic := install-check\nalias c := check\n\ncheck:\n    true\n\n[private]\nhidden:\n    true\n\n# doc\n[no-cd]\ninstall-check flag="x":\n    true\n\n@quiet a b="2" +rest="":\n    true\n' >"$t/jrepo/justfile"
+printf 'demo:\n    true\n' >"$t/jrepo/more.just"; git -C "$t/jrepo" init -q -b main . && git -C "$t/jrepo" add -A
+jd() { printf '## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s` exits 0\n' "$1" >"$t/jd.md"; }
+cd "$t/jrepo"
+for c in 'just install-check' 'just install-check flag=y' 'just demo' 'just hidden' 'just ic' 'just quiet 1' 'just --yes demo'; do
+  jd "$c"; run 0 ticket - <"$t/jd.md"; [[ "$out" == "stdin: ok" ]] || fail "$c: $out"
+done
+jd 'just nosuch'; run 1 ticket - <"$t/jd.md"; has "(\`just nosuch\`: no justfile recipe nosuch in $t/jrepo)"
+# A module recipe is `just MOD RECIPE`, as just runs it (just 1.21 runs modules only unstable, and refuses MOD::RECIPE).
+mkdir -p "$t/jrepo/sub"; printf 'alias c := check\ninner:\n    true\ncheck:\n    true\n' >"$t/jrepo/sub/mod.just"; printf 'mod sub\n' >>"$t/jrepo/justfile"
+jd 'just sub inner'; JUST_UNSTABLE=1 run 0 ticket - <"$t/jd.md"
+# A module's gate, or a module alias to it, is the gate whatever path names it (#172 final review).
+jd 'just sub check'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub check\`: just sub check is a gate or factory recipe, not the app)"
+jd 'just sub c'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub c\`: just sub c is a gate or factory recipe, not the app)"
+jd 'just sub::inner'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub::inner\`: no justfile recipe sub::inner in $t/jrepo)"
+sed -i '$d' "$t/jrepo/justfile"   # drop the mod line: the cases below run without JUST_UNSTABLE
+jd 'just c'; run 1 ticket - <"$t/jd.md"; has "(\`just c\`: just c is a gate or factory recipe, not the app)"
+# Fails closed, never a fallback: a justfile just cannot read, or no just, is exit 2 naming why.
+mkdir -p "$t/nojust"; cp -P "$t/sys"/* "$t/nojust/"; rm "$t/nojust/just"   # the hermetic PATH less just
+jd 'just demo'; PATH="$t/nojust" run 2 ticket - <"$t/jd.md"; has "cannot read the justfile's recipes ($t/jrepo/justfile): just is not on PATH"; hasnt ": ok"
+jd 'curl https://example.com'; PATH="$t/nojust" run 0 ticket - <"$t/jd.md"   # no just demo: justfile never read
+printf 'broken (:\n' >>"$t/jrepo/justfile"
+jd 'just demo'; run 2 ticket - <"$t/jd.md"; has "cannot read the justfile's recipes ($t/jrepo/justfile): just --dump: error:"; hasnt ": ok"
+cd "$t/repo"
 # #121 D17: criterion ids inside a <template>.
 for a in acceptance-zz acceptance-zz2; do
   printf '## Acceptance criteria\n\n- [ ] zz#%s: x\n- [ ] demo: `demo a` prints ok\n' "$a" >"$t/d17.md"; run 1 ticket "$t/d17.md"
@@ -265,4 +334,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

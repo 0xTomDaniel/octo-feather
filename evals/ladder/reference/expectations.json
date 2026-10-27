@@ -58,6 +58,11 @@
       {"fact": "field_lines", "field": "Check", "includes": [{"path": "scripts/check-exec", "class": "exact"}]}
     ]
   },
+  "reviewer-product-command-check": {
+    "facts": [
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "src/app/cli.py", "class": "exact"}]}
+    ]
+  },
   "reviewer-no-check": {
     "facts": [
       {"fact": "field_lines", "field": "Check", "none": true}

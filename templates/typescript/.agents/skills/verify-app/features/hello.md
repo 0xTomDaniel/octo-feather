@@ -1,11 +1,10 @@
 # hello
 
-`app hello <name>` greets a user by name, as text or as JSON with `--json`, refuses a blank name with an error and exit 2, and prints its usage line with exit 64 when the name is missing.
+Criteria:
 
-Criteria (kit templates spec, until this repo has its own specs, whose criteria then replace these links):
+- [app#acceptance-hello-json](../../../../docs/specs/app.spec.html#acceptance-hello-json)
 
-- [acceptance-cli-json](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-cli-json)
-- [acceptance-starter-verify](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-starter-verify)
+Drive criterion: `app#acceptance-hello-json`
 
 ## Sub-features
 
@@ -18,7 +17,7 @@ Criteria (kit templates spec, until this repo has its own specs, whose criteria 
 
 ## How to get to it (user POV)
 
-- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo: `node src/cli.ts hello Ada --json`).
+- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo: `node src/cli.ts hello <name> --json`).
 - `app` with no command prints the usage line `usage: app hello NAME [--json]`. There is no `--help`.
 
 ## Driving it with verify-app
@@ -29,9 +28,9 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-app/scripts/verify-app drive hello`. Evidence: `$VERIFY_APP_EVIDENCE_DIR/hello/<case>.{cmd,stdout,stderr,exit,files}` and `summary.txt`.
 
-- **JSON greeting** (`json`). Run `app hello Ada --json`. Observe exit code, stdout JSON, stderr.
-- **Text greeting** (`text`). Run `app hello Ada`. Observe exit code and the stdout line.
-- **Trimmed name** (`trimmed`). Run `app hello "  Ada  " --json`. Observe the `name` field.
+- **JSON greeting** (`json`). Run `app hello <name> --json`, the name `values.name` in `qc.toml`. Observe exit code, stdout JSON (its `text` the contract's `values.greeting`), stderr.
+- **Text greeting** (`text`). Run `app hello <name>`. Observe exit code and the stdout line.
+- **Trimmed name** (`trimmed`). Run `app hello "  <name>  " --json`. Observe the `name` field.
 - **Blank name, JSON** (`empty-json`). Run `app hello "  " --json`. Observe exit code 2, an `error` object on stdout, empty stderr.
 - **Blank name, text** (`empty-text`). Run `app hello "  "`. Observe exit code 2, empty stdout, `error: ` on stderr.
 - **Missing name** (`no-name`). Run `app hello`. Observe exit code 64, empty stdout, `usage: app hello` on stderr.

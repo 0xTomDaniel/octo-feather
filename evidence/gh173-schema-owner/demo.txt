@@ -1,0 +1,75 @@
+== scripts/check-evals --help (owner lines)
+7:Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
+== scripts/octo-feather-qa --help (owner lines)
+4:Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
+19:naming each before target the call reached (what each is, and which call a change is credited to: schema,
+28:kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
+31:A fact is decided when the schema's Facts section says (a skill_read_before once its target is reached; a
+58:A judgment suite (kind judgment, spec judgment#acceptance; schema: Judgment suite) is a bench, not facts: its
+68:held-out meets it, and when a bench FAILS: schema, Bench. Prints the classifiers available and the skipped and
+== baseline copy: evals: ok (8 suites, 273 cases)
+[Suite]                      exit 1  check-evals: role-transcripts/suite.json: field kind: must be one of ['judgment', 'role-transcript', 'skill-trigger'], got 'chat'
+                             field kind stated in schema: ok
+[Suite]                      exit 1  check-evals: role-transcripts/suite.json: field timeout_s: must be a positive integer
+                             field timeout_s stated in schema: ok
+[Suite]                      exit 1  check-evals: role-transcripts/suite.json: field covers: only "role-skills", and only in a skill-trigger suite, got 'role-skills'
+                             field covers stated in schema: ok
+[Case]                       exit 1  check-evals: role-transcripts/cases.json case Bad_Id: field id: must match [a-z0-9][a-z0-9-]*
+                             field id stated in schema: ok
+[Case]                       exit 1  check-evals: role-transcripts/cases.json case implementer-python-ticket: field role: no kit role agents/nobody.md
+                             field role stated in schema: ok
+[Case]                       exit 1  check-evals: skill-triggers/cases.json case impl-prove-json-claim: field split: must be one of ['held-out', 'train'], got 'test'
+                             field split stated in schema: ok
+[Case]                       exit 1  check-evals: skill-triggers/cases.json case impl-prove-json-claim: field should_trigger: must be true or false
+                             field should_trigger stated in schema: ok
+[Case/setup]                 exit 1  check-evals: role-transcripts/cases.json case implementer-python-ticket: field branch: main exists already; name the branch to cut from it
+                             field branch stated in schema: ok
+[Case/setup]                 exit 1  check-evals: role-transcripts/cases.json case reviewer-test-quality: field head.message: must be a non-empty string
+                             field message stated in schema: ok
+[Case/setup]                 exit 1  check-evals: role-transcripts/cases.json case supervisor-publish-lane: field origin: must be true (leave it out for false)
+                             field origin stated in schema: ok
+[Facts]                      exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #1: field fact: unknown fact type 'skill_seen'; known: ['attempt_blocked', 'branch_paths', 'declared', 'declared_includes', 'field_lines', 'skill_not_read', 'skill_read', 'skill_read_before']
+                             field fact stated in schema: ok
+[Facts]                      exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #1: field skill: no kit skill .agents/skills/no-such-skill/SKILL.md
+                             field skill stated in schema: ok
+[Before targets]             exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #1: field before: must be one of ['edit', 'final_message', 'gh_call', 'git_commit', 'git_push', 'kit_contract_edit', 'test_write'], got 'test_run'
+                             field before stated in schema: ok
+[Before targets]             exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #1: field before: git_push needs the case's origin: true (nothing else can reach it)
+                             field before stated in schema: ok
+[Attempt record]             exit 1  check-evals: isolation/reference/expectations.json case reach-live-state fact #1: field kind: must be one of ['credential', 'herdr', 'lane_state'], got 'network'
+                             field kind stated in schema: ok
+[Final JSON]                 exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #7: field in: must be a non-empty list of strings
+                             field in stated in schema: ok
+[Field lines]                exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #7: field field: must be a field name ([A-Z][A-Za-z-]*): Check or Owner (their none lines too), or another, got 'Checks'
+                             field field stated in schema: ok
+[Field lines]                exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #7: field every: must be a non-empty object of string lists, keys from ['class', 'owner', 'path', 'reads', 'rule']
+                             field every stated in schema: ok
+[Branch paths]               exit 1  check-evals: role-transcripts/reference/expectations.json case implementer-python-ticket fact #7: field touched: must be a non-empty list of relative paths (a dir ends in /)
+                             field touched stated in schema: ok
+[Leaks]                      exit 1  check-evals: role-transcripts/cases.json case implementer-python-ticket: field task: shows the agent its grade (skill path skills/tdd); graded facts stay hidden
+                             field task stated in schema: ok
+[Coverage]                   exit 1  check-evals: skill-triggers: role implementer skill principle-prove-it-works: no case for should_trigger false split held-out; every skill a role lists needs a should and a should-not (near miss) case, each in train and held-out
+                             field should_trigger stated in schema: ok
+[Judgment suite]             exit 1  check-evals: judgment-exact-or-proxy/question.json: field labels: must be a list of 2 or more distinct non-empty strings
+                             field labels stated in schema: ok
+[Judgment suite]             exit 1  check-evals: judgment-exact-or-proxy/cases.json case justfile-check-scripts: field split: must be one of ['held-out', 'train'], got 'dev'
+                             field split stated in schema: ok
+[Judgment suite]             exit 1  check-evals: judgment-exact-or-proxy/reference/expectations.json case justfile-check-scripts: field reason: must be one non-empty line
+                             field reason stated in schema: ok
+[Calibration]                exit 1  check-evals: judgment-exact-or-proxy/suite.json: field calibration.held_out.brier: must be a number from 0 to 2, got 3
+                             field brier stated in schema: ok
+[Calibration]                exit 1  check-evals: judgment-exact-or-proxy/suite.json: field calibration.threshold.accepted: must be true or false, got 'no'
+                             field accepted stated in schema: ok
+[Calibration]                exit 1  check-evals: judgment-exact-or-proxy/suite.json: field calibration.evidence: must be a relative path inside the repo, got '../outside.md'
+                             field evidence stated in schema: ok
+[Judgment model]             exit 1  check-evals: judgment-model.json: field model: openrouter/~typesafe/jev-latest is a moving alias in classifiers.json (owner: owner 2026-10-23 to the director: 'remove Jev latest from the bench'; director generalization the same night, gh119 gate bench-aliases 2026-10-23T23:11:59Z (lanes/archive/gh119.handoffs.jsonl): 'bench pinned versions only; ~ and -latest ids skipped as moving alias', owner did not object; spec judgment#rule-one-model); name a pinned one
+                             field model stated in schema: ok
+[Judgment model]             exit 1  check-evals: judgment-model.json: field chosen: unknown field
+                             field chosen stated in schema: ok
+[Classifiers]                exit 1  check-evals: classifiers.json: field owner: must be the ruling's source, one non-empty line, got ''
+                             field owner stated in schema: ok
+[Classifiers]                exit 1  check-evals: classifiers.json: field pinned.openrouter/typesafe/jev-1.13: openrouter/typesafe/jev-1.13 already listed in moving_alias
+                             field pinned stated in schema: ok
+[Classifiers]                exit 1  check-evals: classifiers.json: field yes_no_only.openrouter/respan/span-01.error: missing
+                             field error stated in schema: ok
+== 32 breaks, 0 not failing or naming a field the schema does not state

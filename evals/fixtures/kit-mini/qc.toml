@@ -1,0 +1,24 @@
+# The kit's own driver contract (quality spec #qc-contract, #verify-skill-what: the kit is a target of its
+# own lanes), read by the verify-octo-feather skill. Validate it with octo-feather-contract.
+format = 1
+
+# No setup: the kit's commands run from the checkout as they are; `just install-check` checks the box's tools.
+
+# The kit's commands as every agent has them: the checkout's scripts/ first on PATH (AGENTS.md Layout).
+# A drive appends the command a user types: `just --justfile <kit>/justfile new-repo ...`, `octo-feather-contract ...`.
+[entry]
+command = 'env PATH="$QC_REPO/scripts:$PATH"'
+
+# None: every kit command is short-lived; nothing serves.
+[services]
+
+# None: drives keep their scratch state (new repos, scratch evidence stores) in the helper's run state, never here.
+[fixture]
+
+# The values drives use.
+[values]
+# The template the new-repo drive creates a repo from.
+lang = "python"
+# The criterion the evidence drive's scratch records serve, and its text (the scratch repo has no specs).
+scratch_criterion = "scratch#acceptance-drive"
+scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evidence drive appends a record, Then it reads back by commit."

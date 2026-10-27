@@ -1,0 +1,63 @@
+01:24:15 python: ok (16 files)
+01:24:15 scripts: shellcheck ok (44 files)
+01:24:15 refs: ok (502 files)
+01:24:15 dashes: ok (527 files)
+01:24:15 skills: ok (30 skills, 5 roles, trackers github, linear)
+01:24:15 decision-log: ok (0 files)
+01:24:15 roles: ok (6 role files, reviewer family openai != implement
+01:24:15 behavior smoke: ok (no role path changed since 7dbe98b)
+01:24:15 vendored: ok (18 skills equal authenticated upstream at pin 
+01:24:15 accepted: ok (unregistered, no hand-off, hand-written key, A
+01:24:15 check-behavior-smoke: ok (no git config; absent base skips l
+01:24:15 check-dashes: ok (#121 D7 cases: docs/specs/ files fail, the
+01:24:27 check-decision-log: ok (missing why, invalid JSON and non-ob
+01:24:37 check-gate-free: ok (dependency, transitive, after-&& and ar
+01:32:36 check-refs: ok (retired words in docs/ and root; exemptions 
+01:34:13 check-scripts: ok (#121 D1 D2 cases)
+01:35:09 check-skills: ok (missing, body-only and empty name or descr
+01:35:09 check-templates: ok (#118 cases: commented and real just che
+01:35:25 check-vendored test: ok (offline-namespace gate, pinned Spec
+01:35:27 herdr-close: ok (pane id closes its tab, prints tab=, TERMs 
+01:35:27 herdr-say: ok (supervisor resumes and messages its parked wo
+01:35:29 herdr-spawn: ok (pane and headless launch carry --approve; p
+01:35:31 install-check: ok (pi 1.3.0 (pi-version) ok, pi 0.0.1 WRONG 
+01:35:33 integrate: ok (merge, cherry-pick, conflict, red gate, missi
+01:35:33 lane-archive: ok (default + named session, sha256 before = a
+01:35:35 lane-done: ok (Linear: parent and every ticket done through 
+01:35:49 lane-judge: below accepted threshold: answer shown labelled 
+01:35:51 lane-judge: ok (refusals before a verdict comment, unknown q
+01:36:09 lane-merge-ask: ok (verdict create, update in place, unchang
+01:36:21 lane-tickets: ok (hermetic PATH, no host gh; snapshot taken 
+01:36:23 new-repo: ok (python typescript: tracked files only, one com
+01:36:25 pi-role: ok (repo skill from a lane worktree, home ignored, 
+01:38:33 qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, tr
+01:38:45 qc-gh: ok (kit on kit, snapshot fetched outside per run, rea
+01:38:45 qc test: offline: no route to any network (user+network name
+01:38:45 qc test: sandbox Herdr mode: fake
+01:39:01 qc test: copycreds: scratch/a .git/m discarded with the run 
+01:39:01 qc test: bigcopy: scratch/big discarded with the run (1 writ
+01:39:03 qc test: rewrite:  discarded with the run (0 writes), exit 0
+01:39:05 qc test: refresh: scratch/oldauth .git/oldauth /tmp/tmp.BIzE
+01:39:07 qc test: token: scratch/tok .git/tok2 discarded with the run
+01:39:07 qc test: rewrite:  discarded with the run (0 writes), exit 0
+01:39:09 qc test: rewrite:  discarded with the run (0 writes), exit 0
+01:39:17 qc: ok (pass flips built, fail stays planned, status-only co
+01:39:17 recipe-args: ok (kit shape, spec-chat, integrate, start, sup
+01:39:21 case recovers: ok (2 provider errors, 2 resumes, finished, p
+01:39:27 case down: ok (4 requests, 3 resumes, then stopped; one pare
+01:39:31 case normal: ok (1 request, no resume, parent not messaged)
+01:39:37 case idle: ok (mid-backoff isStreaming false, abort answered
+01:39:43 case takeover: ok (takeover answered 0.52s after the error, 
+01:39:45 case headless: ok (pi-role -p exit 1 in 1s, 1 request, no re
+01:39:45 resume-on-error: ok (pi 1.3.0, empty HOME and environment, n
+01:39:49 review-host: ok (pane PATH, --help passes through, no <scrip
+01:39:49 octo-feather-exclude: review state ignored in /tmp/tmp.soeid
+01:39:49 shape: ok (shaping skills only, spec-chat-shape from the rep
+01:39:49 spec-chat-install: ok (agents-only links, ignored once, clea
+01:39:53 spec-status: ok (good, bad, init, built; guard: unlogged, lo
+01:39:53 start: ok (macOS project session, not running refused, expli
+01:39:58 tracker: ok (no config and github: github-pr + github-issues
+01:39:58 spec-status: ok (10 status files)
+01:39:58 templates: ok (2)
+01:39:58 evals: ok (8 suites, 273 cases)
+01:39:58 just check: ok
