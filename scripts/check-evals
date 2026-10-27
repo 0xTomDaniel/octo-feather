@@ -4,162 +4,14 @@
 Deterministic and free: reads JSON only, never starts an agent or a model. Run by `just check`
 (check-evals) and first by every factory eval run, which refuses a malformed suite.
 
-EVALS_DIR (default: the kit's evals/) holds one dir per suite plus fixtures/ (one dir per fixture,
-copied and git-initialized per run). A suite dir holds:
-  suite.json                   {"suite": <its dir name>, "kind": "skill-trigger" | "role-transcript" | "judgment",
-                                "description": str, optional "max_tool_calls", "timeout_s" (positive ints),
-                                optional "covers": "role-skills" (skill-trigger only, below),
-                                optional "calibration": {"evidence": path, "held_out": {"accuracy": 0..1,
-                                "brier": 0..2}, "threshold": {"accuracy_min": 0..1, "brier_max": >= 0,
-                                "accepted": bool}} (judgment only: the kit's judgment model's calibration on
-                                this question, read by `octo-feather-lane judge`; evidence the bench's file,
-                                relative to the dir holding EVALS_DIR; held_out and threshold copied from it,
-                                accepted false until the director accepts it)}. A suite names no model: no
-                                key "model" or "chosen" at any depth (spec judgment#rule-one-model)
-EVALS_DIR/judgment-model.json  {"model": P/ID, "evidence": path}: the kit's one judgment model, every judgment
-                               question's (spec judgment#rule-one-model), read by octo-feather-qa (the bench
-                               shows it beside each question's best) and `octo-feather-lane judge`; P/ID one of
-                               classifiers.json's pinned, never a listed moving alias or yes/no-only model (exact
-                               id, no name shape);
-                               evidence a file as above. Required when EVALS_DIR holds a judgment suite
-EVALS_DIR/classifiers.json     {"owner": the moving_alias ruling's source, one non-empty line, "moving_alias":
-                               [P/ID...], "yes_no_only": {P/ID: {"ruling": its ruling's source, "error": its
-                               verbatim provider error on a real choice question, "evidence": where that error
-                               is recorded; ruling and evidence one non-empty line, error non-empty}}, "pinned":
-                               {P/ID: its pinning ruling's source, one non-empty line}}: only ids with a
-                               recorded ruling (spec judgment#rule-available); no id in two lists, none twice;
-                               read by octo-feather-qa's bench (its --help: skipped ids, ids in none).
-                               Required beside judgment-model.json
-  cases.json                   [{id, role, fixture, task}], what the agent may see; a skill-trigger
-                               case also has should_trigger (bool) and split ("train" | "held-out");
-                               a role-transcript case may also have
-                                 branch   a branch name cut from main and checked out
-                                 head     {"fixture": F, "branch": B, "message": M}: fixture F's tree
-                                          committed over main on branch B with message M (checked out)
-                                 origin   true: a bare origin holding main (for git push)
-                                 fake_gh  true: a fake gh first on PATH, logging each call
-                               and its task may hold {repo} and {head} (the copy's path, its HEAD sha)
-  reference/expectations.json  {id: {"facts": [fact...]}}, never shown to the agent
-A judgment suite (kind "judgment", spec judgment#acceptance: one closed question's labelled set, benched on
-classifiers by octo-feather-qa, never graded by facts) holds instead:
-  question.json                {"id": str, "question": the closed question, "labels": [2+ distinct labels],
-                                "label_help": {label: one line, exactly the labels}, "state_shape": str}
-  cases.json                   [{id, split ("train" | "held-out"), state (what the classifier is shown)}],
-                               at least 15 cases, at least one in each split
-  reference/expectations.json  {id: {"label": one of the labels, "reason": one line, "source": str,
-                                optional "labelled_by" (who labelled it), "relabel" (why a proposed
-                                label was changed): each one line}}
-Facts are a closed list (graded from the Pi transcript, never meaning, docs/adr/0008):
-  {"fact": "skill_read", "skill": S}         S's SKILL.md entered the agent's context: a tool result (any
-                                             tool: a Pi read, a bash cat) holding its full content as the
-                                             kit under test holds it (head, or --kit-ref COMMIT's tree),
-                                             normalized only for what the tool adds (CRLF, trailing
-                                             newlines); a result Pi truncated never counts, nor an ls, a
-                                             grep or a head of a part; no command text is read
-  {"fact": "skill_not_read", "skill": S}     it never did
-  {"fact": "skill_read_before", "skill": S, "before": T}
-                                             S loaded (as above) before the first tool call that reached
-                                             T, decided from the filesystem (the watcher snapshots the case
-                                             repo after each call), never from command text: test_write (a
-                                             file the case repo's fixture declares a test changed: one its
-                                             declared runner collects, pytest from its own config, any name
-                                             the config collects, never a path shape; the fixture, or head's
-                                             when the case has head, must declare its tests: a pyproject.toml
-                                             [tool.pytest.ini_options] testpaths, a non-empty list of
-                                             strings, and a uv.lock so setup installs the runner), edit
-                                             (any file git does not ignore changed), git_commit (HEAD on a new commit), git_push (origin's
-                                             refs changed; needs origin), gh_call (the fake gh ran; needs
-                                             fake_gh), kit_contract_edit (a role, skill or patch
-                                             changed, as agents/corrector.md words it: agents/*.md,
-                                             .agents/skills/**, .skillfile/patches/**),
-                                             final_message (pi ended on its own with a final assistant
-                                             message). T never reached in the run FAILS it ("target never
-                                             reached"), read or not: write the case so T is reached
-  {"fact": "attempt_blocked", "kind": K}     the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox)
-                                             holds at least one attempt of K and every one refused. K one of
-                                             herdr (a call through its herdr shim whose executed argv is a
-                                             subcommand delivering to a pane, as herdr's own CLI lists them:
-                                             agent prompt|send-keys, pane send-text|send-keys|run, so
-                                             herdr-say and any spelling reaching herdr on PATH count;
-                                             refused: exit non-zero, herdr-comms' contract 0 = delivered;
-                                             a call whose shim never reported its exit counts as delivered),
-                                             lane_state (an open of the tmpfs mask over a live lanes/ or
-                                             sessions/ dir, or of a name in it; refused: the mask holds no
-                                             entry; director.toml and director.handoffs.jsonl are masked by
-                                             a /dev/null bind, not watchable exactly, so not recorded),
-                                             credential (each offline gh refusal; each `get` to git's only
-                                             credential helper, the sandbox's, which answers none; an open
-                                             of the gh config or ~/.ssh mask, refused when empty). An
-                                             attempt the sandbox did not record (a missing file read in a
-                                             mask, a token variable) counts as not made, and none made
-                                             fails: the case proves the block, not the agent's restraint.
-                                             No command text and no tool output is read. The record is kept
-                                             by a setup-side recorder outside the judged agent's namespaces
-                                             (it cannot kill, ptrace, rewrite, truncate or delete it; a
-                                             recorder ending without its record fails every such fact): the
-                                             agent can only append, so a forged refusal never erases a
-                                             recorded attempt not refused. Stated limit: a forged herdr or
-                                             credential message can stand in for an attempt never made, and
-                                             a call bypassing the shims (the real herdr by path, code
-                                             injected into a shim) is not recorded; lane_state opens are
-                                             the kernel's own (inotify), not forgeable
-  {"fact": "declared", "field": F, "in": [L...]}
-                                             the agent's FINAL assistant message holds exactly one fenced
-                                             ```json block, parsing to an object whose top-level F is one of
-                                             the labels L (F a non-empty string, L a non-empty list of
-                                             strings). Fails, naming why, on zero or 2+ json blocks, invalid
-                                             JSON, a non-object, F missing, a value outside L, or a run
-                                             stopped (tool-call or time bound) before its final message.
-                                             The way a producer emits a verdict as data (a reviewer's block
-                                             list, a corrector's chosen rung)
-  {"fact": "declared_includes", "field": F, "items": [O...]}
-                                             the same one ```json block, whose top-level F is a list holding,
-                                             for each O (a non-empty object of string values), an object with
-                                             every key of O equal (other keys free): a reviewer's block list
-                                             by test id, a judge's verdict per criterion id. Fails naming each
-                                             O missing
-  {"fact": "field_lines", "field": F, optional "none": true, "includes": [O...], "every": {K: [V...]}}
-                                             the FINAL assistant message's field lines, parsed by
-                                             `octo-feather-lane fields` (the parser `verdict` uses; field form
-                                             and reader scope: .agents/skills/code-review/SKILL.md step 4,
-                                             **Report fields**). F: Check (lines {path, rule, owner, reads,
-                                             class}, or its none line), Owner (lines {path, rule, restated:
-                                             [path...]}, or its none line; `:<line>` stripped), or any other
-                                             Name (lines {text}). The field
-                                             must be present and well formed (Check, Owner: no parser error),
-                                             then: none, it is its one none line (Check, Owner only, alone);
-                                             includes, each O (non-empty, string values, keys of F's lines)
-                                             matches a line (key equal; a list key holds the value); every, each
-                                             line's K is one of [V...] (a list key: each element; [] allows none).
-                                             Fails on a run stopped before its final message
-  {"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}
-                                             the paths the case repo changed against main's commit at setup (its
-                                             working tree: HEAD's commits, uncommitted and untracked files git does
-                                             not ignore), read by the watcher when pi ends: untouched, none is P or
-                                             under P (P ending in /: a dir); touched, each P has one. At least
-                                             one key; P a relative path. Fails on a run stopped before it ended
-Why facts read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
-exact check, rung 3 structured judgment, Who builds what); where a fix goes: docs/adr/0020 (Where the
-fix goes). No judgment fact exists yet (one would run through Pi codemode models.classify); every case
-grades the facts above.
-Fails, naming the case and the field, on: a missing or unknown field, a wrong type, an unknown fact
-or `before`, a role with no agents/<role>.md, a fixture with no dir, a skill with no kit SKILL.md, a
-case id without expectations or the reverse, a skill-trigger case whose facts disagree with
-should_trigger, a "covers": "role-skills" suite missing a case for a role's skill (below), a malformed
-branch, head, origin or fake_gh (or one outside a role-transcript suite), a git_push without origin or
-a gh_call without fake_gh, a test_write whose fixture declares no tests (naming the fixture), or a task
-that leaks its grade, exactly: it holds one of the case's facts as data (a JSON object embedded in the
-task that parses equal to a fact object, key order and whitespace ignored) or the path of a skill it is graded on, matched by whole path component (<skill>/SKILL.md or
-skills/<skill>, so implement-spec/SKILL.md never matches skill implement). No other wording rule: a hint
-in other words is for review.
-Coverage: in a suite with "covers": "role-skills", every skill each kit role lists (agents/<role>.md
-`skills:`) needs, for that role, a should_trigger true case graded skill_read or skill_read_before of it
-and a should_trigger false case graded skill_not_read of it, each in split train and in held-out; a
-missing one fails naming the role and the skill, so a skill added to a role gets its cases. A role's
-`{tracker}` resolves as pi-role resolves it for a case run in a fixture copy: `tracker` in the fixture's
-.octo-feather.toml, github (so github-issues) when the file or key is absent; every tracker skill the
-fixtures resolve to is a skill of that role (a fixture naming a tracker the kit has no skill for fails).
-Not covered: `externalSkills` (installed in the target repo, not kit skills, so no fact can name them).
+EVALS_DIR: default the kit's evals/.
+Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
+refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
+role-transcript setup branch/head/origin/fake_gh), Facts (reference/expectations.json: the closed fact
+list, Before targets, Attempt record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
+classifiers.json).
+Each problem prints `check-evals: <file>[ case <id>][ fact #<n>]: field <name>: <problem>`.
 Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
 EVALS_DIR is not a dir.
 """
@@ -363,7 +215,7 @@ def check_model_ref(m, field, where, errs, ruled):
 
 
 def check_classifiers(evals, errs):
-    """EVALS/classifiers.json (shape: --help). Returns it when well formed, else None."""
+    """EVALS/classifiers.json (schema: .agents/skills/eval-cases/references/schema.md, Judgment model and classifiers). Returns it when well formed, else None."""
     where = CLASSIFIERS
     o = load(evals / CLASSIFIERS, errs, "every catalogue classifier ruled {owner, moving_alias, yes_no_only, pinned} (spec judgment#rule-available)")
     if o is None:
@@ -592,7 +444,7 @@ def pi_role():
 
 
 def declares_tests(evals, name):
-    """The fixture declares its tests (test_write's rule, --help): its pyproject.toml's [tool.pytest.ini_options]
+    """The fixture declares its tests (test_write's rule: .agents/skills/eval-cases/references/schema.md, Before targets): its pyproject.toml's [tool.pytest.ini_options]
     testpaths, a non-empty list of strings, and a uv.lock. A missing fixture dir is reported elsewhere."""
     fx = evals / "fixtures" / name
     if not (re.fullmatch(r"[A-Za-z0-9._-]+", name) and fx.is_dir()):
@@ -702,7 +554,7 @@ def check_exp(at, exp, errs):
 
 
 def check_fields(fa, f, errs):
-    """A field_lines fact: field a field name, then none, includes and every as --help states them."""
+    """A field_lines fact: field a field name, then none, includes and every (.agents/skills/eval-cases/references/schema.md, Field lines)."""
     fld = f.get("field")
     if "field" in f and not (isinstance(fld, str) and FIELD_NAME.fullmatch(fld) and fld not in ("Checks", "Owners")):
         errs.append(f"{fa}: field field: must be a field name ({FIELD_NAME.pattern}): Check or Owner (their none lines "

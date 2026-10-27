@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT]   factory evals (`just qa`)
 
-Runs the kit's eval cases (evals/<suite>/, shape: scripts/check-evals, which runs first and must
-pass). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
+Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
+Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
+below, by section). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
 dir (a role-transcript case's `head` fixture committed over it on its branch, its `branch` cut and
 checked out, a fixture with uv.lock synced with `uv sync --locked`; a setup failure is a FAIL, case not
 run; {repo} and {head} in the task become the copy's path and HEAD sha), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
@@ -16,42 +17,21 @@ never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh fi
 answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo (content
 hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
-naming each target the call reached: edit (a file changed), test_write (a file the fixture declares a test
-changed, decided by its declared runner: check-evals --help owns the rule; the watcher asks pytest which files
-it collects, from the case repo's own config, in a copy of that snapshot's own bytes (so a later call's write never
-reaches it), no test module imported, after each call that changed a file and
-only for a case graded on test_write; pytest giving no list stops the run, naming why), git_commit (HEAD on a
-commit that did not exist before the run), git_push (origin's refs changed), gh_call (the fake gh ran), kit_contract_edit (a role, skill or patch changed, as agents/corrector.md
-words its rule: agents/*.md, .agents/skills/**, .skillfile/patches/**). No regex over commands infers a write. Stated limit: a change is
-credited to the first call at whose end event the snapshot shows it (taken as the event arrives, whatever the watcher
-is still deciding), exact while the model's turn separates
-calls; of calls run in parallel within one turn, the first to end gets it.
+naming each before target the call reached (what each is, and which call a change is credited to: schema,
+Before targets). For a case graded on test_write only, after each call that changed a file, the watcher asks
+pytest which files it collects, from the case repo's own config, in a copy of that snapshot's own bytes, no test
+module imported; pytest giving no list stops the run, naming why. No regex over commands infers a write.
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
 and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
 `attempts`; no command text or tool output is read), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
-kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts: check-evals --help.
+kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
-A skill_read_before is decided only once its target is reached (the read before it passes, after it or
-none fails); a target never reached in the run FAILS it ("target never reached"), read or not: a case
-reaches its target, never passes vacuously. final_message is reached when pi ends on its own with a final
-assistant message, so such a fact, like `declared`, never stops a run early.
+A fact is decided when the schema's Facts section says (a skill_read_before once its target is reached; a
+fact read from the final message only once pi exits on its own, so it never stops a run early).
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
-A skill read (a load) is the skill's content entering the agent's context, decided exactly: a tool result (any
-tool: a Pi read, a bash cat) whose text holds that SKILL.md's full content as the kit under test holds it (head:
-the kit checkout; --kit-ref: COMMIT's committed tree), compared after normalizing only what the tool adds
-(CRLF, the file's trailing newlines; bash's appended exit status falls outside the content). A result Pi
-truncated (structuredContent.truncated, or its `[Showing lines`, `[N more lines in file.` or `[Output
-truncated.` notice) never counts, nor does an ls, a grep or a head of a part. No command text is read.
-A `declared` or `declared_includes` fact reads the run's final assistant message (message_end events): it
-stays open until pi exits on its own, so it never stops a run early, and a run stopped at a bound fails it.
-So do `field_lines` (the final message's field lines, parsed by running the head kit's
-`octo-feather-lane fields -` on it, the parser `octo-feather-lane verdict` uses; field form and
-reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**) and `branch_paths` (the
-watcher's qa_branch event when pi ends: every path the case repo changed against main's commit at setup,
-committed, uncommitted or untracked, files git does not ignore).
 
 Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
 exact check, rung 3 structured judgment, Who builds what) and docs/adr/0020 (Where the fix goes).
@@ -76,37 +56,22 @@ result.json, and <run-id>/summary.json.
                             it. An unknown COMMIT exits 64; a kit there with no agents/<role>.md (or scripts/pi-role)
                             fails that case naming the file. Every input.json, result.json and result line
                             records the kit's full sha (without --kit-ref: the kit's HEAD).
-A judgment suite (kind judgment, spec judgment#acceptance; shape: check-evals --help) is a bench, not facts: its
+A judgment suite (kind judgment, spec judgment#acceptance; schema: Judgment suite) is a bench, not facts: its
 selected cases run in the same sandbox as one Pi extension command, no agent: `pi --no-session --no-skills --no-mcp
 --no-extensions --no-tools -e <bench extension> -p "/octo-feather-bench <input>"` runs the command and exits, no
 chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
-ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped (below) answer the closed question
-(a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once. The state
-goes as the case's state string, the one shape every classifier takes (some accept no other object than their
-own). A moving alias (an id EVALS/classifiers.json lists in moving_alias, exact P/ID, never judged by its name) is
-never called nor scored: the report lists it as "skipped: moving alias" with that file's owner ruling, bench.json
-`skipped` records it and `skipped_ruling` the ruling. A yes/no-only model (an id it lists in yes_no_only, exact P/ID;
-owner ruling on #169: a model that only answers yes/no is not used, it must also classify; binary questions stay
-allowed) is likewise never called nor scored, on every bench, a binary question's too: the report lists it as
-"skipped: yes/no only" with its entry's ruling and recorded provider error, bench.json `skipped` records it and
-`skipped_yes_no_only` its entry ({ruling, error, evidence}). An id in none of its lists is benched as usual (scored where it answered),
-flagged on the report's "unclassified id" line and in bench.json `unclassified`, for the owner to rule there (never
-eligible as the kit's model: check-evals). classify never throws, so stopReason and
-errorMessage are kept. A classifier that answered no case of the real question (one that cannot accept its form, or
-any other failure: no error text is parsed) is listed unavailable with that question's provider error, no stand-in
-probe (spec judgment#rule-available); a new yes/no-only model shows this way until the owner rules it in yes_no_only. Its JSON output line is graded here against
-reference/expectations.json, never shown to it. Prints the classifiers available, then a TRAIN and a HELD-OUT table
-per answering model (answered, correct, accuracy, Brier, ECE over top-probability buckets, cost from result.usage,
-errors), each unavailable one (above), then the kit's one judgment
-model (EVALS/judgment-model.json, spec judgment#rule-one-model) beside the question's best-scoring classifier
-(from train only: best train accuracy over all train cases, ties lower train Brier, lower train cost, name), the
-kit model's proposed threshold (from its train answers: held-out
-accuracy >= the Wilson 95% lower bound of train accuracy, held-out Brier <= train Brier mean + 1.96 standard
-errors), whether held-out meets it, and its confidence buckets. Every answer is labelled a model
-judgment; no gate reads it. Artifacts <run-id>/<suite>/: input.json (what the classifiers see), extension.js,
+ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped answer the closed
+question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
+The state goes as the case's state string, the one shape every classifier takes (some accept no other object than
+their own). classify never throws, so stopReason and errorMessage are kept. Its JSON output line is graded here
+against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+held-out meets it, and when a bench FAILS: schema, Bench. Prints the classifiers available and the skipped and
+unclassified ones, then a TRAIN and a HELD-OUT table per answering model (answered, correct, accuracy, Brier, ECE,
+cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+question's best, the kit model's proposed threshold, whether held-out meets it, and its confidence buckets.
+Artifacts <run-id>/<suite>/: input.json (what the classifiers see), extension.js,
 stdout.txt, stderr.txt, sandbox.json, answers.json, bench.json, report.txt; summary.json `benches`.
-A bench FAILS when its sandbox or command fails, no classifier answers every train case, or the kit's model, benched
-(no --classifier, or one naming it), does not answer every train case.
 Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -147,7 +112,7 @@ def tool_calls(lines):
 # attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
 # helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
 # tool output is read. Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
-# record (the recorder's line; none: attempts_error, read as no record; what that does: scripts/check-evals --help).
+# record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
 def attempt_record(path=None):
     """The record's lines so far (the watcher, in the sandbox); [] when there is none."""
     path = path or os.environ.get("OCTO_FEATHER_QC_ATTEMPTS", "")
@@ -308,7 +273,7 @@ def holds(line, item):
 def judge_fields(fact, final, last):
     """The final message's field F, parsed by `octo-feather-lane fields` (one parser, verdict's; form and scope:
     .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
-    every (check-evals --help)."""
+    every (schema: .agents/skills/eval-cases/references/schema.md, Field lines)."""
     f = fact["field"]
     head = f"field_lines {f}"
     st, text = final_text(head, final, last)
@@ -426,7 +391,7 @@ def judge_attempt(kind, record, final):
     """Pass: at least one recorded attempt of KIND, every one refused, as the sandbox recorded them. One not refused
     fails it at once; none recorded fails it at the end (the case proves the block, not the agent's restraint; an
     attempt the sandbox did not record counts as not made)."""
-    if record is None:   # sandbox.json attempts_error (scripts/check-evals --help, attempt_blocked)
+    if record is None:   # sandbox.json attempts_error (.agents/skills/eval-cases/references/schema.md, Attempt record)
         return "fail", f"attempt_blocked {kind}: the sandbox sent no attempt record"
     tried = [r for r in record if r.get("kind") == kind and r.get("attempt") is True]
     show_ = lambda r: f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:160]})"
@@ -511,9 +476,9 @@ def pytest_sessionfinish(session):
 
 
 def declared_tests(snap):
-    """{path: content hash} of every file the case repo's declared runner collects (rule: check-evals --help, test_write):
+    """{path: content hash} of every file the case repo's declared runner collects (rule: .agents/skills/eval-cases/references/schema.md, Before targets):
     pytest from the repo's own config (testpaths, python_files...), run in its synced env, collect only, no test module
-    imported, no bytecode or cache written, in a tree from snap's "data" (why: --help, test_write; #170).
+    imported, no bytecode or cache written, in a tree from snap's "data" (why: schema, Before targets; #170).
     Raises RuntimeError when pytest gives no list."""
     files, tree = snap["files"], f"{QA_TMP}/collect/tree"
     shutil.rmtree(tree, ignore_errors=True)
@@ -576,7 +541,7 @@ def watch(argv):
     timer = threading.Timer(tmo, stop, args=("timeout",)); timer.daemon = True; timer.start()
     seen, raws, lines = [], [], queue.Queue()
 
-    def pump():   # the snapshot per end event, off the deciding loop (why: --help, stated limit; #170)
+    def pump():   # the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
         for raw in p.stdout:
             end = safe_json(raw) if b'"tool_execution_end"' in raw else None
             end = end if isinstance(end, dict) and end.get("type") == "tool_execution_end" else None
@@ -887,11 +852,11 @@ MODEL_FILE = "judgment-model.json"   # in the evals dir: the kit's one judgment 
 BEST_RULE = "highest train accuracy over every train case answered; ties: lower train Brier, lower train cost, name"
 
 
-CLASSIFIERS = "classifiers.json"   # in the evals dir (shape: check-evals --help)
+CLASSIFIERS = "classifiers.json"   # in the evals dir (schema: .agents/skills/eval-cases/references/schema.md, Judgment model and classifiers)
 
 
 def classifier_lists(evals):
-    """EVALS/classifiers.json, parsed (its shape: check-evals --help)."""
+    """EVALS/classifiers.json, parsed (its schema: the eval-cases skill, Judgment model and classifiers)."""
     return json.loads((Path(evals) / CLASSIFIERS).read_text())
 
 
@@ -906,7 +871,7 @@ def yes_no_skipped(bench, ruled):
 
 
 def judgment_model(evals):
-    """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its shape: check-evals --help)."""
+    """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
     return json.loads((Path(evals) / MODEL_FILE).read_text())["model"]
 
 
