@@ -134,7 +134,8 @@ named with its reason on stderr, after the others were tried; exit 1, rerun afte
   octo-feather-lane report         every open lane of this session: its pull request, agents and waits
 
 `report` (spec comms #factory-report) writes nothing. It reads each lanes/*.toml record of
-the state dir (archive/ skipped) and the hand-off log beside it, `herdr agent list`, and for a record
+the state dir (archive/ skipped) and the hand-off log beside it, the state dir's director.handoffs.jsonl,
+`herdr agent list`, and for a record
 with `pr`, `gh pr view` in the repository the record names. It prints `report at <now>`, then per lane:
 
   lane <record name>: issue <issue> <repository> "<goal>"
@@ -146,6 +147,15 @@ with `pr`, `gh pr view` in the repository the record names. It prints `report at
     waits: worker <name> <pane> working          per agent other than the supervisor in state working
     waits: owner gate <gate> asked <at>          per pending owner gate (spec comms #report-owner-queue)
     waits: check <name> <status> on head <12 hex>  per check still running on the head
+
+After the lanes:
+
+  owner queue:                                   (`owner queue: none` with none pending)
+    lane <record name> gate <gate> asked <at>    per pending owner gate of every lane, oldest first
+                                                 (spec comms #report-owner-queue)
+  owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
+    class <class>: count <N>, last seen <at>     per owner-caught finding class, by class name
+                                                 (spec comms #report-owner-caught)
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
 read (a record, a log, Herdr, GitHub) prints as `unread: <source>: <reason>` where its facts would be,
@@ -1635,7 +1645,33 @@ def check_results(rollup: list[dict]) -> str:
     return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
 
 
-def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str]) -> list[str]:
+def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
+    """The director log's owner-caught finding classes (spec comms #report-owner-caught)."""
+    log = state / "director.handoffs.jsonl"
+    if not log.exists():
+        return [f"owner-caught: log {log.name}: none"]
+    try:
+        lines, bad = read_log(log)
+    except (OSError, UnicodeDecodeError) as e:
+        unread.append(f"log {log.name}")
+        return [f"owner-caught: unread: log {log.name}: {e}"]
+    seen: dict[str, list] = {}
+    for d in lines:
+        c = d.get("class")
+        if d.get("kind") == "finding" and isinstance(c, str) and c.startswith("owner-caught-"):
+            s = seen.setdefault(c, [0, None])
+            s[0] += 1
+            t = utc(d.get("at"))
+            if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
+                s[1] = d.get("at")
+    out = [f"owner-caught ({log.name}):" if seen else f"owner-caught ({log.name}): none"]
+    out += [f"  class {c}: count {n}, last seen {stamp(at, now)}" for c, (n, at) in sorted(seen.items())]
+    if bad:
+        out.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+    return out
+
+
+def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list) -> list[str]:
     import tomllib
     name = rec_path.stem
     try:
@@ -1685,7 +1721,9 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
     if log.exists():
         try:
             lines, bad = read_log(log)
-            out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending_gates(lines)]
+            pending = pending_gates(lines)
+            out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending]
+            queue += [(name, g, at) for g, at in pending]
             if bad:
                 notes.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
         except (OSError, UnicodeDecodeError) as e:
@@ -1717,8 +1755,14 @@ def cmd_report(args: list[str]) -> int:
         print(f"unread: lanes {lanes}: {e}")
     if not records:
         print("no open lane")
+    queue: list = []
     for r in records:
-        print("\n".join(report_lane(r, agents, herdr_why, now, unread)))
+        print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue)))
+    queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
+    print("owner queue:" if queue else "owner queue: none")
+    for name, g, at in queue:
+        print(f"  lane {name} gate {g} asked {stamp(at, now)}")
+    print("\n".join(owner_caught(lanes.parent, now, unread)))
     print(f"unread: {', '.join(unread) or 'none'}")
     return 0
 

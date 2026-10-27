@@ -19,4 +19,17 @@ lane lane-c: issue gh4 o/a "Merge ask awaits the owner"
   running: w7:p1 lane-c done (supervisor)
   waits: waiting_on "", last hand-off 2026-10-22T14:00:00Z (AGE ago)
   waits: owner gate merge asked 2026-10-22T14:00:00Z (AGE ago)
+lane lane-d: issue gh6 o/b "Spec review awaits the owner"
+  started: 2026-10-21T08:30:00Z (AGE ago)
+  pr: none
+  running: w8:p1 lane-d idle (supervisor)
+  waits: waiting_on "owner", last hand-off 2026-10-21T09:00:00Z (AGE ago)
+  waits: owner gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
+owner queue:
+  lane lane-d gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
+  lane lane-c gate merge asked 2026-10-22T14:00:00Z (AGE ago)
+owner-caught (director.handoffs.jsonl):
+  class owner-caught-gate-speed: count 2, last seen 2026-10-22T16:00:00Z (AGE ago)
+  class owner-caught-waits-invisible: count 1, last seen 2026-10-21T15:00:00Z (AGE ago)
+  log director.handoffs.jsonl: 1 unparsable line (4)
 unread: GitHub (lane-a), GitHub (lane-b), GitHub (lane-c)
