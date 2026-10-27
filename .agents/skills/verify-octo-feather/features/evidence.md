@@ -1,7 +1,5 @@
 # evidence
 
-`octo-feather-evidence` is a target's append-only evidence store in the box's local state: `append` records one drive (commit, criterion and its text hash, contract and fixture versions, the captured outputs) and prints the record id; `read` lists records by criterion and commit, as text or `--json`; `where` prints the store folder.
-
 Criteria:
 
 - [quality#acceptance-evidence-record](../../../../docs/specs/quality.spec.html#acceptance-evidence-record)

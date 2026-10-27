@@ -1,7 +1,5 @@
 # new-repo
 
-`just new-repo LANG DEST` makes a new target repo at DEST from the kit's `templates/LANG`: the template's tracked files, one commit on `main`, Spec Chat's skill links, and a starter verify skill on its `AGENTS.md` `Repo skills:` line; it refuses an unknown LANG or a DEST that is not new or empty, before creating anything.
-
 Criteria:
 
 - [templates#acceptance-starter-verify](../../../../docs/specs/templates.spec.html#acceptance-starter-verify)
