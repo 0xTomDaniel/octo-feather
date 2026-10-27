@@ -22,3 +22,6 @@ Runs (`scripts/octo-feather-qa --suite ladder --case reviewer-product-command-ch
    Base reviewer classified the test file, not the command.
 
 Result: separates, base 0/2, head 1/1 on the final expectation. Single trials; no variance claim.
+
+Blast radius (wider Check scope must not add Check lines where no decision refuses): head a877916, run 20261027T033818Z-1cf166:
+`PASS ladder/reviewer-no-check: field_lines Check: `Checks: none` [stop: exit, 26 tool calls, 56.1 s] [kit a87791629672aed1b895d6983ae6a03a304490b4]`
