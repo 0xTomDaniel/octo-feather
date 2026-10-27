@@ -2,8 +2,9 @@
 // (docs/specs/spend.spec.html, writer-agent). Each assistant message is one model call; a tool
 // result that carries usage is the model work that tool did (nested, e.g. codemode's
 // models.classify). Each goes to the ledger's one writer, `scripts/octo-feather-lane spend record`
-// of this kit, with purpose = OCTO_FEATHER_ROLE, else the --octo-feather-role flag pi-role passes,
-// else "agent" (a Pi run outside pi-role).
+// of this kit, with purpose = the --octo-feather-role flag pi-role passes (the running role, even
+// under a parent's inherited OCTO_FEATHER_ROLE), else OCTO_FEATHER_ROLE, else "agent" (a Pi run
+// outside pi-role).
 // The lane is the writer's (`octo-feather-lane --help`, spend record).
 //
 // Model: an assistant message's provider/model. A tool result's usage names no model, so its
@@ -53,7 +54,7 @@ function line(model: string, usage: any, timestamp: unknown, unpriced = false): 
   const t = typeof timestamp === "number" ? new Date(timestamp) : new Date();
   return {
     model,
-    purpose: process.env.OCTO_FEATHER_ROLE || flagRole || "agent",
+    purpose: flagRole || process.env.OCTO_FEATHER_ROLE || "agent",
     input_tokens: count(usage?.input) + count(usage?.cacheRead) + count(usage?.cacheWrite),
     output_tokens: count(usage?.output),
     cost_usd: typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null,
