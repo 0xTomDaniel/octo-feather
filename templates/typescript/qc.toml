@@ -15,6 +15,7 @@ command = 'node "$QC_REPO/src/cli.ts"'
 # None: the app keeps no data.
 [fixture]
 
-# The name the hello drive greets.
+# The hello drive's input and its expected greeting (a worked example, not computed).
 [values]
 name = "Ada"
+greeting = "Hello, Ada"

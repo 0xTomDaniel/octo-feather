@@ -1,13 +1,10 @@
 # hello
 
-`app hello <name>` greets a user by name, as text or as JSON with `--json`, and refuses a blank name with an error and a non-zero exit.
+Criteria:
 
-Criteria (kit templates spec, until this repo has its own specs, whose criteria then replace these links):
+- [app#acceptance-hello-json](../../../../docs/specs/app.spec.html#acceptance-hello-json)
 
-- [acceptance-cli-json](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-cli-json)
-- [acceptance-starter-verify](https://github.com/0xTomDaniel/octo-feather/blob/main/docs/specs/templates.spec.html#acceptance-starter-verify)
-
-Drive criterion: `templates#acceptance-cli-json`
+Drive criterion: `app#acceptance-hello-json`
 
 ## Sub-features
 
@@ -30,7 +27,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-app/scripts/verify-app drive hello`. Evidence: `$VERIFY_APP_EVIDENCE_DIR/hello/<case>.{cmd,stdout,stderr,exit,files}` and `summary.txt`.
 
-- **JSON greeting** (`json`). Run `app hello <name> --json`, the name `values.name` in `qc.toml`. Observe exit code, stdout JSON, stderr.
+- **JSON greeting** (`json`). Run `app hello <name> --json`, the name `values.name` in `qc.toml`. Observe exit code, stdout JSON (its `text` the contract's `values.greeting`), stderr.
 - **Text greeting** (`text`). Run `app hello <name>`. Observe exit code and the stdout line.
 - **Trimmed name** (`trimmed`). Run `app hello "  <name>  " --json`. Observe the `name` field.
 - **Blank name, JSON** (`empty-json`). Run `app hello "  " --json`. Observe exit code 2, an `error` object on stdout, empty stderr.

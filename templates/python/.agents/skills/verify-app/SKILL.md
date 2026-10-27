@@ -7,24 +7,31 @@ description: "Drive this repo's `app` CLI (a short-lived Python command, no serv
 
 The app's only user surface is the `app` CLI (`app hello <name> [--json]`). There is no server, browser, database or interactive mode; every command is one short-lived process. The helper below runs each command the real user path: the `app` command the contract's entry declares, as a subprocess, in its own empty working directory.
 
-Helper (executable, plain bash plus `python3` 3.11+, which reads the contract):
+## Helpers
+
+One helper, [`scripts/verify-app`](scripts/verify-app), executable, plain bash plus `python3` 3.11+, which reads the contract. Run it from anywhere; it finds the repo from its own path:
 
 ```
-.agents/skills/verify-app/scripts/verify-app setup|launch|doctor|drive <feature>|cleanup|run
+.agents/skills/verify-app/scripts/verify-app setup             # the contract's setup only
+.agents/skills/verify-app/scripts/verify-app launch            # see Launch
+.agents/skills/verify-app/scripts/verify-app doctor            # see Doctor
+.agents/skills/verify-app/scripts/verify-app drive <feature>   # see Drive; features: hello
+.agents/skills/verify-app/scripts/verify-app cleanup           # see Cleanup
+.agents/skills/verify-app/scripts/verify-app run               # all of the above, end to end
 ```
 
-`run` does launch, doctor, `drive hello`, cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed.
+`run` does launch, doctor, `drive hello`, cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed. Any other argument prints the usage line and exits 1.
 
 ## Contract
 
-[`qc.toml`](../../../qc.toml) at the repo root is this app's driver contract (octo-feather quality spec `#qc-contract`) and the one source of how the app is set up and entered, the services it needs, its fixtures and their reset, and the values drives use. The helper invokes only what it declares; edit the contract, never the helper, to change any of them. How the helper uses each key:
+[`qc.toml`](../../../qc.toml) at the repo root is this app's driver contract (octo-feather quality spec `#qc-contract`); what it declares is that spec section's, not repeated here. The helper invokes only what it declares; edit the contract, never the helper, to change any of it. How the helper uses each key:
 
 - `format`: the helper reads format 1.
 - `setup`: `setup` and `launch` run it.
 - `entry.command`: `launch` writes it as `bin/app` in the run state; every case runs that with its arguments.
 - `services`: none for this CLI. The helper starts no service: `launch` fails naming any declared one.
 - `fixture`: none for this app. `drive` runs each declared `reset` before its cases.
-- `values`: the hello drive greets `values.name`.
+- `values`: the hello drive greets `values.name` and expects the greeting `values.greeting`, a worked example the helper compares against, never rebuilds.
 
 What each key means and how its commands run: the kit's `schemas/qc.v1.schema.json`. Validate the contract with the kit's `octo-feather-contract` (prints ok, or names the missing or wrong key).
 
@@ -68,7 +75,7 @@ Evidence lives at `$VERIFY_APP_EVIDENCE_DIR`: `doctor.txt` (from `run`) and one 
 
 The kept record is this repo's evidence store (octo-feather quality spec `#evidence-store`), outside the repo and both folders above: every `drive`, passed or failed, appends one record through the kit's `octo-feather-evidence` (on PATH with the kit's `scripts/`; a drive fails without it) and prints `verify-app: evidence record <id> (criterion <spec>#<anchor>; ...)`. The record holds the feature folder's files as outputs and names the commit, the criterion, the contract and fixture versions:
 
-- The criterion is the one the feature file's `Drive criterion:` line names; the helper passes the feature file's line linking it as the criterion's text, for when this repo's specs lack it.
+- The criterion is the one the feature file's `Drive criterion:` line names; `octo-feather-evidence` hashes its text from this repo's spec (`docs/specs/<spec>.spec.html`, the element with that anchor). With no such element the drive fails naming the criterion, and no record is kept.
 - Read a criterion's records at a commit: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` (`--json` for data). Where the store lives and the record format: `octo-feather-evidence --help`.
 
 ## Cleanup
