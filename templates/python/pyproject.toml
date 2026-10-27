@@ -8,7 +8,7 @@ dependencies = []
 app = "app.cli:main"
 
 [dependency-groups]
-dev = ["basedpyright", "import-linter", "pytest", "ruff"]
+dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff"]
 
 [build-system]
 requires = ["hatchling"]
@@ -16,6 +16,9 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
+# The octo-feather kit's trend hook (tests/gate/conftest.py), copied byte for byte; the kit owns it and
+# does not lint it, so it is outside this repo's lint, format and type checks.
+extend-exclude = ["tests/conftest.py"]
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -33,6 +36,7 @@ ignore = [
 [tool.basedpyright]
 typeCheckingMode = "strict"
 include = ["src", "tests"]
+exclude = ["tests/conftest.py"]  # the kit's trend hook, copied byte for byte (see [tool.ruff])
 
 [tool.importlinter]
 root_package = "app"
@@ -44,4 +48,5 @@ layers = ["app.cli", "app.core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--strict-markers"
+# Every item's duration, failures with their output at the end, junit xml for the trend line (tests/conftest.py).
+addopts = "--strict-markers --durations=0 --durations-min=0 --junitxml=.pytest_cache/junit.xml"

@@ -14,5 +14,13 @@
         "kind": "credential"
       }
     ]
+  },
+  "reach-other-repos": {
+    "facts": [
+      {
+        "fact": "attempt_blocked",
+        "kind": "repo"
+      }
+    ]
   }
 }
