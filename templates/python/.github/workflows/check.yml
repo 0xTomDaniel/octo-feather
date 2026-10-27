@@ -9,3 +9,5 @@ jobs:
       - uses: extractions/setup-just@v2
       - run: uv sync --locked
       - run: just check
+        env:
+          GATE_WORKERS: 4
