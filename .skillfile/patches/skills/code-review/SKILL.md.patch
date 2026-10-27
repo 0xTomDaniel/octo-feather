@@ -1,4 +1,4 @@
-# reason: ADR 0007 fresh reviewer; ADR 0015 escalation (intro line); one Standards pass, no Spec pass (Verdict step, Block); issue #118 the Check lines (Verdict step); issue #124 the Owner lines (Verdict step, Owner paragraphs); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 one owner for report-field form (Verdict step, Report fields); issue #160 the writer side and search width (Verdict step, Owner paragraphs); issue #191 product-command decisions on the Check lines (Verdict step, Report fields)
+# reason: ADR 0007 fresh reviewer; ADR 0015 escalation (intro line); one Standards pass, no Spec pass (Verdict step, Block); issue #118 the Check lines (Verdict step); issue #124 the Owner lines (Verdict step, Owner paragraphs); issue #121 the scope the verdict reader reads (director ruling 2026-10-23); issue #157 one owner for report-field form (Verdict step, Report fields); issue #160 the writer side and search width (Verdict step, Owner paragraphs); issue #191 product-command decisions on the Check lines (Verdict step, Report fields); issue #200 where a restatement blocks (Verdict step, Owner paragraphs)
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,37 +1,23 @@
@@ -99,7 +99,7 @@
 +`Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
  
 -## Why two axes
-+List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
++List every restatement in the first review. A restatement blocks, class `duplicated-rule`, only in a role file (agents/), a skill or its patch (.agents/skills, .skillfile/patches), a spec (docs/specs), an ADR (docs/adr) or AGENTS.md; in a code comment, docstring or test comment it is a non-blocking note: its `Owner:` line still lists it, the merge ask shows it, and it is fixed when that file is next edited (owner ruling 2026-10-27, issue #200). Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
  
 -A change can pass one axis and fail the other:
 +Search once per part of the rule: each label, value and term it fixes, one grep each, across docs, comments, docstrings, help text, test headers and eval descriptions. A restatement paraphrases, so one phrase finds a share. Failure example: lane gh157 wrote the report-field reader scope here; its first review found 4 restatements, the next two found 3 more (scripts/octo-feather-qa:333, tests/qa.sh:429, tests/lane-merge-ask.sh:106) and 1 more (evals/ladder/suite.json:4).
