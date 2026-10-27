@@ -1,428 +1,615 @@
-#!/usr/bin/env bash
-# verify-octo-feather: drive the octo-feather kit's own commands the way an owner or agent runs them, and keep the proof.
-# Usage: verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
-# Run state: $VERIFY_OCTO_FEATHER_RUN_DIR. Evidence: $VERIFY_OCTO_FEATHER_EVIDENCE_DIR.
-# Both default outside the git dir, under ${TMPDIR:-/tmp}. What a drive may touch: ../SKILL.md.
-set -euo pipefail
+#!/usr/bin/env python3
+"""verify-octo-feather: drive the octo-feather kit's own commands the way an owner or agent runs them, and keep the proof.
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-repo=$(cd "$script_dir/../../../.." && pwd -P)
-repo_key=$(printf '%s' "$repo" | cksum | cut -d' ' -f1)
-base="${TMPDIR:-/tmp}/verify-octo-feather.$(id -u).$repo_key"
-run_dir="${VERIFY_OCTO_FEATHER_RUN_DIR:-$base/run}"
-evidence_dir="${VERIFY_OCTO_FEATHER_EVIDENCE_DIR:-$base/evidence}"
-state="$run_dir/state"
-created="$run_dir/created"
-contract="$repo/qc.toml"
-features="new-repo install-check contract evidence"
+Usage: verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
+Run state: $VERIFY_OCTO_FEATHER_RUN_DIR. Evidence: $VERIFY_OCTO_FEATHER_EVIDENCE_DIR.
+Both default outside the git dir, under ${TMPDIR:-/tmp}. What a drive may touch: ../SKILL.md.
+Needs python3 3.11+ (tomllib reads qc.toml).
+"""
 
-say() { printf 'verify-octo-feather: %s\n' "$*"; }
-die() {
-    printf 'verify-octo-feather: %s\n' "$*" >&2
-    exit 1
-}
+from __future__ import annotations
 
-# Prove a folder is writable by writing to it; `test -w` lies under some sandboxes.
-writable() {
-    local dir=$1 probe
-    mkdir -p "$dir" 2>/dev/null || return 1
-    probe="$dir/.verify-octo-feather-probe.$$"
-    { : >"$probe"; } 2>/dev/null || return 1
-    rm -f "$probe"
-}
+import difflib
+import glob
+import hashlib
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tomllib
+from collections.abc import Callable, Sequence
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, NoReturn
 
-load_state() {
-    [[ -f $state ]] || die "no run state at $state: run 'verify-octo-feather launch' first"
-    # shellcheck source=/dev/null
-    . "$state"
-}
+ME = "verify-octo-feather"
+FEATURES = ("new-repo", "install-check", "contract", "evidence")
+SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
+REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
+CONTRACT = REPO / "qc.toml"
 
-# The kit's contract, qc.toml at the kit root (format 1), as shell assignments: QC_SETUP, QC_ENTRY, QC_SERVICES,
-# QC_FIXTURES and QC_RESETS, QC_VALUES and QC_VALUES_JSON. The helper enters the kit only through these.
-read_contract() {
-    command -v python3 >/dev/null || die "python3 (3.11+) not on PATH: verify-octo-feather reads $contract with its tomllib"
-    python3 - "$contract" <<'EOF_PY'
-import json, shlex, sys
-try:
-    import tomllib
-except ImportError:
-    sys.exit("verify-octo-feather: python3 3.11+ needed: it reads qc.toml with tomllib")
-path = sys.argv[1]
-try:
-    with open(path, "rb") as fh:
-        c = tomllib.load(fh)
-except (OSError, ValueError) as e:
-    sys.exit(f"verify-octo-feather: cannot read the kit's contract {path}: {e}")
-if c.get("format") != 1:
-    sys.exit(f"verify-octo-feather: {path}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
-entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
-if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
-        and isinstance(fixture, dict) and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
-        and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())):
-    sys.exit(f"verify-octo-feather: {path} does not match format 1 (validate: octo-feather-contract)")
-q, arr = shlex.quote, lambda xs: "(" + " ".join(shlex.quote(x) for x in xs) + ")"
-print(f"QC_SETUP={q(c.get('setup', ''))}")
-print(f"QC_ENTRY={q(entry['command'])}")
-print(f"QC_SERVICES={arr(services)}")
-print(f"QC_FIXTURES={arr(fixture)}")
-print(f"QC_RESETS={arr(f['reset'] for f in fixture.values())}")
-print("declare -gA QC_VALUES=(" + " ".join(f"[{q(k)}]={q(v)}" for k, v in values.items()) + ")")
-print(f"QC_VALUES_JSON={q(json.dumps(values))}")
-EOF_PY
-}
 
-cmd_launch() {
-    writable "$run_dir" || die "cannot write run state folder: $run_dir"
-    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
-    local contract_sh
-    contract_sh=$(read_contract) || exit 1
-    eval "$contract_sh"
+def cksum(data: bytes) -> int:
+    """POSIX cksum's CRC, so the default folders keep the name the shell helper gave them."""
+    n, tail = len(data), []
+    while n:
+        tail.append(n & 0xFF)
+        n >>= 8
+    crc = 0
+    for b in [*data, *tail]:
+        crc ^= b << 24
+        for _ in range(8):
+            crc = (((crc << 1) ^ 0x04C11DB7) if crc & 0x80000000 else crc << 1) & 0xFFFFFFFF
+    return ~crc & 0xFFFFFFFF
+
+
+BASE = Path(os.environ.get("TMPDIR") or "/tmp") / f"{ME}.{os.getuid()}.{cksum(str(REPO).encode())}"
+RUN_DIR = Path(os.environ.get("VERIFY_OCTO_FEATHER_RUN_DIR") or BASE / "run")
+EVIDENCE_DIR = Path(os.environ.get("VERIFY_OCTO_FEATHER_EVIDENCE_DIR") or BASE / "evidence")
+STATE = RUN_DIR / "state"
+CREATED = RUN_DIR / "created"
+
+
+def say(msg: str) -> None:
+    print(f"{ME}: {msg}", flush=True)
+
+
+def die(msg: str) -> NoReturn:
+    sys.stdout.flush()
+    print(f"{ME}: {msg}", file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def writable(d: Path) -> bool:
+    """Prove a folder is writable by writing to it; `test -w` lies under some sandboxes."""
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / f".{ME}-probe.{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def output(argv: Sequence[str], **kw: Any) -> tuple[int, str]:
+    """A command's exit code and its stdout then stderr, as text."""
+    try:
+        r = subprocess.run(list(argv), capture_output=True, text=True, check=False, **kw)
+    except OSError as e:
+        return 127, f"{e}\n"
+    return r.returncode, r.stdout + r.stderr
+
+
+def git_rev(repo: Path) -> str:
+    code, out = output(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"])
+    return out.strip() if code == 0 and out.strip() else "unknown"
+
+
+@dataclass(frozen=True)
+class Contract:
+    """The kit's contract, qc.toml at the kit root (format 1). The helper enters the kit only through it."""
+
+    setup: str
+    entry: str
+    services: list[str]
+    fixtures: dict[str, str]  # name: reset command
+    values: dict[str, str]
+
+
+def read_contract() -> Contract:
+    try:
+        with CONTRACT.open("rb") as fh:
+            c: dict[str, Any] = tomllib.load(fh)
+    except (OSError, ValueError) as e:
+        die(f"cannot read the kit's contract {CONTRACT}: {e}")
+    if c.get("format") != 1:
+        die(f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
+    entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
+    if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
+            and isinstance(fixture, dict)
+            and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
+            and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())
+            and isinstance(c.get("setup", ""), str)):
+        die(f"{CONTRACT} does not match format 1 (validate: octo-feather-contract)")
+    return Contract(setup=c.get("setup", ""), entry=entry["command"], services=list(services),
+                    fixtures={k: f["reset"] for k, f in fixture.items()}, values=dict(values))
+
+
+def sh_in_repo(command: str) -> bool:
+    """A contract command, as the contract says it runs: under sh, in the kit, with QC_REPO set."""
+    return subprocess.run(["sh", "-c", command], cwd=REPO, env={**os.environ, "QC_REPO": str(REPO)},
+                          check=False).returncode == 0
+
+
+@dataclass(frozen=True)
+class State:
+    contract: Contract
+    kit: str
+    repo: str
+    rev: str
+    launched: str
+
+
+def load_state() -> State:
+    if not STATE.is_file():
+        die(f"no run state at {STATE}: run '{ME} launch' first")
+    s = json.loads(STATE.read_text())
+    return State(contract=Contract(**s["contract"]), kit=s["kit"], repo=s["repo"], rev=s["rev"], launched=s["launched"])
+
+
+def cmd_launch() -> None:
+    if not writable(RUN_DIR):
+        die(f"cannot write run state folder: {RUN_DIR}")
+    if not writable(EVIDENCE_DIR):
+        die(f"cannot write evidence folder: {EVIDENCE_DIR}")
+    c = read_contract()
     # Short-lived commands: this helper starts no service. A contract that declares one needs a helper that readies it.
-    [[ ${#QC_SERVICES[@]} == 0 ]] || die "qc.toml declares services (${QC_SERVICES[*]}); this helper starts none: extend it to start and ready them"
-    if [[ -n $QC_SETUP ]]; then
-        say "setup in $repo (qc.toml setup): $QC_SETUP"
-        (cd "$repo" && QC_REPO=$repo sh -c "$QC_SETUP") || die "qc.toml setup failed: $QC_SETUP"
-    fi
-    local kit rev
+    if c.services:
+        die(f"qc.toml declares services ({' '.join(c.services)}); this helper starts none: extend it to start and ready them")
+    if c.setup:
+        say(f"setup in {REPO} (qc.toml setup): {c.setup}")
+        if not sh_in_repo(c.setup):
+            die(f"qc.toml setup failed: {c.setup}")
     # The kit command: qc.toml's entry with the user's command appended.
-    kit="$run_dir/bin/kit"
-    mkdir -p "$run_dir/bin" "$run_dir/scratch" || die "cannot write run state folder: $run_dir"
-    printf '#!/usr/bin/env bash\nexport QC_REPO=%q\nexec sh -c %q kit "$@"\n' "$repo" "$QC_ENTRY \"\$@\"" >"$kit" || die "cannot write kit command: $kit"
-    chmod +x "$kit"
-    rev=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)
-    {
-        printf '%s\n' "$contract_sh"
-        printf 'KIT=%q\n' "$kit"
-        printf 'REPO=%q\n' "$repo"
-        printf 'REV=%q\n' "$rev"
-        printf 'LAUNCHED=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    } >"$state" || die "cannot write run state file: $state"
-    [[ -s $state ]] || die "run state file is empty: $state"
-    say "ready: kit=$kit entry=$QC_ENTRY rev=$rev"
-    say "run state: $run_dir"
-    say "evidence:  $evidence_dir"
-}
+    kit = RUN_DIR / "bin" / "kit"
+    try:
+        (RUN_DIR / "bin").mkdir(parents=True, exist_ok=True)
+        (RUN_DIR / "scratch").mkdir(parents=True, exist_ok=True)
+    except OSError:
+        die(f"cannot write run state folder: {RUN_DIR}")
+    wrapper = f'#!/usr/bin/env bash\nexport QC_REPO={shlex.quote(str(REPO))}\nexec sh -c {shlex.quote(c.entry + ' "$@"')} kit "$@"\n'
+    try:
+        kit.write_text(wrapper)
+        kit.chmod(0o755)
+    except OSError:
+        die(f"cannot write kit command: {kit}")
+    rev = git_rev(REPO)
+    try:
+        STATE.write_text(json.dumps({"contract": asdict(c), "kit": str(kit), "repo": str(REPO), "rev": rev,
+                                     "launched": now()}, indent=1) + "\n")
+    except OSError:
+        die(f"cannot write run state file: {STATE}")
+    if STATE.stat().st_size == 0:
+        die(f"run state file is empty: {STATE}")
+    say(f"ready: kit={kit} entry={c.entry} rev={rev}")
+    say(f"run state: {RUN_DIR}")
+    say(f"evidence:  {EVIDENCE_DIR}")
 
-# KIT, REPO, REV and the contract's QC_* come from the state file.
-# shellcheck disable=SC2153
-cmd_doctor() {
-    load_state
-    local ok=0 out t rev installer
-    report() { printf '%-8s %s\n' "$1" "$2"; }
-    if [[ -x $KIT ]]; then report ok "kit command $KIT"; else
-        report FAIL "kit command missing: $KIT"
-        ok=1
-    fi
-    report info "entry (qc.toml): $QC_ENTRY"
-    for t in just git python3; do
-        if command -v "$t" >/dev/null; then report ok "$t on PATH"; else
-            report FAIL "$t not on PATH: the kit's commands need it"
-            ok=1
-        fi
-    done
-    for t in octo-feather-new-repo octo-feather-contract octo-feather-evidence; do
-        out=$("$KIT" sh -c 'command -v "$1"' sh "$t" 2>&1 || true)
-        if [[ $out == "$REPO/scripts/$t" ]]; then report ok "$t resolves to this checkout"; else
-            report FAIL "$t resolves to '$out', not $REPO/scripts/$t"
-            ok=1
-        fi
-    done
-    if out=$("$KIT" just --justfile "$REPO/justfile" --summary 2>&1) && grep -qw new-repo <<<"$out" && grep -qw install-check <<<"$out"; then
-        report ok "kit justfile lists new-repo and install-check"
-    else
-        report FAIL "'just --summary' failed or lacks new-repo, install-check: $out"
-        ok=1
-    fi
-    if out=$("$KIT" octo-feather-contract "$REPO" 2>&1); then report ok "$out"; else
-        report FAIL "$out"
-        ok=1
-    fi
-    rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
-    if [[ $rev == "$REV" ]]; then report ok "checkout at launch rev $REV"; else
-        report WARN "checkout moved: launched at $REV, now $rev (relaunch)"
-    fi
-    installer="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat"
-    if [[ -x $installer ]]; then report ok "Spec Chat installer $installer (new-repo links it)"; else
-        report WARN "no Spec Chat installer at $installer: the new-repo drive fails (features/new-repo.md Gotchas)"
-    fi
-    if unshare -Un --map-current-user true 2>/dev/null; then report ok "unshare -Un: install-check drives without network"; else
-        report WARN "no network namespace (unshare -Un): the install-check drive fails (features/install-check.md Gotchas)"
-    fi
-    if [[ -d $run_dir/scratch ]]; then report ok "scratch $run_dir/scratch"; else
-        report FAIL "scratch missing"
-        ok=1
-    fi
-    return "$ok"
-}
 
-# One isolated case: fresh empty cwd, the command as typed, stdout, stderr, exit code, files left in cwd, and the
-# kit checkout's git status before and after (a drive changes nothing in the kit).
-# case_run <dir> <name> <arg>...; case_env (VAR=value...) and case_pre (a wrapper such as unshare) apply when set.
-case_env=()
-case_pre=()
-case_run() {
-    local dir=$1 name=$2
-    shift 2
-    local cwd="$run_dir/scratch/cwd/$name" code=0 before="$run_dir/scratch/kit-status.before"
-    rm -rf "$cwd" && mkdir -p "$cwd"
-    { printf '%q ' "${case_env[@]}" "${case_pre[@]}" "$@" && echo; } >"$dir/$name.cmd"
-    git -C "$REPO" status --porcelain=v1 >"$before"
-    (cd "$cwd" && env "${case_env[@]}" "${case_pre[@]}" "$KIT" "$@") >"$dir/$name.stdout" 2>"$dir/$name.stderr" || code=$?
-    echo "$code" >"$dir/$name.exit"
-    find "$cwd" -mindepth 1 >"$dir/$name.files"
-    diff "$before" <(git -C "$REPO" status --porcelain=v1) >"$dir/$name.kit-status" || true
-}
+def cmd_doctor(tee: Path | None = None) -> int:
+    s = load_state()
+    ok = 0
+    log = tee.open("w") if tee else None
 
-# obs <dir> <case> <key> <cmd>...: an observed fact, the command's stdout (and its stderr), for the check as o[key].
-obs() {
-    local dir=$1 name=$2 key=$3
-    shift 3
-    "$@" >"$dir/$name.obs.$key" 2>&1 || true
-}
+    def report(level: str, msg: str) -> None:
+        line = f"{level:<8} {msg}"
+        print(line, flush=True)
+        if log:
+            log.write(line + "\n")
 
-# check <dir> <name> <python-expr over out, err, code, j (stdout JSON or None), o (observations), v (qc.toml values)>
-# A case passes when the expression holds, it left no files in its cwd and the kit's git status did not change.
-check() {
-    local dir=$1 name=$2 expr=$3 verdict
-    verdict=$(
-        python3 - "$dir" "$name" "$expr" "$QC_VALUES_JSON" "$REPO" <<'EOF'
-import json, pathlib, re, sys
-d, n, expr, kit = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3], sys.argv[5]
-v = json.loads(sys.argv[4])
-out = (d / f"{n}.stdout").read_text()
-err = (d / f"{n}.stderr").read_text()
-code = int((d / f"{n}.exit").read_text())
-o = {p.name[len(n) + 5:]: p.read_text() for p in d.glob(f"{n}.obs.*")}
-clean = (d / f"{n}.files").read_text() == "" and (d / f"{n}.kit-status").read_text() == ""
-try:
-    j = json.loads(out)
-except ValueError:
-    j = None
-try:
-    ok = bool(eval("(" + expr + "\n)"))
-except Exception as e:
-    print(f"check error: {type(e).__name__}: {e}", file=sys.stderr)
-    ok = False
-print("PASS" if ok and clean else "FAIL")
-EOF
-    )
-    printf '%s %s: %s\n' "$verdict" "$name" "$(cat "$dir/$name.cmd")" | tee -a "$dir/summary.txt"
-    sed 's/^/    stdout: /' "$dir/$name.stdout"
-    sed 's/^/    stderr: /' "$dir/$name.stderr"
-    printf '    exit: %s\n' "$(cat "$dir/$name.exit")"
-    [[ $verdict == PASS ]]
-}
+    if os.access(s.kit, os.X_OK):
+        report("ok", f"kit command {s.kit}")
+    else:
+        report("FAIL", f"kit command missing: {s.kit}")
+        ok = 1
+    report("info", f"entry (qc.toml): {s.contract.entry}")
+    for t in ("just", "git", "python3"):
+        if shutil.which(t):
+            report("ok", f"{t} on PATH")
+        else:
+            report("FAIL", f"{t} not on PATH: the kit's commands need it")
+            ok = 1
+    for t in ("octo-feather-new-repo", "octo-feather-contract", "octo-feather-evidence"):
+        out = output([s.kit, "sh", "-c", 'command -v "$1"', "sh", t])[1].rstrip("\n")
+        if out == f"{s.repo}/scripts/{t}":
+            report("ok", f"{t} resolves to this checkout")
+        else:
+            report("FAIL", f"{t} resolves to '{out}', not {s.repo}/scripts/{t}")
+            ok = 1
+    code, out = output([s.kit, "just", "--justfile", f"{s.repo}/justfile", "--summary"])
+    out = out.rstrip("\n")
+    if code == 0 and {"new-repo", "install-check"} <= set(out.split()):
+        report("ok", "kit justfile lists new-repo and install-check")
+    else:
+        report("FAIL", f"'just --summary' failed or lacks new-repo, install-check: {out}")
+        ok = 1
+    code, out = output([s.kit, "octo-feather-contract", s.repo])
+    out = out.rstrip("\n")
+    if code == 0:
+        report("ok", out)
+    else:
+        report("FAIL", out)
+        ok = 1
+    rev = git_rev(Path(s.repo))
+    if rev == s.rev:
+        report("ok", f"checkout at launch rev {s.rev}")
+    else:
+        report("WARN", f"checkout moved: launched at {s.rev}, now {rev} (relaunch)")
+    clone = os.environ.get("SPEC_CHAT_CLONE") or f"{Path.home()}/src/spec-chat"
+    installer = f"{clone}/scripts/install-spec-chat"
+    if os.access(installer, os.X_OK):
+        report("ok", f"Spec Chat installer {installer} (new-repo links it)")
+    else:
+        report("WARN", f"no Spec Chat installer at {installer}: the new-repo drive fails (features/new-repo.md Gotchas)")
+    if has_netns():
+        report("ok", "unshare -Un: install-check drives without network")
+    else:
+        report("WARN", "no network namespace (unshare -Un): the install-check drive fails (features/install-check.md Gotchas)")
+    if (RUN_DIR / "scratch").is_dir():
+        report("ok", f"scratch {RUN_DIR / 'scratch'}")
+    else:
+        report("FAIL", "scratch missing")
+        ok = 1
+    if log:
+        log.close()
+    return ok
 
-# A path a drive creates; cleanup removes it, and only it. Refuses a path that already holds anything.
-fresh_path() {
-    local p=$1
-    [[ ! -e $p || -z "$(ls -A "$p" 2>/dev/null)" ]] || die "$p exists and is not empty: pick a new path (VERIFY_OCTO_FEATHER_NEW_REPO_DEST)"
-    printf '%s\n' "$p" >>"$created"
-}
 
-drive_new_repo() {
-    local dir="$evidence_dir/new-repo" fails=0 lang dest bad kitjust
-    [[ -n ${QC_VALUES[lang]+set} ]] || die "qc.toml [values] has no lang: the new-repo drive creates a repo from templates/<lang>"
-    lang=${QC_VALUES[lang]}
-    dest=$(realpath -m -- "${VERIFY_OCTO_FEATHER_NEW_REPO_DEST:-$run_dir/scratch/new-repo/$lang}")
-    bad="$run_dir/scratch/new-repo/bad-lang"
-    kitjust="$REPO/justfile"
-    fresh_path "$dest"
-    fresh_path "$bad"
-    say "new-repo dest: $dest"
+NETNS = ["unshare", "-Un", "--map-current-user"]
+
+
+def has_netns() -> bool:
+    return output([*NETNS, "true"])[0] == 0
+
+
+@dataclass(frozen=True)
+class Case:
+    """What one case left: stdout, stderr, exit code, stdout as JSON (None when it is not), the facts
+    observed after it (o[key]), the contract's values (v) and the kit root (kit)."""
+
+    out: str
+    err: str
+    code: int
+    j: Any
+    o: dict[str, str]
+    v: dict[str, str]
+    kit: str
+
+
+@dataclass
+class Feature:
+    """One feature's drive: its evidence folder and its cases' results."""
+
+    s: State
+    d: Path
+    fails: int = 0
+    env: dict[str, str] = field(default_factory=dict[str, str])  # scratch env for the next cases
+    pre: list[str] = field(default_factory=list[str])  # a wrapper such as unshare for the next cases
+
+    def run(self, name: str, *args: str) -> None:
+        """One isolated case: fresh empty cwd, the command as typed, stdout, stderr, exit code, files left
+        in cwd, and the kit checkout's git status before and after (a drive changes nothing in the kit)."""
+        d = self.d
+        cwd = RUN_DIR / "scratch" / "cwd" / name
+        shutil.rmtree(cwd, ignore_errors=True)
+        cwd.mkdir(parents=True)
+        typed = [f"{k}={v}" for k, v in self.env.items()] + self.pre + list(args)
+        (d / f"{name}.cmd").write_text("".join(f"{shlex.quote(a)} " for a in typed) + "\n")
+        before = self.kit_status()
+        with (d / f"{name}.stdout").open("wb") as out, (d / f"{name}.stderr").open("wb") as err:
+            rc = subprocess.run([*self.pre, self.s.kit, *args], cwd=cwd, env={**os.environ, **self.env},
+                                stdout=out, stderr=err, check=False).returncode
+        (d / f"{name}.exit").write_text(f"{128 - rc if rc < 0 else rc}\n")
+        left = sorted(str(Path(r) / f) for r, ds, fs in os.walk(cwd) for f in [*ds, *fs])
+        (d / f"{name}.files").write_text("".join(f"{p}\n" for p in left))
+        after = self.kit_status()
+        (d / f"{name}.kit-status").write_text("".join(difflib.unified_diff(
+            before.splitlines(keepends=True), after.splitlines(keepends=True), "before", "after")))
+
+    def kit_status(self) -> str:
+        return output(["git", "-C", self.s.repo, "status", "--porcelain=v1"])[1]
+
+    def obs(self, name: str, key: str, text: str) -> None:
+        """An observed fact for the check as o[key]."""
+        (self.d / f"{name}.obs.{key}").write_text(text)
+
+    def obs_cmd(self, name: str, key: str, *argv: str) -> None:
+        """An observed fact: a command's stdout and stderr."""
+        self.obs(name, key, output(argv)[1])
+
+    def check(self, name: str, holds: Callable[[Case], object]) -> None:
+        """A case passes when holds is true, it left no files in its cwd and the kit's git status did not change."""
+        d = self.d
+        out = (d / f"{name}.stdout").read_text()
+        err = (d / f"{name}.stderr").read_text()
+        code = int((d / f"{name}.exit").read_text())
+        o = {p.name[len(name) + 5:]: p.read_text() for p in d.glob(f"{glob.escape(name)}.obs.*")}
+        clean = (d / f"{name}.files").read_text() == "" and (d / f"{name}.kit-status").read_text() == ""
+        try:
+            j = json.loads(out)
+        except ValueError:
+            j = None
+        try:
+            passed = bool(holds(Case(out=out, err=err, code=code, j=j, o=o, v=self.s.contract.values, kit=self.s.repo)))
+        except Exception as e:  # noqa: BLE001  a check that cannot evaluate fails its case
+            print(f"check error: {type(e).__name__}: {e}", file=sys.stderr, flush=True)
+            passed = False
+        verdict = "PASS" if passed and clean else "FAIL"
+        self.summary(f"{verdict} {name}: {(d / f'{name}.cmd').read_text().rstrip(chr(10))}")
+        for label, text in (("stdout", out), ("stderr", err)):
+            for ln in text.splitlines():
+                print(f"    {label}: {ln}")
+        print(f"    exit: {code}", flush=True)
+        if verdict != "PASS":
+            self.fails += 1
+
+    def summary(self, line: str) -> None:
+        print(line, flush=True)
+        with (self.d / "summary.txt").open("a") as fh:
+            fh.write(line + "\n")
+
+
+def fresh_path(p: Path) -> None:
+    """A path a drive creates; cleanup removes it, and only it. Refuses a path that already holds anything."""
+    if p.exists() and (not p.is_dir() or any(p.iterdir())):
+        die(f"{p} exists and is not empty: pick a new path (VERIFY_OCTO_FEATHER_NEW_REPO_DEST)")
+    with CREATED.open("a") as fh:
+        fh.write(f"{p}\n")
+
+
+def sorted_lines(text: str) -> str:
+    return "".join(f"{ln}\n" for ln in sorted(text.splitlines()))
+
+
+def drive_new_repo(f: Feature) -> None:
+    s, v = f.s, f.s.contract.values
+    if "lang" not in v:
+        die("qc.toml [values] has no lang: the new-repo drive creates a repo from templates/<lang>")
+    lang = v["lang"]
+    dest = Path(os.path.realpath(os.environ.get("VERIFY_OCTO_FEATHER_NEW_REPO_DEST") or RUN_DIR / "scratch" / "new-repo" / lang))
+    bad = RUN_DIR / "scratch" / "new-repo" / "bad-lang"
+    kitjust = f"{s.repo}/justfile"
+    fresh_path(dest)
+    fresh_path(bad)
+    say(f"new-repo dest: {dest}")
     # The template's tracked files, which the new repo must hold exactly.
-    git -C "$REPO/templates/$lang" ls-files | sort >"$dir/create.obs.template-files"
-    printf '%s\n' "$dest" >"$dir/create.obs.dest"
+    f.obs("create", "template-files", sorted_lines(output(["git", "-C", f"{s.repo}/templates/{lang}", "ls-files"])[1]))
+    f.obs("create", "dest", f"{dest}\n")
     # Spec Chat's installer writes its onboarding state under XDG_STATE_HOME: a scratch one, never the box's.
-    case_env=("XDG_STATE_HOME=$run_dir/scratch/state")
+    f.env = {"XDG_STATE_HOME": str(RUN_DIR / "scratch" / "state")}
 
-    case_run "$dir" create just --justfile "$kitjust" new-repo "$lang" "$dest"
-    obs "$dir" create log git -C "$dest" log --format=%s main
-    obs "$dir" create branch git -C "$dest" branch --show-current
-    obs "$dir" create status git -C "$dest" status --porcelain=v1
-    obs "$dir" create files sh -c 'git -C "$1" ls-files | sort' sh "$dest"
-    obs "$dir" create repo-skills grep '^Repo skills:' "$dest/AGENTS.md"
-    obs "$dir" create verify-skill sh -c 'ls "$1"/.agents/skills/verify-*/SKILL.md' sh "$dest"
-    obs "$dir" create contract "$KIT" octo-feather-contract "$dest"
-    check "$dir" create 'code == 0 and o["dest"].strip() + " from templates/" + v["lang"] in out
-        and re.fullmatch(r"Initial commit from octo-feather templates/" + v["lang"] + r" @ [0-9a-f]+\n", o["log"])
-        and o["branch"] == "main\n" and o["status"] == "" and o["files"] == o["template-files"]
-        and re.search(r"\bverify-\w+", o["repo-skills"]) and o["verify-skill"].strip()
-        and o["contract"].endswith(": ok (format 1)\n")' || fails=1
+    f.run("create", "just", "--justfile", kitjust, "new-repo", lang, str(dest))
+    f.obs_cmd("create", "log", "git", "-C", str(dest), "log", "--format=%s", "main")
+    f.obs_cmd("create", "branch", "git", "-C", str(dest), "branch", "--show-current")
+    f.obs_cmd("create", "status", "git", "-C", str(dest), "status", "--porcelain=v1")
+    f.obs("create", "files", sorted_lines(output(["git", "-C", str(dest), "ls-files"])[1]))
+    agents = dest / "AGENTS.md"
+    lines = agents.read_text().splitlines() if agents.is_file() else []
+    f.obs("create", "repo-skills", "".join(f"{ln}\n" for ln in lines if ln.startswith("Repo skills:")))
+    f.obs("create", "verify-skill", "".join(f"{p}\n" for p in sorted(glob.glob(f"{glob.escape(str(dest))}/.agents/skills/verify-*/SKILL.md"))))
+    f.obs_cmd("create", "contract", s.kit, "octo-feather-contract", str(dest))
+    f.check("create", lambda c: c.code == 0 and c.o["dest"].strip() + " from templates/" + c.v["lang"] in c.out
+            and re.fullmatch(r"Initial commit from octo-feather templates/" + c.v["lang"] + r" @ [0-9a-f]+\n", c.o["log"])
+            and c.o["branch"] == "main\n" and c.o["status"] == "" and c.o["files"] == c.o["template-files"]
+            and re.search(r"\bverify-\w+", c.o["repo-skills"]) and c.o["verify-skill"].strip()
+            and c.o["contract"].endswith(": ok (format 1)\n"))
 
     # Over the repo just made: refused, the repo untouched.
-    obs "$dir" refuse-nonempty head-before git -C "$dest" rev-parse HEAD
-    case_run "$dir" refuse-nonempty just --justfile "$kitjust" new-repo "$lang" "$dest"
-    obs "$dir" refuse-nonempty head-after git -C "$dest" rev-parse HEAD
-    check "$dir" refuse-nonempty 'code == 1 and "exists and is not empty" in err
-        and o["head-before"] == o["head-after"] and len(o["head-after"]) > 7' || fails=1
+    f.obs_cmd("refuse-nonempty", "head-before", "git", "-C", str(dest), "rev-parse", "HEAD")
+    f.run("refuse-nonempty", "just", "--justfile", kitjust, "new-repo", lang, str(dest))
+    f.obs_cmd("refuse-nonempty", "head-after", "git", "-C", str(dest), "rev-parse", "HEAD")
+    f.check("refuse-nonempty", lambda c: c.code == 1 and "exists and is not empty" in c.err
+            and c.o["head-before"] == c.o["head-after"] and len(c.o["head-after"]) > 7)
 
-    case_run "$dir" refuse-lang just --justfile "$kitjust" new-repo no-such-lang "$bad"
-    obs "$dir" refuse-lang made sh -c 'if [ -e "$1" ]; then echo made; fi' sh "$bad"
-    check "$dir" refuse-lang 'code == 1 and "unknown LANG" in err and o["made"] == ""' || fails=1
-    case_env=()
-    say "new-repo evidence: $dir"
-    return "$fails"
-}
+    f.run("refuse-lang", "just", "--justfile", kitjust, "new-repo", "no-such-lang", str(bad))
+    f.obs("refuse-lang", "made", "made\n" if bad.exists() else "")
+    f.check("refuse-lang", lambda c: c.code == 1 and "unknown LANG" in c.err and c.o["made"] == "")
+    f.env = {}
+    say(f"new-repo evidence: {f.d}")
 
-drive_install_check() {
-    local dir="$evidence_dir/install-check" fails=0
+
+def drive_install_check(f: Feature) -> None:
     # No network: gh auth status cannot reach GitHub, so the gh line is deterministic (features/install-check.md).
-    unshare -Un --map-current-user true 2>/dev/null || {
-        echo "FAIL offline: no network namespace (unshare -Un) on this box; install-check's gh auth status would reach GitHub" | tee -a "$dir/summary.txt"
-        return 1
-    }
-    case_pre=(unshare -Un --map-current-user)
-    case_run "$dir" offline just --justfile "$REPO/justfile" install-check "$REPO"
-    case_pre=()
-    check "$dir" offline 'code == 1
-        and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING$)", out) for t in ("herdr", "pi", "gh", "jq", "git", "just", "python3", "node"))
-        and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", out)
-        and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", out)
-        and re.search(r"(?m)^tracker \S+ \(target " + re.escape(kit) + r"\)$", out)' || fails=1
-    say "install-check evidence: $dir"
-    return "$fails"
-}
+    if not has_netns():
+        f.summary("FAIL offline: no network namespace (unshare -Un) on this box; install-check's gh auth status would reach GitHub")
+        f.fails += 1
+        return
+    f.pre = NETNS
+    f.run("offline", "just", "--justfile", f"{f.s.repo}/justfile", "install-check", f.s.repo)
+    f.pre = []
+    tools = ("herdr", "pi", "gh", "jq", "git", "just", "python3", "node")
+    f.check("offline", lambda c: c.code == 1
+            and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING$)", c.out) for t in tools)
+            and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", c.out)
+            and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", c.out)
+            and re.search(r"(?m)^tracker \S+ \(target " + re.escape(c.kit) + r"\)$", c.out))
+    say(f"install-check evidence: {f.d}")
 
-drive_contract() {
-    local dir="$evidence_dir/contract" fails=0 in="$run_dir/scratch/contract"
-    rm -rf "$in" && mkdir -p "$in/missing-entry" "$in/none"
-    printf 'format = 1\n[services]\n[fixture]\n[values]\n' >"$in/missing-entry/qc.toml"
 
-    case_run "$dir" kit octo-feather-contract "$REPO"
-    check "$dir" kit 'code == 0 and out == f"octo-feather-contract: {kit}/qc.toml: ok (format 1)\n"' || fails=1
-    case_run "$dir" missing-entry octo-feather-contract "$in/missing-entry"
-    check "$dir" missing-entry 'code == 1 and "missing entry" in out + err and "ok" not in out' || fails=1
-    case_run "$dir" no-contract octo-feather-contract "$in/none"
-    check "$dir" no-contract 'code == 1 and "no qc.toml at" in out + err' || fails=1
-    say "contract evidence: $dir"
-    return "$fails"
-}
+def drive_contract(f: Feature) -> None:
+    sc = RUN_DIR / "scratch" / "contract"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "missing-entry").mkdir(parents=True)
+    (sc / "none").mkdir(parents=True)
+    (sc / "missing-entry" / "qc.toml").write_text("format = 1\n[services]\n[fixture]\n[values]\n")
 
-drive_evidence() {
-    local dir="$evidence_dir/evidence" fails=0 sc="$run_dir/scratch/evidence" r crit text a b first
-    [[ -n ${QC_VALUES[scratch_criterion]+set} && -n ${QC_VALUES[scratch_criterion_text]+set} ]] ||
-        die "qc.toml [values] needs scratch_criterion and scratch_criterion_text: the evidence drive's scratch records serve it"
-    crit=${QC_VALUES[scratch_criterion]}
-    text=${QC_VALUES[scratch_criterion_text]}
-    r="$sc/repo"
-    rm -rf "$sc" && mkdir -p "$r" "$sc/outputs" "$sc/state"
+    f.run("kit", "octo-feather-contract", f.s.repo)
+    f.check("kit", lambda c: c.code == 0 and c.out == f"octo-feather-contract: {c.kit}/qc.toml: ok (format 1)\n")
+    f.run("missing-entry", "octo-feather-contract", str(sc / "missing-entry"))
+    f.check("missing-entry", lambda c: c.code == 1 and "missing entry" in c.out + c.err and "ok" not in c.out)
+    f.run("no-contract", "octo-feather-contract", str(sc / "none"))
+    f.check("no-contract", lambda c: c.code == 1 and "no qc.toml at" in c.out + c.err)
+    say(f"contract evidence: {f.d}")
+
+
+def drive_evidence(f: Feature) -> None:
+    v = f.s.contract.values
+    if "scratch_criterion" not in v or "scratch_criterion_text" not in v:
+        die("qc.toml [values] needs scratch_criterion and scratch_criterion_text: the evidence drive's scratch records serve it")
+    crit, text = v["scratch_criterion"], v["scratch_criterion_text"]
+    sc = RUN_DIR / "scratch" / "evidence"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    for p in (r, sc / "outputs", sc / "state"):
+        p.mkdir(parents=True)
     # A scratch target and a scratch store (XDG_STATE_HOME): the box's evidence stores are never touched.
-    git -C "$r" init -q -b main
-    gitc() { git -C "$r" -c user.name=verify-octo-feather -c user.email=verify@octo-feather.invalid -c core.hooksPath=/dev/null "$@"; }
-    echo one >"$r/file" && gitc add file && gitc commit -q -m one
-    a=$(git -C "$r" rev-parse HEAD)
-    echo "drive output one" >"$sc/outputs/out.txt"
-    case_env=("XDG_STATE_HOME=$sc/state")
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), "-c", "user.name=verify-octo-feather",
+                               "-c", "user.email=verify@octo-feather.invalid", "-c", "core.hooksPath=/dev/null", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
 
-    case_run "$dir" append-a octo-feather-evidence append --repo "$r" --criterion "$crit" --criterion-text "$text" --outputs "$sc/outputs"
-    first=$(find "$sc/state" -name record.json | head -n 1)
-    obs "$dir" append-a record cat "$first"
-    check "$dir" append-a 'code == 0 and re.fullmatch(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\n", out)
-        and json.loads(o["record"])["id"] + "\n" == out and json.loads(o["record"])["revision"] == "'"$a"'"
-        and json.loads(o["record"])["criterion"]["text_from"] == "caller"' || fails=1
-    sha256sum "$first" >"$sc/first.sha"
+    git("init", "-q", "-b", "main")
+    (r / "file").write_text("one\n")
+    git("add", "file")
+    git("commit", "-q", "-m", "one")
+    a = git("rev-parse", "HEAD")
+    (sc / "outputs" / "out.txt").write_text("drive output one\n")
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}
+    append = ("octo-feather-evidence", "append", "--repo", str(r), "--criterion", crit, "--criterion-text", text,
+              "--outputs", str(sc / "outputs"))
+    record_id = r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\n"
 
-    echo two >"$r/file" && gitc commit -q -am two
-    b=$(git -C "$r" rev-parse HEAD)
-    echo "drive output two" >"$sc/outputs/out.txt"
-    case_run "$dir" append-b octo-feather-evidence append --repo "$r" --criterion "$crit" --criterion-text "$text" --outputs "$sc/outputs"
-    obs "$dir" append-b first-unchanged sha256sum -c --quiet "$sc/first.sha"
-    obs "$dir" append-b records sh -c 'find "$1" -name record.json | wc -l' sh "$sc/state"
-    obs "$dir" append-b repo-status git -C "$r" status --porcelain=v1
-    check "$dir" append-b 'code == 0 and re.fullmatch(r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\n", out)
-        and o["first-unchanged"] == "" and o["records"].strip() == "2" and o["repo-status"] == ""' || fails=1
+    def records() -> list[Path]:
+        return sorted((sc / "state").rglob("record.json"))
 
-    case_run "$dir" read-a octo-feather-evidence read --repo "$r" --criterion "$crit" --commit "$a" --json
-    check "$dir" read-a 'code == 0 and isinstance(j, list) and len(j) == 1 and j[0]["record"]["revision"] == "'"$a"'"
-        and j[0]["record"]["criterion"]["id"] == v["scratch_criterion"] and len(j[0]["record"]["criterion"]["text_sha256"]) == 64
-        and "contract" in j[0]["record"] and "fixture" in j[0]["record"] and "out.txt" in j[0]["record"]["outputs"]' || fails=1
-    case_run "$dir" read-b-text octo-feather-evidence read --repo "$r" --criterion "$crit" --commit "$b"
-    check "$dir" read-b-text 'code == 0 and "drive output two" in out and "drive output one" not in out and "'"$b"'" in out' || fails=1
-    case_env=()
-    say "evidence evidence: $dir"
-    return "$fails"
+    f.run("append-a", *append)
+    first = records()[0] if records() else None
+    f.obs("append-a", "record", first.read_text() if first else "")
+    f.check("append-a", lambda c: c.code == 0 and re.fullmatch(record_id, c.out)
+            and json.loads(c.o["record"])["id"] + "\n" == c.out and json.loads(c.o["record"])["revision"] == a
+            and json.loads(c.o["record"])["criterion"]["text_from"] == "caller")
+    first_sha = hashlib.sha256(first.read_bytes()).hexdigest() if first else ""
+
+    (r / "file").write_text("two\n")
+    git("commit", "-q", "-am", "two")
+    b = git("rev-parse", "HEAD")
+    (sc / "outputs" / "out.txt").write_text("drive output two\n")
+    f.run("append-b", *append)
+    same = first is not None and hashlib.sha256(first.read_bytes()).hexdigest() == first_sha
+    f.obs("append-b", "first-unchanged", "" if same else f"{first}: FAILED\n")
+    f.obs("append-b", "records", f"{len(records())}\n")
+    f.obs_cmd("append-b", "repo-status", "git", "-C", str(r), "status", "--porcelain=v1")
+    f.check("append-b", lambda c: c.code == 0 and re.fullmatch(record_id, c.out)
+            and c.o["first-unchanged"] == "" and c.o["records"].strip() == "2" and c.o["repo-status"] == "")
+
+    f.run("read-a", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", crit, "--commit", a, "--json")
+    f.check("read-a", lambda c: c.code == 0 and isinstance(c.j, list) and len(c.j) == 1
+            and c.j[0]["record"]["revision"] == a
+            and c.j[0]["record"]["criterion"]["id"] == c.v["scratch_criterion"]
+            and len(c.j[0]["record"]["criterion"]["text_sha256"]) == 64
+            and "contract" in c.j[0]["record"] and "fixture" in c.j[0]["record"]
+            and "out.txt" in c.j[0]["record"]["outputs"])
+    f.run("read-b-text", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", crit, "--commit", b)
+    f.check("read-b-text", lambda c: c.code == 0 and "drive output two" in c.out and "drive output one" not in c.out
+            and b in c.out)
+    f.env = {}
+    say(f"evidence evidence: {f.d}")
+
+
+DRIVES: dict[str, Callable[[Feature], None]] = {
+    "new-repo": drive_new_repo,
+    "install-check": drive_install_check,
+    "contract": drive_contract,
+    "evidence": drive_evidence,
 }
 
-cmd_drive() {
-    local feature=${1:-}
-    [[ -n $feature ]] || die "usage: verify-octo-feather drive <feature> (features: $features)"
-    load_state
-    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
-    [[ " $features " == *" $feature "* ]] || die "unknown feature '$feature' (features: $features)"
-    local i code=0 dir="$evidence_dir/$feature"
-    for i in "${!QC_FIXTURES[@]}"; do
-        say "reset fixture ${QC_FIXTURES[i]} (qc.toml)"
-        (cd "$REPO" && QC_REPO=$REPO sh -c "${QC_RESETS[i]}") || die "qc.toml fixture ${QC_FIXTURES[i]} reset failed: ${QC_RESETS[i]}"
-    done
-    rm -rf "$dir" && mkdir -p "$dir"
-    echo "$feature @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
-    case $feature in
-    new-repo) drive_new_repo || code=1 ;;
-    install-check) drive_install_check || code=1 ;;
-    contract) drive_contract || code=1 ;;
-    evidence) drive_evidence || code=1 ;;
-    esac
-    if [[ $code == 0 ]]; then echo "PASS $feature" >>"$dir/summary.txt"; else echo "FAIL $feature" >>"$dir/summary.txt"; fi
-    record_evidence "$feature"
-    return "$code"
-}
 
-# Every drive, passed or failed, appends one record to the kit's evidence store (quality spec #evidence-store) through
-# the kit's octo-feather-evidence, entered by the contract: the criterion the feature file's `Drive criterion:` line
-# names, its text from the kit's own spec, the feature's evidence folder as outputs. Cleanup never touches the store.
-record_evidence() {
-    local feature=$1 file="$script_dir/../features/$1.md" crit id
-    crit=$(sed -n 's/^Drive criterion: `\([^`]*\)`.*/\1/p' "$file" | head -n 1)
-    [[ -n $crit ]] || die "$file has no Drive criterion line (Drive criterion: \`<spec>#<anchor>\`): each drive names the criterion it serves"
-    id=$("$KIT" octo-feather-evidence append --repo "$REPO" --criterion "$crit" --outputs "$evidence_dir/$feature") ||
-        die "evidence record for $feature not appended (octo-feather-evidence failed, message above)"
-    say "evidence record $id (criterion $crit; read: octo-feather-evidence read --criterion $crit --commit $REV)"
-}
+def cmd_drive(feature: str | None) -> int:
+    if not feature:
+        die(f"usage: {ME} drive <feature> (features: {' '.join(FEATURES)})")
+    s = load_state()
+    if not writable(EVIDENCE_DIR):
+        die(f"cannot write evidence folder: {EVIDENCE_DIR}")
+    if feature not in DRIVES:
+        die(f"unknown feature '{feature}' (features: {' '.join(FEATURES)})")
+    for name, reset in s.contract.fixtures.items():
+        say(f"reset fixture {name} (qc.toml)")
+        if not sh_in_repo(reset):
+            die(f"qc.toml fixture {name} reset failed: {reset}")
+    d = EVIDENCE_DIR / feature
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    (d / "summary.txt").write_text(f"{feature} @ rev {s.rev}, {now()}\n")
+    f = Feature(s=s, d=d)
+    DRIVES[feature](f)
+    with (d / "summary.txt").open("a") as fh:
+        fh.write(f"{'PASS' if f.fails == 0 else 'FAIL'} {feature}\n")
+    record_evidence(s, feature)
+    return 0 if f.fails == 0 else 1
 
-cmd_cleanup() {
+
+def record_evidence(s: State, feature: str) -> None:
+    """Every drive, passed or failed, appends one record to the kit's evidence store (quality spec
+    #evidence-store) through the kit's octo-feather-evidence, entered by the contract: the criterion the
+    feature file's `Drive criterion:` line names, its text from the kit's own spec, the feature's evidence
+    folder as outputs. Cleanup never touches the store."""
+    file = SCRIPT_DIR / ".." / "features" / f"{feature}.md"
+    m = re.search(r"^Drive criterion: `([^`]*)`", file.read_text(), re.MULTILINE)
+    if not m or not m[1]:
+        die(f"{file} has no Drive criterion line (Drive criterion: `<spec>#<anchor>`): each drive names the criterion it serves")
+    crit = m[1]
+    sys.stdout.flush()
+    r = subprocess.run([s.kit, "octo-feather-evidence", "append", "--repo", s.repo, "--criterion", crit,
+                        "--outputs", str(EVIDENCE_DIR / feature)], stdout=subprocess.PIPE, text=True, check=False)
+    if r.returncode != 0:
+        die(f"evidence record for {feature} not appended (octo-feather-evidence failed, message above)")
+    say(f"evidence record {r.stdout.strip()} (criterion {crit}; read: octo-feather-evidence read --criterion {crit} --commit {s.rev})")
+
+
+def cmd_cleanup() -> None:
     # Nothing runs in the background: every kit command exits per case. Remove only what this helper made.
-    local p
-    if [[ -f $created ]]; then
-        while IFS= read -r p; do
-            [[ -n $p && -e $p ]] || continue
-            rm -rf -- "$p"
-            say "removed scratch $p"
-        done <"$created"
-    fi
-    if [[ -e $run_dir ]]; then
-        rm -rf "$run_dir/scratch" "$state" "$created"
-        rm -f "$run_dir/bin/kit"
-        rmdir "$run_dir/bin" 2>/dev/null || true
-        rmdir "$run_dir" 2>/dev/null || true
-        say "removed run state $run_dir"
-    fi
-    say "evidence kept at $evidence_dir"
-}
+    if CREATED.is_file():
+        for p in CREATED.read_text().splitlines():
+            if p and os.path.lexists(p):
+                if os.path.isdir(p) and not os.path.islink(p):
+                    shutil.rmtree(p)
+                else:
+                    os.unlink(p)
+                say(f"removed scratch {p}")
+    if RUN_DIR.exists():
+        shutil.rmtree(RUN_DIR / "scratch", ignore_errors=True)
+        for p in (STATE, CREATED, RUN_DIR / "bin" / "kit"):
+            p.unlink(missing_ok=True)
+        for d in (RUN_DIR / "bin", RUN_DIR):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        say(f"removed run state {RUN_DIR}")
+    say(f"evidence kept at {EVIDENCE_DIR}")
 
-cmd_run() {
-    local code=0 feature=${1:-new-repo}
-    cmd_launch
-    cmd_doctor | tee "$evidence_dir/doctor.txt" || code=1
-    if [[ $code == 0 ]]; then cmd_drive "$feature" || code=1; fi
-    cmd_cleanup
-    [[ -d $evidence_dir ]] || die "evidence folder gone after cleanup: $evidence_dir"
-    ls -laR "$evidence_dir"
-    if [[ $code == 0 ]]; then say "run PASS"; else say "run FAIL"; fi
-    return "$code"
-}
 
-case ${1:-} in
-launch) cmd_launch ;;
-doctor) cmd_doctor ;;
-drive)
-    shift
-    cmd_drive "$@"
-    ;;
-cleanup) cmd_cleanup ;;
-run)
-    shift
-    cmd_run "$@"
-    ;;
-*) die "usage: verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature] (features: $features)" ;;
-esac
+def cmd_run(feature: str | None) -> int:
+    cmd_launch()
+    code = cmd_doctor(tee=EVIDENCE_DIR / "doctor.txt")
+    if code == 0:
+        code = cmd_drive(feature or "new-repo")
+    cmd_cleanup()
+    if not EVIDENCE_DIR.is_dir():
+        die(f"evidence folder gone after cleanup: {EVIDENCE_DIR}")
+    sys.stdout.flush()
+    subprocess.run(["ls", "-laR", str(EVIDENCE_DIR)], check=False)
+    say("run PASS" if code == 0 else "run FAIL")
+    return code
+
+
+def main(argv: list[str]) -> int:
+    arg = argv[1] if len(argv) > 1 else None
+    match argv[:1]:
+        case ["launch"]:
+            cmd_launch()
+            return 0
+        case ["doctor"]:
+            return cmd_doctor()
+        case ["drive"]:
+            return cmd_drive(arg)
+        case ["cleanup"]:
+            cmd_cleanup()
+            return 0
+        case ["run"]:
+            return cmd_run(arg)
+        case _:
+            die(f"usage: {ME} launch|doctor|drive <feature>|cleanup|run [feature] (features: {' '.join(FEATURES)})")
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

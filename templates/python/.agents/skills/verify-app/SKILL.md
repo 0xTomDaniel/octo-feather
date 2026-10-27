@@ -9,7 +9,7 @@ The app's only user surface is the `app` CLI (`app hello <name> [--json]`). Ther
 
 ## Helpers
 
-One helper, [`scripts/verify-app`](scripts/verify-app), executable, plain bash plus `python3` 3.11+, which reads the contract. Run it from anywhere; it finds the repo from its own path:
+One helper, [`scripts/verify-app`](scripts/verify-app), an executable Python script (`python3` 3.11+, standard library only: `tomllib` reads the contract). Run it from anywhere; it finds the repo from its own path:
 
 ```
 .agents/skills/verify-app/scripts/verify-app setup             # the contract's setup only

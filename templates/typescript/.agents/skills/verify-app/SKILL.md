@@ -9,7 +9,7 @@ The app's only user surface is the `app` CLI (`app hello <name> [--json]`). Ther
 
 ## Helpers
 
-One helper, [`scripts/verify-app`](scripts/verify-app), executable, plain bash plus `node`, and `python3` 3.11+, which reads the contract. Run it from anywhere; it finds the repo from its own path:
+One helper, [`scripts/verify-app`](scripts/verify-app), executable: a thin `sh` launcher that runs [`scripts/verify-app.ts`](scripts/verify-app.ts) with `node` (type stripping, no build). The TypeScript needs only Node: nothing installed, no `python3`; [`scripts/toml.ts`](scripts/toml.ts) reads the contract, since the contract's `setup` is what installs the repo's packages. `tsconfig.json` includes both files, so `just check` types and lints them. Run it from anywhere; it finds the repo from its own path:
 
 ```
 .agents/skills/verify-app/scripts/verify-app setup             # the contract's setup only
