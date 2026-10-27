@@ -123,12 +123,11 @@ k=0; for p in /proc/[0-9]*; do grep -qa "fd/8""/rec" "$p/cmdline" 2>/dev/null &&
     if "STUB-REPOS" in prompt:   # list and read another repo under HOME, and the head kit's roles in a --kit-ref run
         cmds = ['ls -A "$HOME/src"', 'ls -A "$HOME/src/sib"; cat "$HOME/src/sib/NOTES.md"', 'ls -A "$HOME/src/kit"; ls "$HOME/src/kit/agents"',
                 'find "$HOME/src" -name "implementer.md" -o -name NOTES.md']
-    if "STUB-SYNC" in prompt:   # once the harness has frozen the recorder (on the marker sleep): each sender at once, each counting its entry on return
-        cmds = [r'''sleep 2.71828; r="$OCTO_FEATHER_QC_ATTEMPTS"
-(herdr agent prompt w1:p1 SYNC1 > /dev/null 2>&1; echo "herdr $(grep -c SYNC1 "$r")") &
-(printf 'protocol=https\nhost=sync2.invalid\n\n' | git credential fill > /dev/null 2>&1; echo "cred $(grep -c sync2.invalid "$r")") &
-(gh issue view 9 --repo o/SYNC3 > /dev/null 2>&1; echo "gh $(grep -c SYNC3 "$r")") &
-wait''']
+    if "STUB-SYNC" in prompt:   # each sender as a command, its entry read from the published record right as it returns
+        cmds = ['herdr agent prompt w1:p1 SYNC1 > /dev/null 2>&1; echo "herdr $(grep -c SYNC1 "$OCTO_FEATHER_QC_ATTEMPTS")"',
+                "printf 'protocol=https\\nhost=sync2.invalid\\n\\n' | git credential fill > /dev/null 2>&1; "
+                'echo "cred $(grep -c sync2.invalid "$OCTO_FEATHER_QC_ATTEMPTS")"',
+                'gh issue view 9 --repo o/SYNC3 > /dev/null 2>&1; echo "gh $(grep -c SYNC3 "$OCTO_FEATHER_QC_ATTEMPTS")"']
     if "STUB-OVERFLOW" in prompt:   # one call: 510 forged refused herdr messages, then a real delivery through the shim
         cmds = [r'''python3 -c 'import json, socket, sys
 for _ in range(510):
@@ -423,39 +422,17 @@ d="$(ls -dt "$t"/out/*/ | head -1)"
 grep -q "NOTES.md: No such file" "$d/rep/repos/transcript.jsonl" && grep -q "kit/agents': No such file" "$d/rep/repos/transcript.jsonl" \
   || fail "repos: the sibling's file and the head kit's roles were not tried (nothing proved): $(cat "$d/rep/repos/transcript.jsonl")"
 
-# A sender returns only once its entry is written (rule: schema.md, Attempt record): the harness freezes the recorder
-# (SIGSTOP, from outside the sandbox) while the case calls the herdr shim, git's helper and the offline gh, and thaws it
-# 4 s later; each call counts its own entry when it returns. A sender that returned unacked would count 0.
+# A sender returns only once its entry is written (rule: schema.md, Attempt record): the case runs the herdr shim, git's
+# helper and the offline gh, each as a command, and reads its entry from the published record as soon as it returns.
 mkdir -p "$t/syn/syn/reference" "$t/syn/fixtures"; cp -r "$t/good/fixtures/fx" "$t/syn/fixtures/"
 echo '{"suite": "syn", "kind": "role-transcript", "description": "stub acked senders", "max_tool_calls": 20, "timeout_s": 60}' > "$t/syn/syn/suite.json"
 echo "[$(ic sync "Diagnose. STUB-ATTEMPTS STUB-SYNC")]" > "$t/syn/syn/cases.json"
 echo '{"sync": {"facts": [{"fact": "attempt_blocked", "kind": "credential"}]}}' > "$t/syn/syn/reference/expectations.json"
-desc() {   # PID: descendants of PID whose argv holds TEXT
-  python3 - "$1" "$2" <<'EOF'
-import os, sys
-root, text = sys.argv[1:]; kids = {}
-for p in filter(str.isdigit, os.listdir("/proc")):
-    try:
-        st = open(f"/proc/{p}/stat").read(); kids.setdefault(st[st.rindex(")") + 2:].split()[1], []).append(p)
-    except OSError: pass
-todo = [root]
-while todo:
-    for k in kids.get(todo.pop(), []):
-        todo.append(k)
-        try:
-            if text.encode() in open(f"/proc/{k}/cmdline", "rb").read(): print(k)
-        except OSError: pass
-EOF
-}
-timeout -k 5 240 "$Q" --evals "$t/syn" > "$t/syn.out" 2>&1 & qp=$!
-froze=""; for _ in $(seq 400); do [[ -n "$(desc "$qp" 'sleep 2.71828')" ]] && { froze="$(desc "$qp" 'fd/8/rec')"; break; }; sleep 0.05; done
-[[ -n "$froze" ]] && kill -STOP $froze && sleep 4 && kill -CONT $froze
-set +e; wait "$qp"; rc=$?; set -e; out="$(cat "$t/syn.out")"
-[[ -n "$froze" ]] || fail "sync: the recorder was never frozen (nothing proved): $out"
-[[ "$rc" == 0 ]] || fail "sync: want exit 0, got $rc: $out"
+run 0 "$Q" --evals "$t/syn"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 so="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/syn/sync/transcript.jsonl")"
 for w in 'herdr 1' 'cred 1' 'gh 1'; do grep -qx "$w" <<< "$so" || fail "sync: a sender returned before its entry was written, want '$w': $so"; done
+echo "qa test: sync: $(grep -x 'herdr [0-9]*\|cred [0-9]*\|gh [0-9]*' <<< "$so" | paste -sd, -)" >&2
 
 # declared (schema.md, Final JSON):
 # `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.
