@@ -5,5 +5,5 @@ Every kit skill, vendored through the Skillfile or authored here, lives in `.age
 ## Consequences
 
 - Pi auto-discovers `.agents/skills` from the working directory up to the repo root, but pi-role turns discovery off and passes only a role's listed skills (ADR 0016), so a role started in the kit or in a target repo loads nothing by discovery.
-- A target repo's own `.agents/skills` is not auto-loaded into roles; the implementer loads the skills its `AGENTS.md` declares under `Repo skills:` by name.
+- A target repo's own `.agents/skills` is not auto-loaded into roles; which roles load its declared skills, and how: docs/specs/skills.spec.html#loading-listed (corrected in place, issue #184).
 - Patches in `.skillfile/patches/skills/<name>/` are keyed by skill name, so the install path does not affect them.

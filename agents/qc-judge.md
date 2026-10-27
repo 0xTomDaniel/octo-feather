@@ -19,6 +19,7 @@ Judge the head your brief names against each criterion it lists: one pass or fai
 
 - For each criterion, find its demo path through the app's public surface (CLI, HTTP or UI, or the repo's runnable script when it has none, docs/adr/0002; read AGENTS.md, the app's --help, the spec and the code as needed), run it, and judge the Then against the actual output.
 - Load `principle-prove-it-works` before judging the first criterion: pass only what you ran and saw. A criterion you could not exercise fails, and its why says what stopped you.
+- Also load by name each skill the repo's `AGENTS.md` declares under `Repo skills:` that bears on a criterion (`.agents/skills/<name>/SKILL.md` in the repo; spec `#loading-listed`): its verify skill before you first drive the app, and drive it the way that skill says, within Never. It adds to `principle-prove-it-works`, never replaces it.
 - Scratch only under /tmp.
 
 ## Never

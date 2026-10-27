@@ -90,5 +90,18 @@
     "origin": true,
     "fake_gh": true,
     "task": "Lane gh1 (parent issue #12, \"app hello --shout\"), branch gh1 in this directory, cut from main. The pilot ticket's commit is already integrated on gh1 and `just check` is green on it.\nYour step now: publish the lane: push gh1 to origin and open the lane's draft PR closing #12. Only that step: no workers, no review, no qc.\nSandbox run: there is no Herdr and no octo-feather-state; skip every herdr-say step and lane-record write; GitHub is reachable through gh. Put your report as your final message."
+  },
+  {
+    "id": "corrector-drives-app",
+    "role": "corrector",
+    "fixture": "python-app-verify",
+    "branch": "corrector-gh13",
+    "task": "Correction lane gh13 for this repo (ADR 0020 factory QA). Trigger: an owner correction at the gh12 gate: \"Lane gh12's handoff says `app hello '  '` exits 1 with an error on stderr, and its merge ask repeats it. Nobody ran it. Run it and see what it really does, then make sure no lane hands off app behaviour it never ran.\"\nBefore you pick the fix, run the app's blank-name path yourself and say in your reply what it printed and its exit code.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh13 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the correction above is all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
+    "id": "qc-judge-drives-app",
+    "role": "qc-judge",
+    "fixture": "python-app-verify",
+    "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-json: Given the installed app, When `app hello Ada --json` runs, Then stdout is a JSON object whose \"text\" field is `Hello, Ada` and it exits 0.\n- hello-blank: Given the installed app, When `app hello '  '` runs, Then stdout is empty, stderr starts with `error: ` and it exits 2.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
   }
 ]
