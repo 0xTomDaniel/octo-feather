@@ -248,6 +248,11 @@ jd 'just sub c'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub c\
 jd 'just sub::inner'; JUST_UNSTABLE=1 run 1 ticket - <"$t/jd.md"; has "(\`just sub::inner\`: just answers: error: Justfile does not contain recipe \`sub::inner\`.)"
 sed -i '$d' "$t/jrepo/justfile"   # drop the mod line: the cases below run without JUST_UNSTABLE
 jd 'just c'; run 1 ticket - <"$t/jd.md"; has "(\`just c\`: just c runs check, a gate or factory recipe, not the app)"
+# Fails closed (#240): a just whose dry run exits 0 naming no recipe (another wording) answers nothing; the demo is refused.
+mkdir -p "$t/drift"; printf '#!/bin/sh\n[ "$1" = --dry-run ] && { "%s" "$@" 2>&1 | sed s/Running/running/ >&2; exit 0; }\nexec "%s" "$@"\n' "$t/sys/just" "$t/sys/just" >"$t/drift/just"; chmod +x "$t/drift/just"
+for c in 'just demo' 'just c'; do
+  jd "$c"; PATH="$t/drift:$t/sys" run 1 ticket - <"$t/jd.md"; has "(\`$c\`: just answers: its dry run named no recipe it runs"; hasnt ": ok"
+done
 # Fails closed, never a fallback: a justfile just cannot read, or no just, is exit 2 naming why.
 mkdir -p "$t/nojust"; cp -P "$t/sys"/* "$t/nojust/"; rm "$t/nojust/just"   # the hermetic PATH less just
 jd 'just demo'; PATH="$t/nojust" run 2 ticket - <"$t/jd.md"; has "cannot read the justfile's recipes ($t/jrepo/justfile): just is not on PATH"; hasnt ": ok"

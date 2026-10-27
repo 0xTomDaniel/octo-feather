@@ -62,7 +62,8 @@ RUNNING = re.compile(r"^===> Running recipe `([^`]+)`\.\.\.$", re.M)
 
 def just_runs(args, cwd=None):
     """(the recipes `just ARGS` run in CWD runs, in order, dependencies included, as just itself answers; or None
-    and just's reason when it runs none). The one source of what a just command line runs, shared with
+    and the reason just gave no such answer). There is no "runs no recipe" answer: a dry run that names no
+    recipe (another just's wording, just-version pins it) is unanswered, so callers fail closed. The one source of what a just command line runs, shared with
     octo-feather-lane; no model of just's options or recipe arities here (docs/adr/0008). Executes nothing:
     just first parses ARGS beside --completions, which reads no justfile, and only when its one objection is
     the recipe words and overrides themselves (`--completions` used with unexpected ...), so no subcommand
@@ -80,7 +81,7 @@ def just_runs(args, cwd=None):
     if rc:
         return None, line
     names = RUNNING.findall(err)
-    return (names, "") if names else (None, "it runs no recipe")
+    return (names, "") if names else (None, "its dry run named no recipe it runs (just-version pins the just whose answer this reads)")
 
 
 def argv_of(pid):
@@ -107,9 +108,9 @@ def asks_check(argv, cwd=None):
         names, why = just_runs(argv[1:], cwd)
     except (OSError, subprocess.TimeoutExpired) as e:
         return True, f"{type(e).__name__}: {e}"
-    if names is None and why != "it runs no recipe":
+    if names is None:
         return True, why
-    return any(CHECK_RECIPE.fullmatch(n) for n in names or ()), ""
+    return any(CHECK_RECIPE.fullmatch(n) for n in names), ""
 
 
 def marker_just(raw):
