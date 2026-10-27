@@ -4,10 +4,10 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- `uv` on PATH; `verify-app launch` has run and printed `ready`.
+- `python3` 3.11+ and what the contract's `setup` needs on PATH; `verify-app launch` has run and printed `ready`.
 - `verify-app doctor` exits 0 for this checkout.
 - Each case runs in its own empty working directory under `$VERIFY_APP_RUN_DIR/scratch`.
-- Never drive an `app` install other than this checkout's `.venv/bin/app` (doctor checks it).
+- Never drive an `app` other than the contract's entry, as `launch` writes it to `bin/app` (doctor checks it imports from this checkout).
 
 ## Driving conventions
 

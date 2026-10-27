@@ -5,15 +5,28 @@ description: "Drive this repo's `app` CLI (a short-lived Node command running `s
 
 # verify-app
 
-The app's only user surface is the `app` CLI (`app hello <name> [--json]`). There is no server, browser, database or interactive mode; every command is one short-lived process. `package.json` maps the `app` bin to `src/cli.ts`, which Node runs directly (type stripping, no build step). The helper below runs each command the real user path: an `app` command that runs `node <repo>/src/cli.ts "$@"`, as a package manager's bin shim does, as a subprocess, in its own empty working directory.
+The app's only user surface is the `app` CLI (`app hello <name> [--json]`). There is no server, browser, database or interactive mode; every command is one short-lived process. `package.json` maps the `app` bin to `src/cli.ts`, which Node runs directly (type stripping, no build step). The helper below runs each command the real user path: the `app` command the contract's entry declares, as a package manager's bin shim runs it, as a subprocess, in its own empty working directory.
 
-Helper (executable, plain bash plus `node` and `pnpm`):
+Helper (executable, plain bash plus `node`, and `python3` 3.11+, which reads the contract):
 
 ```
 .agents/skills/verify-app/scripts/verify-app setup|launch|doctor|drive <feature>|cleanup|run
 ```
 
 `run` does launch, doctor, `drive hello`, cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed.
+
+## Contract
+
+[`qc.toml`](../../../qc.toml) at the repo root is this app's driver contract (octo-feather quality spec `#qc-contract`) and the one source of how the app is set up and entered, the services it needs, its fixtures and their reset, and the values drives use. The helper invokes only what it declares; edit the contract, never the helper, to change any of them. How the helper uses each key:
+
+- `format`: the helper reads format 1.
+- `setup`: `setup` and `launch` run it.
+- `entry.command`: `launch` writes it as `bin/app` in the run state; every case runs that with its arguments.
+- `services`: none for this CLI. The helper starts no service: `launch` fails naming any declared one.
+- `fixture`: none for this app. `drive` runs each declared `reset` before its cases.
+- `values`: the hello drive greets `values.name`.
+
+What each key means and how its commands run: the kit's `schemas/qc.v1.schema.json`. Validate the contract with the kit's `octo-feather-contract` (prints ok, or names the missing or wrong key).
 
 ## Run state and evidence
 
@@ -25,21 +38,21 @@ Helper (executable, plain bash plus `node` and `pnpm`):
 
 ## Launch
 
-`verify-app launch` checks both folders are writable, runs `setup` (`pnpm install --frozen-lockfile` in the repo root: the repo's own install, same as `just setup` minus the hook), reads the `app` bin path from `package.json`, writes the `app` command to `$VERIFY_APP_RUN_DIR/bin/app`, then records in `$VERIFY_APP_RUN_DIR/state` that command, the bin file, the `node` path, the repo root and the git rev. Ready is the line `verify-app: ready: app=<path> bin=<repo>/src/cli.ts rev=<rev>`. No process is left running: each drive case starts its own process and waits for it to exit.
+`verify-app launch` checks both folders are writable, reads the contract (fails on any declared service), runs its `setup`, writes the `app` command (the contract's entry) to `$VERIFY_APP_RUN_DIR/bin/app`, then records in `$VERIFY_APP_RUN_DIR/state` the contract as read, that command, the `node` path, the repo root and the git rev. Ready is the line `verify-app: ready: app=<path> entry=<entry.command> rev=<rev>`. No process is left running: each drive case starts its own process and waits for it to exit.
 
 ## Doctor
 
-`verify-app doctor` (read-only) answers "is this install worth driving?": the recorded `app` command exists, its bin is this checkout's `src/` file (not some other install), `node` meets `package.json` `engines.node` (older Node cannot strip types), `app` with no command exits 64 with the usage line naming `hello`, the package version, the checkout is still at the launch rev (WARN means relaunch), the scratch dir exists. Exit non-zero on any FAIL. Run it first whenever a drive result looks wrong.
+`verify-app doctor` (read-only) answers "is this install worth driving?": the recorded `app` command exists, the contract's entry it runs, `node` meets `package.json` `engines.node` (older Node cannot strip types), `app` with no command exits 64 with the usage line naming `hello`, the package version, the checkout is still at the launch rev (WARN means relaunch), the scratch dir exists. Exit non-zero on any FAIL. Run it first whenever a drive result looks wrong.
 
 ## Drive
 
-`verify-app drive <feature>` runs every case of one feature from [features/](features/README.md). Each case:
+`verify-app drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) with the contract's values. Each case:
 
 - runs `"$APP" <args>` with cwd an empty `$VERIFY_APP_RUN_DIR/scratch/<case>`;
 - writes `<case>.cmd` (argv as typed), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, and `<case>.files` (files the command left in its cwd; must be empty) to `$VERIFY_APP_EVIDENCE_DIR/<feature>/`;
 - appends `PASS|FAIL <case>: <cmd>` to `<feature>/summary.txt` and prints it with the case's stdout, stderr and exit code.
 
-To drive one command by hand, the same way: `cd "$(mktemp -d)" && node <repo>/src/cli.ts hello Ada --json; echo "exit $?"`. Use `--json` for assertions; plain text output is for the text path only. No PTY is used: the app has no interactive mode and does not branch on whether stdout is a terminal. If that changes, drive the text cases in a PTY (`script -qec`).
+To drive one command by hand, the same way: after `launch`, `cd "$(mktemp -d)" && <run state>/bin/app hello <name> --json; echo "exit $?"` (`launch` prints the run state folder). Use `--json` for assertions; plain text output is for the text path only. No PTY is used: the app has no interactive mode and does not branch on whether stdout is a terminal. If that changes, drive the text cases in a PTY (`script -qec`).
 
 ## Evidence
 

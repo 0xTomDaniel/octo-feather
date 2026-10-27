@@ -18,7 +18,7 @@ Criteria (kit templates spec, until this repo has its own specs, whose criteria 
 
 ## How to get to it (user POV)
 
-- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo: `node src/cli.ts hello Ada --json`).
+- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo: `node src/cli.ts hello <name> --json`).
 - `app` with no command prints the usage line `usage: app hello NAME [--json]`. There is no `--help`.
 
 ## Driving it with verify-app
@@ -29,9 +29,9 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-app/scripts/verify-app drive hello`. Evidence: `$VERIFY_APP_EVIDENCE_DIR/hello/<case>.{cmd,stdout,stderr,exit,files}` and `summary.txt`.
 
-- **JSON greeting** (`json`). Run `app hello Ada --json`. Observe exit code, stdout JSON, stderr.
-- **Text greeting** (`text`). Run `app hello Ada`. Observe exit code and the stdout line.
-- **Trimmed name** (`trimmed`). Run `app hello "  Ada  " --json`. Observe the `name` field.
+- **JSON greeting** (`json`). Run `app hello <name> --json`, the name `values.name` in `qc.toml`. Observe exit code, stdout JSON, stderr.
+- **Text greeting** (`text`). Run `app hello <name>`. Observe exit code and the stdout line.
+- **Trimmed name** (`trimmed`). Run `app hello "  <name>  " --json`. Observe the `name` field.
 - **Blank name, JSON** (`empty-json`). Run `app hello "  " --json`. Observe exit code 2, an `error` object on stdout, empty stderr.
 - **Blank name, text** (`empty-text`). Run `app hello "  "`. Observe exit code 2, empty stdout, `error: ` on stderr.
 - **Missing name** (`no-name`). Run `app hello`. Observe exit code 64, empty stdout, `usage: app hello` on stderr.
