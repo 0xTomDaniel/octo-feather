@@ -47,20 +47,20 @@
       "pr": 252
     },
     "acceptance-report-owner-queue": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-lane-numbers": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-gate-time": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-owner-caught": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-any-target": {
       "status": "built",
