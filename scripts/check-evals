@@ -65,8 +65,7 @@ def load(path, errs, holds=None):
 
 
 def leaks(task, exp):
-    """The grade a task holds: a JSON object in it equal to one of the facts, or a graded skill's path by whole
-    path component."""
+    """The grade TASK leaks (rule: schema.md, Leaks), one finding each, sorted."""
     dec, objs = json.JSONDecoder(), []
     for i, ch in enumerate(task):
         if ch == "{":
@@ -200,7 +199,7 @@ def model_keys(o, at=""):
 
 
 def check_model_ref(m, field, where, errs, ruled):
-    """A classifier P/ID, pinned: in RULED's pinned list, never in its moving_alias or yes_no_only list (exact id, no name shape)."""
+    """M as FIELD's model (rule: schema.md, Judgment model and classifiers); RULED: classifiers.json's lists, None unread."""
     if not (isinstance(m, str) and MODEL.fullmatch(m)):
         errs.append(f"{where}: field {field}: must be a classifier <provider>/<id>, got {m!r}"); return
     if ruled is None:
@@ -277,7 +276,7 @@ def check_evidence(ev, field, where, evals, errs):
 
 
 def check_model_file(evals, errs):
-    """EVALS/judgment-model.json: {model: a pinned P/ID (classifiers.json), evidence: a file beside evals/}."""
+    """EVALS/judgment-model.json (rule: schema.md, Judgment model and classifiers)."""
     where = MODEL_FILE
     ruled = check_classifiers(evals, errs)
     o = load(evals / MODEL_FILE, errs, f"the kit's one judgment model {{model, evidence}} (spec judgment#rule-one-model)")
@@ -296,7 +295,7 @@ def check_model_file(evals, errs):
 
 
 def check_calibration(ch, kind, where, evals, errs, named=()):
-    """A judgment suite's calibration of the kit's model: {evidence: a file beside evals/, held_out, threshold}."""
+    """A suite's calibration CH (rule: schema.md, Calibration)."""
     if kind != "judgment":
         errs.append(f"{where}: field calibration: only in a judgment suite, got kind {kind!r}"); return
     if not isinstance(ch, dict):
@@ -444,8 +443,8 @@ def pi_role():
 
 
 def declares_tests(evals, name):
-    """The fixture declares its tests (test_write's rule: .agents/skills/eval-cases/references/schema.md, Before targets): its pyproject.toml's [tool.pytest.ini_options]
-    testpaths, a non-empty list of strings, and a uv.lock. A missing fixture dir is reported elsewhere."""
+    """Fixture NAME declares its tests (rule: schema.md, Before targets, test_write). A missing fixture dir is
+    reported elsewhere."""
     fx = evals / "fixtures" / name
     if not (re.fullmatch(r"[A-Za-z0-9._-]+", name) and fx.is_dir()):
         return True

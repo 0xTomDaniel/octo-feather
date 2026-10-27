@@ -40,7 +40,7 @@ Each fact, its parameters and exactly what it reads: schema, Facts. Writing a ca
 
 - A skill read is a **load** (schema: Skill load), never a mention.
 - A target never reached fails its `skill_read_before` (schema: Before targets): write the task so the role reaches it, and list such a FAIL as a finding, never weaken the case.
-- **Verdicts as data**: `declared` and `declared_includes` read the final message's one `json` block, e.g. `{"rung": "check"}`, a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}`, a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]}`. The producer emits the block; the task names its shape. If the role's contract does not yet ask for that block, the case's change adds it to the contract.
+- **Verdicts as data** (schema: Final JSON), e.g. `{"rung": "check"}`, a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}`, a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]}`. If the role's contract does not yet ask for that block, the case's change adds it to the contract.
 - Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020 (Where the fix goes).
 - No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question and the kit's judgment model (`evals/judgment-model.json`), labelled a judgment in the result.
 

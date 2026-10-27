@@ -21,7 +21,7 @@
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
 #      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's FIFO; git's only credential helper
 #      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
-#      refused, what, result}; what counts: scripts/check-evals --help, attempt_blocked) is kept by the recorder, a
+#      refused, what, result}; what counts: .agents/skills/eval-cases/references/schema.md, Attempt record) is kept by the recorder, a
 #      setup-side process outside the judge's namespaces (its PID namespace cannot name it: no kill, no ptrace),
 #      on the hidden run tmpfs; the judge sees it only through a read-only bind ($SCR/rec: the live
 #      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket and FIFO, write-only, mode 0200, not removable).
@@ -34,7 +34,7 @@
 #   the judge's own `unshare -rm`) and the judge holds no capabilities.
 #   10. after it exits, setup (outside the judge's namespaces) lists the overlay
 #      upper dir: one JSON line {"upper": [[kind, path]...]} on QC_FD_POST,
-#      after the recorder's line {attempts, gh_misses, gh_miss_log} (or {attempts_error} if it ended without one),
+#      after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
 #      kind new, changed or deleted; octo-feather-qc classifies them. The upper
 #      dir dies with the namespace: nothing the judge wrote anywhere persists.
 # Inner (PID 1 of that namespace):
@@ -209,7 +209,7 @@ if [[ "$phase" == setup ]]; then
   if [[ -n "$HERDR" ]]; then
     { echo "#!$PY"
       echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine; record the call:'
-      echo '# its argv to the recorder before it runs (unreachable: not run), its exit after (scripts/check-evals --help).'
+      echo '# its argv to the recorder before it runs (unreachable: not run), its exit after (.agents/skills/eval-cases/references/schema.md, Attempt record).'
       echo 'import json, os, socket, subprocess, sys'
       printf 'S, HERDR, SOCK = %s, %s, %s\n' "$(jq -n --arg x "$S" '$x')" "$(jq -n --arg x "$HERDR" '$x')" "$(jq -n --arg x "$RSOCK" '$x')"
       cat <<'EOF'
@@ -268,7 +268,7 @@ EOF
   exec {rr}< <(exec python3 - /proc/self/fd/8/rec "$SCR/watch" "$S" 4>&- 5>&- 6>&- <<'EOF'
 import ctypes, json, os, selectors, signal, socket, struct, sys
 rd, lst, S = sys.argv[1:]
-# herdr's pane-delivering subcommands, as its own CLI lists them (scripts/check-evals --help, attempt_blocked herdr)
+# herdr's pane-delivering subcommands, as its own CLI lists them (.agents/skills/eval-cases/references/schema.md, Attempt record)
 AT = {("agent", "prompt"), ("agent", "send-keys"), ("pane", "send-text"), ("pane", "send-keys"), ("pane", "run")}
 out = os.fdopen(os.open(rd + "/attempts.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o444), "a")
 srv = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); srv.bind(rd + "/sock"); os.chmod(rd + "/sock", 0o200)
@@ -288,7 +288,7 @@ live, go, recs, misses, conns, fbuf = False, None, [], [], {}, b""
 def emit(r, ok=None):
     if live if ok is None else ok:
         recs.append(r); out.write(json.dumps(r) + "\n"); out.flush()
-def herdr_end(st):   # one shim call, recorded at its close (no exit reported: scripts/check-evals --help, attempt_blocked herdr)
+def herdr_end(st):   # one shim call, recorded at its close (no exit reported: .agents/skills/eval-cases/references/schema.md, Attempt record)
     a, rc = st.get("argv"), st.get("exit")
     if not isinstance(a, list):
         return
@@ -405,7 +405,8 @@ while not stop:
 drain(); fifo(True)
 for c in list(conns):   # the judge's namespace is gone: every call still open ended without its exit
     herdr_end(conns.pop(c)); c.close()
-print(json.dumps({"attempts": recs[:500], "gh_misses": len(misses), "gh_miss_log": misses[:200]}), flush=True)
+# Whole, never a prefix: `recorded` lets the grader refuse a record it did not get whole (schema.md, Attempt record).
+print(json.dumps({"attempts": recs, "recorded": len(recs), "gh_misses": len(misses), "gh_miss_log": misses}), flush=True)
 EOF
 ); rpid=$!
   read -r -u "$rr" ready || ready=
