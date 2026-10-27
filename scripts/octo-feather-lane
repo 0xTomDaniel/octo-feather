@@ -125,10 +125,12 @@ a demo stage passes when its program, after env assignments and runners, is exac
 with a /, e.g. ./run for a top-level file, and stands for itself, never an interpreter or HTTP tool by
 its basename) or `just` that recipe as just runs it (above): just names it, no other recipe has its
 name, and nothing it runs is a gate or factory recipe, whatever is declared. A top-level recipe the
-justfile lacks yet is asked about through a justfile importing the repo's plus a stand-in `R P1 ... Pk:`
-for each parameter count k from 0 to the demo's word count: just must run at least one reading, and
-every reading it runs must run R and no gate, so `just new a` passes and `just new check` fails (with no
-parameter new would run check); a declared path or recipe that already exists still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
+justfile lacks yet is demoed bare, `just [options] <recipe>` with no further words (owner ruling #240):
+just is asked through a justfile importing the repo's plus `<recipe>:`, and the stage runs it only when
+just runs that recipe and nothing else, options judged by just itself; so `just new` passes and
+`just new a` or `just new check` leaves it unused, the fix: demo it bare, declare a path demo, or split
+(create the recipe first, demo it with arguments in a later ticket). A declared path or recipe that
+already exists still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
 not normalized, under tests/ or a hook dir, a gate or factory recipe (check, check-*, integrate,
 qc, qa, or an alias to one), a recipe that is an existing module (`just MOD`), a module path
 through an existing recipe (`just build x` where build is a recipe: just runs build with x), or a
@@ -155,7 +157,7 @@ named with its reason on stderr, after the others were tried; exit 1, rerun afte
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import functools, hashlib, importlib.machinery, importlib.util, itertools, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -1202,7 +1204,7 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
-    creates, used = {}, set()   # each declared command, `just R...` or a path -> as written
+    creates, used, absent = {}, set(), set()   # each declared command, `just R...` or a path -> as written; recipes the justfile lacks
     for v in dict.fromkeys(CREATES.findall("\n".join(structure(body)))):
         d, why = creates_why_not(v)
         if why is None and d.startswith("just "):
@@ -1217,11 +1219,16 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
                 why = f"`{d}` goes through `just {pre}`, an existing recipe, not a module: just runs {pre} with the rest as arguments"
             elif not to and len(ws) > 1:
                 why = f"`{d}` is a module recipe the justfile lacks: just resolves a recipe the ticket creates only at the top level, through a stand-in; declare a top-level `just <recipe>`, or demo the module recipe once it exists"
+            elif not to:
+                absent.add(d)
         if why:
             fail("bad-creates", f"Creates {why}", "declare a repo-relative path outside tests/ or a recipe other than check/check-*/integrate/qc/qa, as " + CREATES_FORM)
         else:
             creates.setdefault(d, v)
-    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it",
+    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it"
+                           + (f" bare (`just [options] {d[5:]}`, no further words: a recipe the justfile lacks, owner ruling #240)" if d in absent else ""),
+                           (f"demo it bare, `{d}`; or declare a path and demo that; or split: create the recipe in this ticket "
+                            f"and demo it with arguments in a later ticket, once it exists; {CREATES_FORM}") if d in absent else
                            f"make the demo's program exactly the declared command, or drop the line; {CREATES_FORM}")
                       for d in creates if d not in used]
     ec = EXPAND.search("\n".join(structure(body)))
@@ -1431,42 +1438,40 @@ class Surface:
         """(why `just ARGS` is no demo, None if it is one; the `just <recipe>` of CREATES it runs, None if none),
         as just itself answers in ROOT (check-gate-free just_runs, the one source): the recipes it runs,
         dependencies included, none a gate or factory recipe. A top-level recipe of CREATES the justfile lacks
-        gets a stand-in for each parameter count the words allow (`R P1 ... Pk:`, k from 0 to their number) in
-        a justfile importing the repo's: just must run some reading, and every reading it runs is gate-free
-        and runs R. A declared recipe is run when just names it and no other recipe has its name."""
+        is demoed bare (owner ruling #240, B): asked through a justfile importing the repo's plus `R:`, no
+        parameter, the words run it only when just runs R and nothing else; options stay just's to judge.
+        A declared recipe is run when just names it and no other recipe has its name."""
         key = (tuple(args), tuple(creates))
         if key in self._just:
             return self._just[key]
         self.recipes   # no just or an unreadable justfile: exit 2, before any run
         cmd = " ".join(["just", *args])
         absent = sorted(d[5:] for d in creates if d.startswith("just ") and " " not in d[5:] and d[5:] not in self.recipes)
-        ks = list(itertools.product(range(len(args) + 1), repeat=len(absent)))
         if not self.justfile:
             res = (f"no justfile in {self.root}", None)
-        elif "'" in str(self.justfile) or len(ks) > 64:
-            res = (f"{cmd}: just cannot be asked about recipes the ticket creates here ({len(absent)} stand-ins, justfile {self.justfile})", None)
+        elif "'" in str(self.justfile):
+            res = (f"{cmd}: just cannot be asked about recipes the ticket creates here (justfile {self.justfile})", None)
         else:
             with tempfile.TemporaryDirectory() as tmp:
-                stub, readings = Path(tmp) / "justfile", []
-                for k in ks:
-                    pre = []
-                    if absent:
-                        stub.write_text(f"import '{self.justfile}'\n" + "".join(
-                            f"{r}{''.join(f' P{i}' for i in range(n))}:\n" for r, n in zip(absent, k)), encoding="utf-8")
-                        pre = ["--justfile", str(stub), "--working-directory", str(self.root)]
-                    try:
-                        readings.append(gate_free_module().just_runs(pre + args, self.root))
-                    except subprocess.TimeoutExpired:
-                        readings.append((None, "just did not answer in 60s"))
-            ok = [n for n, _ in readings if n is not None]
+                stub, pre = Path(tmp) / "justfile", []
+                if absent:
+                    stub.write_text(f"import '{self.justfile}'\n" + "".join(f"{r}:\n" for r in absent), encoding="utf-8")
+                    pre = ["--justfile", str(stub), "--working-directory", str(self.root)]
+                try:
+                    reading = gate_free_module().just_runs(pre + args, self.root)
+                except subprocess.TimeoutExpired:
+                    reading = (None, "just did not answer in 60s")
+            ok = [reading[0]] if reading[0] is not None else []
             targets = set(self.recipes.values()) | set(absent)
             runs = lambda r: [t for t in targets if t.split()[-1] == r.split()[-1]] == [r] and all(r.split()[-1] in n for n in ok)
             decl = next((d for d in creates if d.startswith("just ") and runs(d[5:])), None)
             stray = next((x for n in ok for x in n if x in absent), None)
             if not ok:
-                res = (f"just answers: {readings[0][1]}", None)
+                res = (f"just answers: {reading[1]}", None)
+            elif stray and ok[0] != [stray]:
+                res = (f"{cmd} runs {', '.join(ok[0])}: {stray}, a recipe the ticket creates, is demoed bare (`just [options] {stray}`, no further words)", None)
             elif g := next((x for n in ok for x in n if NOT_DEMO_RECIPES.fullmatch(x)), None):
-                res = (f"{cmd} runs {g}{' in a reading of a recipe the ticket creates' if absent and stray else ''}, a gate or factory recipe, not the app", None)
+                res = (f"{cmd} runs {g}, a gate or factory recipe, not the app", None)
             elif stray and not decl:
                 res = (f"{cmd} runs {stray}, a name more than one recipe has: just's dry run cannot tell which", None)
             else:

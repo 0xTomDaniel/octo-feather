@@ -29,8 +29,10 @@ check run also carries a runtime marker:
       kept, so the outermost check run owns it however deep a nested just asks
       for check-*; else, when the just that ran this backtick runs a check or
       check-* recipe (dependencies included, as just itself answers: just_runs
-      below), a new marker naming that just's pid; else the inherited marker,
-      if any.
+      below), a new marker naming that just's pid; when just cannot answer for
+      that argv (`just -q check`: -q conflicts with the dry run), fails closed:
+      a new marker too, carrying just's reason, so qa and the judge refuse
+      under it; else the inherited marker, if any.
   check-gate-free --refuse WHAT   run where qa or the judge would start:
       outside a check run prints `gate-free: ok`; inside one, whatever it would
       launch, names WHAT on stderr, stops the outermost check run (SIGTERM to
@@ -99,12 +101,15 @@ def is_just(argv):
 
 
 def asks_check(argv, cwd=None):
-    """True when a just argv, run in CWD, runs a check or check-* recipe, as just itself answers (just_runs)."""
+    """(True when a just argv, run in CWD, runs a check or check-* recipe, as just itself answers (just_runs);
+    just's reason when it cannot answer, which counts as a check run: the gate fails closed.)"""
     try:
-        names, _ = just_runs(argv[1:], cwd)
-    except (OSError, subprocess.TimeoutExpired):
-        return False
-    return any(CHECK_RECIPE.fullmatch(n) for n in names or ())
+        names, why = just_runs(argv[1:], cwd)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return True, f"{type(e).__name__}: {e}"
+    if names is None and why != "it runs no recipe":
+        return True, why
+    return any(CHECK_RECIPE.fullmatch(n) for n in names or ()), ""
 
 
 def marker_just(raw):
@@ -125,8 +130,9 @@ def run_marker():
         cwd = os.readlink(f"/proc/{ppid}/cwd")
     except OSError:
         cwd = None
-    if is_just(argv) and asks_check(argv, cwd):
-        print(json.dumps({"just": ppid}, separators=(",", ":")))
+    check, why = asks_check(argv, cwd) if is_just(argv) else (False, "")
+    if check:
+        print(json.dumps({"just": ppid, **({"unanswered": why} if why else {})}, separators=(",", ":")))
     else:
         print(inherited)
 
@@ -143,6 +149,12 @@ def refuse(args):
     except (ValueError, KeyError, TypeError) as e:
         print(f"check-gate-free: unreadable {MARKER} ({type(e).__name__}); refusing {what}", file=sys.stderr)
         root = None
+    try:
+        why = json.loads(raw).get("unanswered", "")
+    except (ValueError, AttributeError):
+        why = ""
+    if why:
+        print(f"check-gate-free: just pid {root} counts as a check run: just cannot say what its command line runs ({why})", file=sys.stderr)
     print(f"check-gate-free: a check run (just pid {root}) reached {what}; {FIX}", file=sys.stderr)
     if root and is_just(argv_of(root)):
         try:
