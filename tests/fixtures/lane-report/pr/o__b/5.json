@@ -1,0 +1,4 @@
+{"state": "OPEN", "isDraft": true, "headRefOid": "bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5", "statusCheckRollup": [
+  {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "FAILURE"},
+  {"__typename": "StatusContext", "context": "ci/lint", "state": "SUCCESS"}],
+ "commits": [{"oid": "bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5bbbb5"}]}
