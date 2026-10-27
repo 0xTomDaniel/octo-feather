@@ -13,8 +13,8 @@
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
-# cases (owners: ADR 0002, #145); a demo through a command the ticket creates passes only with an exact `Creates:`
-# line, bad-creates and unused-creates otherwise (#240, ADR 0009, ADR 0008); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
+# cases (owners: ADR 0002, #145); demos through a command the ticket creates, the `Creates:` cases
+# octo-feather-lane --help (ticket) owns (#240, ADR 0009, ADR 0008); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
 # draft, usage, no just or an unreadable justfile) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
@@ -282,8 +282,8 @@ for c in '<!--\nExpand-contract: expand\n-->' 'Draft <!-- note\nExpand-contract:
   run 1 ticket "$t/d21c.md"; has "class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
 done
 
-# #240 (owners: ADR 0009, ADR 0008): a demo through a command the ticket creates passes only when a
-# `Creates:` line declares it exactly; every looser Creates or demo fails with its class and a fix naming the form.
+# #240 (owners: ADR 0009, ADR 0008; rule: octo-feather-lane --help (ticket)): Creates cases, each
+# failing one checked for its class and a fix naming the form.
 cr() { # CREATES-LINES DEMO: a draft whose What to build holds the Creates lines and whose demo is DEMO
   printf '## What to build\n\nA new command.\n%s\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s` prints ok\n' "$1" "$2"; }
 cf="\`Creates: \`<path>\`\` or \`Creates: \`just <recipe>\`\`, form: octo-feather-lane --help (ticket)"
@@ -352,8 +352,7 @@ for d in 'just --show new' 'just -s new' 'just --justfile new check' 'just -f ne
   run 1 ticket - < <(cr $'\nCreates: `just new`' "$d"); has "class: unused-creates: Creates \`just new\` but no demo command runs it"
   has "just answers: error: "; [[ ! -e "$t/ran" ]] || fail "$d ran a command"
 done
-# Owner ruling #240 (B): a recipe the ticket creates and the justfile lacks is demoed bare, `just [options] fresh`,
-# options judged by just itself; any further word leaves it unused, the fix naming the path demo and the split.
+# Owner ruling #240 (B; rule: octo-feather-lane --help (ticket)): a recipe the justfile lacks, options judged by just itself.
 for d in 'just fresh' 'just --yes fresh' 'just --shell-arg=-c fresh' 'just --yes -- fresh'; do
   run 0 ticket - < <(cr $'\nCreates: `just fresh`' "$d"); [[ "$out" == "stdin: ok" ]] || fail "$d: $out"
 done
@@ -365,6 +364,21 @@ for d in 'just fresh check' 'just fresh a' 'just fresh a b' 'just serve fresh' '
 done
 run 1 ticket - < <(cr $'\nCreates: `just fresh`' 'just fresh check'); has "(\`just fresh check\`: just fresh check passes fresh a further word: fresh, a recipe the ticket creates, is demoed bare"
 run 1 ticket - < <(cr $'\nCreates: `just fresh`' 'just fresh fresh'); has "(\`just fresh fresh\`: just fresh fresh passes fresh a further word: fresh, a recipe the ticket creates, is demoed bare"
+# A demo naming no recipe runs the repo's default (check, first here), never a stand-in: refused as the gate,
+# the declaration unused (#240 review round 5, creates-default-recipe).
+for d in 'just' 'just --yes'; do
+  run 1 ticket - < <(cr $'\nCreates: `just fresh`' "$d"); has "(\`$d\`: $d runs check, a gate or factory recipe, not the app)"
+  has "class: unused-creates: Creates \`just fresh\` but no demo command runs it"
+done
+# An imported justfile's recipes come later: the default stays the repo's own first recipe, check.
+cp justfile "$t/jf"; printf 'imp:\n    true\n' >first.just; sed -i '1i import "first.just"' justfile
+run 1 ticket - < <(cr $'\nCreates: `just fresh`' 'just'); has "(\`just\`: just runs check, a gate or factory recipe, not the app)"
+cp "$t/jf" justfile; rm first.just
+# A repo whose default is an app recipe: `just` runs serve, a surface; only the declaration is unused.
+printf 'serve:\n    true\n\ncheck:\n    true\n' >justfile
+run 1 ticket - < <(cr $'\nCreates: `just fresh`' 'just'); hasnt "layer-only-ticket"; has "class: unused-creates: Creates \`just fresh\`"
+run 0 ticket - < <(cr $'\nCreates: `just fresh`' 'just fresh'); [[ "$out" == "stdin: ok" ]] || fail "serve first, just fresh: $out"
+cp "$t/jf" justfile
 # An existing recipe declared by its alias is run through the alias (#240 review round 4, creates-recipe-alias).
 printf 'alias launch := new\n' >>justfile
 run 0 ticket - < <(cr $'\nCreates: `just launch`' 'just launch'); [[ "$out" == "stdin: ok" ]] || fail "just launch: $out"
@@ -432,4 +446,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; #240 Creates path and recipe pass, undeclared, unused, malformed, test, gate and alias-to-gate Creates fail, module prefix never its gate, non-running just options leave it unused and run nothing, just demos as just itself runs them (parameter, variadic, running options, a dependency gate, -q refused order-free, a created recipe the justfile lacks demoed bare or refused with the path and split fix, repeats just dedups included; an existing recipe declared by its alias), created python/curl paths pass; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; #240 Creates path and recipe pass, undeclared, unused, malformed, test, gate and alias-to-gate Creates fail, module prefix never its gate, non-running just options leave it unused and run nothing, just demos as just itself runs them (parameter, variadic, running options, a dependency gate, -q refused order-free, a created recipe the justfile lacks demoed bare or refused with the path and split fix, repeats just dedups included, a demo naming no recipe judged by the repo's default (also under an import); an existing recipe declared by its alias), created python/curl paths pass; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

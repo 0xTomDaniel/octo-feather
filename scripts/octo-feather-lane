@@ -1382,7 +1382,7 @@ class Surface:
         makes (#121 D12), on ROOT's own justfile; none without one. Read only when a demo needs it.
         Fails closed (Unchecked, exit 2, the reason named) when just is missing or cannot read it."""
         if self._recipes is None:
-            self._recipes, self.modules = {}, set()
+            self._recipes, self.modules, self.first = {}, set(), None
             c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
             if not c:
                 return self._recipes
@@ -1406,7 +1406,8 @@ class Surface:
                         self._recipes[pre + n] = pre + a["target"]
                     for n, m in d.get("modules", {}).items():
                         self.modules.add(pre + n); walk(m, f"{pre}{n} ")
-                walk(json.loads(p.stdout), "")
+                walk(dump := json.loads(p.stdout), "")
+                self.first = dump.get("first")   # the recipe a demo naming none runs
             except (ValueError, KeyError, TypeError, AttributeError) as e:
                 raise why(f"unexpected just --dump JSON ({type(e).__name__}: {e}); check the just version") from e
         return self._recipes
@@ -1439,11 +1440,11 @@ class Surface:
         """(why `just ARGS` is no demo, None if it is one; the `just <recipe>` of CREATES it runs, None if none),
         as just itself answers in ROOT (check-gate-free just_runs, the one source): the recipes it runs,
         dependencies included, none a gate or factory recipe. A top-level recipe of CREATES the justfile lacks
-        is demoed bare (owner ruling #240, B): asked through a justfile importing the repo's plus a stand-in R
-        whose one parameter defaults to a fresh token and whose dry run fails naming R (a dependency argument,
-        evaluated before just prints anything) when any word binds to it, repeats just would dedup included;
-        the words run it only when just runs R and nothing else; options stay just's to judge. A declared
-        recipe, or alias, is run when just names its recipe and no other recipe has that name."""
+        (form: --help ticket) is asked through a justfile importing the repo's plus a stand-in R whose one
+        parameter defaults to a fresh token and whose dry run fails naming R (a dependency argument, evaluated
+        before just prints anything) when any word binds to it, repeats just would dedup included; its first
+        recipe runs the repo's default (just's `first`), so words naming no recipe run what they run in the repo,
+        never a stand-in. A declared recipe, or alias, is run when just names its recipe and no other has that name."""
         key = (tuple(args), tuple(creates))
         if key in self._just:
             return self._just[key]
@@ -1460,15 +1461,15 @@ class Surface:
             with tempfile.TemporaryDirectory() as tmp:
                 stub, pre = Path(tmp) / "justfile", []
                 if absent:
-                    stub.write_text(f"import '{self.justfile}'\n" + "".join(
+                    stub.write_text(f"import '{self.justfile}'\n" + (f"{dep}d: ({self.first})\n" if self.first else f"{dep} _x:\n") + "".join(
                         f"{r} _ofl='{tok}': ({dep} (if _ofl == '{tok}' {{ '' }} else {{ error('{tok} {r}') }}))\n" for r in absent)
-                        + f"{dep} _x:\n", encoding="utf-8")
+                        + (f"{dep} _x:\n" if self.first else ""), encoding="utf-8")
                     pre = ["--justfile", str(stub), "--working-directory", str(self.root)]
                 try:
                     reading = gate_free_module().just_runs(pre + args, self.root)
                 except subprocess.TimeoutExpired:
                     reading = (None, "just did not answer in 60s")
-            ok = [[n for n in reading[0] if n != dep]] if reading[0] is not None else []
+            ok = [[n for n in reading[0] if n not in (dep, dep + "d")]] if reading[0] is not None else []
             word = bound.fullmatch(reading[1] or "")
             targets = set(self.recipes.values()) | set(absent)
             runs = lambda r: [t for t in targets if t.split()[-1] == r.split()[-1]] == [r] and all(r.split()[-1] in n for n in ok)
