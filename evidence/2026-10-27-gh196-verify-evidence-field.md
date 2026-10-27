@@ -46,3 +46,23 @@ implementer-verify-pass:
 Stated limit: `field_lines Evidence` grades presence only (a present, well-formed `Evidence:` line); the record id is random, so no exact fact matches it and the field's none line would also pass. The two ids above were checked by eye, by the supervisor, against the helper's `evidence record <id>` output in each run's transcript; the implementer rechecked by grep of the run artifacts (011436: 8 hits for `evidence record 20261027T173136Z-cb88eeb4`; 94b399: 14 hits for `evidence record 20261027T173503Z-050d5c23`). Not graded by the case.
 
 Artifacts: $XDG_STATE_HOME/octo-feather/qa/<run id> for each run id above; logs /tmp/gh136-sup/qa196-<case>-{before,after}.log.
+
+## Repair: corrector-evidence-field grades skill_read python (#136, skills#acceptance-repo-skill-roles)
+
+Smoke: agents/corrector.md, agents/qc-judge.md (isolated role run pair of corrector-evidence-field, FAIL at --kit-ref 8451938, PASS at ce2f38d; agents/qc-judge.md changes only a pointer to the corrector's rule and has no case of its own here, owed-eval reason in docs/owed-evals/136.md)
+
+Change at ce2f38d: a declared `Repo skills:` name resolves in the target's `.agents/skills`, else in the kit's skills folder (agents/corrector.md; agents/qc-judge.md points to it). The fixture declares `Repo skills: python, verify-app`; python lives only in the kit. The case gains `skill_read python`.
+
+Two runs, by the supervisor, one at a time, in the qa sandbox: `just qa --case corrector-evidence-field --kit-ref 8451938` (before) and `just qa --case corrector-evidence-field` at ce2f38d (after). Tool call numbers are the grader's.
+
+```
+$ grep -E '^(PASS|FAIL)' /tmp/gh136-sup/qaR-*.log | cut -c1-160
+/tmp/gh136-sup/qaR-after.log:PASS role-transcripts/corrector-evidence-field: skill_read verify-app: loaded at tool call 6 of 27 (read .agents/skills/verify-app/
+/tmp/gh136-sup/qaR-before.log:FAIL role-transcripts/corrector-evidence-field: skill_read python: no load of python/SKILL.md (its full content in a tool result) 
+```
+
+- --kit-ref 8451938, FAIL, run 20261027T205221Z-8496fd (24 calls): no load of python/SKILL.md; no `Evidence:` line.
+- ce2f38d, PASS, run 20261027T205412Z-40429a (27 calls): correct loaded call 2, verify-app call 6, python call 15, before its first edit at call 22 (`tests/test_cli.py`); commit call 27; Evidence `hello 20261027T205455Z-5a10a3c5`. The supervisor found `evidence record 20261027T205455Z-5a10a3c5` 6 times in the transcript (by eye, not graded: stated limit above).
+- Not graded: the head run also edited the fixture's `AGENTS.md` (calls 24-25, a rule table), ordinary corrector behaviour for its task.
+
+Logs: /tmp/gh136-sup/qaR-{before,after}.log.

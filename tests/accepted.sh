@@ -27,6 +27,7 @@ fail() { echo "accepted test: $*" >&2; exit 1; }
 
 sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
 mkdir -p "$t/x"; cp "$fx/a.spec.html" "$fx/a-edited.spec.html" "$t/x/"
+: > "$t/serve.log"   # exists before the first read below: the background redirect may not have opened it yet
 XDG_STATE_HOME="$t/xdg-serve" python3 "$sc/review-spec/assets/review-serve.py" "$t/x" --port 0 >"$t/serve.log" 2>&1 &
 serve=$!; trap 'kill "$serve" 2>/dev/null || true; rm -rf "$t"' EXIT
 for _ in $(seq 100); do url="$(sed -n 's|^spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done

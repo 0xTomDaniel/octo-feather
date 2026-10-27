@@ -337,6 +337,10 @@
       },
       {
         "fact": "skill_read",
+        "skill": "python"
+      },
+      {
+        "fact": "skill_read",
         "skill": "correct"
       },
       {
