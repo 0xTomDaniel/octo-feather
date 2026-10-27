@@ -17,7 +17,7 @@ Helper (executable, plain bash plus `python3` 3.11+, which reads the contract an
 
 ## Contract
 
-[`qc.toml`](../../../qc.toml) at the kit root is the kit's driver contract (quality spec `#qc-contract`) and the one source of how the kit is set up and entered, the services it needs, its fixtures and their reset, and the values drives use. The helper invokes only what it declares; edit the contract, never the helper, to change any of them. How the helper uses each key:
+[`qc.toml`](../../../qc.toml) at the kit root is the kit's driver contract (quality spec `#qc-contract`); what it declares is that spec section's, not repeated here. The helper invokes only what it declares; edit the contract, never the helper, to change any of it. How the helper uses each key:
 
 - `format`: the helper reads format 1.
 - `setup`: none declared; `launch` runs it when one is.

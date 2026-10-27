@@ -1,7 +1,5 @@
 # install-check
 
-`just install-check [TARGET]` lists each runtime tool the box needs as ok with its path or MISSING, Pi against the `pi-version` pin, whether `gh` is authenticated, and the target's tracker skill (then that skill's own CLI check); it exits non-zero when anything is missing or wrong.
-
 Criteria:
 
 - [remote#acceptance-install-browser](../../../../docs/specs/remote.spec.html#acceptance-install-browser)

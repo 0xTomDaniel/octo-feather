@@ -188,17 +188,18 @@ EOF
 
 drive_hello() {
     local dir="$evidence_dir/hello" fails=0 name
-    # The name greeted: qc.toml values.name.
-    [[ -n ${QC_VALUES[name]+set} ]] || die "qc.toml [values] has no name: the hello drive greets values.name"
+    # The name greeted and the greeting expected: qc.toml values.name and values.greeting.
+    [[ -n ${QC_VALUES[name]+set} && -n ${QC_VALUES[greeting]+set} ]] ||
+        die "qc.toml [values] needs name and greeting: the hello drive greets values.name and expects values.greeting"
     name=${QC_VALUES[name]}
     rm -rf "$dir" && mkdir -p "$dir"
     echo "hello @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
     case_run "$dir" json hello "$name" --json
-    check "$dir" json 'code == 0 and err == "" and j == {"name": v["name"], "text": "Hello, " + v["name"]}' || fails=1
+    check "$dir" json 'code == 0 and err == "" and j == {"name": v["name"], "text": v["greeting"]}' || fails=1
     case_run "$dir" text hello "$name"
-    check "$dir" text 'code == 0 and err == "" and out == "Hello, " + v["name"] + "\n"' || fails=1
+    check "$dir" text 'code == 0 and err == "" and out == v["greeting"] + "\n"' || fails=1
     case_run "$dir" trimmed hello "  $name  " --json
-    check "$dir" trimmed 'code == 0 and j == {"name": v["name"], "text": "Hello, " + v["name"]}' || fails=1
+    check "$dir" trimmed 'code == 0 and j == {"name": v["name"], "text": v["greeting"]}' || fails=1
     case_run "$dir" empty-json hello '  ' --json
     check "$dir" empty-json 'code == 2 and err == "" and isinstance(j, dict) and set(j) == {"error"} and j["error"]' || fails=1
     case_run "$dir" empty-text hello '  '
@@ -231,15 +232,14 @@ cmd_drive() {
 # `Drive criterion:` line names, the feature's evidence folder as its outputs. The store is outside the repo
 # and outside both helper folders; cleanup never touches it.
 record_evidence() {
-    local feature=$1 file="$script_dir/../features/$1.md" crit link id
+    local feature=$1 file="$script_dir/../features/$1.md" crit id
     command -v octo-feather-evidence >/dev/null ||
         die "octo-feather-evidence (the octo-feather kit's scripts/) not on PATH: every drive appends a record to the evidence store"
     crit=$(sed -n 's/^Drive criterion: `\([^`]*\)`.*/\1/p' "$file" | head -n 1)
     [[ -n $crit ]] || die "$file has no Drive criterion line (Drive criterion: \`<spec>#<anchor>\`): each drive names the criterion it serves"
-    # The criterion's text, when this repo has no spec holding it: the feature file's line linking it.
-    link=$(grep -m 1 -F "#${crit#*#})" "$file" || true)
-    id=$(octo-feather-evidence append --repo "$REPO" --criterion "$crit" --criterion-text "$link" --outputs "$evidence_dir/$feature") ||
-        die "evidence record for $feature not appended (octo-feather-evidence failed, message above)"
+    # The criterion's text is its element in this repo's docs/specs/<spec>.spec.html, which octo-feather-evidence reads and hashes.
+    id=$(octo-feather-evidence append --repo "$REPO" --criterion "$crit" --outputs "$evidence_dir/$feature") ||
+        die "evidence record for $feature not appended for criterion $crit (octo-feather-evidence failed, message above; its text must be in docs/specs/${crit%%#*}.spec.html)"
     say "evidence record $id (criterion $crit; read: octo-feather-evidence read --criterion $crit --commit $REV)"
 }
 

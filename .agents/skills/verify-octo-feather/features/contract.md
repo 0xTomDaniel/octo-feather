@@ -1,7 +1,5 @@
 # contract
 
-`octo-feather-contract [REPO-OR-QC.TOML]` validates a target's app-driver contract, `qc.toml` at its root, against the kit's schema for its format: it prints ok with the format, or names the missing or wrong key, or that there is no `qc.toml`, and exits non-zero.
-
 Criteria:
 
 - [quality#acceptance-qc-contract](../../../../docs/specs/quality.spec.html#acceptance-qc-contract)
