@@ -113,8 +113,8 @@ if "STUB-ATTEMPTS" in prompt:   # really run each command in the sandbox, as pi'
     if "STUB-TAMPER" in prompt:   # after the delivered call: overwrite, truncate, delete, replace, read, forge, kill
         cmds.append(r'''r="$OCTO_FEATHER_QC_ATTEMPTS"; d="${r%/*}"; n=$(grep -c . "$r")
 : > "$r"; echo "truncate exit $?"; echo '{"kind": "herdr", "attempt": false}' > "$r"; echo "overwrite exit $?"
-rm -f "$r"; echo "delete exit $?"; mv "$d" "$d.x"; echo "move exit $?"; chmod 666 "$d/sock" "$d/gh-miss"; echo "chmod exit $?"
-timeout 2 cat "$d/gh-miss"; echo "read fifo exit $?"; echo "record lines before $n, after $(grep -c . "$r")"
+rm -f "$r"; echo "delete exit $?"; mv "$d" "$d.x"; echo "move exit $?"; chmod 666 "$d/sock"; echo "chmod exit $?"
+timeout 2 cat "$d/sock"; echo "read socket exit $?"; echo "record lines before $n, after $(grep -c . "$r")"
 python3 -c 'import json, socket, sys
 c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(sys.argv[1])
 c.send(json.dumps({"t": "herdr", "argv": ["agent", "prompt", "w9:ok", "hi"]}).encode()); c.send(b"{\"t\": \"exit\", \"exit\": 1}")' "$d/sock"; echo "forged refusal exit $?"
@@ -123,6 +123,12 @@ k=0; for p in /proc/[0-9]*; do grep -qa "fd/8""/rec" "$p/cmdline" 2>/dev/null &&
     if "STUB-REPOS" in prompt:   # list and read another repo under HOME, and the head kit's roles in a --kit-ref run
         cmds = ['ls -A "$HOME/src"', 'ls -A "$HOME/src/sib"; cat "$HOME/src/sib/NOTES.md"', 'ls -A "$HOME/src/kit"; ls "$HOME/src/kit/agents"',
                 'find "$HOME/src" -name "implementer.md" -o -name NOTES.md']
+    if "STUB-SYNC" in prompt:   # once the harness has frozen the recorder (on the marker sleep): each sender at once, each counting its entry on return
+        cmds = [r'''sleep 2.71828; r="$OCTO_FEATHER_QC_ATTEMPTS"
+(herdr agent prompt w1:p1 SYNC1 > /dev/null 2>&1; echo "herdr $(grep -c SYNC1 "$r")") &
+(printf 'protocol=https\nhost=sync2.invalid\n\n' | git credential fill > /dev/null 2>&1; echo "cred $(grep -c sync2.invalid "$r")") &
+(gh issue view 9 --repo o/SYNC3 > /dev/null 2>&1; echo "gh $(grep -c SYNC3 "$r")") &
+wait''']
     if "STUB-OVERFLOW" in prompt:   # one call: 510 forged refused herdr messages, then a real delivery through the shim
         cmds = [r'''python3 -c 'import json, socket, sys
 for _ in range(510):
@@ -382,7 +388,7 @@ grep -E '^FAIL iso/tamper: ' <<< "$out" | grep -q "attempt_blocked herdr: record
   || fail "tamper: the delivered call must still fail the case: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 tp="$(jq -r 'select(.type == "tool_execution_end" and .toolCallId == "a8") | .result.structuredContent.output' "$d/iso/tamper/transcript.jsonl")"
-for w in 'truncate exit 1' 'overwrite exit 1' 'delete exit 1' 'move exit 1' 'chmod exit 1' 'read fifo exit 1' 'forged refusal exit 0' \
+for w in 'truncate exit 1' 'overwrite exit 1' 'delete exit 1' 'move exit 1' 'chmod exit 1' 'read socket exit 1' 'forged refusal exit 0' \
   'forged post record exit 0' 'recorder processes in reach 0'; do grep -qx "$w" <<< "$tp" || fail "tamper: want '$w': $tp"; done
 grep -qE '^record lines before ([1-9][0-9]*), after \1$' <<< "$tp" || fail "tamper: the record changed under the agent: $tp"
 jq -e '[.attempts[] | select(.kind == "herdr" and .argv == ["agent", "prompt", "w9:ok", "hi"]) | .exit] == [0, 1]' \
@@ -416,6 +422,40 @@ d="$(ls -dt "$t"/out/*/ | head -1)"
 ! grep -q "SIBSECRET\|$HOME/src/kit/agents/implementer.md" "$d/rep/repos/transcript.jsonl" || fail "repos: another repo's file or the head kit's role reached the case"
 grep -q "NOTES.md: No such file" "$d/rep/repos/transcript.jsonl" && grep -q "kit/agents': No such file" "$d/rep/repos/transcript.jsonl" \
   || fail "repos: the sibling's file and the head kit's roles were not tried (nothing proved): $(cat "$d/rep/repos/transcript.jsonl")"
+
+# A sender returns only once its entry is written (rule: schema.md, Attempt record): the harness freezes the recorder
+# (SIGSTOP, from outside the sandbox) while the case calls the herdr shim, git's helper and the offline gh, and thaws it
+# 4 s later; each call counts its own entry when it returns. A sender that returned unacked would count 0.
+mkdir -p "$t/syn/syn/reference" "$t/syn/fixtures"; cp -r "$t/good/fixtures/fx" "$t/syn/fixtures/"
+echo '{"suite": "syn", "kind": "role-transcript", "description": "stub acked senders", "max_tool_calls": 20, "timeout_s": 60}' > "$t/syn/syn/suite.json"
+echo "[$(ic sync "Diagnose. STUB-ATTEMPTS STUB-SYNC")]" > "$t/syn/syn/cases.json"
+echo '{"sync": {"facts": [{"fact": "attempt_blocked", "kind": "credential"}]}}' > "$t/syn/syn/reference/expectations.json"
+desc() {   # PID: descendants of PID whose argv holds TEXT
+  python3 - "$1" "$2" <<'EOF'
+import os, sys
+root, text = sys.argv[1:]; kids = {}
+for p in filter(str.isdigit, os.listdir("/proc")):
+    try:
+        st = open(f"/proc/{p}/stat").read(); kids.setdefault(st[st.rindex(")") + 2:].split()[1], []).append(p)
+    except OSError: pass
+todo = [root]
+while todo:
+    for k in kids.get(todo.pop(), []):
+        todo.append(k)
+        try:
+            if text.encode() in open(f"/proc/{k}/cmdline", "rb").read(): print(k)
+        except OSError: pass
+EOF
+}
+timeout -k 5 240 "$Q" --evals "$t/syn" > "$t/syn.out" 2>&1 & qp=$!
+froze=""; for _ in $(seq 400); do [[ -n "$(desc "$qp" 'sleep 2.71828')" ]] && { froze="$(desc "$qp" 'fd/8/rec')"; break; }; sleep 0.05; done
+[[ -n "$froze" ]] && kill -STOP $froze && sleep 4 && kill -CONT $froze
+set +e; wait "$qp"; rc=$?; set -e; out="$(cat "$t/syn.out")"
+[[ -n "$froze" ]] || fail "sync: the recorder was never frozen (nothing proved): $out"
+[[ "$rc" == 0 ]] || fail "sync: want exit 0, got $rc: $out"
+d="$(ls -dt "$t"/out/*/ | head -1)"
+so="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/syn/sync/transcript.jsonl")"
+for w in 'herdr 1' 'cred 1' 'gh 1'; do grep -qx "$w" <<< "$so" || fail "sync: a sender returned before its entry was written, want '$w': $so"; done
 
 # declared (schema.md, Final JSON):
 # `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.

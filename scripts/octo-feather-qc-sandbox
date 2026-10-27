@@ -21,12 +21,12 @@
 #   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
 #      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
-#      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's FIFO; git's only credential helper
+#      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's socket; git's only credential helper
 #      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
 #      refused, what, result}; what counts: .agents/skills/eval-cases/references/schema.md, Attempt record) is kept by the recorder, a
 #      setup-side process outside the judge's namespaces (its PID namespace cannot name it: no kill, no ptrace),
 #      on the hidden run tmpfs; the judge sees it only through a read-only bind ($SCR/rec: the live
-#      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket and FIFO, write-only, mode 0200, not removable).
+#      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket, write-only, mode 0200, not removable; each sender returns only once the recorder has written its entry).
 #      Senders: the herdr shim (a start message with the argv before the call, its exit after), the git helper,
 #      the offline gh's refusals, and the recorder's own inotify watch on the tmpfs masks (gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state,
 #      other repos as repo;
@@ -261,7 +261,8 @@ if [[ "$phase" == setup ]]; then
   if [[ -n "$HERDR" ]]; then
     { echo "#!$PY"
       echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine; record the call:'
-      echo '# its argv to the recorder before it runs (unreachable: not run), its exit after (.agents/skills/eval-cases/references/schema.md, Attempt record).'
+      echo '# its argv to the recorder before it runs (unreachable: not run), its exit after, then returns once the recorder has written the entry'
+    echo '# (.agents/skills/eval-cases/references/schema.md, Attempt record).'
       echo 'import json, os, socket, subprocess, sys'
       printf 'S, HERDR, SOCK = %s, %s, %s\n' "$(jq -n --arg x "$S" '$x')" "$(jq -n --arg x "$HERDR" '$x')" "$(jq -n --arg x "$RSOCK" '$x')"
       cat <<'EOF'
@@ -278,8 +279,9 @@ except OSError as e:
 env = {k: v for k, v in os.environ.items() if k != "HERDR_PANE_ID"}
 rc = subprocess.run([HERDR, "--session", S, *args], env=env, close_fds=False).returncode
 rc = 128 - rc if rc < 0 else rc
-try:
-    c.send(json.dumps({"t": "exit", "exit": rc}).encode())
+try:   # then wait for the recorder's close: it has written this call's entry (a recorder gone ends the wait too)
+    c.send(json.dumps({"t": "exit", "exit": rc}).encode()); c.shutdown(socket.SHUT_WR)
+    while c.recv(16): pass
 except OSError:
     pass
 sys.exit(rc)
@@ -290,7 +292,7 @@ EOF
   fi
   # git's only credential helper (GIT_CONFIG_* resets the list, then names this): records each request, answers none.
   { echo "#!$PY"
-    echo '# qc sandbox git credential helper: send the request to the recorder (protocol, host; never a secret), answer no credential.'
+    echo '# qc sandbox git credential helper: send the request to the recorder (protocol, host; never a secret), wait until it is written, answer no credential.'
     echo 'import json, socket, sys'
     printf 'SOCK = %s\n' "$(jq -n --arg x "$RSOCK" '$x')"
     cat <<'EOF'
@@ -301,6 +303,8 @@ for l in sys.stdin:
 try:
     c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(SOCK)
     c.send(json.dumps({"t": "cred", "op": (sys.argv[1:] or [""])[0], "protocol": f.get("protocol", ""), "host": f.get("host", "")}).encode())
+    c.shutdown(socket.SHUT_WR)
+    while c.recv(16): pass   # the recorder closes once the entry is written
 except OSError:
     pass
 EOF
@@ -313,10 +317,11 @@ EOF
   PATH="$SCR/bin:$PATH"
   [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
   PATH="$(cd "$(dirname "$0")/.." && pwd -P)/.agents/skills/github-pr/scripts:$PATH"   # the offline gh shadows every other gh
-  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$SCR/rec/gh-miss" \
+  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$RSOCK" \
     OCTO_FEATHER_QC_ATTEMPTS="$REC"
   # The recorder: setup-side (outside the judge's namespaces), so the judge can neither kill nor ptrace it; it alone
-  # writes the record. Socket and FIFO mode 0200 on the read-only view: the judge can send, never read, remove or replace.
+  # writes the record. Socket mode 0200 on the read-only view: the judge can send, never read, remove or replace. Each sender
+  # shuts its side and reads to EOF: the recorder closes a connection only after writing what it sent, so a call returns recorded.
   exec {rr}< <(exec python3 - /proc/self/fd/8/rec "$SCR/watch" "$S" 4>&- 5>&- 6>&- <<'EOF'
 import ctypes, json, os, selectors, signal, socket, struct, sys
 rd, lst, S = sys.argv[1:]
@@ -325,7 +330,6 @@ AT = {("agent", "prompt"), ("agent", "send-keys"), ("pane", "send-text"), ("pane
 out = os.fdopen(os.open(rd + "/attempts.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o444), "a")
 srv = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); srv.bind(rd + "/sock"); os.chmod(rd + "/sock", 0o200)
 srv.listen(128); srv.setblocking(False)
-os.mkfifo(rd + "/gh-miss", 0o600); ff = os.open(rd + "/gh-miss", os.O_RDWR | os.O_NONBLOCK); os.chmod(rd + "/gh-miss", 0o200)
 libc = ctypes.CDLL(None, use_errno=True)
 ino = libc.inotify_init1(0o4000 | 0o2000000)   # IN_NONBLOCK | IN_CLOEXEC
 wds = {}
@@ -337,7 +341,7 @@ for l in open(lst):
         wds.setdefault(w, (kind, path, os.open(path, os.O_RDONLY | os.O_DIRECTORY), set(filter(None, kept.split("/")))))
 wr, ww = os.pipe(); os.set_blocking(ww, False); os.set_blocking(wr, False)
 signal.set_wakeup_fd(ww); signal.signal(signal.SIGTERM, lambda *_: None)
-live, go, recs, misses, conns, fbuf = False, None, [], [], {}, b""
+live, go, recs, misses, conns = False, None, [], [], {}
 def emit(r, ok=None):
     if live if ok is None else ok:
         recs.append(r); out.write(json.dumps(r) + "\n"); out.flush()
@@ -364,6 +368,11 @@ def message(c, m):
         st.update(argv=m.get("argv"), live=live)
     elif t == "exit" and "argv" in st and "exit" not in st:
         st["exit"] = m.get("exit")
+    elif t == "miss" and live:   # an offline gh refusal
+        r = {"argv": [str(x) for x in m.get("argv", [])] if isinstance(m.get("argv"), list) else [], "why": str(m.get("why", ""))}
+        misses.append(r)
+        emit({"kind": "credential", "attempt": True, "refused": True, "what": " ".join(["gh", *r["argv"]]),
+              "result": f"offline gh refused: {r['why']}"})
     elif t == "cred":
         op, p, h = (str(m.get(k, "")) for k in ("op", "protocol", "host"))
         emit({"kind": "credential", "attempt": op == "get", "refused": True, "what": f"git credential {op} {p}://{h}",
@@ -376,8 +385,8 @@ def conn(c):
             return
         except OSError:
             m = b""
-        if not m:
-            sel.unregister(c); herdr_end(conns.pop(c)); c.close(); return
+        if not m:   # the sender is done: its entries, and any open queued before, written before the close it waits for
+            opens(); sel.unregister(c); herdr_end(conns.pop(c)); c.close(); return
         message(c, m)
 def accept():
     while True:
@@ -386,28 +395,6 @@ def accept():
         except BlockingIOError:
             return
         c.setblocking(False); conns[c] = {}; sel.register(c, selectors.EVENT_READ)
-def fifo(final=False):   # the offline gh's refusals, one JSON line each; a broken line is a lost refusal, never more
-    global fbuf
-    while True:
-        try:
-            b = os.read(ff, 65536)
-        except BlockingIOError:
-            b = b""
-        if not b:
-            break
-        fbuf += b
-    *ls, fbuf = fbuf.split(b"\n")
-    if final and fbuf:
-        ls.append(fbuf); fbuf = b""
-    for l in ls:
-        try:
-            r = json.loads(l)
-        except ValueError:
-            continue
-        if isinstance(r, dict) and live:
-            misses.append(r)
-            emit({"kind": "credential", "attempt": True, "refused": True, "what": " ".join(["gh", *map(str, r.get("argv", []))]),
-                  "result": f"offline gh refused: {r.get('why', '')}"})
 def opens():   # inotify on the tmpfs masks (what is an attempt, what is refused: .agents/skills/eval-cases/references/schema.md, Attempt record)
     while True:
         try:
@@ -434,9 +421,9 @@ def drain():
     accept()
     for c in list(conns):
         conn(c)
-    fifo(); opens()
+    opens()
 sel = selectors.DefaultSelector()
-for f in (srv, ff, wr) + ((ino,) if ino >= 0 else ()):
+for f in (srv, wr) + ((ino,) if ino >= 0 else ()):
     sel.register(f, selectors.EVENT_READ)
 print(f"ready {len(wds)}" if ino >= 0 else "ready no-inotify", flush=True)
 stop = False
@@ -444,7 +431,6 @@ while not stop:
     for k, _ in sel.select():
         f = k.fileobj
         if f is srv: accept()
-        elif f == ff: fifo()
         elif f == wr:
             try:
                 stop = bool(os.read(wr, 64))
@@ -458,7 +444,7 @@ while not stop:
             go.send(b"live")
         except OSError:
             pass
-drain(); fifo(True)
+drain()
 for c in list(conns):   # the judge's namespace is gone: every call still open ended without its exit
     herdr_end(conns.pop(c)); c.close()
 # Whole, never a prefix: `recorded` lets the grader refuse a record it did not get whole (schema.md, Attempt record).
