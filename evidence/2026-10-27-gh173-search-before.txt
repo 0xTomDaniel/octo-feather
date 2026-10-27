@@ -1,0 +1,662 @@
+## Layout  /EVALS_DIR|suite\.json|cases\.json|expectations\.json|question\.json|judgment-model\.json|classifiers\.json|fixtures//  61 hits
+.agents/skills/code-review/SKILL.md:83: Search once per part of the rule: each label, value and term it fixes, one grep each, across docs, comments, docstrings, help text, test headers and eval descriptions. A restatement paraphrases, so on
+.agents/skills/eval-cases/SKILL.md:12: - `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo c
+.agents/skills/eval-cases/SKILL.md:13: - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded
+.agents/skills/eval-cases/SKILL.md:45: - No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question and the kit's judgment model (`evals/judg
+AGENTS.md:28: - `evals/` factory eval suites (`<suite>/suite.json`, `cases.json`, hidden `reference/expectations.json`) and their `fixtures/`; shape: `scripts/check-evals --help`.
+docs/adr/0008-prose-last.md:12: A clean, protected codebase is how we encourage good behaviour. Any change to a prompt, role file or vendored-skill patch ships with an eval case that fails before the change and passes after it, shap
+evals/judgment-call-evidence/suite.json:4: does a spec call's evidence show that the accepted criterion it names cannot pass with the spec as written? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-exact-or-proxy/suite.json:4: does a check test its rule itself, as stated where the rule is owned, or a stand-in that only correlates with it? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-test-quality/suite.json:4: is a test tautological, implementation-coupled or ok? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-ticket-slice/suite.json:4: is a ticket, as written, a real end-to-end slice with a demo that exercises its change, or layer-only? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+justfile:60: tests/fixtures/ holds data, not scripts
+justfile:92: judgment suites' label data (evals/judgment-*/ cases.json, reference/expectations.json, REPORT.md): frozen
+scripts/check-evals:2: """check-evals [EVALS_DIR]   the shape of every factory eval case (quality #acceptance-qa-cases-checked)
+scripts/check-evals:7: EVALS_DIR: default the kit's evals/.
+scripts/check-evals:9: refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
+scripts/check-evals:10: role-transcript setup branch/head/origin/fake_gh), Facts (reference/expectations.json: the closed fact
+scripts/check-evals:12: suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
+scripts/check-evals:13: classifiers.json).
+scripts/check-evals:16: EVALS_DIR is not a dir.
+scripts/check-evals:202: """M as FIELD's model (rule: schema.md, Judgment model and classifiers); RULED: classifiers.json's lists, None unread."""
+scripts/check-evals:217: """EVALS/classifiers.json (schema: .agents/skills/eval-cases/references/schema.md, Judgment model and classifiers). Returns it when well formed, else None."""
+scripts/check-evals:279: """EVALS/judgment-model.json (rule: schema.md, Judgment model and classifiers)."""
+scripts/octo-feather-lane:24: ticket-slice, call-evidence); every question is asked of the kit's one judgment model, evals/judgment-model.json
+scripts/octo-feather-lane:26: The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
+scripts/octo-feather-lane:30: probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
+scripts/octo-feather-lane:623: """The question's calibration status (spec judgment#rule-calibration) from its suite.json calibration: the kit model's
+scripts/octo-feather-qa:6: below, by section). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
+scripts/octo-feather-qa:25: case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
+scripts/octo-feather-qa:64: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+scripts/octo-feather-qa:855: """EVALS/classifiers.json, parsed (its schema: the eval-cases skill, Judgment model and classifiers)."""
+scripts/octo-feather-qa:860: """The listed classifiers called (benched) in no list of classifiers.json (the skipped ones never are)."""
+scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+scripts/octo-feather-qa:870: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+scripts/octo-feather-qa:992: available classifier answers each picked case's state; graded here against reference/expectations.json, never shown to it."""
+tests/accepted.sh:14: tests/fixtures/accepted/*.spec.html with ETags V1 and V2 below (the ETag names
+tests/check-refs.sh:105: Judgment suites' label data quote frozen history: only cases.json, reference/expectations.json and REPORT.md
+tests/herdr-close.sh:6: tests/fixtures/herdr-say/; HERDR_* and OCTO_FEATHER_* are reset and the sweep
+tests/herdr-say.sh:6: in tests/fixtures/herdr-say/ and a temp state dir per case; HERDR_* and
+tests/herdr-spawn.sh:5: (tests/fixtures/herdr-spawn/), pi-role headless with a fake pi, and
+tests/herdr-spawn.sh:6: herdr-say and octo-feather-start with tests/fixtures/herdr-say/. No real
+tests/herdr-spawn.sh:114: tests/fixtures/herdr-say/ and a temp state dir per case.
+tests/install-check.sh:4: Linear target (tests/fixtures/install-check/linear), no linear on PATH: exit 1, linear listed missing with the
+tests/lane-judge.sh:9: judgment model (evals/judgment-model.json, spec judgment#rule-one-model) alone, on the state file's text, posts one marked comment labelled a model
+tests/lane-judge.sh:57: model registry: the kit's judgment model ($STUB_KIT, read by the test from evals/judgment-model.json), span-02, drex-max,
+tests/qa.sh:44: p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
+tests/qa.sh:582: bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
+tests/qa.sh:670: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+tests/qa.sh:696: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+tests/qa.sh:788: A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
+tests/qa.sh:821: The one place (EVALS/judgment-model.json, spec judgment#rule-one-model; shape: schema.md, Judgment model and classifiers).
+tests/qa.sh:822: badm PY_EDIT WANT: edit a fresh judgment copy's judgment-model.json (m), expect WANT
+tests/qa.sh:842: classifiers.json shape (rule: schema.md, Judgment model and classifiers).
+tests/qa.sh:843: badc PY_EDIT WANT: edit a fresh judgment copy's classifiers.json (o), expect WANT
+tests/spec-status.sh:3: fixture (tests/fixtures/spec-status/), then init and built on a copy, then the
+tests/start.sh:42: herdr (tests/fixtures/herdr-say): --issue ENG-123 in a Linear target makes workspace eng-123 holding one tab,
+## Suite  /max_tool_calls|timeout_s|\bcovers\b|\bkind\b|\bchosen\b|any depth|names? (no |a )?model/  65 hits
+.agents/skills/codebase-design/DESIGN-IT-TWICE.md:3: When the user wants to explore alternative interfaces for a chosen deepening candidate, use this parallel sub-agent pattern. Based on "Design It Twice" (Ousterhout): your first idea is unlikely to be 
+.agents/skills/codebase-design/DESIGN-IT-TWICE.md:11: Before spawning sub-agents, write a user-facing explanation of the problem space for the chosen candidate:
+.agents/skills/eval-cases/SKILL.md:22: `kind: skill-trigger`. The kit suite has `"covers": "role-skills"` (schema: Coverage): add a skill to a role, add its four cases.
+.agents/skills/eval-cases/SKILL.md:31: `kind: role-transcript`. A fixture holding exactly what the task needs, a task as the role's real brief would phrase it, and facts from the closed list.
+.agents/skills/herdr-comms/SKILL.md:126: one parked line (`at kind pane name role cwd session`) on stdout, even when the
+.agents/skills/linear-cli/SKILL.md:29: Copy-pasteable recipes for the most frequent flows. Prefer these dedicated commands over `linear api` (dash) reach for the GraphQL fallback only when no dedicated command or flag covers the operation.
+.agents/skills/linear-cli/SKILL.template.md:30: Copy-pasteable recipes for the most frequent flows. Prefer these dedicated commands over `linear api` (dash) reach for the GraphQL fallback only when no dedicated command or flag covers the operation.
+.agents/skills/typescript/SKILL.md:78: projects exist, use the narrowest project and file invocation that covers the
+agents/code-reviewer.md:40: - Approve the product. The verdict covers this diff; acceptance stays with an owner.
+agents/code-reviewer.md:48: You run in a fresh Herdr pane per merge (docs/adr/0016). Last step, verdict or blocker alike: send the report fields in the form the `code-review` skill's Verdict step owns (its **Report fields**), bl
+agents/corrector.md:15: - Evidence: the trigger in your brief (the owner's correction, or the repeated finding class), every `"kind": "finding"` line with that class in `$(octo-feather-state)/lanes/*.handoffs.jsonl` and `lan
+agents/corrector.md:17: - Each check or instruction you add is a logged call: list it in your reply as `call: <kind> <path>: <rule>`, kind `check` or `instruction+example`. Your supervisor puts each in the merge ask; the own
+agents/director.md:47: You are the only role that talks to the owner (docs/adr/0015). Escalations and owner gates reach you from supervisors, never from workers directly; resolve what your authority covers first, then bring
+agents/director.md:75: Correction lanes (docs/adr/0020): `correct` is factory QA, not product QC. Start a correction lane against the target repo when (a) the owner corrects something at a gate (spec, QA evidence, merge), o
+agents/director.md:76: `jq -r 'select(.kind == "finding") | .class' $(octo-feather-state)/lanes/{,archive/}*.handoffs.jsonl | sort | uniq -c | awk '$1 >= 2'`.
+agents/director.md:77: Baseline qc failures are product gaps: open a gap lane, never a correction lane; baseline lanes log them as `"kind": "gap"`, which this count never sees (docs/adr/0020).
+agents/director.md:78: Skip a class that already has a correction-lane issue, open or closed, unless a finding line of that class is dated (`at`) after that issue closed. It is an ordinary lane (parent issue, supervisor, me
+agents/implementer.md:36: - Implement the general rule the spec states, so every case it covers holds, not only the criterion, fixture, label, or evaluation case at hand. Code keyed to those instances passes the check while th
+agents/supervisor.md:54: line: `{"at": ..., "kind": "finding", "source": "code-review" or "qc", "class": <its class tag>,
+agents/supervisor.md:65: - Before any repo change, however small, and before opening a file to change it, your next action is loading the `implement-spec` skill. It decides whether a spec covers the change and spawns the work
+agents/supervisor.md:108: Escalate scope conflict, missing judgment, unsafe authority, or changed ship grouping to the director only, with `herdr-say --parent`: try first within your own authority; then send what is blocked, w
+docs/adr/0004-github-issues-not-linear.md:1: # The tracker is chosen per target: GitHub Issues or Linear
+docs/adr/0008-prose-last.md:7: 3. **Structured judgment.** What no exact check can decide, the producer of the work declares in a field with fixed labels: the reviewer's `Verdict: clear|blocking`, `Check:` (or `Checks: none`) and `
+docs/adr/0008-prose-last.md:20: `just check` checks the presence half of this paragraph on a branch (`scripts/check-behavior-smoke`, correction lane #26): when the branch diff from its merge base changes a role file, a skill's markd
+docs/adr/0014-the-role-under-the-director-is-the-supervisor.md:3: The agent that owns one lane under the director is called the **supervisor**: the role file is `agents/supervisor.md`, its Herdr tab is `supervisor` in workspace `gh<n>`, and `just supervise N` starts
+docs/adr/0016-every-agent-launches-through-pi-role.md:7: - pi-subagents (pinned npm extension) for headless children through its `subagent` tool. Rejected: a second launcher, an in-process third-party extension, and its own skills and prompts in every deleg
+docs/adr/0017-integration-is-a-script.md:3: The supervisor integrates with `just integrate N REF...` (`scripts/octo-feather-integrate`), which finds lane gh<N>'s worktree, merges each named worker branch (`--no-ff`) or cherry-picks each named c
+docs/adr/0020-the-corrector-runs-on-a-repeat-as-its-own-lane.md:3: `correct` is a factory QA process (`just qa` territory), not product QC (`just qc`), so it never runs inside a product lane. The director starts a correction lane against the target repo in two cases:
+docs/adr/0020-the-corrector-runs-on-a-repeat-as-its-own-lane.md:5: Baseline qc failures never trigger a correction lane. A baseline run (`just qc` on criteria already on main, outside a product lane's own diff) that fails a criterion has found a product gap, not an a
+docs/adr/0020-the-corrector-runs-on-a-repeat-as-its-own-lane.md:16: - The hand-off log fields (spec `#handoff-fields`) include the finding line: `kind`, `source`, `class`, `blocking`, `summary`.
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:9: Spec changes after Accept are logged judgement calls the owner approves at merge. Specs are not perfect up front, and spec and code must never diverge: when a build teaches the factory that an accepte
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:25: - A baseline `just qc` run against criteria already on main logs each failure as a `"kind": "gap"` line and opens a gap lane, never a correction lane (docs/adr/0020, finding 21).
+docs/future.md:19: Tom's caution: sol models tend to over-engineer and over-correct. The code reviewer must judge only against the ticket's acceptance criteria and the spec. `agents/code-reviewer.md` already covers part
+docs/owed-evals/160.md:9: - Note, no eval owed yet: review round 2 found a restatement in a patch reason line (.skillfile/patches/skills/code-review/SKILL.md.patch:1) that the writer's search had excluded with the patch payloa
+docs/owed-evals/71.md:5: - Corrector and director, meaning stays out of checks (docs/adr/0008, `correct` patch, principle-encode-lessons-in-structure, issue #71): given the check-owned-rules history (a phrase-list check that 
+docs/owed-evals/98.md:6: - Supervisor, reads beyond the scripts (spec skills#tracker): asked for a Linear read no tracker script covers (a team's workflow states), the supervisor reads the vendored `linear-cli` references by 
+docs/owed-evals/backlog.md:18: - Director, baseline gap routing (docs/adr/0020, finding 21): a baseline qc failure is logged `"kind": "gap"` and opens a gap lane, never a correction lane, however often its cause repeats. Smoke: `ev
+docs/plan.md:13: | 0 | Remote box | 45m | Provider chosen by Tom; Debian/Ubuntu, 8+ GB RAM (several Pi agents plus pnpm/Playwright); Tailscale; git, gh, just, uv, node+pnpm, pi, herdr, jq; spec-chat review hosting rea
+evals/ladder/suite.json:4: on fixture python-app-noprint (ruff select without T20, so no lint rule covers bare print), a ticket whose criterion is hello-shout and whose What to build also asks for a `just check` scan of src/ fo
+evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases, each in train and held-out (covers:
+justfile:75: LICENSE, this justfile (docs/ also covers docs/specs/) and
+scripts/check-behavior-smoke:21: directory prefix; named() below, token bounds per #121 N7). One evidence file no longer covers
+scripts/check-evals:48: keys that would name a model in a suite
+scripts/check-evals:193: """The dotted paths of every key in O, at any depth, that would name a model (model, chosen)."""
+scripts/check-vendored:73: """Skillfile lines: (kind, name, source, path); kind fetch-only for a `#fetch-only github ...` line."""
+scripts/octo-feather-lane:29: The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
+scripts/octo-feather-lane:254: """Each line of TEXT with its kind, `fence`, `quote`, `comment` or `text`, in the scope above. With COMMENTS
+scripts/octo-feather-qa:27: A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
+scripts/octo-feather-qa:28: (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
+scripts/octo-feather-qa:56: A judgment suite (kind judgment, spec judgment#acceptance; schema: Judgment suite) is a bench, not facts: its
+scripts/octo-feather-qa:59: chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
+scripts/octo-feather-qa:110: helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
+scripts/octo-feather-qc-sandbox:23: (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
+scripts/octo-feather-qc-sandbox:36: upper dir: one JSON line {"upper": [[kind, path]...]} on QC_FD_POST,
+scripts/octo-feather-qc-sandbox:38: kind new, changed or deleted; octo-feather-qc classifies them. The upper
+scripts/octo-feather-spec-status:22: "kind": "clarifies" | "adds" | "weakens", "anchors": ["<data-anchor>"...],
+scripts/octo-feather-spec-status:29: than supervisor, passes_as_written not false, an unknown kind, or a criterion id
+scripts/octo-feather-spec-status:37: such a call of kind weakens, an added one of kind adds.
+scripts/octo-feather-spec-status:308: (kind, heading): the order and wording of #gates-call-loudness
+tests/check-behavior-smoke.sh:47: Per-path smoke (#93): evidence that names no path on a `Smoke:` line covers none.
+tests/qa.sh:29: Stub pi --mode json: canned event stream chosen by tokens in the -p prompt; its own argv as the first record.
+tests/qa.sh:267: Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+tests/qa.sh:396: `ok` also reads tdd early and still passes (the watcher kept it running); `early` lingers past timeout_s.
+tests/qa.sh:789: evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
+tests/qa.sh:800: No suite names a model (spec judgment#rule-one-model): a model or chosen key at any depth is refused, naming the one place.
+## Case  /should_trigger|\bsplit\b|fake_gh|\borigin\b.*\b(true|bare)|\{repo\}|\{head\}|repo setup|setup fields/  35 hits
+.agents/skills/code-review/SKILL.md:38: - **Divergent Change**: one file or module is edited for several unrelated reasons. → split so each module changes for one reason.
+.agents/skills/eval-cases/SKILL.md:13: - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded
+.agents/skills/eval-cases/SKILL.md:33: - Repo setup (`branch`, `head`, `origin`, `fake_gh`) and `{repo}`, `{head}` in the task: schema, Case.
+.agents/skills/to-tickets/SKILL.md:53: - Should any tickets be merged or split further?
+.agents/skills/writing-for-agents/SKILL-MECHANICS.md:18: The invocation cut of splitting (the sequence cut lives in `SKILL.md`): split off a model-invoked skill when you have a distinct leading word that should trigger it on its own (a trigger word you actu
+.agents/skills/writing-for-agents/SKILL.md:43: **Sprawl** is the failure mode here: a document simply too long, even when every line is live and unique. Attention thins across the excess, and every extra line is one more to keep relevant. The cure
+.agents/skills/writing-for-agents/SKILL.md:54: ## When to split
+.agents/skills/writing-for-agents/SKILL.md:56: Splitting one document into two spends one of the two loads, so split only when the cut earns it:
+.agents/skills/writing-for-agents/SKILL.md:58: - **By sequence**: split a run of steps where the post-completion steps tempt the agent to rush the one in front of it. Keeping them out of view drives more legwork on the current task. Beware the rev
+agents/director.md:73: Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent ticket in the target's tracker, which you file with the tracker skill's `issue-create`. Cut lanes from the accep
+agents/supervisor.md:59: - Your lane is one merge ask on one parent ticket in the target's tracker, filed by the director (docs/adr/0019). File its tickets as sub-issues of that parent with `to-tickets`; set `Blocked by` only
+docs/adr/0011-herdr-layout.md:3: Herdr holds one workspace `director` with a single tab for the director. Every lane gets its own workspace named by its lane key, which is also the lane's branch name, exactly the lane key with no pre
+docs/adr/0019-a-lane-is-one-merge-ask.md:3: One supervisor is one lane is one merge ask is one parent ticket in the target's tracker (ADR 0004), filed by the director; the supervisor's tickets are sub-issues of that parent, with `Blocked by` on
+docs/owed-evals/115.md:5: Later change (lane gh108, #116 follow-up): the eval-cases body documents the case format as built (before-targets incl. kit_contract_edit, declared_includes, setup fields, the owned-rule principle). I
+scripts/check-evals:10: role-transcript setup branch/head/origin/fake_gh), Facts (reference/expectations.json: the closed fact
+scripts/check-evals:330: """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+scripts/check-evals:410: """A role-transcript case's repo setup fields."""
+scripts/check-gate-free:64: """A process's argv: /proc where there is one, else ps (macOS: split on whitespace); None if gone."""
+scripts/octo-feather-lane:1415: """Replace $(...) and backquote-free substitutions with a placeholder word, so env values never split."""
+scripts/octo-feather-qa:7: dir (its repo setup and task slots: schema, Case; a fixture with uv.lock synced with `uv sync --locked`;
+scripts/octo-feather-qa:15: never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH (logs argv,
+scripts/octo-feather-qa:16: answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
+scripts/octo-feather-qa:37: Prints one PASS or FAIL line per case with the facts that decided it, then, when any case has a split
+scripts/octo-feather-qa:43: --sample N                of the selected cases run only N, stratified by should_trigger and split
+scripts/octo-feather-qa:404: octo-feather-qa fake GitHub (a case's fake_gh): logs argv, answers the few calls a lane start needs.
+scripts/octo-feather-qa:1111: """n of picked, stratified by (should_trigger, split): each stratum shuffled with a fixed seed, then one
+scripts/octo-feather-qa:1112: from each in turn; should_trigger true/train and false/held-out lead, so 2 picks hold one of each."""
+scripts/octo-feather-qa:1132: """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+scripts/octo-feather-qc:96: Repo: {repo}, head {head}. Spec: {spec}.
+scripts/octo-feather-qc:105: {{"head": "{head}", "criteria": [{{"id": "<id>", "verdict": "pass" or "fail", "command": "<exact command you ran>", "output": "<its output, trimmed to what shows the outcome>", "why": "<one line>"}}]}
+scripts/review-host:94: `ps` text must equal that launch whole, never split into words, its interpreter the literal path
+tests/check-refs.sh:15: The retired words and runtime file names, split so this file stays clean under the check it tests.
+tests/check-refs.sh:89: The lane branch default, split so this file stays clean: a role restating it fails, its pointer passes.
+tests/qa.sh:415: Role-transcript cases: repo setup (head, branch, origin, fake gh, {repo}/{head}), skill reads by Pi `read` only,
+tests/tracker.sh:238: shellcheck disable=SC2086 # $c is one command line, split into its words
+## Facts  /skill_read|skill_not_read|attempt_blocked|declared_includes|\bdeclared\b|field_lines|branch_paths|never reached|vacuous|fact is decided|closed (fact )?list/  64 hits
+.agents/skills/eval-cases/SKILL.md:13: - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded
+.agents/skills/eval-cases/SKILL.md:18: A case tests the rule as its **owner** file states it (the role file, the skill), never a stricter one. Copy the rule's own condition into the fact: "`writing-for-agents` before editing a role, skill 
+.agents/skills/eval-cases/SKILL.md:31: `kind: role-transcript`. A fixture holding exactly what the task needs, a task as the role's real brief would phrase it, and facts from the closed list.
+.agents/skills/eval-cases/SKILL.md:42: - A target never reached fails its `skill_read_before` (schema: Before targets): write the task so the role reaches it, and list such a FAIL as a finding, never weaken the case.
+.agents/skills/eval-cases/SKILL.md:44: - Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020
+.agents/skills/eval-cases/SKILL.md:47: A fact or target the closed list lacks is added to the schema, refused in `scripts/check-evals` and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa.sh`.
+.agents/skills/github-pr/SKILL.md:46: Read target repo `AGENTS.md`, its declared canonical index (`docs/specs/index.spec.html`
+.agents/skills/typescript/SKILL.md:67: - Use the repo's declared replay-recording command to record real API
+.agents/skills/typescript/SKILL.md:76: During iteration, prefer the narrowest repo-declared Vitest project, tier,
+.agents/skills/typescript/SKILL.md:99: changes require more. Prefer repo-declared package, tier, project, or
+agents/implementer.md:34: - Load each skill when its step comes: starting the ticket, `implement`, and the tracker skill to read it; before the first `gh` call (a PR read), `github-pr`; before each test you write or change, `t
+agents/implementer.md:57: Last step, result or blocker alike: send the commit id, what changed, the one fact the change is safe because of and how far you proved it (`blast-radius`), declared repo skills loaded, the check fiel
+docs/adr/0008-prose-last.md:7: 3. **Structured judgment.** What no exact check can decide, the producer of the work declares in a field with fixed labels: the reviewer's `Verdict: clear|blocking`, `Check:` (or `Checks: none`) and `
+docs/owed-evals/106.md:7: Needs a fact the closed list lacks (a named tool's result holds a given text): add it in `scripts/check-evals` and grade it in `scripts/octo-feather-qa` with a stub-pi test in `tests/qa.sh` (eval-case
+docs/owed-evals/107.md:3: An owed eval fails before its behaviour change and passes after it; the change's smoke run is in `evidence/` (rule: docs/adr/0008). Now cases (removed here, #116): role skills loading at their step an
+docs/owed-evals/115.md:5: Later change (lane gh108, #116 follow-up): the eval-cases body documents the case format as built (before-targets incl. kit_contract_edit, declared_includes, setup fields, the owned-rule principle). I
+docs/owed-evals/118.md:8: - Supervisor, ticket demo judged, not regexed (to-tickets patch, issue #118, deletion of the What-to-build naming rule): an approved one-ticket breakdown; the drafted issue passes `octo-feather-lane t
+docs/owed-evals/118.md:9: - Corrector, template route, target hardening (docs/adr/0020 Where the fix goes: a language-general lesson hardens the target and also files a kit issue for `templates/<lang>`). Graded today: evals/la
+docs/owed-evals/118.md:10: - Corrector, routing a kit cause (issue #118 owner round, docs/adr/0020 Where the fix goes), still owed: a separating kit-route case (held-out `corrector-kit-route` in evals/ladder passes at both kits
+docs/owed-evals/157.md:5: - Report fields, one owner (the `code-review` skill's Verdict step, **Report fields**; agents/implementer.md and agents/code-reviewer.md Output point there). Graded by existing evals/ladder cases, no 
+docs/owed-evals/157.md:6: - eval-cases skill, Field lines pointer followed, graded (round 3 change): smoke shows it at head, ungraded (evidence/2026-10-25-gh157-report-fields.md, Round 5: run 20261025T030732Z-414fc9 greps Repo
+docs/owed-evals/160.md:6: Base 0/3, head 3/3, separating on the declared `Owner:` field only: base implementers already pointed on this small fixture.
+docs/owed-evals/160.md:7: - Owed, writer: the same case on a kit-sized fixture (a `git archive` kit copy, as evidence/2026-10-25-gh157-report-fields.md Round 5) where the ticket writes an owned rule whose existing restatements
+docs/owed-evals/167.md:5: Owed, reviewer: six graders on main `8451938` that their lane reviewer classified exact in the merge ask, and the #165 sweep (https://github.com/0xTomDaniel/octo-feather/issues/165#issuecomment-641860
+docs/owed-evals/167.md:7: - r01, reviewer of #108 (PR #111 verdict, `Check: scripts/octo-feather-qa: attempt_blocked herdr ... class: exact`): `scripts/octo-feather-qa:158-168` at `8451938`, `ATTEMPT`, the command and path reg
+docs/owed-evals/167.md:8: - r02, reviewer of #108 (PR #111 verdict, the `attempt_blocked herdr`, `lane_state` and `credential` Check lines, each `class: exact`): `scripts/octo-feather-qa:187-204` at `8451938`, `leaked()` and `
+docs/owed-evals/167.md:9: - r03, reviewer of #108 (PR #111 verdict, `Check: scripts/octo-feather-qa: skill_read_before test_write ... class: exact`): `scripts/octo-feather-qa:560-567` at `8451938`, `changed()`, test_write as a
+docs/owed-evals/47.md:5: - Supervisor, tracer tickets (to-tickets patch, spec `#acceptance-tracer-tickets`, issue #47): an approved breakdown with one product ticket and one wide-refactor step; each drafted issue names `<spec
+docs/owed-evals/47.md:6: - Jev judges whether a ticket is a real tracer slice (issue #47): `octo-feather-lane ticket` checks only facts (criterion anchor, demo last, a declared surface; whether the demo shows what What to bui
+docs/owed-evals/71.md:5: - Corrector and director, meaning stays out of checks (docs/adr/0008, `correct` patch, principle-encode-lessons-in-structure, issue #71): given the check-owned-rules history (a phrase-list check that 
+evals/isolation/suite.json:4: each case is graded on attempt_blocked (what counts as an attempt and as refused:
+evals/ladder/suite.json:4: each case is graded only on that declared `rung` field (never prose).
+evals/ladder/suite.json:4: docs/adr/0020 says harden the target, not how, and branch_paths has no any-of form), and on the final message's json block `issues` holding one with repo 0xTomDaniel/octo-feather and dir templates/pyt
+evals/skill-triggers/suite.json:4: Graded only by skill_read / skill_not_read.
+evals/skill-triggers/suite.json:4: A run stops once every fact is decided, or at the tool-call or time bound.
+scripts/check-evals:556: """A field_lines fact: field a field name, then none, includes and every (.agents/skills/eval-cases/references/schema.md, Field lines)."""
+scripts/octo-feather-lane:53: The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
+scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
+scripts/octo-feather-qa:27: A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
+scripts/octo-feather-qa:29: A fact is decided when the schema's Facts section says (a skill_read_before once its target is reached; a
+scripts/octo-feather-qa:33: Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
+scripts/octo-feather-qa:109: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
+scripts/octo-feather-qa:171: """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md, as skill_text reads it
+scripts/octo-feather-qa:223: """declared (schema, Final JSON)."""
+scripts/octo-feather-qa:237: """declared_includes (schema, Final JSON)."""
+scripts/octo-feather-qa:315: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+scripts/octo-feather-qa:386: """attempt_blocked KIND over the sandbox's RECORD (rule: schema, Attempt record)."""
+scripts/octo-feather-qa:504: """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
+scripts/octo-feather-qa:510: branch_paths' base: main as set up
+tests/herdr-spawn.sh:15: A failing-read case is vacuous unless herdr-spawn read up to the armed
+tests/lane-tickets.sh:29: No host directory is on it, so a host gh (a CI runner's, asking for GH_TOKEN) is never reached.
+tests/lane-tickets.sh:38: Its declared surface: bin/demo (tracked executable), pyproject's `app`, justfile `serve`;
+tests/lane-tickets.sh:119: command), demos through each declared surface (tracked bin/ by name and path after an env
+tests/lane-tickets.sh:145: The qc judge's draft (gh47 qc at 294ac1d), verbatim: a printf demo is no declared surface.
+tests/lane-tickets.sh:151: a declared surface passes every fact; whether it is a real slice is review's, never a regex over
+tests/lane-tickets.sh:223: A repo with no declared program (no executable, no recipe but its gate, no bin) demos through its script.
+tests/lane-tickets.sh:227: A module's gate is no declared program either: the script demo still passes (#172 final review).
+tests/qa.sh:395: declared (schema.md, Final JSON):
+tests/qa.sh:412: A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+tests/qa.sh:416: before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
+tests/qa.sh:469: A target never reached fails the read before it (test_write here), read or not.
+tests/qa.sh:476: Only a declared test counts: tests/README.md and tests/test_y.py (outside spec's declaration) are edits, specs/cli_check.py
+tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+## Skill load  /truncat|normaliz|CRLF|full (SKILL\.md )?content|skill load|a load\b/  16 hits
+.agents/skills/improve-codebase-architecture/SKILL.md:69: - **User rejects the candidate with a load-bearing reason?** Offer an ADR, framed as: _"Want me to record this as an ADR so future architecture reviews don't re-suggest it?"_ Only offer when the reaso
+.agents/skills/interrogate/references/code-quality-review.md:33: 6. **Keep logic in the canonical layer and reuse existing helpers.** Call out feature logic leaking into shared paths or implementation details leaking through APIs. Prefer existing canonical utilitie
+evals/role-transcripts/suite.json:4: the case passes when its transcript shows each listed skill loaded before the step it serves, that step reached in the run, and where the case needs a verdict, the role's final message carrying it (fa
+justfile:135: Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).
+scripts/octo-feather-lane:302: """(the report's check classification as normalized lines, why it is unusable) (docs/adr/0008)."""
+scripts/octo-feather-qa:142: """The SKILL.md as the kit under test holds it, normalized: CRLF as LF, trailing newlines dropped (a tool may
+scripts/octo-feather-qa:154: None while it has none or when Pi truncated it (structuredContent.truncated, or Pi's truncation notice)."""
+scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+scripts/octo-feather-qa:814: """Brier (mean over cases of sum over labels of (p - truth)^2, probabilities renormalized), ECE over top-probability
+scripts/octo-feather-spec-status:34: it (so moving or reordering a child changes its parents), whitespace normalized;
+tests/check-decision-log.sh:50: Valid logs pass: one line, several, nested, no final newline, CRLF, any key order, unicode text.
+tests/qa.sh:110: after the delivered call: overwrite, truncate, delete, replace, read, forge, kill
+tests/qa.sh:142: read PATH|limit=N: the first N lines and Pi's continuation notice; bash CMD #TRUNC: Pi marks the output truncated.
+tests/qa.sh:373: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+tests/qa.sh:446: A load is the full SKILL.md content in a tool result: an ls, grep, head of a part, a read of another tdd/SKILL.md,
+tests/qa.sh:447: a read Pi cut short (limit, its notice) and a cat whose output Pi marked truncated never count.
+## Before targets  /test_write|git_commit|git_push|gh_call|kit_contract_edit|final_message|before.target|snapshot|testpaths/  55 hits
+.agents/skills/eval-cases/SKILL.md:18: A case tests the rule as its **owner** file states it (the role file, the skill), never a stricter one. Copy the rule's own condition into the fact: "`writing-for-agents` before editing a role, skill 
+.agents/skills/github-pr/SKILL.md:103: (docs/adr/0022) and the kit's tests use: it answers reads from a snapshot and
+.agents/skills/tdd/SKILL.md:31: - **Tautological**: the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), s
+docs/adr/0022-interim-qc-is-a-fresh-cross-family-judge.md:5: The judge has bash, so it runs sandboxed by default (#33; lane #15 run 6 showed an env or PATH shim is not isolation: an explicit `herdr --session default` read the live session). `octo-feather-qc` st
+docs/adr/0022-interim-qc-is-a-fresh-cross-family-judge.md:7: The judge gets read-only GitHub evidence (#34; lane #23 failed 8 criteria only because GitHub was absent). When the worktree's `origin` is a GitHub URL (read locally, so missing auth cannot pass for n
+docs/owed-evals/115.md:5: Later change (lane gh108, #116 follow-up): the eval-cases body documents the case format as built (before-targets incl. kit_contract_edit, declared_includes, setup fields, the owned-rule principle). I
+docs/owed-evals/167.md:9: - r03, reviewer of #108 (PR #111 verdict, `Check: scripts/octo-feather-qa: skill_read_before test_write ... class: exact`): `scripts/octo-feather-qa:560-567` at `8451938`, `changed()`, test_write as a
+docs/owed-evals/34.md:5: - Supervisor and code reviewer, QC GitHub evidence (docs/adr/0022, #34): a lane claims a criterion whose proof is on GitHub (an issue state, a draft PR); the sandboxed judge reads it through the offli
+scripts/check-evals:30: a before target reachable only with that case field
+scripts/check-evals:446: """Fixture NAME declares its tests (rule: schema.md, Before targets, test_write). A missing fixture dir is
+scripts/octo-feather-qa:17: sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
+scripts/octo-feather-qa:18: qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
+scripts/octo-feather-qa:19: is credited to: schema, Before targets). For a case graded on test_write only, the collection runs after each
+scripts/octo-feather-qa:20: call that changed a file, in a copy of that snapshot's own bytes, no test module imported.
+scripts/octo-feather-qa:86: kit_contract_edit: exactly the files agents/corrector.md's "before editing a role, skill or patch" guards, repo-root relative.
+scripts/octo-feather-qa:178: """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
+scripts/octo-feather-qa:179: gh_call, kit_contract_edit, from its qa_fs events (filesystem snapshots, never command text)."""
+scripts/octo-feather-qa:472: """{path: content hash} of every file test_write's runner collects (rule: schema, Before targets): run in the
+scripts/octo-feather-qa:495: """The filesystem targets reached between two snapshots; known: commits that existed before the run."""
+scripts/octo-feather-qa:505: After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
+scripts/octo-feather-qa:537: the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
+scripts/octo-feather-qc:23: fresh snapshot with this shell's gh auth into per-run scratch before every run;
+scripts/octo-feather-qc:25: refusing writes. No GitHub remote: no snapshot, and that gh refuses every call.
+scripts/octo-feather-qc:28: --no-github            skip the snapshot (printed in the proof) instead of
+scripts/octo-feather-qc:41: 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
+scripts/octo-feather-qc:100: When you judge a criterion only from this history (GitHub snapshot, lane records, logs) rather than by exercising it, its why starts "history only:" and it passes only if the history shows the exact r
+scripts/octo-feather-qc:110: """Fetch this run's GitHub snapshot outside the sandbox; return {dir, line, repo, meta} or {off}."""
+scripts/octo-feather-qc:118: killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
+scripts/octo-feather-qc:281: (snapshot, miss log) is removed; a 2nd signal (timeout sends one to the child
+scripts/octo-feather-qc-ghsnap:2: """octo-feather-qc-ghsnap REPO DIR   read-only GitHub snapshot for the qc judge (docs/adr/0022)
+scripts/octo-feather-qc-sandbox:12: 4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
+scripts/octo-feather-qc-sandbox:53: QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_GHSNAP snapshot dir and
+scripts/octo-feather-qc-sandbox:137: 4. seam: extra read-only binds (e.g. a GitHub evidence snapshot, ticket #34).
+tests/lane-merge-ask.sh:222: the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
+tests/lane-tickets.sh:5: snapshot, taken by octo-feather-qc-ghsnap from a fake GitHub gh and served by the qc judge's
+tests/lane-tickets.sh:70: A fake GitHub gh, used only to take the snapshot: like real gh it answers every --json field
+tests/lane-tickets.sh:71: asked (stored value or null), so the snapshot holds exactly the fields the snapshot CLI asks for.
+tests/lane-tickets.sh:284: The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
+tests/lane-tickets.sh:285: asked is one the snapshot CLI fetches.
+tests/lane-tickets.sh:334: Read-only: no run wrote to the repo or the snapshot.
+tests/qa.sh:160: the model's next turn: as with pi, the watcher snapshots before the next call runs
+tests/qa.sh:191: longer than the stub's 0.5 s turn, so the next call's write always lands before it ends; test_write must still go to
+tests/qa.sh:192: the call whose end the snapshot was taken at.
+tests/qa.sh:412: A read with its target never reached fails, never a vacuous pass: final_message unreached when the run is cut off.
+tests/qa.sh:416: before-targets from the watcher's filesystem snapshots, declared_includes. A scripted stub runs real commands.
+tests/qa.sh:419: test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
+tests/qa.sh:467: kit_contract_edit: a role, skill or patch changed (agents/corrector.md's words); AGENTS.md, agents/<dir>/x.md or another
+tests/qa.sh:469: A target never reached fails the read before it (test_write here), read or not.
+tests/qa.sh:477: (any name the declaration collects) is a test_write.
+tests/qc-gh.sh:4: octo-feather-qc-ghsnap snapshots it before every run, and a fake `pi` judge inside the
+tests/qc-gh.sh:7: and the report. Also: the brief names the evidence, the snapshot is read-only inside,
+tests/qc-gh.sh:48: qc's scratch (snapshots) lives under $t: a killed test leaves nothing
+tests/qc-gh.sh:166: A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no snapshot behind.
+tests/qc.sh:48: a Herdr server writes its snapshot as it exits
+tests/tracker.sh:82: github-issues against the offline fake gh: a snapshot of o/r with issue 3 (sub-issues 7, 8), 7 (parent 3, blocked
+## Attempt record  /attempt record|lane_state|forge|recorder|refusal|whole record|never a prefix/  53 hits
+.agents/skills/herdr-comms/SKILL.md:82: may be the refusal, where a bare Enter kills the agent being spawned. The
+.agents/skills/typescript/SKILL.md:87: - Treat MSW handlers as tape recorders, not API simulators.
+agents/supervisor.md:100: - Keep one writer per mutable resource. Your head-pinned merge closes the lane: reconcile the PR and worklane state together, move the parent ticket and every ticket to done with `octo-feather-lane do
+docs/adr/0022-interim-qc-is-a-fresh-cross-family-judge.md:7: The judge gets read-only GitHub evidence (#34; lane #23 failed 8 criteria only because GitHub was absent). When the worktree's `origin` is a GitHub URL (read locally, so missing auth cannot pass for n
+docs/owed-evals/167.md:8: - r02, reviewer of #108 (PR #111 verdict, the `attempt_blocked herdr`, `lane_state` and `credential` Check lines, each `class: exact`): `scripts/octo-feather-qa:187-204` at `8451938`, `leaked()` and `
+docs/owed-evals/167.md:11: - r05, reviewer of #119 (PR #147 verdict, `Check: scripts/check-evals: one kit judgment model, ... pinned provider/id ... class: exact`): `scripts/check-evals:314-321` at `8451938`, `check_model_ref`,
+docs/owed-evals/46.md:5: - Supervisor, lane close archive (spec `#octo-lane-record-life-archive`, issue #46): a merged lane at close; the supervisor runs `octo-feather-lane archive <name>` after its last hand-off line and bef
+evals/ladder/suite.json:4: graded on the check field holding a Check line for src/app/cli.py, the file holding the refusal, with class exact (which decisions take a Check line:
+scripts/check-gate-free:36: its just, so a script that swallows the refusal still fails the gate) and
+scripts/check-gate-free:37: exits 1. A caller treats anything but the ok line as refusal.
+scripts/check-gate-free:39: Stated limit: like `env -i`, a script that deliberately clears or forges the
+scripts/octo-feather-lane:50: `verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
+scripts/octo-feather-lane:145: """A refusal: message names the fix, exit 1, nothing moved."""
+scripts/octo-feather-lane:532: """Malformed PR data from gh is a refusal naming the fix, never a traceback."""
+scripts/octo-feather-new-repo:8: touches the network or creates a GitHub repo. Every refusal happens before
+scripts/octo-feather-qa:23: and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
+scripts/octo-feather-qa:109: attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
+scripts/octo-feather-qa:110: helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
+scripts/octo-feather-qa:111: tool output is read. Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
+scripts/octo-feather-qa:112: record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
+scripts/octo-feather-qa:340: (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+scripts/octo-feather-qc-sandbox:22: refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's FIFO; git's only credential helper
+scripts/octo-feather-qc-sandbox:23: (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
+scripts/octo-feather-qc-sandbox:24: refused, what, result}; what counts: .agents/skills/eval-cases/references/schema.md, Attempt record) is kept by the recorder, a
+scripts/octo-feather-qc-sandbox:29: the offline gh's refusals, and the recorder's own inotify watch on the tmpfs masks (gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state;
+scripts/octo-feather-qc-sandbox:37: after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
+scripts/octo-feather-qc-sandbox:41: 7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66; then go to the recorder
+scripts/octo-feather-qc-sandbox:47: One cleanup line on stderr, the record on the QC_FD_POST pipe (setup then stops the recorder and
+scripts/octo-feather-qc-sandbox:132: The masks the attempt record watches (the recorder, step 6): tmpfs dirs only; a /dev/null bind cannot be watched exactly
+scripts/octo-feather-qc-sandbox:200: The attempt record: kept by the recorder (below) in $OV/rec, on the hidden run tmpfs; the judge's view a read-only bind.
+scripts/octo-feather-qc-sandbox:266: The recorder: setup-side (outside the judge's namespaces), so the judge can neither kill nor ptrace it; it alone
+scripts/octo-feather-qc-sandbox:336: the offline gh's refusals, one JSON line each; a broken line is a lost refusal, never more
+scripts/octo-feather-qc-sandbox:408: Whole, never a prefix: `recorded` lets the grader refuse a record it did not get whole (schema.md, Attempt record).
+scripts/octo-feather-qc-sandbox:417: The recorder's line: only after the judge's namespace is gone (every sender dead), the record as it holds it.
+scripts/octo-feather-qc-sandbox:585: Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
+tests/check-gate-free.sh:73: The test's own boundary: the copy's check run starts outside the kit's (marker cleared), so its refusal stops the copy's just only.
+tests/check-gate-free.sh:89: The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
+tests/check-gate-free.sh:126: A script that swallows the refusal still fails the gate.
+tests/check-gate-free.sh:128: A nested just asking for a check-* recipe keeps the outer check run's marker: the refusal deep inside fails the outer just check.
+tests/lane-archive.sh:5: both; a lane without a hand-off log; each refusal leaves every file in place. Run by `just check`.
+tests/lane-judge.sh:143: --- refusals before any classify call or write ---
+tests/lane-merge-ask.sh:87: --- verdict: create once, update in place, refusals write nothing ---
+tests/lane-merge-ask.sh:127: refusals: each non-zero, fix named, no write
+tests/new-repo.sh:5: exactly its tracked files, one commit on main, clean status; every refusal
+tests/qa.sh:8: refusal inside a check run, the shape check naming case and field, and a judgment suite's bench (its extension
+tests/qa.sh:110: after the delivered call: overwrite, truncate, delete, replace, read, forge, kill
+tests/qa.sh:120: one call: 510 forged refused herdr messages, then a real delivery through the shim
+tests/qa.sh:347: own attempt record (its setup-side recorder: herdr shim, git credential helper, offline gh, mask watch), never from command text or output.
+tests/qa.sh:373: The judged agent tampers after a delivered call (overwrite, truncate, delete, move, read, forge, kill the recorder):
+tests/qa.sh:386: Any number of forged refusals before a delivered call: the whole record is graded, never a prefix.
+tests/resume-on-error.sh:5: fake herdr-say first on PATH as the parent recorder. A pane is driven as Pi's RPC mode (stdin
+tests/tracker.sh:8: refusal of writes passes through, and against a recording gh for the write arguments; issue-view
+tests/tracker.sh:120: Writes: the fake gh is read-only, so each write exits non-zero with its refusal and prints nothing.
+## Final JSON  /json block|fenced|Final JSON/  15 hits
+.agents/skills/eval-cases/SKILL.md:43: - **Verdicts as data** (schema: Final JSON), e.g. `{"rung": "check"}`, a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}`, a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]
+docs/owed-evals/107.md:3: An owed eval fails before its behaviour change and passes after it; the change's smoke run is in `evidence/` (rule: docs/adr/0008). Now cases (removed here, #116): role skills loading at their step an
+docs/owed-evals/118.md:10: - Corrector, routing a kit cause (issue #118 owner round, docs/adr/0020 Where the fix goes), still owed: a separating kit-route case (held-out `corrector-kit-route` in evals/ladder passes at both kits
+docs/owed-evals/71.md:5: - Corrector and director, meaning stays out of checks (docs/adr/0008, `correct` patch, principle-encode-lessons-in-structure, issue #71): given the check-owned-rules history (a phrase-list check that 
+docs/owed-evals/93.md:5: - Code review, a `Smoke:` line that names a path its run never exercised (docs/adr/0008, `scripts/check-behavior-smoke` per-path rule, issue #93): given gh67 at a60d12c with `Smoke: agents/implementer
+evals/ladder/suite.json:4: Does the corrector place a lesson on the right rung of docs/adr/0008? The corrector runs a real correction brief on a fixture repo and ends with one json block naming the rung its fix sits on;
+evals/ladder/suite.json:4: docs/adr/0020 says harden the target, not how, and branch_paths has no any-of form), and on the final message's json block `issues` holding one with repo 0xTomDaniel/octo-feather and dir templates/pyt
+scripts/check-evals:11: list, Before targets, Attempt record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+scripts/octo-feather-qa:198: """(status, text, obj): the block Final JSON reads (schema, Final JSON) as an object, status None when there is one.
+scripts/octo-feather-qa:223: """declared (schema, Final JSON)."""
+scripts/octo-feather-qa:237: """declared_includes (schema, Final JSON)."""
+scripts/octo-feather-qc:103: Your final message is exactly one fenced json block and nothing else:
+tests/lane-tickets.sh:15: demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
+tests/lane-tickets.sh:263: #121 D18 D21 (#145): headings, items and an Expand-contract line in fenced code or an HTML comment;
+tests/qa.sh:395: declared (schema.md, Final JSON):
+## Field lines  /Field lines|\bincludes\b|\bevery\b.*field|none line/  23 hits
+.agents/skills/code-review/SKILL.md:59: **Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`), for every role that reports one, the implementer's check
+.agents/skills/codebase-design/SKILL.md:108: - **"Interface" as the TypeScript `interface` keyword or a class's public methods**: too narrow: interface here includes every fact a caller must know.
+.agents/skills/eval-cases/SKILL.md:13: - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded
+.agents/skills/github-pr/SKILL.md:56: for the lane's parent ticket, and includes `## Summary` and `## Validation`.
+.agents/skills/linear-cli/references/issue.md:227: Ask for every field instead of taking them as flags
+agents/supervisor.md:39: fields a moment names and keeping every other field;
+docs/adr/0015-escalations-go-up-the-chain.md:3: Every escalation moves one level up the org chart, never straight to the owner: worker (implementer, code reviewer, corrector) to supervisor, supervisor to director, director to owner. Each level firs
+docs/adr/0022-interim-qc-is-a-fresh-cross-family-judge.md:5: The judge has bash, so it runs sandboxed by default (#33; lane #15 run 6 showed an env or PATH shim is not isolation: an explicit `herdr --session default` read the live session). `octo-feather-qc` st
+docs/owed-evals/118.md:8: - Supervisor, ticket demo judged, not regexed (to-tickets patch, issue #118, deletion of the What-to-build naming rule): an approved one-ticket breakdown; the drafted issue passes `octo-feather-lane t
+docs/owed-evals/157.md:5: - Report fields, one owner (the `code-review` skill's Verdict step, **Report fields**; agents/implementer.md and agents/code-reviewer.md Output point there). Graded by existing evals/ladder cases, no 
+docs/owed-evals/157.md:6: - eval-cases skill, Field lines pointer followed, graded (round 3 change): smoke shows it at head, ungraded (evidence/2026-10-25-gh157-report-fields.md, Round 5: run 20261025T030732Z-414fc9 greps Repo
+docs/owed-evals/167.md:5: Owed, reviewer: six graders on main `8451938` that their lane reviewer classified exact in the merge ask, and the #165 sweep (https://github.com/0xTomDaniel/octo-feather/issues/165#issuecomment-641860
+scripts/check-evals:11: list, Before targets, Attempt record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+scripts/check-evals:556: """A field_lines fact: field a field name, then none, includes and every (.agents/skills/eval-cases/references/schema.md, Field lines)."""
+scripts/octo-feather-lane:51: errors} from the Owner field (`:<line>` stripped from every path); "fields" {Name: [value...]} for every
+scripts/octo-feather-qa:271: .agents/skills/code-review/SKILL.md step 4, Report fields): present and well formed, then none, includes and
+scripts/octo-feather-qa:272: every (schema: .agents/skills/eval-cases/references/schema.md, Field lines)."""
+scripts/octo-feather-qa:760: const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
+scripts/octo-feather-qa:764: const ruled_out = (m) => skip.includes(name(m));
+scripts/octo-feather-qa:769: const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
+tests/lane-tickets.sh:70: A fake GitHub gh, used only to take the snapshot: like real gh it answers every --json field
+tests/lane-tickets.sh:284: The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
+tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+## Branch paths  /untouched|\btouched\b|Branch paths/  11 hits
+docs/owed-evals/118.md:9: - Corrector, template route, target hardening (docs/adr/0020 Where the fix goes: a language-general lesson hardens the target and also files a kit issue for `templates/<lang>`). Graded today: evals/la
+docs/owed-evals/backlog.md:19: - Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, pilot 1 run): a brownfield ticket with several criteria on a library-shaped repo (
+evals/ladder/suite.json:4: So listing every touched file fails.
+justfile:291: Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
+scripts/check-evals:11: list, Before targets, Attempt record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+scripts/octo-feather-qa:315: """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
+tests/integrate.sh:73: or eng-123-x; an unknown tracker is refused before any worktree is touched.
+tests/lane-archive.sh:30: Default session (HERDR_SESSION empty): state at the top; a second lane is untouched.
+tests/qa.sh:537: field_lines and branch_paths (.agents/skills/eval-cases/references/schema.md, Field lines, Branch paths).
+tests/qc-gh.sh:137: PR 0 (and a non-number) refused before the judge or any fetch; status untouched.
+tests/qc.sh:281: Every escape fails; leftovers killed, agents counted, credential copies gone, live records untouched.
+## Leaks  /\bleak|its grade|whole (path )?component|key order/  25 hits
+.agents/skills/eval-cases/SKILL.md:34: - The task leaks no graded fact: no hint of what is counted (`check-evals` refuses the mechanical leaks, schema: Leaks; the rest is yours).
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:22: .leak { stroke: #dc2626; }
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:38: Repo name, date, and a compact legend: solid box = module, dashed line = seam, red arrow = leakage, thick dark box = deep module. No introduction paragraph. Straight into the candidates.
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:52: - **Wins**: bullets, ≤6 words each. e.g. "Tests hit one interface", "Pricing logic stops leaking", "Delete 4 shallow wrappers".
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:63: Use a Mermaid `flowchart` or `graph` when the point is "X calls Y calls Z, and look at the mess." Wrap it in a Tailwind-styled card so it doesn't feel parachuted in. Style with classDef to colour leak
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:71: C -.leak.-> D[PricingClient]
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:72: classDef leak stroke:#dc2626,stroke-width:2px;
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:73: class C,D leak
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:97: - Colour sparingly: one accent (emerald or indigo) plus red for leakage and amber for warnings.
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:117: - "Pricing leaks across the seam."
+.agents/skills/improve-codebase-architecture/SKILL.md:31: - Where do tightly-coupled modules leak across their seams?
+.agents/skills/interrogate/references/code-quality-review.md:33: 6. **Keep logic in the canonical layer and reuse existing helpers.** Call out feature logic leaking into shared paths or implementation details leaking through APIs. Prefer existing canonical utilitie
+.agents/skills/tdd/SKILL.md:3: description: Tests that are worth keeping: where tests go (seams) and the anti-patterns (implementation-coupled, tautological, test leak), with the red-green loop. Use before writing or changing any t
+.agents/skills/tdd/SKILL.md:32: - **Test leak**: production code carries something only a test uses: a test-only flag, env var, hook, parameter or branch. Reach the state from the test instead, mocking at the boundary (see [mocking.
+agents/implementer.md:38: - Tests go through a public surface (docs/adr/0002), one or two per criterion, and no test detail leaks into production code: the `tdd` skill (Seams, Test leak; docs/adr/0002).
+docs/adr/0002-integration-and-e2e-tests-only.md:5: The vendored `tdd` skill is patched to match: before writing any test, the implementer writes down the seams under test, public surfaces only, so every test is integration or end-to-end and never a un
+docs/owed-evals/167.md:8: - r02, reviewer of #108 (PR #111 verdict, the `attempt_blocked herdr`, `lane_state` and `credential` Check lines, each `class: exact`): `scripts/octo-feather-qa:187-204` at `8451938`, `leaked()` and `
+docs/owed-evals/backlog.md:19: - Implementer and code reviewer, no unit tests and minimal brownfield change (tdd Seams and Test leak, docs/adr/0002, pilot 1 run): a brownfield ticket with several criteria on a library-shaped repo (
+justfile:221: Every eval case's shape: required fields, known facts, expectations for each case, no task showing its grade (quality #acceptance-qa-cases-checked).
+scripts/check-evals:68: """The grade TASK leaks (rule: schema.md, Leaks), one finding each, sorted."""
+scripts/pi-role:34: global skill folder never leaks into a role: only listed skills load.
+tests/check-decision-log.sh:50: Valid logs pass: one line, several, nested, no final newline, CRLF, any key order, unicode text.
+tests/qa.sh:135: @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit (tokens: a task naming a path leaks)
+tests/qa.sh:602: The leak rule is exact: a fact as data whatever its key order and whitespace; a skill path by whole component only.
+tests/qa.sh:613: a neighbour skill's path, the skill's name in prose, a JSON object that is no fact: no leak
+## Coverage  /role-skills|Coverage|\{tracker\}|four cases|near.miss/  20 hits
+.agents/skills/eval-cases/SKILL.md:22: `kind: skill-trigger`. The kit suite has `"covers": "role-skills"` (schema: Coverage): add a skill to a role, add its four cases.
+.agents/skills/eval-cases/SKILL.md:25: - **Should-not** tasks are **near misses**: they share the skill's keywords or concepts but need something else. An obviously unrelated task ("write fibonacci") tests nothing.
+agents/director.md:7: skills: herdr-comms, github-pr, {tracker}
+agents/implementer.md:7: skills: principle-prove-it-works, blast-radius, commit, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
+agents/supervisor.md:7: skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, to-tickets
+docs/adr/0004-github-issues-not-linear.md:5: Tracker work lives only in packaged skills, never in the kit's general scripts or role prose: `github-pr` (branches, pull requests, merge; every role that needs GitHub loads it, whatever the tracker),
+evals/skill-triggers/suite.json:4: Does a role read a skill it lists when, and only when, the task needs it? For every skill each kit role lists, should-trigger cases and near-miss should-not cases, each in train and held-out (covers:
+evals/skill-triggers/suite.json:4: role-skills).
+justfile:251: The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
+scripts/check-evals:11: list, Before targets, Attempt record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+scripts/check-evals:459: """The tracker skills the fixtures resolve {tracker} to, as pi-role does in a fixture copy's checkout top."""
+scripts/check-evals:478: """(role, skill) for every skill each kit role's frontmatter lists under `skills:`, {tracker} resolved."""
+scripts/check-roles:74: {tracker} is the default tracker's skill, github-issues).
+scripts/octo-feather-start:49: The role must start in the target at --cwd: pi-role resolves its {tracker} skill there, and an unknown
+scripts/octo-feather-start:71: $1: workspace id; run in the target, where pi-role resolves {tracker}
+scripts/pi-role:24: {tracker} is the target's tracker skill: `tracker` in
+scripts/pi-role:48: has a tracker when its skill folder exists. {tracker} on a role's skills line loads it.
+tests/qa.sh:267: Coverage: the kit's suite covers every role-listed skill; dropping one held-out near miss names the role and skill.
+tests/qa.sh:280: {tracker} on a role's skills line resolves as pi-role does in a fixture copy: no .octo-feather.toml is github, so
+tests/qa.sh:452: The role's {tracker} slot: pi-role resolves it in the case copy (no .octo-feather.toml: github, so github-issues).
+## Judgment suite  /label_help|state_shape|labelled_by|relabel|labell?ed set|closed question|at least 15|fifteen|one line\b/  28 hits
+.agents/skills/code-review/SKILL.md:54: Report the findings, each marked **block** or **note**, then the verdict: the one line `Verdict: blocking` if any finding blocks, else `Verdict: clear`.
+.agents/skills/code-review/SKILL.md:69: Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
+.agents/skills/code-review/SKILL.md:77: Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text 
+.agents/skills/eval-cases/SKILL.md:45: - No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question and the kit's judgment model (`evals/judg
+.agents/skills/improve-codebase-architecture/HTML-REPORT.md:53: - **ADR callout** (if applicable): one line in an amber-tinted box.
+agents/director.md:48: Ask the owner only for spec acceptance, QA evidence review, merges, promotion, traffic shifts, decisions that change what gets built, and owner-held access; lane notes and minor flags where current be
+agents/director.md:50: Supervisors report everything to you as it happens; never tell them to report less. You are the filter: relay to the owner only gates, decisions, real blockers, and lane closes; progress gets one line
+agents/supervisor.md:52: At each hand-off moment, append one line to `<lane record name>.handoffs.jsonl`
+docs/adr/0023-a-first-party-pi-extension-resumes-provider-errors.md:7: - **Stopped.** When the last round's run still settles on an error, the agent sends its parent one line through `herdr-say --parent` naming agent (`OCTO_FEATHER_ROLE` and the working directory's name)
+docs/owed-evals/118.md:7: Calibration before any use: the issue #118 audit rows (every check, test gate, grader and recipe at main 5f8fca3, each classified exact or proxy with what it reads, re-classified on the owner's direct
+evals/judgment-call-evidence/suite.json:4: does a spec call's evidence show that the accepted criterion it names cannot pass with the spec as written? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-exact-or-proxy/suite.json:4: does a check test its rule itself, as stated where the rule is owned, or a stand-in that only correlates with it? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-test-quality/suite.json:4: is a test tautological, implementation-coupled or ok? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-ticket-slice/suite.json:4: is a ticket, as written, a real end-to-end slice with a demo that exercises its change, or layer-only? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+scripts/check-evals:35: spec judgment#acceptance: at least fifteen cases per labelled set
+scripts/check-evals:330: """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+scripts/octo-feather-lane:26: The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
+scripts/octo-feather-lane:33: merge-ask, on pass, prints each such comment as one line under `Model judgments` after the section, beside the
+scripts/octo-feather-qa:61: question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
+scripts/octo-feather-qa:747: model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
+scripts/octo-feather-qa:754: description: "octo-feather-qa judgment bench: every classifier answers the closed question for each case",
+scripts/octo-feather-qc:105: {{"head": "{head}", "criteria": [{{"id": "<id>", "verdict": "pass" or "fail", "command": "<exact command you ran>", "output": "<its output, trimmed to what shows the outcome>", "why": "<one line>"}}]}
+scripts/pi-role:18: description  one line for owners; pi-role ignores it
+tests/check-decision-log.sh:50: Valid logs pass: one line, several, nested, no final newline, CRLF, any key order, unicode text.
+tests/qa.sh:217: Every case: one line each, facts named; any failure exits 1.
+tests/qa.sh:649: A judgment suite: one closed question's labelled set, benched on every available classifier by a Pi extension command,
+tests/qa.sh:780: The labeller record: optional labelled_by and relabel, each one line; any other extra field still refused.
+tests/tracker.sh:22: DIR ROLE: the skill names pi-role passes, one line, or pi-role's failure in $err
+## Calibration  /calibration|held_out\b|threshold|accuracy_min|brier_max|\baccepted\b/  79 hits
+.agents/skills/domain-modeling/ADR-FORMAT.md:21: - **Status** frontmatter (`proposed | accepted | deprecated | superseded by ADR-NNNN`): useful when decisions are revisited
+.agents/skills/eval-cases/SKILL.md:13: - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded
+.agents/skills/interrogate/references/code-quality-review.md:23: 1. **Do not let a PR push a file from under 1k lines to over 1k lines without a very strong reason.** Treat this as a strong smell. Prefer extracting helpers, subcomponents, or modules. If the diff cr
+.agents/skills/to-tickets/SKILL.md:99: - [ ] <spec slug>#<anchor>: what proves the criterion this ticket serves (the anchor from the accepted spec, docs/specs/<spec slug>.spec.html)
+AGENTS.md:24: - `scripts/` published commands on every agent's `PATH`: `octo-feather-start` (director or lane workspace), `octo-feather-state` (state dir), `octo-feather-integrate` (`just integrate`), `octo-feather
+agents/director.md:36: surfaced. A worker result sent to you names its unreachable supervisor pane (spec `#roles-goal`): forward it with `herdr-say <supervisor pane> <result>`, which resumes a parked supervisor; only when t
+agents/director.md:37: Consume completed artifacts before optional reporting; wake unfinished idle supervisors to integrate/advance and verify results. A lane whose accepted PR merged is closed: reconcile the PR and worklan
+agents/director.md:69: Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. It comes with a kickoff brief (the kit's `docs/kickoff-brief.md`: target, accepted spec and commit, the 
+agents/director.md:71: Spec PR (docs/adr/0021), before any lane code: on branch `spec/<slug>` at the accepted commit, run `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` (every criterion `planned`), com
+agents/director.md:73: Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent ticket in the target's tracker, which you file with the tracker skill's `issue-create`. Cut lanes from the accep
+agents/director.md:88: brief pointing to the finish order, naming the spec path and its accepted commit. Name the criterion ids the lane builds (its rows in `docs/specs/<slug>.status.json`). Code-level conditions go in the 
+agents/implementer.md:39: - Write product code and integration/E2E tests through public surfaces. Structure stays your everyday job: types, narrow interfaces, illegal states unrepresentable, import boundaries in your own code 
+agents/implementer.md:49: - Review your own work or declare it accepted.
+agents/supervisor.md:25: - You never shape (docs/adr/0021). Your lane starts from a spec the owner accepted and merged to main with its status file `docs/specs/<slug>.status.json`; your brief names the spec and the criterion 
+agents/supervisor.md:87: - Prior gates: the spec accepted and merged to main with its status file.
+docs/adr/0008-prose-last.md:10: Who builds what (Test and Check: GLOSSARY.md). The implementer writes product code and its tests, nothing else: no check unless an accepted spec criterion explicitly asks for that repo rule (a lint ra
+docs/adr/0019-a-lane-is-one-merge-ask.md:3: One supervisor is one lane is one merge ask is one parent ticket in the target's tracker (ADR 0004), filed by the director; the supervisor's tickets are sub-issues of that parent, with `Blocked by` on
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:1: # The accepted spec is the handoff; it merges first, with a status per criterion and logged calls for later changes
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:3: Brainstorming and shaping happen outside the factory. An owner chat in the target repo (`just shape`: Pi with only the shaping skills, grill-with-docs, improve-codebase-architecture, sharpen and spec-
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:5: Kickoff: the owner tells the director "build <spec path>" (one spec or several), with a kickoff brief from the kit's `docs/kickoff-brief.md` (target, accepted spec and commit, the project's tooling, g
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:7: Status lives beside the spec, never in it: `docs/specs/<slug>.status.json` is `{"spec": "<slug>.spec.html", "accepted_commit": "<sha>", "criteria": {"<id>": {"status": "planned" | "built", "pr": <N or
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:9: Spec changes after Accept are logged judgement calls the owner approves at merge. Specs are not perfect up front, and spec and code must never diverge: when a build teaches the factory that an accepte
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:18: - Status inside the spec HTML (an attribute per criterion). Rejected: the accepted bytes would change, and Spec Chat would have to know this workflow.
+docs/adr/0021-the-accepted-spec-is-the-handoff.md:28: - `octo-feather-accepted` and `octo-feather-spec-status` are tested in `just check`. `octo-feather-accepted` reads Spec Chat's registry files and spool hand-offs directly, since review-host has no que
+docs/future.md:32: - A lane revising its spec registers it under the spec's own slug, never `gh<N>` (one row per spec), so the lane's work never shows as a lane card. Registering under `gh<N>` would make a second row wi
+docs/future.md:43: Later `just qc` asks Jev one yes or no per logged spec call: does the cited evidence show the accepted criterion cannot pass as written? Trigger: about 10 calls the owner approved or denied, used as l
+docs/future.md:63: After Thursday 10-22: `octo-feather-spec-status reaccept STATUS COMMIT --reset ID...` applies an accepted revision mechanically (reset the listed ids to `planned`, add new ids as `planned`, drop remov
+docs/future.md:81: - Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, pilot 1 `06af3f4`). It now reads the review page's Accep
+docs/future.md:92: - Accept went stale twice: amending the spec after registration (rich output 51d4fa7; B2 amend) moved its hash, so `octo-feather-accepted` rejected Tom's real Accept ("Accept spec pressed on version …
+docs/future.md:93: - `octo-feather-accepted` needs SPEC_PATH; without it rc=1 even when Accept was recorded.
+docs/future.md:94: - `herdr-say` and `octo-feather-accepted` aren't on PATH on the Mac (`herdr-say` lives in `.agents/skills/herdr-comms/assets/`).
+docs/kickoff-brief.md:9: SPEC        <spec path> accepted at <commit> (octo-feather-accepted prints it), review link <url>
+docs/owed-evals/backlog.md:5: - Director, chat acceptance (docs/adr/0021): the owner says "spec accepted" in chat; the director records nothing and sends the review link. Smoke: `evidence/2026-10-19-role-probes.md`. Not yet a case
+docs/plan.md:3: Done predicate: by tonight, on the dedicated remote, one rehearsal mini-project per language went spec-chat HTML spec, accepted, director dispatch, supervisor, Pi implementer, integrator, code-reviewe
+evals/judgment-call-evidence/suite.json:4: does a spec call's evidence show that the accepted criterion it names cannot pass with the spec as written? The labelled set (question.json, cases.json, hidden reference/expectations.json;
+evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+scripts/check-evals:40: a judgment suite's optional calibration of the kit's model
+scripts/check-evals:41: calibration.held_out: the bench's held-out score for the kit's model
+scripts/check-evals:42: calibration.threshold: proposed (accepted false) or accepted
+scripts/check-evals:298: """A suite's calibration CH (rule: schema.md, Calibration)."""
+scripts/octo-feather-accepted:2: """octo-feather-accepted SPEC_PATH [--repo DIR]
+scripts/octo-feather-accepted:9: hosting/*/registry.toml; tests/accepted.sh crosses it with pinned Spec Chat),
+scripts/octo-feather-accepted:14: SPOOL_SIDE directory, *-handoff-*.json). The row is accepted when the newest
+scripts/octo-feather-accepted:16: with no `events` list) and the version it accepted is the spec at the row's
+scripts/octo-feather-accepted:22: A registry `accepted` key is ignored: only the page's Accept counts.
+scripts/octo-feather-accepted:28: Prints `accepted <commit> slug=<slug> at=<accept time> session=<dir> id=<row id>
+scripts/octo-feather-accepted:39: tests/accepted.sh against a hash Spec Chat itself computed.
+scripts/octo-feather-lane:30: probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
+scripts/octo-feather-lane:31: accepted, and its status: below accepted threshold, no accepted threshold or meets accepted threshold; spec judgment
+scripts/octo-feather-lane:32: #rule-calibration), PR head, Review head (the verdict comment's), then the question and the state; prints its URL.
+scripts/octo-feather-lane:623: """The question's calibration status (spec judgment#rule-calibration) from its suite.json calibration: the kit model's
+scripts/octo-feather-lane:624: held-out accuracy and Brier against its threshold, proposed or accepted. Display only: no gate reads it (#rule-advisory)."""
+scripts/octo-feather-qa:65: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+scripts/octo-feather-qa:69: question's best, the kit model's proposed threshold, whether held-out meets it, and its confidence buckets.
+scripts/octo-feather-qa:744: the threshold's 95% bounds
+scripts/octo-feather-qa:875: """Per benched model: train and held-out accuracy and calibration, cost, errors; the question's best-scoring
+scripts/octo-feather-qa:876: classifier (train only) and the kit's model's proposed threshold (from its train answers)."""
+scripts/octo-feather-spec-status:2: """octo-feather-spec-status: the per-criterion status file beside an accepted spec (docs/adr/0021).
+tests/accepted.sh:2: Integration test for scripts/octo-feather-accepted against fixture review-host
+tests/accepted.sh:6: wrote its hand-off, and octo-feather-accepted still exited 1 because it waited
+tests/accepted.sh:7: for a registry `accepted = true` that nothing writes. Here Accept is the
+tests/accepted.sh:14: tests/fixtures/accepted/*.spec.html with ETags V1 and V2 below (the ETag names
+tests/accepted.sh:18: isolated XDG_STATE_HOME, and octo-feather-accepted finds that row and its Accept
+tests/accepted.sh:94: under its own XDG_STATE_HOME: octo-feather-accepted finds the row, then its Accept.
+tests/lane-judge.sh:115: A real suite's calibration may change with every rebench; what the rule fixes is its status: no accepted threshold
+tests/lane-judge.sh:223: --- calibration status beside each answer (spec judgment#rule-calibration, #acceptance-judge-advisory) ---
+tests/lane-judge.sh:237: The kit's four real suites: no question has an accepted threshold (owner ruling 2026-10-23, issue #151).
+tests/lane-judge.sh:256: A question whose held-out accuracy and calibration are below its accepted threshold (spec judgment#acceptance-judge-advisory):
+tests/lane-judge.sh:257: the kit, copied, with test-quality's threshold accepted above its held-out score. The answer is still shown, labelled
+tests/lane-judge.sh:258: a model judgment, with "below accepted threshold"; merge-ask is ready with and without it.
+tests/qa.sh:788: A judgment suite's calibration of the kit's model (suite.json "calibration", read by octo-feather-lane judge): an
+tests/qa.sh:789: evidence file that exists beside evals/ (the repo holding it), held_out and threshold; refused on any other kind.
+tests/qa.sh:806: Its calibration record (copied from the evidence file); shape: .agents/skills/eval-cases/references/schema.md, Calibration.
+tests/qc-gh.sh:232: The kit's own status files name accepted commits this fresh repo lacks; only zz-demo is judged.
+tests/spec-chat-install.sh:62: A linked worktree top is a checkout top: accepted, its links ignored too.
+tests/spec-status.sh:4: call log and the guard on a spec changed since its accepted commit
+## Judgment model and classifiers  /moving_alias|moving alias|yes_no_only|yes/no.only|\bpinned\b|one judgment model|-latest/  49 hits
+.agents/skills/blast-radius/SKILL.md:34: 3. Look where grep stops. Read the source of the library you call, and check its pinned version and any local patch. Work out when things run: microtasks, unmount and teardown, Solid versus React. Fol
+AGENTS.md:15: - Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live 
+agents/supervisor.md:3: description: Supervisor. Owns one work item (a parent ticket in the target's tracker) from brief until it merges, spawns its workers in Herdr tabs, integrates with `just integrate`, a fresh code-revie
+agents/supervisor.md:100: - Keep one writer per mutable resource. Your head-pinned merge closes the lane: reconcile the PR and worklane state together, move the parent ticket and every ticket to done with `octo-feather-lane do
+docs/adr/0002-integration-and-e2e-tests-only.md:3: Tests drive public surfaces and never unit-test internals. A public surface is the app CLI with `--json`, HTTP or UI, or, for an integration test, a public library function: one the package offers to 
+docs/adr/0016-every-agent-launches-through-pi-role.md:7: - pi-subagents (pinned npm extension) for headless children through its `subagent` tool. Rejected: a second launcher, an in-process third-party extension, and its own skills and prompts in every deleg
+docs/adr/0022-interim-qc-is-a-fresh-cross-family-judge.md:5: The judge has bash, so it runs sandboxed by default (#33; lane #15 run 6 showed an env or PATH shim is not isolation: an explicit `herdr --session default` read the live session). `octo-feather-qc` st
+docs/owed-evals/100.md:6: - Supervisor, PR line (spec #acceptance-pr-tracks): in a Linear target the lane PR body starts with `Tracks ENG-123` (the tracker skill's pr-line) and carries no `Closes #N`; `octo-feather-lane merge-
+docs/owed-evals/118.md:5: - Classifier judge (Pi codemode `models.classify`, `openrouter/typesafe/jev-1.13`, `jev-1.14`, `jev-latest`; working on the box since 2026-10-23, confidence uncalibrated): it gates nothing, runs only 
+docs/owed-evals/167.md:10: - r04, reviewer of #119 (PR #147 merge ask: "pinned versions only, moving aliases skipped"; verdict Check lines cite judgment#rule-available as exact): `scripts/octo-feather-qa:811-815` at `8451938`, 
+docs/owed-evals/167.md:11: - r05, reviewer of #119 (PR #147 verdict, `Check: scripts/check-evals: one kit judgment model, ... pinned provider/id ... class: exact`): `scripts/check-evals:314-321` at `8451938`, `check_model_ref`,
+docs/owed-evals/167.md:12: - r06, reviewer of #119 (PR #147 merge ask: "Yes/no-only classifiers ... skipped like moving aliases, decided by a probe", no proxy flag in the verdict): `scripts/octo-feather-qa:838-850` at `8451938`
+docs/owed-evals/99.md:6: - Supervisor, integrate by lane key: in a Linear lane eng-123, handing in worker commits, the supervisor runs `just integrate ENG-123 REF...` and it lands on branch eng-123. Smoke: none yet (script pi
+docs/owed-evals/backlog.md:16: - Supervisor, head-pinned merge (spec `#gates-merge`, docs/adr/0007): one eval per case the rule names, each judged against its criterion: (a) head unchanged (spec `#acceptance-merge-approved-head`), 
+docs/plan.md:32: Sources pinned today: octo-lite `cc6fa4e` (Apache-2.0), pstack `0b8e952` (cursor/plugins, MIT), mattpocock/skills `49dd158d` (MIT).
+evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+justfile:202: Fill the check-vendored cache: pinned skillfile binary, each Skillfile pin commit (fetch-only Spec Chat included, #96), every call time-bounded. Never inside `just check`.
+scripts/check-evals:43: the kit's one judgment model (spec judgment#rule-one-model)
+scripts/check-evals:45: every catalogue classifier ruled moving alias, yes/no only or pinned (spec judgment#rule-available)
+scripts/check-evals:47: each yes_no_only entry's fields
+scripts/check-vendored:12: - skillfile (version and sha256 pinned below) runs only in a throwaway copy
+scripts/check-vendored:24: (a comment to skillfile, which never installs it) is pinned, fetched and authenticated
+scripts/octo-feather-accepted:9: hosting/*/registry.toml; tests/accepted.sh crosses it with pinned Spec Chat),
+scripts/octo-feather-lane:24: ticket-slice, call-evidence); every question is asked of the kit's one judgment model, evals/judgment-model.json
+scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+scripts/octo-feather-qa:762: // no name shape. Without inp.skip (`octo-feather-lane judge`, asking the kit's model, which check-evals holds pinned): none.
+scripts/octo-feather-qa:847: in the evals dir: the kit's one judgment model (spec judgment#rule-one-model)
+scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+scripts/octo-feather-qa:870: """The kit's one judgment model, P/ID, from EVALS/judgment-model.json (its schema: the eval-cases skill, Judgment model and classifiers)."""
+tests/accepted.sh:13: - the versions: pinned review-serve.py, run as a server, serves
+tests/accepted.sh:17: - the registry: pinned Spec Chat's review-host CLI registers a spec under an
+tests/accepted.sh:93: The registry pinned Spec Chat's review-host writes (no --state-dir, no Herdr session),
+tests/install-check.sh:5: pinned v3.1.0 and the install path (release binary, or npx @schpet/linear-cli);
+tests/lane-judge.sh:113: The kit's one judgment model, as recorded (spec judgment#rule-one-model): the stub lists it and refuses any other.
+tests/qa.sh:43: pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
+tests/qa.sh:44: p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
+tests/qa.sh:45: x-latest:free, p/q-1.2:free) and the listed yes/no-only ynr kill the run if called; yesno (not listed) refuses every choice question
+tests/qa.sh:46: with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
+tests/qa.sh:55: listed moving aliases and yes/no only: a call to one kills the run
+tests/qa.sh:667: The kit's one judgment model (spec judgment#rule-one-model): stub/first, not the question's best (token).
+tests/qa.sh:670: Stub classifiers.json (rules: schema.md, Judgment model and classifiers, Bench): p/q-1.2:free listed a moving alias,
+tests/qa.sh:671: ynr listed yes/no only, p/q-latest and m-current pinned, cheap-total in none.
+tests/qa.sh:717: per-model cost and the run total (token, first, p/q-1.2, p/q-latest 0.015 each; cheap 0.042 + 0.024)
+tests/qa.sh:735: A --classifier naming a listed moving alias or yes/no only (rule: octo-feather-qa --help; a call kills the stub run).
+tests/qa.sh:837: pinned ids named -latest and -current (rule: schema.md, Judgment model and classifiers)
+## Bench  /Brier|\bECE\b|Wilson|1\.96|best.scoring|tie.break|unavailable|unclassified|skipped|held_out_meets|train only|bench FAILS|choice question/  47 hits
+.agents/skills/linear-cli/SKILL.md:204: - `5` unavailable: network failure, timeout, rate limit, or server error; retry later, but a create or update may already have happened
+.agents/skills/linear-cli/SKILL.template.md:205: - `5` unavailable: network failure, timeout, rate limit, or server error; retry later, but a create or update may already have happened
+docs/adr/0013-role-files-are-pi-subagents-agents.md:3: Each role is one file in `agents/` (`director.md`, `supervisor.md`, `implementer.md`, `code-reviewer.md`, `corrector.md`): a Markdown body appended to Pi's system prompt, under frontmatter that `scrip
+docs/future.md:95: - Registering on macOS reports wake=unavailable, so the director can't be woken; orders went through herdr-say by hand.
+docs/owed-evals/157.md:7: - Note, reader error on a bold label (run 20261025T023848Z-15afcd): `**Checks:** none` yields "report classifies no check" (the absent-field message), never naming the shape it saw; a corrector propos
+docs/owed-evals/167.md:10: - r04, reviewer of #119 (PR #147 merge ask: "pinned versions only, moving aliases skipped"; verdict Check lines cite judgment#rule-available as exact): `scripts/octo-feather-qa:811-815` at `8451938`, 
+docs/owed-evals/167.md:12: - r06, reviewer of #119 (PR #147 merge ask: "Yes/no-only classifiers ... skipped like moving aliases, decided by a probe", no proxy flag in the verdict): `scripts/octo-feather-qa:838-850` at `8451938`
+evals/judgment-call-evidence/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-exact-or-proxy/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-test-quality/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+evals/judgment-ticket-slice/suite.json:4: per model accuracy, calibration (Brier, ECE, confidence buckets) and cost, train and held-out apart, the kit's one judgment model (evals/judgment-model.json, spec judgment#rule-one-model) shown beside
+justfile:10: Homebrew's bash 5 and python3, and mise's shims, ahead of the system's; missing dirs are skipped by the shell.
+scripts/check-roles:18: resolved at launch; absent ones are skipped
+scripts/octo-feather-lane:30: probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
+scripts/octo-feather-lane:624: held-out accuracy and Brier against its threshold, proposed or accepted. Display only: no gate reads it (#rule-advisory)."""
+scripts/octo-feather-qa:60: ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped answer the closed
+scripts/octo-feather-qa:61: question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
+scripts/octo-feather-qa:64: against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
+scripts/octo-feather-qa:65: unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
+scripts/octo-feather-qa:66: held-out meets it, and when a bench FAILS: schema, Bench. Prints the classifiers available and the skipped and
+scripts/octo-feather-qa:67: unclassified ones, then a TRAIN and a HELD-OUT table per answering model (answered, correct, accuracy, Brier, ECE,
+scripts/octo-feather-qa:68: cost, errors), each unavailable one, then the kit's one judgment model (EVALS/judgment-model.json) beside the
+scripts/octo-feather-qa:743: top-probability buckets for ECE and the confidence table
+scripts/octo-feather-qa:748: 4 calls at once; the state is the case's state string; a skipped id (INP skip, exact P/ID) is never called. One
+scripts/octo-feather-qa:749: stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+scripts/octo-feather-qa:761: // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
+scripts/octo-feather-qa:766: const skipped = listed.filter(ruled_out).map(name);
+scripts/octo-feather-qa:790: const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows};
+scripts/octo-feather-qa:814: """Brier (mean over cases of sum over labels of (p - truth)^2, probabilities renormalized), ECE over top-probability
+scripts/octo-feather-qa:815: buckets, the buckets [lo, hi, n, mean top probability, accuracy], and each case's Brier term."""
+scripts/octo-feather-qa:860: """The listed classifiers called (benched) in no list of classifiers.json (the skipped ones never are)."""
+scripts/octo-feather-qa:865: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+scripts/octo-feather-qa:875: """Per benched model: train and held-out accuracy and calibration, cost, errors; the question's best-scoring
+scripts/octo-feather-qa:876: classifier (train only) and the kit's model's proposed threshold (from its train answers)."""
+scripts/octo-feather-qa:1026: problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+scripts/octo-feather-qc:41: 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
+scripts/octo-feather-shape:8: home, as pi-role looks up externalSkills): spec-chat-shape, skipped with a
+scripts/pi-role:32: A missing one is skipped with a warning
+tests/accepted.sh:12: test locally while CI, with no clone, skipped the cross-check). With it the test checks:
+tests/check-behavior-smoke.sh:26: No base ref: skipped locally, a failure in CI.
+tests/lane-judge.sh:8: unreadable or empty state and an unavailable kit model, writing nothing; it asks every question of the kit's one
+tests/qa.sh:45: x-latest:free, p/q-1.2:free) and the listed yes/no-only ynr kill the run if called; yesno (not listed) refuses every choice question
+tests/qa.sh:696: The kit's model (judgment-model.json: stub/first) beside the question's best-scoring classifier (train only: token).
+tests/qa.sh:746: Best's tie-break (schema.md, Bench): cheap-train costs less on train, more in all.
+tests/qa.sh:749: The kit's model benched but unscored (schema.md, Bench: a bench FAILS) (broken: every case refused;
+tests/qa.sh:759: STUB-REFUSE state), never listed unavailable.
+tests/review-host.sh:12: is stopped. Run by `just check`; never skipped (no pin cached: `just vendored-fetch`).
