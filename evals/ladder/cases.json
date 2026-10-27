@@ -130,6 +130,28 @@
     "task": "Review lane gh8, ticket T8 (`app count` prints the number of notes stored in notes.json; criterion count).\nDiff: base main, head implementer-t8 in this directory (`git diff main...implementer-t8`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   },
   {
+    "id": "reviewer-comment-restatement-note",
+    "role": "code-reviewer",
+    "fixture": "docs-rules-skill",
+    "head": {
+      "fixture": "docs-rules-comment-restated",
+      "branch": "implementer-t9",
+      "message": "feat(list): list numbers the notes (T9, list-numbered)"
+    },
+    "task": "Review lane gh9, ticket T9 (`app list` numbers each note from 1, as `1. buy milk`, recorded as an ADR; criterion list-numbered).\nDiff: base main, head implementer-t9 in this directory (`git diff main...implementer-t9`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "reviewer-skill-restatement-blocks",
+    "role": "code-reviewer",
+    "fixture": "docs-rules-skill",
+    "head": {
+      "fixture": "docs-rules-skill-restated",
+      "branch": "implementer-t10",
+      "message": "feat(list): list numbers the notes (T10, list-numbered)"
+    },
+    "task": "Review lane gh10, ticket T10 (`app list` numbers each note from 1, as `1. buy milk`, recorded as an ADR; criterion list-numbered).\nDiff: base main, head implementer-t10 in this directory (`git diff main...implementer-t10`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
     "id": "corrector-template-route",
     "role": "corrector",
     "fixture": "python-app",
