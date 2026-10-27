@@ -792,8 +792,7 @@ bad "$ok_cal"'; s["calibration"]["model"] = "stub/first"' "jb/suite.json: field 
 bad "$ok_cal"'; s["calibration"]["held_out"]["model"] = "stub/first"' "jb/suite.json: field calibration.held_out.model: $one" "$t/jg-good" jb
 bad 's["chosen"] = {"model": "stub/p/q-1.2", "evidence": "evidence/jb.md"}' "jb/suite.json: field chosen: $one" "$t/jg-good" jb
 bad 's["model"] = "stub/first"' "jb/suite.json: field model: $one" "$t/jg-good" jb
-# Its calibration record (copied from the evidence file): held_out {accuracy 0..1, brier 0..2}, threshold {accuracy_min 0..1,
-# brier_max >= 0, accepted bool}, each key required, no other.
+# Its calibration record (copied from the evidence file); shape: .agents/skills/eval-cases/references/schema.md, Calibration.
 for k in held_out threshold; do
   bad "$ok_cal"'; del s["calibration"]["'$k'"]' "jb/suite.json: field calibration.$k: missing" "$t/jg-good" jb
   bad "$ok_cal"'; s["calibration"]["'$k'"] = 0.7' "jb/suite.json: field calibration.$k: must be an object {" "$t/jg-good" jb
