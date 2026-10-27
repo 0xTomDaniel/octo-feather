@@ -6,12 +6,20 @@ lane lane-a: issue gh1 o/a "Implementer working"
   running: w5:p2 implementer-gh2 working
   waits: waiting_on "", last hand-off 2026-10-20T09:30:00Z (AGE ago)
   waits: worker implementer-gh2 w5:p2 working
+  review rounds: 2
+  spend: $1.7500 over 2 calls of known cost, 2 calls of unknown cost
+  gate time: lane unread: GitHub (PR #5)
+  gate time: main unread: GitHub: gh api repos/o/a/commits?per_page=100 failed (error connecting to api.github.com): check o/a exists, and gh auth status
   log lane-a.handoffs.jsonl: 1 unparsable line (2)
 lane lane-b: issue gh3 o/b "Escalated to the director"
   started: 2026-10-21T10:00:00Z (AGE ago)
   pr: #5 unread: GitHub: gh pr view 5 failed (error connecting to api.github.com): check PR #5 exists in o/b, and gh auth status
   running: w6:p1 lane-b idle (supervisor)
   waits: waiting_on "director", last hand-off 2026-10-21T11:15:00Z (AGE ago)
+  review rounds: 0
+  spend: none recorded for lane-b
+  gate time: lane unread: GitHub (PR #5)
+  gate time: main unread: GitHub: gh api repos/o/b/commits?per_page=100 failed (error connecting to api.github.com): check o/b exists, and gh auth status
   log lane-b.handoffs.jsonl: none
 lane lane-c: issue gh4 o/a "Merge ask awaits the owner"
   started: 2026-10-22T12:00:00Z (AGE ago)
@@ -19,12 +27,20 @@ lane lane-c: issue gh4 o/a "Merge ask awaits the owner"
   running: w7:p1 lane-c done (supervisor)
   waits: waiting_on "", last hand-off 2026-10-22T14:00:00Z (AGE ago)
   waits: owner gate merge asked 2026-10-22T14:00:00Z (AGE ago)
+  review rounds: 0
+  spend: $0.1250 over 1 call of known cost, 0 calls of unknown cost
+  gate time: lane unread: GitHub (PR #9)
+  gate time: main unread: GitHub: gh api repos/o/a/commits?per_page=100 failed (error connecting to api.github.com): check o/a exists, and gh auth status
 lane lane-d: issue gh6 o/b "Spec review awaits the owner"
   started: 2026-10-21T08:30:00Z (AGE ago)
   pr: none
   running: w8:p1 lane-d idle (supervisor)
   waits: waiting_on "owner", last hand-off 2026-10-21T09:00:00Z (AGE ago)
   waits: owner gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
+  review rounds: 0
+  spend: none recorded for lane-d
+  gate time: lane none: no pr
+  gate time: main unread: GitHub: gh api repos/o/b/commits?per_page=100 failed (error connecting to api.github.com): check o/b exists, and gh auth status
 owner queue:
   lane lane-d gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
   lane lane-c gate merge asked 2026-10-22T14:00:00Z (AGE ago)
@@ -32,4 +48,6 @@ owner-caught (director.handoffs.jsonl):
   class owner-caught-gate-speed: count 2, last seen 2026-10-22T16:00:00Z (AGE ago)
   class owner-caught-waits-invisible: count 1, last seen 2026-10-21T15:00:00Z (AGE ago)
   log director.handoffs.jsonl: 1 unparsable line (4)
-unread: GitHub (lane-a), GitHub (lane-b), GitHub (lane-c)
+spend.jsonl: 2 unparsable lines (6, 8)
+check-runs.jsonl: 1 unparsable line (5)
+unread: GitHub (lane-a), GitHub (o/a default branch), GitHub (lane-b), GitHub (o/b default branch), GitHub (lane-c)

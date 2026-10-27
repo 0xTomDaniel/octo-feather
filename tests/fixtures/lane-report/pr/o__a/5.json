@@ -1,3 +1,4 @@
 {"state": "OPEN", "isDraft": false, "headRefOid": "aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5", "statusCheckRollup": [
   {"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"},
-  {"__typename": "CheckRun", "name": "e2e", "status": "IN_PROGRESS", "conclusion": ""}]}
+  {"__typename": "CheckRun", "name": "e2e", "status": "IN_PROGRESS", "conclusion": ""}],
+ "commits": [{"oid": "a5c1a5c1a5c1a5c1a5c1a5c1a5c1a5c1a5c1a5c1"}, {"oid": "aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5aaaa5"}]}
