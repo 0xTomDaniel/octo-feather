@@ -20,4 +20,6 @@ Both scripts' ASTs, every docstring blanked (comments are not in the AST), compa
 
 ## Not changed (out of this ticket's scope), still pointing at `check-evals --help`, which now names the owner
 
-AGENTS.md:28, scripts/check-evals FIX message (runtime text: "check-evals --help lists the shape"), scripts/octo-feather-lane:631,659,662 (runtime messages), scripts/octo-feather-qc-sandbox:24,212,271,291 (comments), tests/qa.sh:367,407,659,724,811,827,832 (comments). Restatements left in files this ticket may not write: tests/qa.sh:795-796 (calibration schema), evals/role-transcripts/suite.json:4 and evals/isolation/suite.json:4 (fact semantics in descriptions).
+AGENTS.md:28, scripts/check-evals FIX message (runtime text: "check-evals --help lists the shape"), scripts/octo-feather-lane:631,659,662 (runtime messages), scripts/octo-feather-qc-sandbox:24,212,271,291 (comments), tests/qa.sh:367,407,659,724,811,827,832 (comments).
+
+Follow-up (scope widened by the supervisor): the three restatements found, tests/qa.sh:795-796 (calibration schema), evals/role-transcripts/suite.json:4 and evals/isolation/suite.json:4 (fact rules in descriptions), now point at the schema; the descriptions keep what each suite tests. No code or test reads a suite description beyond check-evals' non-blank check (grep of scripts/ and tests/); `scripts/check-evals`: `evals: ok (8 suites, 273 cases)`.
