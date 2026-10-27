@@ -12,7 +12,8 @@ model's family (the part before "/") must differ from the implementer's.
 The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
 which documents its mounts and checks): a pre-run proof is printed and any
 failed check aborts before the judge starts; after it exits, leftovers are
-killed and the agents it started are counted. The judge has no persistent
+killed and the agents it started are counted; its agents' model spend is recorded
+(record_spend). The judge has no persistent
 writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
@@ -222,9 +223,24 @@ def sandboxed(judge, session, gh, history=True, kit=None):
     record = {"session": session, "proof": read("proof").splitlines()}
     for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
         record.update(json.loads(line))
+    record_spend(record.get("spend") or [], f"sandbox {session}")
     if "agents_started" not in record:
         return None, record
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
+
+
+def record_spend(lines, what):
+    """LINES (ledger lines a run's call paths wrote where they could not reach the box ledger) appended through the
+    ledger's one writer, `octo-feather-lane spend record`, run here in the caller's environment so its lane resolves
+    (spec spend#rule-lane; its failures, never the caller's: `octo-feather-lane --help`, spend record)."""
+    if not lines:
+        return
+    try:
+        subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input="".join(l + "\n" for l in lines),
+                       text=True, stdout=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"octo-feather-qc: spend unrecorded ({len(lines)} call(s), {what}): octo-feather-lane spend record "
+              f"did not run ({type(e).__name__})", file=sys.stderr)
 
 
 def worktree_writes(upper):
