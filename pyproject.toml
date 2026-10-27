@@ -1,0 +1,18 @@
+# The kit's test runner only (#224): `just check` runs every gate recipe and every tests/*.sh as one pytest
+# item each, by subprocess (tests/gate/, docs/adr/0002). Not a package; no kit code imports from here.
+[project]
+name = "octo-feather-kit-tests"
+version = "0"
+requires-python = ">=3.10"
+dependencies = []
+
+[dependency-groups]
+dev = ["pytest==9.1.1", "pytest-xdist==3.8.0"]
+
+[tool.uv]
+package = false
+
+[tool.pytest.ini_options]
+testpaths = ["tests/gate"]
+# Every item's duration, failures with their captured output, junit xml for the trend line (tests/gate/conftest.py).
+addopts = "--strict-markers --durations=0 --junitxml=.pytest_cache/junit.xml"
