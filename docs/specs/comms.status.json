@@ -1,6 +1,6 @@
 {
   "spec": "comms.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "1b188f5127ee4556f0aacd5becdfcb733c459310",
   "criteria": {
     "acceptance-guard-other-lane": {
       "status": "built",
