@@ -606,7 +606,8 @@ def fixture_copy(src, scratch, case=None, evals=None):
     if (repo / "uv.lock").is_file():
         u = subprocess.run(["uv", "sync", "--locked", "-q"], cwd=repo, capture_output=True, text=True)
         if u.returncode:
-            raise RuntimeError(f"fixture setup: uv sync --locked exited {u.returncode}: {u.stderr.strip()[-300:]}")
+            # uv's error and its cause lead (a package missing from an offline cache: which one, and why).
+            raise RuntimeError(f"fixture setup: uv sync --locked exited {u.returncode}: {' '.join(u.stderr.split())[:400]}")
     head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=repo, capture_output=True, text=True, check=True).stdout.strip()
     return repo, head
 

@@ -18,8 +18,11 @@ Q="$kit/scripts/octo-feather-qa"; C="$kit/scripts/check-evals"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "qa test: $*" >&2; exit 1; }
 export TMPDIR="$t/tmp"; mkdir "$TMPDIR"
-# uv's package cache stays the box's (a pytest fixture's runner installs from it, as `just setup` would).
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$(uv cache dir)}"
+# The python-app fixtures' setup runs the real uv (the slow-runner shim below wraps it).
+real_uv="$(command -v uv)" || fail "uv not found on PATH: the python-app fixture setup (uv sync --locked) needs it; install uv (CI: astral-sh/setup-uv)"
+# uv's package cache stays the box's (a pytest fixture's runner installs from it, as `just setup` would), read
+# offline: the gate calls no network service (quality #boundary-gate); CI fills the cache in a step before the gate.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_OFFLINE=1
 # A throwaway HOME: the sandbox masks its (empty) live state, never the box's.
 export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
@@ -190,7 +193,7 @@ EOF
 # A slow test runner (#170): the watcher's pytest collection in the spec fixture (the only one with specs/) takes 1.5 s,
 # longer than the stub's 0.5 s turn, so the next call's write always lands before it ends (which call
 # test_write is credited to: schema.md, Before targets, stated limit).
-printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$(command -v uv)" > "$t/bin/uv"
+printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$real_uv" > "$t/bin/uv"
 chmod +x "$t/bin/pi" "$t/bin/herdr" "$t/bin/uv"
 export PATH="$t/bin:$kit/scripts:$PATH"
 echo "fixture" > "$t/evals/fixtures/fx/README.md"

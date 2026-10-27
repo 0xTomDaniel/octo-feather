@@ -27,4 +27,12 @@ jobs:
         with:
           node-version: 22.x
       - run: npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$(tr -d '[:space:]' < pi-version)"
+      # uv at an exact version, sha256-checked (the release's own .sha256), then each eval fixture's locked deps into uv's
+      # cache: the third network step. tests/qa.sh syncs python-app copies inside the gate with UV_OFFLINE=1, from this cache only.
+      - uses: astral-sh/setup-uv@v10
+        with:
+          version: "0.13.1"
+          checksum: eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220 # uv-x86_64-unknown-linux-gnu.tar.gz
+          enable-cache: false
+      - run: for l in evals/fixtures/*/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
       - run: just check
