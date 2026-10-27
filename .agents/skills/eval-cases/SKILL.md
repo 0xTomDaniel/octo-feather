@@ -9,8 +9,8 @@ A Pi adaptation of the eval method in Anthropic's `skill-creator` (Apache-2.0, c
 
 ## Where things live
 
-- `evals/<suite>/suite.json` (`kind`: `skill-trigger` or `role-transcript`), `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run).
-- `scripts/check-evals --help` is the source of truth for the shape and the closed fact list; run `scripts/check-evals` after every edit (it runs in `just check`).
+- `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run).
+- [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded, judgment suites, calibration, `classifiers.json` and the bench's ranking, threshold and FAIL rule. Read it before writing or changing a case; run `scripts/check-evals` after every edit (it runs in `just check`).
 - `scripts/octo-feather-qa --help` runs cases (`just qa`), in the qc sandbox, one trial per case.
 
 ## 0. Test the rule as owned
@@ -19,32 +19,32 @@ A case tests the rule as its **owner** file states it (the role file, the skill)
 
 ## 1. Trigger cases (does a role read a skill when, and only when, the task needs it)
 
-`kind: skill-trigger`, every case with `should_trigger` (bool) and `split` (`train` | `held-out`). The kit suite has `"covers": "role-skills"`: check-evals fails, naming role and skill, unless every skill each role lists (`skills:` in agents/<role>.md) has a should and a should-not case in train and in held-out. Add a skill to a role, add its four cases.
+`kind: skill-trigger`. The kit suite has `"covers": "role-skills"` (schema: Coverage): add a skill to a role, add its four cases.
 
 - **Should-trigger** tasks need the skill without naming it, its path or its method words (a task that says "red-green-refactor" tests the word, not the description). Vary the phrasing: formal, casual, terse, with real file names and a little backstory. At most one explicit case.
 - **Should-not** tasks are **near misses**: they share the skill's keywords or concepts but need something else. An obviously unrelated task ("write fibonacci") tests nothing.
 - Substantive tasks only: a one-step task ("read file X") triggers no skill whatever the description says.
-- Facts: `skill_read` (or `skill_read_before`) for should, `skill_not_read` for should-not.
 - **Held-out** cases are never tuned against: write them before changing the description, never reword them after a run, and report their score apart from the train cases. A description tuned until every case passes fits the cases, not the role.
 
 ## 2. Role transcript cases (does the role do the thing)
 
 `kind: role-transcript`. A fixture holding exactly what the task needs, a task as the role's real brief would phrase it, and facts from the closed list.
 
-- Repo setup fields: `branch` (cut from main, checked out), `head` (`{"fixture", "branch", "message"}`: a second fixture's tree committed over main on its branch), `origin: true` (a bare origin holding main, for `git push`), `fake_gh: true` (a fake gh first on PATH, logging each call). In the task, `{repo}` and `{head}` become the copy's path and HEAD sha.
-- The task leaks no graded fact: no skill path, no expectation JSON, no hint of what is counted (`check-evals` refuses the mechanical leaks; the rest is yours).
+- Repo setup (`branch`, `head`, `origin`, `fake_gh`) and `{repo}`, `{head}` in the task: schema, Case.
+- The task leaks no graded fact: no hint of what is counted (`check-evals` refuses the mechanical leaks, schema: Leaks; the rest is yours).
 - The grade comes from what the role did (tool calls and their results), never its self-report.
 
 ## 3. What a fact reads
 
-- **Skill read** (a load): the skill's content entered the agent's context. A tool result, from any tool (a Pi `read`, a bash `cat`), holds the SKILL.md's full content as the kit under test holds it (head, or the `--kit-ref` commit), compared after normalizing only what the tool adds (CRLF, trailing newlines). A result Pi truncated never counts, nor an `ls`, a `grep` or a `head` of a part. No command text is read.
-- **Before-targets** (`skill_read_before`'s `before`), decided from filesystem snapshots the watcher takes after each tool call, never from command text: `test_write` (a test path changed), `edit` (any file git does not ignore), `git_commit` (HEAD on a new commit), `git_push` (origin's refs; needs `origin`), `gh_call` (the fake gh ran; needs `fake_gh`), `kit_contract_edit` (a role, skill or patch changed, as agents/corrector.md words its rule: `agents/*.md`, `.agents/skills/**`, `.skillfile/patches/**`; `AGENTS.md` is an `edit` only), `final_message` (pi ended on its own with a final message). A target never reached fails the fact, read or not ("target never reached"): write the task so the role reaches it, and list such a FAIL as a finding, never weaken the case.
-- **Verdicts as data**: `declared` (the final message's one fenced `json` block, a top-level field one of fixed labels, e.g. `{"rung": "check"}`) and `declared_includes` (that block's top-level list holds given objects, e.g. a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}` or a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]}`). The producer emits the block; the task names its shape. Both read only once pi exits on its own, so they never stop a run early. If the role's contract does not yet ask for that block, the case's change adds it to the contract.
-- **Field lines and branch paths**: `field_lines` (the final message's field lines, parsed by `octo-feather-lane fields`, the parser `verdict` uses: `Check` and `Owner` lines by key, their none lines, any other field such as `Blocked`; field form and reader scope: `.agents/skills/code-review/SKILL.md` step 4, **Report fields**) and `branch_paths` (what the case repo changed against main, committed or not: `untouched`, `touched`). Shapes: `scripts/check-evals --help`.
-- Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020 (Where the fix goes).
-- No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question (on this box `openrouter/typesafe/jev-1.14` or `~jev-latest`), labelled a judgment in the result.
+Each fact, its parameters and exactly what it reads: schema, Facts. Writing a case against them:
 
-A fact or target the closed list lacks is added in `scripts/check-evals` (shape, `--help`) and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa.sh`.
+- A skill read is a **load** (schema: Skill load), never a mention.
+- A target never reached fails its `skill_read_before` (schema: Facts): write the task so the role reaches it, and list such a FAIL as a finding, never weaken the case.
+- **Verdicts as data** (schema: Final JSON), e.g. `{"rung": "check"}`, a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}`, a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]}`. If the role's contract does not yet ask for that block, the case's change adds it to the contract.
+- Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020 (Where the fix goes).
+- No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question and the kit's judgment model (`evals/judgment-model.json`), labelled a judgment in the result.
+
+A fact or target the closed list lacks is added to the schema, refused in `scripts/check-evals` and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa.sh`.
 
 ## 4. Fails before, passes after
 
