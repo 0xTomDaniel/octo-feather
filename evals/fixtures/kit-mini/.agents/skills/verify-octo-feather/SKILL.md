@@ -7,7 +7,7 @@ description: "Drive the octo-feather kit's own commands (just new-repo, just ins
 
 The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its user surface is its commands: the `just` recipes in the kit's `justfile` and the published commands in `scripts/`, each a short-lived process. There is no server, browser or interactive mode. The helper runs each command on the real user path, through the contract's entry, as a subprocess, in its own empty working directory, against scratch only: new repos, scratch targets and scratch state live in the run state folder, and no drive reaches a live lane, Herdr, `gh` or the network.
 
-Helper (executable, plain bash plus `python3` 3.11+, which reads the contract and checks results):
+Helper (an executable Python script, `python3` 3.11+, standard library only: `tomllib` reads the contract):
 
 ```
 .agents/skills/verify-octo-feather/scripts/verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
@@ -79,7 +79,7 @@ The kept record is the kit's evidence store (quality spec `#evidence-store`), ou
 
 ## Helpers
 
-- `scripts/verify-octo-feather`: the one helper; its usage line is above, and running it with no argument prints it.
+- `scripts/verify-octo-feather`: the one helper, a Python script; its usage line is above, and running it with no argument prints it.
 - Every subcommand prints what it did; `launch` prints the folders, `drive` the record id.
 
 ## Features

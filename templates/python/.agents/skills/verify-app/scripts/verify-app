@@ -1,281 +1,426 @@
-#!/usr/bin/env bash
-# verify-app: drive the `app` CLI the way a user does and keep the proof.
-# Usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run
-# Run state: $VERIFY_APP_RUN_DIR. Evidence: $VERIFY_APP_EVIDENCE_DIR.
-# Both default outside the git dir, under ${TMPDIR:-/tmp}.
-set -euo pipefail
+#!/usr/bin/env python3
+"""verify-app: drive the `app` CLI the way a user does and keep the proof.
 
-script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-repo=$(cd "$script_dir/../../../.." && pwd)
-repo_key=$(printf '%s' "$repo" | cksum | cut -d' ' -f1)
-base="${TMPDIR:-/tmp}/verify-app.$(id -u).$repo_key"
-run_dir="${VERIFY_APP_RUN_DIR:-$base/run}"
-evidence_dir="${VERIFY_APP_EVIDENCE_DIR:-$base/evidence}"
-state="$run_dir/state"
-contract="$repo/qc.toml"
-features="hello"
+Usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run
+Run state: $VERIFY_APP_RUN_DIR. Evidence: $VERIFY_APP_EVIDENCE_DIR.
+Both default outside the git dir, under ${TMPDIR:-/tmp}.
+Needs python3 3.11+ (tomllib reads qc.toml); the app's own venv python answers the doctor's install probes.
+"""
 
-say() { printf 'verify-app: %s\n' "$*"; }
-die() {
-    printf 'verify-app: %s\n' "$*" >&2
-    exit 1
-}
+from __future__ import annotations
 
-# Prove a folder is writable by writing to it; `test -w` lies under some sandboxes.
-writable() {
-    local dir=$1 probe
-    mkdir -p "$dir" 2>/dev/null || return 1
-    probe="$dir/.verify-app-probe.$$"
-    { : >"$probe"; } 2>/dev/null || return 1
-    rm -f "$probe"
-}
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+import tomllib
+from collections.abc import Callable
+from dataclasses import dataclass
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, NoReturn
 
-load_state() {
-    [[ -f $state ]] || die "no run state at $state: run 'verify-app launch' first"
-    # shellcheck source=/dev/null
-    . "$state"
-}
+ME = "verify-app"
+USAGE = "usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run"
+FEATURES = ("hello",)
+SCRIPT_DIR = Path(os.path.abspath(os.path.dirname(__file__)))
+REPO = Path(os.path.normpath(SCRIPT_DIR / "../../../.."))
+CONTRACT = REPO / "qc.toml"
 
-# The app-driver contract, qc.toml at the repo root (format 1), as shell assignments: QC_SETUP, QC_ENTRY,
-# QC_SERVICES (names), QC_FIXTURES and QC_RESETS (names and reset commands), QC_VALUES and QC_VALUES_JSON.
-# The helper sets up, enters and resets the app only through these; its commands run under sh with QC_REPO set.
-read_contract() {
-    command -v python3 >/dev/null || die "python3 (3.11+) not on PATH: verify-app reads $contract with its tomllib"
-    python3 - "$contract" <<'EOF_PY'
-import json, shlex, sys
-try:
-    import tomllib
-except ImportError:
-    sys.exit("verify-app: python3 3.11+ needed: it reads qc.toml with tomllib")
-path = sys.argv[1]
-try:
-    with open(path, "rb") as fh:
-        c = tomllib.load(fh)
-except (OSError, ValueError) as e:
-    sys.exit(f"verify-app: cannot read the app-driver contract {path}: {e}")
-if c.get("format") != 1:
-    sys.exit(f"verify-app: {path}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
-entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
-if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
-        and isinstance(fixture, dict) and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
-        and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())):
-    sys.exit(f"verify-app: {path} does not match format 1 (validate: octo-feather-contract)")
-q, arr = shlex.quote, lambda xs: "(" + " ".join(shlex.quote(x) for x in xs) + ")"
-print(f"QC_SETUP={q(c.get('setup', ''))}")
-print(f"QC_ENTRY={q(entry['command'])}")
-print(f"QC_SERVICES={arr(services)}")
-print(f"QC_FIXTURES={arr(fixture)}")
-print(f"QC_RESETS={arr(f['reset'] for f in fixture.values())}")
-print("declare -gA QC_VALUES=(" + " ".join(f"[{q(k)}]={q(v)}" for k, v in values.items()) + ")")
-print(f"QC_VALUES_JSON={q(json.dumps(values))}")
-EOF_PY
-}
 
-cmd_setup() {
-    eval "$(read_contract)" || exit 1
-    if [[ -z $QC_SETUP ]]; then say "no setup declared in $contract"; return; fi
-    say "setup in $repo (qc.toml setup): $QC_SETUP"
-    (cd "$repo" && QC_REPO=$repo sh -c "$QC_SETUP") || die "qc.toml setup failed: $QC_SETUP"
-}
+def cksum(data: bytes) -> int:
+    """POSIX cksum's CRC, so the default folders keep the name the shell helper gave them."""
+    crc = 0
+    for b in [*data, *_length_bytes(len(data))]:
+        crc ^= b << 24
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x04C11DB7) if crc & 0x80000000 else crc << 1
+            crc &= 0xFFFFFFFF
+    return ~crc & 0xFFFFFFFF
 
-cmd_launch() {
-    writable "$run_dir" || die "cannot write run state folder: $run_dir"
-    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
-    local contract_sh
-    contract_sh=$(read_contract) || exit 1
-    eval "$contract_sh"
+
+def _length_bytes(n: int) -> list[int]:
+    out: list[int] = []
+    while n:
+        out.append(n & 0xFF)
+        n >>= 8
+    return out
+
+
+BASE = Path(os.environ.get("TMPDIR") or "/tmp") / f"verify-app.{os.getuid()}.{cksum(str(REPO).encode())}"
+RUN_DIR = Path(os.environ.get("VERIFY_APP_RUN_DIR") or BASE / "run")
+EVIDENCE_DIR = Path(os.environ.get("VERIFY_APP_EVIDENCE_DIR") or BASE / "evidence")
+STATE = RUN_DIR / "state"
+
+
+def say(msg: str) -> None:
+    print(f"{ME}: {msg}", flush=True)
+
+
+def die(msg: str) -> NoReturn:
+    sys.stdout.flush()
+    print(f"{ME}: {msg}", file=sys.stderr, flush=True)
+    sys.exit(1)
+
+
+def now() -> str:
+    return datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def writable(d: Path) -> bool:
+    """Prove a folder is writable by writing to it; `test -w` lies under some sandboxes."""
+    try:
+        d.mkdir(parents=True, exist_ok=True)
+        probe = d / f".verify-app-probe.{os.getpid()}"
+        probe.write_bytes(b"")
+        probe.unlink()
+    except OSError:
+        return False
+    return True
+
+
+def git_rev(repo: Path) -> str:
+    r = subprocess.run(["git", "-C", str(repo), "rev-parse", "--short", "HEAD"],
+                       capture_output=True, text=True, check=False)
+    return r.stdout.strip() if r.returncode == 0 and r.stdout.strip() else "unknown"
+
+
+@dataclass(frozen=True)
+class Contract:
+    """The app-driver contract, qc.toml at the repo root (format 1). The helper sets up, enters and
+    resets the app only through it; its commands run under sh with QC_REPO set."""
+
+    setup: str
+    entry: str
+    services: list[str]
+    fixtures: dict[str, str]  # name: reset command
+    values: dict[str, str]
+
+
+def read_contract() -> Contract:
+    try:
+        with CONTRACT.open("rb") as fh:
+            c: dict[str, Any] = tomllib.load(fh)
+    except (OSError, ValueError) as e:
+        die(f"cannot read the app-driver contract {CONTRACT}: {e}")
+    if c.get("format") != 1:
+        die(f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
+    entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
+    if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
+            and isinstance(fixture, dict)
+            and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
+            and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())
+            and isinstance(c.get("setup", ""), str)):
+        die(f"{CONTRACT} does not match format 1 (validate: octo-feather-contract)")
+    return Contract(setup=c.get("setup", ""), entry=entry["command"], services=list(services),
+                    fixtures={k: f["reset"] for k, f in fixture.items()}, values=dict(values))
+
+
+def sh_in_repo(command: str) -> bool:
+    """A contract command, as the contract says it runs: under sh, in the repo, with QC_REPO set."""
+    return subprocess.run(["sh", "-c", command], cwd=REPO, env={**os.environ, "QC_REPO": str(REPO)},
+                          check=False).returncode == 0
+
+
+@dataclass(frozen=True)
+class State:
+    contract: Contract
+    app: str
+    py: str
+    repo: str
+    rev: str
+    launched: str
+
+
+def load_state() -> State:
+    if not STATE.is_file():
+        die(f"no run state at {STATE}: run 'verify-app launch' first")
+    s = json.loads(STATE.read_text())
+    return State(contract=Contract(**s["contract"]), app=s["app"], py=s["py"], repo=s["repo"],
+                 rev=s["rev"], launched=s["launched"])
+
+
+def cmd_setup(contract: Contract | None = None) -> None:
+    c = contract or read_contract()
+    if not c.setup:
+        say(f"no setup declared in {CONTRACT}")
+        return
+    say(f"setup in {REPO} (qc.toml setup): {c.setup}")
+    if not sh_in_repo(c.setup):
+        die(f"qc.toml setup failed: {c.setup}")
+
+
+def cmd_launch() -> None:
+    if not writable(RUN_DIR):
+        die(f"cannot write run state folder: {RUN_DIR}")
+    if not writable(EVIDENCE_DIR):
+        die(f"cannot write evidence folder: {EVIDENCE_DIR}")
+    c = read_contract()
     # A short-lived CLI: this helper starts no service. A contract that declares one needs a helper that starts and readies it.
-    [[ ${#QC_SERVICES[@]} == 0 ]] || die "qc.toml declares services (${QC_SERVICES[*]}); this helper drives a CLI and starts none: extend it to start and ready them"
-    cmd_setup
-    local app py rev
+    if c.services:
+        die(f"qc.toml declares services ({' '.join(c.services)}); this helper drives a CLI and starts none: extend it to start and ready them")
+    cmd_setup(c)
     # The `app` command: qc.toml's entry with the user's arguments appended.
-    app="$run_dir/bin/app"
-    py="$repo/.venv/bin/python"
-    mkdir -p "$run_dir/bin" "$run_dir/scratch"
-    printf '#!/usr/bin/env bash\nexport QC_REPO=%q\nexec sh -c %q app "$@"\n' "$repo" "$QC_ENTRY \"\$@\"" >"$app" || die "cannot write app command: $app"
-    chmod +x "$app"
-    rev=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)
-    {
-        printf '%s\n' "$contract_sh"
-        printf 'APP=%q\n' "$app"
-        printf 'PY=%q\n' "$py"
-        printf 'REPO=%q\n' "$repo"
-        printf 'REV=%q\n' "$rev"
-        printf 'LAUNCHED=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
-    } >"$state" || die "cannot write run state file: $state"
-    [[ -s $state ]] || die "run state file is empty: $state"
-    say "ready: app=$app entry=$QC_ENTRY rev=$rev"
-    say "run state: $run_dir"
-    say "evidence:  $evidence_dir"
-}
+    app = RUN_DIR / "bin" / "app"
+    py = REPO / ".venv" / "bin" / "python"
+    (RUN_DIR / "bin").mkdir(parents=True, exist_ok=True)
+    (RUN_DIR / "scratch").mkdir(parents=True, exist_ok=True)
+    wrapper = f'#!/usr/bin/env bash\nexport QC_REPO={shlex.quote(str(REPO))}\nexec sh -c {shlex.quote(c.entry + ' "$@"')} app "$@"\n'
+    try:
+        app.write_text(wrapper)
+        app.chmod(0o755)
+    except OSError:
+        die(f"cannot write app command: {app}")
+    rev = git_rev(REPO)
+    state = State(contract=c, app=str(app), py=str(py), repo=str(REPO), rev=rev, launched=now())
+    try:
+        STATE.write_text(json.dumps({**state.__dict__, "contract": c.__dict__}, indent=1) + "\n")
+    except OSError:
+        die(f"cannot write run state file: {STATE}")
+    if STATE.stat().st_size == 0:
+        die(f"run state file is empty: {STATE}")
+    say(f"ready: app={app} entry={c.entry} rev={rev}")
+    say(f"run state: {RUN_DIR}")
+    say(f"evidence:  {EVIDENCE_DIR}")
 
-# APP, PY, REPO, REV and the contract's QC_* come from the state file.
-# shellcheck disable=SC2153
-cmd_doctor() {
-    load_state
-    local ok=0 out version origin rev
-    report() { printf '%-8s %s\n' "$1" "$2"; }
-    if [[ -x $APP ]]; then report ok "app command $APP"; else
-        report FAIL "app command missing: $APP"
-        ok=1
-    fi
-    report info "entry (qc.toml): $QC_ENTRY"
-    if out=$("$APP" --help 2>&1) && grep -q 'hello' <<<"$out"; then
-        report ok "'app --help' lists hello"
-    else
-        report FAIL "'app --help' failed or lacks hello"
-        ok=1
-    fi
-    version=$("$PY" -c 'import importlib.metadata as m; print(m.version("app"))' 2>&1) || ok=1
-    report info "app version $version"
-    origin=$("$PY" -c 'import app; print(app.__file__)' 2>&1) || ok=1
-    if [[ $origin == "$REPO/src/"* ]]; then report ok "app imports from this checkout: $origin"; else
-        report FAIL "app imports from elsewhere: $origin"
-        ok=1
-    fi
-    rev=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
-    if [[ $rev == "$REV" ]]; then report ok "checkout at launch rev $REV"; else
-        report WARN "checkout moved: launched at $REV, now $rev (relaunch)"
-    fi
-    if [[ -d $run_dir/scratch ]]; then report ok "scratch cwd $run_dir/scratch"; else
-        report FAIL "scratch cwd missing"
-        ok=1
-    fi
-    return "$ok"
-}
 
-# One isolated case: fresh empty cwd, captured argv, stdout, stderr, exit code.
-# case_run <dir> <name> <arg>...
-case_run() {
-    local dir=$1 name=$2
-    shift 2
-    local cwd="$run_dir/scratch/$name" code=0
-    rm -rf "$cwd" && mkdir -p "$cwd"
-    printf '%q ' app "$@" >"$dir/$name.cmd"
-    echo >>"$dir/$name.cmd"
-    (cd "$cwd" && "$APP" "$@") >"$dir/$name.stdout" 2>"$dir/$name.stderr" || code=$?
-    echo "$code" >"$dir/$name.exit"
+def output(argv: list[str]) -> tuple[int, str]:
+    """A probe's exit code and its stdout and stderr, trailing newlines stripped as `$(...)` does."""
+    try:
+        r = subprocess.run(argv, capture_output=True, text=True, check=False)
+    except OSError as e:
+        return 127, str(e)
+    return r.returncode, (r.stdout + r.stderr).rstrip("\n")
+
+
+def cmd_doctor(tee: Path | None = None) -> int:
+    s = load_state()
+    ok = 0
+    log = tee.open("w") if tee else None
+
+    def report(level: str, msg: str) -> None:
+        line = f"{level:<8} {msg}"
+        print(line, flush=True)
+        if log:
+            log.write(line + "\n")
+
+    if os.access(s.app, os.X_OK):
+        report("ok", f"app command {s.app}")
+    else:
+        report("FAIL", f"app command missing: {s.app}")
+        ok = 1
+    report("info", f"entry (qc.toml): {s.contract.entry}")
+    code, out = output([s.app, "--help"])
+    if code == 0 and "hello" in out:
+        report("ok", "'app --help' lists hello")
+    else:
+        report("FAIL", "'app --help' failed or lacks hello")
+        ok = 1
+    code, version = output([s.py, "-c", 'import importlib.metadata as m; print(m.version("app"))'])
+    ok |= code != 0
+    report("info", f"app version {version}")
+    code, origin = output([s.py, "-c", "import app; print(app.__file__)"])
+    ok |= code != 0
+    if origin.startswith(f"{s.repo}/src/"):
+        report("ok", f"app imports from this checkout: {origin}")
+    else:
+        report("FAIL", f"app imports from elsewhere: {origin}")
+        ok = 1
+    rev = git_rev(Path(s.repo))
+    if rev == s.rev:
+        report("ok", f"checkout at launch rev {s.rev}")
+    else:
+        report("WARN", f"checkout moved: launched at {s.rev}, now {rev} (relaunch)")
+    if (RUN_DIR / "scratch").is_dir():
+        report("ok", f"scratch cwd {RUN_DIR / 'scratch'}")
+    else:
+        report("FAIL", "scratch cwd missing")
+        ok = 1
+    if log:
+        log.close()
+    return ok
+
+
+@dataclass(frozen=True)
+class Case:
+    """What one case left: stdout as JSON (None when it is not), stdout, stderr, exit code."""
+
+    j: Any
+    out: str
+    err: str
+    code: int
+
+
+def exit_code(rc: int) -> int:
+    return 128 - rc if rc < 0 else rc
+
+
+def case_run(s: State, d: Path, name: str, *args: str) -> None:
+    """One isolated case: fresh empty cwd, captured argv, stdout, stderr, exit code."""
+    cwd = RUN_DIR / "scratch" / name
+    shutil.rmtree(cwd, ignore_errors=True)
+    cwd.mkdir(parents=True)
+    (d / f"{name}.cmd").write_text("".join(f"{shlex.quote(a)} " for a in ("app", *args)) + "\n")
+    with (d / f"{name}.stdout").open("wb") as out, (d / f"{name}.stderr").open("wb") as err:
+        code = exit_code(subprocess.run([s.app, *args], cwd=cwd, stdout=out, stderr=err, check=False).returncode)
+    (d / f"{name}.exit").write_text(f"{code}\n")
     # Side effect check: the CLI writes no files where it runs.
-    find "$cwd" -mindepth 1 >"$dir/$name.files"
-}
+    left = sorted(str(Path(root) / f) for root, dirs, files in os.walk(cwd) for f in [*dirs, *files])
+    (d / f"{name}.files").write_text("".join(f"{p}\n" for p in left))
 
-# check <dir> <name> <python-expr over j (stdout JSON or None), out, err, code, v (qc.toml values)>
-check() {
-    local dir=$1 name=$2 expr=$3 verdict
-    verdict=$(
-        "$PY" - "$dir" "$name" "$expr" "$QC_VALUES_JSON" <<'EOF'
-import json, pathlib, sys
-d, n, expr = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
-v = json.loads(sys.argv[4])
-out = (d / f"{n}.stdout").read_text()
-err = (d / f"{n}.stderr").read_text()
-code = int((d / f"{n}.exit").read_text())
-files = (d / f"{n}.files").read_text()
-try:
-    j = json.loads(out)
-except ValueError:
-    j = None
-print("PASS" if eval(expr) and files == "" else "FAIL")
-EOF
-    )
-    printf '%s %s: %s\n' "$verdict" "$name" "$(cat "$dir/$name.cmd")" | tee -a "$dir/summary.txt"
+
+def check(d: Path, name: str, holds: Callable[[Case], bool]) -> bool:
+    """PASS when the case's facts hold and it left no files in its cwd; prints what the user saw."""
+    out = (d / f"{name}.stdout").read_text()
+    err = (d / f"{name}.stderr").read_text()
+    code = int((d / f"{name}.exit").read_text())
+    try:
+        j = json.loads(out)
+    except ValueError:
+        j = None
+    try:
+        passed = bool(holds(Case(j=j, out=out, err=err, code=code)))
+    except Exception as e:  # noqa: BLE001  a check that cannot evaluate fails its case
+        print(f"check error: {type(e).__name__}: {e}", file=sys.stderr)
+        passed = False
+    passed = passed and (d / f"{name}.files").read_text() == ""
+    verdict = "PASS" if passed else "FAIL"
+    line = f"{verdict} {name}: {(d / f'{name}.cmd').read_text().rstrip(chr(10))}"
+    print(line)
+    with (d / "summary.txt").open("a") as fh:
+        fh.write(line + "\n")
     # Show what the user saw: stdout and stderr, then the exit code.
-    sed 's/^/    stdout: /' "$dir/$name.stdout"
-    sed 's/^/    stderr: /' "$dir/$name.stderr"
-    printf '    exit: %s\n' "$(cat "$dir/$name.exit")"
-    [[ $verdict == PASS ]]
-}
+    for label, text in (("stdout", out), ("stderr", err)):
+        for ln in text.splitlines():
+            print(f"    {label}: {ln}")
+    print(f"    exit: {code}", flush=True)
+    return passed
 
-drive_hello() {
-    local dir="$evidence_dir/hello" fails=0 name
+
+def case(s: State, d: Path, name: str, args: tuple[str, ...], holds: Callable[[Case], bool]) -> bool:
+    case_run(s, d, name, *args)
+    return check(d, name, holds)
+
+
+def drive_hello(s: State) -> bool:
+    d = EVIDENCE_DIR / "hello"
+    v = s.contract.values
     # The name greeted and the greeting expected: qc.toml values.name and values.greeting.
-    [[ -n ${QC_VALUES[name]+set} && -n ${QC_VALUES[greeting]+set} ]] ||
-        die "qc.toml [values] needs name and greeting: the hello drive greets values.name and expects values.greeting"
-    name=${QC_VALUES[name]}
-    rm -rf "$dir" && mkdir -p "$dir"
-    echo "hello @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
-    case_run "$dir" json hello "$name" --json
-    check "$dir" json 'code == 0 and err == "" and j == {"name": v["name"], "text": v["greeting"]}' || fails=1
-    case_run "$dir" text hello "$name"
-    check "$dir" text 'code == 0 and err == "" and out == v["greeting"] + "\n"' || fails=1
-    case_run "$dir" trimmed hello "  $name  " --json
-    check "$dir" trimmed 'code == 0 and j == {"name": v["name"], "text": v["greeting"]}' || fails=1
-    case_run "$dir" empty-json hello '  ' --json
-    check "$dir" empty-json 'code == 2 and err == "" and isinstance(j, dict) and set(j) == {"error"} and j["error"]' || fails=1
-    case_run "$dir" empty-text hello '  '
-    check "$dir" empty-text 'code == 2 and out == "" and err.startswith("error: ")' || fails=1
-    say "hello evidence: $dir"
-    return "$fails"
-}
+    if "name" not in v or "greeting" not in v:
+        die("qc.toml [values] needs name and greeting: the hello drive greets values.name and expects values.greeting")
+    name = v["name"]
+    shutil.rmtree(d, ignore_errors=True)
+    d.mkdir(parents=True)
+    (d / "summary.txt").write_text(f"hello @ rev {s.rev}, {now()}\n")
+    greeted = {"name": v["name"], "text": v["greeting"]}
+    # Every case runs, whatever the one before it gave.
+    results = [
+        case(s, d, "json", ("hello", name, "--json"),
+             lambda c: c.code == 0 and c.err == "" and c.j == greeted),
+        case(s, d, "text", ("hello", name),
+             lambda c: c.code == 0 and c.err == "" and c.out == v["greeting"] + "\n"),
+        case(s, d, "trimmed", ("hello", f"  {name}  ", "--json"),
+             lambda c: c.code == 0 and c.j == greeted),
+        case(s, d, "empty-json", ("hello", "  ", "--json"),
+             lambda c: c.code == 2 and c.err == "" and isinstance(c.j, dict)
+             and set(c.j) == {"error"} and bool(c.j["error"])),
+        case(s, d, "empty-text", ("hello", "  "),
+             lambda c: c.code == 2 and c.out == "" and c.err.startswith("error: ")),
+    ]
+    say(f"hello evidence: {d}")
+    return all(results)
 
-cmd_drive() {
-    local feature=${1:-}
-    [[ -n $feature ]] || die "usage: verify-app drive <feature> (features: $features)"
-    load_state
-    writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
-    local i
-    for i in "${!QC_FIXTURES[@]}"; do
-        say "reset fixture ${QC_FIXTURES[i]} (qc.toml)"
-        (cd "$REPO" && QC_REPO=$REPO sh -c "${QC_RESETS[i]}") || die "qc.toml fixture ${QC_FIXTURES[i]} reset failed: ${QC_RESETS[i]}"
-    done
-    local code=0
-    case $feature in
-    hello) drive_hello || code=1 ;;
-    *) die "unknown feature '$feature' (features: $features)" ;;
-    esac
-    record_evidence "$feature"
-    return "$code"
-}
 
-# Every drive, passed or failed, appends one record to this repo's evidence store (octo-feather quality spec
-# #evidence-store) through the kit's octo-feather-evidence: the criterion the feature file's
-# `Drive criterion:` line names, the feature's evidence folder as its outputs. The store is outside the repo
-# and outside both helper folders; cleanup never touches it.
-record_evidence() {
-    local feature=$1 file="$script_dir/../features/$1.md" crit id
-    command -v octo-feather-evidence >/dev/null ||
-        die "octo-feather-evidence (the octo-feather kit's scripts/) not on PATH: every drive appends a record to the evidence store"
-    crit=$(sed -n 's/^Drive criterion: `\([^`]*\)`.*/\1/p' "$file" | head -n 1)
-    [[ -n $crit ]] || die "$file has no Drive criterion line (Drive criterion: \`<spec>#<anchor>\`): each drive names the criterion it serves"
+def cmd_drive(feature: str | None) -> int:
+    if not feature:
+        die(f"usage: verify-app drive <feature> (features: {' '.join(FEATURES)})")
+    s = load_state()
+    if not writable(EVIDENCE_DIR):
+        die(f"cannot write evidence folder: {EVIDENCE_DIR}")
+    for name, reset in s.contract.fixtures.items():
+        say(f"reset fixture {name} (qc.toml)")
+        if not sh_in_repo(reset):
+            die(f"qc.toml fixture {name} reset failed: {reset}")
+    if feature != "hello":
+        die(f"unknown feature '{feature}' (features: {' '.join(FEATURES)})")
+    passed = drive_hello(s)
+    record_evidence(s, feature)
+    return 0 if passed else 1
+
+
+def record_evidence(s: State, feature: str) -> None:
+    """Every drive, passed or failed, appends one record to this repo's evidence store (octo-feather quality
+    spec #evidence-store) through the kit's octo-feather-evidence: the criterion the feature file's
+    `Drive criterion:` line names, the feature's evidence folder as its outputs. The store is outside the
+    repo and outside both helper folders; cleanup never touches it."""
+    file = SCRIPT_DIR / ".." / "features" / f"{feature}.md"
+    if not shutil.which("octo-feather-evidence"):
+        die("octo-feather-evidence (the octo-feather kit's scripts/) not on PATH: every drive appends a record to the evidence store")
+    m = re.search(r"^Drive criterion: `([^`]*)`", file.read_text(), re.MULTILINE)
+    if not m or not m[1]:
+        die(f"{file} has no Drive criterion line (Drive criterion: `<spec>#<anchor>`): each drive names the criterion it serves")
+    crit = m[1]
     # The criterion's text is its element in this repo's docs/specs/<spec>.spec.html, which octo-feather-evidence reads and hashes.
-    id=$(octo-feather-evidence append --repo "$REPO" --criterion "$crit" --outputs "$evidence_dir/$feature") ||
-        die "evidence record for $feature not appended for criterion $crit (octo-feather-evidence failed, message above; its text must be in docs/specs/${crit%%#*}.spec.html)"
-    say "evidence record $id (criterion $crit; read: octo-feather-evidence read --criterion $crit --commit $REV)"
-}
+    sys.stdout.flush()
+    r = subprocess.run(["octo-feather-evidence", "append", "--repo", s.repo, "--criterion", crit,
+                        "--outputs", str(EVIDENCE_DIR / feature)], stdout=subprocess.PIPE, text=True, check=False)
+    if r.returncode != 0:
+        die(f"evidence record for {feature} not appended for criterion {crit} (octo-feather-evidence failed, message above; its text must be in docs/specs/{crit.split('#')[0]}.spec.html)")
+    say(f"evidence record {r.stdout.strip()} (criterion {crit}; read: octo-feather-evidence read --criterion {crit} --commit {s.rev})")
 
-cmd_cleanup() {
+
+def cmd_cleanup() -> None:
     # Nothing runs in the background: the CLI exits per case. Remove only our run state.
-    if [[ -e $run_dir ]]; then
-        rm -rf "$run_dir/scratch" "$state"
-        rm -f "$run_dir/bin/app"
-        rmdir "$run_dir/bin" 2>/dev/null || true
-        rmdir "$run_dir" 2>/dev/null || true
-        say "removed run state $run_dir"
-    fi
-    say "evidence kept at $evidence_dir"
-}
+    if RUN_DIR.exists():
+        shutil.rmtree(RUN_DIR / "scratch", ignore_errors=True)
+        STATE.unlink(missing_ok=True)
+        (RUN_DIR / "bin" / "app").unlink(missing_ok=True)
+        for d in (RUN_DIR / "bin", RUN_DIR):
+            try:
+                d.rmdir()
+            except OSError:
+                pass
+        say(f"removed run state {RUN_DIR}")
+    say(f"evidence kept at {EVIDENCE_DIR}")
 
-cmd_run() {
-    local code=0
-    cmd_launch
-    cmd_doctor | tee "$evidence_dir/doctor.txt" || code=1
-    if [[ $code == 0 ]]; then cmd_drive hello || code=1; fi
-    cmd_cleanup
-    [[ -d $evidence_dir ]] || die "evidence folder gone after cleanup: $evidence_dir"
-    ls -laR "$evidence_dir"
-    if [[ $code == 0 ]]; then say "run PASS"; else say "run FAIL"; fi
-    return "$code"
-}
 
-case ${1:-} in
-setup) cmd_setup ;;
-launch) cmd_launch ;;
-doctor) cmd_doctor ;;
-drive)
-    shift
-    cmd_drive "$@"
-    ;;
-cleanup) cmd_cleanup ;;
-run) cmd_run ;;
-*) die "usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run" ;;
-esac
+def cmd_run() -> int:
+    cmd_launch()
+    code = cmd_doctor(tee=EVIDENCE_DIR / "doctor.txt")
+    if code == 0:
+        code = cmd_drive("hello")
+    cmd_cleanup()
+    if not EVIDENCE_DIR.is_dir():
+        die(f"evidence folder gone after cleanup: {EVIDENCE_DIR}")
+    sys.stdout.flush()
+    subprocess.run(["ls", "-laR", str(EVIDENCE_DIR)], check=False)
+    say("run PASS" if code == 0 else "run FAIL")
+    return code
+
+
+def main(argv: list[str]) -> int:
+    match argv[:1]:
+        case ["setup"]:
+            cmd_setup()
+            return 0
+        case ["launch"]:
+            cmd_launch()
+            return 0
+        case ["doctor"]:
+            return cmd_doctor()
+        case ["drive"]:
+            return cmd_drive(argv[1] if len(argv) > 1 else None)
+        case ["cleanup"]:
+            cmd_cleanup()
+            return 0
+        case ["run"]:
+            return cmd_run()
+        case _:
+            die(USAGE)
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
