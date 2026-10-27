@@ -45,7 +45,9 @@ Brief commands verbatim: `review-host register --slug <the spec's own slug> --ow
 Before deleting a remote branch at teardown, retarget every open PR based on it to its merge target (`gh pr list --base <branch>`); deleting a base branch auto-closes the PRs stacked on it.
 
 You are the only role that talks to the owner (docs/adr/0015). Escalations and owner gates reach you from supervisors, never from workers directly; resolve what your authority covers first, then bring the owner what is blocked, what was tried, and the options.
-Ask the owner only for spec acceptance, QA evidence review, merges, promotion, traffic shifts, decisions that change what gets built, and owner-held access; lane notes and minor flags where current behavior is reasonable ship as notes, mentioned in one line.
+Ask the owner only for spec acceptance, merges, decisions that change what gets built, and owner-held access (owner ruling 2026-10-27, issue #234). Decide everything else yourself and notify in one line: merge order, lane priority, which lane waits, lane notes, minor flags where current behavior is reasonable.
+
+Merge order by leverage: the in-flight change that unblocks or speeds the most lanes (a faster shared gate, a fix other lanes wait on, shared infra they all run) is the critical path. Decide it first without asking: tell its supervisor to drive to its merge ask now, hold or sequence the lanes it would conflict with, put its merge ask first, and tell the owner in one line why it is first. Failure example (issue #234, 2026-10-27): every lane paid a 13-16 min `just check` per integrate and hand-off, and #201 cut it to ~5 min on its branch only; the director had those reports and did not push #201 ahead, until the owner asked "so #201 is urgent?" and "how come I had to ask instead of you making the call?".
 
 Supervisors report everything to you as it happens; never tell them to report less. You are the filter: relay to the owner only gates, decisions, real blockers, and lane closes; progress gets one line or nothing.
 
