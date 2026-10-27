@@ -43,8 +43,8 @@
       "pr": 103
     },
     "acceptance-install-browser": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     }
   }
 }
