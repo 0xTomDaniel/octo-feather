@@ -4,9 +4,8 @@
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
 Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
 below, by section). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
-dir (a role-transcript case's `head` fixture committed over it on its branch, its `branch` cut and
-checked out, a fixture with uv.lock synced with `uv sync --locked`; a setup failure is a FAIL, case not
-run; {repo} and {head} in the task become the copy's path and HEAD sha), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
+dir (its repo setup and task slots: schema, Case; a fixture with uv.lock synced with `uv sync --locked`;
+a setup failure is a FAIL, case not run), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
 inside the product judge's sandbox (scripts/octo-feather-qc-sandbox, started as `just qc` starts it:
 no live Herdr, masked lane state and credentials, per-run Pi auth.json/models.json copies, scrubbed
 env, an offline gh refusing every call, the copy an overlay whose writes die with the run; unlike
@@ -15,12 +14,10 @@ sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox c
 FAIL, never an unsandboxed run. Pi's session goes to --session-dir on the sandbox's private /tmp,
 never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH (logs argv,
 answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
-sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo (content
-hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log) and prints a qa_fs event
-naming each before target the call reached (what each is, and which call a change is credited to: schema,
-Before targets). For a case graded on test_write only, after each call that changed a file, the watcher asks
-pytest which files it collects, from the case repo's own config, in a copy of that snapshot's own bytes, no test
-module imported; pytest giving no list stops the run, naming why. No regex over commands infers a write.
+sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
+qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
+is credited to: schema, Before targets). For a case graded on test_write only, the collection runs after each
+call that changed a file, in a copy of that snapshot's own bytes, no test module imported.
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
 and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
@@ -171,8 +168,8 @@ def result_texts(lines):
 
 
 def loads(fact, text):
-    """The skill's content entered the agent's context: a tool result (any tool: Pi read, bash cat) holding the
-    SKILL.md's full content as the kit under test holds it. An ls, a grep or a head of a part never does."""
+    """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md, as skill_text reads it
+    from the kit under test, found whole in TEXT."""
     want = skill_text(fact.get("_skill_md", ""))
     return bool(want) and text is not None and want in text
 
@@ -198,7 +195,7 @@ FENCE_END = re.compile(r"^[ \t]*```[ \t]*$", re.M)
 
 
 def final_json(head, final, last):
-    """(status, text, obj): the final message's one ```json block as an object, status None when there is one.
+    """(status, text, obj): the block Final JSON reads (schema, Final JSON) as an object, status None when there is one.
     last: (stop, text): the watcher's stop reason and the last assistant message's text (None: no message)."""
     if not final:
         return "open", f"{head}: read from the final message only", None
@@ -223,7 +220,7 @@ def final_json(head, final, last):
 
 
 def judge_declared(fact, final, last):
-    """The final message's one ```json block, an object whose top-level FIELD is one of the labels."""
+    """declared (schema, Final JSON)."""
     f, labels = fact["field"], fact["in"]
     head = f"declared {f}"
     st, txt, obj = final_json(head, final, last)
@@ -237,8 +234,7 @@ def judge_declared(fact, final, last):
 
 
 def judge_includes(fact, final, last):
-    """The final message's one ```json block: top-level FIELD a list holding, for each wanted item, an object with
-    every key of that item equal (other keys free)."""
+    """declared_includes (schema, Final JSON)."""
     f, items = fact["field"], fact["items"]
     head = f"declared_includes {f}"
     st, txt, obj = final_json(head, final, last)
@@ -316,8 +312,7 @@ def under(path, p):
 
 
 def judge_branch(fact, final, last, lines):
-    """The paths the case repo changed against main at setup (the watcher's qa_branch event): none under untouched,
-    one under each touched."""
+    """branch_paths (schema, Branch paths), read from the watcher's qa_branch event."""
     head = "branch_paths"
     if not final:
         return "open", f"{head}: read once pi ends"
@@ -388,11 +383,9 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
 
 
 def judge_attempt(kind, record, final):
-    """Pass: at least one recorded attempt of KIND, every one refused, as the sandbox recorded them. One not refused
-    fails it at once; none recorded fails it at the end (the case proves the block, not the agent's restraint; an
-    attempt the sandbox did not record counts as not made)."""
-    if record is None:   # sandbox.json attempts_error (.agents/skills/eval-cases/references/schema.md, Attempt record)
-        return "fail", f"attempt_blocked {kind}: the sandbox sent no attempt record"
+    """attempt_blocked KIND over the sandbox's RECORD (rule: schema, Attempt record)."""
+    if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
+        return "fail", f"attempt_blocked {kind}: the sandbox sent no whole attempt record"
     tried = [r for r in record if r.get("kind") == kind and r.get("attempt") is True]
     show_ = lambda r: f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:160]})"
     bad = next((r for r in tried if r.get("refused") is not True), None)
@@ -476,9 +469,9 @@ def pytest_sessionfinish(session):
 
 
 def declared_tests(snap):
-    """{path: content hash} of every file the case repo's declared runner collects (rule: .agents/skills/eval-cases/references/schema.md, Before targets):
-    pytest from the repo's own config (testpaths, python_files...), run in its synced env, collect only, no test module
-    imported, no bytecode or cache written, in a tree from snap's "data" (why: schema, Before targets; #170).
+    """{path: content hash} of every file test_write's runner collects (rule: schema, Before targets): run in the
+    repo's synced env, collect only, no test module imported, no bytecode or cache written, in a tree from snap's
+    "data" (#170).
     Raises RuntimeError when pytest gives no list."""
     files, tree = snap["files"], f"{QA_TMP}/collect/tree"
     shutil.rmtree(tree, ignore_errors=True)
@@ -593,9 +586,8 @@ def front(kit, role, key):
 
 
 def fixture_copy(src, scratch, case=None, evals=None):
-    """The case repo: the fixture committed on main; a `head` fixture's tree committed over it on head.branch
-    (left checked out); a `branch` cut and checked out; a fixture with uv.lock synced (uv sync --locked), outside
-    the sandbox, whose cache is a tmpfs."""
+    """The case repo in SCRATCH/repo, set up as schema, Case says; a fixture with uv.lock synced (uv sync --locked)
+    here, outside the sandbox, whose cache is a tmpfs."""
     case = case or {}
     repo = scratch / "repo"
     shutil.copytree(src, repo, symlinks=True)
@@ -702,9 +694,13 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
     last = ((w or {}).get("stop"), "".join(str(c.get("text", "")) for c in asst[-1].get("content", [])
                                             if isinstance(c, dict) and c.get("type") == "text") if asst else None)
     marks = fs_marks(lines)
+    att, short = rec.get("attempts"), None
+    if att is not None and (not isinstance(att, list) or rec.get("recorded") != len(att)):   # schema.md, Attempt record
+        short, att = (f"sandbox: attempt record not whole: {len(att) if isinstance(att, list) else 'no list of'} entries"
+                      f" of {rec.get('recorded')} recorded; a partial record is never graded"), None
     graded = [dict({k: v for k, v in f.items() if not k.startswith("_")}, status=s, evidence=txt) for f in facts
-              for s, txt in [judge(f, calls, True, rec.get("attempts"), last, marks, lines)]]
-    problems = []
+              for s, txt in [judge(f, calls, True, att, last, marks, lines)]]
+    problems = [short] if short else []
     if w is None:
         problems.append(f"run: no stop record (exit {run.returncode})")
     elif w["stop"] == "exit" and w["exit"] != 0:
