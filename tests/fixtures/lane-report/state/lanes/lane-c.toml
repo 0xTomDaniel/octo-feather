@@ -1,0 +1,8 @@
+supervisor = "w7:p1"
+repository = "o/a"
+issue = "gh4"
+goal = "Merge ask awaits the owner"
+pr = 9
+started_at = "2026-10-22T12:00:00Z"
+last_handoff_at = "2026-10-22T14:00:00Z"
+waiting_on = ""

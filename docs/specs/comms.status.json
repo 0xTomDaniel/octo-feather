@@ -1,6 +1,6 @@
 {
   "spec": "comms.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "1b188f5127ee4556f0aacd5becdfcb733c459310",
   "criteria": {
     "acceptance-guard-other-lane": {
       "status": "built",
@@ -41,6 +41,34 @@
     "acceptance-lane-archive": {
       "status": "built",
       "pr": 49
+    },
+    "acceptance-report-lanes": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-owner-queue": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-lane-numbers": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-gate-time": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-owner-caught": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-any-target": {
+      "status": "built",
+      "pr": 252
+    },
+    "acceptance-report-unreadable": {
+      "status": "built",
+      "pr": 252
     }
   }
 }

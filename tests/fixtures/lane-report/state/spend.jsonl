@@ -1,0 +1,8 @@
+{"at": "2026-10-20T08:20:00.000Z", "lane": "lane-a", "purpose": "implementer", "model": "m/one", "input_tokens": 1000, "output_tokens": 200, "cost_usd": 0.25}
+{"at": "2026-10-20T08:25:00.000Z", "lane": "lane-a", "purpose": "implementer", "model": "m/local", "input_tokens": 900, "output_tokens": 100, "cost_usd": null}
+{"at": "2026-10-20T09:00:00.000Z", "lane": "lane-a", "purpose": "code-reviewer", "model": "m/one", "input_tokens": 5000, "output_tokens": 800, "cost_usd": 1.5}
+{"at": "2026-10-20T09:05:00.000Z", "lane": "lane-a", "purpose": "qc-judge", "model": "m/local", "input_tokens": 700, "output_tokens": 50, "cost_usd": null}
+{"at": "2026-10-20T09:10:00.000Z", "lane": null, "purpose": "director", "model": "m/one", "input_tokens": 100, "output_tokens": 10, "cost_usd": 9.0}
+{"at": "2026-10-22T12:10:00.000Z", "lane": "lane-c", "purpose": "implementer", "model": "m/one", "input_
+{"at": "2026-10-22T12:20:00.000Z", "lane": "lane-c", "purpose": "implementer", "model": "m/one", "input_tokens": 400, "output_tokens": 40, "cost_usd": 0.125}
+{"at": "2026-10-22T12:30:00.000Z", "lane": "lane-c", "purpose": "implementer", "model": "m/one", "input_tokens": 400, "output_tokens": 40, "cost_usd": "0.5"}
