@@ -26,8 +26,12 @@ default:
     @just --list
 
 # The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
-    @echo "just check: ok"
+# Each check-* recipe and each test is a step of scripts/octo-feather-check (timing and trend record: its --help; #201).
+# Only check-* recipes are steps, so check-gate-free's scan of them sees every recipe the gate runs.
+check:
+    @octo-feather-check --step check-scripts --step check-refs --step check-dashes --step check-skills \
+      --step check-decision-log --step check-roles --step check-behavior-smoke --step check-vendored \
+      --glob 'tests/*.sh' --step check-spec-status --step check-templates --step check-evals
 
 # shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
 # runs_python reads each file's shebang line; which shebangs count as python: #121 D2.
@@ -182,12 +186,9 @@ check-templates:
 
 # Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
 # script's public surface is review's call, not a check (docs/adr/0008, #118).
+# Each test a step; the runner gives steps TMPDIR's real path (macOS: its --help).
 check-tests:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
-    TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
-    for t in "$root"/tests/*.sh; do "$t"; done
+    @octo-feather-check --glob 'tests/*.sh'
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built, and every spec change
 # since its accepted_commit is named by a call in <slug>.calls.jsonl (docs/adr/0021, issue-lifecycle #gates-spec-calls).
