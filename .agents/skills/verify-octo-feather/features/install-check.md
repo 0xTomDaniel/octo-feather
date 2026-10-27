@@ -28,5 +28,5 @@ Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive insta
 ## Gotchas
 
 - Drives reach no network, so the case runs in a network namespace (`unshare -Un`): `gh auth status` cannot reach GitHub and reports not authenticated, so exit 1 is the expected result here, not a box fault. A box without user namespaces fails the case naming `unshare`; run `just install-check` by hand there.
-- The headless browser line its criterion asks for is a later ticket: the command does not list a browser yet, so a PASS here proves the tool listing only, not the criterion. Add the browser case when the command gains it.
+- The kit drives no browser (its `qc.toml` has no `[browser]`), so this case prints no browser line and a PASS proves the tool listing only, not the criterion's browser line. The browser line (MISSING naming the Playwright pin, the box folder and the install command; ok when the headless shell is in the folder) is proven by `tests/install-check.sh` on a fixture target whose `qc.toml` declares `[browser] playwright = "<pin>"`.
 - Tool lines depend on the box: the case checks each tool has a line, not that it is installed.

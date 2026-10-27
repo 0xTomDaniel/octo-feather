@@ -54,6 +54,13 @@ variant empty-setup 's/^setup = .*/setup = ""/'
 bad empty-setup 'qc.toml: setup must not be empty'
 variant bad-toml 's/^format = 1/format = /'
 bad bad-toml 'qc.toml: not TOML:'
+# [browser]: the verify skill drives a headless browser at a Playwright release pin (remote spec #host-tools).
+variant browser '$a [browser]\nplaywright = "1.64.1"'
+run "$t/browser"; [[ "$rc" == 0 ]] || fail "a contract with [browser] playwright = 1.64.1 not ok (exit $rc): $out"
+variant browser-latest '$a [browser]\nplaywright = "latest"'
+bad browser-latest 'qc.toml: browser.playwright must match ^[0-9]+\.[0-9]+\.[0-9]+$'
+variant browser-no-pin '$a [browser]'
+bad browser-no-pin 'qc.toml: browser: missing playwright'
 mkdir -p "$t/none"
 bad none "no qc.toml at $t/none/qc.toml"
 run "$t/python" "$t/python"
@@ -79,4 +86,4 @@ sed -i '/^\[services\]$/d' "$repo/qc.toml"
 set +e; vout="$("$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] && grep -qF 'qc.toml declares services (web)' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
   || fail "a declared service was not refused before setup (exit $rc): $vout"
-echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, bad TOML and no file fail naming the field; ts verify-app follows qc.toml's setup and values)"
+echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, bad TOML and no file fail naming the field; ts verify-app follows qc.toml's setup and values)"
