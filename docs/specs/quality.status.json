@@ -59,8 +59,8 @@
       "pr": 181
     },
     "acceptance-verify-declared": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-launch-fails": {
       "status": "built",
@@ -83,8 +83,8 @@
       "pr": null
     },
     "acceptance-qc-contract": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-evidence-record": {
       "status": "built",
