@@ -10,6 +10,9 @@
 #               answer: 3 ledger lines (2 model messages, 1 tool result), shown under gh149 and
 #               implementer with the model, tokens and Pi's cost (spend#acceptance-spend-agents)
 #   role-unset  no OCTO_FEATHER_ROLE, no Herdr space: the extension's purpose fallback, no lane
+#   pi-role     the implementer role launched through scripts/pi-role (which loads the extension) as
+#               a pane launch does (herdr-spawn's role env), JSON mode, in lane gh149's space: its message under gh149 and
+#               implementer
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
 #               (spend#rule-write-fails)
 # One real pi process at a time (the box's Pi load budget). Never skips: without pi, or with pi at
@@ -106,6 +109,20 @@ s="$(spend)"
 row "$s" lane '\(no lane\)' 0.170000 1 0 150 10
 row "$s" purpose agent 0.170000 1 0 150 10
 echo "case role-unset: ok (purpose agent, no lane)"
+
+# pi-role: no -e here; pi-role loads the extension. Not -p: a headless pi-role run drops the Herdr
+# space (scripts/pi-role HEADLESS_UNSET), a pane launch keeps it. OCTO_FEATHER_ROLE as herdr-spawn sets it.
+set +e
+out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer "$kit/scripts/pi-role" "$kit/agents/implementer.md" --model fake/fake \
+  --no-session --mode json "answer" 2>"$t/err")"; rc=$?
+set -e
+[[ "$rc" == 0 && "$out" == *fake-answer-ok* ]] || fail "pi-role: exit $rc: $(cat "$t/err")"
+lines 5
+s="$(spend)"
+row "$s" lane gh149 0.484000 4 0 407 43
+row "$s" purpose implementer 0.484000 4 0 407 43
+row "$s" model fake/fake 0.650000 4 0 550 50
+echo "case pi-role: ok (pi-role launch recorded under gh149 and implementer)"
 
 # unwritable: the ledger path is a directory.
 mv "$ledger" "$t/ledger.bak"; mkdir "$ledger"

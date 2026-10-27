@@ -36,7 +36,7 @@ Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
 Pi always gets --extension for the kit's extensions/resume-on-error.ts
-(docs/adr/0023).
+(docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent).
 """
 import hashlib, json, os, re, subprocess, sys, tomllib
 
@@ -49,8 +49,8 @@ HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR
 TRACKERS = {"github": "github-issues", "linear": "linear"}
 DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
-# The kit's Pi extension every role loads, in the kit's extensions/ (issue #152).
-EXTENSION = "resume-on-error.ts"
+# The kit's Pi extensions every role loads, in the kit's extensions/ (issues #152, #187).
+EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
 
 
 def parse(path):
@@ -123,7 +123,8 @@ def launch(path, to_file=False):
         args += ["--tools", ",".join(fm["tools"] + ["codemode"])] if fm["tools"] else ["--no-tools"]
     args += ["--no-mcp", "--no-skills"]
     roots = skill_roots(path)
-    args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", EXTENSION)]
+    for e in EXTENSIONS:
+        args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", e)]
     tracker = tracker_skill(roots[0])
     for s in fm.get("skills", []):
         s = tracker if s == TRACKER_SLOT else s
