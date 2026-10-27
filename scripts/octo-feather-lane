@@ -36,8 +36,8 @@ review verdict; no gate reads one (spec judgment #rule-advisory): merge-ask pass
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin. Its fields (the verdict, the check field, the Owner field) and the
 reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
-in scope is the verdict, and lines that disagree are refused. The check field classifies every
-check, test gate or grader the diff adds or changes (docs/adr/0008, issue #118). Refused: no
+in scope is the verdict, and lines that disagree are refused. What the check field classifies:
+docs/adr/0008, Who builds what. Refused: no
 verdict, neither check form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
@@ -241,7 +241,7 @@ CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]
 # The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
 OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
-CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check "
+CHECK_FORM = ("`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds what), else one line each "
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 

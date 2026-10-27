@@ -3,6 +3,8 @@
 Change: docs/adr/0008 "Who builds what", reviewer sentence corrected in place: exact vs proxy classifies every decision that passes or refuses from facts, product commands included (owner ruling 2026-10-26). code-review skill step 4 Report fields (patch + materialized): the Check paragraph points to that paragraph; `<path>` names a product command's decision file. Case: evals/ladder reviewer-product-command-check, head fixture evals/fixtures/python-app-config-check (`app config-check FILE`, refusal in src/app/cli.py, key reading in src/app/config.py; fixture `just check` green, 5 tests).
 
 Smoke: .agents/skills/code-review/ .skillfile/patches/skills/code-review/SKILL.md.patch (code-reviewer runs below load the code-review skill at head d863f0d and 2e976c3)
+Smoke: agents/code-reviewer.md (the code-reviewer role ran in every run below; its line 34 was pointed at docs/adr/0008 Who builds what after these runs, a wording-to-pointer change on the supervisor's ruling, no rerun)
+Removed: agents/code-reviewer.md:34 and scripts/octo-feather-lane:39, :244 lost their narrower restatement ("every check" / "no check") of what a Check line classifies; each now points to docs/adr/0008 Who builds what.
 Removed: nothing removed; incident class check-unclassified x2 (#159, #180): reviewers gave no Check line for a product command's fact-based refusal (owner ruling 2026-10-26).
 
 Base: 218b43ce8b4f025f6ee238815169525886a8b589 (gh167 after #173). One reviewer run each, base run 1 doubling as the smoke.
