@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Integration test for the check-refs gate (overview #acceptance-retired-words,
 # #acceptance-pi-only): in a throwaway git copy of the kit's tracked files, each
-# planted bad file makes `just check` fail with the message naming the fix.
-# check-refs runs before check-tests, so a red copy never recurses. Run by `just check`.
+# planted bad file makes `just check-refs` fail with the message naming the fix (#207: the recipe under test, not
+# the whole gate per case); one case runs `just check` to prove the gate includes check-refs. Run by `just check`.
 set -euo pipefail
-# A bad file the gate misses would reach check-tests in the copy and rerun this test: stop there.
+# The one `just check` case in the copy runs this test there too (its tests/*.sh step): stop there, nested.
 [[ -z "${CHECK_REFS_TEST_COPY:-}" ]] || { echo "check-refs test: nested run in a copy (a planted file passed check-refs)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home"' EXIT
@@ -17,14 +17,14 @@ op="op""erator"; hu="hu""man"; cl="CLA""UDE.md"; cx=".co""dex/AGENTS.md"
 words='use director for the top agent and owner for the person'
 pi='Pi is the only runtime'
 # expect FILE CONTENT MESSAGE: FILE (new, or a tracked file CONTENT is appended to)
-# makes `just check` fail naming MESSAGE; the copy is restored after.
+# makes `just check-refs` fail naming MESSAGE; the copy is restored after.
 expect() {
   local old=""; [[ -e "$t/$1" ]] && { old="$t/.expect-old"; cp "$t/$1" "$old"; printf '\n' >> "$t/$1"; }
   mkdir -p "$t/$(dirname "$1")"; printf '%s\n' "$2" >> "$t/$1"; g add -f "$1"
-  set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && just check-refs 2>&1)"; rc=$?; set -e
   if [[ -n "$old" ]]; then mv "$old" "$t/$1"; g add "$1"
   else g rm -qf --cached "$1"; rm -rf "${t:?}/$1"; [[ "$1" == */* ]] && rmdir "$t/$(dirname "$1")" 2>/dev/null || true; fi
-  [[ "$rc" != 0 ]] || { echo "check-refs test: $1 with '$2' passed just check" >&2; exit 1; }
+  [[ "$rc" != 0 ]] || { echo "check-refs test: $1 with '$2' passed just check-refs" >&2; exit 1; }
   grep -qF "$3" <<<"$out" || { echo "check-refs test: $1 did not report: $3" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$1" <<<"$out" || { echo "check-refs test: $1 not named in the output" >&2; exit 1; }
 }
@@ -116,4 +116,12 @@ done
 expect "$cl" "" "$pi"
 expect "$cx" "" "$pi"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-refs test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
+# The gate includes check-refs: `just check` in the copy fails on a planted retired word, naming the message and
+# the file. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
+# above stops this one if the planted word ever got past check-refs.
+find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-refs.sh -delete; g add -A
+printf '%s\n' "Ask the $hu before merging." > "$t/docs/x.md"; g add -f docs/x.md
+set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 XDG_STATE_HOME="$t.home" just check 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] || { echo "check-refs test: docs/x.md with a retired word passed just check" >&2; exit 1; }
+grep -qF "$words" <<<"$out" && grep -qF docs/x.md <<<"$out" || { echo "check-refs test: just check did not report docs/x.md: $words" >&2; echo "$out" >&2; exit 1; }
 echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi; a broken scanner fails closed; judgment label data exempt, the rest of the suite scanned)"
