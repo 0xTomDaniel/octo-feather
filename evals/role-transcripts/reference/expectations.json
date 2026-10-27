@@ -252,5 +252,48 @@
         ]
       }
     ]
+  },
+  "corrector-drives-app": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "correct"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "principle-encode-lessons-in-structure"
+      }
+    ]
+  },
+  "qc-judge-drives-app": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "principle-prove-it-works",
+        "before": "final_message"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-json",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-blank",
+            "verdict": "pass"
+          }
+        ]
+      }
+    ]
   }
 }
