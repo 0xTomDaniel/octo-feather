@@ -11,6 +11,7 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals. A kit test runs a script as a command and feeds it inputs, never loads or reads it; review judges this (docs/adr/0008 rung 3).
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
+- Where each artifact lives, spec-first change and fixing only seen problems: docs/adr/0024.
 - Fix a lesson on the highest rung of the ladder in docs/adr/0008; only what its rung 2 allows becomes a check.
 - Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.
 
@@ -26,4 +27,4 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
 - `evals/` factory eval suites (`<suite>/suite.json`, `cases.json`, hidden `reference/expectations.json`) and their `fixtures/`; shape: `scripts/check-evals --help`.
-- `docs/adr/` lasting decisions (Matt's ADR format); `docs/plan.md` the build plan; `docs/future.md` deferred ideas; `docs/owed-evals/<issue>.md` owed eval cases (docs/adr/0008).
+- `docs/adr/` ADRs, Matt's format (what they own: docs/specs/index.spec.html `#context`); `docs/future.md` deferred ideas; `docs/owed-evals/<issue>.md` owed eval cases (docs/adr/0008).
