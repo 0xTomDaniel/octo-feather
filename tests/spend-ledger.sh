@@ -13,6 +13,8 @@
 #   pi-role     the implementer role launched through scripts/pi-role (which loads the extension) as
 #               a pane launch does (herdr-spawn's role env), JSON mode, in lane gh149's space: its message under gh149 and
 #               implementer
+#   zero-priced fake/free, its catalog rates all 0 (rule: extensions/spend-ledger.ts header, Cost):
+#               its line has cost_usd null, counted under unknown cost (spend#rule-cost)
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
 #               (spend#rule-write-fails)
 # One real pi process at a time (the box's Pi load budget). Never skips: without pi, or with pi at
@@ -64,7 +66,7 @@ echo '{"retry":{"enabled":false}}' > "$t/agent/settings.json"
 python3 "$t/fake.py" "$t/port" & srv=$!
 for _ in $(seq 50); do [[ -s "$t/port" ]] && break; sleep 0.1; done
 [[ -s "$t/port" ]] || fail "fake provider did not start"
-printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-completions","apiKey":"x","models":[{"id":"fake","cost":{"input":1000,"output":2000,"cacheRead":0,"cacheWrite":0}}]}}}\n' \
+printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-completions","apiKey":"x","models":[{"id":"fake","cost":{"input":1000,"output":2000,"cacheRead":0,"cacheWrite":0}},{"id":"free","cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}}\n' \
   "$(cat "$t/port")" > "$t/agent/models.json"
 
 state="$t/state/octo-feather"; ledger="$state/spend.jsonl"
@@ -77,7 +79,7 @@ run() {
   local prompt="$1"; shift
   set +e
   out="$(cd "$t/repo" && pienv "$@" pi -e "$kit/extensions/spend-ledger.ts" -e "$kit/tests/fixtures/spend-ledger/nested-tool.ts" \
-    --model fake/fake --no-session -p "$prompt" 2>"$t/err")"; rc=$?
+    --model "${model:-fake/fake}" --no-session -p "$prompt" 2>"$t/err")"; rc=$?
   set -e
 }
 # lines N: wait up to 10 s for the ledger to hold N lines (the writer runs detached).
@@ -123,6 +125,17 @@ row "$s" lane gh149 0.484000 4 0 407 43
 row "$s" purpose implementer 0.484000 4 0 407 43
 row "$s" model fake/fake 0.650000 4 0 550 50
 echo "case pi-role: ok (pi-role launch recorded under gh149 and implementer)"
+
+# zero-priced: fake/free answers with the same usage (150 in, 10 out); Pi reports $0, the line holds null.
+model=fake/free run "answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
+[[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "zero-priced: exit $rc, answer '$out': $(cat "$t/err")"
+lines 6
+grep -qE '"model": ?"fake/free".*"cost_usd": ?null' "$ledger" || fail "zero-priced: no fake/free line with cost_usd null: $(tail -1 "$ledger")"
+s="$(spend)"
+row "$s" model fake/free 0.000000 1 1 150 10
+row "$s" lane gh149 0.484000 5 1 557 53
+row "$s" model fake/fake 0.650000 4 0 550 50
+echo "case zero-priced: ok (fake/free: cost_usd null, 1 call of unknown cost; fake/fake priced as before)"
 
 # unwritable: the ledger path is a directory.
 mv "$ledger" "$t/ledger.bak"; mkdir "$ledger"
