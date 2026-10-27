@@ -12,7 +12,10 @@ Trigger: owner correction 2026-10-27 (issue #234): owner had to ask "so #201 is 
 - Rung 1 (structure): the facts the director lacked as one view (per-lane gate time, what each lane waits on, which open PR changes shared infra) belong to #137 (factory report); proposed there, not built here.
 - Rung 2 (exact check): none; merge order by leverage is judgment, no exact rule.
 - Rung 3 (structured judgment): the eval below grades a declared field; it does not discriminate (results), so it is owed, not in `just qa`.
-- Rung 4 (prose), this change, agents/director.md Behavior: the owner-ask list set to the owner's ruling, and a merge-order-by-leverage instruction with the #234 failure example.
+- Rung 1 (structure), this change, agents/director.md Behavior: the owner-ask list no longer restates the owner gates; it points to their owners (spec `#gates-list`, docs/adr/0020 (a) for QA evidence) and keeps only what no other file owns (decisions that change what gets built, owner-held access), then "decide everything else and notify" (docs/adr/0008 rung 1, issue #124). The earlier draft (d41adaa) narrowed the restated list instead and diverged from `#gates-list`; replaced before review.
+- Rung 4 (prose), this change, agents/director.md Behavior: a merge-order-by-leverage instruction with the #234 failure example.
+
+The smoke below ran on d41adaa's wording (restated narrowed list); the pointer form changes which gates are listed (promotion, traffic, QA evidence back in by pointer), not the merge-order instruction the case exercises. No new runs.
 
 ## Smoke
 
@@ -60,4 +63,4 @@ Sandbox run: there is no Herdr, no octo-feather-state and no GitHub. Write each 
 ```
 
 Smoke: agents/director.md
-Removed: "QA evidence review", "promotion", "traffic shifts" from the director's "Ask the owner only for" list (owner ruling 2026-10-27, issue #234); incident: #234 owner-caught-director-priority.
+Removed: the director's restated gate list "spec acceptance, QA evidence review, merges, promotion, traffic shifts" (now a pointer to spec `#gates-list` and docs/adr/0020 (a)); incident: #234 owner-caught-director-priority.
