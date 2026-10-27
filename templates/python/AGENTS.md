@@ -15,5 +15,6 @@ Repo skills: python, verify-app
 ## Commands
 
 - `just setup` once: `uv sync` and the git hook.
-- `just check` the gate.
+- `just check` the gate: each step and test a pytest item, run in parallel (`GATE_WORKERS` workers; default: justfile `check-tests`), each timed, failures listed at the end, one trend line per run in the octo-feather state dir.
+- `just test [PYTEST ARGS]` the same items, a subset: `just test -k check-types`, `just test --lf` reruns the last failures.
 - `uv run app hello Ada --json` the app.

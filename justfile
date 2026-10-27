@@ -25,9 +25,13 @@ gate_free := if gate_free_out == "gate-free: ok" { "ok" } else if gate_free_out 
 default:
     @just --list
 
-# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape.
-check: check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-tests check-spec-status check-templates check-evals
-    @echo "just check: ok"
+# The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
+# so check-gate-free's scan of them sees every recipe the gate runs.
+export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals"
+
+# Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit tests.
+check: check-tests
 
 # shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
 # runs_python reads each file's shebang line; which shebangs count as python: #121 D2.
@@ -182,12 +186,26 @@ check-templates:
 
 # Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
 # script's public surface is review's call, not a check (docs/adr/0008, #118).
-check-tests:
+# pytest + pytest-xdist (tests/gate/): each GATE_RECIPES recipe, then each tests/*.sh, one item run as a command
+# (TMPDIR its real path: tests/gate/test_gate.py); every item's duration, failures with their output, one trend line
+# per run in the state dir (tests/gate/conftest.py). Timing never decides pass or fail. Offline: pytest from the
+# uv cache, filled by `uv sync --locked` in the kit (CI's uv step). Workers: GATE_WORKERS, default 2: half the 4 CPUs,
+# since the box runs at most 2 heavy commands at once across lanes (CI sets 4). A gate run inside an item (a test's
+# throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
+# copy fails on its recipe, never fans out a nested gate (#208).
+# Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
+check-tests *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    # macOS: mktemp paths under the /var symlink would not match the tests' pwd -P paths.
-    TMPDIR="$(cd "${TMPDIR:-/tmp}" && pwd -P)"; export TMPDIR
-    for t in "$root"/tests/*.sh; do "$t"; done
+    cd "$root"
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
+    GATE_NESTED=1 exec uv run --locked --offline --no-sync pytest "$@"
+
+# The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
+test *args:
+    @just check-tests "$@"
 
 # Every docs/specs/*.status.json names exactly its spec's criterion ids, planned or built, and every spec change
 # since its accepted_commit is named by a call in <slug>.calls.jsonl (docs/adr/0021, issue-lifecycle #gates-spec-calls).
