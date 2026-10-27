@@ -27,9 +27,10 @@ check run also carries a runtime marker:
       which the justfile exports to every recipe (and so to any nested just,
       script or tool they start): an inherited marker naming a live just is
       kept, so the outermost check run owns it however deep a nested just asks
-      for check-*; else, when the just that ran this backtick was asked for a
-      check or check-* recipe, a new marker naming that just's pid; else the
-      inherited marker, if any.
+      for check-*; else, when the just that ran this backtick runs a check or
+      check-* recipe (dependencies included, as just itself answers: just_runs
+      below), a new marker naming that just's pid; else the inherited marker,
+      if any.
   check-gate-free --refuse WHAT   run where qa or the judge would start:
       outside a check run prints `gate-free: ok`; inside one, whatever it would
       launch, names WHAT on stderr, stops the outermost check run (SIGTERM to
@@ -53,11 +54,31 @@ def die(msg):
 
 
 MARKER = "OCTO_FEATHER_CHECK_RUN"
-# just options that take a value (--set takes two); everything else before a recipe is a flag.
-VALUE_OPTS = {"-f", "--justfile", "-d", "--working-directory", "--chooser", "--color", "--command-color",
-              "--completions", "--dotenv-filename", "--dotenv-path", "--dump-format", "--list-heading",
-              "--list-prefix", "--shell", "--shell-arg", "-s", "--show"}
 CHECK_RECIPE = re.compile(r"check(-[A-Za-z0-9_-]+)?")
+RUNNING = re.compile(r"^===> Running recipe `([^`]+)`\.\.\.$", re.M)
+
+
+def just_runs(args, cwd=None):
+    """(the recipes `just ARGS` run in CWD runs, in order, dependencies included, as just itself answers; or None
+    and just's reason when it runs none). The one source of what a just command line runs, shared with
+    octo-feather-lane; no model of just's options or recipe arities here (docs/adr/0008). Executes nothing:
+    just first parses ARGS beside --completions, which reads no justfile, and only when its one objection is
+    the recipe words and overrides themselves (`--completions` used with unexpected ...), so no subcommand
+    such as --show, --list or --command is among them, dry-runs ARGS with --verbose: just resolves recipes
+    and their parameters, names each recipe it would run, and evaluates no backtick. Anything else, an
+    option that conflicts with --dry-run (-q) included, is just's reason, never a guess."""
+    def just(*a):
+        p = subprocess.run(["just", *a, *args], cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+        err = re.sub(r"\x1b\[[0-9;]*m", "", p.stderr)
+        return p.returncode, err, (err.strip().splitlines() or [f"exit {p.returncode}"])[0]
+    rc, err, line = just("--completions", "bash")
+    if rc and not err.startswith("error: `--completions` used with unexpected "):
+        return None, line
+    rc, err, line = just("--dry-run", "--verbose")
+    if rc:
+        return None, line
+    names = RUNNING.findall(err)
+    return (names, "") if names else (None, "it runs no recipe")
 
 
 def argv_of(pid):
@@ -77,26 +98,13 @@ def is_just(argv):
     return bool(argv) and os.path.basename(argv[0]).startswith("just")
 
 
-def asks_check(argv):
-    """True when a just argv asks for a check or check-* recipe (any recipe position; qa and qc arguments are data)."""
-    pos, i = [], 1
-    while i < len(argv):
-        a = argv[i]
-        if a in ("-c", "--command"):
-            return False   # runs a command, no recipe
-        if a == "--":
-            pos += argv[i + 1:]; break
-        if a == "--set":
-            i += 3; continue
-        if a in VALUE_OPTS:
-            i += 2; continue
-        if not a.startswith("-") and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*=.*", a, re.S):
-            pos.append(a)
-        i += 1
-    names = [re.split(r"/|::", p)[-1] for p in pos]
-    if names and names[0] in ("qa", "qc"):
+def asks_check(argv, cwd=None):
+    """True when a just argv, run in CWD, runs a check or check-* recipe, as just itself answers (just_runs)."""
+    try:
+        names, _ = just_runs(argv[1:], cwd)
+    except (OSError, subprocess.TimeoutExpired):
         return False
-    return any(CHECK_RECIPE.fullmatch(n) for n in names)
+    return any(CHECK_RECIPE.fullmatch(n) for n in names or ())
 
 
 def marker_just(raw):
@@ -113,7 +121,11 @@ def run_marker():
         pass
     ppid = os.getppid()
     argv = argv_of(ppid)
-    if is_just(argv) and asks_check(argv):
+    try:
+        cwd = os.readlink(f"/proc/{ppid}/cwd")
+    except OSError:
+        cwd = None
+    if is_just(argv) and asks_check(argv, cwd):
         print(json.dumps({"just": ppid}, separators=(",", ":")))
     else:
         print(inherited)

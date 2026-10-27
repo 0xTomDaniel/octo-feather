@@ -108,11 +108,12 @@ the repo's own public surface (ADR 0009): after env assignments and runners (uv 
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
 imports, aliases and `just MOD RECIPE` included, never a header regex; no just or a justfile
-it cannot read is exit 2, #172; the recipe is the one just runs: before it only the running options
--q -v --yes --unstable --highlight --no-highlight --no-dotenv --clear-shell-args --color --command-color
---dotenv-filename --dotenv-path --set --shell, `--`, and NAME=VALUE overrides; any other option, e.g.
---show, --list, --dump, --dry-run or --justfile, runs no recipe of the repo's justfile, and a later word
-naming a gate or factory recipe, e.g. `just demo check`, may run it after the recipe, #240), a package.json bin or pyproject
+it cannot read is exit 2, #172; the recipes are the ones just itself says it runs, in the repo,
+dependencies included, none a gate or factory recipe: just parses the words beside --completions, and
+unless it objects to more than their recipe words and overrides (a subcommand such as --show, --list or
+--command runs no recipe), dry-runs them with --verbose, naming each recipe; executing nothing,
+evaluating no backtick; every option, parameter and default is just's to read, and anything just refuses,
+-q with --dry-run included, fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
@@ -122,13 +123,16 @@ command the ticket itself creates when the ticket declares it exactly in a line
 ``Creates: `just <recipe>` `` (`just MOD RECIPE` for a module), one backticked value, the line repeatable:
 a demo stage passes when its program, after env assignments and runners, is exactly that path (written
 with a /, e.g. ./run for a top-level file, and stands for itself, never an interpreter or HTTP tool by
-its basename) or `just` that recipe as just resolves it (the running options above; the module path
-walked through existing modules and the declared one, so `just sub check` runs `sub check`, never a
-declared `just sub`; a gate or factory recipe stays refused whatever is declared); a declared path
-that already exists still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
+its basename) or `just` that recipe as just runs it (above): just names it, no other recipe has its
+name, and nothing it runs is a gate or factory recipe, whatever is declared. A top-level recipe the
+justfile lacks yet is asked about through a justfile importing the repo's plus a stand-in `R P1 ... Pk:`
+for each parameter count k from 0 to the demo's word count: just must run at least one reading, and
+every reading it runs must run R and no gate, so `just new a` passes and `just new check` fails (with no
+parameter new would run check); a declared path or recipe that already exists still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
 not normalized, under tests/ or a hook dir, a gate or factory recipe (check, check-*, integrate,
-qc, qa, or an alias to one), a recipe that is an existing module (`just MOD`), or a module path
-through an existing recipe (`just build x` where build is a recipe: just runs build with x). Class unused-creates: a declared command no demo stage runs (an
+qc, qa, or an alias to one), a recipe that is an existing module (`just MOD`), a module path
+through an existing recipe (`just build x` where build is a recipe: just runs build with x), or a
+module recipe the justfile lacks (`just MOD NEW`: no stand-in just can resolve). Class unused-creates: a declared command no demo stage runs (an
 Expand-contract ticket runs none). A demo of an undeclared command the repo lacks stays
 layer-only-ticket, its fix naming the Creates form. A ticket body
 is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
@@ -151,7 +155,7 @@ named with its reason on stderr, after the others were tried; exit 1, rerun afte
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, itertools, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -1211,6 +1215,8 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
                 why = f"`{d}` is an existing module, not a recipe; declare `just {d[5:]} <recipe>`"
             elif pre:
                 why = f"`{d}` goes through `just {pre}`, an existing recipe, not a module: just runs {pre} with the rest as arguments"
+            elif not to and len(ws) > 1:
+                why = f"`{d}` is a module recipe the justfile lacks: just resolves a recipe the ticket creates only at the top level, through a stand-in; declare a top-level `just <recipe>`, or demo the module recipe once it exists"
         if why:
             fail("bad-creates", f"Creates {why}", "declare a repo-relative path outside tests/ or a recipe other than check/check-*/integrate/qc/qa, as " + CREATES_FORM)
         else:
@@ -1282,45 +1288,22 @@ def creates_why_not(v: str) -> tuple[str, str | None]:
     return rel, None
 
 
-# just's options that still run a recipe of the repo's justfile: a closed allowlist (docs/adr/0008); any
-# other option (--show, --list, --dump, --dry-run, --justfile, --command...) runs none of its recipes.
-JUST_FLAGS = {"-q", "--quiet", "-v", "--verbose", "--yes", "--unstable", "--highlight", "--no-highlight",
-              "--no-dotenv", "--clear-shell-args"}
-JUST_VALUED = {"--color": 1, "--command-color": 1, "--dotenv-filename": 1, "--dotenv-path": 1, "--set": 2, "--shell": 1}
-
-
-def just_args(args: list[str]) -> tuple[list[str] | None, str]:
-    """(the recipe and argument words of `just ARGS`, its options and NAME=VALUE overrides dropped;
-    None when an option outside JUST_FLAGS/JUST_VALUED makes it run no recipe of the repo's justfile, why)."""
-    i = 0
-    while i < len(args):
-        a = args[i]
-        if a == "--":
-            i += 1
-            break
-        if not a.startswith("-") or a == "-":
-            break
-        name, eq, _ = a.partition("=")
-        if not eq and (a in JUST_FLAGS or re.fullmatch(r"-v+", a)):
-            i += 1
-        elif name in JUST_VALUED:
-            i += 1 + JUST_VALUED[name] - (1 if eq else 0)
-        else:
-            return None, f"just {a} runs no recipe of the repo's justfile (a running option: -q -v --yes --set...)"
-    rest = args[i:]
-    while rest and re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*=.*", rest[0]):
-        rest = rest[1:]
-    return rest, ""
+@functools.cache
+def gate_free_module():
+    """scripts/check-gate-free, whose just_runs() is the one source of what a just command line runs (with the gate's marker)."""
+    loader = importlib.machinery.SourceFileLoader("check_gate_free", str(KIT / "scripts" / "check-gate-free"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_gate_free", loader))
+    loader.exec_module(mod)
+    return mod
 
 
 def created(words: list[str], creates, surf: "Surface") -> str | None:
     """The declared command of CREATES that a stage's program WORDS (env and runners dropped) runs exactly, None if none.
-    A recipe is the complete one just runs (SURF.just_recipe), and never a gate or factory recipe."""
+    A recipe is one just itself runs (SURF.just_why), never beside a gate or factory recipe."""
     if not words:
         return None
     if words[0] == "just":
-        rec, why = surf.just_recipe(words[1:], creates)
-        return f"just {rec}" if why is None and f"just {rec}" in creates else None
+        return surf.just_why(words[1:], creates)[1]
     prog = words[0]
     rel = prog[2:] if prog.startswith("./") else prog
     return rel if "/" in prog and rel in creates else None
@@ -1358,6 +1341,7 @@ class Surface:
 
     def __init__(self, root: Path):
         self.root, self.exec_paths, self.exec_names, self._recipes, self.bins = root, set(), set(), None, set()
+        self.justfile, self._just = None, {}
         self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
         ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
         for line in ls.stdout.splitlines():
@@ -1394,7 +1378,7 @@ class Surface:
             c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
             if not c:
                 return self._recipes
-            f = self.root / c[0]
+            f = self.justfile = self.root / c[0]
             why = lambda w: Unchecked(f"cannot read the justfile's recipes ({f}): {w}, then rerun")
             if len(c) > 1:
                 raise why(f"justfile is ambiguous, just refuses to pick one of: {' '.join(c)}; keep one")
@@ -1431,6 +1415,8 @@ class Surface:
         invs, whys = [], []
         for stage in re.split(r"\|\||&&|[|;]", strip_subst(cmd)):
             why, words = self.stage_why_not(stage)
+            if words and words[0] == "just":
+                why = self.just_why(words[1:], creates)[0]   # with the stand-ins of the recipes it creates
             if (d := created(words, creates, self)) is not None:
                 if used is not None:
                     used.add(d)
@@ -1441,36 +1427,52 @@ class Surface:
                 whys.append(why)
         return invs, "; ".join(dict.fromkeys(whys)) or "empty command"
 
-    def just_recipe(self, args: list[str], creates=()) -> tuple[str, str | None]:
-        """(the recipe `just ARGS` runs, `MOD RECIPE` for a module one, as just resolves it; why it is no
-        demo, None if it is one). A module path walks existing modules and, for a name the repo lacks as
-        recipe, the module path of a `just MOD RECIPE` in CREATES; a recipe of CREATES is one too."""
-        words, why = just_args(args)
-        if words is None:
-            return "", why
-        rec = words[0] if words else ""
-        if not rec:
-            return "", "`just` with no recipe"
-        if NOT_DEMO_RECIPES.fullmatch(rec):
-            return rec, f"just {rec} is a gate or factory recipe, not the app"
-        recipes = self.recipes
-        mods = set(self.modules)
-        for d in creates:
-            ws = d.split()[1:] if d.startswith("just ") else []
-            mods |= {p for k in range(1, len(ws)) if (p := " ".join(ws[:k])) not in recipes}
-        n = 1
-        for w in words[1:]:   # `just MOD RECIPE`: what every just with modules runs (1.21 refuses MOD::RECIPE)
-            if rec not in mods:
-                break
-            rec, n = f"{rec} {w}", n + 1
-        if not_demo(recipes.get(rec, rec)):
-            return rec, f"just {rec} is a gate or factory recipe, not the app"
-        # A word after the recipe is a further recipe once its parameters run out: never a gate one.
-        if g := next((w for w in words[n:] if NOT_DEMO_RECIPES.fullmatch(w) or not_demo(recipes.get(w, ""))), None):
-            return rec, f"just {rec} then {g}: {g} may run as a gate or factory recipe, not the app"
-        if rec not in recipes and f"just {rec}" not in creates:
-            return rec, f"no justfile recipe {rec} in {self.root}"
-        return rec, None
+    def just_why(self, args: list[str], creates=()) -> tuple[str | None, str | None]:
+        """(why `just ARGS` is no demo, None if it is one; the `just <recipe>` of CREATES it runs, None if none),
+        as just itself answers in ROOT (check-gate-free just_runs, the one source): the recipes it runs,
+        dependencies included, none a gate or factory recipe. A top-level recipe of CREATES the justfile lacks
+        gets a stand-in for each parameter count the words allow (`R P1 ... Pk:`, k from 0 to their number) in
+        a justfile importing the repo's: just must run some reading, and every reading it runs is gate-free
+        and runs R. A declared recipe is run when just names it and no other recipe has its name."""
+        key = (tuple(args), tuple(creates))
+        if key in self._just:
+            return self._just[key]
+        self.recipes   # no just or an unreadable justfile: exit 2, before any run
+        cmd = " ".join(["just", *args])
+        absent = sorted(d[5:] for d in creates if d.startswith("just ") and " " not in d[5:] and d[5:] not in self.recipes)
+        ks = list(itertools.product(range(len(args) + 1), repeat=len(absent)))
+        if not self.justfile:
+            res = (f"no justfile in {self.root}", None)
+        elif "'" in str(self.justfile) or len(ks) > 64:
+            res = (f"{cmd}: just cannot be asked about recipes the ticket creates here ({len(absent)} stand-ins, justfile {self.justfile})", None)
+        else:
+            with tempfile.TemporaryDirectory() as tmp:
+                stub, readings = Path(tmp) / "justfile", []
+                for k in ks:
+                    pre = []
+                    if absent:
+                        stub.write_text(f"import '{self.justfile}'\n" + "".join(
+                            f"{r}{''.join(f' P{i}' for i in range(n))}:\n" for r, n in zip(absent, k)), encoding="utf-8")
+                        pre = ["--justfile", str(stub), "--working-directory", str(self.root)]
+                    try:
+                        readings.append(gate_free_module().just_runs(pre + args, self.root))
+                    except subprocess.TimeoutExpired:
+                        readings.append((None, "just did not answer in 60s"))
+            ok = [n for n, _ in readings if n is not None]
+            targets = set(self.recipes.values()) | set(absent)
+            runs = lambda r: [t for t in targets if t.split()[-1] == r.split()[-1]] == [r] and all(r.split()[-1] in n for n in ok)
+            decl = next((d for d in creates if d.startswith("just ") and runs(d[5:])), None)
+            stray = next((x for n in ok for x in n if x in absent), None)
+            if not ok:
+                res = (f"just answers: {readings[0][1]}", None)
+            elif g := next((x for n in ok for x in n if NOT_DEMO_RECIPES.fullmatch(x)), None):
+                res = (f"{cmd} runs {g}{' in a reading of a recipe the ticket creates' if absent and stray else ''}, a gate or factory recipe, not the app", None)
+            elif stray and not decl:
+                res = (f"{cmd} runs {stray}, a name more than one recipe has: just's dry run cannot tell which", None)
+            else:
+                res = (None, decl)
+        self._just[key] = res
+        return res
 
     def stage_why_not(self, stage: str) -> tuple[str | None, list[str]]:
         words = program_words(stage)
@@ -1495,7 +1497,7 @@ class Surface:
         if prog == "playwright" or prog.endswith("/playwright"):
             return None
         if prog == "just":
-            return self.just_recipe(args)[1]
+            return self.just_why(args)[0]
         if "/" in prog:
             rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
             if os.path.isabs(prog):
