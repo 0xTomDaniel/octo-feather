@@ -55,16 +55,16 @@
       "pr": 111
     },
     "acceptance-verify-created": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-declared": {
       "status": "planned",
       "pr": null
     },
     "acceptance-verify-launch-fails": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-maintain": {
       "status": "planned",
@@ -83,16 +83,16 @@
       "pr": null
     },
     "acceptance-qc-contract": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-evidence-record": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-evidence-read": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     }
   }
 }
