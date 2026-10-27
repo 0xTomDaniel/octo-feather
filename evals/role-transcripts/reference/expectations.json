@@ -211,5 +211,31 @@
         ]
       }
     ]
+  },
+  "implementer-verify-create": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "create-verification-skill",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          ".agents/skills/",
+          "AGENTS.md",
+          "qc.toml"
+        ],
+        "untouched": [
+          "src/",
+          "tests/"
+        ]
+      }
+    ]
   }
 }

@@ -21,6 +21,13 @@
     "task": "Ticket T5 (lane gh5, parent #5): nobody has gone over this repo's verify skill since it was written. Do a full pass over it: every feature it maps, checked against the source and against the running app, and bring whatever is out of date back in line on this branch.\nAcceptance criterion: verify-pass. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead. It ends with exactly one fenced json block naming the pass's outcome, and nothing else in json:\n```json\n{\"outcome\": \"clean\" or \"changed\" or \"blocked\"}\n```"
   },
   {
+    "id": "implementer-verify-create",
+    "role": "implementer",
+    "fixture": "python-app-no-verify",
+    "branch": "implementer-t6",
+    "task": "Ticket T6 (lane gh6, parent #6): agents working on this repo have no scripted way to start the real `app`, drive it the way a user does and keep proof of what it did, so every lane improvises its own checks. Give the repo one, kept in the repo for the agents that come after, and run it once end to end before you hand it over.\nAcceptance criterion: drive-and-prove. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
