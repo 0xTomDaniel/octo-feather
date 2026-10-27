@@ -16,10 +16,8 @@ mkdir -p "$HOME"
 fail() { echo "lane-spend test: $*" >&2; exit 1; }
 state="$XDG_STATE_HOME/octo-feather"; ledger="$state/spend.jsonl"
 line() { printf '{"model":"%s","purpose":"%s","input_tokens":%s,"output_tokens":%s,"cost_usd":%s%s}\n' "$@"; }
-row() { # OUT TITLE KEY USD CALLS UNKNOWN IN OUT: the KEY row under "By TITLE:"
-  awk -v t="By $2:" '$0==t{on=1;next} /^By |^OpenRouter/{on=0} on' <<<"$1" |
-    grep -qE "^  $3 +\\\$$4 +calls +$5 +unknown cost +$6 +tokens in $7 out $8\$" || fail "no $2 row '$3 \$$4 calls $5 unknown $6 in $7 out $8' in: $1"
-}
+row() { # OUT TITLE KEY USD CALLS UNKNOWN IN OUT: the KEY row under "By TITLE:" (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "${@:2}" <<<"$1")" || fail "$r in: $1"; }
 
 # Empty ledger: totals print, no records.
 out="$("$L" spend)" || fail "spend on an empty ledger failed"
@@ -38,7 +36,7 @@ python3 -c 'import json,sys; [json.loads(l) for l in open(sys.argv[1])]' "$ledge
 out="$("$L" spend)"
 grep -qF "(4 calls)" <<<"$out" || fail "header count: $out"
 row "$out" lane gh9 0.250000 2 1 110 6
-row "$out" lane '\(no lane\)' 0.125000 1 0 40 2
+row "$out" lane '(no lane)' 0.125000 1 0 40 2
 row "$out" lane gh10 1.000000 1 0 7 3
 row "$out" purpose judge 0.250000 2 1 110 6
 row "$out" purpose bench 0.125000 1 0 40 2
@@ -80,8 +78,7 @@ reconcile() { # LABEL OPENROUTER LEDGER GAP [UNKNOWN]: that row is in $out
   local want; want="$(printf '  %-11s %12s %12s %12s' "$1" "$2" "$3" "$4")${5:+  ($5 ledger calls of unknown cost)}"
   grep -qxF -- "$want" <<<"$out" || fail "reconcile row for $1, want '$want' in: $out"
 }
-now=$(date -u +%s); day=$(date -u -d "$(date -u +%F)" +%s)
-mon=$(( day - ($(date -u +%u) - 1) * 86400 )); m1=$(date -u -d "$(date -u +%Y-%m-01)" +%s)
+read -r now day mon m1 < <("$kit/tests/spend-out" windows)   # now; today's, this week's, this month's first second
 mkdir -p "$HOME/.pi/agent"; printf '{"openrouter":{"type":"api_key","key":"sk-test-123"}}\n' >"$HOME/.pi/agent/auth.json"
 export HERDR_SESSION=rc   # every window: one call now, plus calls that count in none
 rec openrouter/a/b 0.25 "$now"; rec openrouter/a/b null "$now"; rec anthropic/x 7 "$now"; rec openrouter/a/b 9 1577836800

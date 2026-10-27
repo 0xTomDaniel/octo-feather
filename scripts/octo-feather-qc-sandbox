@@ -656,10 +656,21 @@ dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(
 "$@" 2>&6 4>&- 5>&- 6>&-; rc=$?
 
 # 9. post-run cleanup. The spend ledger's writers run detached: the kill below would lose their lines.
-for _ in $(seq 100); do
-  w=0; for p in $(nsprocs); do [[ "$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" == *"spend record"* ]] && w=1; done
-  ((w)) || break; sleep 0.1
-done
+python3 - <<'EOF'
+# Up to 10 s for every live `spend record` in this PID namespace (but PID 1, this shell, and itself) to end.
+import os, time
+def writer(p):
+    try:
+        if open(f"/proc/{p}/stat").read().split(" ")[2] == "Z":
+            return False
+        return b"spend record" in open(f"/proc/{p}/cmdline", "rb").read().replace(b"\0", b" ")
+    except OSError:
+        return False
+for _ in range(100):
+    if not any(writer(p) for p in os.listdir("/proc") if p.isdigit() and p not in ("1", str(os.getpid()))):
+        break
+    time.sleep(0.1)
+EOF
 panes=0
 [[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
 headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))
