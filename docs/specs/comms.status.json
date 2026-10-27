@@ -43,8 +43,8 @@
       "pr": 49
     },
     "acceptance-report-lanes": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-owner-queue": {
       "status": "planned",
@@ -63,12 +63,12 @@
       "pr": null
     },
     "acceptance-report-any-target": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     },
     "acceptance-report-unreadable": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 252
     }
   }
 }
