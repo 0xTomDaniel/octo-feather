@@ -58,3 +58,48 @@ the prose of scripts/*, tests/*.sh (comments), evals/*/suite.json descriptions, 
   only, no behaviour change, so no eval case owed.
 - justfile:221: check-evals recipe comment keeps its purpose, rule summary replaced by a schema.md pointer.
 - octo-feather-lane refusal literal left as is (supervisor ruling).
+
+## Round 3 (delta review at 2b9fe6f: two missed forms)
+
+Search: evidence/2026-10-27-gh173-schema-restatements.py, new FORMS pass (docstrings naming a data entry's keys; comments on a fact's decision timing), run on 2b9fe6f (before) and the worktree (after). Prints only hits without a schema pointer.
+
+Changed: scripts/octo-feather-qa:861 (yes_no_skipped: keys now 'schema, Judgment model and classifiers'); tests/qa.sh:433 and :440 (skill_not_read's end-of-run decision now 'schema.md, Facts'; :440 a further hit of the same form). Comments only, no code token changed.
+
+Kept, judged: key-set hits name other owners' shapes, not a schema.md entry: octo-feather-lane:49, :339 (code-review Report fields); octo-feather-qa:746, :1021-1022 (bench child command's stdout protocol), :1128 (score return shape); octo-feather-qc:110, qc-sandbox:37 (sandbox mechanism); docs/owed-evals/118.md (dated record). herdr-spawn.sh:99 is a dialog, not a fact.
+
+### Before (2b9fe6f)
+
+```
+## Form: entry keys in a docstring  /\{[a-z_]+(, [a-z_]+)+\}/  10 hits, 10 without a schema pointer
+docs/owed-evals/118.md:5: - Classifier judge (Pi codemode `models.classify`, `openrouter/typesafe/jev-1.13`, `jev-1.14`, `jev-latest`; working on the box since 2026-10-23, confidence uncalibrated): it gates nothing, runs only 
+scripts/octo-feather-lane:49: "Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
+scripts/octo-feather-lane:339: """(Owner lines as {path, rule, restated}, `Owners: none` given, why unusable) (code-review skill, Verdict step)."""
+scripts/octo-feather-qa:746: stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+scripts/octo-feather-qa:861: """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+scripts/octo-feather-qa:1021: cases: [{id, state}], classifiers: [P/ID] or None}), no agent, within TMO seconds. Returns (bench, run, sandbox record,
+scripts/octo-feather-qa:1022: problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+scripts/octo-feather-qa:1128: """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+scripts/octo-feather-qc:110: """Fetch this run's GitHub snapshot outside the sandbox; return {dir, line, repo, meta} or {off}."""
+scripts/octo-feather-qc-sandbox:37: after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
+## Form: a fact's decision timing  /until the run|run ends|open to the end|stays open|decided (when|once)|end of the run/  4 hits, 3 without a schema pointer
+tests/herdr-spawn.sh:99: 2c. The "did not clear" path (a non-Pi dialog that stays open) keeps the same
+tests/qa.sh:433: stays open until the run ends
+tests/qa.sh:440: fx: open to the end, so all 7 run
+```
+
+### After
+
+```
+## Form: entry keys in a docstring  /\{[a-z_]+(, [a-z_]+)+\}/  9 hits, 9 without a schema pointer
+docs/owed-evals/118.md:5: - Classifier judge (Pi codemode `models.classify`, `openrouter/typesafe/jev-1.13`, `jev-1.14`, `jev-latest`; working on the box since 2026-10-23, confidence uncalibrated): it gates nothing, runs only 
+scripts/octo-feather-lane:49: "Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
+scripts/octo-feather-lane:339: """(Owner lines as {path, rule, restated}, `Owners: none` given, why unusable) (code-review skill, Verdict step)."""
+scripts/octo-feather-qa:746: stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
+scripts/octo-feather-qa:1021: cases: [{id, state}], classifiers: [P/ID] or None}), no agent, within TMO seconds. Returns (bench, run, sandbox record,
+scripts/octo-feather-qa:1022: problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
+scripts/octo-feather-qa:1128: """{split: {passed, total}} over the cases that have a split; {} when none has one."""
+scripts/octo-feather-qc:110: """Fetch this run's GitHub snapshot outside the sandbox; return {dir, line, repo, meta} or {off}."""
+scripts/octo-feather-qc-sandbox:37: after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
+## Form: a fact's decision timing  /until the run|run ends|open to the end|stays open|decided (when|once)|end of the run/  2 hits, 1 without a schema pointer
+tests/herdr-spawn.sh:99: 2c. The "did not clear" path (a non-Pi dialog that stays open) keeps the same
+```

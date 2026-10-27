@@ -68,3 +68,16 @@ for sec, pat in SECTIONS.items():
     hits = [f"{p}:{n}: {t.strip()[:200]}".replace("\u2014", "(dash)").replace("\u2013", "(dash)") for p, n, t in lines if rx.search(t)]
     print(f"## {sec}  /{pat}/  {len(hits)} hits")
     print("\n".join(hits))
+
+# Round 3 (review at 2b9fe6f): the two forms the section pass missed, over the same prose. A hit with no "schema"
+# in its text names a data entry's keys or a fact's decision timing without a pointer.
+FORMS = {
+    "entry keys in a docstring": r"\{[a-z_]+(, [a-z_]+)+\}",
+    "a fact's decision timing": r"until the run|run ends|open to the end|stays open|decided (when|once)|end of the run",
+}
+for name, pat in FORMS.items():
+    rx = re.compile(pat)
+    hits = [f"{p}:{n}: {t.strip()[:200]}" for p, n, t in lines if rx.search(t)]
+    bare = [h for h in hits if "schema" not in h.split(": ", 1)[1]]
+    print(f"## Form: {name}  /{pat}/  {len(hits)} hits, {len(bare)} without a schema pointer")
+    print("\n".join(bare))

@@ -858,7 +858,7 @@ def unclassified_ids(bench, ruled):
 
 
 def yes_no_skipped(bench, ruled):
-    """The skipped classifiers classifiers.json lists yes/no only, each with its entry {ruling, error, evidence}."""
+    """The skipped classifiers classifiers.json lists yes/no only, each with its entry (its keys: schema, Judgment model and classifiers)."""
     return {m: ruled["yes_no_only"][m] for m in bench.get("skipped") or [] if m in ruled["yes_no_only"]}
 
 
