@@ -60,7 +60,7 @@
   },
   "reviewer-product-command-check": {
     "facts": [
-      {"fact": "field_lines", "field": "Check", "includes": [{"path": "src/app/config.py", "class": "exact"}]}
+      {"fact": "field_lines", "field": "Check", "includes": [{"path": "src/app/cli.py", "class": "exact"}]}
     ]
   },
   "reviewer-no-check": {
