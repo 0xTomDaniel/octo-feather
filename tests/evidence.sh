@@ -24,8 +24,13 @@ gitc() { git -C "$repo" -c user.name=t -c user.email=t@t "$@"; }
 for lang in python typescript; do
   repo="$t/$lang-app"; mkdir -p "$repo"
   (cd "$kit/templates/$lang" && git ls-files -z | xargs -0 cp --parents -t "$repo")
-  # Offline, no install: typescript's setup a no-op; python's a bare venv (the helper's python), the entry the source on PYTHONPATH.
+  # Offline: typescript's packages installed from the pnpm store first (its helper reads qc.toml with smol-toml), its setup
+  # then a no-op; python's setup a bare venv (the helper's python), the entry the source on PYTHONPATH.
   sed -i -e 's/^setup = .*/setup = "true"/' "$repo/qc.toml"
+  if [[ "$lang" == typescript ]]; then
+    (cd "$repo" && pnpm install --offline --frozen-lockfile --silent) \
+      || fail "typescript: pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
+  fi
   if [[ "$lang" == python ]]; then
     sed -i -e 's|^setup = .*|setup = '"'"'python3 -m venv "$QC_REPO/.venv"'"'"'|' \
       -e 's|^command = .*|command = '"'"'PYTHONPATH="$QC_REPO/src" "$QC_REPO/.venv/bin/python" -m app.cli'"'"'|' "$repo/qc.toml"

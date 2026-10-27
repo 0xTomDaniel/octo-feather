@@ -9,7 +9,7 @@ The app's only user surface is the `app` CLI (`app hello <name> [--json]`). Ther
 
 ## Helpers
 
-One helper, [`scripts/verify-app`](scripts/verify-app), executable: a thin `sh` launcher that runs [`scripts/verify-app.ts`](scripts/verify-app.ts) with `node` (type stripping, no build). The TypeScript needs only Node: nothing installed, no `python3`; [`scripts/toml.ts`](scripts/toml.ts) reads the contract, since the contract's `setup` is what installs the repo's packages. `tsconfig.json` includes both files, so `just check` types and lints them. Run it from anywhere; it finds the repo from its own path:
+One helper, [`scripts/verify-app`](scripts/verify-app), executable: a thin `sh` launcher that runs [`scripts/verify-app.ts`](scripts/verify-app.ts) with `node` (type stripping, no build). It needs Node and this repo's packages installed (`just setup`), no `python3`: the contract is read with the TOML package `smol-toml` (a dev dependency in `package.json`). Without the install, every command that reads the contract (`setup`, `launch`, `run`) exits 1 naming `smol-toml` and `just setup`. `tsconfig.json` includes the script, so `just check` types and lints it. Run it from anywhere; it finds the repo from its own path:
 
 ```
 .agents/skills/verify-app/scripts/verify-app setup             # the contract's setup only
@@ -45,7 +45,7 @@ What each key means and how its commands run: the kit's `schemas/qc.v1.schema.js
 
 ## Launch
 
-`verify-app launch` checks both folders are writable, reads the contract (fails on any declared service), runs its `setup`, writes the `app` command (the contract's entry) to `$VERIFY_APP_RUN_DIR/bin/app`, then records in `$VERIFY_APP_RUN_DIR/state` the contract as read, that command, the `node` path, the repo root and the git rev. Ready is the line `verify-app: ready: app=<path> entry=<entry.command> rev=<rev>`. No process is left running: each drive case starts its own process and waits for it to exit.
+`verify-app launch` needs the repo's packages installed (`just setup`; see Helpers). It checks both folders are writable, reads the contract (fails on any declared service), runs its `setup`, writes the `app` command (the contract's entry) to `$VERIFY_APP_RUN_DIR/bin/app`, then records in `$VERIFY_APP_RUN_DIR/state` the contract as read, that command, the `node` path, the repo root and the git rev. Ready is the line `verify-app: ready: app=<path> entry=<entry.command> rev=<rev>`. No process is left running: each drive case starts its own process and waits for it to exit.
 
 ## Doctor
 
