@@ -209,6 +209,15 @@
         "in": [
           "changed"
         ]
+      },
+      {
+        "fact": "field_lines",
+        "field": "Coverage",
+        "includes": [
+          {
+            "text": "hello read and driven"
+          }
+        ]
       }
     ]
   },
@@ -293,6 +302,46 @@
             "verdict": "pass"
           }
         ]
+      }
+    ]
+  },
+  "implementer-verify-map-current": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/",
+          ".agents/skills/verify-app/features/hello.md"
+        ]
+      },
+      {
+        "fact": "field_lines",
+        "field": "Evidence"
+      }
+    ]
+  },
+  "corrector-evidence-field": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "correct"
+      },
+      {
+        "fact": "field_lines",
+        "field": "Evidence"
       }
     ]
   }

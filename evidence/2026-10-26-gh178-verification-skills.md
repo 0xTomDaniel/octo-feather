@@ -19,16 +19,16 @@ Before, `just qa --suite role-transcripts --case implementer-verify-pass --kit-r
 
 ```
 FAIL role-transcripts/implementer-verify-pass: skill_read_before maintain-verification-skill edit: first edit at tool call 11 of 22 (edit /tmp/qa-34b2ef-1-l1e_10v_/repo/.agents/skills/verify-app/features/hello.md), no load of maintain-verification-skill/SKILL.md (its full content in a tool result) in 22 tool calls [stop: exit, 22 tool calls, 117.3 s] [kit 8451938bc467fb18f012228c938869c3fb5c1ecf]
-qa: 0/1 passed (run 20261026T202619Z-34b2ef); artifacts /home/exedev/.local/state/octo-feather/qa/20261026T202619Z-34b2ef
+qa: 0/1 passed (run 20261026T202619Z-34b2ef); artifacts $XDG_STATE_HOME/octo-feather/qa/20261026T202619Z-34b2ef
 ```
 
-Caveat from its transcript: the kit at 8451938 has no maintain-verification-skill, so the role ran `find / -name maintain-verification-skill` (call 6) and at call 8 cat'ed a copy from the integration clone /home/exedev/src/octo-feather-gh136, which the sandbox leaves readable. The grader did not count it (not the run's kit), so the FAIL stands on the kit, but the before run did see a version of the skill. Kit source trees readable from the qa sandbox are a sandbox gap, not this ticket's.
+Caveat from its transcript: the kit at 8451938 has no maintain-verification-skill, so the role ran `find / -name maintain-verification-skill` (call 6) and at call 8 cat'ed a copy from the integration clone <lane checkout>, which the sandbox leaves readable. The grader did not count it (not the run's kit), so the FAIL stands on the kit, but the before run did see a version of the skill. Kit source trees readable from the qa sandbox are a sandbox gap, not this ticket's.
 
 After, `just qa --suite role-transcripts --case implementer-verify-pass` (kit 25089bd; log /tmp/gh136-sup/qa-after.log, run 20261026T202817Z-31ff10, artifacts ~/.local/state/octo-feather/qa/20261026T202817Z-31ff10):
 
 ```
-PASS role-transcripts/implementer-verify-pass: skill_read_before maintain-verification-skill edit: loaded at tool call 1 of 15 (read /home/exedev/src/octo-feather-gh136-w178/.agents/skills/maintain-verification-skill/SKILL.md), before first edit at tool call 7 of 15 (edit .agents/skills/verify-app/scripts/verify-app); skill_read_before commit git_commit: loaded at tool call 12 of 15 (...), before first git_commit at tool call 14 of 15 (...); branch_paths: changed .agents/skills/verify-app/features/hello.md, .agents/skills/verify-app/scripts/verify-app; none under src/, tests/, pyproject.toml, uv.lock, AGENTS.md, justfile, .githooks/, .github/; each of .agents/skills/verify-app/ changed; declared outcome: "changed", one of ["changed"] [stop: exit, 15 tool calls, 99.2 s] [kit 25089bd3b58be6b212138d33b0f768818c1ada87]
-qa: 1/1 passed (run 20261026T202817Z-31ff10); artifacts /home/exedev/.local/state/octo-feather/qa/20261026T202817Z-31ff10
+PASS role-transcripts/implementer-verify-pass: skill_read_before maintain-verification-skill edit: loaded at tool call 1 of 15 (read <lane worktree>/.agents/skills/maintain-verification-skill/SKILL.md), before first edit at tool call 7 of 15 (edit .agents/skills/verify-app/scripts/verify-app); skill_read_before commit git_commit: loaded at tool call 12 of 15 (...), before first git_commit at tool call 14 of 15 (...); branch_paths: changed .agents/skills/verify-app/features/hello.md, .agents/skills/verify-app/scripts/verify-app; none under src/, tests/, pyproject.toml, uv.lock, AGENTS.md, justfile, .githooks/, .github/; each of .agents/skills/verify-app/ changed; declared outcome: "changed", one of ["changed"] [stop: exit, 15 tool calls, 99.2 s] [kit 25089bd3b58be6b212138d33b0f768818c1ada87]
+qa: 1/1 passed (run 20261026T202817Z-31ff10); artifacts $XDG_STATE_HOME/octo-feather/qa/20261026T202817Z-31ff10
 ```
 
 What the role did in the head run (transcript.jsonl, 15 tool calls):
@@ -53,9 +53,9 @@ Scratch: `just new-repo python /tmp/w178-gen/app --no-spec-chat`, worktree /tmp/
 Tool calls, condensed (call 1 is the patched SKILL.md, call 3 the feature-map example):
 
 ```
- 1 read: /home/exedev/src/octo-feather-gh136-w178/.agents/skills/create-verification-skill/SKILL.md
+ 1 read: <lane worktree>/.agents/skills/create-verification-skill/SKILL.md
  2 bash: cd /tmp/w178-gen/app-wt && git status && git log --oneline -3 && ls -la && ls -R .agents src tests 2>/dev/null | head -50 && cat justfile
- 3 bash: cd /tmp/w178-gen/app-wt && cat src/app/cli.py src/app/core.py tests/test_cli.py pyproject.toml .gitignore; ls /home/exedev/src/octo-feather-
+ 3 bash: cd /tmp/w178-gen/app-wt && cat src/app/cli.py src/app/core.py tests/test_cli.py pyproject.toml .gitignore; ls ~/src/octo-feather-
  4 bash: cd /tmp/w178-gen/app-wt && id -u && which uv && uv run --locked app hello Ada --json; echo "exit $?"; uv run --locked app hello " " --json; 
  5 write: /tmp/w178-gen/app-wt/.agents/skills/verify-app/scripts/verify-app
  6 bash: cd /tmp/w178-gen/app-wt && chmod +x .agents/skills/verify-app/scripts/verify-app && (command -v shellcheck && shellcheck .agents/skills/veri
@@ -70,7 +70,7 @@ Tool calls, condensed (call 1 is the patched SKILL.md, call 3 the feature-map ex
 15 bash: cd "$(mktemp -d)" && /tmp/w178-gen/app-wt/.venv/bin/app hello ; echo "exit $?"; cd /tmp/w178-gen/app-wt && just check 2>&1 | tail -5; echo "
 16 bash: rm -rf /tmp/w178-gen/tmp; mkdir -p /tmp/w178-gen/tmp /tmp/w178-gen/evidence; cd /tmp/w178-gen/app-wt && env -i HOME=$HOME PATH=$PATH TMPDIR=
 17 bash: mkdir -p /tmp/w178-gen/ro && chmod 555 /tmp/w178-gen/ro; cd /tmp/w178-gen/app-wt && env -i HOME=$HOME PATH=$PATH TMPDIR=/tmp/w178-gen/tmp VE
-18 read: /home/exedev/src/octo-feather-gh136-w178/.agents/skills/commit/SKILL.md
+18 read: <lane worktree>/.agents/skills/commit/SKILL.md
 19 bash: cd /tmp/w178-gen/app-wt && git add AGENTS.md .agents/skills/verify-app && git status --short && cat > /tmp/w178-gen/commitmsg <<'EOF' feat(v
 20 bash: cd /tmp/w178-gen/app-wt && git ls-files -s .agents/skills/verify-app/scripts/verify-app && git status --short && git log --oneline -2; chmod
 ```
