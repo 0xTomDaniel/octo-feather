@@ -47,6 +47,15 @@
       "description": "Named values criteria refer to and drives use",
       "type": "object",
       "additionalProperties": {"type": "string"}
+    },
+    "browser": {
+      "description": "Present only when the verify skill drives a headless browser: Playwright's headless Chromium shell, installed once per box where `just install-check` names, which a drive reaches by PLAYWRIGHT_BROWSERS_PATH (remote spec #host-tools)",
+      "type": "object",
+      "required": ["playwright"],
+      "properties": {
+        "playwright": {"description": "The Playwright release the verify skill pins, whose headless Chromium shell it drives", "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$"}
+      },
+      "additionalProperties": false
     }
   },
   "additionalProperties": false

@@ -15,7 +15,7 @@ import glob, json, os, re, sys, tomllib
 ME = "octo-feather-contract"
 SCHEMAS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schemas")
 KEYWORDS = {"$schema", "$id", "title", "description", "type", "required", "properties",
-            "additionalProperties", "const", "minLength"}
+            "additionalProperties", "const", "minLength", "pattern"}
 TYPES = {"object": dict, "string": str, "integer": int}
 
 
@@ -54,6 +54,8 @@ def check(value, schema, where, out):
         out.append(f"{name} must be {schema['const']!r}")
     if "minLength" in schema and isinstance(value, str) and len(value) < schema["minLength"]:
         out.append(f"{name} must not be empty")
+    if "pattern" in schema and isinstance(value, str) and not re.search(schema["pattern"], value):
+        out.append(f"{name} must match {schema['pattern']}")
     if not isinstance(value, dict):
         return
     prefix = f"{where}: " if where else ""

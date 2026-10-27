@@ -231,7 +231,8 @@ check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), and the tracker CLI of the target
-# (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear.
+# (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
+# a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin.
 install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
@@ -255,6 +256,28 @@ install-check target=invocation_directory():
     echo "tracker ${skill} (target $1)"
     c="$root/.agents/skills/$skill/scripts/install-check"
     [[ ! -x "$c" ]] || "$c" || bad=1
+    # A target whose qc.toml has [browser] (its verify skill drives a headless browser, spec remote#host-tools):
+    # Playwright's headless Chromium shell at the pinned Playwright release, once per box in
+    # ${XDG_DATA_HOME:-~/.local/share}/octo-feather/ms-playwright/<pin>, the PLAYWRIGHT_BROWSERS_PATH a drive sets.
+    # Never under ~/.cache: the qc sandbox masks it. No qc.toml or no [browser]: no browser line.
+    top="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")"
+    bpin="$(python3 -c 'import os, re, sys, tomllib
+    p = os.path.join(sys.argv[1], "qc.toml")
+    if not os.path.isfile(p): sys.exit(0)
+    try: b = tomllib.load(open(p, "rb")).get("browser")
+    except (OSError, ValueError) as e: sys.exit(f"browser {p}: not TOML: {e} (octo-feather-contract)")
+    if b is None: sys.exit(0)
+    v = b.get("playwright") if isinstance(b, dict) else None
+    if not isinstance(v, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v): sys.exit(f"browser {p}: [browser] playwright must be a release like 1.64.1 (octo-feather-contract)")
+    print(v)' "$top")" || bad=1
+    if [[ -n "$bpin" ]]; then
+      folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"; cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+      shell="$(ls -d "$folder"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)"
+      if [[ "$folder/" == "$cache/"* ]]; then
+        printf 'browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; set XDG_DATA_HOME outside it\n' "$folder" "$cache"; bad=1
+      elif [[ -n "$shell" ]]; then printf 'browser ok  %s (Playwright %s; PLAYWRIGHT_BROWSERS_PATH=%s)\n' "${shell%/INSTALLATION_COMPLETE}" "$bpin" "$folder"
+      else printf 'browser MISSING (want Playwright %s headless Chromium shell in %s); install: PLAYWRIGHT_BROWSERS_PATH=%s npx -y playwright@%s install --only-shell chromium\n' "$bpin" "$folder" "$folder" "$bpin"; bad=1; fi
+    fi
     exit "$bad"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
