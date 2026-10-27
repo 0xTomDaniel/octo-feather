@@ -78,7 +78,7 @@ Then, for every rule the diff writes or changes where it is owned (owners: docs/
 
 `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
 
-List every restatement in the first review; each blocks, class `duplicated-rule`. Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
+List every restatement in the first review. A restatement blocks, class `duplicated-rule`, only in a role file (agents/), a skill or its patch (.agents/skills, .skillfile/patches), a spec (docs/specs), an ADR (docs/adr) or AGENTS.md; in a code comment, docstring or test comment it is a non-blocking note: its `Owner:` line still lists it, the merge ask shows it, and it is fixed when that file is next edited (owner ruling 2026-10-27, issue #200). Failure example: lane gh118 wrote docs/adr/0008 rung 2 and, in the same lane, restated it in AGENTS.md, agents/corrector.md and two skills with their patches; review rounds 6 and 7 each found only a share.
 
 Search once per part of the rule: each label, value and term it fixes, one grep each, across docs, comments, docstrings, help text, test headers and eval descriptions. A restatement paraphrases, so one phrase finds a share. Failure example: lane gh157 wrote the report-field reader scope here; its first review found 4 restatements, the next two found 3 more (scripts/octo-feather-qa:333, tests/qa.sh:429, tests/lane-merge-ask.sh:106) and 1 more (evals/ladder/suite.json:4).
 
