@@ -27,7 +27,7 @@ This repo has no `docs/specs/` yet. Until it does, the starter behavior is speci
 
 ## Feature entry contract
 
-Each feature file has an H1 title, one paragraph of user-visible behavior, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-app`, `Gotchas`. Criteria are linked by anchor, never restated.
+Each feature file has an H1 title, one paragraph of user-visible behavior, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-app`, `Gotchas`. Criteria are linked by anchor, never restated. One line, ``Drive criterion: `<spec>#<anchor>` ``, after the criteria links names the criterion the feature's drive serves, its evidence record's criterion id.
 
 ## Features
 

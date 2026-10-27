@@ -66,7 +66,8 @@ repo="$t/ts-app"; mkdir -p "$repo"
 git -C "$repo" init -q && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm init --allow-empty
 sed -i -e 's/^setup = .*/setup = "echo declared > \\"$QC_REPO\/setup-ran\\""/' -e 's/^name = "Ada"/name = "Grace"/' "$repo/qc.toml"
 run "$repo"; [[ "$rc" == 0 ]] || fail "edited ts contract not ok: $out"
-export VERIFY_APP_RUN_DIR="$t/va/run" VERIFY_APP_EVIDENCE_DIR="$t/va/evidence"
+# Its drive appends an evidence record: to a throwaway store, never the box's.
+export VERIFY_APP_RUN_DIR="$t/va/run" VERIFY_APP_EVIDENCE_DIR="$t/va/evidence" XDG_STATE_HOME="$t/state" PATH="$kit/scripts:$PATH"
 set +e; vout="$("$repo/.agents/skills/verify-app/scripts/verify-app" run 2>&1)"; rc=$?; set -e
 [[ "$rc" == 0 ]] || fail "verify-app run on the edited contract failed (exit $rc): $vout"
 [[ "$(cat "$repo/setup-ran")" == declared ]] || fail "verify-app did not run the declared setup"
