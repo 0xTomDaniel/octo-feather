@@ -27,9 +27,12 @@ check run also carries a runtime marker:
       which the justfile exports to every recipe (and so to any nested just,
       script or tool they start): an inherited marker naming a live just is
       kept, so the outermost check run owns it however deep a nested just asks
-      for check-*; else, when the just that ran this backtick was asked for a
-      check or check-* recipe, a new marker naming that just's pid; else the
-      inherited marker, if any.
+      for check-*; else, when the just that ran this backtick runs a check or
+      check-* recipe (dependencies included, as just itself answers: just_runs
+      below), a new marker naming that just's pid; when just cannot answer for
+      that argv (`just -q check`: -q conflicts with the dry run), fails closed:
+      a new marker too, carrying just's reason, so qa and the judge refuse
+      under it; else the inherited marker, if any.
   check-gate-free --refuse WHAT   run where qa or the judge would start:
       outside a check run prints `gate-free: ok`; inside one, whatever it would
       launch, names WHAT on stderr, stops the outermost check run (SIGTERM to
@@ -53,11 +56,32 @@ def die(msg):
 
 
 MARKER = "OCTO_FEATHER_CHECK_RUN"
-# just options that take a value (--set takes two); everything else before a recipe is a flag.
-VALUE_OPTS = {"-f", "--justfile", "-d", "--working-directory", "--chooser", "--color", "--command-color",
-              "--completions", "--dotenv-filename", "--dotenv-path", "--dump-format", "--list-heading",
-              "--list-prefix", "--shell", "--shell-arg", "-s", "--show"}
 CHECK_RECIPE = re.compile(r"check(-[A-Za-z0-9_-]+)?")
+RUNNING = re.compile(r"^===> Running recipe `([^`]+)`\.\.\.$", re.M)
+
+
+def just_runs(args, cwd=None):
+    """(the recipes `just ARGS` run in CWD runs, in order, dependencies included, as just itself answers; or None
+    and the reason just gave no such answer). There is no "runs no recipe" answer: a dry run that names no
+    recipe (another just's wording, just-version pins it) is unanswered, so callers fail closed. The one source of what a just command line runs, shared with
+    octo-feather-lane; no model of just's options or recipe arities here (docs/adr/0008). Executes nothing:
+    just first parses ARGS beside --completions, which reads no justfile, and only when its one objection is
+    the recipe words and overrides themselves (`--completions` used with unexpected ...), so no subcommand
+    such as --show, --list or --command is among them, dry-runs ARGS with --verbose: just resolves recipes
+    and their parameters, names each recipe it would run, and evaluates no backtick. Anything else, an
+    option that conflicts with --dry-run (-q) included, is just's reason, never a guess."""
+    def just(*a):
+        p = subprocess.run(["just", *a, *args], cwd=cwd, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=60)
+        err = re.sub(r"\x1b\[[0-9;]*m", "", p.stderr)
+        return p.returncode, err, (err.strip().splitlines() or [f"exit {p.returncode}"])[0]
+    rc, err, line = just("--completions", "bash")
+    if rc and not err.startswith("error: `--completions` used with unexpected "):
+        return None, line
+    rc, err, line = just("--dry-run", "--verbose")
+    if rc:
+        return None, line
+    names = RUNNING.findall(err)
+    return (names, "") if names else (None, "its dry run named no recipe it runs (just-version pins the just whose answer this reads)")
 
 
 def argv_of(pid):
@@ -77,26 +101,16 @@ def is_just(argv):
     return bool(argv) and os.path.basename(argv[0]).startswith("just")
 
 
-def asks_check(argv):
-    """True when a just argv asks for a check or check-* recipe (any recipe position; qa and qc arguments are data)."""
-    pos, i = [], 1
-    while i < len(argv):
-        a = argv[i]
-        if a in ("-c", "--command"):
-            return False   # runs a command, no recipe
-        if a == "--":
-            pos += argv[i + 1:]; break
-        if a == "--set":
-            i += 3; continue
-        if a in VALUE_OPTS:
-            i += 2; continue
-        if not a.startswith("-") and not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*=.*", a, re.S):
-            pos.append(a)
-        i += 1
-    names = [re.split(r"/|::", p)[-1] for p in pos]
-    if names and names[0] in ("qa", "qc"):
-        return False
-    return any(CHECK_RECIPE.fullmatch(n) for n in names)
+def asks_check(argv, cwd=None):
+    """(True when a just argv, run in CWD, runs a check or check-* recipe, as just itself answers (just_runs);
+    just's reason when it cannot answer, which counts as a check run: the gate fails closed.)"""
+    try:
+        names, why = just_runs(argv[1:], cwd)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        return True, f"{type(e).__name__}: {e}"
+    if names is None:
+        return True, why
+    return any(CHECK_RECIPE.fullmatch(n) for n in names), ""
 
 
 def marker_just(raw):
@@ -113,8 +127,13 @@ def run_marker():
         pass
     ppid = os.getppid()
     argv = argv_of(ppid)
-    if is_just(argv) and asks_check(argv):
-        print(json.dumps({"just": ppid}, separators=(",", ":")))
+    try:
+        cwd = os.readlink(f"/proc/{ppid}/cwd")
+    except OSError:
+        cwd = None
+    check, why = asks_check(argv, cwd) if is_just(argv) else (False, "")
+    if check:
+        print(json.dumps({"just": ppid, **({"unanswered": why} if why else {})}, separators=(",", ":")))
     else:
         print(inherited)
 
@@ -131,6 +150,12 @@ def refuse(args):
     except (ValueError, KeyError, TypeError) as e:
         print(f"check-gate-free: unreadable {MARKER} ({type(e).__name__}); refusing {what}", file=sys.stderr)
         root = None
+    try:
+        why = json.loads(raw).get("unanswered", "")
+    except (ValueError, AttributeError):
+        why = ""
+    if why:
+        print(f"check-gate-free: just pid {root} counts as a check run: just cannot say what its command line runs ({why})", file=sys.stderr)
     print(f"check-gate-free: a check run (just pid {root}) reached {what}; {FIX}", file=sys.stderr)
     if root and is_just(argv_of(root)):
         try:
