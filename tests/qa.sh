@@ -430,14 +430,14 @@ def case(i, steps, **kw):
     return dict({"id": i, "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(steps)}, **kw)
 blk = lambda o: "Verdict.\n```json\n" + json.dumps(o) + "\n```"
 rb = lambda s, b: {"fact": "skill_read_before", "skill": s, "before": b}
-fx = {"fact": "skill_not_read", "skill": "pull"}   # stays open until the run ends
+fx = {"fact": "skill_not_read", "skill": "pull"}   # when it is decided: schema.md, Facts
 cases = [
   # order: tdd read, test write, commit read, commit, push, gh call, github-pr read; github-pr comes after its gh call.
   (case("order", [["read", "@tdd"], ["bash", "mkdir -p tests && printf 'def test_x(): pass\\n' > tests/test_x.py"],
                   ["read", "@commit"], ["bash", G + " add -A && " + G + " commit -qm x"], ["bash", "git push -q origin HEAD"],
                   ["bash", "gh pr create --title x"], ["read", "@github-pr"]], branch="impl-t1", origin=True, fake_gh=True, fixture="py"),
    [rb("tdd", "test_write"), rb("commit", "test_write"), rb("commit", "git_commit"), rb("tdd", "git_push"),
-    rb("github-pr", "gh_call"), rb("python", "edit"), rb("commit", "final_message"), fx]),   # fx: open to the end, so all 7 run
+    rb("github-pr", "gh_call"), rb("python", "edit"), rb("commit", "final_message"), fx]),   # fx keeps the run going, so all 7 run (rule: schema.md, Facts)
   # a write the commands never name as one: python writes the test file; a read-only command that names tests/ with > is none.
   (case("fsonly", [["bash", "ls tests/ 2>&1 > /dev/null; cat README.md > /dev/null"], ["read", "@tdd"],
                    ["bash", "python3 -c \"open('tests/test_z.py', 'w').write('x')\""]], fixture="py"),
