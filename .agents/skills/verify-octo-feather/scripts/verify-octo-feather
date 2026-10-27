@@ -163,14 +163,14 @@ case_pre=()
 case_run() {
     local dir=$1 name=$2
     shift 2
-    local cwd="$run_dir/scratch/cwd/$name" code=0 before
+    local cwd="$run_dir/scratch/cwd/$name" code=0 before="$run_dir/scratch/kit-status.before"
     rm -rf "$cwd" && mkdir -p "$cwd"
     { printf '%q ' "${case_env[@]}" "${case_pre[@]}" "$@" && echo; } >"$dir/$name.cmd"
-    before=$(git -C "$REPO" status --porcelain=v1)
+    git -C "$REPO" status --porcelain=v1 >"$before"
     (cd "$cwd" && env "${case_env[@]}" "${case_pre[@]}" "$KIT" "$@") >"$dir/$name.stdout" 2>"$dir/$name.stderr" || code=$?
     echo "$code" >"$dir/$name.exit"
     find "$cwd" -mindepth 1 >"$dir/$name.files"
-    diff <(printf '%s\n' "$before") <(git -C "$REPO" status --porcelain=v1) >"$dir/$name.kit-status" || true
+    diff "$before" <(git -C "$REPO" status --porcelain=v1) >"$dir/$name.kit-status" || true
 }
 
 # obs <dir> <case> <key> <cmd>...: an observed fact, the command's stdout (and its stderr), for the check as o[key].
