@@ -320,6 +320,35 @@ done
 printf 'alias c := check\n' >>justfile
 run 1 ticket - < <(cr $'\nCreates: `just c`' 'just c'); has "class: bad-creates: Creates \`just c\` is a gate or factory recipe"
 sed -i '$d' justfile
+# #240 review: a declared recipe is the complete one just runs. A module prefix never stands for its gate
+# (creates-recipe-prefix): the gate refusal holds and the declaration of the module itself is bad-creates.
+printf 'check:\n    true\n' >sub.just; printf 'mod sub\n' >>justfile
+JUST_UNSTABLE=1 run 1 ticket - < <(cr $'\nCreates: `just sub`' 'just sub check')
+has "class: layer-only-ticket: demo runs no surface the repo declares (\`just sub check\`: just sub check is a gate or factory recipe, not the app)"
+has "class: bad-creates: Creates \`just sub\` is an existing module, not a recipe"; hasnt ": ok"
+JUST_UNSTABLE=1 run 0 ticket - < <(cr $'\nCreates: `just sub new`' 'just sub new a')
+sed -i '$d' justfile; rm sub.just
+run 1 ticket - < <(cr $'\nCreates: `just serve x`' 'just serve x')
+has "class: bad-creates: Creates \`just serve x\` goes through \`just serve\`, an existing recipe, not a module"
+run 1 ticket - < <(cr $'\nCreates: `just new`' 'just new check'); has "class: unused-creates: Creates \`just new\`"
+# An option that runs no recipe (show, list, a value option's operand) leaves the declaration unused
+# (creates-option-as-command); running options (closed allowlist) and overrides still run it.
+for d in 'just --show new-recipe' 'just -s new-recipe' 'just --justfile new-recipe check' 'just -f new-recipe check' \
+         'just --list new-recipe' 'just --dump new-recipe' 'just --evaluate new-recipe' 'just --summary new-recipe' \
+         'just -n new-recipe' 'just --dry-run new-recipe' 'just --command new-recipe'; do
+  run 1 ticket - < <(cr $'\nCreates: `just new-recipe`' "$d"); has "class: unused-creates: Creates \`just new-recipe\` but no demo command runs it"
+  has "runs no recipe of the repo's justfile"
+done
+run 1 ticket - < <(cr $'\nCreates: `just new-recipe`' 'just --set new-recipe x serve'); has "class: unused-creates: Creates \`just new-recipe\`"
+for d in 'just -v --set a b x=1 new-recipe' 'just --color=never --yes -- new-recipe a' 'just -q new-recipe --show'; do
+  run 0 ticket - < <(cr $'\nCreates: `just new-recipe`' "$d"); [[ "$out" == "stdin: ok" ]] || fail "$d: $out"
+done
+# A created path stands for itself, never read as an interpreter or HTTP tool by its basename
+# (creates-invocation-crash): it passes declared and run, and nothing prints a traceback (run asserts it).
+for p in scripts/python scripts/curl bin/node bin/playwright; do
+  run 0 ticket - < <(cr $'\nCreates: `'"$p"'`' "$p"); [[ "$out" == "stdin: ok" ]] || fail "$p: $out"
+  run 0 ticket - < <(cr $'\nCreates: `'"$p"'`' "$p run x")
+done
 # The waiver: an Expand-contract ticket runs no demo, so its Creates is unused.
 run 1 ticket - < <(printf 'Expand-contract: expand\nCreates: `bin/x`\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n')
 has "class: unused-creates: Creates \`bin/x\` but no demo command runs it"
@@ -377,4 +406,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; #240 Creates path and recipe pass, undeclared, unused, malformed, test, gate and alias-to-gate Creates fail; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; #240 Creates path and recipe pass, undeclared, unused, malformed, test, gate and alias-to-gate Creates fail, module prefix never its gate, non-running just options leave it unused, created python/curl paths pass; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
