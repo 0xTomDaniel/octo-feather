@@ -13,7 +13,8 @@
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
 # demo; interpreter-run scripts, <template> content, fenced code and HTML comments: the #121 D11 D17 D18 D21
-# cases (owners: ADR 0002, #145); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
+# cases (owners: ADR 0002, #145); a demo through a command the ticket creates passes only with an exact `Creates:`
+# line, bad-creates and unused-creates otherwise (#240, ADR 0009, ADR 0008); `ticket -` checks stdin. Hermetic: PATH is built here, so no host gh is reachable. Errors
 # (gh down, gh missing, bad JSON, missing ticket midway, paged sub-issues, no specs, unreadable
 # draft, usage, no just or an unreadable justfile) exit 2 naming the fix, no traceback, nothing reported as passed, no file
 # written. Run by `just check`.
@@ -281,6 +282,48 @@ for c in '<!--\nExpand-contract: expand\n-->' 'Draft <!-- note\nExpand-contract:
   run 1 ticket "$t/d21c.md"; has "class: layer-only-ticket: last acceptance item is not a \`demo: \` line"
 done
 
+# #240 (owners: ADR 0009, ADR 0008): a demo through a command the ticket creates passes only when a
+# `Creates:` line declares it exactly; every looser Creates or demo fails with its class and a fix naming the form.
+cr() { # CREATES-LINES DEMO: a draft whose What to build holds the Creates lines and whose demo is DEMO
+  printf '## What to build\n\nA new command.\n%s\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s` prints ok\n' "$1" "$2"; }
+cf="\`Creates: \`<path>\`\` or \`Creates: \`just <recipe>\`\`, form: octo-feather-lane --help (ticket)"
+run 0 ticket - < <(cr $'\nCreates: `scripts/new-cmd`' 'scripts/new-cmd --json'); [[ "$out" == "stdin: ok" ]] || fail "Creates path: $out"
+run 1 ticket - < <(cr '' 'scripts/new-cmd --json')
+[[ "$(grep -c '^stdin: class: ' <<<"$out")" == 1 ]] || fail "no Creates: $out"
+has "stdin: class: layer-only-ticket: demo runs no surface the repo declares (\`scripts/new-cmd --json\`: scripts/new-cmd is not an executable the repo tracks)"
+has "$cf"
+# ./ prefix, env and runner, list item and bold forms, repeated lines, a recipe, a module recipe, a path that already exists.
+run 0 ticket - < <(cr $'\n- **Creates:** `./bin/x`\nCreates: `bin/x`' 'FOO=1 uv run ./bin/x a')
+run 0 ticket - < <(cr $'\nCreates: `bin/x`\nCreates: `just new-recipe`' 'bin/x a && just --yes new-recipe b')
+run 0 ticket - < <(cr $'\nCreates: `just sub new`' 'just sub new')
+run 0 ticket - < <(cr $'\nCreates: `bin/demo`' 'bin/demo a')
+# In a fence or comment a Creates line is no declaration.
+run 1 ticket - < <(cr $'\n```\nCreates: `bin/x`\n```\n<!-- Creates: `bin/x` -->' 'bin/x a'); has "class: layer-only-ticket"; hasnt "-creates"
+# A Creates no demo command runs: a different path, a bare name (runs PATH, not the file), only as an argument.
+for d in 'bin/y a' 'x a' 'bin/demo bin/x'; do
+  run 1 ticket - < <(cr $'\nCreates: `bin/x`' "$d"); has "stdin: class: unused-creates: Creates \`bin/x\` but no demo command runs it; fix: "; has "$cf"
+done
+run 1 ticket - < <(cr $'\nCreates: `just new-recipe`' 'just other'); has "class: unused-creates: Creates \`just new-recipe\`"
+# Malformed Creates: bad-creates, each naming its problem and the form.
+for c in '`tests/new.sh`|`tests/new.sh` is under a test or hook directory' '`.githooks/x`|`.githooks/x` is under a test or hook directory' \
+         '`just check`|`just check` is a gate or factory recipe' '`just check-fast`|`just check-fast` is a gate or factory recipe' \
+         '`just integrate`|`just integrate` is a gate or factory recipe' '`just qc`|`just qc` is a gate or factory recipe' \
+         '`just qa`|`just qa` is a gate or factory recipe' '`just sub check`|`just sub check` is a gate or factory recipe' \
+         '`/usr/bin/x`|`/usr/bin/x` is not repo-relative' '`../x`|`../x` is not repo-relative' '`bin/../../x`|`bin/../../x` is not repo-relative' \
+         '``|empty value' '`just`|empty value' 'bin/x|value `bin/x` is not one backticked path or `just <recipe>`' \
+         '|value `` is not one backticked path or `just <recipe>`' '`bin/x` and more|value `` `bin/x` and more `` is not one backticked' \
+         '`bin/x a`|`bin/x a` is not one path' '`bin//x`|`bin//x` is not a normalized path' '`just a:b`|`just a:b` is not one path'; do
+  run 1 ticket - < <(cr $'\nCreates: '"${c%%|*}" 'bin/demo a'); has "stdin: class: bad-creates: "; has "${c#*|}"; has "; fix: "; has "$cf"
+  hasnt "unused-creates"; hasnt "layer-only"
+done
+# A declared recipe that already exists as an alias to the gate is the gate.
+printf 'alias c := check\n' >>justfile
+run 1 ticket - < <(cr $'\nCreates: `just c`' 'just c'); has "class: bad-creates: Creates \`just c\` is a gate or factory recipe"
+sed -i '$d' justfile
+# The waiver: an Expand-contract ticket runs no demo, so its Creates is unused.
+run 1 ticket - < <(printf 'Expand-contract: expand\nCreates: `bin/x`\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n')
+has "class: unused-creates: Creates \`bin/x\` but no demo command runs it"
+
 # The offline gh, serving the snapshot octo-feather-qc-ghsnap took, refused nothing: every field
 # asked is one the snapshot CLI fetches.
 [[ ! -s "$t/miss.log" ]] || fail "offline gh refused calls (a field the snapshot lacks?): $(cat "$t/miss.log")"
@@ -334,4 +377,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, module gate, module alias to its gate, module gate as no program, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; #240 Creates path and recipe pass, undeclared, unused, malformed, test, gate and alias-to-gate Creates fail; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

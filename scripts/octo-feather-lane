@@ -112,7 +112,17 @@ it cannot read is exit 2, #172), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A ticket body
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
+command the ticket itself creates when the ticket declares it exactly in a line
+``Creates: `<path>` `` (repo-relative, e.g. scripts/new-cmd or bin/x; a leading ./ is dropped) or
+``Creates: `just <recipe>` `` (`just MOD RECIPE` for a module), one backticked value, the line repeatable:
+a demo stage passes when its program, after env assignments and runners, is exactly that path (written
+with a /, e.g. ./run for a top-level file) or `just` that recipe; a declared path that already exists
+still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
+not normalized, under tests/ or a hook dir, or a gate or factory recipe (check, check-*, integrate,
+qc, qa, or an alias to one). Class unused-creates: a declared command no demo stage runs (an
+Expand-contract ticket runs none). A demo of an undeclared command the repo lacks stays
+layer-only-ticket, its fix naming the Creates form. A ticket body
 is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
 or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
@@ -1047,6 +1057,9 @@ GATE = re.compile(r"just\s+check(-[a-z-]+)?")
 ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
 CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
 EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
+CREATES = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Creates:\**[ \t]*(.*?)\s*$", re.M | re.I)
+# The fix text for a Creates line (scope: --help (ticket)).
+CREATES_FORM = "`Creates: `<path>`` or `Creates: `just <recipe>``, form: octo-feather-lane --help (ticket)"
 DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
 ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
@@ -1177,12 +1190,28 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
+    creates, used = {}, set()   # each declared command, `just R...` or a path -> as written
+    for v in dict.fromkeys(CREATES.findall("\n".join(structure(body)))):
+        d, why = creates_why_not(v)
+        if why is None and d.startswith("just "):
+            to = cache.setdefault(("surface",), Surface(specs.parent.parent)).recipes.get(d[5:])
+            if to and not_demo(to):
+                why = f"`{d}` is a gate or factory recipe (check, check-*, integrate, qc, qa), not a command the ticket creates"
+        if why:
+            fail("bad-creates", f"Creates {why}", "declare a repo-relative path outside tests/ or a recipe other than check/check-*/integrate/qc/qa, as " + CREATES_FORM)
+        else:
+            creates.setdefault(d, v)
+    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it",
+                           f"make the demo's program exactly the declared command, or drop the line; {CREATES_FORM}")
+                      for d in creates if d not in used]
     ec = EXPAND.search("\n".join(structure(body)))
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
+        unused()
         return out
     if ec:
         fail("layer-only-ticket", f"Expand-contract line names `{ec.group(1)}`",
              "write `Expand-contract: expand`, `migrate` or `contract` (the wide refactor's step), or drop it and end on a demo")
+        unused()
         return out
     last = items[-1] if items else ""
     fix = ("end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI "
@@ -1198,11 +1227,57 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
             fail("layer-only-ticket", f"demo is the gate alone (`{cmds[0]}`)", fix)
         else:
             surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
-            runs = [surf.runs(c) for c in cmds]
+            runs = [surf.runs(c, creates, used) for c in cmds]
             invs = [i for r in runs for i in r[0]]
             if not invs:
                 fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
+    unused()
     return out
+
+
+def q(v: str) -> str:
+    """V as a Markdown code span."""
+    return f"`` {v} ``" if "`" in v else f"`{v}`"
+
+
+def creates_why_not(v: str) -> tuple[str, str | None]:
+    """(the command a `Creates:` value V declares, why V declares none, None if it does)."""
+    m = re.fullmatch(r"`([^`]*)`", v)
+    if not m:
+        return "", f"value {q(v)} is not one backticked path or `just <recipe>`"
+    d = m.group(1).strip()
+    if d in ("", "just"):
+        return "", f"{q(m.group(1))} has an empty value"
+    if d.startswith("just ") or d.startswith("just\t"):
+        words = d.split()[1:]
+        if not all(re.fullmatch(r"[A-Za-z_][A-Za-z0-9_-]*", w) for w in words):
+            return "", f"`{d}` is not one path or `just <recipe>` (`just MOD RECIPE` for a module recipe)"
+        d = "just " + " ".join(words)
+        if not_demo(words[-1]):
+            return "", f"`{d}` is a gate or factory recipe (check, check-*, integrate, qc, qa), not a command the ticket creates"
+        return d, None
+    if re.search(r"\s", d):
+        return "", f"`{d}` is not one path (no arguments or spaces)"
+    if os.path.isabs(d) or ".." in d.split("/"):
+        return "", f"`{d}` is not repo-relative (no leading /, no ..)"
+    rel = d[2:] if d.startswith("./") else d
+    if os.path.normpath(rel) != rel:
+        return "", f"`{d}` is not a normalized path (no //, /./ or trailing /)"
+    if TEST_DIR.search(rel):
+        return "", f"`{d}` is under a test or hook directory, not the app's surface"
+    return rel, None
+
+
+def created(words: list[str], creates) -> str | None:
+    """The declared command of CREATES that a stage's program WORDS (env and runners dropped) runs exactly, None if none."""
+    if not words:
+        return None
+    if words[0] == "just":
+        names = [a for a in words[1:] if not a.startswith("-")]
+        return next((d for d in creates if d.startswith("just ") and names[:len(d.split()) - 1] == d.split()[1:]), None)
+    prog = words[0]
+    rel = prog[2:] if prog.startswith("./") else prog
+    return rel if "/" in prog and rel in creates else None
 
 
 # A demo goes through the repo's own public surface (ADR 0009): a program the repo declares,
@@ -1212,7 +1287,9 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
                "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
-               "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
+               "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
+               + ", the demo running that path or recipe; or, for one step of a wide refactor, add the line "
+               "`Expand-contract: expand|migrate|contract`")
 
 
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
@@ -1301,11 +1378,17 @@ class Surface:
         recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
         return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
 
-    def runs(self, cmd: str) -> tuple[list[str], str]:
-        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not)."""
+    def runs(self, cmd: str, creates=(), used: set | None = None) -> tuple[list[str], str]:
+        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not).
+        A stage whose program is exactly a command of CREATES (the ticket's `Creates:` lines) is on it
+        too, and that command goes into USED."""
         invs, whys = [], []
         for stage in re.split(r"\|\||&&|[|;]", strip_subst(cmd)):
             why, words = self.stage_why_not(stage)
+            if (d := created(words, creates)) is not None:
+                why = None
+                if used is not None:
+                    used.add(d)
             if why is None:
                 invs.append(invocation(words))
             else:
