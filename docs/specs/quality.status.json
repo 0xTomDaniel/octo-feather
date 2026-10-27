@@ -83,8 +83,8 @@
       "pr": null
     },
     "acceptance-qc-contract": {
-      "status": "built",
-      "pr": 181
+      "status": "planned",
+      "pr": null
     },
     "acceptance-evidence-record": {
       "status": "built",
