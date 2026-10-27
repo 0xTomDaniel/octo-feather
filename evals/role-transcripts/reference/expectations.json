@@ -237,5 +237,20 @@
         ]
       }
     ]
+  },
+  "implementer-verify-kit": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "verify-octo-feather",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "scripts/octo-feather-contract"
+        ]
+      }
+    ]
   }
 }
