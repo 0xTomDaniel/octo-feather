@@ -131,6 +131,28 @@ on PARENT, whether or not the tracker already did (one already done stays as it 
 back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
 named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
 
+  octo-feather-lane report         every open lane of this session: its pull request, agents and waits
+
+`report` (spec comms #factory-report) reads and writes nothing. It reads each lanes/*.toml record of
+the state dir (archive/ skipped) and the hand-off log beside it, `herdr agent list`, and for a record
+with `pr`, `gh pr view` in the repository the record names. It prints `report at <now>`, then per lane:
+
+  lane <record name>: issue <issue> <repository> "<goal>"
+    started: <started_at>
+    pr: #N <state> <draft|ready> head <12 hex> checks: <count> <result>, ...   (`pr: none` with no pr)
+    running: <pane> <name> <Herdr state>, one line per Herdr agent whose workspace is the supervisor
+             pane's prefix; `(supervisor)` marks the supervisor's pane, a supervisor pane not listed is said
+    waits: waiting_on "<value>", last hand-off <last_handoff_at>
+    waits: worker <name> <pane> working          per agent other than the supervisor in state working
+    waits: owner gate <gate> asked <at>          per pending owner gate (spec comms #report-owner-queue)
+    waits: check <name> <status> on head <12 hex>  per check still running on the head
+
+Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
+read (a record, a log, Herdr, GitHub) prints as `unread: <source>: <reason>` where its facts would be,
+and every lane still prints from what it could read; a log's unparsable lines are counted and named
+by line number. The report's last line, `unread: none` or `unread: <source>, ...`, names each source
+unread. Exit 0; 1 on any argument.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
 import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
@@ -1536,6 +1558,171 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
+# --- the factory report (spec comms #factory-report, issue #248) ---
+
+RUNNING = "working"   # the Herdr agent_status of an agent at work
+
+
+def utc(s: object) -> "datetime.datetime | None":
+    import datetime
+    try:
+        return datetime.datetime.strptime(str(s), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+
+
+def stamp(s: object, now) -> str:
+    t = utc(s)
+    if t is None:
+        return f"{s!r} (not a UTC instant)" if s not in (None, "") else "(not recorded)"
+    secs = int((now - t).total_seconds())
+    sign, secs = ("", secs) if secs >= 0 else ("-", -secs)
+    d, h, m = secs // 86400, secs // 3600 % 24, secs // 60 % 60
+    age = (f"{d}d" if d else "") + (f"{h}h" if d or h else "") + f"{m}m"
+    return f"{t:%Y-%m-%dT%H:%M:%SZ} ({sign}{age} ago)"
+
+
+def herdr_agents() -> list[dict]:
+    try:
+        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"herdr agent list failed ({err[-1][:300] if err else f'exit {p.returncode}'})")
+    try:
+        agents = json.loads(p.stdout)["result"]["agents"]
+        if not isinstance(agents, list) or not all(isinstance(a, dict) for a in agents):
+            raise TypeError("agents is not a list of objects")
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"herdr agent list printed no agent list ({type(e).__name__}: {e})")
+    return agents
+
+
+def read_log(path: Path) -> tuple[list[dict], list[int]]:
+    """The hand-off log's JSON object lines, and the numbers of the lines that are not one."""
+    lines, bad = [], []
+    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            d = json.loads(l)
+        except ValueError:
+            d = None
+        (lines.append(d) if isinstance(d, dict) else bad.append(i))
+    return lines, bad
+
+
+def pending_gates(lines: list[dict]) -> list[tuple[str, object]]:
+    """Each pending owner gate (spec comms #report-owner-queue), with its asked time."""
+    latest: dict[str, dict] = {}
+    for d in lines:
+        if d.get("kind") == "gate" and isinstance(d.get("gate"), str) and d.get("event") in ("asked", "answered"):
+            latest[d["gate"]] = d
+    return [(g, d.get("at")) for g, d in latest.items() if d["event"] == "asked"]
+
+
+def check_results(rollup: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for c in rollup:
+        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
+            r = (c.get("state") or "pending").lower()
+        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+            r = (c.get("status") or "pending").lower()
+        else:
+            r = c["conclusion"].lower()
+        counts[r] = counts.get(r, 0) + 1
+    return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
+
+
+def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str]) -> list[str]:
+    import tomllib
+    name = rec_path.stem
+    try:
+        rec = tomllib.loads(rec_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        unread.append(f"record {rec_path.name}")
+        return [f"lane {name}", f"  unread: record {rec_path.name}: {e}"]
+    repo = rec.get("repository")
+    out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
+           f"  started: {stamp(rec.get('started_at'), now)}"]
+    check_waits = []
+    pr = rec.get("pr")
+    if pr is None:
+        out.append("  pr: none")
+    elif not isinstance(pr, int) or isinstance(pr, bool) or not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        unread.append(f"GitHub ({name})")
+        out.append(f"  pr: {pr!r} unread: GitHub: the record needs pr a number and repository owner/name (repository {repo!r})")
+    else:
+        try:
+            d = pr_view(pr, "state,isDraft,headRefOid,statusCheckRollup", repo)
+            rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
+            head = str(d["headRefOid"])[:12]
+            out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
+            check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+        except (Refuse, KeyError, TypeError, AttributeError) as e:
+            unread.append(f"GitHub ({name})")
+            out.append(f"  pr: #{pr} unread: GitHub: {e}")
+    sup = rec.get("supervisor")
+    workers = []
+    if agents is None:
+        out.append(f"  running: unread: Herdr: {herdr_why}")
+    elif not isinstance(sup, str) or ":" not in sup:
+        out.append(f"  running: the record's supervisor {sup!r} is no pane id")
+    else:
+        ws = sup.split(":", 1)[0]
+        mine = sorted((a for a in agents if a.get("workspace_id") == ws), key=lambda a: str(a.get("pane_id")))
+        for a in mine:
+            is_sup = a.get("pane_id") == sup
+            out.append(f"  running: {a.get('pane_id')} {a.get('name') or '(no name)'} {a.get('agent_status')}" + (" (supervisor)" if is_sup else ""))
+            if not is_sup and a.get("agent_status") == RUNNING:
+                workers.append(f"  waits: worker {a.get('name') or '(no name)'} {a.get('pane_id')} {RUNNING}")
+        if not any(a.get("pane_id") == sup for a in mine):
+            out.append(f"  running: supervisor pane {sup} not in herdr agent list")
+    out.append(f"  waits: waiting_on {json.dumps(rec.get('waiting_on', ''))}, last hand-off {stamp(rec.get('last_handoff_at'), now)}")
+    out += workers
+    log, notes = rec_path.with_name(f"{name}.handoffs.jsonl"), []
+    if log.exists():
+        try:
+            lines, bad = read_log(log)
+            out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending_gates(lines)]
+            if bad:
+                notes.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+        except (OSError, UnicodeDecodeError) as e:
+            unread.append(f"log {log.name}")
+            notes.append(f"  unread: log {log.name}: {e}")
+    else:
+        notes.append(f"  log {log.name}: none")
+    return out + check_waits + notes
+
+
+def cmd_report(args: list[str]) -> int:
+    import datetime
+    if args:
+        raise Refuse(f"usage: octo-feather-lane report (takes no arguments; got {' '.join(args)})")
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    lanes = lanes_dir()
+    print(f"report at {now:%Y-%m-%dT%H:%M:%SZ} ({lanes})")
+    unread: list[str] = []
+    try:
+        agents, herdr_why = herdr_agents(), None
+    except Refuse as e:
+        agents, herdr_why = None, str(e)
+        unread.append("Herdr")
+    try:
+        records = sorted(lanes.glob("*.toml"))
+    except OSError as e:
+        records = []
+        unread.append(f"lanes {lanes}")
+        print(f"unread: lanes {lanes}: {e}")
+    if not records:
+        print("no open lane")
+    for r in records:
+        print("\n".join(report_lane(r, agents, herdr_why, now, unread)))
+    print(f"unread: {', '.join(unread) or 'none'}")
+    return 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "verdict": cmd_verdict,
@@ -1545,6 +1732,7 @@ COMMANDS = {
     "tickets": cmd_tickets,
     "done": cmd_done,
     "ticket": cmd_ticket,
+    "report": cmd_report,
 }
 
 
