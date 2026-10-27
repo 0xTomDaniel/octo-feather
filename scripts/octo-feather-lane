@@ -153,7 +153,8 @@ model (provider/id, e.g. openrouter/qwen/qwen3-8b) and purpose (e.g. bench, judg
 input_tokens and output_tokens, integers >= 0; cost_usd, the provider's reported cost in USD, or null or absent
 when unreported; at, optional ISO 8601 time of the call (default now, UTC). The lane is --lane NAME (for callers
 that lost the HERDR_* env, e.g. in a sandbox), else the lane record in $(octo-feather-state)/lanes/*.toml whose
-`supervisor` pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, e.g. w37 for supervisor "w37:p2"), else
+`supervisor` pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, e.g. w37 for supervisor "w37:p2", else
+OCTO_FEATHER_SPEND_SPACE: scripts/pi-role --help, Headless), else
 null: no lane (spec spend#rule-lane). Records only grow (spec spend#rule-append): all lines of one call are
 appended in one locked write, so concurrent writers never interleave. It never fails its caller: a line it
 cannot read, or a ledger it cannot write, prints one stderr line naming the unrecorded spend, and it exits 0
@@ -1576,7 +1577,7 @@ def state_dir() -> Path:
 
 def spend_lane(lanes: Path) -> str | None:
     """The lane whose supervisor pane is in the caller's Herdr space (spec spend#rule-lane), else None."""
-    space = os.environ.get("HERDR_WORKSPACE_ID", "")
+    space = os.environ.get("HERDR_WORKSPACE_ID") or os.environ.get("OCTO_FEATHER_SPEND_SPACE", "")
     if not space:
         return None
     import tomllib
