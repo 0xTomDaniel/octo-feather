@@ -14,6 +14,8 @@ Repo skills: verify-octo-feather
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals. A kit test runs a script as a command and feeds it inputs, never loads or reads it; review judges this (docs/adr/0008 rung 3).
 - Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
 - Where each artifact lives, spec-first change and fixing only seen problems: docs/adr/0024.
+- Shell is for thin glue: calling commands, environment setup, mounts. Logic, parsing and rules go in Python.
+- Every kit mechanism is built for any target repo; a kit-only piece states why.
 - Fix a lesson on the highest rung of the ladder in docs/adr/0008; only what its rung 2 allows becomes a check.
 - Vendored skills are pinned in `Skillfile` and `Skillfile.lock`, materialized into `.agents/skills/`, and changed only through patches in `.skillfile/patches/`. Upstream license and attribution live in `NOTICE`.
 

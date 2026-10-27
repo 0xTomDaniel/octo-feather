@@ -10,6 +10,7 @@ Repo skills: python, verify-app
 - Tests are integration and end-to-end only, through the CLI: `tests/test_cli.py` calls `app.cli.main` in-process and runs `app` as a subprocess. No unit tests of internals, no mocks of our own code. One or two tests per acceptance criterion; keep the suite small.
 - No test detail in production code: no test-only flags, env vars, hooks, parameters or branches. Reach the state from the test, mocking at the boundary.
 - `app.cli` may import `app.core`; `app.core` never imports `app.cli` (import-linter enforces it).
+- Shell is for thin glue: calling commands, environment setup, mounts. Logic, parsing and rules go in Python.
 - Integrate worker commits with `just integrate TICKET REF...` (the kit's `octo-feather-integrate`); keep the recipe.
 
 ## Commands
