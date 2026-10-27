@@ -126,9 +126,10 @@ with a /, e.g. ./run for a top-level file, and stands for itself, never an inter
 its basename) or `just` that recipe as just runs it (above): just names it, no other recipe has its
 name, and nothing it runs is a gate or factory recipe, whatever is declared. A top-level recipe the
 justfile lacks yet is demoed bare, `just [options] <recipe>` with no further words (owner ruling #240):
-just is asked through a justfile importing the repo's plus `<recipe>:`, and the stage runs it only when
-just runs that recipe and nothing else, options judged by just itself; so `just new` passes and
-`just new a` or `just new check` leaves it unused, the fix: demo it bare, declare a path demo, or split
+just is asked through a justfile importing the repo's plus a stand-in `<recipe>` whose dry run fails on any
+word just binds to it (so a repeat such as `just new new`, which just would dedup, counts), and the stage
+runs it only when just runs that recipe and nothing else, options judged by just itself; so `just new`
+passes and `just new a`, `just new new` or `just new check` leaves it unused, the fix: demo it bare, declare a path demo, or split
 (create the recipe first, demo it with arguments in a later ticket). A declared path or recipe that
 already exists still passes. Class bad-creates: a value not one backticked path or recipe, empty, absolute, with `..`,
 not normalized, under tests/ or a hook dir, a gate or factory recipe (check, check-*, integrate,
@@ -157,7 +158,7 @@ named with its reason on stderr, after the others were tried; exit 1, rerun afte
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -1438,9 +1439,11 @@ class Surface:
         """(why `just ARGS` is no demo, None if it is one; the `just <recipe>` of CREATES it runs, None if none),
         as just itself answers in ROOT (check-gate-free just_runs, the one source): the recipes it runs,
         dependencies included, none a gate or factory recipe. A top-level recipe of CREATES the justfile lacks
-        is demoed bare (owner ruling #240, B): asked through a justfile importing the repo's plus `R:`, no
-        parameter, the words run it only when just runs R and nothing else; options stay just's to judge.
-        A declared recipe is run when just names it and no other recipe has its name."""
+        is demoed bare (owner ruling #240, B): asked through a justfile importing the repo's plus a stand-in R
+        whose one parameter defaults to a fresh token and whose dry run fails naming R (a dependency argument,
+        evaluated before just prints anything) when any word binds to it, repeats just would dedup included;
+        the words run it only when just runs R and nothing else; options stay just's to judge. A declared
+        recipe, or alias, is run when just names its recipe and no other recipe has that name."""
         key = (tuple(args), tuple(creates))
         if key in self._just:
             return self._just[key]
@@ -1452,21 +1455,28 @@ class Surface:
         elif "'" in str(self.justfile):
             res = (f"{cmd}: just cannot be asked about recipes the ticket creates here (justfile {self.justfile})", None)
         else:
+            tok = secrets.token_hex(8)
+            dep, bound = f"_ofl{tok}", re.compile(f"error: Call to function `error` failed: {tok} (\\S+)")
             with tempfile.TemporaryDirectory() as tmp:
                 stub, pre = Path(tmp) / "justfile", []
                 if absent:
-                    stub.write_text(f"import '{self.justfile}'\n" + "".join(f"{r}:\n" for r in absent), encoding="utf-8")
+                    stub.write_text(f"import '{self.justfile}'\n" + "".join(
+                        f"{r} _ofl='{tok}': ({dep} (if _ofl == '{tok}' {{ '' }} else {{ error('{tok} {r}') }}))\n" for r in absent)
+                        + f"{dep} _x:\n", encoding="utf-8")
                     pre = ["--justfile", str(stub), "--working-directory", str(self.root)]
                 try:
                     reading = gate_free_module().just_runs(pre + args, self.root)
                 except subprocess.TimeoutExpired:
                     reading = (None, "just did not answer in 60s")
-            ok = [reading[0]] if reading[0] is not None else []
+            ok = [[n for n in reading[0] if n != dep]] if reading[0] is not None else []
+            word = bound.fullmatch(reading[1] or "")
             targets = set(self.recipes.values()) | set(absent)
             runs = lambda r: [t for t in targets if t.split()[-1] == r.split()[-1]] == [r] and all(r.split()[-1] in n for n in ok)
-            decl = next((d for d in creates if d.startswith("just ") and runs(d[5:])), None)
+            decl = next((d for d in creates if d.startswith("just ") and runs(self.recipes.get(d[5:], d[5:]))), None)
             stray = next((x for n in ok for x in n if x in absent), None)
-            if not ok:
+            if word:
+                res = (f"{cmd} passes {word.group(1)} a further word: {word.group(1)}, a recipe the ticket creates, is demoed bare (`just [options] {word.group(1)}`, no further words)", None)
+            elif not ok:
                 res = (f"just answers: {reading[1]}", None)
             elif stray and ok[0] != [stray]:
                 res = (f"{cmd} runs {', '.join(ok[0])}: {stray}, a recipe the ticket creates, is demoed bare (`just [options] {stray}`, no further words)", None)
