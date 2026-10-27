@@ -1,0 +1,25 @@
+run 1: exit 0 in 152 s
+run 1 load pid 805274: exit 0
+run 1 load pid 805275: exit 0
+run 1 load pid 805276: exit 0
+run 2: exit 0 in 166 s
+run 2 load pid 906086: exit 0
+run 2 load pid 906087: exit 0
+run 2 load pid 906088: exit 0
+run 3: exit 0 in 173 s
+run 3 load pid 1001330: exit 0
+run 3 load pid 1001331: exit 0
+run 3 load pid 1001332: exit 0
+run 4: exit 0 in 178 s
+run 4 load pid 1096401: exit 0
+run 4 load pid 1096402: exit 0
+run 4 load pid 1096403: exit 0
+run 5: exit 0 in 177 s
+run 5 load pid 1191221: exit 0
+run 5 load pid 1191222: exit 0
+run 5 load pid 1191223: exit 0
+run 6: exit 0 in 200 s
+run 6 load pid 1301597: exit 0
+run 6 load pid 1301598: exit 0
+run 6 load pid 1301599: exit 0
+loop: 6/6 green
