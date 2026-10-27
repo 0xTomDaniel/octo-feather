@@ -40,11 +40,15 @@
 #      after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
 #      kind new, changed or deleted; octo-feather-qc classifies them. The upper
 #      dir dies with the namespace: nothing the judge wrote anywhere persists.
+#   11. the run's model spend: the lines the spend ledger's writer appended to the scratch state dir's
+#      spend.jsonl (no lane: the route is unset), one JSON line {"spend": [line...]} on QC_FD_POST;
+#      octo-feather-qc records them (its record_spend).
 # Inner (PID 1 of that namespace):
 #   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66; then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
-#   9. post-run: count agents, stop and delete the sandbox session, kill every
+#   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
+#      count agents, stop and delete the sandbox session, kill every
 #      other process in the PID namespace (nested ones included) and count what
 #      is left; exiting PID 1 then makes the kernel kill anything remaining.
 #      One cleanup line on stderr, the record on the QC_FD_POST pipe (setup then stops the recorder and
@@ -244,7 +248,7 @@ if [[ "$phase" == setup ]]; then
   cd "$PWD" || die "re-enter $PWD"
 
   # 6. env and shims.
-  unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE \
+  unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE OCTO_FEATHER_SPEND_SPACE \
     HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
     GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
@@ -466,6 +470,9 @@ EOF
     jq -cn '{attempts_error: "the attempt recorder ended without its record"}' >&5
     say "FAIL attempt record: the recorder ended without its record"
   fi
+  # 11. the run's spend lines, from the scratch ledger (a regular file only: the judge could plant a fifo there).
+  sl="$SB/spend.jsonl"
+  if [[ -f "$sl" && ! -L "$sl" ]]; then jq -Rnc '{spend: [inputs]}' < "$sl"; else jq -nc '{spend: []}'; fi >&5
   # 10. what the judge wrote into the worktree, read from the masked upper dir (real worktree at fd 9).
   python3 - /proc/self/fd/8/u /proc/self/fd/9 >&5 <<'EOF'
 import json, os, stat, sys
@@ -593,8 +600,8 @@ check "$(t test "$tok" = 0 -a "$ghls" = 0 -a "$cred" = 0 -a "$r" != 0)" "no gh o
 # The judge reads no tracker ticket: no tracker credential (issue-lifecycle spec #qc-interim).
 lin=$(env | grep -c '^LINEAR_API_KEY=')
 check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
-route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
-check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
+route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|OCTO_FEATHER_SPEND_SPACE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
+check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
 st=$("$(dirname "$0")/octo-feather-state")
 check "$(t test "$st" = "$SB")" "state dir is per-run scratch: $st"
 w=0
@@ -648,7 +655,11 @@ dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(
 # 8. the judge.
 "$@" 2>&6 4>&- 5>&- 6>&-; rc=$?
 
-# 9. post-run cleanup.
+# 9. post-run cleanup. The spend ledger's writers run detached: the kill below would lose their lines.
+for _ in $(seq 100); do
+  w=0; for p in $(nsprocs); do [[ "$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null)" == *"spend record"* ]] && w=1; done
+  ((w)) || break; sleep 0.1
+done
 panes=0
 [[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
 headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))

@@ -1065,23 +1065,14 @@ def classify(qc, inp, tmo, session, out=None, *, purpose):
         (out / "stderr.txt").write_text(run.stderr)
     bench, problem = bench_output(run.stdout)
     if bench is not None:
-        record_spend(bench.get("calls") or [], purpose)
+        record_spend(qc, bench.get("calls") or [], purpose)
     return bench, run, rec, (f"{problem} (pi exit {run.returncode})" if problem else None)
 
 
-def record_spend(calls, purpose):
-    """CALLS (the bench command's), one ledger line each under PURPOSE, through the ledger's one writer, `octo-feather-lane
-    spend record`, run here outside the sandbox in the caller's environment, so its lane resolves (spec spend, writer-bench
-    and writer-judge rows; its failures: `octo-feather-lane --help`, spend record)."""
-    if not calls:
-        return
-    lines = "".join(json.dumps({**c, "purpose": purpose}) + "\n" for c in calls)
-    try:
-        subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input=lines, text=True,
-                       stdout=subprocess.DEVNULL, timeout=60)
-    except (OSError, subprocess.SubprocessError) as e:
-        print(f"octo-feather-qa: spend unrecorded ({len(calls)} {purpose} call(s)): octo-feather-lane spend record "
-              f"did not run ({type(e).__name__})", file=sys.stderr)
+def record_spend(qc, calls, purpose):
+    """CALLS (the bench command's), one ledger line each under PURPOSE, recorded as octo-feather-qc record_spend says
+    (spec spend, writer-bench and writer-judge rows)."""
+    qc.record_spend([json.dumps({**c, "purpose": purpose}) for c in calls], purpose)
 
 
 def bench_end(out, res, problem):

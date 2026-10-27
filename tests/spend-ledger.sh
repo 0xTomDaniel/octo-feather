@@ -18,8 +18,12 @@
 #               code-reviewer (spend#rule-lane, spend#writer-agent)
 #   zero-priced fake/free, its catalog rates all 0 (rule: extensions/spend-ledger.ts header, Cost):
 #               `spend` shows it at $0, its call counted under unknown cost (spend#rule-cost)
+#   qc          `just qc` (scripts/octo-feather-qc, its sandbox) in lane gh149's space, beside a classifier judge
+#               call: the judge's message under gh149 and qc-judge, the lane's roles and total in `spend`'s lane and
+#               purpose rows (spend#acceptance-spend-agents)
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
-#               (spend#rule-write-fails)
+#               (spend#rule-write-fails); then the same for the qc run (qc-unwritable): same verdict and exit
+#   qa          a `just qa` eval case (role implementer) in no lane: under no lane and implementer (spend#rule-lane)
 # One real pi process at a time (the box's Pi load budget). Never skips: without pi, or with pi at
 # another version, it fails naming the install command. Run by `just check`.
 set -euo pipefail
@@ -38,7 +42,7 @@ fail() { echo "spend-ledger test: $*" >&2; exit 1; }
 # gets a nested_work tool call (usage 100 in, 20 out); any other request gets the answer
 # fake-answer-ok (usage 150 in, 10 out).
 cat > "$t/fake.py" <<'EOF'
-import http.server, json, os, sys
+import http.server, json, os, re, sys
 port_file = sys.argv[1]
 class H(http.server.BaseHTTPRequestHandler):
     def log_message(self, *a): pass
@@ -46,12 +50,18 @@ class H(http.server.BaseHTTPRequestHandler):
         body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
         msgs = body.get("messages", [])
         tool = "use the tool" in json.dumps(msgs) and not any(m.get("role") == "tool" for m in msgs)
+        qc = re.search(r"Repo: .*, head ([0-9a-f]{40})\.", json.dumps(msgs))
         self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
         base = {"id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake"}
         if tool:
             delta = {"role": "assistant", "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
                      "function": {"name": "nested_work", "arguments": "{}"}}]}
             end, usage = "tool_calls", {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}
+        elif qc:   # a qc brief (scripts/octo-feather-qc BRIEF): every criterion it names passes
+            ids = re.findall(r"\\n- (acceptance-[a-z0-9-]+): ", json.dumps(msgs))
+            crit = [{"id": i, "verdict": "pass", "command": "demo", "output": "ok", "why": "shown"} for i in ids]
+            delta = {"role": "assistant", "content": "```json\n" + json.dumps({"head": qc.group(1), "criteria": crit}) + "\n```"}
+            end, usage = "stop", {"prompt_tokens": 150, "completion_tokens": 10, "total_tokens": 160}
         else:
             delta = {"role": "assistant", "content": "fake-answer-ok"}
             end, usage = "stop", {"prompt_tokens": 150, "completion_tokens": 10, "total_tokens": 160}
@@ -161,6 +171,35 @@ row "$s" lane gh149 0.654000 6 1 707 63
 row "$s" model fake/fake 0.990000 6 0 850 70
 echo "case zero-priced: ok (fake/free: \$0.000000, 1 call of unknown cost, 150 in 10 out; fake/fake priced as before)"
 
+# qc: the product judge's run in its sandbox (scripts/octo-feather-qc), in lane gh149's space, beside the lane's
+# implementer spend above and a classifier judge call: its one message (150 in, 10 out, $0.17) under gh149 and qc-judge
+# (spec spend#acceptance-spend-agents; how: scripts/octo-feather-qc record_spend). Linux only (the sandbox needs unshare), as tests/qc.sh.
+sandbox=1; [[ "$(uname -s)" != Darwin ]] || { sandbox=0; echo "cases qc, qa: skipped, not on macOS (the qc sandbox needs Linux; CI runs them)"; }
+qcrepo="$t/qcrepo"; mkdir -p "$qcrepo/docs/specs" "$t/home/.pi"; cp -r "$t/agent" "$t/home/.pi/agent"   # under HOME: kept in the sandbox
+cp "$kit/tests/fixtures/spec-status/good/demo.spec.html" "$qcrepo/docs/specs/"
+gitenv=(GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t)
+(cd "$qcrepo" && git init -q -b main && git add -A && env "${gitenv[@]}" git commit -qm spec \
+  && "$kit/scripts/octo-feather-spec-status" init docs/specs/demo.spec.html "$(git rev-parse --short HEAD)" >/dev/null \
+  && git add -A && env "${gitenv[@]}" git commit -qm status)
+# qc SPACE: one `just qc` of acceptance-a; $out, $rc, stderr in $t/err.
+qc() { set +e
+  out="$(cd "$qcrepo" && pienv HERDR_WORKSPACE_ID="$1" PI_CODING_AGENT_DIR="$t/home/.pi/agent" OCTO_FEATHER_QC_MODEL=fake/fake "${gitenv[@]}" \
+    "$kit/scripts/octo-feather-qc" docs/specs/demo.status.json 5 acceptance-a 2>"$t/err")"; rc=$?
+  set -e; }
+if ((sandbox)); then
+  printf '{"model":"openrouter/typesafe/jev-1.13","purpose":"judge","input_tokens":500,"output_tokens":40,"cost_usd":0.0001}\n' |
+    env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" HERDR_WORKSPACE_ID=w37 "$L" spend record
+  qc w37
+  [[ "$rc" == 0 && "$out" == *"PASS acceptance-a"* ]] || fail "qc: exit $rc: $out $(tail -20 "$t/err")"
+  calls 10
+  s="$(spend)"
+  row "$s" 'lane and purpose' 'gh149 qc-judge' 0.170000 1 0 150 10
+  row "$s" 'lane and purpose' 'gh149 implementer' 0.654000 6 1 707 63
+  row "$s" 'lane and purpose' 'gh149 judge' 0.000100 1 0 500 40
+  row "$s" lane gh149 0.824100 8 1 1357 113
+  echo "case qc: ok (the judge's call under gh149 and qc-judge, beside gh149 implementer and judge, lane gh149 \$0.8241)"
+fi
+
 # unwritable: the ledger path is a directory.
 mv "$ledger" "$t/ledger.bak"; mkdir "$ledger"
 run "answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
@@ -169,4 +208,32 @@ want='octo-feather-lane spend record: spend unrecorded (1 call(s), $0.170000): c
 for _ in $(seq 100); do grep -qF "$want" "$t/err" && break; sleep 0.1; done
 grep -qF "$want" "$t/err" || fail "unwritable: stderr lacks '$want': $(cat "$t/err")"
 echo "case unwritable: ok (exit 0, fake-answer-ok, stderr: $(grep -F "$want" "$t/err" | head -1))"
+# qc-unwritable: the same qc run with the ledger unwritable: the same verdict and exit, stderr names the unrecorded call
+# (spec spend#rule-write-fails).
+if ((sandbox)); then
+  qc w37
+  [[ "$rc" == 0 && "$out" == *"PASS acceptance-a"* ]] || fail "qc-unwritable: exit $rc (want 0 and PASS acceptance-a): $out"
+  grep -qF "$want" "$t/err" || fail "qc-unwritable: stderr lacks '$want': $(cat "$t/err")"
+  echo "case qc-unwritable: ok (exit 0, PASS acceptance-a, stderr: $(grep -F "$want" "$t/err" | head -1))"
+fi
+rm -r "$ledger"; mv "$t/ledger.bak" "$ledger"
+
+# qa: a factory eval case (role implementer) run by `just qa` (scripts/octo-feather-qa) outside any lane: its call
+# under no lane and implementer (spec spend#rule-lane).
+if ((sandbox)); then
+  ev="$t/evals"; mkdir -p "$ev/one/reference" "$ev/fixtures/fx"; echo fixture > "$ev/fixtures/fx/README.md"
+  echo '{"suite": "one", "kind": "skill-trigger", "description": "spend", "max_tool_calls": 5, "timeout_s": 120}' > "$ev/one/suite.json"
+  echo '[{"id": "look", "role": "implementer", "fixture": "fx", "should_trigger": false, "split": "train", "task": "Only look."}]' > "$ev/one/cases.json"
+  echo '{"look": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]}}' > "$ev/one/reference/expectations.json"
+  set +e
+  out="$(cd "$t/repo" && pienv PI_CODING_AGENT_DIR="$t/home/.pi/agent" OCTO_FEATHER_QA_DIR="$t/qa" "${gitenv[@]}" \
+    "$kit/scripts/octo-feather-qa" --evals "$ev" --model fake/fake 2>"$t/err")"; rc=$?
+  set -e
+  [[ "$rc" == 0 && "$out" == *"PASS one/look"* ]] || fail "qa: exit $rc: $out $(tail -20 "$t/err")"
+  calls 11
+  s="$(spend)"
+  row "$s" 'lane and purpose' '\(no lane\) implementer' 0.170000 1 0 150 10
+  row "$s" lane gh149 0.824100 8 1 1357 113
+  echo "case qa: ok (the eval case's call under no lane and implementer)"
+fi
 echo "spend-ledger: ok (pi $v, empty HOME and environment, no provider credential)"
