@@ -164,7 +164,7 @@ def oauth_warning():
 def sandboxed(judge, session, gh, history=True, kit=None):
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
-    test, kept readable while other repos are masked (default this kit)."""
+    test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")

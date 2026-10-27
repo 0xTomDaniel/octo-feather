@@ -7,7 +7,7 @@ below, by section). Each case: its fixture (evals/fixtures/<fixture>) is copied 
 dir (its repo setup and task slots: schema, Case; a fixture with uv.lock synced with `uv sync --locked`;
 a setup failure is a FAIL, case not run), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
 inside the product judge's sandbox (scripts/octo-feather-qc-sandbox, started as `just qc` starts it:
-no live Herdr, masked lane state, credentials and other repos (the kit under test kept), per-run Pi auth.json/models.json copies, scrubbed
+no live Herdr, masked lane state, credentials and other repos (what stays visible: docs/adr/0022, sandbox paragraph), per-run Pi auth.json/models.json copies, scrubbed
 env, an offline gh refusing every call, the copy an overlay whose writes die with the run; unlike
 `just qc`, no lane history: no archived lanes or director log bound in, proof line `history none`). The
 sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox cannot start, is a
@@ -48,8 +48,8 @@ result.json, and <run-id>/summary.json.
   --kit-ref COMMIT          run the cases against the kit at COMMIT: its role files, skills (its committed
                             .agents/skills, patches applied) and pi-role, from a `git archive` in scratch outside
                             the repo, bound read-only in the sandbox like the kit, removed after the run; cases,
-                            fixtures, grader and sandbox stay the head's; in the sandbox the head kit is masked but for the
-                            machinery the sandbox runs (scripts/octo-feather-qc-sandbox, step 3b). Shows a kit change's case failing before
+                            fixtures, grader and sandbox stay the head's (what of the head kit the sandbox shows:
+                            docs/adr/0022, sandbox paragraph). Shows a kit change's case failing before
                             it. An unknown COMMIT exits 64; a kit there with no agents/<role>.md (or scripts/pi-role)
                             fails that case naming the file. Every input.json, result.json and result line
                             records the kit's full sha (without --kit-ref: the kit's HEAD).
