@@ -23,29 +23,29 @@ FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_befor
          "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
          "field_lines": {"field"}, "branch_paths": set()}
 OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
-FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # else {"text"}
+FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
 FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
-NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # a before target reachable only with that case field
-SETUP = {"branch", "head", "origin", "fake_gh"}   # optional, role-transcript cases only
+NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
+SETUP = {"branch", "head", "origin", "fake_gh"}   # schema.md, Case
 BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential"}
 KINDS = {"skill-trigger", "role-transcript", "judgment"}
-JUDGMENT_MIN = 15   # spec judgment#acceptance: at least fifteen cases per labelled set
+JUDGMENT_MIN = 15   # schema.md, Judgment suite
 QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
 J_CASE = {"id", "split", "state"}
 J_EXP = {"label", "reason", "source"}
-J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record, optional
-CALIBRATION = {"evidence", "held_out", "threshold"}   # a judgment suite's optional calibration of the kit's model
-HELD_OUT = {"accuracy", "brier"}   # calibration.held_out: the bench's held-out score for the kit's model
-THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold: proposed (accepted false) or accepted
-MODEL_FILE = "judgment-model.json"   # the kit's one judgment model (spec judgment#rule-one-model)
+J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record (schema.md, Judgment suite)
+CALIBRATION = {"evidence", "held_out", "threshold"}   # schema.md, Calibration
+HELD_OUT = {"accuracy", "brier"}   # calibration.held_out (schema.md, Calibration)
+THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold (schema.md, Calibration)
+MODEL_FILE = "judgment-model.json"   # schema.md, Judgment model and classifiers
 MODEL_KEYS = {"model", "evidence"}
-CLASSIFIERS = "classifiers.json"   # every catalogue classifier ruled moving alias, yes/no only or pinned (spec judgment#rule-available)
+CLASSIFIERS = "classifiers.json"   # schema.md, Judgment model and classifiers
 CLASSIFIER_KEYS = {"owner", "moving_alias", "yes_no_only", "pinned"}
-YES_NO_KEYS = ("ruling", "error", "evidence")   # each yes_no_only entry's fields
-NAMES_MODEL = {"model", "chosen"}   # keys that would name a model in a suite
+YES_NO_KEYS = ("ruling", "error", "evidence")   # each yes_no_only entry's (schema.md, Judgment model and classifiers)
+NAMES_MODEL = {"model", "chosen"}   # schema.md, Suite
 MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
 BASE = {"id", "role", "fixture", "task"}
 TRIGGER = {"should_trigger", "split"}
@@ -190,7 +190,7 @@ def check_suite(d, evals, errs):
 
 
 def model_keys(o, at=""):
-    """The dotted paths of every key in O, at any depth, that would name a model (model, chosen)."""
+    """The dotted paths of every NAMES_MODEL key in O (rule: schema.md, Suite)."""
     if isinstance(o, list):
         return [p for n, x in enumerate(o) for p in model_keys(x, f"{at}[{n}]")]
     if not isinstance(o, dict):
@@ -327,7 +327,7 @@ def check_calibration(ch, kind, where, evals, errs, named=()):
 
 
 def check_judgment(d, cases, exps, errs):
-    """A judgment suite: its closed question, and each case's split and state, label, one-line reason and source."""
+    """A judgment suite (rule: schema.md, Judgment suite)."""
     name = d.name
     q = load(d / "question.json", errs)
     labels = []
@@ -407,7 +407,7 @@ def check_judgment(d, cases, exps, errs):
 
 
 def check_setup(at, c, evals, errs):
-    """A role-transcript case's repo setup fields."""
+    """A role-transcript case's repo setup fields (rule: schema.md, Case)."""
     ref = lambda v: isinstance(v, str) and BRANCH.fullmatch(v) and ".." not in v and not v.endswith(("/", ".lock"))
     if "branch" in c and not ref(c["branch"]):
         errs.append(f"{at}: field branch: must be a branch name ({BRANCH.pattern}, no '..'), got {c['branch']!r}")
@@ -456,7 +456,7 @@ def declares_tests(evals, name):
 
 
 def fixture_trackers(evals, errs):
-    """The tracker skills the fixtures resolve {tracker} to, as pi-role does in a fixture copy's checkout top."""
+    """The tracker skills the fixtures resolve {tracker} to (rule: schema.md, Coverage)."""
     pr = pi_role()
     have = pr.kit_trackers(str(KIT / ".agents" / "skills"))
     out = set()
@@ -475,7 +475,7 @@ def fixture_trackers(evals, errs):
 
 
 def role_skills(evals, errs):
-    """(role, skill) for every skill each kit role's frontmatter lists under `skills:`, {tracker} resolved."""
+    """(role, skill) for every skill each kit role lists (rule: schema.md, Coverage)."""
     trackers, slot = fixture_trackers(evals, errs)
     pairs = []
     for f in sorted((KIT / "agents").glob("*.md")):

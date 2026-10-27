@@ -1,7 +1,7 @@
 {
   "suite": "role-transcripts",
   "kind": "role-transcript",
-  "description": "Does each role do its real step as designed? A role runs a real brief on a fixture repo (a ticket, a correction, a review, a qc run, a lane's parent issue or publish); the case passes when its transcript shows each listed skill loaded before the step it serves, that step reached in the run, and where the case needs a verdict, the role's final message carrying it (facts and what each reads: .agents/skills/eval-cases/references/schema.md, Facts). Cases from #107's role probes and the owed evals that a transcript can decide.",
+  "description": "Does each role do its real step as designed? A role runs a real brief on a fixture repo (a ticket, a correction, a review, a qc run, a lane's parent issue or publish); each case is graded on facts: a listed skill loaded before the step it serves and, where the case needs a verdict, the role's final message carrying it (facts and what each reads: .agents/skills/eval-cases/references/schema.md, Facts). Cases from #107's role probes and the owed evals that a transcript can decide.",
   "max_tool_calls": 120,
   "timeout_s": 1800
 }

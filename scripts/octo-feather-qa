@@ -17,17 +17,16 @@ answers repo view, issue and pr create, lists); an `origin` case gets a bare ori
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
 qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
 is credited to: schema, Before targets). For a case graded on test_write only, the collection runs after each
-call that changed a file, in a copy of that snapshot's own bytes, no test module imported.
+call that changed a file (on what: schema, Before targets), no test module imported.
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
-and, for attempt_blocked only, the sandbox's own attempt record (its setup-side recorder writes it; sandbox.json
-`attempts`; no command text or tool output is read), against the
+and, for attempt_blocked only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
+Attempt record), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
 (default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
-A fact is decided when the schema's Facts section says (a skill_read_before once its target is reached; a
-fact read from the final message only once pi exits on its own, so it never stops a run early).
+A fact is decided when the schema's Facts section says.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
 
 Why graders read declared fields, never prose, and what a judgment may gate: docs/adr/0008 (rung 2
@@ -58,8 +57,8 @@ selected cases run in the same sandbox as one Pi extension command, no agent: `p
 --no-extensions --no-tools -e <bench extension> -p "/octo-feather-bench <input>"` runs the command and exits, no
 chat model turn (non-LLM classifiers need no agent, so no launcher; docs/adr/0016 covers agents). The command lists
 ctx.modelRegistry.getAvailableOfType("classifier") and has each (or each --classifier) not skipped answer the closed
-question (a choice question: the question, label_help as criteria) for every case's state, at most 4 calls at once.
-The state goes as the case's state string, the one shape every classifier takes (some accept no other object than
+question (its form: schema, Bench) for every case's state, at most 4 calls at once.
+The state goes as the case's state string (schema, Bench), the one shape every classifier takes (some accept no other object than
 their own). classify never throws, so stopReason and errorMessage are kept. Its JSON output line is graded here
 against reference/expectations.json, never shown to it. Which classifiers are skipped (EVALS/classifiers.json),
 unclassified or unavailable, the scores, the best-scoring classifier, the kit model's proposed threshold, whether
@@ -83,7 +82,7 @@ SELF = KIT / "scripts" / "octo-feather-qa"
 GH_OFF = "github: none (factory eval: no GitHub evidence)"
 DEFAULT_MAX_CALLS, DEFAULT_TIMEOUT = 12, 600
 SAMPLE_SEED = "octo-feather-qa"
-# kit_contract_edit: exactly the files agents/corrector.md's "before editing a role, skill or patch" guards, repo-root relative.
+# kit_contract_edit's paths, repo-root relative (rule: schema, Before targets).
 CONTRACT_PATH = re.compile(r"^(?:agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+)$")
 
 
@@ -106,9 +105,8 @@ def tool_calls(lines):
     return calls
 
 
-# attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox: its herdr shim, git credential
-# helper and offline gh send to it, its setup-side recorder alone writes it, with its inotify mask watch), one {kind, attempt, refused, what, result} per line; no command text and no
-# tool output is read. Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
+# attempt_blocked: the qc sandbox's own attempt record (scripts/octo-feather-qc-sandbox), one {kind, attempt, refused,
+# what, result} per line (what it reads: .agents/skills/eval-cases/references/schema.md, Attempt record). Live, in the sandbox: the recorder's read-only view as it grows; after the run: the sandbox's post
 # record (the recorder's line; none: attempts_error, read as no record; what that does: .agents/skills/eval-cases/references/schema.md, Attempt record).
 def attempt_record(path=None):
     """The record's lines so far (the watcher, in the sandbox); [] when there is none."""
@@ -129,7 +127,7 @@ def show(call):
     return f"{n} {str(a.get('path') or a.get('command') or '')[:120]}".strip()
 
 
-# What Pi itself adds to a tool result when it cuts it short (read: a partial file; bash: a kept tail).
+# Pi's truncation notices (rule: schema, Skill load).
 TRUNCATED = re.compile(r"\[(?:Showing lines \d+-\d+ of \d+|\d+ more lines in file\.|Output truncated\.)")
 _SKILL_TEXT = {}
 
@@ -139,8 +137,7 @@ def norm(text):
 
 
 def skill_text(path):
-    """The SKILL.md as the kit under test holds it, normalized: CRLF as LF, trailing newlines dropped (a tool may
-    drop the file's last newline; Pi's bash appends its exit status after the output)."""
+    """The SKILL.md as the kit under test holds it, normalized (rule: schema, Skill load)."""
     if path not in _SKILL_TEXT:
         try:
             _SKILL_TEXT[path] = norm(Path(path).read_text(encoding="utf-8")).rstrip("\n")
@@ -151,7 +148,7 @@ def skill_text(path):
 
 def result_texts(lines):
     """The text each tool call put in the agent's context, in start order: its tool_execution_end content text,
-    None while it has none or when Pi truncated it (structuredContent.truncated, or Pi's truncation notice)."""
+    None while it has none or when Pi truncated it (rule: schema, Skill load)."""
     order, texts = [], {}
     for line in lines:
         e = safe_json(line)
@@ -176,7 +173,7 @@ def loads(fact, text):
 
 def fs_marks(lines):
     """{target: index of the first tool call after which the watcher saw it}: test_write, edit, git_commit, git_push,
-    gh_call, kit_contract_edit, from its qa_fs events (filesystem snapshots, never command text)."""
+    gh_call, kit_contract_edit, from its qa_fs events (rule: schema, Before targets)."""
     order, marks = {}, {}
     for line in lines:
         e = safe_json(line)
@@ -337,7 +334,7 @@ def judge_branch(fact, final, last, lines):
 def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
     """(status, text): status pass, fail, or open (undecided so far; only when not final).
     marks: fs_marks of the run (the first tool call index of each filesystem target); lines: the event stream
-    (a skill load is read from the tool results in it); record: the sandbox's attempt record (attempt_blocked)."""
+    (skill loads: schema, Skill load); record: the sandbox's attempt record (attempt_blocked)."""
     if fact["fact"] == "declared":
         return judge_declared(fact, final, last)
     if fact["fact"] == "declared_includes":
@@ -364,7 +361,7 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
     if t == "skill_read_before":
         b = fact["before"]
         stop, text = last or (None, None)
-        if b == "final_message":   # never a mark: reached when pi ends on its own with a final message, after every call
+        if b == "final_message":   # never a mark (rule: schema, Before targets)
             w = n if final and stop in (None, "exit") and text is not None else None
             gone = "no final assistant message" if stop in (None, "exit") else f"run stopped ({stop}) before its final message"
         else:
@@ -437,7 +434,7 @@ def prep(setup):
 
 
 def snapshot(origin, log, keep=False):
-    """The case repo as data: content hash of every file git does not ignore, HEAD, origin's refs, gh log lines;
+    """The case repo as data, a snapshot (what it holds: schema, Before targets);
     keep: also those files' bytes as read ("data"), for declared_tests to collect from that same state."""
     files, data = {}, {}
     for f in subprocess.run(["git", "ls-files", "-z", "-co", "--exclude-standard"], capture_output=True, text=True).stdout.split("\0"):
@@ -507,7 +504,7 @@ def watch(argv):
     cmd = argv[argv.index("--") + 1:]
     env, origin, log = prep(setup)
     known = set(git_out("rev-list", "--all").split())
-    main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base: main as set up
+    main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base (schema, Branch paths)
     tests = any(isinstance(f, dict) and f.get("before") == "test_write" for f in facts)   # only a case graded on it
     snap = snapshot(origin, log, tests)
     if tests:
@@ -740,12 +737,12 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
 BENCH_INPUT = "bench-input.json"
 BENCH_EXT = "bench-extension.js"
 BENCH_COMMAND = "octo-feather-bench"
-BUCKETS = (0.0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)   # top-probability buckets for ECE and the confidence table
-Z = 1.96   # the threshold's 95% bounds
+BUCKETS = (0.0, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0)   # ECE's buckets (schema, Bench), also the confidence table's
+Z = 1.96   # the proposed threshold's z (schema, Bench)
 JUDGMENT = "model judgment (classifier output, advisory: no gate reads it)"
 # The bench as a Pi extension command, run by `pi -e <this> -p "/octo-feather-bench <input path>"`: no agent, no chat
-# model. Every available classifier (or the --classifier ones) answers the closed question for every case, at most
-# 4 calls at once; the state is the case's state string; a skipped id (INP skip, exact P/ID) is never called. One
+# model. Who answers, on what, and which ids are skipped: schema, Bench; INP skip lists the skipped ids. At most
+# 4 calls at once. One
 # stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
 # order, cost, error index].
 BENCH_SOURCE = """import { readFileSync, writeSync } from "node:fs";
@@ -758,8 +755,8 @@ export default function (pi) {
       const all = await reg.getAvailableOfType("classifier");
       const name = (m) => m.provider + "/" + m.id;
       const listed = inp.classifiers ? all.filter((m) => inp.classifiers.includes(name(m))) : all;
-      // A ruled-out id is skipped, never called: an exact P/ID in inp.skip (classifiers.json moving_alias and yes_no_only),
-      // no name shape. Without inp.skip (`octo-feather-lane judge`, asking the kit's model, which check-evals holds pinned): none.
+      // inp.skip: the ruled-out ids (schema.md, Bench). Without inp.skip (`octo-feather-lane judge`, asking the kit's
+      // model): none.
       const skip = inp.skip || [];
       const ruled_out = (m) => skip.includes(name(m));
       const ms = listed.filter((m) => !ruled_out(m));
@@ -811,8 +808,7 @@ def bench_output(stdout):
 
 
 def calibration(answered, labels):
-    """Brier (mean over cases of sum over labels of (p - truth)^2, probabilities renormalized), ECE over top-probability
-    buckets, the buckets [lo, hi, n, mean top probability, accuracy], and each case's Brier term."""
+    """Brier and ECE (rule: schema, Bench), the buckets [lo, hi, n, mean top probability, accuracy], and each case's Brier term."""
     terms, tops = [], []
     for a in answered:
         ps = [p if isinstance(p, (int, float)) else 0.0 for p in a["probabilities"]]
@@ -844,7 +840,7 @@ def wilson_low(k, n):
     return (p + Z * Z / (2 * n) - Z * ((p * (1 - p) + Z * Z / (4 * n)) / n) ** 0.5) / (1 + Z * Z / n)
 
 
-MODEL_FILE = "judgment-model.json"   # in the evals dir: the kit's one judgment model (spec judgment#rule-one-model)
+MODEL_FILE = "judgment-model.json"   # in the evals dir (schema, Judgment model and classifiers)
 BEST_RULE = "highest train accuracy over every train case answered; ties: lower train Brier, lower train cost, name"
 
 
@@ -857,7 +853,7 @@ def classifier_lists(evals):
 
 
 def unclassified_ids(bench, ruled):
-    """The listed classifiers called (benched) in no list of classifiers.json (the skipped ones never are)."""
+    """The benched classifiers in no list of classifiers.json (rule: schema, Bench, Classes)."""
     return [m for m in bench.get("benched") or [] if m not in ruled["pinned"]]
 
 
@@ -872,8 +868,8 @@ def judgment_model(evals):
 
 
 def bench_metrics(bench, cases, labels, kit_model=None, ruled=None):
-    """Per benched model: train and held-out accuracy and calibration, cost, errors; the question's best-scoring
-    classifier (train only) and the kit's model's proposed threshold (from its train answers)."""
+    """Per benched model: scores per split; the question's best-scoring classifier and the kit's model's proposed
+    threshold (rules: schema, Bench)."""
     errors = bench.get("errors") or []
     names = bench.get("benched") or []
     per = {m: [] for m in names}
@@ -1013,7 +1009,7 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
                skipped_yes_no_only=yes_no_skipped(bench, ruled),
                unclassified=unclassified_ids(bench, ruled),
                models=models, best=best, kit_model=kit, cost_usd=sum(m["cost_usd"] for m in models))
-    asked = not requested or kit_model in requested   # --classifier without the kit's model: it is not benched, by request
+    asked = not requested or kit_model in requested   # --classifier without the kit's model (schema, Bench: when a bench FAILS)
     problem = ("no classifier answered every train case" if not best else
                f"the kit's judgment model {kit_model} was not scored ({kit['why']})" if asked and not kit["scored"] else None)
     return bench_end(out, res, problem)

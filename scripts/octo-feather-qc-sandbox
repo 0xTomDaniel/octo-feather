@@ -355,7 +355,7 @@ def fifo(final=False):   # the offline gh's refusals, one JSON line each; a brok
             misses.append(r)
             emit({"kind": "credential", "attempt": True, "refused": True, "what": " ".join(["gh", *map(str, r.get("argv", []))]),
                   "result": f"offline gh refused: {r.get('why', '')}"})
-def opens():   # inotify on the tmpfs masks: an open is an attempt, refused when the mask holds no entry
+def opens():   # inotify on the tmpfs masks (what is an attempt, what is refused: .agents/skills/eval-cases/references/schema.md, Attempt record)
     while True:
         try:
             b = os.read(ino, 65536)
