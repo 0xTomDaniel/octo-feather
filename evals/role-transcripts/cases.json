@@ -28,6 +28,13 @@
     "task": "Ticket T6 (lane gh6, parent #6): agents working on this repo have no scripted way to start the real `app`, drive it the way a user does and keep proof of what it did, so every lane improvises its own checks. Give the repo one, kept in the repo for the agents that come after, and run it once end to end before you hand it over.\nAcceptance criterion: drive-and-prove. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
   },
   {
+    "id": "implementer-verify-kit",
+    "role": "implementer",
+    "fixture": "kit-mini",
+    "branch": "implementer-t7",
+    "task": "Ticket T7 (lane gh7, parent #7): run with no argument in a folder with no contract, `octo-feather-contract` refuses with `no qc.toml at ./qc.toml`, and an owner reading that line in a log cannot tell which folder it looked in. Make the refusal name the absolute path it looked at, whatever form the argument took (none, a relative folder, a relative file path), and leave everything else the command prints as it is. Drive the changed command for real and keep the proof before you hand it over.\nAcceptance criterion: contract-abs-path. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t7, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
