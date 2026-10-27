@@ -67,16 +67,16 @@
       "pr": 181
     },
     "acceptance-verify-maintain": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-map-current": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-used": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 181
     },
     "acceptance-verify-view-model": {
       "status": "planned",
