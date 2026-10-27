@@ -2,7 +2,8 @@
 # Integration test for the check-scripts gate (rules: #121 D1 D2). In a throwaway copy of the kit's
 # tracked files, each planted script makes `just check-scripts` fail or pass. Run by `just check`.
 # Cases that reach the whole shellcheck pass share runs (#207): the scripts that must pass are planted together in
-# one run, which also proves the clean copy green; the shell scripts that must fail, together in another, each named.
+# one run, which also proves the clean copy green. Each script that must fail runs alone: the bash -n fallback stops
+# at the first bad file.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
@@ -15,11 +16,12 @@ run() {
   set +e; out="$(cd "$t" && just check-scripts 2>&1)"; rc=$?; set -e
   for f in "${planted[@]}"; do rm -f "${t:?}/$f"; done; planted=()
 }
-# expect SHEBANG BODY: alone, scripts/x.planted makes just check-scripts fail naming it.
+# expect SHEBANG BODY [FILE]: alone, FILE (default scripts/x.planted) makes just check-scripts fail naming it.
 expect() {
-  plant scripts/x.planted "$1" "$2"; run
-  [[ "$rc" != 0 ]] || { echo "check-scripts test: '$1' with '$2' passed just check-scripts" >&2; exit 1; }
-  grep -qF 'scripts/x.planted' <<<"$out" || { echo "check-scripts test: '$1' with '$2' not named in the output" >&2; echo "$out" >&2; exit 1; }
+  local f="${3:-scripts/x.planted}"
+  plant "$f" "$1" "$2"; run
+  [[ "$rc" != 0 ]] || { echo "check-scripts test: $f '$1' with '$2' passed just check-scripts" >&2; exit 1; }
+  grep -qF "$f" <<<"$out" || { echo "check-scripts test: $f '$1' with '$2' not named in the output" >&2; echo "$out" >&2; exit 1; }
 }
 # allow SHEBANG BODY: plants a script that must pass, checked by the next allowed run.
 n=0; allow() { n=$((n + 1)); plant "scripts/x$n.planted" "$1" "$2"; }
@@ -27,12 +29,6 @@ n=0; allow() { n=$((n + 1)); plant "scripts/x$n.planted" "$1" "$2"; }
 allowed() {
   local what; what="$(for f in "${planted[@]}"; do head -n 2 "$t/$f" | paste -sd ' ' -; done)"; run
   [[ "$rc" == 0 ]] || { echo "check-scripts test: one of these failed just check-scripts:" >&2; echo "$what" >&2; echo "$out" >&2; exit 1; }
-}
-# rejected FILE...: just check-scripts fails naming every planted FILE.
-rejected() {
-  local f; run
-  [[ "$rc" != 0 ]] || { echo "check-scripts test: planted bad shell scripts passed just check-scripts: $*" >&2; exit 1; }
-  for f in "$@"; do grep -qF "$f" <<<"$out" || { echo "check-scripts test: $f not named in the output" >&2; echo "$out" >&2; exit 1; }; done
 }
 py='#!/usr/bin/env python3'
 uv='#!/usr/bin/env -S uv run --script'
@@ -52,9 +48,8 @@ allow '#!/opt/python3/bin/bash' 'if [ -n "${1:-}" ]; then echo "$1"; fi'
 allow '#!/usr/bin/env bash' 'echo ok'
 allowed
 # Bad shell fails wherever check-scripts looks: scripts/, the herdr-comms assets, tests/.
-plant scripts/x.planted '#!/opt/python3/bin/bash' 'if then fi'
-plant scripts/y.planted '#!/usr/bin/env bash' 'if then fi'
-plant .agents/skills/herdr-comms/assets/x.planted '#!/usr/bin/env bash' 'if then fi'
-plant tests/x.planted '#!/usr/bin/env bash' 'if then fi'
-rejected "${planted[@]}"
+expect '#!/opt/python3/bin/bash' 'if then fi'
+expect '#!/usr/bin/env bash' 'if then fi'
+expect '#!/usr/bin/env bash' 'if then fi' .agents/skills/herdr-comms/assets/x.planted
+expect '#!/usr/bin/env bash' 'if then fi' tests/x.planted
 echo "check-scripts: ok (#121 D1 D2 cases)"

@@ -16,7 +16,8 @@ build-backend = "hatchling.build"
 
 [tool.ruff]
 line-length = 100
-# The octo-feather kit's trend hook, copied byte for byte; it is linted where it is written, not here.
+# The octo-feather kit's trend hook (tests/gate/conftest.py), copied byte for byte; the kit owns it and
+# does not lint it, so it is outside this repo's lint, format and type checks.
 extend-exclude = ["tests/conftest.py"]
 
 [tool.ruff.lint]
