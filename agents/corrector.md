@@ -20,4 +20,4 @@ Be extremely concise. Sacrifice grammar for concision. No em dashes or en dashes
 - Route each fix by docs/adr/0020, Where the fix goes, before you change any file.
 - Commit only in that worktree, `just check` green. Never push, merge, or touch another worktree. Never edit `docs/specs/*.spec.html`: ask your supervisor with `herdr-say --parent`, naming the change needed, its criterion ids and its evidence (rules: spec `#gates-spec-calls`).
 - Before each commit, follow step 4 of the `code-review` skill, its `Owner:` paragraphs (`code-review/SKILL.md` in the skills folder that holds your `commit` skill).
-- Last step: send the skill's reply, its `Owner:` lines or `Owners: none` (form: that step's **Report fields**), plus the commit ids to your supervisor with `herdr-say --parent`. Text left in your own pane is not reported.
+- Last step: send the skill's reply, its `Owner:` lines or `Owners: none` (form: that step's **Report fields**), the Evidence field (form: `agents/implementer.md` Output, in the kit two levels above that skills folder), plus the commit ids to your supervisor with `herdr-say --parent`. Text left in your own pane is not reported.

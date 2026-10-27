@@ -103,5 +103,19 @@
     "role": "qc-judge",
     "fixture": "python-app-verify",
     "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-json: Given the installed app, When `app hello Ada --json` runs, Then stdout is a JSON object whose \"text\" field is `Hello, Ada` and it exits 0.\n- hello-blank: Given the installed app, When `app hello '  '` runs, Then stdout is empty, stderr starts with `error: ` and it exits 2.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
+  },
+  {
+    "id": "implementer-verify-map-current",
+    "role": "implementer",
+    "fixture": "python-app-verify-live",
+    "branch": "implementer-t8",
+    "task": "Ticket T8 (lane gh8, parent #8): people greeting someone across a noisy room want `app hello Ada --shout` to print the greeting in capitals (`HELLO, ADA`), and the same with `--json` (the `text` field in capitals, `name` as typed after trimming). Without `--shout` nothing changes.\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t8, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "corrector-evidence-field",
+    "role": "corrector",
+    "fixture": "python-app-verify-live",
+    "branch": "corrector-gh15",
+    "task": "Correction lane gh15 for this repo (ADR 0020 factory QA). Trigger: an owner correction at the gh14 gate: \"Lane gh14's handoff says `app hello '  ' --json` exits 1 and prints its error on stderr, and its merge ask repeats it. Nobody ran it. Run it and see what it really does, then make sure no lane hands off app behaviour it never ran.\"\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh15 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the correction above is all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
   }
 ]
