@@ -27,4 +27,4 @@ This file governs work on the kit itself. Terms (director, supervisor, worker, w
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
 - `evals/` factory eval suites (`<suite>/suite.json`, `cases.json`, hidden `reference/expectations.json`) and their `fixtures/`; shape: `scripts/check-evals --help`.
-- `docs/adr/` lasting decisions (Matt's ADR format); `docs/future.md` deferred ideas; `docs/owed-evals/<issue>.md` owed eval cases (docs/adr/0008).
+- `docs/adr/` ADRs, Matt's format (what they own: docs/specs/index.spec.html `#context`); `docs/future.md` deferred ideas; `docs/owed-evals/<issue>.md` owed eval cases (docs/adr/0008).
