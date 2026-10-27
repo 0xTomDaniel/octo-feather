@@ -3,3 +3,5 @@ node_modules/
 .venv/
 __pycache__/
 /tmp/
+# just check's pytest run: its cache (--lf) and junit xml (.pytest_cache/junit.xml, the trend line's source)
+.pytest_cache/

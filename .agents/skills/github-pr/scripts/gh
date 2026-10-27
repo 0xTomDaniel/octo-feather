@@ -5,9 +5,9 @@ snapshot scripts/octo-feather-qc-ghsnap fetched before the run (read-only bind, 
 issue view|list, pr view|list|diff|checks, run view|list, repo view, api GET, --json/-q/--jq.
 It refuses every write and every call the snapshot cannot answer (exit 1) and logs each refusal.
 Env: OCTO_FEATHER_GHSNAP snapshot dir; OCTO_FEATHER_GHSNAP_OFF why there is none (then every call
-is refused with it); OCTO_FEATHER_GHSNAP_MISS the refusal log. File contents and commits come from
+is refused with it); OCTO_FEATHER_GHSNAP_MISS the refusal log (a file, or the sandbox recorder's socket). File contents and commits come from
 the git repo of the current directory."""
-import json, os, re, subprocess, sys, base64
+import json, os, re, socket, stat, subprocess, sys, base64
 SNAP = os.environ.get("OCTO_FEATHER_GHSNAP", "")
 MISS = os.environ.get("OCTO_FEATHER_GHSNAP_MISS", "")
 GIT = os.getcwd()
@@ -32,7 +32,13 @@ def select_repo(argv):
 def miss(why, code=1):
     if MISS:
         try:
-            with open(MISS, "a") as f: f.write(json.dumps({"argv": sys.argv[1:], "why": why}) + "\n")
+            if os.path.exists(MISS) and stat.S_ISSOCK(os.stat(MISS).st_mode):   # the qc sandbox's recorder: returns once it has written the refusal
+                c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(MISS)
+                c.send(json.dumps({"t": "miss", "argv": [a[:4000] for a in sys.argv[1:201]], "why": why[:4000]}).encode())
+                c.shutdown(socket.SHUT_WR)
+                while c.recv(16): pass
+            else:
+                with open(MISS, "a") as f: f.write(json.dumps({"argv": sys.argv[1:], "why": why}) + "\n")
         except OSError: pass
     try: at = open(os.path.join(SNAP, "fetched_at")).read().strip()
     except OSError: at = "none"

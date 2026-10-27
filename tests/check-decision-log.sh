@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # Integration test for the check-decision-log gate (quality #acceptance-decision-log-schema):
 # in a throwaway git copy of the kit's tracked files, a planted tracked decisions.jsonl
-# (at the root or nested) with a bad line makes `just check` fail naming FILE:LINE and the
-# field; a valid log, an untracked log and no log pass. check-decision-log runs before
-# check-tests, so a red copy never recurses. Run by `just check`.
+# (at the root or nested) with a bad line makes `just check-decision-log` fail naming FILE:LINE
+# and the field; a valid log, an untracked log and no log pass (#231: the recipe under test, not
+# the whole gate per case); one case runs `just check` to prove the gate includes
+# check-decision-log. Run by `just check`.
 set -euo pipefail
-# A bad log the gate misses would reach check-tests in the copy and rerun this test: stop there.
+# The one `just check` case in the copy runs this test there too (its tests/*.sh step): stop there, nested.
 [[ -z "${CHECK_DECISION_LOG_TEST_COPY:-}" ]] || { echo "check-decision-log test: nested run in a copy (a planted log passed check-decision-log)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin"' EXIT
@@ -21,7 +22,7 @@ set +e; out="$(cd "$t" && just check-decision-log 2>&1)"; rc=$?; set -e
 plant() { mkdir -p "$t/$(dirname "$1")"; printf '%b' "$2" > "$t/$1"; [[ "${3:-}" == untracked ]] || g add -f "$1"; }
 unplant() { g rm -qf --cached "$1" >/dev/null 2>&1 || true; rm -f "$t/$1"; [[ "$1" != */* ]] || rmdir -p "$t/$(dirname "$1")" 2>/dev/null || true; }
 # run RECIPE: `just RECIPE` in the copy into $out and $rc.
-run() { set +e; out="$(cd "$t" && env -u CI CHECK_DECISION_LOG_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e; }
+run() { set +e; out="$(cd "$t" && just "$1" 2>&1)"; rc=$?; set -e; }
 # expect RECIPE FILE CONTENT REPORT...: a tracked FILE holding CONTENT makes `just RECIPE` fail
 # with each REPORT line ("FILE:LINE: problem") printed after "check-decision-log: ".
 expect() {
@@ -42,11 +43,11 @@ head='"ts":"2026-10-19T00:00:00Z","agent":"implementer","phase":"handoff","decis
 tail='"evidence":"just check","result":"pending"'
 ok="{$head,\"why\":\"gate green\",$tail}"
 L=decisions.jsonl; N=docs/lane/run/decisions.jsonl
-# The criterion cases, through the whole gate: missing why, invalid JSON, non-object, nested path.
-expect check "$L" "{$head,$tail}\n" "$L:1: missing why"
-expect check "$L" "$ok\n{$head,\"why\":\"x\",$tail\n" "$L:2: invalid JSON"
-expect check "$L" "[\"why\"]\n" "$L:1: not a JSON object"
-expect check "$N" "$ok\n$ok\n{$head,$tail}\n" "$N:3: missing why"
+# The criterion cases: missing why, invalid JSON, non-object, nested path.
+expect check-decision-log "$L" "{$head,$tail}\n" "$L:1: missing why"
+expect check-decision-log "$L" "$ok\n{$head,\"why\":\"x\",$tail\n" "$L:2: invalid JSON"
+expect check-decision-log "$L" "[\"why\"]\n" "$L:1: not a JSON object"
+expect check-decision-log "$N" "$ok\n$ok\n{$head,$tail}\n" "$N:3: missing why"
 # Valid logs pass: one line, several, nested, no final newline, CRLF, any key order, unicode text.
 allow "$L" "$ok\n"
 allow "$N" "$ok\n$ok\n$ok\n"
@@ -93,7 +94,7 @@ expect check-decision-log "$L" "$ok $ok\n" "$L:1: invalid JSON"
 expect check-decision-log "$L" "{}\n" "$L:1: missing ts" "$L:1: missing why" "$L:1: missing result"
 # Pattern dialect: schemas/decision-log.schema.json's $schema (#142, #121 D9). \S on U+FEFF, U+3000 U+00A0
 # U+2028 U+000B (fail) and U+001C..U+001F, U+0085, U+200B, U+180E (pass).
-expect check "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
+expect check-decision-log "$L" "{$head,\"why\":\"x\",\"evidence\":\"e\",\"result\":\"\\\\ufeff\"}\n" "$L:1: result does not match"
 expect check-decision-log "$L" "{$head,\"why\":\"\\\\u3000\\\\u00a0\\\\u2028\\\\u000b\",$tail}\n" "$L:1: why does not match"
 for c in 001c 001d 001e 001f 0085 200b 180e; do allow "$L" "{$head,\"why\":\"\\\\u$c\",$tail}\n"; done
 # The same dialect (#142) on \d \w \b . $ [\S] [^\s] via schema edits.
@@ -189,4 +190,12 @@ set +e; out="$(cd "$t" && PATH="$t.bin" "$(command -v python3)" scripts/check-de
   || { echo "check-decision-log test: missing node did not fail closed" >&2; echo "$out" >&2; exit 1; }
 rm -f "$t.schema"
 [[ -z "$(g status --porcelain)" ]] || { echo "check-decision-log test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
+# The gate includes check-decision-log: `just check` in the copy fails on a nested log line missing why, naming
+# FILE:LINE. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
+# above stops this one if the planted log ever got past check-decision-log.
+find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-decision-log.sh -delete; g add -A
+plant "$N" "$ok\n{$head,$tail}\n"
+set +e; out="$(cd "$t" && env -u CI CHECK_DECISION_LOG_TEST_COPY=1 XDG_STATE_HOME="$t.home" just check 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] || { echo "check-decision-log test: $N missing why passed just check" >&2; exit 1; }
+grep -qF "check-decision-log: $N:2: missing why" <<<"$out" || { echo "check-decision-log test: just check did not report $N:2: missing why" >&2; echo "$out" >&2; exit 1; }
 echo "check-decision-log: ok (missing why, invalid JSON and non-object lines fail naming FILE:LINE and the field, nested included; valid, untracked and no logs pass; the schema drives fields and extras; adversarial forms and a broken checker fail closed)"
