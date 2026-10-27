@@ -7,14 +7,14 @@
 # nothing of the box's ~/.pi or ledger. Cases:
 #   agents      in lane gh149's space (HERDR_WORKSPACE_ID=w37) as implementer: a prompt that calls
 #               a tool reporting nested usage (tests/fixtures/spend-ledger/nested-tool.ts), then an
-#               answer: 3 ledger lines (2 model messages, 1 tool result), shown under gh149 and
+#               answer: 3 calls (2 model messages, 1 tool result), shown under gh149 and
 #               implementer with the model, tokens and Pi's cost (spend#acceptance-spend-agents)
 #   role-unset  no OCTO_FEATHER_ROLE, no Herdr space: the extension's purpose fallback, no lane
 #   pi-role     the implementer role launched through scripts/pi-role (which loads the extension) as
 #               a pane launch does (herdr-spawn's role env), JSON mode, in lane gh149's space: its message under gh149 and
 #               implementer
 #   zero-priced fake/free, its catalog rates all 0 (rule: extensions/spend-ledger.ts header, Cost):
-#               its line has cost_usd null, counted under unknown cost (spend#rule-cost)
+#               `spend` shows it at $0, its call counted under unknown cost (spend#rule-cost)
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
 #               (spend#rule-write-fails)
 # One real pi process at a time (the box's Pi load budget). Never skips: without pi, or with pi at
@@ -82,31 +82,33 @@ run() {
     --model "${model:-fake/fake}" --no-session -p "$prompt" 2>"$t/err")"; rc=$?
   set -e
 }
-# lines N: wait up to 10 s for the ledger to hold N lines (the writer runs detached).
-lines() { for _ in $(seq 100); do [[ "$(wc -l 2>/dev/null < "$ledger" || echo 0)" -ge "$1" ]] && break; sleep 0.1; done
-  sleep 0.3; local n; n="$(wc -l 2>/dev/null < "$ledger" || echo 0)"
-  [[ "$n" == "$1" ]] || fail "ledger has $n lines, want $1: $(cat "$ledger" 2>/dev/null)"; }
 row() { # OUT TITLE KEY USD CALLS UNKNOWN IN OUT: the KEY row under "By TITLE:"
   awk -v t="By $2:" '$0==t{on=1;next} /^By |^OpenRouter/{on=0} on' <<<"$1" |
     grep -qE "^  $3 +\\\$$4 +calls +$5 +unknown cost +$6 +tokens in $7 out $8\$" || fail "no $2 row '$3 \$$4 calls $5 unknown $6 in $7 out $8' in: $1"
 }
 spend() { env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend; }
+# total: the calls `spend` counts in all, from its "Spend ledger: PATH (N calls)" header; 0 before any.
+total() { spend 2>/dev/null | sed -nE '1s/^Spend ledger: .* \(([0-9]+) calls?\)$/\1/p' | grep . || echo 0; }
+# calls N: wait up to 10 s for `spend` to count N calls in all (the writer runs detached).
+calls() { for _ in $(seq 100); do [[ "$(total)" -ge "$1" ]] && break; sleep 0.1; done
+  sleep 0.3; local n; n="$(total)"
+  [[ "$n" == "$1" ]] || fail "spend counts $n calls, want $1: $(spend 2>&1)"; }
 
 # agents: 2 model messages (0.1 + 0.04 = $0.14; 0.15 + 0.02 = $0.17) and the tool's $0.004.
 run "use the tool, then answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
 [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "agents: exit $rc, answer '$out': $(cat "$t/err")"
-lines 3
+calls 3
 s="$(spend)"
 row "$s" lane gh149 0.314000 3 0 257 33
 row "$s" purpose implementer 0.314000 3 0 257 33
 row "$s" model fake/fake 0.310000 2 0 250 30
 row "$s" model tool/nested_work 0.004000 1 0 7 3
-echo "case agents: ok (3 lines under gh149 and implementer: fake/fake \$0.31 250 in 30 out, tool/nested_work \$0.004 7 in 3 out)"
+echo "case agents: ok (3 calls under gh149 and implementer: fake/fake \$0.31 250 in 30 out, tool/nested_work \$0.004 7 in 3 out)"
 
 # role-unset: purpose agent, no lane.
 run "answer"
 [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "role-unset: exit $rc, answer '$out': $(cat "$t/err")"
-lines 4
+calls 4
 s="$(spend)"
 row "$s" lane '\(no lane\)' 0.170000 1 0 150 10
 row "$s" purpose agent 0.170000 1 0 150 10
@@ -119,23 +121,22 @@ out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implemente
   --no-session --mode json "answer" 2>"$t/err")"; rc=$?
 set -e
 [[ "$rc" == 0 && "$out" == *fake-answer-ok* ]] || fail "pi-role: exit $rc: $(cat "$t/err")"
-lines 5
+calls 5
 s="$(spend)"
 row "$s" lane gh149 0.484000 4 0 407 43
 row "$s" purpose implementer 0.484000 4 0 407 43
 row "$s" model fake/fake 0.650000 4 0 550 50
 echo "case pi-role: ok (pi-role launch recorded under gh149 and implementer)"
 
-# zero-priced: fake/free answers with the same usage (150 in, 10 out); Pi reports $0, the line holds null.
+# zero-priced: fake/free answers with the same usage (150 in, 10 out); Pi reports $0, spend counts it as unknown cost.
 model=fake/free run "answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
 [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "zero-priced: exit $rc, answer '$out': $(cat "$t/err")"
-lines 6
-grep -qE '"model": ?"fake/free".*"cost_usd": ?null' "$ledger" || fail "zero-priced: no fake/free line with cost_usd null: $(tail -1 "$ledger")"
+calls 6
 s="$(spend)"
 row "$s" model fake/free 0.000000 1 1 150 10
 row "$s" lane gh149 0.484000 5 1 557 53
 row "$s" model fake/fake 0.650000 4 0 550 50
-echo "case zero-priced: ok (fake/free: cost_usd null, 1 call of unknown cost; fake/fake priced as before)"
+echo "case zero-priced: ok (fake/free: \$0.000000, 1 call of unknown cost, 150 in 10 out; fake/fake priced as before)"
 
 # unwritable: the ledger path is a directory.
 mv "$ledger" "$t/ledger.bak"; mkdir "$ledger"
