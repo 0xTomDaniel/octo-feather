@@ -1,6 +1,5 @@
 name: check
 on:
-  # Only the head that goes into a merge ask: a draft PR skips the job; marking it ready runs it.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:

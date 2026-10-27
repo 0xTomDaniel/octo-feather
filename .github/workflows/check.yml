@@ -3,7 +3,7 @@
 # ubuntu-latest already ships bash, git, python3 and shellcheck.
 name: check
 on:
-  # Only the head that goes into a merge ask: a draft PR skips the job; marking it ready runs it.
+  # When: docs/specs/templates.spec.html#acceptance-same-gate.
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
