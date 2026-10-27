@@ -744,8 +744,9 @@ JUDGMENT = "model judgment (classifier output, advisory: no gate reads it)"
 # The bench as a Pi extension command, run by `pi -e <this> -p "/octo-feather-bench <input path>"`: no agent, no chat
 # model. Who answers, on what, and which ids are skipped: schema, Bench; INP skip lists the skipped ids. At most
 # 4 calls at once. One
-# stdout line {"bench": {available, benched, skipped, errors, rows}}, rows [model, case, choice, probabilities in label
-# order, cost, error index].
+# stdout line {"bench": {available, benched, skipped, errors, rows, calls}}, rows [model, case, choice, probabilities in label
+# order, cost, error index]; calls one {model, input_tokens, output_tokens, cost_usd, at} per reg.classify call, the
+# usage Pi reported for it (tokens unreported: 0; cost: spec spend#rule-cost), its ledger line (record_spend).
 BENCH_SOURCE = """import { readFileSync, writeSync } from "node:fs";
 export default function (pi) {
   pi.registerCommand("%(command)s", {
@@ -766,12 +767,18 @@ export default function (pi) {
       const errors = [];
       const err = (e) => { const s = String(e); if (!errors.includes(s)) errors.push(s); return errors.indexOf(s); };
       const r4 = (x) => (typeof x === "number" ? Math.round(x * 1e4) / 1e4 : null);
+      const calls = [];
+      const tokens = (x) => (Number.isInteger(x) && x >= 0 ? x : 0);
       const one = async (mi, ci) => {
         let r;
         try { r = await reg.classify(ms[mi], {state: inp.cases[ci].state, questions: {q}}); }
-        catch (e) { return [mi, ci, null, null, null, err(e)]; }
+        catch (e) { calls.push({model: name(ms[mi]), input_tokens: 0, output_tokens: 0, cost_usd: null, at: new Date().toISOString()});
+                    return [mi, ci, null, null, null, err(e)]; }
         const a = r && r.answers ? r.answers.q : undefined;
         const cost = r && r.usage && r.usage.cost && typeof r.usage.cost.total === "number" ? r.usage.cost.total : null;
+        const u = (r && r.usage) || {};
+        calls.push({model: name(ms[mi]), input_tokens: tokens(u.input), output_tokens: tokens(u.output), cost_usd: cost,
+                    at: new Date().toISOString()});
         if (!r || r.stopReason !== "stop" || !a) return [mi, ci, null, null, cost, err((r && (r.errorMessage || r.stopReason)) || "no result")];
         return [mi, ci, a.choice, inp.labels.map((l) => r4((a.probabilities || {})[l])), cost, null];
       };
@@ -785,7 +792,7 @@ export default function (pi) {
       const used = [...new Set(rows.map((r) => r[5]).filter((e) => e !== null))];
       const errs = used.map((e) => errors[e]);
       rows.forEach((r) => { if (r[5] !== null) r[5] = used.indexOf(r[5]); });
-      const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows};
+      const bench = {available: all.map(name), benched: ms.map(name), skipped, errors: errs, rows, calls};
       // Pi keeps stdout for itself in print mode (an extension's process.stdout goes to stderr): write fd 1 directly.
       const buf = Buffer.from(JSON.stringify({bench}) + "\\n");
       const nap = new Int32Array(new SharedArrayBuffer(4));
@@ -996,7 +1003,7 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
            "cases": [{"id": c["id"], "state": c["state"]} for c, _ in picked], "classifiers": requested or None,
            "skip": ruled["moving_alias"] + list(ruled["yes_no_only"])}
-    bench, run, rec, problem = classify(qc, inp, tmo, f"qa-{runid}-bench", out)
+    bench, run, rec, problem = classify(qc, inp, tmo, f"qa-{runid}-bench", out, purpose="bench")
     res["seconds"] = round(time.time() - t0, 1)
     if problem:
         return bench_end(out, res, problem)
@@ -1016,12 +1023,13 @@ def run_bench(qc, d, suite, picked, requested, runid, out, kit_model):
     return bench_end(out, res, problem)
 
 
-def classify(qc, inp, tmo, session, out=None):
+def classify(qc, inp, tmo, session, out=None, *, purpose):
     """The one classify path, the bench's and `octo-feather-lane judge`'s: pi in the qa sandbox (session SESSION, no lane
     history, offline gh off) runs the BENCH_SOURCE extension's command on INP ({question, labels, criteria: {label: help},
     cases: [{id, state}], classifiers: [P/ID] or None}), no agent, within TMO seconds. Returns (bench, run, sandbox record,
-    problem): bench the command's {available, benched, skipped, errors, rows}, None with problem naming why. With OUT,
-    writes input.json, extension.js, sandbox.json, stdout.txt and stderr.txt there."""
+    problem): bench the command's {available, benched, skipped, errors, rows, calls}, None with problem naming why. With OUT,
+    writes input.json, extension.js, sandbox.json, stdout.txt and stderr.txt there. Then records each of its calls under
+    PURPOSE in the spend ledger (record_spend)."""
     scratch = Path(tempfile.mkdtemp(prefix=f"{session}-"))
     try:
         (scratch / BENCH_INPUT).write_text(json.dumps(inp, indent=1) + "\n")
@@ -1055,7 +1063,24 @@ def classify(qc, inp, tmo, session, out=None):
         (out / "stdout.txt").write_text(run.stdout)
         (out / "stderr.txt").write_text(run.stderr)
     bench, problem = bench_output(run.stdout)
+    if bench is not None:
+        record_spend(bench.get("calls") or [], purpose)
     return bench, run, rec, (f"{problem} (pi exit {run.returncode})" if problem else None)
+
+
+def record_spend(calls, purpose):
+    """CALLS (the bench command's), one ledger line each under PURPOSE, through the ledger's one writer, `octo-feather-lane
+    spend record`, run here outside the sandbox in the caller's environment, so its lane resolves (spec spend, writer-bench
+    and writer-judge rows; its failures: `octo-feather-lane --help`, spend record)."""
+    if not calls:
+        return
+    lines = "".join(json.dumps({**c, "purpose": purpose}) + "\n" for c in calls)
+    try:
+        subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input=lines, text=True,
+                       stdout=subprocess.DEVNULL, timeout=60)
+    except (OSError, subprocess.SubprocessError) as e:
+        print(f"octo-feather-qa: spend unrecorded ({len(calls)} {purpose} call(s)): octo-feather-lane spend record "
+              f"did not run ({type(e).__name__})", file=sys.stderr)
 
 
 def bench_end(out, res, problem):
