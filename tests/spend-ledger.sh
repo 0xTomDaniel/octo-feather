@@ -24,6 +24,8 @@
 #   unwritable  the ledger is a directory: same answer and exit 0, stderr names the unrecorded spend
 #               (spend#rule-write-fails); then the same for the qc run (qc-unwritable): same verdict and exit
 #   qa          a `just qa` eval case (role implementer) in no lane: under no lane and implementer (spend#rule-lane)
+#   inherited   pi-role agents/implementer.md -p under a parent's inherited OCTO_FEATHER_ROLE=supervisor (a
+#               supervisor's headless worker): under gh149 and implementer, no supervisor row (spend#writer-agent)
 # One real pi process at a time (the box's Pi load budget). Never skips: without pi, or with pi at
 # another version, it fails naming the install command. Run by `just check`.
 set -euo pipefail
@@ -142,9 +144,9 @@ row "$s" model fake/fake 0.650000 4 0 550 50
 echo "case pi-role: ok (pi-role launch recorded under gh149 and implementer)"
 
 # headless: pi-role -p drops HERDR_WORKSPACE_ID (#77); the spend still finds the lane. No OCTO_FEATHER_ROLE.
-headless() { local space="$1" role="$2"
+headless() { local space="$1" role="$2"; shift 2
   set +e
-  out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID="$space" "$kit/scripts/pi-role" "$kit/agents/$role.md" --model fake/fake \
+  out="$(cd "$t/repo" && pienv HERDR_WORKSPACE_ID="$space" "$@" "$kit/scripts/pi-role" "$kit/agents/$role.md" --model fake/fake \
     --no-session -p "answer" 2>"$t/err")"; rc=$?
   set -e
   [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "headless $role: exit $rc, answer '$out': $(cat "$t/err")"; }
@@ -236,4 +238,13 @@ if ((sandbox)); then
   row "$s" lane gh149 0.824100 8 1 1357 113
   echo "case qa: ok (the eval case's call under no lane and implementer)"
 fi
+
+# inherited: a supervisor's headless worker keeps the parent's OCTO_FEATHER_ROLE=supervisor; the role pi-role launches
+# wins (spend#writer-agent). One more fake/fake answer (150 in, 10 out, $0.17) on gh149 implementer's 6 calls.
+headless w37 implementer OCTO_FEATHER_ROLE=supervisor
+calls $((sandbox ? 12 : 9))
+s="$(spend)"
+row "$s" 'lane and purpose' 'gh149 implementer' 0.824000 7 1 857 73
+! grep -q supervisor <<<"$s" || fail "inherited: a supervisor row: $s"
+echo "case inherited: ok (pi-role implementer -p under inherited OCTO_FEATHER_ROLE=supervisor: under gh149 and implementer)"
 echo "spend-ledger: ok (pi $v, empty HOME and environment, no provider credential)"
