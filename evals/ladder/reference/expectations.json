@@ -97,13 +97,13 @@
   "reviewer-comment-restatement-note": {
     "facts": [
       {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]},
-      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "src/app.py"}, {"path": "docs/adr/0002-errors-name-the-fix.md", "restated": "tests/test_app.py"}]}
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-list-numbers-notes.md", "restated": "src/app.py"}, {"path": "docs/adr/0002-list-numbers-notes.md", "restated": "tests/test_app.py"}]}
     ]
   },
   "reviewer-skill-restatement-blocks": {
     "facts": [
       {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]},
-      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-errors-name-the-fix.md", "restated": ".agents/skills/notes-cli/SKILL.md"}]}
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-list-numbers-notes.md", "restated": ".agents/skills/notes-cli/SKILL.md"}]}
     ]
   },
   "corrector-template-route": {

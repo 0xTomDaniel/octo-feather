@@ -8,4 +8,4 @@ Keep short notes from the terminal.
     python3 src/app.py add "text"    # add a note
     python3 src/app.py list          # print every note
 
-Errors: docs/adr/0002-errors-name-the-fix.md.
+When something goes wrong, the error should tell the user which command fixes it.

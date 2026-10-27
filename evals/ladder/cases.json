@@ -136,9 +136,9 @@
     "head": {
       "fixture": "docs-rules-comment-restated",
       "branch": "implementer-t9",
-      "message": "feat(errors): errors name their fix (T9, errors-name-the-fix)"
+      "message": "feat(list): list numbers the notes (T9, list-numbered)"
     },
-    "task": "Review lane gh9, ticket T9 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t9 in this directory (`git diff main...implementer-t9`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+    "task": "Review lane gh9, ticket T9 (`app list` numbers each note from 1, as `1. buy milk`, recorded as an ADR; criterion list-numbered).\nDiff: base main, head implementer-t9 in this directory (`git diff main...implementer-t9`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   },
   {
     "id": "reviewer-skill-restatement-blocks",
@@ -147,9 +147,9 @@
     "head": {
       "fixture": "docs-rules-skill-restated",
       "branch": "implementer-t10",
-      "message": "feat(errors): errors name their fix (T10, errors-name-the-fix)"
+      "message": "feat(list): list numbers the notes (T10, list-numbered)"
     },
-    "task": "Review lane gh10, ticket T10 (error messages name their fix: every error message names the command that fixes it and a usage error exits 2, recorded as an ADR; criterion errors-name-the-fix).\nDiff: base main, head implementer-t10 in this directory (`git diff main...implementer-t10`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+    "task": "Review lane gh10, ticket T10 (`app list` numbers each note from 1, as `1. buy milk`, recorded as an ADR; criterion list-numbered).\nDiff: base main, head implementer-t10 in this directory (`git diff main...implementer-t10`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   },
   {
     "id": "corrector-template-route",

@@ -7,7 +7,6 @@ A small note-keeping CLI, `app`, that stores notes in `notes.json` in the curren
 - Each rule is stated once, where it is owned (an ADR in docs/adr/, or this file); every other file points to it.
 - Tests run the CLI as a subprocess (`tests/test_app.py`); no tests of internals.
 - `just check` is the gate: it runs the tests. A red gate blocks a commit.
-- Error messages and exit codes: docs/adr/0002-errors-name-the-fix.md.
 
 ## Commands
 
