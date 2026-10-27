@@ -66,6 +66,7 @@ echo default > "$HOME/.config/herdr/herdr.sock"
 echo 'oauth_token: SECRET-gh' > "$HOME/.config/gh/hosts.yml"; echo 'https://x:SECRET-git@github.com' > "$HOME/.git-credentials"
 echo LIVE > "$live/lanes/gh9.toml"; echo ARCHIVED > "$live/lanes/archive/gh1.toml"; echo '{"director":1}' > "$live/director.handoffs.jsonl"
 echo 'pane = "LIVE"' > "$live/director.toml"
+git init -q "$HOME/src/sib"; echo SIBSECRET > "$HOME/src/sib/notes.md"   # another repo on the box (#182)
 mkdir -p "$HOME/.pi/agent"; echo '{"k": "SECRET-pi-auth-0123456789", "exp": 1}' > "$HOME/.pi/agent/auth.json"; chmod 600 "$HOME/.pi/agent/auth.json"
 echo '{"providers": {"p": {"apiKey": "SECRET-pi-models-0123456789"}}}' > "$HOME/.pi/agent/models.json"
 cat > "$t/fakeherdr/herdr" <<'EOF'
@@ -168,6 +169,8 @@ P
     d="$(mktemp -d /tmp/qc-escape-XXXXXX)"; echo k > "$d/auth.json"; echo m > "$d/models.json"
     L="$HOME/.local/state/octo-feather"; st="$(octo-feather-state)"
     grep -q LIVE "$L/lanes/gh9.toml" "$L/director.toml" 2>/dev/null && echo "ESCAPE read live lanes"
+    ls -A "$HOME/src/sib" 2>/dev/null | grep -q notes && echo "ESCAPE listed another repo"
+    grep -q SIBSECRET "$HOME/src/sib/notes.md" 2>/dev/null && echo "ESCAPE read another repo"
     echo x > "$L/lanes/escaped" 2>/dev/null; echo x >> "$L/director.handoffs.jsonl" 2>/dev/null
     echo x >> "$st/lanes/archive/gh1.toml" 2>/dev/null && echo "ESCAPE wrote archive"
     echo x >> "$st/director.handoffs.jsonl" 2>/dev/null && echo "ESCAPE wrote director log"
@@ -278,11 +281,20 @@ BASH_ENV="$t/bin/leak.env" run 66 escape $st 5 acceptance-a
 grep -q "FAIL no tracker credential: LINEAR_API_KEY set 1 times" <<< "$out" || fail "leaking Linear key not caught by the proof: $out"
 [[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started with a Linear key in its env"
 
+# A mask over another repo that cannot be set up (here a path to bind back on it is missing) aborts before the judge.
+OCTO_FEATHER_QC_RO_BINDS="$HOME/src/sib/missing" run 66 escape $st 5 acceptance-a
+grep -q "qc sandbox: FAIL bind back $HOME/src/sib/missing on the mask over $HOME/src/sib" <<< "$out" || fail "a failed repo mask not named: $out"
+[[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started after a failed repo mask"
+
 # Every escape fails; leftovers killed, agents counted, credential copies gone, live records untouched.
 run 0 escape $st 5 acceptance-a
 judge="$(report '["stdout"]')"
 grep -E 'ESCAPE|MISSING|LINEAR KEY' <<< "$judge" && fail "sandbox escape: $judge"
 grep -q "qc sandbox: ok   no tracker credential: LINEAR_API_KEY set 0 times" <<< "$out" || fail "no Linear key proof: $out"
+grep -q "qc sandbox: ok   other repos hidden: 1 git repos under $HOME .*: src/sib; visible: kit under test $kit, worktree $PWD$" <<< "$out" \
+  || fail "no other-repos proof naming the mask and what stays visible: $out"
+report '["sandbox"]["attempts"]' | grep -q "'kind': 'repo', 'attempt': True, 'refused': True, 'what': 'open $HOME/src/sib'" \
+  || fail "the listing of another repo not recorded and refused: $(report '["sandbox"]')"
 grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" || fail "no agent count: $out"
 [[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["worktree_writes"]')" == "[]" ]] \
   || fail "cleanup record: $(report '["sandbox"]')"
@@ -376,4 +388,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, judge from agents/qc-judge.md, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, judge from agents/qc-judge.md, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, other repos masked (listing recorded and refused; a failed mask aborts), cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
