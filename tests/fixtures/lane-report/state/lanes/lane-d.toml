@@ -1,0 +1,7 @@
+supervisor = "w8:p1"
+repository = "o/b"
+issue = "gh6"
+goal = "Spec review awaits the owner"
+started_at = "2026-10-21T08:30:00Z"
+last_handoff_at = "2026-10-21T09:00:00Z"
+waiting_on = "owner"
