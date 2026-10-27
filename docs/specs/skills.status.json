@@ -39,8 +39,8 @@
       "pr": 103
     },
     "acceptance-repo-skill-roles": {
-      "status": "built",
-      "pr": 181
+      "status": "planned",
+      "pr": null
     },
     "acceptance-verification-pi": {
       "status": "built",
