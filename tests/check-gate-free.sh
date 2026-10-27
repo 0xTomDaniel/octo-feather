@@ -113,6 +113,21 @@ body_form check-zz $'zz_judge := "octo-feather-" + "qc"\ncheck-zz:\n    {{zz_jud
 body_form check-zz $'check-zz a=`just qa`:\n    echo {{a}}'
 body_form check-zz $'check-zz: (helper-zz `just qa`)\nhelper-zz b:\n    echo {{b}}'
 body_form check-yy $'check-zz:\n    echo quality aqua\ncheck-yy:\n    just qa'
+# Fails closed at run time (review r3, gate-marker-fail-open): `just -q check` runs check, but just cannot
+# dry-run -q, so it cannot say so; it counts as a check run and the refusal in check's first dependency stops it.
+plant "${c/check:/check: probe}" $'probe:\n    @check-gate-free --refuse probe && { touch "'"$t"'.refused-not"; exit 1; }'
+set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN CHECK_GATE_FREE_TEST_COPY=1 just -q check 2>&1)"; rc=$?; set -e
+printf '%s\n' "$orig" > "$t/justfile"
+[[ "$rc" != 0 && ! -e "$t.refused-not" ]] || { echo "check-gate-free test: just -q check ran past the refusal (rc $rc)" >&2; echo "$out" >&2; rm -f "$t.refused-not"; exit 1; }
+# Fails closed on an answer it cannot read (#240, CI's just 1.59 fail-open): a just whose dry run exits 0 naming
+# no recipe (another wording) is no "runs no recipe"; `just check` counts as a check run and the refusal stops it.
+plant "${c/check:/check: probe}" $'probe:\n    @check-gate-free --refuse probe && { touch "'"$t"'.refused-not"; exit 1; }'
+b="$t.bin"; mkdir -p "$b"
+printf '#!/bin/sh\n[ "$1" = --dry-run ] && { "%s" "$@" 2>&1 | sed s/Running/running/ >&2; exit 0; }\nexec "%s" "$@"\n' "$J" "$J" >"$b/just"; chmod +x "$b/just"
+set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN PATH="$b:$PATH" CHECK_GATE_FREE_TEST_COPY=1 "$J" check 2>&1)"; rc=$?; set -e
+printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$b"
+[[ "$rc" != 0 && ! -e "$t.refused-not" ]] && grep -qF 'just cannot say what its command line runs (its dry run named no recipe' <<<"$out" \
+  || { echo "check-gate-free test: a dry run naming no recipe read as no check run (rc $rc)" >&2; echo "$out" >&2; rm -f "$t.refused-not"; exit 1; }
 # The reviewer's repro runs: echo only, exit 0.
 plant "$c" $'check-zz:\n    echo qa'
 out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just check-zz 2>&1)" && grep -qx qa <<<"$out" \

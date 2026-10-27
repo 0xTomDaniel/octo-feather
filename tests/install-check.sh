@@ -46,4 +46,15 @@ printf '#!/bin/sh\necho 0.0.1\n' >"$t/bin/pi"
 check 1 "$gh_target" ""
 grep -qx "pi     WRONG VERSION $t/bin/pi reports 0.0.1, want $pin (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin" <<<"$out" \
   || fail "pi 0.0.1: no WRONG VERSION line naming the pin and the install command: $out"
-echo "install-check: ok (pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear)"
+# just at the kit's pin (just-version): the just on PATH (the copy above) ok; a just reporting another release: WRONG VERSION
+# naming the pin and its release page, exit 1. The stub forwards all but --version to the real just (the gate guard asks it).
+jpin="$(tr -d '[:space:]' <"$kit/just-version")"
+printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
+check 0 "$gh_target" ""
+grep -qx "just   version $jpin ok (just-version)" <<<"$out" || fail "just at the pin: no ok version line: $out"
+o="$t/home/.local/bin"; mkdir -p "$o"   # first on the recipe's PATH (the justfile's export)
+printf '#!/bin/sh\n[ "$1" = --version ] && { echo "just 0.0.1"; exit 0; }\nexec "%s" "$@"\n' "$t/bin/just" >"$o/just"; chmod +x "$o/just"
+check 1 "$gh_target" ""; rm -rf "$t/home/.local"
+grep -qx "just   WRONG VERSION $o/just reports 0.0.1, want $jpin (just-version); install just $jpin: https://github.com/casey/just/releases/tag/$jpin" <<<"$out" \
+  || fail "just 0.0.1: no WRONG VERSION line naming the pin and its release: $out"
+echo "install-check: ok (pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; just $jpin (just-version) ok, just 0.0.1 WRONG VERSION naming the pin, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear)"
