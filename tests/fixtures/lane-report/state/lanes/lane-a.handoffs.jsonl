@@ -2,3 +2,5 @@
 not json {
 {"at": "2026-10-20T08:40:00Z", "kind": "gate", "gate": "spec-review", "event": "answered", "answer": "accepted"}
 {"at": "2026-10-20T09:30:00Z", "kind": "attempt", "role": "implementer", "ticket": "gh2"}
+{"at": "2026-10-20T10:30:00Z", "kind": "review", "ticket": 2, "commit": "a5c1a5c", "verdict": "blocking", "blockers": 1, "round": 1}
+{"at": "2026-10-20T11:30:00Z", "kind": "review", "ticket": 2, "commit": "aaaa5aa", "verdict": "clear", "blockers": 0, "round": 2}

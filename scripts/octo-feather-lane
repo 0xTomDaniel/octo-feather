@@ -131,37 +131,46 @@ on PARENT, whether or not the tracker already did (one already done stays as it 
 back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
 named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
 
-  octo-feather-lane report         every open lane of this session: its pull request, agents and waits
+  octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
 
-`report` (spec comms #factory-report) writes nothing. It reads each lanes/*.toml record of
-the state dir (archive/ skipped) and the hand-off log beside it, the state dir's director.handoffs.jsonl,
-`herdr agent list`, and for a record
-with `pr`, `gh pr view` in the repository the record names. It prints `report at <now>`, then per lane:
+What `report` reads and shows, that it writes nothing, and how it treats a source it cannot read:
+docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then per lane:
 
   lane <record name>: issue <issue> <repository> "<goal>"
-    started: <started_at>
+    started: <started_at>                        its age is the lane's wall time
     pr: #N <state> <draft|ready> head <12 hex> checks: <count> <result>, ...   (`pr: none` with no pr)
     running: <pane> <name> <Herdr state>, one line per Herdr agent whose workspace is the supervisor
              pane's prefix; `(supervisor)` marks the supervisor's pane, a supervisor pane not listed is said
     waits: waiting_on "<value>", last hand-off <last_handoff_at>
     waits: worker <name> <pane> working          per agent other than the supervisor in state working
-    waits: owner gate <gate> asked <at>          per pending owner gate (spec comms #report-owner-queue)
-    waits: check <name> <status> on head <12 hex>  per check still running on the head
+    waits: owner gate <gate> asked <at>
+    waits: check <name> <status> on head <12 hex>
+    review rounds: <N>                           the hand-off log's `"kind": "review"` lines
+    spend: $<dollars> over <N> calls of known cost, <M> calls of unknown cost
+                                                 spend.jsonl lines whose lane is the record name
+                                                 (cost_usd null: unknown; neither a number nor null:
+                                                 unparsable); `none recorded for <lane>`,
+                                                 `no spend recorded (spend.jsonl: none)` with no ledger
+    gate time: lane <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+    gate time: main <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+                                                 the check-runs.jsonl line with the latest start whose
+                                                 head is a commit of the PR (`gh pr view --json commits`),
+                                                 then of the default branch's last 100 commits (one
+                                                 `gh api repos/<repository>/commits` per repository);
+                                                 `<lane|main> none: <why>` with no such run
 
 After the lanes:
 
   owner queue:                                   (`owner queue: none` with none pending)
-    lane <record name> gate <gate> asked <at>    per pending owner gate of every lane, oldest first
-                                                 (spec comms #report-owner-queue)
+    lane <record name> gate <gate> asked <at>    oldest first
   owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
-    class <class>: count <N>, last seen <at>     per owner-caught finding class, by class name
-                                                 (spec comms #report-owner-caught)
+    class <class>: count <N>, last seen <at>     by class name
+  spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
-read (a record, a log, Herdr, GitHub) prints as `unread: <source>: <reason>` where its facts would be,
-and every lane still prints from what it could read; a log's unparsable lines are counted and named
-by line number. The report's last line, `unread: none` or `unread: <source>, ...`, names each source
-unread. Exit 0; 1 on any argument.
+read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
+counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
+Exit 0; 1 on any argument.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
@@ -1671,7 +1680,108 @@ def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
     return out
 
 
-def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list) -> list[str]:
+def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | None:
+    """A JSON lines file's object lines with their numbers, and the numbers of the lines that are not one; None with no file."""
+    if not path.exists():
+        return None
+    rows, bad = [], []
+    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            d = json.loads(l)
+        except ValueError:
+            d = None
+        (rows.append((i, d)) if isinstance(d, dict) else bad.append(i))
+    return rows, bad
+
+
+class ReportSources:
+    """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
+    LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
+
+    def __init__(self, state: Path, unread: list[str]):
+        self.unread, self.main = unread, {}
+        self.ledger, self.ledger_why = self.load(state / self.LEDGER)
+        self.trend, self.trend_why = self.load(state / self.TREND)
+        if self.ledger:   # a cost neither dollars nor null (unknown) makes the line unreadable
+            rows, bad = self.ledger
+            odd = [i for i, d in rows if d.get("cost_usd", "") is not None and not self.dollars(d.get("cost_usd", ""))]
+            self.ledger = [r for r in rows if r[0] not in odd], sorted(bad + odd)
+
+    @staticmethod
+    def dollars(c: object) -> bool:
+        return isinstance(c, (int, float)) and not isinstance(c, bool)
+
+    def load(self, path: Path):
+        try:
+            return numbered_jsonl(path), None
+        except (OSError, UnicodeDecodeError) as e:
+            self.unread.append(path.name)
+            return None, str(e)
+
+    def notes(self) -> list[str]:
+        return [f"{n}: {len(r[1])} unparsable line{'s' if len(r[1]) > 1 else ''} ({', '.join(map(str, r[1]))})"
+                for n, r in ((self.LEDGER, self.ledger), (self.TREND, self.trend)) if r and r[1]]
+
+    def spend(self, name: str) -> str:
+        if self.ledger_why:
+            return f"  spend: unread: {self.LEDGER}: {self.ledger_why}"
+        if self.ledger is None:
+            return f"  spend: no spend recorded ({self.LEDGER}: none)"
+        costs = [d.get("cost_usd") for _, d in self.ledger[0] if d.get("lane") == name]
+        known = [c for c in costs if self.dollars(c)]
+        if not costs:
+            return f"  spend: none recorded for {name}"
+        unknown = len(costs) - len(known)
+        return (f"  spend: ${sum(known):.4f} over {len(known)} call{'s' if len(known) != 1 else ''} of known cost, "
+                f"{unknown} call{'s' if unknown != 1 else ''} of unknown cost")
+
+    def last_run(self, heads: set[str]) -> dict | None:
+        runs = [(utc(d.get("start")) is not None, str(utc(d.get("start")) or ""), i, d)
+                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads]
+        return max(runs, key=lambda r: r[:3])[3] if runs else None
+
+    def main_heads(self, repo: object) -> set[str] | str:
+        """The default branch's last 100 commits of repo, or why they are unread."""
+        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+            return f"unread: the record needs repository owner/name (repository {repo!r})"
+        if repo not in self.main:
+            try:
+                out = json.loads(gh(["api", f"repos/{repo}/commits?per_page=100"], f"check {repo} exists, and gh auth status"))
+                self.main[repo] = {c["sha"] for c in out}
+            except (Refuse, ValueError, KeyError, TypeError) as e:
+                self.unread.append(f"GitHub ({repo} default branch)")
+                self.main[repo] = f"unread: GitHub: {e}"
+        return self.main[repo]
+
+    def gate(self, pr: object, pr_heads: set[str] | None, repo: object, now) -> list[str]:
+        if self.trend_why:
+            return [f"  gate time: unread: {self.TREND}: {self.trend_why}"]
+        if self.trend is None:
+            return [f"  gate time: no gate run recorded ({self.TREND}: none)"]
+
+        def run(who: str, d: dict | None, none: str) -> str:
+            if d is None:
+                return f"  gate time: {who} none: {none}"
+            steps = d.get("steps")
+            n = len(steps) if isinstance(steps, list) else steps
+            return (f"  gate time: {who} {d.get('total_s')}s exit {d.get('exit')}, {n} steps, head {str(d.get('head'))[:12]}, "
+                    f"started {stamp(d.get('start'), now)}")
+        if pr is None:
+            lane = "  gate time: lane none: no pr"
+        elif pr_heads is None:
+            lane = f"  gate time: lane unread: GitHub (PR #{pr})"
+        else:
+            lane = run("lane", self.last_run(pr_heads), f"no gate run on a commit of PR #{pr}")
+        main = self.main_heads(repo)
+        if isinstance(main, str):
+            return [lane, f"  gate time: main {main}"]
+        return [lane, run("main", self.last_run(main), f"no gate run on a commit of {repo}'s default branch")]
+
+
+def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list,
+                src: ReportSources) -> list[str]:
     import tomllib
     name = rec_path.stem
     try:
@@ -1682,7 +1792,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
     repo = rec.get("repository")
     out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
            f"  started: {stamp(rec.get('started_at'), now)}"]
-    check_waits = []
+    check_waits, pr_heads = [], None
     pr = rec.get("pr")
     if pr is None:
         out.append("  pr: none")
@@ -1691,11 +1801,12 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
         out.append(f"  pr: {pr!r} unread: GitHub: the record needs pr a number and repository owner/name (repository {repo!r})")
     else:
         try:
-            d = pr_view(pr, "state,isDraft,headRefOid,statusCheckRollup", repo)
+            d = pr_view(pr, "state,isDraft,headRefOid,statusCheckRollup,commits", repo)
             rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
             head = str(d["headRefOid"])[:12]
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
             check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+            pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
         except (Refuse, KeyError, TypeError, AttributeError) as e:
             unread.append(f"GitHub ({name})")
             out.append(f"  pr: #{pr} unread: GitHub: {e}")
@@ -1718,9 +1829,11 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
     out.append(f"  waits: waiting_on {json.dumps(rec.get('waiting_on', ''))}, last hand-off {stamp(rec.get('last_handoff_at'), now)}")
     out += workers
     log, notes = rec_path.with_name(f"{name}.handoffs.jsonl"), []
+    rounds = "  review rounds: 0"
     if log.exists():
         try:
             lines, bad = read_log(log)
+            rounds = f"  review rounds: {sum(1 for d in lines if d.get('kind') == 'review')}"
             pending = pending_gates(lines)
             out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending]
             queue += [(name, g, at) for g, at in pending]
@@ -1729,9 +1842,11 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
         except (OSError, UnicodeDecodeError) as e:
             unread.append(f"log {log.name}")
             notes.append(f"  unread: log {log.name}: {e}")
+            rounds = f"  review rounds: unread (log {log.name})"
     else:
         notes.append(f"  log {log.name}: none")
-    return out + check_waits + notes
+    numbers = [rounds, src.spend(name), *src.gate(pr, pr_heads, repo, now)]
+    return out + check_waits + numbers + notes
 
 
 def cmd_report(args: list[str]) -> int:
@@ -1756,13 +1871,16 @@ def cmd_report(args: list[str]) -> int:
     if not records:
         print("no open lane")
     queue: list = []
+    src = ReportSources(lanes.parent, unread)
     for r in records:
-        print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue)))
+        print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue, src)))
     queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
     print("owner queue:" if queue else "owner queue: none")
     for name, g, at in queue:
         print(f"  lane {name} gate {g} asked {stamp(at, now)}")
     print("\n".join(owner_caught(lanes.parent, now, unread)))
+    for n in src.notes():
+        print(n)
     print(f"unread: {', '.join(unread) or 'none'}")
     return 0
 
