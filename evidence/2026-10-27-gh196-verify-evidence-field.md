@@ -15,7 +15,7 @@ Removed: nothing; two Output fields, one implementer Rules line, one corrector O
 
 Not a role run: the implementer ran the fixture's helper in a git copy (no Pi process), `XDG_STATE_HOME` under /tmp, the worktree's `scripts/` first on PATH: `verify-app run`, 5 PASS, `verify-app: evidence record 20261027T163802Z-7ca9caad (criterion app#acceptance-hello-json; ...)`, run PASS.
 
-PATH: the template helper needs `octo-feather-evidence` on PATH. The live kit install (`~/src/octo-feather-kit/scripts`, 1d5bafb) does not have it yet, so the qa runs put the worktree's `scripts/` first on PATH (demo commands in the implementer's report).
+PATH: the template helper needs `octo-feather-evidence` on PATH. The live kit install (the box's install clone on PATH, at 1d5bafb) does not have it yet, so the qa runs put the worktree's `scripts/` first on PATH (demo commands in the implementer's report).
 
 ## Isolated role runs
 
