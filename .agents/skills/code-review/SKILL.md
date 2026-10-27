@@ -66,11 +66,11 @@ Owners: none
 
 `Checks:` takes only `none`: a report with `Check:` lines has no `Checks:` line. Failure examples, each read as a missing or refused field: `## Verdict: blocking`, a heading (gh122 and gh124 reviewers); a bare `Checks:` line heading the `Check:` lines (gh157 implementers, 3 of 3 runs); a bullet or bold label (`- Verdict: clear`, `**Verdict:** clear`).
 
-Then classify every check the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
+Then classify every check, and every other decision docs/adr/0008 "Who builds what" classifies, that the diff adds or changes (Check: GLOSSARY.md), one line each, or the one line `Checks: none`:
 
 `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`
 
-`<path>` is one path with no spaces: the check's own file, or `justfile:<recipe>` for a recipe.
+`<path>` is one path with no spaces: the check's own file (a product command's: the file holding its decision), or `justfile:<recipe>` for a recipe.
 
 `<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
 
