@@ -97,17 +97,12 @@ run() {
     --model "${model:-fake/fake}" --no-session -p "$prompt" 2>"$t/err")"; rc=$?
   set -e
 }
-row() { # OUT TITLE KEY USD CALLS UNKNOWN IN OUT: the KEY row under "By TITLE:"
-  awk -v t="By $2:" '$0==t{on=1;next} /^By |^OpenRouter/{on=0} on' <<<"$1" |
-    grep -qE "^  $3 +\\\$$4 +calls +$5 +unknown cost +$6 +tokens in $7 out $8\$" || fail "no $2 row '$3 \$$4 calls $5 unknown $6 in $7 out $8' in: $1"
-}
-spend() { env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend; }
-# total: the calls `spend` counts in all, from its "Spend ledger: PATH (N calls)" header; 0 before any.
-total() { spend 2>/dev/null | sed -nE '1s/^Spend ledger: .* \(([0-9]+) calls?\)$/\1/p' | grep . || echo 0; }
-# calls N: wait up to 10 s for `spend` to count N calls in all (the writer runs detached).
-calls() { for _ in $(seq 100); do [[ "$(total)" -ge "$1" ]] && break; sleep 0.1; done
-  sleep 0.3; local n; n="$(total)"
-  [[ "$n" == "$1" ]] || fail "spend counts $n calls, want $1: $(spend 2>&1)"; }
+row() { # OUT TITLE KEY USD CALLS UNKNOWN IN OUT: the KEY row under "By TITLE:" (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "${@:2}" <<<"$1")" || fail "$r in: $1"; }
+spendcmd=(env -i PATH="$PATH" HOME="$t/home" XDG_STATE_HOME="$t/state" "$L" spend)
+spend() { "${spendcmd[@]}"; }
+# calls N: wait up to 10 s for `spend` to count N calls in all (the writer runs detached; tests/spend-out).
+calls() { local r; r="$("$kit/tests/spend-out" calls "$1" -- "${spendcmd[@]}")" || fail "$r"; }
 
 # agents: 2 model messages (0.1 + 0.04 = $0.14; 0.15 + 0.02 = $0.17) and the tool's $0.004.
 run "use the tool, then answer" HERDR_WORKSPACE_ID=w37 OCTO_FEATHER_ROLE=implementer
@@ -125,7 +120,7 @@ run "answer"
 [[ "$rc" == 0 && "$out" == fake-answer-ok ]] || fail "role-unset: exit $rc, answer '$out': $(cat "$t/err")"
 calls 4
 s="$(spend)"
-row "$s" lane '\(no lane\)' 0.170000 1 0 150 10
+row "$s" lane '(no lane)' 0.170000 1 0 150 10
 row "$s" purpose agent 0.170000 1 0 150 10
 echo "case role-unset: ok (purpose agent, no lane)"
 
@@ -158,7 +153,7 @@ row "$s" purpose implementer 0.654000 5 0 557 53
 headless w99 code-reviewer
 calls 7
 s="$(spend)"
-row "$s" lane '\(no lane\)' 0.340000 2 0 300 20
+row "$s" lane '(no lane)' 0.340000 2 0 300 20
 row "$s" purpose code-reviewer 0.170000 1 0 150 10
 row "$s" lane gh149 0.654000 5 0 557 53
 echo "case headless: ok (implementer in w37 under gh149 and implementer; code-reviewer in w99 under no lane and code-reviewer)"
@@ -234,7 +229,7 @@ if ((sandbox)); then
   [[ "$rc" == 0 && "$out" == *"PASS one/look"* ]] || fail "qa: exit $rc: $out $(tail -20 "$t/err")"
   calls 11
   s="$(spend)"
-  row "$s" 'lane and purpose' '\(no lane\) implementer' 0.170000 1 0 150 10
+  row "$s" 'lane and purpose' '(no lane) implementer' 0.170000 1 0 150 10
   row "$s" lane gh149 0.824100 8 1 1357 113
   echo "case qa: ok (the eval case's call under no lane and implementer)"
 fi

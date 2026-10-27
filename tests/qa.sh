@@ -773,13 +773,12 @@ assert argv[argv.index("-p") + 1].startswith("/octo-feather-bench "), argv
 EOF
 # spec spend#acceptance-spend-bench: 8 benched x 15 cases = 120 calls, $0.126 as bench.json above; broken and yesno (30)
 # report no usage, the 90 others 1 in, 1 out each.
-spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend`
-  awk -v t="By $1:" '$0==t{on=1;next} /^By |^OpenRouter/{on=0} on' <<< "$spent" |
-    grep -qE "^  $2 +\\\$$3 +calls +$4 +unknown cost +$5 +tokens in $6 out $7\$" || fail "spend: no $1 row '$2 \$$3 calls $4 unknown $5 in $6 out $7' in: $spent"; }
+spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend` (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "$@" <<< "$spent")" || fail "spend: $r in: $spent"; }
 spent="$("$kit/scripts/octo-feather-lane" spend)" || fail "spend failed: $spent"
 grep -qF "Spend ledger: $HOME/.local/state/octo-feather/spend.jsonl (120 calls)" <<< "$spent" || fail "spend: not 120 calls: $spent"
 spend_row purpose bench 0.126000 120 30 90 90
-spend_row lane '\(no lane\)' 0.126000 120 30 90 90
+spend_row lane '(no lane)' 0.126000 120 30 90 90
 spend_row 'day (UTC)' "$(date -u +%F)" 0.126000 120 30 90 90
 spend_row model stub/cheap-train 0.042000 15 0 15 15
 spend_row model stub/cheap-total 0.024000 15 0 15 15

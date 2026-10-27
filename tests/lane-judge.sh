@@ -181,14 +181,13 @@ STUB_WANT="$(cat "$t/state"; echo .)"; STUB_WANT="${STUB_WANT%.}"; export STUB_W
 mkdir -p "$HOME/.local/state/octo-feather/lanes"; printf 'supervisor = "w5:p2"\n' > "$HOME/.local/state/octo-feather/lanes/gh5.toml"
 HERDR_WORKSPACE_ID=w5 run 0 judge 7 test-quality --state "$t/state"
 # spec spend#acceptance-spend-judge: the stub reports 120 tokens in, 3 out, $0.001.
-spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend`
-  awk -v t="By $1:" '$0==t{on=1;next} /^By |^OpenRouter/{on=0} on' <<< "$spent" |
-    grep -qE "^  $2 +\\\$$3 +calls +$4 +unknown cost +$5 +tokens in $6 out $7\$" || fail "spend: no $1 row '$2 \$$3 calls $4 unknown $5 in $6 out $7' in: $spent"; }
+spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend` (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "$@" <<< "$spent")" || fail "spend: $r in: $spent"; }
 spent="$("$L" spend)" || fail "spend failed: $spent"
 grep -qF "Spend ledger: $HOME/.local/state/octo-feather/spend.jsonl (1 calls)" <<< "$spent" || fail "spend: not 1 call: $spent"
 spend_row lane gh5 0.001000 1 0 120 3
 spend_row purpose judge 0.001000 1 0 120 3
-spend_row model "${M//./\\.}" 0.001000 1 0 120 3
+spend_row model "$M" 0.001000 1 0 120 3
 spend_row 'day (UTC)' "$(date -u +%F)" 0.001000 1 0 120 3
 [[ "$out" == "https://github.com/o/r/pull/7#issuecomment-1002" ]] || fail "judge printed $out"
 grep -qxE "judge: created \(test-quality: tautological, confidence 0\.870, model judgment by ${M//./\\.}; calibration: $CAL\)" <<<"$err" || fail "judge said: $err"
