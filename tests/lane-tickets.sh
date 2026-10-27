@@ -8,7 +8,7 @@
 # the offline fake linear (.agents/skills/linear/scripts/linear, a JSON store). Proves: a parent whose tickets all name criteria
 # and end on a demo passes; #10's real body fails naming layer-only-ticket and the fix;
 # no criterion, unknown anchor or spec, gate-only demo, demo not last each fail with their
-# class; a demo passes only through a surface the repo declares (tracked executable, justfile
+# class; rule tickets pass or fail as octo-feather-lane --help (ticket) says; a demo passes only through a surface the repo declares (tracked executable, justfile
 # recipe as `just --dump` lists it, #172; pyproject/package.json bin, HTTP URL, UI driver), so the qc judge's printf draft and
 # a test script fail; checks are facts only, never prose meaning (the qc judge's persistence-only
 # draft passes: whether its demo shows the behavior What to build describes is review's, #118); an Expand-contract ticket passes without a
@@ -42,6 +42,7 @@ printf '#!/bin/sh\necho ok\n' >"$t/repo/bin/demo"; cp "$t/repo/bin/demo" "$t/rep
 printf 'print("score")\n' >"$t/repo/harness.py"   # a runnable script, not executable (ADR 0002)
 mkdir -p "$t/repo/scripts"; cp "$t/repo/bin/demo" "$t/repo/scripts/octo-feather-lane"   # as in the kit, where the judge ran
 chmod +x "$t/repo/bin/demo" "$t/repo/tests/demo.sh" "$t/repo/scripts/octo-feather-lane"
+mkdir -p "$t/repo/docs/adr"; printf '# Integration is a script\n' >"$t/repo/docs/adr/0017-integration-is-a-script.md"   # the owner rule tickets name
 printf '[project]\nname = "app"\n\n[project.scripts]\napp = "app.cli:main"\n' >"$t/repo/pyproject.toml"
 # zz: criteria only inside a <template> (nested too), #121 D17; acceptance-ok outside one.
 printf '<template><li data-acceptance-criterion data-anchor="acceptance-zz">x</li><template><p id="in"></p></template>\n<li data-acceptance-criterion data-anchor="acceptance-zz2">y</li></template>\n<ol><li data-acceptance-criterion data-anchor="acceptance-ok">z</li></ol>\n' >"$t/repo/docs/specs/zz.spec.html"
@@ -55,7 +56,7 @@ F = pathlib.Path(sys.argv[1])
 bodies = {int(p.stem.split("-")[0]): p.read_text() for p in F.glob("*.md")}
 # 10.json: #10's body as `gh issue view 10 --json body` returns it, one paragraph trimmed (said in place).
 bodies |= {int(p.stem): json.loads(p.read_text())["body"] for p in F.glob("*.json")}
-parents = {100: [101, 102, 103, 104, 105, 106, 107], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199]}
+parents = {100: [101, 102, 103, 104, 105, 106, 107], 8: [10, 101], 20: [21, 22, 23, 24, 25, 26, 27, 28, 33, 35, 36, 40, 41], 30: [], 50: ([101], 3), 60: [101, 199], 70: [101, 108]}
 def node(n): return {"number": n, "state": "OPEN", "title": f"t{n}", "url": f"u{n}"}
 iss = {}
 for p, subs in parents.items():
@@ -173,6 +174,44 @@ printf '## What to build\n\n`demo a` greets.\n\n## Acceptance criteria\n\n- [ ] 
 run 1 ticket "$t/section.md"; has "demo#acceptance is not a data-acceptance-criterion anchor; fix: name the data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a"
 run 0 ticket - <"$F/36-judge-persistence.md"; has "stdin: ok"
 
+# Rule tickets (spec #lanes-tickets; form: octo-feather-lane --help (ticket)).
+run 0 tickets 70; has "108: ok"; has "70: 2 of 2 tickets pass"
+rt() { printf '## What to build\n\nA rule fix.\n\n## Acceptance criteria\n\n%s\n' "$1" >"$t/rule.md"; }
+for o in 'docs/adr/0017' 'docs/adr/0017-integration-is-a-script.md' 'ADR 0017' 'owner ruling 2026-10-23, #121' 'owner ruling #121'; do
+  rt "- [ ] rule: integrate adds no integrate or qc recipe to a repo the kit did not create ($o)
+- [ ] demo: \`demo a\` prints ok"; run 0 ticket "$t/rule.md"; [[ "$out" == "$t/rule.md: ok" ]] || fail "rule ticket ($o): $out"
+done
+rt "- [ ] demo#acceptance-a: x
+- [ ] rule: a rule beside a criterion (ADR 0017)
+- [ ] demo: \`demo a\` prints ok"; run 0 ticket "$t/rule.md"
+rf="fix: write the rule item as \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
+for c in 'integrate adds no recipe|`rule: integrate adds no recipe` names no owner in parentheses' \
+         'integrate adds no recipe (docs/adr/9999)|owner `docs/adr/9999` names no ADR file in' \
+         'integrate adds no recipe (ADR 0099)|owner `ADR 0099` names no ADR file in' \
+         'integrate adds no recipe (docs/adr/0017-wrong-name.md)|owner `docs/adr/0017-wrong-name.md` names no ADR file in' \
+         '(docs/adr/0017)|empty rule' '|empty rule' \
+         'integrate adds no recipe (the supervisor)|owner `the supervisor` is neither an ADR nor an owner ruling' \
+         'integrate adds no recipe (owner ruling)|owner `owner ruling` is neither an ADR nor an owner ruling'; do
+  rt "- [ ] rule: ${c%%|*}
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
+  has "$t/rule.md: class: unowned-rule: ${c#*|}"; has "$rf"; hasnt "class: no-criterion"; hasnt "ADR NNNN"; hasnt "owner ruling <"
+done
+rt "- [ ] demo#acceptance-a: x
+- [ ] rule: no owner here
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"; has "class: unowned-rule: \`rule: no owner here\` names no owner"
+rt "- [ ] rule: integrate adds no recipe (docs/adr/0017)"; run 1 ticket "$t/rule.md"
+has "$t/rule.md: class: layer-only-ticket: last acceptance item is not a \`demo: \` line"; hasnt "no-criterion"
+rt "- [ ] rule: integrate adds no recipe (docs/adr/0017)
+- [ ] demo: \`printf ok\`"; run 1 ticket "$t/rule.md"; has "class: layer-only-ticket: demo runs no surface the repo declares"
+# Neither a criterion id nor a rule item: no-criterion, its fix naming both forms.
+rt "- [ ] some item
+- [ ] demo: \`demo a\` prints ok"; run 1 ticket "$t/rule.md"
+has "class: no-criterion: no acceptance item names a criterion id; fix: start each item with the criterion it serves"
+has "or, serving no criterion, add an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket)"
+hasnt "ADR NNNN"; hasnt "owner ruling <"
+rm "$t/rule.md"; run 1 ticket - <<<"no section"
+has "(or, serving no criterion, an item \`rule: <rule> (<owner>)\`, owner kinds: octo-feather-lane --help (ticket))"; hasnt "ADR NNNN"
+
 # Interpreter-run scripts (owner: ADR 0002 fallback, #121 D11):
 # this repo declares programs, so `python3 scripts/octo-feather-lane` (as in the kit) and harness.py are refused.
 d11() { printf '## What to build\n\n`%s` checks.\n\n## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `%s`\n' "$1" "$1" >"$t/d11.md"; }
@@ -289,4 +328,4 @@ cd "$t/repo"
 # Read-only: no run wrote to the repo or the snapshot.
 [[ "$(sums)" == "$start" ]] || fail "a run changed files under the repo or snapshot"
 [[ "$(git status --porcelain)" == "$status" ]] || fail "repo changed: $(git status --porcelain)"
-echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"
+echo "lane-tickets: ok (hermetic PATH, no host gh; snapshot taken by octo-feather-qc-ghsnap from a fake GitHub, served by the offline gh, nothing refused; all pass incl. demos via tracked bin, uv run app, just recipe + curl URL, playwright, a runnable script by its interpreter (uv run python harness.py) ; #121 D11 D17 D18 D21 cases; #172 just recipes as just --dump lists them (defaulted parameter, attribute, import, alias, alias to the gate, no such recipe, no just, unreadable justfile); #10 layer-only-ticket with fix, no criterion, unknown anchor and spec, gate-only demo, demo not last, qc judge printf draft, test-script demo, persistence-only draft passes the facts, inline python, story or section anchor as criterion, factory recipe, bad and good Expand-contract; rule tickets by ADR path, ADR number and owner ruling pass, unowned, unknown ADR, empty rule, other owner and demo-less rule tickets fail; ticket file and stdin; gh down, missing, bad JSON, ticket missing midway, paged sub-issues, --repo refused, no specs, unreadable or empty draft, usage: exit 2, nothing passed, no traceback, no file written; Linear target through the fake linear: pass, fail, key order, no sub-issues, unknown and wrong-tracker key, no gh)"

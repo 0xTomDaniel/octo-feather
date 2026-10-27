@@ -13,7 +13,7 @@ place, when the record is missing or either archive target already exists.
   octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
                                    create, or update in place, the PR's one review verdict
                                    comment (marker, head, verdict, findings); prints its URL
-  octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R]
+  octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
                                    the kit's judgment model answers it on FILE's text; create, or
@@ -84,6 +84,13 @@ The verdict comment must also carry its check classes (`Checks: none` or `Check:
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
+A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
+criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
+entry built with it; --status is then optional. Its judged head H is the review verdict comment's Head:
+the check needs Head, Checks, the parent line and Review verdict, and `Judged:` only when H is not the
+PR head (the same proof as above). A lane that claims any criterion (a Built or Failed id, a qc commit,
+a status entry built with the PR) with no row is refused naming the criterion table.
+
   octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
   octo-feather-lane ticket FILE|-  check one ticket draft (a file, or stdin) before publishing
 
@@ -91,7 +98,12 @@ with its fix on stderr, exit 1.
 `## Acceptance criteria` list. A ticket passes when it names at least one criterion id
 `<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
 element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
-section or table anchor is no criterion; <template> content: #121 D17), and its last item is `demo: ` with a backticked command that runs
+section or table anchor is no criterion; <template> content: #121 D17), or, serving none, names the rule it
+serves and that rule's owner (spec #lanes-tickets) in an item `rule: <rule> (<owner>)`, the `<rule> (<owner>)`
+form of the review's Check lines (docs/adr/0008): the rule non-empty, the owner an ADR of the repo
+(`docs/adr/NNNN...` or `ADR NNNN`, naming exactly one docs/adr/NNNN-*.md) or `owner ruling <date and/or issue>`;
+a rule item with no owner, an unknown ADR, an empty rule or another owner fails class unowned-rule, and
+beside a criterion id it is allowed, not required. Its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
@@ -803,6 +815,40 @@ def parent_line(body: str, branch: str) -> list[str]:
     return out
 
 
+def no_criterion(lines: list[str], commits: list[dict], specs: dict[str, dict], pr: int) -> bool:
+    """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
+    no `qc: built` commit on the PR and no status entry built with it."""
+    b, f = field(lines, "Built"), field(lines, "Failed")
+    if not b or b[1].strip("`").lower() != "none" or not f or f[1].strip("`").lower() != "none":
+        return False
+    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|.*\|", l.strip(), re.I)), None)
+    for l in lines[t + 1:] if t is not None else []:
+        if not l.strip().startswith("|"):
+            break
+        if not all(re.fullmatch(r":?-+:?", c.strip()) for c in l.strip().strip("|").split("|")):
+            return False
+    if any(QC_COMMIT.match(subject(c)) for c in commits):
+        return False
+    return not any(v.get("status") == "built" and v.get("pr") == pr for cr in specs.values() for v in cr.values())
+
+
+def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
+    """(the PR commit the linked review verdict comment names as its Head, None), or (None, why); (None, None)
+    when there is no such comment to read (the Review verdict check names that)."""
+    rv = field(lines, "Review verdict")
+    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
+    c = next((c for c in comments if m and (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
+    cb = (c or {}).get("body") or ""
+    if not cb.lstrip().startswith(MARKER):
+        return None, None
+    ch = HEAD_LINE.search(cb.split("\n### Findings", 1)[0])
+    at = [oid for oid, _ in commits if ch and oid.lower().startswith(ch.group(1).lower())]
+    if len(at) != 1:
+        return None, (f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not one commit of PR #{pr}: "
+                      f"review the PR head {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
+    return at[0].lower(), None
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -815,8 +861,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         else:
             rest.append(args[i]); i += 1
     if len(rest) != 1:
-        raise Refuse(f"usage: octo-feather-lane merge-ask PR --status FILE [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
-    pr = pr_number(rest[0]); specs = load_specs(files)
+        raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0]); specs = load_specs(files) if files else {}
     d = pr_view(pr, "body,headRefName,headRefOid,statusCheckRollup,comments,commits", repo)
     head = d["headRefOid"]; miss: list[str] = []
     miss += parent_line(d["body"] or "", d["headRefName"] or "")
@@ -824,6 +870,9 @@ def cmd_merge_ask(args: list[str]) -> int:
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
     lines = sec or []
+    no_crit = no_criterion(lines, d["commits"] or [], specs, pr)
+    if not files and not no_crit:
+        load_specs(files)   # a lane that claims a criterion names its status files
 
     h = field(lines, "Head")
     if not h or not h[1]:
@@ -847,7 +896,7 @@ def cmd_merge_ask(args: list[str]) -> int:
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
     if t is None:
         old = any(re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I) for l in lines)
-        miss.append(f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion | qc verdict | judged | evidence |` "
+        if not no_crit: miss.append(f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion | qc verdict | judged | evidence |` "
                     "with one row per claimed criterion, judged naming the head just qc judged")
     else:
         for l in lines[t + 1:]:
@@ -870,20 +919,23 @@ def cmd_merge_ask(args: list[str]) -> int:
             sha, why = judged_sha(cells[2], commits, head, pr)
             (judged_at.add(sha) if sha else miss.append(f"criterion row {cid}: {why}"))
             rows[cid] = v
-        if not rows:
+        if not rows and not no_crit:
             miss.append("criterion table: no rows; add one per claimed criterion")
     judged = next(iter(judged_at)) if len(judged_at) == 1 else None
     if len(judged_at) > 1:
         miss.append(f"criterion table: rows name {len(judged_at)} judged heads ({', '.join(sorted(s[:12] for s in judged_at))}); "
                     "qc and the review judge one head: run just qc, naming every criterion the lane builds, and the review on one integrated head")
     jl = field(lines, "Judged")
+    if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
+        judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)
+        miss += [why] if why else []
     if judged:
         try:
             proof, why = head_proof(judged, head, files, base)
         except Refuse as e:
             proof, why = None, [str(e)]
         miss += [f"Judged: {w}" for w in why]
-        if proof and (not jl or jl[1].strip("`") != proof):
+        if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
     review_checks: list[str] = []
@@ -934,7 +986,9 @@ def cmd_merge_ask(args: list[str]) -> int:
     qc = [QC_COMMIT.match(s) for _, s in commits]
     qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
     unpassed = sorted(c for c in built if c.split("#", 1)[1] not in qc_ids)
-    if not any(qc):
+    if no_crit:
+        pass   # builds no criterion: no qc run, no qc commit
+    elif not any(qc):
         miss.append(f"Built: no `qc: built` commit on PR #{pr}; run just qc on the lane head (docs/adr/0022)")
     elif unpassed:   # a subset: a later qc run may reset an earlier pass to planned
         miss.append(f"Built: {' '.join(unpassed)} in no `qc: built` commit of PR #{pr} (they passed "
@@ -994,6 +1048,30 @@ ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
 CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
 EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
 DEMO = re.compile(r"^\**demo:\**\s*", re.I)
+RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
+ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
+RULING = re.compile(r"owner ruling\s+\S.*", re.I)
+# The fix text for a rule item (scope: --help (ticket)).
+RULE_FORM = "`rule: <rule> (<owner>)`, owner kinds: octo-feather-lane --help (ticket)"
+
+
+def rule_why_not(rest: str, adr: Path) -> str | None:
+    """Why the rule item `rule: REST` names no owned rule, None if it does; ADR: the repo's docs/adr."""
+    o = OWNED.fullmatch(rest)   # the review's Check-line form, `<rule> (<owner>)`
+    if not o:
+        return ("empty rule" if re.fullmatch(r"(\([^()]*\))?", rest) else f"`rule: {rest[:80]}` names no owner in parentheses")
+    owner = o.group(2).strip()
+    if RULING.fullmatch(owner):
+        return None
+    a = ADR_OWNER.fullmatch(owner)
+    if not a:
+        return f"owner `{owner}` is neither an ADR nor an owner ruling"
+    hits = sorted(adr.glob(f"{a.group(2) or a.group(3)}-*.md")) if adr.is_dir() else []
+    if a.group(1):
+        hits = [h for h in hits if f"docs/adr/{h.name}".startswith(a.group(1))]
+    if len(hits) != 1:
+        return f"owner `{owner}` names {'no' if not hits else len(hits)} ADR file{'s' if len(hits) > 1 else ''} in {adr}"
+    return None
 
 
 class Anchors(HTMLParser):
@@ -1069,12 +1147,18 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
     items = criteria_items(body); section = items is not None
     if not section:
         fail("no-criterion", "no `## Acceptance criteria` section",
-             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` and the last `demo: ` with a backticked command")
+             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` "
+             f"(or, serving no criterion, an item {RULE_FORM}) and the last `demo: ` with a backticked command")
         items = []
     ids = list(dict.fromkeys((m.group(1), m.group(2)) for m in (CRITERION.match(i) for i in items) if m))
-    if section and not ids:
+    rules = [(r.group(1).strip(), rule_why_not(r.group(1).strip(), specs.parent / "adr")) for r in (RULE.match(i) for i in items) if r]
+    for rest, why in rules:
+        if why:
+            fail("unowned-rule", why, f"write the rule item as {RULE_FORM}")
+    if section and not ids and not rules:
         fail("no-criterion", "no acceptance item names a criterion id",
-             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html")
+             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html; "
+             f"or, serving no criterion, add an item {RULE_FORM}")
     crit, other = [], []
     for slug, anchor in ids:
         have = spec_anchors(specs, slug, cache)
