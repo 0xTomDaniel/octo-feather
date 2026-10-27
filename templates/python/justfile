@@ -12,13 +12,36 @@ setup:
     uv sync --locked
     git config core.hooksPath .githooks
 
-# Lint, format, types, import boundaries, integration and E2E tests.
-check:
+# The gate's steps, each one pytest item (tests/test_gate.py) beside the integration and E2E tests.
+export GATE_RECIPES := "check-lint check-format check-types check-imports"
+
+# Lint, format, types, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md Commands;
+# trend line: tests/conftest.py). Timing never decides pass or fail.
+check: check-tests
+
+check-lint:
     uv run --locked ruff check .
+
+check-format:
     uv run --locked ruff format --check .
+
+check-types:
     uv run --locked basedpyright
+
+check-imports:
     uv run --locked lint-imports
-    uv run --locked pytest -q
+
+# A gate run inside another gate's item (GATE_NESTED set) is sequential and stops at its first failure
+# (-n 0 -x). Extra arguments go to pytest.
+check-tests *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    GATE_NESTED=1 exec uv run --locked pytest "$@"
+
+# The gate's pytest items, all or a subset by pytest arguments (`just test -k check-types`, `just test --lf`).
+test *args:
+    @just check-tests "$@"
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:
