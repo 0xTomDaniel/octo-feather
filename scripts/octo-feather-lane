@@ -108,11 +108,28 @@ the repo's own public surface (ADR 0009): after env assignments and runners (uv 
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
 recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
 imports, aliases and `just MOD RECIPE` included, never a header regex; no just or a justfile
-it cannot read is exit 2, #172), a package.json bin or pyproject
+it cannot read is exit 2, #172; the recipes are the ones just itself says it runs, in the repo,
+dependencies included, none a gate or factory recipe: just parses the words beside --completions, and
+unless it objects to more than their recipe words and overrides (a subcommand such as --show, --list or
+--command runs no recipe), dry-runs them with --verbose, naming each recipe; executing nothing,
+evaluating no backtick; every option, parameter and default is just's to read, and anything just refuses,
+-q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's just-version is
+the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
-wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A ticket body
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
+command the ticket itself creates when the ticket declares it exactly in a line
+``Creates: `<path>` `` (repo-relative, the script or file the demo runs, e.g. scripts/new-cmd or bin/x;
+a leading ./ is dropped), one backticked value, the line repeatable: a demo stage passes when its
+program, after env assignments and runners, is exactly that path (written with a /, e.g. ./run for a
+top-level file, and stands for itself, never an interpreter or HTTP tool by its basename). A declared
+path that already exists still passes. A just recipe is never declared (owner ruling #240, C): an
+existing one is a demo as above, needing no Creates; one the justfile lacks is created in an earlier
+ticket, or the demo runs the path it runs. Class bad-creates: a value not one backticked path, empty,
+`just ...`, absolute, with `..`, not normalized, or under tests/ or a hook dir. Class unused-creates: a declared path no demo stage runs (an
+Expand-contract ticket runs none). A demo of an undeclared command the repo lacks stays
+layer-only-ticket, its fix naming the Creates form. A ticket body
 is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
 or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
 structural facts only, never what the prose means: whether the demo shows the behavior What to
@@ -131,9 +148,50 @@ on PARENT, whether or not the tracker already did (one already done stays as it 
 back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
 named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
 
+  octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
+
+What `report` reads and shows, that it writes nothing, and how it treats a source it cannot read:
+docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then per lane:
+
+  lane <record name>: issue <issue> <repository> "<goal>"
+    started: <started_at>                        its age is the lane's wall time
+    pr: #N <state> <draft|ready> head <12 hex> checks: <count> <result>, ...   (`pr: none` with no pr)
+    running: <pane> <name> <Herdr state>, one line per Herdr agent whose workspace is the supervisor
+             pane's prefix; `(supervisor)` marks the supervisor's pane, a supervisor pane not listed is said
+    waits: waiting_on "<value>", last hand-off <last_handoff_at>
+    waits: worker <name> <pane> working          per agent other than the supervisor in state working
+    waits: owner gate <gate> asked <at>
+    waits: check <name> <status> on head <12 hex>
+    review rounds: <N>                           the hand-off log's `"kind": "review"` lines
+    spend: $<dollars> over <N> calls of known cost, <M> calls of unknown cost
+                                                 spend.jsonl lines whose lane is the record name
+                                                 (cost_usd null: unknown; neither a number nor null:
+                                                 unparsable); `none recorded for <lane>`,
+                                                 `no spend recorded (spend.jsonl: none)` with no ledger
+    gate time: lane <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+    gate time: main <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+                                                 the check-runs.jsonl line with the latest start whose
+                                                 head is a commit of the PR (`gh pr view --json commits`),
+                                                 then of the default branch's last 100 commits (one
+                                                 `gh api repos/<repository>/commits` per repository);
+                                                 `<lane|main> none: <why>` with no such run
+
+After the lanes:
+
+  owner queue:                                   (`owner queue: none` with none pending)
+    lane <record name> gate <gate> asked <at>    oldest first
+  owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
+    class <class>: count <N>, last seen <at>     by class name
+  spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
+
+Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
+read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
+counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
+Exit 0; 1 on any argument.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
 
@@ -1047,6 +1105,12 @@ GATE = re.compile(r"just\s+check(-[a-z-]+)?")
 ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
 CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
 EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
+CREATES = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Creates:\**[ \t]*(.*?)\s*$", re.M | re.I)
+# The fix text for a Creates line (scope: --help (ticket)).
+CREATES_FORM = "`Creates: `<path>``, form: octo-feather-lane --help (ticket)"
+# The fix for a `Creates: `just ...`` line (scope: --help (ticket)).
+CREATES_JUST_FIX = ("an existing recipe needs no Creates; an absent recipe cannot be declared: create it in an earlier ticket, "
+                    "or demo through the path it runs, declared as " + CREATES_FORM)
 DEMO = re.compile(r"^\**demo:\**\s*", re.I)
 RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
 ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
@@ -1177,12 +1241,24 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
         fail("no-criterion", "no acceptance item names an acceptance criterion: "
              + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
              f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
+    creates, used = {}, set()   # each declared path -> as written
+    for v in dict.fromkeys(CREATES.findall("\n".join(structure(body)))):
+        d, why = creates_why_not(v)
+        if why:
+            fail("bad-creates", f"Creates {why}", CREATES_JUST_FIX if d == "just" else "declare a repo-relative path outside tests/, as " + CREATES_FORM)
+        else:
+            creates.setdefault(d, v)
+    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it",
+                           f"make the demo's program exactly the declared path, or drop the line; {CREATES_FORM}")
+                      for d in creates if d not in used]
     ec = EXPAND.search("\n".join(structure(body)))
     if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
+        unused()
         return out
     if ec:
         fail("layer-only-ticket", f"Expand-contract line names `{ec.group(1)}`",
              "write `Expand-contract: expand`, `migrate` or `contract` (the wide refactor's step), or drop it and end on a demo")
+        unused()
         return out
     last = items[-1] if items else ""
     fix = ("end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI "
@@ -1198,11 +1274,57 @@ def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
             fail("layer-only-ticket", f"demo is the gate alone (`{cmds[0]}`)", fix)
         else:
             surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
-            runs = [surf.runs(c) for c in cmds]
+            runs = [surf.runs(c, creates, used) for c in cmds]
             invs = [i for r in runs for i in r[0]]
             if not invs:
                 fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
+    unused()
     return out
+
+
+def q(v: str) -> str:
+    """V as a Markdown code span."""
+    return f"`` {v} ``" if "`" in v else f"`{v}`"
+
+
+def creates_why_not(v: str) -> tuple[str, str | None]:
+    """(the path a `Creates:` value V declares, why V declares none, None if it does; "just" for a just recipe)."""
+    m = re.fullmatch(r"`([^`]*)`", v)
+    if not m:
+        return "", f"value {q(v)} is not one backticked path"
+    d = m.group(1).strip()
+    if d == "":
+        return "", f"{q(m.group(1))} has an empty value"
+    if d.split()[0] == "just":
+        return "just", f"`{d}` declares a just recipe, not a path (owner ruling #240, C)"
+    if re.search(r"\s", d):
+        return "", f"`{d}` is not one path (no arguments or spaces)"
+    if os.path.isabs(d) or ".." in d.split("/"):
+        return "", f"`{d}` is not repo-relative (no leading /, no ..)"
+    rel = d[2:] if d.startswith("./") else d
+    if os.path.normpath(rel) != rel:
+        return "", f"`{d}` is not a normalized path (no //, /./ or trailing /)"
+    if TEST_DIR.search(rel):
+        return "", f"`{d}` is under a test or hook directory, not the app's surface"
+    return rel, None
+
+
+@functools.cache
+def gate_free_module():
+    """scripts/check-gate-free, whose just_runs() is the one source of what a just command line runs (with the gate's marker)."""
+    loader = importlib.machinery.SourceFileLoader("check_gate_free", str(KIT / "scripts" / "check-gate-free"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_gate_free", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def created(words: list[str], creates) -> str | None:
+    """The declared path of CREATES that a stage's program WORDS (env and runners dropped) runs exactly, None if none."""
+    if not words:
+        return None
+    prog = words[0]
+    rel = prog[2:] if prog.startswith("./") else prog
+    return rel if "/" in prog and rel in creates else None
 
 
 # A demo goes through the repo's own public surface (ADR 0009): a program the repo declares,
@@ -1212,7 +1334,9 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
                "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
                "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
-               "generic tool; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`")
+               "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
+               + ", the demo running that path; or, for one step of a wide refactor, add the line "
+               "`Expand-contract: expand|migrate|contract`")
 
 
 RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
@@ -1235,6 +1359,7 @@ class Surface:
 
     def __init__(self, root: Path):
         self.root, self.exec_paths, self.exec_names, self._recipes, self.bins = root, set(), set(), None, set()
+        self.justfile, self._just = None, {}
         self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
         ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
         for line in ls.stdout.splitlines():
@@ -1271,7 +1396,7 @@ class Surface:
             c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
             if not c:
                 return self._recipes
-            f = self.root / c[0]
+            f = self.justfile = self.root / c[0]
             why = lambda w: Unchecked(f"cannot read the justfile's recipes ({f}): {w}, then rerun")
             if len(c) > 1:
                 raise why(f"justfile is ambiguous, just refuses to pick one of: {' '.join(c)}; keep one")
@@ -1301,16 +1426,43 @@ class Surface:
         recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
         return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
 
-    def runs(self, cmd: str) -> tuple[list[str], str]:
-        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not)."""
+    def runs(self, cmd: str, creates=(), used: set | None = None) -> tuple[list[str], str]:
+        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not).
+        A stage whose program is exactly a path of CREATES (the ticket's `Creates:` lines) is on it
+        too, and that path goes into USED."""
         invs, whys = [], []
         for stage in re.split(r"\|\||&&|[|;]", strip_subst(cmd)):
             why, words = self.stage_why_not(stage)
-            if why is None:
+            if (d := created(words, creates)) is not None:
+                if used is not None:
+                    used.add(d)
+                invs.append(d)   # a created path stands for itself, never read by its basename
+            elif why is None:
                 invs.append(invocation(words))
             else:
                 whys.append(why)
         return invs, "; ".join(dict.fromkeys(whys)) or "empty command"
+
+    def just_why(self, args: list[str]) -> str | None:
+        """Why `just ARGS` is no demo, None if it is one, as just itself answers in ROOT (check-gate-free
+        just_runs, the one source): the recipes it runs, dependencies included, none a gate or factory recipe."""
+        key = tuple(args)
+        if key in self._just:
+            return self._just[key]
+        self.recipes   # no just or an unreadable justfile: exit 2, before any run
+        cmd = " ".join(["just", *args])
+        if not self.justfile:
+            res = f"no justfile in {self.root}"
+        else:
+            try:
+                names, why = gate_free_module().just_runs(args, self.root)
+            except subprocess.TimeoutExpired:
+                names, why = None, "just did not answer in 60s"
+            g = next((n for n in names or () if NOT_DEMO_RECIPES.fullmatch(n)), None)
+            res = (f"just answers: {why}" if names is None else
+                   f"{cmd} runs {g}, a gate or factory recipe, not the app" if g else None)
+        self._just[key] = res
+        return res
 
     def stage_why_not(self, stage: str) -> tuple[str | None, list[str]]:
         words = program_words(stage)
@@ -1335,20 +1487,7 @@ class Surface:
         if prog == "playwright" or prog.endswith("/playwright"):
             return None
         if prog == "just":
-            words = [a for a in args if not a.startswith("-")]
-            rec = words[0] if words else ""
-            if not rec:
-                return "`just` with no recipe"
-            if NOT_DEMO_RECIPES.fullmatch(rec):
-                return f"just {rec} is a gate or factory recipe, not the app"
-            recipes = self.recipes
-            for w in words[1:]:   # `just MOD RECIPE`: what every just with modules runs (1.21 refuses MOD::RECIPE)
-                if rec not in self.modules:
-                    break
-                rec = f"{rec} {w}"
-            if rec not in recipes:
-                return f"no justfile recipe {rec} in {self.root}"
-            return f"just {rec} is a gate or factory recipe, not the app" if not_demo(recipes[rec]) else None
+            return self.just_why(args)
         if "/" in prog:
             rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
             if os.path.isabs(prog):
@@ -1401,7 +1540,7 @@ def invocation(words: list[str]) -> str:
         words = words[words.index(script_arg(words)):]
     prog, args = words[0], [a for a in words[1:] if not a.startswith("-")]
     name = prog.rsplit("/", 1)[-1]
-    if name in HTTP:
+    if prog in HTTP:   # as word_why_not reads it: a bare name, never a path's basename
         url = next(a for a in args if re.match(r"https?://", a))
         return re.sub(r"^https?://[^/]*", "", url).split("?")[0].split("#")[0] or "/"
     if name == "playwright":
@@ -1536,6 +1675,314 @@ def cmd_ticket(args: list[str]) -> int:
     return 1 if fails else 0
 
 
+# --- the factory report (spec comms #factory-report, issue #248) ---
+
+RUNNING = "working"   # the Herdr agent_status of an agent at work
+
+
+def utc(s: object) -> "datetime.datetime | None":
+    import datetime
+    try:
+        return datetime.datetime.strptime(str(s), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+    except ValueError:
+        return None
+
+
+def stamp(s: object, now) -> str:
+    t = utc(s)
+    if t is None:
+        return f"{s!r} (not a UTC instant)" if s not in (None, "") else "(not recorded)"
+    secs = int((now - t).total_seconds())
+    sign, secs = ("", secs) if secs >= 0 else ("-", -secs)
+    d, h, m = secs // 86400, secs // 3600 % 24, secs // 60 % 60
+    age = (f"{d}d" if d else "") + (f"{h}h" if d or h else "") + f"{m}m"
+    return f"{t:%Y-%m-%dT%H:%M:%SZ} ({sign}{age} ago)"
+
+
+def herdr_agents() -> list[dict]:
+    try:
+        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"herdr agent list failed ({err[-1][:300] if err else f'exit {p.returncode}'})")
+    try:
+        agents = json.loads(p.stdout)["result"]["agents"]
+        if not isinstance(agents, list) or not all(isinstance(a, dict) for a in agents):
+            raise TypeError("agents is not a list of objects")
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"herdr agent list printed no agent list ({type(e).__name__}: {e})")
+    return agents
+
+
+def read_log(path: Path) -> tuple[list[dict], list[int]]:
+    """The hand-off log's JSON object lines, and the numbers of the lines that are not one."""
+    lines, bad = [], []
+    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            d = json.loads(l)
+        except ValueError:
+            d = None
+        (lines.append(d) if isinstance(d, dict) else bad.append(i))
+    return lines, bad
+
+
+def pending_gates(lines: list[dict]) -> list[tuple[str, object]]:
+    """Each pending owner gate (spec comms #report-owner-queue), with its asked time."""
+    latest: dict[str, dict] = {}
+    for d in lines:
+        if d.get("kind") == "gate" and isinstance(d.get("gate"), str) and d.get("event") in ("asked", "answered"):
+            latest[d["gate"]] = d
+    return [(g, d.get("at")) for g, d in latest.items() if d["event"] == "asked"]
+
+
+def check_results(rollup: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for c in rollup:
+        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
+            r = (c.get("state") or "pending").lower()
+        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+            r = (c.get("status") or "pending").lower()
+        else:
+            r = c["conclusion"].lower()
+        counts[r] = counts.get(r, 0) + 1
+    return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
+
+
+def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
+    """The director log's owner-caught finding classes (spec comms #report-owner-caught)."""
+    log = state / "director.handoffs.jsonl"
+    if not log.exists():
+        return [f"owner-caught: log {log.name}: none"]
+    try:
+        lines, bad = read_log(log)
+    except (OSError, UnicodeDecodeError) as e:
+        unread.append(f"log {log.name}")
+        return [f"owner-caught: unread: log {log.name}: {e}"]
+    seen: dict[str, list] = {}
+    for d in lines:
+        c = d.get("class")
+        if d.get("kind") == "finding" and isinstance(c, str) and c.startswith("owner-caught-"):
+            s = seen.setdefault(c, [0, None])
+            s[0] += 1
+            t = utc(d.get("at"))
+            if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
+                s[1] = d.get("at")
+    out = [f"owner-caught ({log.name}):" if seen else f"owner-caught ({log.name}): none"]
+    out += [f"  class {c}: count {n}, last seen {stamp(at, now)}" for c, (n, at) in sorted(seen.items())]
+    if bad:
+        out.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+    return out
+
+
+def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | None:
+    """A JSON lines file's object lines with their numbers, and the numbers of the lines that are not one; None with no file."""
+    if not path.exists():
+        return None
+    rows, bad = [], []
+    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            d = json.loads(l)
+        except ValueError:
+            d = None
+        (rows.append((i, d)) if isinstance(d, dict) else bad.append(i))
+    return rows, bad
+
+
+class ReportSources:
+    """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
+    LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
+
+    def __init__(self, state: Path, unread: list[str]):
+        self.unread, self.main = unread, {}
+        self.ledger, self.ledger_why = self.load(state / self.LEDGER)
+        self.trend, self.trend_why = self.load(state / self.TREND)
+        if self.ledger:   # a cost neither dollars nor null (unknown) makes the line unreadable
+            rows, bad = self.ledger
+            odd = [i for i, d in rows if d.get("cost_usd", "") is not None and not self.dollars(d.get("cost_usd", ""))]
+            self.ledger = [r for r in rows if r[0] not in odd], sorted(bad + odd)
+
+    @staticmethod
+    def dollars(c: object) -> bool:
+        return isinstance(c, (int, float)) and not isinstance(c, bool)
+
+    def load(self, path: Path):
+        try:
+            return numbered_jsonl(path), None
+        except (OSError, UnicodeDecodeError) as e:
+            self.unread.append(path.name)
+            return None, str(e)
+
+    def notes(self) -> list[str]:
+        return [f"{n}: {len(r[1])} unparsable line{'s' if len(r[1]) > 1 else ''} ({', '.join(map(str, r[1]))})"
+                for n, r in ((self.LEDGER, self.ledger), (self.TREND, self.trend)) if r and r[1]]
+
+    def spend(self, name: str) -> str:
+        if self.ledger_why:
+            return f"  spend: unread: {self.LEDGER}: {self.ledger_why}"
+        if self.ledger is None:
+            return f"  spend: no spend recorded ({self.LEDGER}: none)"
+        costs = [d.get("cost_usd") for _, d in self.ledger[0] if d.get("lane") == name]
+        known = [c for c in costs if self.dollars(c)]
+        if not costs:
+            return f"  spend: none recorded for {name}"
+        unknown = len(costs) - len(known)
+        return (f"  spend: ${sum(known):.4f} over {len(known)} call{'s' if len(known) != 1 else ''} of known cost, "
+                f"{unknown} call{'s' if unknown != 1 else ''} of unknown cost")
+
+    def last_run(self, heads: set[str]) -> dict | None:
+        runs = [(utc(d.get("start")) is not None, str(utc(d.get("start")) or ""), i, d)
+                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads]
+        return max(runs, key=lambda r: r[:3])[3] if runs else None
+
+    def main_heads(self, repo: object) -> set[str] | str:
+        """The default branch's last 100 commits of repo, or why they are unread."""
+        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+            return f"unread: the record needs repository owner/name (repository {repo!r})"
+        if repo not in self.main:
+            try:
+                out = json.loads(gh(["api", f"repos/{repo}/commits?per_page=100"], f"check {repo} exists, and gh auth status"))
+                self.main[repo] = {c["sha"] for c in out}
+            except (Refuse, ValueError, KeyError, TypeError) as e:
+                self.unread.append(f"GitHub ({repo} default branch)")
+                self.main[repo] = f"unread: GitHub: {e}"
+        return self.main[repo]
+
+    def gate(self, pr: object, pr_heads: set[str] | None, repo: object, now) -> list[str]:
+        if self.trend_why:
+            return [f"  gate time: unread: {self.TREND}: {self.trend_why}"]
+        if self.trend is None:
+            return [f"  gate time: no gate run recorded ({self.TREND}: none)"]
+
+        def run(who: str, d: dict | None, none: str) -> str:
+            if d is None:
+                return f"  gate time: {who} none: {none}"
+            steps = d.get("steps")
+            n = len(steps) if isinstance(steps, list) else steps
+            return (f"  gate time: {who} {d.get('total_s')}s exit {d.get('exit')}, {n} steps, head {str(d.get('head'))[:12]}, "
+                    f"started {stamp(d.get('start'), now)}")
+        if pr is None:
+            lane = "  gate time: lane none: no pr"
+        elif pr_heads is None:
+            lane = f"  gate time: lane unread: GitHub (PR #{pr})"
+        else:
+            lane = run("lane", self.last_run(pr_heads), f"no gate run on a commit of PR #{pr}")
+        main = self.main_heads(repo)
+        if isinstance(main, str):
+            return [lane, f"  gate time: main {main}"]
+        return [lane, run("main", self.last_run(main), f"no gate run on a commit of {repo}'s default branch")]
+
+
+def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list,
+                src: ReportSources) -> list[str]:
+    import tomllib
+    name = rec_path.stem
+    try:
+        rec = tomllib.loads(rec_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        unread.append(f"record {rec_path.name}")
+        return [f"lane {name}", f"  unread: record {rec_path.name}: {e}"]
+    repo = rec.get("repository")
+    out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
+           f"  started: {stamp(rec.get('started_at'), now)}"]
+    check_waits, pr_heads = [], None
+    pr = rec.get("pr")
+    if pr is None:
+        out.append("  pr: none")
+    elif not isinstance(pr, int) or isinstance(pr, bool) or not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        unread.append(f"GitHub ({name})")
+        out.append(f"  pr: {pr!r} unread: GitHub: the record needs pr a number and repository owner/name (repository {repo!r})")
+    else:
+        try:
+            d = pr_view(pr, "state,isDraft,headRefOid,statusCheckRollup,commits", repo)
+            rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
+            head = str(d["headRefOid"])[:12]
+            out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
+            check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+            pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
+        except (Refuse, KeyError, TypeError, AttributeError) as e:
+            unread.append(f"GitHub ({name})")
+            out.append(f"  pr: #{pr} unread: GitHub: {e}")
+    sup = rec.get("supervisor")
+    workers = []
+    if agents is None:
+        out.append(f"  running: unread: Herdr: {herdr_why}")
+    elif not isinstance(sup, str) or ":" not in sup:
+        out.append(f"  running: the record's supervisor {sup!r} is no pane id")
+    else:
+        ws = sup.split(":", 1)[0]
+        mine = sorted((a for a in agents if a.get("workspace_id") == ws), key=lambda a: str(a.get("pane_id")))
+        for a in mine:
+            is_sup = a.get("pane_id") == sup
+            out.append(f"  running: {a.get('pane_id')} {a.get('name') or '(no name)'} {a.get('agent_status')}" + (" (supervisor)" if is_sup else ""))
+            if not is_sup and a.get("agent_status") == RUNNING:
+                workers.append(f"  waits: worker {a.get('name') or '(no name)'} {a.get('pane_id')} {RUNNING}")
+        if not any(a.get("pane_id") == sup for a in mine):
+            out.append(f"  running: supervisor pane {sup} not in herdr agent list")
+    out.append(f"  waits: waiting_on {json.dumps(rec.get('waiting_on', ''))}, last hand-off {stamp(rec.get('last_handoff_at'), now)}")
+    out += workers
+    log, notes = rec_path.with_name(f"{name}.handoffs.jsonl"), []
+    rounds = "  review rounds: 0"
+    if log.exists():
+        try:
+            lines, bad = read_log(log)
+            rounds = f"  review rounds: {sum(1 for d in lines if d.get('kind') == 'review')}"
+            pending = pending_gates(lines)
+            out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending]
+            queue += [(name, g, at) for g, at in pending]
+            if bad:
+                notes.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+        except (OSError, UnicodeDecodeError) as e:
+            unread.append(f"log {log.name}")
+            notes.append(f"  unread: log {log.name}: {e}")
+            rounds = f"  review rounds: unread (log {log.name})"
+    else:
+        notes.append(f"  log {log.name}: none")
+    numbers = [rounds, src.spend(name), *src.gate(pr, pr_heads, repo, now)]
+    return out + check_waits + numbers + notes
+
+
+def cmd_report(args: list[str]) -> int:
+    import datetime
+    if args:
+        raise Refuse(f"usage: octo-feather-lane report (takes no arguments; got {' '.join(args)})")
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    lanes = lanes_dir()
+    print(f"report at {now:%Y-%m-%dT%H:%M:%SZ} ({lanes})")
+    unread: list[str] = []
+    try:
+        agents, herdr_why = herdr_agents(), None
+    except Refuse as e:
+        agents, herdr_why = None, str(e)
+        unread.append("Herdr")
+    try:
+        records = sorted(lanes.glob("*.toml"))
+    except OSError as e:
+        records = []
+        unread.append(f"lanes {lanes}")
+        print(f"unread: lanes {lanes}: {e}")
+    if not records:
+        print("no open lane")
+    queue: list = []
+    src = ReportSources(lanes.parent, unread)
+    for r in records:
+        print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue, src)))
+    queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
+    print("owner queue:" if queue else "owner queue: none")
+    for name, g, at in queue:
+        print(f"  lane {name} gate {g} asked {stamp(at, now)}")
+    print("\n".join(owner_caught(lanes.parent, now, unread)))
+    for n in src.notes():
+        print(n)
+    print(f"unread: {', '.join(unread) or 'none'}")
+    return 0
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "verdict": cmd_verdict,
@@ -1545,6 +1992,7 @@ COMMANDS = {
     "tickets": cmd_tickets,
     "done": cmd_done,
     "ticket": cmd_ticket,
+    "report": cmd_report,
 }
 
 

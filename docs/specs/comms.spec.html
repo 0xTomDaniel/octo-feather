@@ -23,6 +23,7 @@
 <p data-user-story data-user-facing="false" data-anchor="story-no-wrong-pane">As a supervisor, a worker that follows a wrong habit cannot type into another lane or straight to the director while its supervisor is reachable.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: a worker that ends without reporting is noticed, recovered and reported up.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-lane-state">As the director, I read every lane's current state and history, findings included, from plain files, so I can audit lanes and count repeated finding classes without asking each supervisor.</p>
+<p data-user-story data-user-facing="false" data-anchor="story-factory-report">As the director, I read the whole factory in one report built only from what already records it, so I answer the owner from facts, waits on the owner included, instead of reading each lane's panes.</p>
 </section>
 
 <section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
@@ -37,13 +38,21 @@
 <p data-acceptance-criterion data-anchor="acceptance-lane-no-tickets" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor delivering several tickets, When a ticket changes state, then the director opens that ticket in the target's tracker,</span> <span data-acceptance-observable>Then the tracker shows the ticket's new state, and the lane record holds no ticket entry.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-finding-lines" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor that receives a code-review verdict with two findings, When it consumes the verdict,</span> <span data-acceptance-observable>Then the lane's hand-off log gains one finding line per finding, each naming its source, class and whether it blocks, proven by an integration test: no screen shows it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-lane-archive" data-story="story-lane-state"><span data-acceptance-scenario>Given a supervisor whose pull request merged, When it closes the lane,</span> <span data-acceptance-observable>Then the lanes directory no longer lists the lane and its archive holds the lane's record and hand-off log unchanged, proven by an integration test: no screen shows it.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-lanes" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with three open lanes, one with an implementer working, one escalated to the director and one whose merge ask awaits the owner, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report shows each lane with its pull request and its checks, each agent in its workspace with its Herdr state, and what it waits on: the implementer, the director, and the owner's merge gate with the time it was asked.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-owner-queue" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with one lane whose merge ask awaits the owner and another whose spec review awaits the owner's Accept, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report's owner queue lists both, oldest first, each with its lane, its gate and how long it has waited.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-lane-numbers" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with an open lane that has had two review rounds and recorded model spend, some of it of unknown cost, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report shows that lane's wall time since it started, its two review rounds, and its spend in dollars with the calls of unknown cost counted apart.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-gate-time" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with an open lane whose pull request and main each have a recorded gate run, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report shows the wall time of the lane's last gate run beside main's last.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-owner-caught" data-story="story-factory-report"><span data-acceptance-scenario>Given the director whose log holds owner-caught findings of two classes, one of them twice, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report lists each owner-caught class with its count, two for the repeated one, and when it was last seen.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-any-target" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with open lanes on two target repositories, When the director runs the factory report,</span> <span data-acceptance-observable>Then each lane shows the pull request and checks from its own repository.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-report-unreadable" data-story="story-factory-report"><span data-acceptance-scenario>Given the director with open lanes while GitHub cannot be reached, needs an induced failure: GitHub unreachable, When the director runs the factory report,</span> <span data-acceptance-observable>Then the report shows every lane from its files and names GitHub as unread with the reason.</span></p>
 
 </section>
 
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
 <h2>Modular boundaries</h2>
 <p data-modular-boundary data-anchor="boundary-transport"><span data-boundary-responsibility>The Herdr wrappers (<code>herdr-spawn</code>, <code>herdr-say</code>, <code>herdr-close</code>, <code>herdr-wake</code>) own placing, messaging, parking, resuming and closing agents.</span> <span data-boundary-seam>Caller-facing seam: each wrapper's arguments, exit status, and printed <code>pane=</code> and <code>workspace=</code> lines.</span> <span data-boundary-dependency>Dependency direction: external-provider; they depend on the Herdr CLI. Roles and skills depend on the wrappers, never the reverse.</span> <span data-boundary-scope>Observable scope: Herdr workspaces, tabs and agents.</span></p>
-<p data-modular-boundary data-anchor="boundary-lane-files"><span data-boundary-responsibility>The kit owns the lane record, hand-off log and director log formats; roles write them at the named moments.</span> <span data-boundary-seam>Caller-facing seam: the files in the Herdr session's state directory, printed by <code>octo-feather-state</code>.</span> <span data-boundary-dependency>Dependency direction: self-contained; readers follow the format and the kit names no reader.</span> <span data-boundary-scope>Observable scope: file contents and the lane's workspace membership.</span></p>
+<p data-modular-boundary data-anchor="boundary-lane-files"><span data-boundary-responsibility>The kit owns the lane record, hand-off log and director log formats; roles write them at the named moments.</span> <span data-boundary-seam>Caller-facing seam: the files in the Herdr session's state directory, printed by <code>octo-feather-state</code>.</span> <span data-boundary-dependency>Dependency direction: self-contained; readers follow the format, the factory report among them.</span> <span data-boundary-scope>Observable scope: file contents and the lane's workspace membership.</span></p>
+<p data-modular-boundary data-anchor="boundary-factory-report"><span data-boundary-responsibility>The factory report, <code>octo-feather-lane report</code>, owns pulling the factory's current state together for the director.</span> <span data-boundary-seam>Caller-facing seam: the command and the report it prints.</span> <span data-boundary-dependency>Dependency direction: external-provider; it reads the lane files, the director log, the spend ledger, the gate run trend, Herdr's agent list and GitHub; it writes nothing, and nothing depends on it.</span> <span data-boundary-scope>Observable scope: the printed report.</span></p>
 </section>
 
 <section data-anchor="escalation-rules" id="escalation-rules">
@@ -141,6 +150,7 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <tbody>
 <tr data-anchor="handoff-director-note"><td>note</td><td>The director tells the owner something worth keeping</td><td>issue when about one lane, text</td></tr>
 <tr data-anchor="handoff-director-prod"><td>prod</td><td>The director wakes or redirects a supervisor</td><td>issue, note</td></tr>
+<tr data-anchor="handoff-director-finding"><td>finding</td><td>The director records a finding worth counting by class</td><td>class, starting <code>owner-caught-</code> when the owner caught what the factory should have; issue when about one lane; summary</td></tr>
 </tbody>
 </table>
 </div>
@@ -152,6 +162,27 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <p data-anchor="session-wake-owner">Spec Chat's review service may run in another Herdr session, so each review row carries an owner value naming its session and pane; a review hand-off wakes that pane in its own session.</p>
 <p data-anchor="wake-provider-rule">A just recipe in the kit registers <code>herdr-wake</code> as Spec Chat's wake provider on the remote, so a review hand-off wakes the parked pane its row names.</p>
 <p data-anchor="transport-restart-risk">Risk: whether Herdr keeps workspace and pane ids across a Herdr server restart is unproven; if not, a restart breaks every lane record's supervisor pane.</p>
+</section>
+<section data-anchor="factory-report" id="factory-report">
+<h2>Factory report</h2>
+<p data-anchor="report-what"><code>octo-feather-lane report</code> prints the current state of every open lane in the session for the director, who runs it before each status answer to the owner. It reads only what already records that state and collects nothing new: the lane records and hand-off logs, the director log, the spend ledger, the gate run trend, Herdr's agent list, and each lane's pull request in the repository its record names. It writes nothing.</p>
+<p data-anchor="report-facts">The report prints facts with their times, never a verdict: no lane is called healthy, stuck or late. A source it cannot read is named with the reason, and everything else still prints.</p>
+<div class="table-scroll" data-anchor="report-fields-wrap">
+<table data-anchor="report-fields"><caption>What the report shows for each open lane</caption>
+<thead><tr><th>Field</th><th>Read from</th></tr></thead>
+<tbody>
+<tr data-anchor="report-field-pr"><td>Pull request</td><td>The record's <code>pr</code>; on GitHub its state, draft or ready, head, and its checks by result</td></tr>
+<tr data-anchor="report-field-running"><td>Running</td><td>Each Herdr agent in the lane's workspace, supervisor and workers, with its name and Herdr state</td></tr>
+<tr data-anchor="report-field-waits"><td>Waits on</td><td>The record's <code>waiting_on</code> with the record's last hand-off time; each pending owner gate with the time it was asked; checks still running on the pull request's head</td></tr>
+<tr data-anchor="report-field-wall"><td>Wall time</td><td>Now minus the record's <code>started_at</code></td></tr>
+<tr data-anchor="report-field-rounds"><td>Review rounds</td><td>The hand-off log's review lines</td></tr>
+<tr data-anchor="report-field-spend"><td>Spend</td><td>The spend ledger's dollars for the lane, with its calls of unknown cost counted apart</td></tr>
+<tr data-anchor="report-field-gate-time"><td>Gate time</td><td>The wall time of the last gate run on a commit of the lane's pull request, beside the last on a commit of main</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="report-owner-queue">An owner gate is pending when its latest gate line in the hand-off log is <code>asked</code> with no later <code>answered</code> line for the same gate. The owner queue lists every pending owner gate across lanes, oldest first, with its lane, gate and age.</p>
+<p data-anchor="report-owner-caught">The report counts the director log's finding lines whose class starts <code>owner-caught-</code> by class, each with its count and the time it was last seen, so the owner sees whether what the factory missed declines over time.</p>
 </section>
 <section data-anchor="open-questions" id="open-questions">
 <h2>Open questions</h2>

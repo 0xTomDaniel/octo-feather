@@ -3,14 +3,18 @@
  * Usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run
  * Run state: $VERIFY_APP_RUN_DIR. Evidence: $VERIFY_APP_EVIDENCE_DIR.
  * Both default outside the git dir, under ${TMPDIR:-/tmp}.
- * Node runs this file directly (type stripping, no build), through ./verify-app; it needs nothing installed.
+ * Node runs this file directly (type stripping, no build), through ./verify-app. Reading qc.toml needs the
+ * repo's packages installed (`just setup`); the commands that read only the run state need nothing.
  */
 import { spawnSync, type SpawnSyncReturns } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { isDeepStrictEqual } from "node:util";
-import { parseToml, TomlError, type TomlTable, type TomlValue } from "./toml.ts";
+import type { TomlTable, TomlValue } from "smol-toml";
+
+// The TOML reader, a package: loaded here, refused only by a command that reads qc.toml (readContract).
+const toml = await import("smol-toml").catch((e: unknown) => (e instanceof Error ? e : new Error(String(e))));
 
 const ME = "verify-app";
 const USAGE = "usage: verify-app setup|launch|doctor|drive <feature>|cleanup|run";
@@ -95,8 +99,13 @@ interface Contract {
   values: Record<string, string>;
 }
 
+/** A TOML table: not an array, date or time, which are objects too. */
+function isTable(t: TomlValue | undefined): t is TomlTable {
+  return Object.prototype.toString.call(t) === "[object Object]";
+}
+
 function strings(t: TomlValue | undefined): Record<string, string> | undefined {
-  if (typeof t !== "object") return undefined;
+  if (!isTable(t)) return undefined;
   const out: Record<string, string> = {};
   for (const [k, v] of Object.entries(t)) {
     if (typeof v !== "string") return undefined;
@@ -106,11 +115,14 @@ function strings(t: TomlValue | undefined): Record<string, string> | undefined {
 }
 
 function readContract(): Contract {
+  if (toml instanceof Error) {
+    die(`cannot load the TOML reader smol-toml (${toml.message.split("\n")[0] ?? ""}): install this repo's packages first (just setup, or pnpm install --frozen-lockfile)`);
+  }
   let c: TomlTable;
   try {
-    c = parseToml(fs.readFileSync(CONTRACT, "utf8"));
+    c = toml.parse(fs.readFileSync(CONTRACT, "utf8"));
   } catch (e) {
-    if (e instanceof TomlError || e instanceof Error) die(`cannot read the app-driver contract ${CONTRACT}: ${e.message}`);
+    if (e instanceof Error) die(`cannot read the app-driver contract ${CONTRACT}: ${e.message}`);
     throw e;
   }
   const { format, entry, services, fixture, values: rawValues, setup = "" } = c;
@@ -119,16 +131,16 @@ function readContract(): Contract {
   }
   const values = strings(rawValues);
   const fixtures: Record<string, string> = {};
-  let fixturesOk = typeof fixture === "object";
-  if (typeof fixture === "object") {
+  let fixturesOk = isTable(fixture);
+  if (isTable(fixture)) {
     for (const [name, f] of Object.entries(fixture)) {
-      const reset = typeof f === "object" ? f["reset"] : undefined;
+      const reset = isTable(f) ? f["reset"] : undefined;
       if (typeof reset === "string") fixtures[name] = reset;
       else fixturesOk = false;
     }
   }
-  const command = typeof entry === "object" ? entry["command"] : undefined;
-  if (typeof command !== "string" || typeof services !== "object" || !fixturesOk || values === undefined || typeof setup !== "string") {
+  const command = isTable(entry) ? entry["command"] : undefined;
+  if (typeof command !== "string" || !isTable(services) || !fixturesOk || values === undefined || typeof setup !== "string") {
     die(`${CONTRACT} does not match format 1 (validate: octo-feather-contract)`);
   }
   return { setup, entry: command, services: Object.keys(services), fixtures, values };

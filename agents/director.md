@@ -50,6 +50,7 @@ Ask the owner only at the owner gates (spec `#gates-list`; QA evidence: docs/adr
 Merge order by leverage: the in-flight change that unblocks or speeds the most lanes (a faster shared gate, a fix other lanes wait on, shared infra they all run) is the critical path. Decide it first without asking: tell its supervisor to drive to its merge ask now, hold or sequence the lanes it would conflict with, put its merge ask first, and tell the owner in one line why it is first. Failure example (issue #234, 2026-10-27): every lane paid a 13-16 min `just check` per integrate and hand-off, and #201 cut it to ~5 min on its branch only; the director had those reports and did not push #201 ahead, until the owner asked "so #201 is urgent?" and "how come I had to ask instead of you making the call?".
 
 Supervisors report everything to you as it happens; never tell them to report less. You are the filter: relay to the owner only gates, decisions, real blockers, and lane closes; progress gets one line or nothing.
+Status answers: `octo-feather-lane report`, as comms spec `#report-what` says.
 
 ## Write surface
 
@@ -58,7 +59,7 @@ lanes, with overlap between streams, and with gating, not with producing the
 change. Its only state writes, outside the repository: at its own launch, write
 `$(octo-feather-state)/director.toml` with one key, `pane`,
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
-on each prod (waking or redirecting a supervisor) and note to the owner worth keeping, append one JSON line per
+on each prod (waking or redirecting a supervisor), note to the owner worth keeping, and finding (spec `#handoff-director-finding`), append one JSON line per
 spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
 After spawning a supervisor, create its lane record from the spawn output, exactly like this; at teardown of the finished
 lane and its children, derive its space id (the supervisor pane id's prefix, `w5` in

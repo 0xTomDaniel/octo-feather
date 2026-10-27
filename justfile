@@ -109,10 +109,12 @@ check-refs:
       echo "check-refs: retired-words scanner error: grep exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1; hits=""; fi
     rc=0; found="$(RETIRED="$retired" perl -ne '
         BEGIN { %ok = (
-          # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its one citer.
+          # Frozen spec anchor kept from octo-lite (docs/adr/0021): its definition, the index map, its citers
+          # (the director role and the anchors list of the comms spec call log).
           "docs/specs/comms.spec.html"    => [qr{data-anchor="handoff-[o]perator(-wrap)?"}],
           "docs/specs/index.spec.html"    => [qr{data-anchor="map-handoff-[o]perator"}, qr{#handoff-[o]perator(?=[<"])}],
           "agents/director.md"            => [qr{`#handoff-[o]perator`}],
+          "docs/specs/comms.calls.jsonl"  => [qr{"handoff-[o]perator"}],
           # The #acceptance-retired-words criterion names the words it bans.
           "docs/specs/overview.spec.html" => [qr{uses the retired word [o]perator or [h]uman}],
           # The corrector quotes vendored pstack correct.
@@ -265,6 +267,13 @@ install-check target=invocation_directory():
       v="$(pi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
       if [[ "$v" == "$pin" ]]; then printf 'pi     version %s ok (pi-version)\n' "$v"
       else printf 'pi     WRONG VERSION %s reports %s, want %s (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@%s\n' "$p" "${v:-no version}" "$pin" "$pin"; bad=1; fi
+    fi
+    # just at the pin in just-version: the gate reads just's own answers (check-gate-free), one just on box and CI.
+    pin="$(tr -d '[:space:]' <"$root/just-version")"
+    if p="$(command -v just)"; then
+      v="$(just --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+      if [[ "$v" == "$pin" ]]; then printf 'just   version %s ok (just-version)\n' "$v"
+      else printf 'just   WRONG VERSION %s reports %s, want %s (just-version); install just %s: https://github.com/casey/just/releases/tag/%s\n' "$p" "${v:-no version}" "$pin" "$pin" "$pin"; bad=1; fi
     fi
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
     # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.

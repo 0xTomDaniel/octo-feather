@@ -66,12 +66,20 @@ bad none "no qc.toml at $t/none/qc.toml"
 run "$t/python" "$t/python"
 [[ "$rc" == 2 ]] && grep -qF 'usage: octo-feather-contract [REPO-OR-QC.TOML]' <<<"$out" || fail "two arguments not refused with usage (exit $rc): $out"
 
-# The TypeScript template's verify-app invokes only what qc.toml declares: its setup (here a marker,
-# no install, offline) and its entry, driven with the contract's value. Node runs src/cli.ts with no deps.
+# The TypeScript template's verify-app invokes only what qc.toml declares: its setup (here a marker)
+# and its entry, driven with the contract's value. It reads qc.toml with the TOML package smol-toml:
+# with the repo's packages not installed, launch fails naming it and `just setup`, before any setup;
+# then the packages are installed offline from the pnpm store, as `just setup` installs them.
 repo="$t/ts-app"; mkdir -p "$repo"
 (cd "$kit/templates/typescript" && git ls-files -z | xargs -0 cp --parents -t "$repo")
 git -C "$repo" init -q && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm init --allow-empty
-sed -i -e 's/^setup = .*/setup = "echo declared > \\"$QC_REPO\/setup-ran\\""/' -e 's/^name = "Ada"/name = "Grace"/' -e 's/^greeting = .*/greeting = "Hello, Grace"/' "$repo/qc.toml"
+sed -i -e 's/^setup = .*/setup = "echo declared > \\"$QC_REPO\/setup-ran\\""/' "$repo/qc.toml"
+set +e; vout="$(VERIFY_APP_RUN_DIR="$t/va0/run" VERIFY_APP_EVIDENCE_DIR="$t/va0/evidence" "$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
+[[ "$rc" == 1 ]] && grep -qF 'cannot load the TOML reader smol-toml' <<<"$vout" && grep -qF 'just setup' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
+  || fail "launch with the packages not installed did not fail naming smol-toml and just setup (exit $rc): $vout"
+(cd "$repo" && pnpm install --offline --frozen-lockfile --silent) \
+  || fail "pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
+sed -i -e 's/^name = "Ada"/name = "Grace"/' -e 's/^greeting = .*/greeting = "Hello, Grace"/' "$repo/qc.toml"
 run "$repo"; [[ "$rc" == 0 ]] || fail "edited ts contract not ok: $out"
 # Its drive appends an evidence record: to a throwaway store, never the box's.
 export VERIFY_APP_RUN_DIR="$t/va/run" VERIFY_APP_EVIDENCE_DIR="$t/va/evidence" XDG_STATE_HOME="$t/state" PATH="$kit/scripts:$PATH"
@@ -86,4 +94,4 @@ sed -i '/^\[services\]$/d' "$repo/qc.toml"
 set +e; vout="$("$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] && grep -qF 'qc.toml declares services (web)' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
   || fail "a declared service was not refused before setup (exit $rc): $vout"
-echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, bad TOML and no file fail naming the field; ts verify-app follows qc.toml's setup and values)"
+echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, bad TOML and no file fail naming the field; ts verify-app names the missing install, then follows qc.toml's setup and values)"
