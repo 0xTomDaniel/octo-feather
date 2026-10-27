@@ -94,6 +94,18 @@
       {"fact": "field_lines", "field": "Owner", "none": true}
     ]
   },
+  "reviewer-comment-restatement-note": {
+    "facts": [
+      {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]},
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-list-numbers-notes.md", "restated": "src/app.py"}, {"path": "docs/adr/0002-list-numbers-notes.md", "restated": "tests/test_app.py"}]}
+    ]
+  },
+  "reviewer-skill-restatement-blocks": {
+    "facts": [
+      {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]},
+      {"fact": "field_lines", "field": "Owner", "includes": [{"path": "docs/adr/0002-list-numbers-notes.md", "restated": ".agents/skills/notes-cli/SKILL.md"}]}
+    ]
+  },
   "corrector-template-route": {
     "facts": [
       {"fact": "branch_paths", "untouched": ["templates/", "agents/", ".agents/", ".skillfile/"]},
