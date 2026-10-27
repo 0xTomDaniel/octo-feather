@@ -64,6 +64,17 @@
     "task": "Review lane gh6, ticket T6 (a script committed without its exec bit never lands again; criterion scripts-executable: `just check` fails, naming the file, when a file tracked under scripts/ or .githooks/ has git mode 100644, and passes when each one is 100755).\nDiff: base main, head implementer-t6 in this directory (`git diff main...implementer-t6`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   },
   {
+    "id": "reviewer-product-command-check",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-config-check",
+      "branch": "implementer-t7",
+      "message": "feat(cli): app config-check refuses a config missing a required key (T7, config-keys)"
+    },
+    "task": "Review lane gh7, ticket T7 (a greeting config missing a key is refused before use; criterion config-keys: `app config-check FILE` exits 2, naming each missing key, when the TOML file lacks `name` or `greeting`, and exits 0 when both are present; `--json` prints the missing keys).\nDiff: base main, head implementer-t7 in this directory (`git diff main...implementer-t7`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
     "id": "reviewer-no-check",
     "role": "code-reviewer",
     "fixture": "python-app",

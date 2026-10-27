@@ -218,7 +218,7 @@ spec-chat repo:
 integrate issue +refs:
     octo-feather-integrate "$@"
 
-# Every eval case's shape: required fields, known facts, expectations for each case, no task showing its grade (quality #acceptance-qa-cases-checked).
+# Every eval case's shape (rules: .agents/skills/eval-cases/references/schema.md; quality #acceptance-qa-cases-checked).
 check-evals:
     @python3 "$root/scripts/check-evals"
 

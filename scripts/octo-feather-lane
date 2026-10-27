@@ -25,7 +25,7 @@ ticket-slice, call-evidence); every question is asked of the kit's one judgment 
 `model` (spec judgment#rule-one-model).
 The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
 nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
-no agent, in the qa sandbox, moving aliases never called; refused inside a check run), asking only that model.
+no agent, in the qa sandbox; what it calls: octo-feather-qa --help; refused inside a check run), asking only that model.
 The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
 probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
 accepted, and its status: below accepted threshold, no accepted threshold or meets accepted threshold; spec judgment
@@ -36,8 +36,8 @@ review verdict; no gate reads one (spec judgment #rule-advisory): merge-ask pass
 `verdict` writes through gh (never under the qc judge). REPORT is the code review's
 report, a file or - for stdin. Its fields (the verdict, the check field, the Owner field) and the
 reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
-in scope is the verdict, and lines that disagree are refused. The check field classifies every
-check, test gate or grader the diff adds or changes (docs/adr/0008, issue #118). Refused: no
+in scope is the verdict, and lines that disagree are refused. What the check field classifies:
+docs/adr/0008, Who builds what. Refused: no
 verdict, neither check form, both, a malformed Check line, a class other than exact or proxy, and
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
@@ -106,7 +106,9 @@ a rule item with no owner, an unknown ADR, an empty rule or another owner fails 
 beside a criterion id it is allowed, not required. Its last item is `demo: ` with a backticked command that runs
 the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
 pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
-recipe other than check/check-*/integrate/qc/qa, a package.json bin or pyproject
+recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
+imports, aliases and `just MOD RECIPE` included, never a header regex; no just or a justfile
+it cannot read is exit 2, #172), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
 or a generic tool (printf, echo). The
@@ -116,7 +118,7 @@ or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). C
 structural facts only, never what the prose means: whether the demo shows the behavior What to
 build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
 `<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
-2 nothing could be checked (gh, file or specs error; nothing printed as passed).
+2 nothing could be checked (gh, file, specs or justfile error; nothing printed as passed).
 `tickets` reads tickets only through the target's tracker skill's `issue-view` (the parent's
 `children`, then each body; GitHub Issues or Linear, from the .octo-feather.toml of the git repo
 at the current directory; on GitHub it works under the qc judge's offline gh).
@@ -239,7 +241,7 @@ CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]
 # The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
 OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
 CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
-CHECK_FORM = ("`Checks: none` when the diff adds or changes no check (GLOSSARY.md, eval graders included), else one line per check "
+CHECK_FORM = ("`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds what), else one line each "
               "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
 
 
@@ -685,9 +687,7 @@ def cmd_judge(args: list[str]) -> int:
     if problem:
         raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
     if model not in (bench.get("benched") or []):
-        yn = next((e for m, e, _ in bench.get("yesno") or [] if m == model), None)
-        why = ("a moving alias, never called" if model in (bench.get("skipped") or []) else
-               f"yes/no only (a choice question refused: {yn})" if yn is not None else "not an available classifier")
+        why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
         raise Refuse(f"the kit's judgment model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
                      f"check Pi's models and auth, or rebench and record another in evals/judgment-model.json")
     rows = bench.get("rows") or []
@@ -1221,6 +1221,11 @@ RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), 
 INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno", "bun", "Rscript"}
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
+
+
+def not_demo(recipe: str) -> bool:
+    """RECIPE (`MOD RECIPE` or `MOD::RECIPE` too) is a gate or factory recipe: its own name, whatever module path names it."""
+    return bool(NOT_DEMO_RECIPES.fullmatch(re.split(r"\s+|::", recipe)[-1]))
 TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
 
 
@@ -1229,7 +1234,7 @@ class Surface:
     package.json bin and pyproject [project.scripts] names."""
 
     def __init__(self, root: Path):
-        self.root, self.exec_paths, self.exec_names, self.recipes, self.bins = root, set(), set(), set(), set()
+        self.root, self.exec_paths, self.exec_names, self._recipes, self.bins = root, set(), set(), None, set()
         self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
         ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
         for line in ls.stdout.splitlines():
@@ -1239,13 +1244,6 @@ class Surface:
             # A test or hook is the gate's, not the app's surface.
             if meta.startswith("100755") and not TEST_DIR.search(path):
                 self.exec_paths.add(path); self.exec_names.add(path.rsplit("/", 1)[-1])
-        try:
-            for line in (root / "justfile").read_text(encoding="utf-8").splitlines():
-                m = re.match(r"^@?([A-Za-z_][\w-]*)\b[^:=]*:(?!=)", line)
-                if m and not line.startswith(("set ", "export ", "alias ", "import ", "mod ")):
-                    self.recipes.add(m.group(1))
-        except (OSError, UnicodeDecodeError):
-            pass
         try:
             b = json.loads((root / "package.json").read_text(encoding="utf-8"))
             binv = b.get("bin") if isinstance(b, dict) else None
@@ -1262,9 +1260,45 @@ class Surface:
         except (OSError, ValueError, ImportError):
             pass
 
+    @property
+    def recipes(self) -> dict[str, str]:
+        """Each name `just` runs in ROOT (recipe, alias, `MOD RECIPE`) -> the recipe it runs, as
+        `just --dump --dump-format json` declares them: the call octo-feather-integrate's recipe_names
+        makes (#121 D12), on ROOT's own justfile; none without one. Read only when a demo needs it.
+        Fails closed (Unchecked, exit 2, the reason named) when just is missing or cannot read it."""
+        if self._recipes is None:
+            self._recipes, self.modules = {}, set()
+            c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
+            if not c:
+                return self._recipes
+            f = self.root / c[0]
+            why = lambda w: Unchecked(f"cannot read the justfile's recipes ({f}): {w}, then rerun")
+            if len(c) > 1:
+                raise why(f"justfile is ambiguous, just refuses to pick one of: {' '.join(c)}; keep one")
+            try:
+                p = subprocess.run(["just", "--justfile", str(f), "--working-directory", str(self.root),
+                                    "--dump", "--dump-format", "json"], capture_output=True, text=True)
+            except OSError as e:
+                raise why("just is not on PATH; install just" if isinstance(e, FileNotFoundError)
+                          else f"cannot run just ({e}); fix that") from e
+            if p.returncode:
+                raise why(f"just --dump: {(p.stderr.strip().splitlines() or ['exit ' + str(p.returncode)])[0]}; fix the justfile")
+            try:
+                def walk(d: dict, pre: str):
+                    for n in d["recipes"]:
+                        self._recipes[pre + n] = pre + n
+                    for n, a in d.get("aliases", {}).items():
+                        self._recipes[pre + n] = pre + a["target"]
+                    for n, m in d.get("modules", {}).items():
+                        self.modules.add(pre + n); walk(m, f"{pre}{n} ")
+                walk(json.loads(p.stdout), "")
+            except (ValueError, KeyError, TypeError, AttributeError) as e:
+                raise why(f"unexpected just --dump JSON ({type(e).__name__}: {e}); check the just version") from e
+        return self._recipes
+
     def program(self) -> str:
         """A program the repo declares (an executable, a recipe other than the gate's, a bin), '' if none."""
-        recipes = sorted(f"just {r}" for r in self.recipes if not NOT_DEMO_RECIPES.fullmatch(r))
+        recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
         return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
 
     def runs(self, cmd: str) -> tuple[list[str], str]:
@@ -1301,12 +1335,20 @@ class Surface:
         if prog == "playwright" or prog.endswith("/playwright"):
             return None
         if prog == "just":
-            rec = next((a for a in args if not a.startswith("-")), "")
+            words = [a for a in args if not a.startswith("-")]
+            rec = words[0] if words else ""
             if not rec:
                 return "`just` with no recipe"
             if NOT_DEMO_RECIPES.fullmatch(rec):
                 return f"just {rec} is a gate or factory recipe, not the app"
-            return None if rec in self.recipes else f"no justfile recipe {rec} in {self.root}"
+            recipes = self.recipes
+            for w in words[1:]:   # `just MOD RECIPE`: what every just with modules runs (1.21 refuses MOD::RECIPE)
+                if rec not in self.modules:
+                    break
+                rec = f"{rec} {w}"
+            if rec not in recipes:
+                return f"no justfile recipe {rec} in {self.root}"
+            return f"just {rec} is a gate or factory recipe, not the app" if not_demo(recipes[rec]) else None
         if "/" in prog:
             rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
             if os.path.isabs(prog):
