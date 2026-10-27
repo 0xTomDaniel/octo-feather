@@ -12,6 +12,7 @@ base="${TMPDIR:-/tmp}/verify-app.$(id -u).$repo_key"
 run_dir="${VERIFY_APP_RUN_DIR:-$base/run}"
 evidence_dir="${VERIFY_APP_EVIDENCE_DIR:-$base/evidence}"
 state="$run_dir/state"
+contract="$repo/qc.toml"
 features="hello"
 
 say() { printf 'verify-app: %s\n' "$*"; }
@@ -35,23 +36,67 @@ load_state() {
     . "$state"
 }
 
+# The app-driver contract, qc.toml at the repo root (format 1), as shell assignments: QC_SETUP, QC_ENTRY,
+# QC_SERVICES (names), QC_FIXTURES and QC_RESETS (names and reset commands), QC_VALUES and QC_VALUES_JSON.
+# The helper sets up, enters and resets the app only through these; its commands run under sh with QC_REPO set.
+read_contract() {
+    command -v python3 >/dev/null || die "python3 (3.11+) not on PATH: verify-app reads $contract with its tomllib"
+    python3 - "$contract" <<'EOF_PY'
+import json, shlex, sys
+try:
+    import tomllib
+except ImportError:
+    sys.exit("verify-app: python3 3.11+ needed: it reads qc.toml with tomllib")
+path = sys.argv[1]
+try:
+    with open(path, "rb") as fh:
+        c = tomllib.load(fh)
+except (OSError, ValueError) as e:
+    sys.exit(f"verify-app: cannot read the app-driver contract {path}: {e}")
+if c.get("format") != 1:
+    sys.exit(f"verify-app: {path}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
+entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
+if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
+        and isinstance(fixture, dict) and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
+        and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())):
+    sys.exit(f"verify-app: {path} does not match format 1 (validate: octo-feather-contract)")
+q, arr = shlex.quote, lambda xs: "(" + " ".join(shlex.quote(x) for x in xs) + ")"
+print(f"QC_SETUP={q(c.get('setup', ''))}")
+print(f"QC_ENTRY={q(entry['command'])}")
+print(f"QC_SERVICES={arr(services)}")
+print(f"QC_FIXTURES={arr(fixture)}")
+print(f"QC_RESETS={arr(f['reset'] for f in fixture.values())}")
+print("declare -gA QC_VALUES=(" + " ".join(f"[{q(k)}]={q(v)}" for k, v in values.items()) + ")")
+print(f"QC_VALUES_JSON={q(json.dumps(values))}")
+EOF_PY
+}
+
 cmd_setup() {
-    command -v uv >/dev/null || die "uv not on PATH"
-    say "installing deps in $repo (uv sync --locked)"
-    (cd "$repo" && uv sync --locked)
+    eval "$(read_contract)" || exit 1
+    if [[ -z $QC_SETUP ]]; then say "no setup declared in $contract"; return; fi
+    say "setup in $repo (qc.toml setup): $QC_SETUP"
+    (cd "$repo" && QC_REPO=$repo sh -c "$QC_SETUP") || die "qc.toml setup failed: $QC_SETUP"
 }
 
 cmd_launch() {
     writable "$run_dir" || die "cannot write run state folder: $run_dir"
     writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    local contract_sh
+    contract_sh=$(read_contract) || exit 1
+    eval "$contract_sh"
+    # A short-lived CLI: this helper starts no service. A contract that declares one needs a helper that starts and readies it.
+    [[ ${#QC_SERVICES[@]} == 0 ]] || die "qc.toml declares services (${QC_SERVICES[*]}); this helper drives a CLI and starts none: extend it to start and ready them"
     cmd_setup
     local app py rev
-    app="$repo/.venv/bin/app"
+    # The `app` command: qc.toml's entry with the user's arguments appended.
+    app="$run_dir/bin/app"
     py="$repo/.venv/bin/python"
-    [[ -x $app ]] || die "app command not installed at $app after setup"
+    mkdir -p "$run_dir/bin" "$run_dir/scratch"
+    printf '#!/usr/bin/env bash\nexport QC_REPO=%q\nexec sh -c %q app "$@"\n' "$repo" "$QC_ENTRY \"\$@\"" >"$app" || die "cannot write app command: $app"
+    chmod +x "$app"
     rev=$(git -C "$repo" rev-parse --short HEAD 2>/dev/null || echo unknown)
-    mkdir -p "$run_dir/scratch"
     {
+        printf '%s\n' "$contract_sh"
         printf 'APP=%q\n' "$app"
         printf 'PY=%q\n' "$py"
         printf 'REPO=%q\n' "$repo"
@@ -59,12 +104,12 @@ cmd_launch() {
         printf 'LAUNCHED=%q\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
     } >"$state" || die "cannot write run state file: $state"
     [[ -s $state ]] || die "run state file is empty: $state"
-    say "ready: app=$app rev=$rev"
+    say "ready: app=$app entry=$QC_ENTRY rev=$rev"
     say "run state: $run_dir"
     say "evidence:  $evidence_dir"
 }
 
-# APP, PY, REPO, REV come from the state file.
+# APP, PY, REPO, REV and the contract's QC_* come from the state file.
 # shellcheck disable=SC2153
 cmd_doctor() {
     load_state
@@ -74,6 +119,7 @@ cmd_doctor() {
         report FAIL "app command missing: $APP"
         ok=1
     fi
+    report info "entry (qc.toml): $QC_ENTRY"
     if out=$("$APP" --help 2>&1) && grep -q 'hello' <<<"$out"; then
         report ok "'app --help' lists hello"
     else
@@ -113,13 +159,14 @@ case_run() {
     find "$cwd" -mindepth 1 >"$dir/$name.files"
 }
 
-# check <dir> <name> <python-expr over j (stdout JSON or None), out, err, code>
+# check <dir> <name> <python-expr over j (stdout JSON or None), out, err, code, v (qc.toml values)>
 check() {
     local dir=$1 name=$2 expr=$3 verdict
     verdict=$(
-        "$PY" - "$dir" "$name" "$expr" <<'EOF'
+        "$PY" - "$dir" "$name" "$expr" "$QC_VALUES_JSON" <<'EOF'
 import json, pathlib, sys
 d, n, expr = pathlib.Path(sys.argv[1]), sys.argv[2], sys.argv[3]
+v = json.loads(sys.argv[4])
 out = (d / f"{n}.stdout").read_text()
 err = (d / f"{n}.stderr").read_text()
 code = int((d / f"{n}.exit").read_text())
@@ -140,15 +187,18 @@ EOF
 }
 
 drive_hello() {
-    local dir="$evidence_dir/hello" fails=0
+    local dir="$evidence_dir/hello" fails=0 name
+    # The name greeted: qc.toml values.name.
+    [[ -n ${QC_VALUES[name]+set} ]] || die "qc.toml [values] has no name: the hello drive greets values.name"
+    name=${QC_VALUES[name]}
     rm -rf "$dir" && mkdir -p "$dir"
     echo "hello @ rev $REV, $(date -u +%Y-%m-%dT%H:%M:%SZ)" >"$dir/summary.txt"
-    case_run "$dir" json hello Ada --json
-    check "$dir" json 'code == 0 and err == "" and j == {"name": "Ada", "text": "Hello, Ada"}' || fails=1
-    case_run "$dir" text hello Ada
-    check "$dir" text 'code == 0 and err == "" and out == "Hello, Ada\n"' || fails=1
-    case_run "$dir" trimmed hello '  Ada  ' --json
-    check "$dir" trimmed 'code == 0 and j == {"name": "Ada", "text": "Hello, Ada"}' || fails=1
+    case_run "$dir" json hello "$name" --json
+    check "$dir" json 'code == 0 and err == "" and j == {"name": v["name"], "text": "Hello, " + v["name"]}' || fails=1
+    case_run "$dir" text hello "$name"
+    check "$dir" text 'code == 0 and err == "" and out == "Hello, " + v["name"] + "\n"' || fails=1
+    case_run "$dir" trimmed hello "  $name  " --json
+    check "$dir" trimmed 'code == 0 and j == {"name": v["name"], "text": "Hello, " + v["name"]}' || fails=1
     case_run "$dir" empty-json hello '  ' --json
     check "$dir" empty-json 'code == 2 and err == "" and isinstance(j, dict) and set(j) == {"error"} and j["error"]' || fails=1
     case_run "$dir" empty-text hello '  '
@@ -162,6 +212,11 @@ cmd_drive() {
     [[ -n $feature ]] || die "usage: verify-app drive <feature> (features: $features)"
     load_state
     writable "$evidence_dir" || die "cannot write evidence folder: $evidence_dir"
+    local i
+    for i in "${!QC_FIXTURES[@]}"; do
+        say "reset fixture ${QC_FIXTURES[i]} (qc.toml)"
+        (cd "$REPO" && QC_REPO=$REPO sh -c "${QC_RESETS[i]}") || die "qc.toml fixture ${QC_FIXTURES[i]} reset failed: ${QC_RESETS[i]}"
+    done
     case $feature in
     hello) drive_hello ;;
     *) die "unknown feature '$feature' (features: $features)" ;;
@@ -172,6 +227,8 @@ cmd_cleanup() {
     # Nothing runs in the background: the CLI exits per case. Remove only our run state.
     if [[ -e $run_dir ]]; then
         rm -rf "$run_dir/scratch" "$state"
+        rm -f "$run_dir/bin/app"
+        rmdir "$run_dir/bin" 2>/dev/null || true
         rmdir "$run_dir" 2>/dev/null || true
         say "removed run state $run_dir"
     fi

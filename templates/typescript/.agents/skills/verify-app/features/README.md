@@ -4,7 +4,7 @@ This directory is the maintained source for verifying the user-facing behavior o
 
 ## Baseline preconditions
 
-- `node` (at least `package.json` `engines.node`) and `pnpm` on PATH; `verify-app launch` has run and printed `ready`.
+- `node` (at least `package.json` `engines.node`), `python3` 3.11+ and what the contract's `setup` needs on PATH; `verify-app launch` has run and printed `ready`.
 - `verify-app doctor` exits 0 for this checkout.
 - Each case runs in its own empty working directory under `$VERIFY_APP_RUN_DIR/scratch`.
 - Never drive an `app` other than this checkout's `src/cli.ts` (doctor checks it).
