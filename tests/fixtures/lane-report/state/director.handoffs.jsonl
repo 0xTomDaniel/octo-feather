@@ -1,0 +1,8 @@
+{"at": "2026-10-19T10:00:00Z", "kind": "prod", "issue": 1, "note": "launched lane gh1"}
+{"at": "2026-10-19T11:00:00Z", "kind": "finding", "class": "owner-caught-gate-speed", "issue": 1, "summary": "the owner saw the gate take 9 minutes"}
+{"at": "2026-10-20T12:00:00Z", "kind": "finding", "class": "flaky-gate-test", "summary": "qc-gh killed-run case failed once"}
+{"at": "2026-10-20T12:30:00Z", "kind": "finding", "class": "owner-caught-
+{"at": "2026-10-20T13:00:00Z", "kind": "workaround", "class": "owner-caught-workaround", "issue": 3, "summary": "a workaround line, not a finding"}
+{"at": "2026-10-21T15:00:00Z", "kind": "finding", "class": "owner-caught-waits-invisible", "summary": "the owner asked what each lane waits on"}
+{"at": "2026-10-22T16:00:00Z", "kind": "finding", "class": "owner-caught-gate-speed", "issue": 4, "summary": "the owner saw the gate take 11 minutes"}
+{"at": "2026-10-22T17:00:00Z", "kind": "note", "text": "status sent"}

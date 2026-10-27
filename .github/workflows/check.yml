@@ -16,7 +16,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # check-behavior-smoke compares the PR with its base (origin/$GITHUB_BASE_REF)
+      # just at the pin in just-version: the gate reads just's own answers (check-gate-free), so box and CI run one just.
+      - id: pins
+        run: echo "just=$(tr -d '[:space:]' < just-version)" >> "$GITHUB_OUTPUT"
       - uses: extractions/setup-just@v2
+        with:
+          just-version: ${{ steps.pins.outputs.just }}
       # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       # The spec-chat pin is a private repo: its read-only deploy key, used for that repo's URL only.
