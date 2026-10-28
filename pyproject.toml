@@ -314,6 +314,7 @@ typeCheckingMode = "strict"
   "B018",
   "B904",
   "B905",
+  "BLE001",
   "C901",
   "E401",
   "E501",
@@ -333,6 +334,7 @@ typeCheckingMode = "strict"
   "N818",
   "PERF203",
   "PLC0415",
+  "PLR0124",
   "PLR0911",
   "PLR0912",
   "PLR0913",
@@ -344,10 +346,12 @@ typeCheckingMode = "strict"
   "PTH117",
   "RUF005",
   "RUF021",
+  "S602",
   "S607",
   "SIM105",
   "T201",
   "TRY003",
+  "TRY004",
   "TRY301",
   "UP034",
 ]
@@ -417,15 +421,19 @@ typeCheckingMode = "strict"
   "FBT002",
   "FURB167",
   "I001",
+  "PERF203",
   "PLR0912",
   "PLR0913",
+  "PLR0915",
   "PLR0917",
   "PLR2004",
   "PLW1510",
   "PT018",
+  "PTH101",
   "PTH109",
   "S108",
   "S607",
+  "SIM105",
   "T201",
 ]
 "scripts/octo-feather-qc-ghsnap" = [
@@ -507,7 +515,9 @@ typeCheckingMode = "strict"
   "PTH111",
   "PTH113",
   "PTH118",
+  "PTH119",
   "PTH120",
+  "PTH122",
   "PTH123",
   "S606",
   "S607",
@@ -550,6 +560,13 @@ typeCheckingMode = "strict"
   "SIM115",
   "T201",
 ]
+"tests/fixtures/lane-spend/curl" = [
+  "E401",
+  "E501",
+  "I001",
+  "PTH123",
+  "T201",
+]
 "tests/gate/conftest.py" = [
   "ANN001",
   "ANN002",
@@ -583,6 +600,18 @@ typeCheckingMode = "strict"
   "S108",
   "TRY003",
 ]
+"tests/spend-out" = [
+  "ANN001",
+  "ANN201",
+  "E401",
+  "E501",
+  "I001",
+  "ICN001",
+  "PLR0913",
+  "PLR0917",
+  "PLW1510",
+  "T201",
+]
 
 [tool.ruff.format]
 # Baseline (octo-feather-lint): taken once, only shrinks.
@@ -607,6 +636,8 @@ exclude = [
   "scripts/review-host",
   "tests/fixtures/lane-report/gh",
   "tests/fixtures/lane-report/herdr",
+  "tests/fixtures/lane-spend/curl",
   "tests/gate/conftest.py",
   "tests/gate/test_gate.py",
+  "tests/spend-out",
 ]

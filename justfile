@@ -27,7 +27,7 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types"
+export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
@@ -180,6 +180,31 @@ check-format:
 check-types:
     @uv run --locked --offline --no-sync octo-feather-lint types
 
+# Kit TypeScript (#245): templates/typescript's tsc (@tsconfig/strictest) and eslint (typescript-eslint
+# strict-type-checked and stylistic-type-checked) over the files tsconfig.json declares (its exclude names each
+# exclusion and why); eslint gets exactly tsc's list (tsc --showConfig), never a directory. Pinned in package.json
+# and pnpm-lock.yaml at the template's versions, installed offline from the pnpm store (filled once, with network:
+# CI's pnpm step; install-check names the command). Today's eslint violations in extensions/spend-ledger.ts and its
+# test fixture sit in eslint's own bulk suppressions, eslint-suppressions.json (per file and rule, a count), which only
+# shrinks: a rule over its count fails (eslint then lists every occurrence of it in that file), an unused entry fails
+# until pruned. tsc has no baseline: its errors are fixed in place.
+# One recipe, not two: two gate items installing node_modules at once would race.
+check-ts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
+    cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
+    mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
+    (( ${#files[@]} )) || { echo "check-ts: tsconfig.json lists no files" >&2; exit 1; }
+    bad=0
+    pnpm exec tsc || { bad=1; echo "check-ts: fix each tsc error above at its file(line,col)" >&2; }
+    pnpm exec eslint --max-warnings 0 -- "${files[@]}" || { bad=1
+      echo "check-ts: fix each eslint finding above at its file, line:col; rule docs: https://typescript-eslint.io/rules/<rule> or https://eslint.org/docs/latest/rules/<rule> (an exception: // eslint-disable-next-line <rule> -- <reason>, on its line). Never add to eslint-suppressions.json; an unused entry there is pruned: pnpm exec eslint --prune-suppressions -- ${files[*]}" >&2; }
+    [[ "$bad" == 0 ]] && echo "ts: ok (${#files[@]} files: tsc, eslint)"
+    exit "$bad"
+
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
 # Structure only; each template's own `just check` runs in its repo (deterministic, no network here).
@@ -270,7 +295,7 @@ install-check target=invocation_directory():
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
-    for t in herdr pi gh jq git just python3 node; do
+    for t in herdr pi gh jq git just python3 node pnpm; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
@@ -288,6 +313,11 @@ install-check target=invocation_directory():
       if [[ "$v" == "$pin" ]]; then printf 'just   version %s ok (just-version)\n' "$v"
       else printf 'just   WRONG VERSION %s reports %s, want %s (just-version); install just %s: https://github.com/casey/just/releases/tag/%s\n' "$p" "${v:-no version}" "$pin" "$pin" "$pin"; bad=1; fi
     fi
+    # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
+    # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
+    # pnpm under another HOME (corepack's shim) would download itself.
+    if cmp -s "$root/pnpm-lock.yaml" "$root/node_modules/.pnpm/lock.yaml"; then echo "pnpm   kit TypeScript tools ok (pnpm-lock.yaml)"
+    else echo "pnpm   kit TypeScript tools NOT FETCHED (pnpm-lock.yaml); fetch them once, with network: pnpm install --frozen-lockfile --dir $root"; bad=1; fi
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
     # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
     skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
