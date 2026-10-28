@@ -1,0 +1,70 @@
+#!/usr/bin/env python3
+"""spend-out: reads `octo-feather-lane spend` output for the spend tests (tests/lane-spend.sh, spend-ledger.sh,
+lane-judge.sh, qa.sh). A test helper run as a command; it never reads the ledger, only `spend`'s output.
+
+  spend-out row TITLE KEY USD CALLS UNKNOWN IN OUT < OUTPUT
+      exit 0 when the section "By TITLE:" holds the row KEY $USD calls CALLS unknown cost UNKNOWN tokens in IN out OUT
+      (every value literal); else exit 1 naming the row it wanted.
+  spend-out calls N -- SPEND-COMMAND...
+      runs SPEND-COMMAND until its "Spend ledger: PATH (N calls)" header counts N or more (up to 10 s; the writer runs
+      detached), then 0.3 s more; exit 0 when it counts exactly N, else exit 1 with the count and the output.
+  spend-out windows
+      prints the UTC epoch seconds: now, today's first second, this ISO week's (Monday) and this month's.
+"""
+import datetime, re, subprocess, sys, time
+
+
+def row(title, key, usd, calls, unknown, tin, tout):
+    on, rows = False, []
+    for line in sys.stdin.read().splitlines():
+        if line == f"By {title}:":
+            on = True
+            continue
+        if line.startswith(("By ", "OpenRouter")):
+            on = False
+        elif on:
+            rows.append(line)
+    e = re.escape
+    want = re.compile(f"  {e(key)} +\\${e(usd)} +calls +{e(calls)} +unknown cost +{e(unknown)} +tokens in {e(tin)} out {e(tout)}")
+    if any(want.fullmatch(r) for r in rows):
+        return 0
+    print(f"no {title} row '{key} ${usd} calls {calls} unknown {unknown} in {tin} out {tout}'")
+    return 1
+
+
+def total(cmd):
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True).stdout
+    m = re.fullmatch(r"Spend ledger: .* \(([0-9]+) calls?\)", (out.splitlines() or [""])[0])
+    return int(m.group(1)) if m else 0
+
+
+def calls(n, cmd):
+    for _ in range(100):
+        if total(cmd) >= n:
+            break
+        time.sleep(0.1)
+    time.sleep(0.3)
+    got = total(cmd)
+    if got == n:
+        return 0
+    out = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True).stdout
+    print(f"spend counts {got} calls, want {n}: {out}")
+    return 1
+
+
+def windows():
+    now = datetime.datetime.now(datetime.timezone.utc)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    mon, m1 = day - datetime.timedelta(days=day.weekday()), day.replace(day=1)
+    print(int(now.timestamp()), *(int(x.timestamp()) for x in (day, mon, m1)))
+    return 0
+
+
+a = sys.argv[1:]
+if a[:1] == ["row"] and len(a) == 8:
+    sys.exit(row(*a[1:]))
+if a[:1] == ["calls"] and len(a) > 3 and a[1].isdigit() and a[2] == "--":
+    sys.exit(calls(int(a[1]), a[3:]))
+if a == ["windows"]:
+    sys.exit(windows())
+sys.exit(__doc__)
