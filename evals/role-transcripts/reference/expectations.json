@@ -175,6 +175,180 @@
       }
     ]
   },
+  "implementer-verify-pass": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "maintain-verification-skill",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          ".agents/skills/verify-app/"
+        ],
+        "untouched": [
+          "src/",
+          "tests/",
+          "pyproject.toml",
+          "uv.lock",
+          "AGENTS.md",
+          "justfile",
+          ".githooks/",
+          ".github/"
+        ]
+      },
+      {
+        "fact": "declared",
+        "field": "outcome",
+        "in": [
+          "changed"
+        ]
+      },
+      {
+        "fact": "field_lines",
+        "field": "Coverage",
+        "includes": [
+          {
+            "text": "hello read and driven"
+          }
+        ]
+      }
+    ]
+  },
+  "implementer-verify-create": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "create-verification-skill",
+        "before": "edit"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          ".agents/skills/",
+          "AGENTS.md",
+          "qc.toml"
+        ],
+        "untouched": [
+          "src/",
+          "tests/"
+        ]
+      }
+    ]
+  },
+  "implementer-verify-kit": {
+    "facts": [
+      {
+        "fact": "skill_read_before",
+        "skill": "verify-octo-feather",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "scripts/octo-feather-contract"
+        ]
+      }
+    ]
+  },
+  "corrector-drives-app": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "correct"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "principle-encode-lessons-in-structure"
+      }
+    ]
+  },
+  "qc-judge-drives-app": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "principle-prove-it-works",
+        "before": "final_message"
+      },
+      {
+        "fact": "declared_includes",
+        "field": "criteria",
+        "items": [
+          {
+            "id": "hello-json",
+            "verdict": "pass"
+          },
+          {
+            "id": "hello-blank",
+            "verdict": "pass"
+          }
+        ]
+      }
+    ]
+  },
+  "implementer-verify-map-current": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read_before",
+        "skill": "commit",
+        "before": "git_commit"
+      },
+      {
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/",
+          ".agents/skills/verify-app/features/hello.md"
+        ]
+      },
+      {
+        "fact": "field_lines",
+        "field": "Evidence"
+      }
+    ]
+  },
+  "corrector-evidence-field": {
+    "facts": [
+      {
+        "fact": "skill_read",
+        "skill": "verify-app"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "python"
+      },
+      {
+        "fact": "skill_read",
+        "skill": "correct"
+      },
+      {
+        "fact": "field_lines",
+        "field": "Evidence"
+        }
+      ]
+    },
   "reviewer-reinvented-parser": {
     "facts": [
       {

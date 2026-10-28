@@ -40,7 +40,7 @@ A skill-trigger or role-transcript case, an object:
 
 ## Facts
 
-An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty list of objects. Facts are a closed list, graded from the Pi transcript, the watcher's snapshots and the sandbox's record, never meaning (docs/adr/0008). Each fact has exactly its keys below; an unknown `fact`, a missing key or an unknown key is refused. `skill` S is `[a-z0-9-]+` with a kit `.agents/skills/S/SKILL.md`.
+An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty list of objects. Facts are a closed list, graded from the Pi transcript, the watcher's snapshots and the sandbox's record, never meaning (docs/adr/0008). Each fact has exactly its keys below; an unknown `fact`, a missing key or an unknown key is refused. `skill` S is `[a-z0-9-]+` with a `.agents/skills/S/SKILL.md` in the kit, else in the case's fixture (its `head` fixture when it has one: the tree the agent sees), as a target's declared repo skill is.
 
 - `{"fact": "skill_read", "skill": S}`: S loaded (Skill load).
 - `{"fact": "skill_not_read", "skill": S}`: it never did (decided when the run ends).
@@ -53,7 +53,7 @@ An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty lis
 
 ### Skill load
 
-S's SKILL.md entered the agent's context: a tool result (any tool: a Pi read, a bash cat) holding its full content as the kit under test holds it (head, or `--kit-ref` COMMIT's committed tree), compared after normalizing only what the tool adds (CRLF, the file's trailing newlines; bash's appended exit status falls outside the content). A result Pi truncated (`structuredContent.truncated`, or its `[Showing lines`, `[N more lines in file.` or `[Output truncated.` notice) never counts, nor an ls, a grep or a head of a part. No command text is read.
+S's SKILL.md entered the agent's context: a tool result (any tool: a Pi read, a bash cat) holding its full content as the kit under test holds it (head, or `--kit-ref` COMMIT's committed tree), or, for a skill the kit lacks, as the case repo holds it once set up, before the agent runs, compared after normalizing only what the tool adds (CRLF, the file's trailing newlines; bash's appended exit status falls outside the content). A result Pi truncated (`structuredContent.truncated`, or its `[Showing lines`, `[N more lines in file.` or `[Output truncated.` notice) never counts, nor an ls, a grep or a head of a part. No command text is read.
 
 ### Before targets
 

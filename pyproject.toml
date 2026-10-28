@@ -1,11 +1,12 @@
 # The kit's test runner (#224): `just check` runs every gate recipe and every tests/*.sh as one pytest
 # item each, by subprocess (tests/gate/, docs/adr/0002); and the kit's Python lint, format and type tools
-# (#244, below). Not a package; no kit code imports from here.
+# (#244, below). Not a package; no kit code imports from here but a kit script's runtime dep below.
 [project]
 name = "octo-feather-kit-tests"
 version = "0"
 requires-python = ">=3.10"
-dependencies = []
+# octo-feather-contract validates qc.toml with jsonschema, re-running itself here (uv run --locked --offline).
+dependencies = ["jsonschema==4.26.0"]
 
 [dependency-groups]
 dev = [
@@ -37,6 +38,10 @@ extend-exclude = [
   # vendored skills (Skillfile github entries): upstream code, changed only through .skillfile/patches
   ".agents/skills/{tdd,implement,implement-spec,to-tickets,grill-with-docs,grilling,domain-modeling,code-review,writing-for-agents,correct,improve-codebase-architecture,codebase-design,principle-prove-it-works,blast-radius,sharpen,principle-encode-lessons-in-structure,interrogate,linear-cli}/",
 ]
+# Not a baseline (ruff baselines rule codes, and a syntax error has none): this file, from main (#181), uses
+# Python 3.12 f-string quoting (line 169) though the project's floor is 3.10 and its skill says 3.11+. Checked
+# as 3.12 until its owner fixes the line or raises the floor; then drop this entry.
+per-file-target-version = { ".agents/skills/verify-octo-feather/scripts/verify-octo-feather" = "py312" }
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -103,6 +108,25 @@ typeCheckingMode = "strict"
   "RUF005",
   "SIM115",
   "T201",
+]
+".agents/skills/verify-octo-feather/scripts/verify-octo-feather" = [
+  "ANN401",
+  "C901",
+  "E501",
+  "PLR0912",
+  "PLR0915",
+  "PLR2004",
+  "PTH100",
+  "PTH108",
+  "PTH112",
+  "PTH114",
+  "PTH120",
+  "PTH207",
+  "S108",
+  "S607",
+  "SIM105",
+  "T201",
+  "TC003",
 ]
 "scripts/check-behavior-smoke" = [
   "ANN001",
@@ -304,6 +328,58 @@ typeCheckingMode = "strict"
   "S607",
   "T201",
   "UP031",
+]
+"scripts/octo-feather-contract" = [
+  "ANN001",
+  "ANN201",
+  "C901",
+  "E401",
+  "E501",
+  "I001",
+  "PLR0911",
+  "PTH100",
+  "PTH112",
+  "PTH118",
+  "PTH119",
+  "PTH120",
+  "PTH123",
+  "PTH207",
+  "S606",
+  "S607",
+  "T201",
+]
+"scripts/octo-feather-evidence" = [
+  "ANN001",
+  "ANN002",
+  "ANN201",
+  "ANN204",
+  "C901",
+  "E401",
+  "E501",
+  "EM102",
+  "I001",
+  "ICN001",
+  "N818",
+  "PLR0912",
+  "PLR0915",
+  "PLW1510",
+  "PTH100",
+  "PTH101",
+  "PTH103",
+  "PTH104",
+  "PTH110",
+  "PTH111",
+  "PTH112",
+  "PTH113",
+  "PTH114",
+  "PTH118",
+  "PTH120",
+  "PTH123",
+  "PTH208",
+  "RUF012",
+  "S607",
+  "T201",
+  "TRY003",
 ]
 "scripts/octo-feather-lane" = [
   "ANN001",
@@ -618,6 +694,7 @@ typeCheckingMode = "strict"
 exclude = [
   ".agents/skills/github-pr/scripts/gh",
   ".agents/skills/linear/scripts/linear",
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
   "scripts/check-behavior-smoke",
   "scripts/check-decision-log",
   "scripts/check-evals",
@@ -626,6 +703,8 @@ exclude = [
   "scripts/check-skills",
   "scripts/check-vendored",
   "scripts/octo-feather-accepted",
+  "scripts/octo-feather-contract",
+  "scripts/octo-feather-evidence",
   "scripts/octo-feather-lane",
   "scripts/octo-feather-qa",
   "scripts/octo-feather-qc",

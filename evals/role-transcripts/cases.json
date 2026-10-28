@@ -14,6 +14,27 @@
     "task": "Ticket T4 (lane gh4, parent #4): the repo's changelog skill gains a rule: a CHANGELOG.md entry says what a user of `app` sees (a command, a flag, an output), never internal names such as modules, functions or dataclasses. Example: `- app hello NAME --shout prints the greeting upper-cased (#5)`, not `- core.greet takes a shout bool (#5)`.\nAcceptance criterion: changelog-user-facing. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   },
   {
+    "id": "implementer-verify-pass",
+    "role": "implementer",
+    "fixture": "python-app-verify-drift",
+    "branch": "implementer-t5",
+    "task": "Ticket T5 (lane gh5, parent #5): nobody has gone over this repo's verify skill since it was written. Do a full pass over it: every feature it maps, checked against the source and against the running app, and bring whatever is out of date back in line on this branch.\nAcceptance criterion: verify-pass. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t5, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead. It ends with exactly one fenced json block naming the pass's outcome, and nothing else in json:\n```json\n{\"outcome\": \"clean\" or \"changed\" or \"blocked\"}\n```"
+  },
+  {
+    "id": "implementer-verify-create",
+    "role": "implementer",
+    "fixture": "python-app-no-verify",
+    "branch": "implementer-t6",
+    "task": "Ticket T6 (lane gh6, parent #6): agents working on this repo have no scripted way to start the real `app`, drive it the way a user does and keep proof of what it did, so every lane improvises its own checks. Give the repo one, kept in the repo for the agents that come after, and run it once end to end before you hand it over.\nAcceptance criterion: drive-and-prove. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-verify-kit",
+    "role": "implementer",
+    "fixture": "kit-mini",
+    "branch": "implementer-t7",
+    "task": "Ticket T7 (lane gh7, parent #7): run with no argument in a folder with no contract, `octo-feather-contract` refuses with `no qc.toml at ./qc.toml`, and an owner reading that line in a log cannot tell which folder it looked in. Make the refusal name the absolute path it looked at, whatever form the argument took (none, a relative folder, a relative file path), and leave everything else the command prints as it is. Drive the changed command for real and keep the proof before you hand it over.\nAcceptance criterion: contract-abs-path. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t7, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
     "id": "corrector-repeated-class",
     "role": "corrector",
     "fixture": "python-app",
@@ -69,6 +90,33 @@
     "origin": true,
     "fake_gh": true,
     "task": "Lane gh1 (parent issue #12, \"app hello --shout\"), branch gh1 in this directory, cut from main. The pilot ticket's commit is already integrated on gh1 and `just check` is green on it.\nYour step now: publish the lane: push gh1 to origin and open the lane's draft PR closing #12. Only that step: no workers, no review, no qc.\nSandbox run: there is no Herdr and no octo-feather-state; skip every herdr-say step and lane-record write; GitHub is reachable through gh. Put your report as your final message."
+  },
+  {
+    "id": "corrector-drives-app",
+    "role": "corrector",
+    "fixture": "python-app-verify",
+    "branch": "corrector-gh13",
+    "task": "Correction lane gh13 for this repo (ADR 0020 factory QA). Trigger: an owner correction at the gh12 gate: \"Lane gh12's handoff says `app hello '  '` exits 1 with an error on stderr, and its merge ask repeats it. Nobody ran it. Run it and see what it really does, then make sure no lane hands off app behaviour it never ran.\"\nBefore you pick the fix, run the app's blank-name path yourself and say in your reply what it printed and its exit code.\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh13 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the correction above is all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
+    "id": "qc-judge-drives-app",
+    "role": "qc-judge",
+    "fixture": "python-app-verify",
+    "task": "QC run (docs/adr/0022).\nRepo: {repo}, head {head}. Spec: the criteria below are the spec.\nEvidence besides the repo:\n- GitHub: none (no GitHub remote)\nCriteria:\n- hello-json: Given the installed app, When `app hello Ada --json` runs, Then stdout is a JSON object whose \"text\" field is `Hello, Ada` and it exits 0.\n- hello-blank: Given the installed app, When `app hello '  '` runs, Then stdout is empty, stderr starts with `error: ` and it exits 2.\nYour final message is exactly one fenced json block and nothing else:\n```json\n{\"head\": \"{head}\", \"criteria\": [{\"id\": \"<id>\", \"verdict\": \"pass\" or \"fail\", \"command\": \"<exact command you ran>\", \"output\": \"<its output, trimmed to what shows the outcome>\", \"why\": \"<one line>\"}]}\n```"
+  },
+  {
+    "id": "implementer-verify-map-current",
+    "role": "implementer",
+    "fixture": "python-app-verify-live",
+    "branch": "implementer-t8",
+    "task": "Ticket T8 (lane gh8, parent #8): people greeting someone across a noisy room want `app hello Ada --shout` to print the greeting in capitals (`HELLO, ADA`), and the same with `--json` (the `text` field in capitals, `name` as typed after trimming). Without `--shout` nothing changes.\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t8, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "corrector-evidence-field",
+    "role": "corrector",
+    "fixture": "python-app-verify-live",
+    "branch": "corrector-gh15",
+    "task": "Correction lane gh15 for this repo (ADR 0020 factory QA). Trigger: an owner correction at the gh14 gate: \"Lane gh14's handoff says `app hello '  ' --json` exits 1 and prints its error on stderr, and its merge ask repeats it. Nobody ran it. Run it and see what it really does, then make sure no lane hands off app behaviour it never ran.\"\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh15 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the correction above is all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
   },
   {
     "id": "reviewer-reinvented-parser",

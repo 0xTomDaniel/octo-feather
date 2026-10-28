@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Quality - octo-feather (mini) spec</title>
+</head>
+<body>
+<article class="spec">
+<h1 data-anchor="title">Quality</h1>
+<section data-anchor="acceptance">
+<h2>Acceptance</h2>
+<p data-acceptance-criterion data-anchor="acceptance-qc-contract"><span data-acceptance-scenario>Given a supervisor of any target repository, When any lane's merge ask is sent,</span> <span data-acceptance-observable>Then the target holds one app-driver contract, <code>qc.toml</code> at its root, naming its format version, and its verify skill enters, serves, readies, resets and drives the app only by invoking what that contract declares, restating none of its commands.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-evidence-record"><span data-acceptance-scenario>Given an implementer in a target repository with its contract and verify skill, When it drives a feature through the verify skill at a commit,</span> <span data-acceptance-observable>Then the target's evidence store holds one new record naming that commit, the criterion the drive serves with a hash of its text, and the contract and fixture versions, and holding the captured outputs; every earlier record is unchanged, and the target's git status shows no change.</span></p>
+</section>
+</article>
+</body>
+</html>

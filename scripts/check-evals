@@ -161,7 +161,9 @@ def check_suite(d, evals, errs):
             if isinstance(c.get("id"), str):
                 errs.append(f"{at}: field id: no expectations in reference/expectations.json")
             continue
-        check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs)
+        tree = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")   # the tree the agent sees
+        check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
+                  evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None)
         if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
             continue
         for n, f in enumerate(exp["facts"]):
@@ -505,7 +507,7 @@ def check_coverage(name, cases, exps, evals, errs):
                         "needs a should and a should-not (near miss) case, each in train and held-out")
 
 
-def check_exp(at, exp, errs):
+def check_exp(at, exp, errs, fixture=None):
     if not isinstance(exp, dict):
         errs.append(f"{at}: must be a JSON object {{\"facts\": [...]}}"); return
     for k in sorted(set(exp) - {"facts"}):
@@ -526,8 +528,9 @@ def check_exp(at, exp, errs):
             errs.append(f"{fa}: field {k}: unknown field for {t}")
         sk = f.get("skill")
         if "skill" in f and not (isinstance(sk, str) and re.fullmatch(r"[a-z0-9-]+", sk)
-                                 and (KIT / ".agents" / "skills" / sk / "SKILL.md").is_file()):
-            errs.append(f"{fa}: field skill: no kit skill .agents/skills/{sk}/SKILL.md")
+                                 and any((d / ".agents" / "skills" / sk / "SKILL.md").is_file() for d in (KIT, fixture) if d)):
+            errs.append(f"{fa}: field skill: no .agents/skills/{sk}/SKILL.md in the kit"
+                        + (f" or in fixture {fixture.name}" if fixture else ""))
         if "kind" in f and f["kind"] not in ATTEMPTS:
             errs.append(f"{fa}: field kind: must be one of {sorted(ATTEMPTS)}, got {f['kind']!r}")
         if t == "declared" and "field" in f and not (isinstance(f["field"], str) and f["field"].strip()):

@@ -1,6 +1,6 @@
 {
   "spec": "quality.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "44c4b559ef96419a88e355390ec4c4ac057bd612",
   "criteria": {
     "acceptance-gate-green": {
       "status": "built",
@@ -53,6 +53,46 @@
     "acceptance-qa-cases-checked": {
       "status": "built",
       "pr": 111
+    },
+    "acceptance-verify-created": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-declared": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-launch-fails": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-maintain": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-map-current": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-used": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verify-view-model": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-contract": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-evidence-record": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-evidence-read": {
+      "status": "built",
+      "pr": 181
     }
   }
 }
