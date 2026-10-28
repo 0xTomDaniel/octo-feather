@@ -27,8 +27,8 @@
       "pr": 16
     },
     "acceptance-director-tools": {
-      "status": "built",
-      "pr": 179
+      "status": "planned",
+      "pr": null
     },
     "acceptance-supervise-layout": {
       "status": "built",
