@@ -100,4 +100,20 @@ printf 'import nonexistent\n' >"$t/untracked.py"
 ok lint "with only an untracked file"; grep -qF 'lint: ok (0 files' <<<"$out" || fail "lint did not report 0 files"
 ok format "with only an untracked file"; grep -qF 'format: ok (0 files' <<<"$out" || fail "format did not report 0 files"
 ok types "with only an untracked file"; grep -qF 'analyzed 0 files' <<<"$out" || fail "types did not report 0 files"
+
+# Every baselined file gone: the set is empty, every entry of each baseline stale; shrink empties them.
+rm -rf "$t"; mkdir "$t"
+printf '[tool.ruff.lint]\nselect = ["ALL"]\n\n[tool.basedpyright]\ntypeCheckingMode = "strict"\n' >"$t/pyproject.toml"
+printf 'N: int = "x"\nX = {  "a":1 }\n' >"$t/bad.py"
+g init -q; g add -A; g commit -qm base
+ok init "init with bad.py"; g add -A; g commit -qm baselines
+grep -qF '"./bad.py"' "$t/.basedpyright/baseline.json" || fail "init did not baseline bad.py's type error"
+g rm -q bad.py; g commit -qm gone
+bad lint 'bad.py is not in the file set' 'octo-feather-lint shrink'
+bad format 'bad.py is formatted or gone' 'octo-feather-lint shrink'
+bad types 'no longer occur' 'octo-feather-lint shrink'
+ok shrink "shrink with every baselined file gone"
+printf '{\n    "files": {}\n}' | cmp -s - "$t/.basedpyright/baseline.json" || fail "shrink left $(cat "$t/.basedpyright/baseline.json")"
+! grep -qF 'bad.py' "$t/pyproject.toml" || fail "shrink left a bad.py ruff entry"
+ok lint "after shrink"; ok format "after shrink"; ok types "after shrink"
 echo "lint test: ok"
