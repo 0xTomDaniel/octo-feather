@@ -12,6 +12,8 @@
 #     browser MISSING naming the pin, the box folder and the install command, exit 1; a fake headless shell in
 #     the folder at that pin: ok, exit 0; the folder under the cache folder the qc sandbox masks: refused, exit 1;
 #     GitHub target (no qc.toml [browser]): no browser line. No browser is downloaded: the folder is faked.
+#   agent-browser (spec remote#acceptance-install-agent-browser), a stub: at 0.40.0 ok; 0.39.4 WRONG VERSION; none on
+#     PATH: MISSING naming 0.40.0 and the npm install, exit 1.
 # herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
 # the exit. Run by `just check`.
 set -euo pipefail
@@ -22,6 +24,7 @@ mkdir -p "$t/bin" "$t/home" "$t/old"
 pin="$(tr -d '[:space:]' <"$kit/pi-version")"
 for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
 printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
+printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"   # at the pin; the cases below swap or drop it
 printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* "$t/old/linear"
 cp "$(command -v just)" "$t/bin/just"   # its own dir goes on the recipe's PATH: the test's, never one holding a linear
 # PATH without any linear: every dir holding one is dropped (the recipe adds HOME/.local/bin: HOME is a fresh dir).
@@ -51,7 +54,7 @@ check 1 "$gh_target" ""
 grep -qx "pi     WRONG VERSION $t/bin/pi reports 0.0.1, want $pin (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin" <<<"$out" \
   || fail "pi 0.0.1: no WRONG VERSION line naming the pin and the install command: $out"
 printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
-! grep -qi browser <<<"$out" || fail "GitHub target without qc.toml [browser] has a browser line: $out"
+! grep -qi '^browser' <<<"$out" || fail "GitHub target without qc.toml [browser] has a browser line: $out"
 # just at the kit's pin (just-version): the just on PATH (the copy above) ok; a just reporting another release: WRONG VERSION
 # naming the pin and its release page, exit 1. The stub forwards all but --version to the real just (the gate guard asks it).
 jpin="$(tr -d '[:space:]' <"$kit/just-version")"
@@ -77,4 +80,22 @@ mkdir -p "$t/home/.cache/d"; cp -r "$t/home/.local/share/octo-feather" "$t/home/
 data="$t/home/.cache/d" check 1 "$br_target" ""
 grep -q "^browser UNREADABLE IN THE QC SANDBOX $t/home/.cache/d/octo-feather/ms-playwright/1.64.1 is under $t/home/.cache" <<<"$out" \
   || fail "browser folder under the masked cache folder: not refused: $out"
-echo "install-check: ok (pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; just $jpin (just-version) ok, just 0.0.1 WRONG VERSION naming the pin, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
+# agent-browser (spec remote#acceptance-install-agent-browser): the stub at 0.40.0 ok; another release WRONG VERSION; on a
+# box without it, MISSING naming 0.40.0 and the npm install. Without it: each PATH dir holding one is mirrored minus it.
+grep -qx 'agent-browser version 0.40.0 ok (agent-browser-version)' <<<"$out" || fail "agent-browser at the pin: no ok line: $out"
+printf '#!/bin/sh\necho "agent-browser 0.39.4"\n' >"$t/bin/agent-browser"
+check 1 "$gh_target" ""
+grep -qx "agent-browser WRONG VERSION $t/bin/agent-browser reports 0.39.4, want 0.40.0 (agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)" <<<"$out" \
+  || fail "agent-browser 0.39.4: no WRONG VERSION line naming 0.40.0 and the install: $out"
+rm "$t/bin/agent-browser"; saved="$clean"; clean=""; n=0
+IFS=: read -ra ds <<<"$saved"; for d in "${ds[@]}"; do
+  [[ -n "$d" ]] || continue
+  if [[ -e "$d/agent-browser" ]]; then n=$((n + 1)); m="$t/noab$n"; mkdir -p "$m"
+    for f in "$d"/*; do [[ "${f##*/}" == agent-browser ]] || ln -s "$f" "$m/"; done; clean+=":$m"
+  else clean+=":$d"; fi
+done
+check 1 "$gh_target" ""; clean="$saved"
+grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
+  || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
+printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"
+echo "install-check: ok (agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; just $jpin (just-version) ok, just 0.0.1 WRONG VERSION naming the pin, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"

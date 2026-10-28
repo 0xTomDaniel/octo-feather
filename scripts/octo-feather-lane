@@ -49,7 +49,7 @@ of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when
 "Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
 `verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
 errors} from the Owner field (`:<line>` stripped from every path); "fields" {Name: [value...]} for every
-other `Name: value` line in scope (Name: a capital, then letters or -). Exit 0; 1 on an unreadable report.
+other `Name: value` line in scope (Name: a capital, then letters or -, in words one space apart: `Prior art`). Exit 0; 1 on an unreadable report.
 The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
@@ -418,7 +418,7 @@ def check_lines(text: str) -> tuple[list[str], list[str]]:
 OWNER_LINE = re.compile(r"^Owner:[ \t]*(.*?)\s*$")
 OWNER_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*restated:\s*(\S[^|]*?)")
 OWNERS_LINE = re.compile(r"^Owners:[ \t]*(.*?)\s*$")
-FIELD_LINE = re.compile(r"^([A-Z][A-Za-z-]*):[ \t]*(.*?)\s*$")
+FIELD_LINE = re.compile(r"^([A-Z][A-Za-z-]*(?: [A-Za-z-]+)*):[ \t]*(.*?)\s*$")
 AT_LINE = re.compile(r":\d+$")   # `<path>:<line>`: the path alone
 
 

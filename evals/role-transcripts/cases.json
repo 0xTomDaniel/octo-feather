@@ -139,5 +139,12 @@
       "message": "feat(lane): log each worker commit (T11, commit-log)"
     },
     "task": "Review lane gh11, ticket T11 (every commit a worker makes is recorded in .lane/commits.jsonl, one JSON line per commit with its time, commit id and ticket, so the lane can see what landed; criterion commit-log).\nDiff: base main, head implementer-t11 in this directory (`git diff main...implementer-t11`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
+    "id": "implementer-library-web",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t9",
+    "task": "Ticket T9 (lane gh9, parent #9): `app hello-file PATH` greets every name listed in a YAML file, one greeting per line, in file order. The file is a mapping with one key, `names`, a list of strings, and may use any YAML syntax for it (block or flow lists, quoted or plain scalars, comments, anchors). `--json` prints a list of the greetings as `app hello --json` prints one. A file that is not valid YAML, or has no `names` list of strings, exits 2 with an error naming the file.\nAcceptance criterion: hello-file. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t9, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
   }
 ]

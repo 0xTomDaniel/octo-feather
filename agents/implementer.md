@@ -3,8 +3,8 @@ name: implementer
 description: Implement one ticket inside the worktree it was given, and return the commit.
 model: anthropic/claude-opus-5-5
 thinking: medium
-tools: read, grep, find, ls, bash, edit, write
-skills: principle-prove-it-works, principle-encode-lessons-in-structure, blast-radius, commit, create-verification-skill, maintain-verification-skill, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
+tools: read, grep, find, ls, bash, edit, write, web
+skills: principle-prove-it-works, principle-encode-lessons-in-structure, blast-radius, commit, create-verification-skill, maintain-verification-skill, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript, agent-browser
 ---
 
 # Implementer

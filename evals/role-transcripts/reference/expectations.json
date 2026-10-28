@@ -375,5 +375,6 @@
         ]
       }
     ]
-  }
+  },
+  "implementer-library-web": {"facts": [{"fact": "tool_called", "tools": ["mcp__exa__web_search_exa", "mcp__parallel__web_search"]}, {"fact": "field_lines", "field": "Prior art"}]}
 }
