@@ -20,4 +20,8 @@ Round 2, re-cut fixture:
    `PASS role-transcripts/reviewer-reinvented-parser: field_lines Verdict: 1 line(s) [{"text": "blocking"}]; holds {"text": "blocking"} [stop: exit, 22 tool calls, 65.5 s] [kit 8255ab90dfd1ccaea29bc97653e1db35128b4e31]`
    Finding: `class: reinvented-library`, src/app/names.py hand-written YAML parser, use PyYAML `safe_load`.
 
-Result: separates, base FAIL (clear), head PASS (blocking, reinvented-library).
+Round 3, review block moved to code-review step 4 **Prior art** (head 456d2be), run 20261028T001140Z-199d10:
+`PASS role-transcripts/reviewer-reinvented-parser: field_lines Verdict: 1 line(s) [{"text": "blocking"}]; holds {"text": "blocking"} [stop: exit, 33 tool calls, 116.0 s] [kit 456d2be68c58ceb1f96f8aa9ba7c8e2276dd82a1]`
+Finding: `class: reinvented-library`, src/app/names.py, cites code-review Verdict **Prior art**, use pinned PyYAML `safe_load`. Base unchanged (8255ab9, round 2 run 1: FAIL, clear).
+
+Result: separates, base FAIL (clear), head PASS (blocking, reinvented-library), at 456d2be.

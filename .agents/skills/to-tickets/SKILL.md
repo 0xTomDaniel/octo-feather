@@ -108,6 +108,6 @@ For one step of a wide refactor, replace the demo item with the line `Expand-con
 
 </issue-template>
 
-In either form, a ticket that needs infrastructure (a parser, test runner, protocol, file format, scheduler) names the capability and asks for prior art: "provide YAML config reading (prefer an existing library)", not "write a YAML parser".
+In either form, a ticket that needs infrastructure (the `code-review` skill, Verdict step, **Prior art**) names the capability and asks for prior art: "provide YAML config reading (prefer an existing library)", not "write a YAML parser".
 
 In either form, avoid specific file paths or code snippets: they go stale fast. Exception: if a prototype produced a snippet that encodes a decision more precisely than prose can (state machine, reducer, schema, type shape), inline it and note briefly that it came from a prototype. Trim to the decision-rich parts, not a working demo, just the important bits.
