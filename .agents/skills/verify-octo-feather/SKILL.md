@@ -13,7 +13,7 @@ Helper (an executable Python script, `python3` 3.11+, standard library only: `to
 .agents/skills/verify-octo-feather/scripts/verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
 ```
 
-`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed.
+`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed or, for a `PASS-with-unreachable` drive, every case but the named unreachable steps passed.
 
 ## Contract
 
@@ -51,7 +51,7 @@ What each key means and how its commands run: `schemas/qc.v1.schema.json`. Valid
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`;
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;
-- appends `PASS|FAIL <case>: <cmd>` to `<feature>/summary.txt` and prints it with the case's stdout, stderr and exit code; the summary's last line is `PASS|FAIL <feature>`.
+- appends `PASS|FAIL <case>: <cmd>` to `<feature>/summary.txt` and prints it with the case's stdout, stderr and exit code; the summary's last line is `PASS|FAIL <feature>`, or `PASS-with-unreachable <feature> (unreachable: <step>...)` when every case passed and a step this box cannot reach was printed and recorded as `UNREACHABLE <step>: <prerequisite and route attempted>`.
 
 To drive one command by hand, the same way: after `launch`, `cd "$(mktemp -d)" && <run state>/bin/kit octo-feather-contract <kit>; echo "exit $?"`. Keep scratch only: a DEST under `/tmp`, `XDG_STATE_HOME` under the run state for commands that write box state, `unshare -Un --map-current-user` before anything that would reach `gh` or the network.
 
