@@ -12,6 +12,9 @@ Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
            message is on stdout. A -p (--print) run has no route to any pane:
            its child gets no OCTO_FEATHER_PARENT, HERDR_PANE_ID, HERDR_TAB_ID
            or HERDR_WORKSPACE_ID (issue #77). A pane launch keeps its env.
+           Its Herdr space stays as OCTO_FEATHER_SPEND_SPACE, read only by the
+           spend ledger's writer for the lane (octo-feather-lane --help, spend
+           record; issue #189).
 
 Frontmatter (one `key: value` per line, lists comma-separated):
   name         must equal the file name; names the cached prompt file
@@ -36,7 +39,8 @@ Pi always gets --approve: project-local files are trusted for that one run, so
 Pi's "Trust project folder?" dialog never opens and ~/.pi/agent/trust.json is
 never written (issue #3).
 Pi always gets --extension for the kit's extensions/resume-on-error.ts
-(docs/adr/0023).
+(docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
+--octo-feather-role <the role file's name> for the latter's purpose.
 """
 import hashlib, json, os, re, subprocess, sys, tomllib
 
@@ -49,8 +53,8 @@ HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR
 TRACKERS = {"github": "github-issues", "linear": "linear"}
 DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
-# The kit's Pi extension every role loads, in the kit's extensions/ (issue #152).
-EXTENSION = "resume-on-error.ts"
+# The kit's Pi extensions every role loads, in the kit's extensions/ (issues #152, #187).
+EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
 
 
 def parse(path):
@@ -123,7 +127,9 @@ def launch(path, to_file=False):
         args += ["--tools", ",".join(fm["tools"] + ["codemode"])] if fm["tools"] else ["--no-tools"]
     args += ["--no-mcp", "--no-skills"]
     roots = skill_roots(path)
-    args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", EXTENSION)]
+    for e in EXTENSIONS:
+        args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", e)]
+    args += ["--octo-feather-role", os.path.splitext(os.path.basename(path))[0]]
     tracker = tracker_skill(roots[0])
     for s in fm.get("skills", []):
         s = tracker if s == TRACKER_SLOT else s
@@ -170,6 +176,8 @@ def main(argv):
         return
     flags = argv[1:argv.index("--")] if "--" in argv else argv[1:]
     if "-p" in flags or "--print" in flags:
+        if os.environ.get("HERDR_WORKSPACE_ID"):
+            os.environ["OCTO_FEATHER_SPEND_SPACE"] = os.environ["HERDR_WORKSPACE_ID"]
         for v in HEADLESS_UNSET:
             os.environ.pop(v, None)
     os.execvp("pi", ["pi", *args])

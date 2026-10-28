@@ -167,9 +167,21 @@ reset
 FAKE_PI_HANG=30$$ timeout -k 5 "$lim" "$Q" "$st" 5 acceptance-a > /dev/null 2> "$t/hang.err" & hp=$!; echo "$hp" > "$t/run.pid"
 for _ in $(seq 100); do grep -q 'qc sandbox: ok   github: snapshot' "$t/hang.err" && break; sleep 0.1; done
 grep -q 'qc sandbox: ok   github: snapshot' "$t/hang.err" || fail "hang run: judge never started: $(cat "$t/hang.err")"
-kill -TERM "$hp"; set +e; wait "$hp"; rc=$?; set -e; rm -f "$t/run.pid"
+# Killed as timeout kills it, its 2nd send (to the group) landing late, during qc's cleanup, as on a loaded box (#235):
+# TERM to timeout, then to its group every 0.5 ms until the group is gone; the checks then run at once, no grace sleep.
+python3 - "$hp" <<'EOF'
+import os, signal, sys, time
+g = int(sys.argv[1]); os.kill(g, signal.SIGTERM); end = time.time() + 30
+while time.time() < end:
+    try:
+        os.killpg(g, signal.SIGTERM)
+    except ProcessLookupError:
+        break
+    time.sleep(0.0005)
+EOF
+set +e; wait "$hp"; rc=$?; set -e; rm -f "$t/run.pid"
 [[ "$rc" != 0 ]] || fail "hang run exited 0"
-sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls -A "$TMPDIR")"
+[[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls -A "$TMPDIR")"
 ! pgrep -fx "sleep 30$$" > /dev/null || fail "killed run's judge survived"
 reset
 
