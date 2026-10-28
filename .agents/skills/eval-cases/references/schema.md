@@ -50,6 +50,7 @@ An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty lis
 - `{"fact": "declared_includes", "field": F, "items": [O...]}`: F a non-blank string, O a non-empty list of non-empty objects, keys non-empty strings, values strings (Final JSON).
 - `{"fact": "field_lines", "field": F, optional "none", "includes", "every"}` (Field lines).
 - `{"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}`: at least one key, each a non-empty list of relative paths P (no leading `/`, no `..` component, no whitespace; a dir ends in `/`) (Branch paths).
+- `{"fact": "tool_called", "tools": [N...]}`: N a non-empty list of tool names, no whitespace (Tool call).
 
 ### Skill load
 
@@ -89,9 +90,13 @@ An attempt the sandbox did not record (a missing file read in a mask, a token va
 
 The way a producer emits a verdict as data (a reviewer's block list, a corrector's chosen rung); the task names the block's shape.
 
+### Tool call
+
+`tool_called` passes at the first call to a tool named in N (its `tool_execution_start` `toolName`, exact) whose `tool_execution_end` is not `isError` and whose result holds non-blank text; no call's arguments or result content is judged. Decided at that call; with none by the run's end, fails naming each such call's error or empty result, or that none was made.
+
 ### Field lines
 
-The FINAL assistant message's field lines, parsed by `octo-feather-lane fields` (the parser `verdict` uses; field form and reader scope: `.agents/skills/code-review/SKILL.md` step 4, **Report fields**). F matches `[A-Z][A-Za-z-]*`, not `Checks` or `Owners`: `Check` (lines `{path, rule, owner, reads, class}`, or its none line), `Owner` (lines `{path, rule, restated: [path...]}`, or its none line; `:<line>` stripped), or any other Name (lines `{text}`).
+The FINAL assistant message's field lines, parsed by `octo-feather-lane fields` (the parser `verdict` uses; field form and reader scope: `.agents/skills/code-review/SKILL.md` step 4, **Report fields**). F matches `[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*` (words one space apart: `Prior art`), not `Checks` or `Owners`: `Check` (lines `{path, rule, owner, reads, class}`, or its none line), `Owner` (lines `{path, rule, restated: [path...]}`, or its none line; `:<line>` stripped), or any other Name (lines `{text}`).
 
 - The field must be present and well formed (Check, Owner: no parser error; another field: a column-0 `F:` line with a value outside code blocks).
 - `none`: only `true`, only for Check or Owner, without includes or every: the field is its one none line.

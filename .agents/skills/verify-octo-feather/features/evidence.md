@@ -16,7 +16,7 @@ Drive criterion: `quality#acceptance-evidence-record`
 
 ## How to get to it (user POV)
 
-- A verify skill's drive runs `append` once per drive. The owner or an agent reads: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` in the target repo; `octo-feather-evidence --help` for the rest.
+- A verify skill's drive runs `append` (how many records: [README.md#feature-entry-contract](README.md#feature-entry-contract)). The owner or an agent reads: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` in the target repo; `octo-feather-evidence --help` for the rest.
 
 ## Driving it with verify-octo-feather
 
@@ -37,4 +37,4 @@ The drive makes a scratch target (a git repo with two commits) and a scratch sto
 ## Gotchas
 
 - The store is keyed by the target's root commit, so every drive's scratch target is a new store; cleanup removes it with the run state.
-- This drive's own record (the helper appends one per drive) goes to the kit's real store, not the scratch one: read it with `octo-feather-evidence read --criterion quality#acceptance-evidence-record` in the kit.
+- This drive's own records (how many: [README.md#feature-entry-contract](README.md#feature-entry-contract)) go to the kit's real store, not the scratch one: read them with `octo-feather-evidence read --criterion quality#acceptance-evidence-record` in the kit.

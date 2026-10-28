@@ -153,10 +153,16 @@ if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] 
             s = s.replace(f"@rel:{n}", os.path.relpath(d + "/SKILL.md")).replace(f"@dot:{n}", f"{d}/../{n}/SKILL.md") \
                  .replace(f"@other:{n}", f"/nowhere/{n}/SKILL.md").replace(f"@@{n}", d).replace(f"@{n}", d + "/SKILL.md")
         return s
-    # read PATH|limit=N: the first N lines and Pi's continuation notice; bash CMD #TRUNC: Pi marks the output truncated.
+    # read PATH|limit=N: the first N lines and Pi's continuation notice; bash CMD #TRUNC: Pi marks the output truncated;
+    # any other tool name TEXT: a call to that tool answering TEXT (ERR:TEXT: an error result).
     for k, (kind, arg) in enumerate(json.loads(prompt.split("STUB-STEPS:", 1)[1])):
         if kind == "say":
             final = arg; break
+        if kind not in ("read", "bash"):
+            tool(f"s{k}", kind, {"query": "q"})
+            out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": arg.startswith("ERR:"),
+                 "result": {"content": [{"type": "text", "text": arg.removeprefix("ERR:")}]}})
+            time.sleep(0.5); continue
         path, _, lim = sub(arg).partition("|limit=")
         tool(f"s{k}", kind, {"path": path} if kind == "read" else {"command": sub(arg)})
         p = subprocess.run(["bash", "-c", sub(arg)], capture_output=True, text=True) if kind == "bash" else None
@@ -604,6 +610,8 @@ none = {"fact": "field_lines", "field": "Check", "none": True}
 exact = {"fact": "field_lines", "field": "Check", "every": {"class": ["exact"]}}
 has = {"fact": "field_lines", "field": "Check", "includes": [{"class": "exact", "path": "scripts/check-exec"}], "every": {"class": ["exact"]}}
 keep = {"fact": "branch_paths", "untouched": ["scripts/", "justfile"], "touched": ["src/"]}
+web = {"fact": "tool_called", "tools": ["web_a", "web_b"]}
+prior = {"fact": "field_lines", "field": "Prior art"}
 cases = [
   (case("fnone", [["bash", "mkdir -p src && echo x > src/a.py && " + G + " add -A && " + G + " commit -qm a && echo y > src/b.py"],
                   ["say", "Done.\n\nChecks: none\nBlocked: the scan (no criterion asks for it)"]]),
@@ -618,6 +626,11 @@ cases = [
                                                            ("README.md", "AGENTS.md", "skills/s.md")]}]),
   (case("fonone", [["say", "Owners: none\nBlocked:"]]), [{"fact": "field_lines", "field": "Owner", "none": True},
                                                         {"fact": "field_lines", "field": "Blocked"}]),
+  (case("fweb", [["web_a", "ERR:rate limited"], ["web_b", "PyYAML 6.0.2 on PyPI"],
+                 ["say", "Done.\nPrior art: PyYAML 6.0.2 | released: 2024-08-06 | license: MIT"]]), [web, prior]),
+  (case("fwebnone", [["web_a", "ERR:rate limited"], ["web_c", "PyYAML"], ["say", "Done.\nPrior  art: x"]]), [web, prior]),
+  (case("fwebempty", [["web_b", " "]]), [web]),
+  (case("fwebno", [["web_c", "PyYAML"]]), [web]),
 ]
 json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
 json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
@@ -634,6 +647,12 @@ fl FAIL fproxy 'field_lines Check: [{"path": "scripts/check-exec", "rule": "ever
 fl PASS fowner 'holds {"path": "docs/adr/0099-x.md", "restated": "README.md"}; {"path": "docs/adr/0099-x.md", "restated": "AGENTS.md"}; {"path": "docs/adr/0099-x.md", "restated": "skills/s.md"}'
 fl FAIL fonone 'field_lines Blocked: no column-0 `Blocked:` line with a value outside code blocks'
 grep -E '^FAIL fl/fonone: ' <<< "$out" | grep -qF 'field_lines Owner:' && fail "fonone: Owners: none failed: $out"
+# tool_called (schema.md, Tool call): an error result skipped, a named tool's text result passes; a two-word field.
+fl PASS fweb 'tool_called web_a | web_b: tool call 3 web_b {"query": "q"} returned 20 characters; field_lines Prior art: 1 line(s) [{"text": "PyYAML 6.0.2 | released: 2024-08-06 | license: MIT"}]'
+fl FAIL fwebnone 'tool_called web_a | web_b: call 2 web_a: error'
+fl FAIL fwebnone 'field_lines Prior art: no column-0 `Prior art:` line'
+fl FAIL fwebempty 'tool_called web_a | web_b: call 2 web_b: empty result'
+fl FAIL fwebno 'tool_called web_a | web_b: no call to any of them in 2 tool calls'
 
 # Shape check (rules: schema.md, by section; output and exit: check-evals --help, octo-feather-qa --help).
 bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
@@ -698,6 +717,10 @@ bad 'e["fnone"]["facts"][0]["none"] = "yes"' "case fnone fact #1: field none: on
 bad 'e["fexact"]["facts"][0]["includes"] = [{"klass": "exact"}]' "case fexact fact #1: field includes: must be a non-empty list of non-empty objects of string values, keys from" "$t/fl-good" fl
 bad 'e["fexact"]["facts"][0]["every"] = {"class": "exact"}' "case fexact fact #1: field every: must be a non-empty object of string lists" "$t/fl-good" fl
 bad 'e["fnone"]["facts"][3] = {"fact": "branch_paths"}' "case fnone fact #4: field untouched: missing" "$t/fl-good" fl
+bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
+bad 'e["fweb"]["facts"][0]["tools"] = ["web a"]' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
+bad 'del e["fweb"]["facts"][0]["tools"]' "case fweb fact #1: field tools: missing" "$t/fl-good" fl
+bad 'e["fweb"]["facts"][1]["field"] = "Prior  art"' "case fweb fact #2: field field: must be a field name" "$t/fl-good" fl
 bad 'e["fnone"]["facts"][3]["untouched"] = "scripts/"' "case fnone fact #4: field untouched: must be a non-empty list of relative paths" "$t/fl-good" fl
 bad 'e["fnone"]["facts"][3]["touched"] = ["../x"]' "case fnone fact #4: field touched: must be a non-empty list of relative paths" "$t/fl-good" fl
 bad 'e["fnone"]["facts"][3]["paths"] = []' "case fnone fact #4: field paths: unknown field for branch_paths" "$t/fl-good" fl
@@ -950,4 +973,4 @@ for m in stub 'stub/' '/x' 'stub/a b' ''; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
 done
 badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, other repos and the --kit-ref head kit masked (attempt_blocked repo), missing role file named, unknown ref 64, attempt_blocked from the sandbox attempt record (herdr-say called through a variable and herdr both recorded, a delivered message then a failing command not blocked, never attempted, a delivered call after 510 forged refusals fails: the record graded whole), declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (schema.md, Bench; catalogue and --classifier; moving alias and yes/no only skipped, never called), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, best's tie-break, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json and classifiers.json shape (schema.md))"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, other repos and the --kit-ref head kit masked (attempt_blocked repo), missing role file named, unknown ref 64, attempt_blocked from the sandbox attempt record (herdr-say called through a variable and herdr both recorded, a delivered message then a failing command not blocked, never attempted, a delivered call after 510 forged refusals fails: the record graded whole), declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields, a two-word field), tool_called (an error or empty result skipped, a named tool's text result passes, none called fails), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (schema.md, Bench; catalogue and --classifier; moving alias and yes/no only skipped, never called), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, best's tie-break, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json and classifiers.json shape (schema.md))"

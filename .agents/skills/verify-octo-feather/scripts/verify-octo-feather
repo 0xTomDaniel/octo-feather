@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "role-launch")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -208,7 +208,7 @@ def cmd_doctor(tee: Path | None = None) -> int:
         else:
             report("FAIL", f"{t} not on PATH: the kit's commands need it")
             ok = 1
-    for t in ("octo-feather-new-repo", "octo-feather-contract", "octo-feather-evidence"):
+    for t in ("octo-feather-new-repo", "octo-feather-contract", "octo-feather-evidence", "pi-role"):
         out = output([s.kit, "sh", "-c", 'command -v "$1"', "sh", t])[1].rstrip("\n")
         if out == f"{s.repo}/scripts/{t}":
             report("ok", f"{t} resolves to this checkout")
@@ -460,6 +460,7 @@ def drive_install_check(f: Feature) -> None:
     f.check("offline", lambda c: c.code == 1
             and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING$)", c.out) for t in tools)
             and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", c.out)
+            and re.search(r"(?m)^agent-browser (version \S+ ok|WRONG VERSION|MISSING)", c.out)
             and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", c.out)
             and re.search(r"(?m)^tracker \S+ \(target " + re.escape(c.kit) + r"\)$", c.out))
     say(f"install-check evidence: {f.d}")
@@ -545,11 +546,96 @@ def drive_evidence(f: Feature) -> None:
     say(f"evidence evidence: {f.d}")
 
 
+def manifest(c: Case) -> dict[str, Any]:
+    """What a `pi-role --json` launch gives Pi, as the role-launch checks read it."""
+    a: list[str] = c.j["args"]
+    tools = a[a.index("--tools") + 1].split(",") if "--tools" in a else []
+    exts = [a[i + 1] for i, x in enumerate(a) if x == "--extension"]
+    web_list = a[a.index("--octo-feather-web-servers") + 1] if "--octo-feather-web-servers" in a else None
+    return {"tools": tools, "no_mcp": "--no-mcp" in a, "web_ext": any(e.endswith("/extensions/web-servers.ts") for e in exts),
+            "web_list": web_list, "mcp": sorted(t for t in tools if t.startswith("mcp__"))}
+
+
+def web_ok(c: Case, role: str, servers: list[str], kit: str) -> bool:
+    """A web role: built-ins, codemode, one mcp__<server>__* per listed server, the web extension with kit's
+    list, no --no-mcp. Any other role: codemode, no MCP entry, --no-mcp, no web extension. The director: no edit
+    or write (roles#acceptance-director-tools)."""
+    m = manifest(c)
+    web = role in c.v["web_roles"].split()
+    base = [t for t in m["tools"] if not t.startswith("mcp__")]
+    if "codemode" not in base:
+        return False
+    if role == "director" and sorted(base) != sorted(["read", "grep", "find", "ls", "bash", "codemode"]):
+        return False
+    if web:
+        return (m["mcp"] == sorted(f"mcp__{s}__*" for s in servers) and not m["no_mcp"] and m["web_ext"]
+                and m["web_list"] == f"{kit}/web-mcp.json")
+    return m["mcp"] == [] and m["no_mcp"] and not m["web_ext"] and m["web_list"] is None
+
+
+def drive_role_launch(f: Feature) -> None:
+    """Each role's launch as Pi gets it, offline: `pi-role --json` (what herdr-spawn hands a tab and what a
+    headless run executes), no model turn. features/role-launch.md."""
+    v = f.s.contract.values
+    if "web_roles" not in v or "web_servers" not in v:
+        die("qc.toml [values] needs web_roles and web_servers: the role-launch drive's expected web roles and servers")
+    roles = ("director", "supervisor", "implementer", "corrector", "code-reviewer", "qc-judge")
+    servers = v["web_servers"].split()
+    sc = RUN_DIR / "scratch" / "role-launch"
+    shutil.rmtree(sc, ignore_errors=True)
+    # pi-role --json caches the role body under XDG_CACHE_HOME: a scratch one, never the box's.
+    base_env = {"XDG_CACHE_HOME": str(sc / "cache")}
+    f.env = base_env
+    for role in roles:
+        f.run(role, "pi-role", "--json", f"{f.s.repo}/agents/{role}.md")
+        f.obs(role, "role-tools", "".join(ln + "\n" for ln in (Path(f.s.repo) / "agents" / f"{role}.md").read_text().splitlines()
+                                          if ln.startswith("tools:")))
+        f.check(role, lambda c, r=role: c.code == 0 and web_ok(c, r, servers, c.kit))
+
+    # Another MCP server in the user's Pi config and in the target's: the launch is unchanged and names neither.
+    home, agent, target = sc / "home", sc / "agent", sc / "target"
+    for p in (home, agent, target / ".pi"):
+        p.mkdir(parents=True)
+    (agent / "mcp.json").write_text('{"mcpServers":{"userother":{"url":"https://userother.invalid/mcp"}}}\n')
+    (target / ".pi" / "mcp.json").write_text('{"mcpServers":{"projother":{"url":"https://projother.invalid/mcp"}}}\n')
+    subprocess.run(["git", "-c", "init.defaultBranch=main", "init", "-q", str(target)], check=True)
+    f.env = {**base_env, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent)}
+    for role in ("implementer", "supervisor"):
+        name = f"other-mcp-{role}"
+        f.run(name, "env", "-C", str(target), "pi-role", "--json", f"{f.s.repo}/agents/{role}.md")
+        f.obs(name, "baseline", (f.d / f"{role}.stdout").read_text())
+        f.obs(name, "configs", (agent / "mcp.json").read_text() + (target / ".pi" / "mcp.json").read_text())
+        f.check(name, lambda c, r=role: c.code == 0 and c.out == c.o["baseline"] and web_ok(c, r, servers, c.kit)
+                and "userother" in c.o["configs"] and "projother" in c.o["configs"]
+                and "userother" not in c.out and "projother" not in c.out)
+
+    # A scratch copy of the kit with one server added to the web list and no role file changed.
+    kit2 = sc / "kit"
+    for d in ("scripts", "agents", "extensions"):
+        shutil.copytree(Path(f.s.repo) / d, kit2 / d, symlinks=True)
+    (kit2 / ".agents").mkdir()
+    (kit2 / ".agents" / "skills").symlink_to(Path(f.s.repo) / ".agents" / "skills")
+    lst = json.loads((Path(f.s.repo) / "web-mcp.json").read_text())
+    lst["mcpServers"]["added"] = {"url": "https://added.invalid/mcp"}
+    (kit2 / "web-mcp.json").write_text(json.dumps(lst, indent=2) + "\n")
+    f.env = base_env
+    agents_diff = output(["diff", "-r", f"{f.s.repo}/agents", str(kit2 / "agents")])[1]
+    for role in roles:
+        name = f"list-once-{role}"
+        f.run(name, f"{kit2}/scripts/pi-role", "--json", f"{kit2}/agents/{role}.md")
+        f.obs(name, "agents-diff", agents_diff)
+        f.check(name, lambda c, r=role: c.code == 0 and c.o["agents-diff"] == ""
+                and web_ok(c, r, [*servers, "added"], str(kit2)))
+    f.env = {}
+    say(f"role-launch evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
     "contract": drive_contract,
     "evidence": drive_evidence,
+    "role-launch": drive_role_launch,
 }
 
 
@@ -582,20 +668,20 @@ def cmd_drive(feature: str | None) -> int:
 
 def record_evidence(s: State, feature: str) -> None:
     """Every drive, passed or failed, appends one record to the kit's evidence store (quality spec
-    #evidence-store) through the kit's octo-feather-evidence, entered by the contract: the criterion the
-    feature file's `Drive criterion:` line names, its text from the kit's own spec, the feature's evidence
-    folder as outputs. Cleanup never touches the store."""
+    #evidence-store) through the kit's octo-feather-evidence, entered by the contract: one per criterion a
+    `Drive criterion:` line of the feature file names, its text from the kit's own spec, the feature's
+    evidence folder as outputs. Cleanup never touches the store."""
     file = SCRIPT_DIR / ".." / "features" / f"{feature}.md"
-    m = re.search(r"^Drive criterion: `([^`]*)`", file.read_text(), re.MULTILINE)
-    if not m or not m[1]:
+    crits = [c for c in re.findall(r"^Drive criterion: `([^`]*)`", file.read_text(), re.MULTILINE) if c]
+    if not crits:
         die(f"{file} has no Drive criterion line (Drive criterion: `<spec>#<anchor>`): each drive names the criterion it serves")
-    crit = m[1]
-    sys.stdout.flush()
-    r = subprocess.run([s.kit, "octo-feather-evidence", "append", "--repo", s.repo, "--criterion", crit,
-                        "--outputs", str(EVIDENCE_DIR / feature)], stdout=subprocess.PIPE, text=True, check=False)
-    if r.returncode != 0:
-        die(f"evidence record for {feature} not appended (octo-feather-evidence failed, message above)")
-    say(f"evidence record {r.stdout.strip()} (criterion {crit}; read: octo-feather-evidence read --criterion {crit} --commit {s.rev})")
+    for crit in crits:
+        sys.stdout.flush()
+        r = subprocess.run([s.kit, "octo-feather-evidence", "append", "--repo", s.repo, "--criterion", crit,
+                            "--outputs", str(EVIDENCE_DIR / feature)], stdout=subprocess.PIPE, text=True, check=False)
+        if r.returncode != 0:
+            die(f"evidence record for {feature} not appended (octo-feather-evidence failed, message above)")
+        say(f"evidence record {r.stdout.strip()} (criterion {crit}; read: octo-feather-evidence read --criterion {crit} --commit {s.rev})")
 
 
 def cmd_cleanup() -> None:

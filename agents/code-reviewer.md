@@ -3,7 +3,7 @@ name: code-reviewer
 description: Judge one diff's code quality and return a verdict. Read-only.
 model: openai/gpt-6.1-sol
 thinking: high
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, bash, web
 skills: code-review, github-pr, tdd
 ---
 
