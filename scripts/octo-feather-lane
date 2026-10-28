@@ -20,8 +20,8 @@ director log's lines about the lane (its issue, or a text naming the lane, #N or
 lines for the lane (`report`, below), and the transcript paths of the supervisor, each worker the log names
 with a session, and the director. It starts agents/reflector.md through pi-role with the lane questions of
 reflection/questions.json, parses its labelled reply (form and refusals: scripts/octo-feather-reflect) and
-appends to lanes/NAME.handoffs.jsonl (created when absent) one finding line per gap, then one reflection
-line (fields: spec comms #handoff-kind-finding, #handoff-kind-reflection), in one write; prints
+appends to lanes/NAME.handoffs.jsonl (created when absent) its finding and reflection lines (spec comms
+#reflection-output; fields: #handoff-kind-finding, #handoff-kind-reflection), in one write; prints
 `reflection: ...` and each finding.
 A reflector that cannot run or replies outside the form appends nothing: exit 1 naming the failed reflection.
 

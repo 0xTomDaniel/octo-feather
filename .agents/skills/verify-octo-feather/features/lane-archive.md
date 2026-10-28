@@ -13,7 +13,7 @@ Drive criterion: `comms#acceptance-reflect-before-archive`
 
 - `refuse-unreachable` archive a scratch merged lane with the reflector's model unreachable: refused naming the failed reflection, every file in place.
 - `refuse-no-record` `reflect` on a lane with no record: refused naming it.
-- `reflect-live` (unreachable in the drive) the real reflector's finding and reflection lines in the archived log.
+- `reflect-live` archive the same lane with the real reflector reaching its model: its finding and reflection lines in the archived log, the stranded-worker catch among them.
 
 ## How to get to it (user POV)
 
@@ -23,17 +23,17 @@ Drive criterion: `comms#acceptance-reflect-before-archive`
 
 Preconditions:
 
-- `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0; a network namespace (`unshare -Un`).
+- `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0; a network namespace (`unshare -Un`); the reflector's model reachable (the deployment's model proxy; SKILL.md, the one exception to offline).
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive lane-archive`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/lane-archive/`.
 
-The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/lane-archive/state`) holding lane gh900 (record, a hand-off log with a code-review finding) and a director log with a stranded-worker note; `HERDR_SOCKET_PATH` points at no server and the reflector saves no Pi session.
+The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/lane-archive/state`) holding lane gh900 (record, a hand-off log with a spawn of w90:p3 and a code-review finding) and a director log with a stranded-worker note (the director read pane w90:p3 stranded at Pi's trust prompt); `HERDR_SOCKET_PATH` points at no server and the reflector saves no Pi session.
 
 - **Model unreachable** (`refuse-unreachable`). Under `unshare -Un`, run `octo-feather-lane archive gh900`. Observe exit 1, stderr naming `lane reflection of gh900 failed` and `nothing appended`, the lane files' sha256 unchanged, no archive/.
 - **No record** (`refuse-no-record`). Run `octo-feather-lane reflect gh404`. Observe exit 1, `no lane record`.
-- **Live reflection** (`reflect-live`), by hand, needs the network and the reflector's model: seed a scratch lane gh900 under `/tmp/gh230-demo/octo-feather/lanes/` and run `XDG_STATE_HOME=/tmp/gh230-demo scripts/octo-feather-lane archive gh900`. Observe `reflection: lane gh900, N findings, questions ...`, and the archived log ending with N finding lines (source reflection, blocking false, question, route) and one reflection line.
+- **Live reflection** (`reflect-live`). Without the namespace, run `octo-feather-lane archive gh900`: the real reflector through pi-role. Observe exit 0, `reflection: lane gh900, N findings, questions ...` with each finding, and the archived log (`reflect-live.obs.archived-log`, printed as `archived log:` lines) holding the seeded lines unchanged, then the finding and reflection lines of comms spec `#reflection-output` (N findings, every lane question); one `caught-by-hand` finding names the stranded worker; gh900 left lanes/ for archive/.
 
 ## Gotchas
 
-- The live run takes minutes at thinking high; `OCTO_FEATHER_REFLECT_ARGS="--thinking off"` makes a cheap smoke, `OCTO_FEATHER_REFLECT_TIMEOUT` bounds it.
-- The reflector's transcript lands in Pi's session folder for the cwd unless `--no-session` is passed.
+- The live case takes minutes at thinking high; `OCTO_FEATHER_REFLECT_ARGS="--thinking off"` on the drive makes a cheap smoke (the drive adds `--no-session`), `OCTO_FEATHER_REFLECT_TIMEOUT` bounds it (default 1800).
+- The model's findings vary run to run: the case checks their form and the stranded-worker catch, never their count or wording.

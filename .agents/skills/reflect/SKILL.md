@@ -17,7 +17,7 @@ The brief names the records to read: a lane's record and hand-off log, the direc
 
 Read each lens template and apply it yourself to the records: `references/judgment-reviewer.md`, `references/tooling-reviewer.md`, `references/divergent-reviewer.md`. Where a template says transcript, read the records of step 1. Its parts about subagents, MCP lookups and skill catalogs do not apply: you have only read, grep, find and ls. Keep each lens's notes to yourself; they are inputs to step 3.
 
-Answer each question of the brief's question list through the lenses: a question is a lens of its own, and every question gets an answer, a gap or none.
+Answer the brief's question list through the lenses, each question a lens of its own; what each question must give: comms spec `#reflection-questions`.
 
 ## 3. Synthesize
 
@@ -29,4 +29,4 @@ Route a finding that a command, check, metadata flag or runtime check would enfo
 
 ## 5. Output
 
-Return the findings in the exact form your brief gives, and nothing the brief's parser would misread. Each finding names its class, the question it answers, its route (the role, skill, template, command or structure where its fix goes) and a summary citing its evidence (the file and line, or the transcript moment). No edit is proposed for approval and none is applied: the command that started you appends the findings.
+Return the findings in the exact form your brief gives, and nothing the brief's parser would misread; what a finding holds: comms spec `#reflection-output`. No edit is proposed for approval and none is applied: the command that started you appends the findings.

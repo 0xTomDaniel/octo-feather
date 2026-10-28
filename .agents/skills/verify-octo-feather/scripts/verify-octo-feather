@@ -552,17 +552,21 @@ def drive_lane_archive(f: Feature) -> None:
     lanes.mkdir(parents=True)
     # A scratch merged lane: a review finding in its log, a stranded-worker catch in the director log.
     (lanes / "gh900.toml").write_text('supervisor = "w90:p2"\nissue = "gh900"\ngoal = "scratch lane"\n')
-    (lanes / "gh900.handoffs.jsonl").write_text(
-        '{"at": "2026-10-28T01:00:00Z", "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": true, "summary": "restated rule"}\n')
+    seeded = ('{"at": "2026-10-28T00:05:00Z", "kind": "spawn", "name": "implementer-gh901", "pane": "w90:p3"}\n'
+              '{"at": "2026-10-28T01:00:00Z", "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": true, "summary": "restated rule"}\n')
+    (lanes / "gh900.handoffs.jsonl").write_text(seeded)
     (lanes.parent / "director.handoffs.jsonl").write_text(
-        '{"at": "2026-10-28T00:40:00Z", "kind": "note", "issue": 900, "text": "read pane w90:p3: implementer stranded at a prompt"}\n')
+        '{"at": "2026-10-28T00:40:00Z", "kind": "note", "issue": 900, "text": "read pane w90:p3: implementer-gh901 stranded at '
+        'Pi\'s \'Trust project folder?\' prompt for 35 min; supervisor w90:p2 had not noticed"}\n')
 
     def files() -> str:
         return "".join(f"{p.relative_to(lanes)} {hashlib.sha256(p.read_bytes()).hexdigest()}\n" for p in sorted(lanes.rglob("*")) if p.is_file())
 
     # Scratch state, a dead Herdr socket, no saved Pi session; the reflector's model unreachable (no network).
+    # OCTO_FEATHER_REFLECT_ARGS from the caller rides along (e.g. "--thinking off" for a cheap smoke).
+    args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
-             "OCTO_FEATHER_REFLECT_ARGS": "--no-session", "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -577,8 +581,40 @@ def drive_lane_archive(f: Feature) -> None:
                 and "archive/" not in c.o["after"])
     f.run("refuse-no-record", "octo-feather-lane", "reflect", "gh404")
     f.check("refuse-no-record", lambda c: c.code == 1 and "no lane record" in c.err)
-    f.unreachable_step("reflect-live", "the reflector's model is reached over the network, and drives stay offline (SKILL.md); "
-                       "prerequisite: a live model run; route: the demo in features/lane-archive.md, recorded in the lane's evidence/")
+    # The real reflector on the same lane, its model reached (SKILL.md: a role's model run is the one exception
+    # to offline); the reflect command calls no gh and the reflector has only read, grep, find and ls, Herdr
+    # stays a dead socket and the state a scratch one, so no live lane is reached.
+    f.env["OCTO_FEATHER_REFLECT_TIMEOUT"] = os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800"
+    f.run("reflect-live", "octo-feather-lane", "archive", "gh900")
+    f.obs("reflect-live", "after", files())
+    arch = lanes / "archive" / "gh900.handoffs.jsonl"
+    f.obs("reflect-live", "archived-log", arch.read_text() if arch.is_file() else "")
+    f.obs("reflect-live", "seeded", seeded)
+    ids = [q["id"] for q in json.loads((Path(f.s.repo) / "reflection" / "questions.json").read_text())["questions"]
+           if q["kind"] == "lane"]
+
+    def reflected(c: Case) -> bool:
+        """The archived log: the seeded lines unchanged, then N finding lines (source reflection, blocking false, a
+        lane question, a route), then one reflection line with findings N; one caught-by-hand finding names the
+        stranded worker; the record and log moved out of lanes/."""
+        log = c.o["archived-log"]
+        if not log.startswith(c.o["seeded"]):
+            return False
+        new = [json.loads(ln) for ln in log[len(c.o["seeded"]):].splitlines()]
+        found, last = new[:-1], new[-1]
+        m = re.search(r"(?m)^reflection: lane gh900, (\d+) findings?, questions ", c.out)
+        return (c.code == 0 and m is not None and int(m[1]) == len(found) == last["findings"] > 0
+                and last["kind"] == "reflection" and sorted(last["questions"]) == sorted(ids)
+                and all(x["kind"] == "finding" and x["source"] == "reflection" and x["blocking"] is False
+                        and x["question"] in ids and x["route"] and x["summary"] and x["class"] for x in found)
+                and any(x["question"] == "caught-by-hand"
+                        and re.search(r"strand|trust project folder|w90:p3|prompt", x["summary"], re.IGNORECASE) for x in found)
+                and "archive/gh900.toml" in c.o["after"] and "\ngh900.toml" not in "\n" + c.o["after"])
+
+    f.check("reflect-live", reflected)
+    if arch.is_file():
+        for ln in arch.read_text()[len(seeded):].splitlines():
+            print(f"    archived log: {ln}")
     f.env = {}
     say(f"lane-archive evidence: {f.d}")
 
