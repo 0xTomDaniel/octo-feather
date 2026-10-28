@@ -1,6 +1,6 @@
 {
   "spec": "issue-lifecycle.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "77bae4637869a58a7509c7fecb88e2d17a3e24a5",
   "criteria": {
     "acceptance-kickoff-refuses": {
       "status": "planned",
