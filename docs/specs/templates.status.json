@@ -27,8 +27,8 @@
       "pr": 16
     },
     "acceptance-starter-verify": {
-      "status": "built",
-      "pr": 181
+      "status": "planned",
+      "pr": null
     }
   }
 }
