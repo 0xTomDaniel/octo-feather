@@ -1,30 +1,38 @@
 #!/usr/bin/env python3
-"""Ruff and basedpyright over a repo's Python, with the tools' own baselines kept shrink-only (#244).
+"""Ruff and basedpyright over a repo's Python, their own baselines kept shrink-only (#244).
 
-Run in the repo root, with ruff and basedpyright on PATH (the kit: `uv run`; a target the same).
+Run in the repo root (its pyproject.toml holds the config), ruff and basedpyright on PATH
+(the kit: `uv run --locked`).
 
-  octo-feather-lint files     print the Python file set, one path per line
-  octo-feather-lint lint      ruff check over the file set
-  octo-feather-lint format    ruff format --check over the file set (never rewrites)
-  octo-feather-lint types     basedpyright over the file set (its config, e.g. strict)
-  octo-feather-lint shrink    drop baseline entries that no longer fire; never adds one
-  octo-feather-lint baseline  print the ruff baseline tables for today's violations (writes nothing)
+  octo-feather-lint files   print the Python file set, one path per line
+  octo-feather-lint lint    ruff check over the file set
+  octo-feather-lint format  ruff format --check over the file set (never rewrites a file)
+  octo-feather-lint types   basedpyright over the file set (its config: strict, say)
+  octo-feather-lint shrink  drop baseline entries that no longer fire; never adds one
+  octo-feather-lint init    take the baselines once, for a repo adopting the lint late; refuses
+                            when any baseline exists
 
-The file set: every git-tracked `*.py` file and every extensionless file whose shebang runs Python,
-minus what the repo's ruff config excludes (`extend-exclude`, each entry with its reason there). Ruff
-and basedpyright skip an extensionless file unless it is named, so every file is passed explicitly;
-`types` fails unless basedpyright reports it analyzed exactly that many files.
+The file set: every git-tracked `*.py` file and every extensionless file whose shebang runs
+Python (python*, pypy*, directly or through env, or `uv run --script`), minus what the root
+pyproject's ruff config excludes (`extend-exclude`; nested configs of fixtures or templates
+never apply). Both tools skip an extensionless file unless it is named, so every file is
+named. basedpyright also drops a file under a dot directory (.agents/) even when named, so it
+runs over a throwaway mirror of links in which a dot-leading component `.x` reads `_.x`; its
+baseline keys are those mirror paths. `types` fails unless basedpyright analyzed exactly the
+files named.
 
-The baselines, each a native mechanism of its tool:
-  ruff check: `[tool.ruff.lint.extend-per-file-ignores]` in pyproject.toml, one key per file (its exact
-    path), listing exactly the rule codes that file violated when the baseline was taken. The repo's own
-    `per-file-ignores` stays its config, never the baseline.
-  ruff format: `[tool.ruff.format] exclude`, the exact paths not formatted when the baseline was taken.
-  basedpyright: its baseline file (`basedpyright --writebaseline`, default .basedpyright/baseline.json).
-A violation outside the baseline fails naming file:line, rule and fix. An entry that no longer fires
-fails naming `octo-feather-lint shrink`, which only removes entries: it never writes a code, path or
-error the baseline lacks (basedpyright's auto mode writes only when no error is new). Exit: 0 pass,
-1 violations or stale entries, 2 usage or tool error.
+The baselines, each the tool's own mechanism:
+  ruff check: `[tool.ruff.lint.extend-per-file-ignores]`, one key per file (its exact path),
+    holding exactly the rule codes the file violated when the baseline was taken, one per line.
+    The repo's own `per-file-ignores` stays config, never baseline.
+  ruff format: `[tool.ruff.format] exclude`, the exact paths unformatted then, one per line.
+  basedpyright: its baseline file (`baselineFile` in [tool.basedpyright], default
+    .basedpyright/baseline.json; it matches an error by rule and columns, not line).
+A violation outside the baseline fails naming file:line, rule and fix. An entry that no
+longer fires fails naming `octo-feather-lint shrink`, which only deletes entry lines and lets
+basedpyright's auto mode prune its file (auto mode writes only fixed errors away, and nothing
+while any error is new): it never adds a code, path or error.
+Exit: 0 pass, 1 violations or stale entries, 2 usage or tool error.
 """
 
 from __future__ import annotations
@@ -36,33 +44,47 @@ import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
 from pathlib import Path
 from typing import cast
 
+import tomllib
+
 PYPROJECT = Path("pyproject.toml")
-# The root config for every file: a nested pyproject (an eval fixture, a template) never overrides its excludes.
+# The root config for every file: a nested pyproject (an eval fixture, a template) never applies.
 ROOT_CONFIG = ["--config", str(PYPROJECT)]
 LINT_TABLE = "tool.ruff.lint.extend-per-file-ignores"
+FORMAT_TABLE = "tool.ruff.format"
 SHRINK = "octo-feather-lint shrink"
 PY_NAME = re.compile(r"(python|pypy)[0-9.]*")
 ENV_ARG_OPTS = {"-u", "--unset", "-C", "--chdir"}
+
+Json = dict[str, object]
 
 
 class ToolError(Exception):
     """A tool could not run or gave output this script cannot read: exit 2."""
 
 
-def runs_python(path: Path) -> bool:
-    """Whether the file's shebang runs Python: python*, pypy* (direct or through env) or `uv run --script`."""
+def say(*lines: str) -> None:
+    sys.stdout.write("".join(f"{line}\n" for line in lines))
+
+
+def warn(line: str) -> None:
+    sys.stderr.write(f"{line}\n")
+
+
+def shebang_words(path: Path) -> list[str]:
     try:
         with path.open("rb") as f:
             first = f.readline().decode("utf-8", "replace").rstrip("\r\n")
     except OSError:
-        return False
-    if not first.startswith("#!"):
-        return False
-    words = first[2:].split()
+        return []
+    return first[2:].split() if first.startswith("#!") else []
+
+
+def runs_python(path: Path) -> bool:
+    """Whether the file's shebang runs Python (the rule check-scripts applies, #121 D2)."""
+    words = shebang_words(path)
     i = 0
     if words and Path(words[0]).name == "env":
         i = 1
@@ -70,14 +92,13 @@ def runs_python(path: Path) -> bool:
             w = words[i]
             if w in ENV_ARG_OPTS:
                 i += 2
-                continue
-            if w.startswith("-S") and len(w) > len("-S"):
-                words[i] = w[2:]
+            elif w.startswith("-S") and len(w) > len("-S"):
+                words[i] = w[len("-S") :]
                 break
-            if w.startswith("-") or "=" in w:
+            elif w.startswith("-") or "=" in w:
                 i += 1
-                continue
-            break
+            else:
+                break
     if i >= len(words):
         return False
     prog = Path(words[i]).name
@@ -88,41 +109,40 @@ def runs_python(path: Path) -> bool:
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
     try:
-        return subprocess.run(cmd, capture_output=True, text=True, check=False)  # noqa: S603
+        return subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
-        msg = f"cannot run {cmd[0]}: {e}; put it on PATH (the kit: uv run --locked)"
+        msg = (
+            f"cannot run {cmd[0]}: {e}; put it on PATH (fetch once, with network: uv sync --locked)"
+        )
         raise ToolError(msg) from e
 
 
-def candidates() -> list[str]:
+def rel(filename: str) -> str:
+    return Path(filename).resolve().relative_to(Path.cwd().resolve()).as_posix()
+
+
+def file_set() -> list[str]:
     r = run(["git", "ls-files", "-z"])
     if r.returncode != 0:
         msg = f"git ls-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    out: list[str] = []
-    for name in r.stdout.split("\0"):
-        p = Path(name)
-        if not name or not p.is_file():
-            continue
-        if p.suffix == ".py" or (not p.suffix and runs_python(p)):
-            out.append(name)
-    return out
-
-
-def file_set() -> list[str]:
-    """The candidates ruff's config keeps (its extend-exclude, applied with --force-exclude)."""
-    cands = candidates()
+    cands = [
+        name
+        for name in r.stdout.split("\0")
+        if name
+        and Path(name).is_file()
+        and (Path(name).suffix == ".py" or (not Path(name).suffix and runs_python(Path(name))))
+    ]
     if not cands:
         return []
     r = run(["ruff", "check", *ROOT_CONFIG, "--force-exclude", "--show-files", *cands])
     if r.returncode != 0:
         msg = f"ruff check --show-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    root = Path.cwd().resolve()
-    return sorted(Path(line).resolve().relative_to(root).as_posix() for line in r.stdout.splitlines() if line)
+    return sorted(rel(line) for line in r.stdout.splitlines() if line)
 
 
-def pyproject() -> dict[str, object]:
+def pyproject() -> Json:
     try:
         return tomllib.loads(PYPROJECT.read_text(encoding="utf-8"))
     except (OSError, tomllib.TOMLDecodeError) as e:
@@ -130,125 +150,139 @@ def pyproject() -> dict[str, object]:
         raise ToolError(msg) from e
 
 
-def table(data: dict[str, object], dotted: str) -> dict[str, object]:
-    node: object = data
+def as_json(value: object) -> Json | None:
+    return cast("Json", value) if isinstance(value, dict) else None
+
+
+def table(dotted: str) -> Json | None:
+    node: Json | None = pyproject()
     for key in dotted.split("."):
-        if not isinstance(node, dict):
-            return {}
-        node = cast("dict[str, object]", node).get(key, {})
-    return cast("dict[str, object]", node) if isinstance(node, dict) else {}
+        node = as_json(node.get(key)) if node is not None else None
+    return node
 
 
 def str_list(value: object, where: str) -> list[str]:
-    if not isinstance(value, list) or not all(isinstance(v, str) for v in cast("list[object]", value)):
+    items = cast("list[object]", value) if isinstance(value, list) else None
+    if items is None or not all(isinstance(v, str) for v in items):
         msg = f"{PYPROJECT}: {where} must be a list of strings"
         raise ToolError(msg)
-    return cast("list[str]", value)
+    return cast("list[str]", items)
 
 
 def lint_baseline() -> dict[str, list[str]]:
-    data = table(pyproject(), LINT_TABLE)
+    data = table(LINT_TABLE) or {}
     return {k: str_list(v, f"[{LINT_TABLE}] {k!r}") for k, v in data.items()}
 
 
 def format_baseline() -> list[str]:
-    return str_list(table(pyproject(), "tool.ruff.format").get("exclude", []), "[tool.ruff.format] exclude")
+    return str_list((table(FORMAT_TABLE) or {}).get("exclude", []), f"[{FORMAT_TABLE}] exclude")
 
 
-def rel(filename: str) -> str:
-    return Path(filename).resolve().relative_to(Path.cwd().resolve()).as_posix()
-
-
-def ruff_json(cmd: list[str]) -> list[dict[str, object]]:
-    r = run(cmd)
+def ruff_json(args: list[str], files: list[str], config: Path = PYPROJECT) -> list[Json]:
+    opts = ["--config", str(config), "--force-exclude", "--output-format", "json"]
+    r = run(["ruff", *args, *opts, *files])
     try:
-        return cast("list[dict[str, object]]", json.loads(r.stdout))
+        return cast("list[Json]", json.loads(r.stdout))
     except json.JSONDecodeError as e:
-        msg = f"{' '.join(cmd[:3])} gave no JSON (exit {r.returncode}): {r.stderr.strip()}"
+        msg = f"ruff {args[0]} gave no JSON (exit {r.returncode}): {r.stderr.strip()}"
         raise ToolError(msg) from e
 
 
-def row(item: dict[str, object]) -> int:
+def where(item: Json) -> tuple[str, int]:
     loc = cast("dict[str, int]", item.get("location") or {})
-    return loc.get("row", 0)
+    return rel(str(item["filename"])), loc.get("row", 0)
 
 
-def lint_findings(files: list[str]) -> list[dict[str, object]]:
-    """Every ruff check violation with the baseline table emptied (the repo's own config still applies)."""
-    cmd = ["ruff", "check", *ROOT_CONFIG, "--force-exclude", "--exit-zero", "--output-format", "json"]
-    return ruff_json([*cmd, "--config", "lint.extend-per-file-ignores = {}", *files])
+def lint_findings(files: list[str]) -> list[Json]:
+    """Every ruff check violation without the baseline table, the rest of the config as is: a
+    copy of pyproject.toml minus that table (a `--config` override merges into the table, never
+    empties it; relative paths in a `--config` file resolve against the working directory)."""
+    text = PYPROJECT.read_text(encoding="utf-8")
+    start = text.find(f"[{LINT_TABLE}]\n")
+    if start >= 0:
+        end = text.find("\n[", start)
+        text = text[:start] + (text[end + 1 :] if end >= 0 else "")
+    with tempfile.TemporaryDirectory() as tmp:
+        config = Path(tmp) / PYPROJECT.name
+        config.write_text(text, encoding="utf-8")
+        return ruff_json(["check", "--exit-zero"], files, config)
 
 
-def lint_state(files: list[str]) -> tuple[list[dict[str, object]], list[tuple[str, str]]]:
-    """New violations (outside the baseline) and stale baseline entries (file, code; code '' = whole key)."""
+def format_findings(files: list[str]) -> list[Json]:
+    return ruff_json(["format", "--check", "--config", "format.exclude = []"], files)
+
+
+def lint_state(files: list[str]) -> tuple[list[Json], list[tuple[str, str]]]:
+    """New violations and stale entries (file, code; code '' when the file left the set)."""
     base = lint_baseline()
     found = lint_findings(files)
-    fired = {(rel(str(f["filename"])), str(f["code"])) for f in found}
-    new = [f for f in found if str(f["code"]) not in base.get(rel(str(f["filename"])), [])]
-    in_set = set(files)
+    fired = {(where(f)[0], str(f["code"])) for f in found}
+    new = [f for f in found if str(f["code"]) not in base.get(where(f)[0], [])]
     stale: list[tuple[str, str]] = []
     for path, codes in sorted(base.items()):
-        if path not in in_set:
+        if path not in files:
             stale.append((path, ""))
-            continue
-        stale.extend((path, c) for c in codes if (path, c) not in fired)
+        else:
+            stale.extend((path, c) for c in codes if (path, c) not in fired)
     return new, stale
+
+
+def format_state(files: list[str]) -> tuple[list[Json], list[str]]:
+    excluded = format_baseline()
+    found = format_findings(files)
+    unformatted = {where(f)[0] for f in found}
+    new = [f for f in found if where(f)[0] not in excluded]
+    return new, [p for p in excluded if p not in unformatted]
 
 
 def cmd_lint(files: list[str]) -> int:
     new, stale = lint_state(files)
-    for f in sorted(new, key=lambda f: (rel(str(f["filename"])), row(f))):
-        fix = cast("dict[str, object] | None", f.get("fix"))
-        how = f"apply ruff's fix: {fix.get('message') or 'ruff check --fix'}" if fix else "change the code so the rule holds"
-        print(
-            f"{rel(str(f['filename']))}:{row(f)}: {f['code']} {f['message']}\n"
-            f"  fix: {how} (rule: {f.get('url')}); the [{LINT_TABLE}] baseline only shrinks, never add {f['code']} to it"
+    for f in sorted(new, key=where):
+        path, line = where(f)
+        fix = cast("Json | None", f.get("fix"))
+        how = f"apply ruff's fix ({fix.get('message') or 'ruff check --fix'})" if fix else ""
+        say(
+            f"{path}:{line}: {f['code']} {f['message']}",
+            f"  fix: {how or 'change the code so the rule holds'}; rule: {f.get('url')}",
+            f"  the [{LINT_TABLE}] baseline only shrinks: never add {f['code']} for {path}",
         )
     for path, code in stale:
-        what = f"{code} no longer fires in {path}" if code else f"{path} is not in the file set (moved or deleted)"
-        print(f"stale baseline entry in {PYPROJECT} [{LINT_TABLE}]: {what}; fix: run `{SHRINK}`")
+        gone = f"{path} is not in the file set" if not code else f"{code} no longer fires in {path}"
+        say(f"stale entry in {PYPROJECT} [{LINT_TABLE}]: {gone}; fix: run `{SHRINK}`")
     if new or stale:
-        print(f"lint: {len(new)} new violations, {len(stale)} stale baseline entries", file=sys.stderr)
+        warn(f"lint: {len(new)} new violations, {len(stale)} stale baseline entries")
         return 1
-    print(f"lint: ok ({len(files)} files, ruff check)")
+    say(f"lint: ok ({len(files)} files, ruff check)")
     return 0
-
-
-def format_state(files: list[str]) -> tuple[list[dict[str, object]], list[str]]:
-    excluded = format_baseline()
-    cmd = ["ruff", "format", "--check", *ROOT_CONFIG, "--force-exclude", "--output-format", "json"]
-    found = ruff_json([*cmd, "--config", "format.exclude = []", *files])
-    unformatted = {rel(str(f["filename"])) for f in found}
-    new = [f for f in found if rel(str(f["filename"])) not in excluded]
-    stale = [p for p in excluded if p not in files or p not in unformatted]
-    return new, stale
 
 
 def cmd_format(files: list[str]) -> int:
     new, stale = format_state(files)
-    for f in sorted(new, key=lambda f: (rel(str(f["filename"])), row(f))):
-        path = rel(str(f["filename"]))
-        print(
-            f"{path}:{row(f)}: unformatted (ruff format)\n"
-            f"  fix: format it as `ruff format --diff {path}` shows; [tool.ruff.format] exclude only shrinks, never add {path} to it"
+    for f in sorted(new, key=where):
+        path, line = where(f)
+        say(
+            f"{path}:{line}: unformatted (ruff format)",
+            f"  fix: format it as `ruff format --diff {path}` shows",
+            f"  [{FORMAT_TABLE}] exclude only shrinks: never add {path}",
         )
     for path in stale:
-        print(f"stale baseline entry in {PYPROJECT} [tool.ruff.format] exclude: {path} is formatted or gone; fix: run `{SHRINK}`")
+        say(f"stale entry in {PYPROJECT} [{FORMAT_TABLE}] exclude: {path} is formatted or gone;")
+        say(f"  fix: run `{SHRINK}`")
     if new or stale:
-        print(f"format: {len(new)} unformatted spots, {len(stale)} stale baseline entries", file=sys.stderr)
+        warn(f"format: {len(new)} unformatted spots, {len(stale)} stale baseline entries")
         return 1
-    print(f"format: ok ({len(files)} files, ruff format --check)")
+    say(f"format: ok ({len(files)} files, ruff format --check)")
     return 0
 
 
 def mirror(path: str) -> str:
-    """A repo path with each dot-leading component written `_.x`: basedpyright drops `**/.*` even when named."""
+    """A repo path with each dot-leading component `.x` written `_.x`."""
     return "/".join(f"_{c}" if c.startswith(".") else c for c in path.split("/"))
 
 
-def pyright(files: list[str], baseline: Path, extra: list[str]) -> dict[str, object]:
-    """basedpyright over the files through a throwaway mirror of links, its project root the mirror (the repo's
-    pyproject linked in), so a file under a dot directory (.agents/) is analyzed; paths come back as repo paths."""
+def pyright(files: list[str], baseline: Path, mode: list[str]) -> Json:
+    """basedpyright over the files through a throwaway mirror of links, its project root the
+    mirror (the repo's pyproject linked in); diagnostics come back with repo paths."""
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp).resolve()
         config = root / PYPROJECT.name
@@ -259,24 +293,30 @@ def pyright(files: list[str], baseline: Path, extra: list[str]) -> dict[str, obj
             link.parent.mkdir(parents=True, exist_ok=True)
             link.symlink_to(Path(f).resolve())
             back[str(link)] = f
-        cmd = ["basedpyright", "--outputjson", "-p", str(config), "--baselinefile", str(baseline.resolve())]
-        r = run([*cmd, *extra, *back])
+        cmd = ["basedpyright", "--outputjson", "-p", str(config)]
+        r = run([*cmd, "--baselinefile", str(baseline.resolve()), *mode, *back])
+    # --writebaseline prints its summary line before the JSON report.
+    start = r.stdout.find("{\n")
     try:
-        report = cast("dict[str, object]", json.loads(r.stdout))
+        report = cast("Json", json.loads(r.stdout[max(start, 0) :]))
     except json.JSONDecodeError as e:
-        msg = f"basedpyright gave no JSON (exit {r.returncode}): {r.stdout.strip()} {r.stderr.strip()}"
+        msg = f"basedpyright gave no JSON (exit {r.returncode}): {r.stdout} {r.stderr}".strip()
         raise ToolError(msg) from e
-    summary = cast("dict[str, int]", report.get("summary") or {})
-    if summary.get("filesAnalyzed") != len(files):
-        msg = f"basedpyright analyzed {summary.get('filesAnalyzed')} files, not the {len(files)} named; it skipped some"
+    analyzed = cast("dict[str, int]", report.get("summary") or {}).get("filesAnalyzed")
+    if analyzed != len(files):
+        msg = f"basedpyright analyzed {analyzed} files, not the {len(files)} named"
         raise ToolError(msg)
-    for d in cast("list[dict[str, object]]", report.get("generalDiagnostics") or []):
+    for d in diagnostics(report):
         d["file"] = back.get(str(d.get("file")), str(d.get("file")))
     return report
 
 
+def diagnostics(report: Json) -> list[Json]:
+    return cast("list[Json]", report.get("generalDiagnostics") or [])
+
+
 def baseline_path() -> Path:
-    value = table(pyproject(), "tool.basedpyright").get("baselineFile", ".basedpyright/baseline.json")
+    value = (table("tool.basedpyright") or {}).get("baselineFile", ".basedpyright/baseline.json")
     return Path(str(value))
 
 
@@ -286,40 +326,37 @@ def cmd_types(files: list[str]) -> int:
         copy = Path(tmp) / "baseline.json"
         if base.is_file():
             shutil.copyfile(base, copy)
-        # auto mode on a throwaway copy: basedpyright drops fixed entries there only, so a change shows them stale.
+        # Auto mode on a throwaway copy: fixed errors leave the copy only, so a change is stale.
         report = pyright(files, copy, ["--baselinemode", "auto"])
         stale = base.is_file() and not filecmp.cmp(base, copy, shallow=False)
-    diags = cast("list[dict[str, object]]", report.get("generalDiagnostics") or [])
-    new = [d for d in diags if d.get("severity") in {"error", "warning"}]
+    new = [d for d in diagnostics(report) if d.get("severity") in {"error", "warning"}]
     for d in new:
         start = cast("dict[str, dict[str, int]]", d.get("range") or {}).get("start", {})
-        print(
-            f"{d['file']}:{start.get('line', 0) + 1}: {d.get('rule') or d.get('severity')} {d.get('message')}\n"
-            f"  fix: change the code so basedpyright accepts it; its baseline {base} only shrinks, never run --writebaseline to hide it"
+        say(
+            f"{d['file']}:{start.get('line', 0) + 1}: {d.get('rule')} {d.get('message')}",
+            "  fix: change the code so basedpyright accepts it; rule: "
+            f"https://docs.basedpyright.com/latest/configuration/config-files/#{d.get('rule')}",
+            f"  its baseline {base} only shrinks: never --writebaseline to hide it",
         )
     if stale:
-        print(f"stale baseline entries in {base}: errors it holds no longer occur; fix: run `{SHRINK}`")
-    summary = cast("dict[str, int]", report.get("summary") or {})
+        say(f"stale entries in {base}: errors it holds no longer occur; fix: run `{SHRINK}`")
     if new or stale:
-        print(f"types: {len(new)} new diagnostics, baseline stale: {'yes' if stale else 'no'}", file=sys.stderr)
+        warn(f"types: {len(new)} new diagnostics, baseline stale: {'yes' if stale else 'no'}")
         return 1
-    print(f"types: ok (basedpyright analyzed {summary.get('filesAnalyzed')} files)")
+    say(f"types: ok (basedpyright analyzed {len(files)} files)")
     return 0
 
 
-def drop_lines(text: str, header: str, key: str | None, drop: set[str]) -> str:
-    """Remove `"X",` lines (X in drop) from one table's array; key None: the table's own `exclude` array."""
-    lines = text.splitlines(keepends=True)
+def drop_lines(text: str, header: str, key: str, drop: set[str]) -> str:
+    """Delete `"X",` lines (X in drop) from the array `key = [` of table `[header]`."""
     out: list[str] = []
     in_table = in_array = False
-    for line in lines:
+    for line in text.splitlines(keepends=True):
         s = line.strip()
         if s.startswith("["):
-            in_table = s == f"[{header}]"
-            in_array = False
+            in_table, in_array = s == f"[{header}]", False
         elif in_table and s.endswith("= ["):
-            name = s[: -len("= [")].strip()
-            in_array = name == (f'"{key}"' if key is not None else "exclude")
+            in_array = s[: -len("= [")].strip() == key
         elif in_array and s == "]":
             in_array = False
         elif in_array and s.rstrip(",").strip('"') in drop:
@@ -328,75 +365,78 @@ def drop_lines(text: str, header: str, key: str | None, drop: set[str]) -> str:
     return "".join(out)
 
 
-def drop_empty_keys(text: str, header: str) -> str:
-    """Remove `"path" = [` ... `]` blocks left with no entry in the table."""
-    pattern = re.compile(r'^"[^"\n]+" = \[\n\]\n', re.MULTILINE)
-    start = text.find(f"[{header}]\n")
-    if start < 0:
-        return text
-    end = text.find("\n[", start + 1)
-    end = len(text) if end < 0 else end + 1
-    return text[:start] + pattern.sub("", text[start:end]) + text[end:]
-
-
 def cmd_shrink(files: list[str]) -> int:
-    text = PYPROJECT.read_text(encoding="utf-8")
-    _, lint_stale = lint_state(files)
-    by_key: dict[str, set[str]] = {}
-    for path, code in lint_stale:
-        by_key.setdefault(path, set()).add(code)
-    for path, codes in by_key.items():
-        drop = set(lint_baseline()[path]) if "" in codes else codes
-        text = drop_lines(text, LINT_TABLE, path, drop)
-    text = drop_empty_keys(text, LINT_TABLE)
-    _, fmt_stale = format_state(files)
-    text = drop_lines(text, "tool.ruff.format", None, set(fmt_stale))
     original = PYPROJECT.read_text(encoding="utf-8")
+    text = original
+    _, lint_stale = lint_state(files)
+    base = lint_baseline()
+    for path in {p for p, _ in lint_stale}:
+        codes = {c for p, c in lint_stale if p == path}
+        text = drop_lines(text, LINT_TABLE, f'"{path}"', set(base[path]) if "" in codes else codes)
+    text = re.sub(r'^"[^"\n]+" = \[\n\]\n', "", text, flags=re.MULTILINE)  # emptied keys
+    _, fmt_stale = format_state(files)
+    text = drop_lines(text, FORMAT_TABLE, "exclude", set(fmt_stale))
     PYPROJECT.write_text(text, encoding="utf-8")
     left = lint_state(files)[1] + [(p, "") for p in format_state(files)[1]]
     if left:
         PYPROJECT.write_text(original, encoding="utf-8")
-        print(f"shrink: could not remove {left}, {PYPROJECT} left as it was; edit it by hand (one quoted entry per line)", file=sys.stderr)
+        warn(f"shrink: could not delete {left}; {PYPROJECT} left as it was. Delete those entry")
+        warn("  lines by hand (the baseline layout: one quoted entry per line)")
         return 1
-    base = baseline_path()
-    if base.is_file():
-        # auto mode removes fixed errors and writes nothing when any error is new: it never grows the file.
-        pyright(files, base, ["--baselinemode", "auto"])
-    print(f"shrink: removed {len(lint_stale)} ruff entries, {len(fmt_stale)} format entries; basedpyright baseline pruned by its auto mode")
+    base_file = baseline_path()
+    if base_file.is_file():
+        pyright(files, base_file, ["--baselinemode", "auto"])
+    say(f"shrink: deleted {len(lint_stale)} ruff check and {len(fmt_stale)} ruff format entries;")
+    say(f"  {base_file} pruned by basedpyright's auto mode")
     return cmd_lint(files) | cmd_format(files) | cmd_types(files)
 
 
-def cmd_baseline(files: list[str]) -> int:
+def cmd_init(files: list[str]) -> int:
+    base = baseline_path()
+    taken = [t for t in (LINT_TABLE, FORMAT_TABLE) if table(t) is not None]
+    if taken or base.exists():
+        warn(f"init: a baseline exists ({', '.join([*taken, str(base)])}); it only shrinks:")
+        warn(f"  fix the new violations instead, or run `{SHRINK}`")
+        return 1
     codes: dict[str, set[str]] = {}
     for f in lint_findings(files):
-        codes.setdefault(rel(str(f["filename"])), set()).add(str(f["code"]))
-    print(f"[{LINT_TABLE}]")
+        codes.setdefault(where(f)[0], set()).add(str(f["code"]))
+    note = "# Baseline (octo-feather-lint): taken once, only shrinks."
+    block = [f"\n[{LINT_TABLE}]", note]
     for path in sorted(codes):
-        print(f'"{path}" = [', *(f'  "{c}",' for c in sorted(codes[path])), "]", sep="\n")
-    cmd = ["ruff", "format", "--check", *ROOT_CONFIG, "--force-exclude", "--output-format", "json"]
-    found = ruff_json([*cmd, "--config", "format.exclude = []", *files])
-    print("\n# under [tool.ruff.format]:\nexclude = [")
-    for path in sorted({rel(str(f["filename"])) for f in found}):
-        print(f'  "{path}",')
-    print("]\n# basedpyright: basedpyright --writebaseline <the files from `octo-feather-lint files`>")
-    return 0
+        block.extend([f'"{path}" = [', *(f'  "{c}",' for c in sorted(codes[path])), "]"])
+    block.extend([f"\n[{FORMAT_TABLE}]", note, "exclude = ["])
+    block.extend(f'  "{p}",' for p in sorted({where(f)[0] for f in format_findings(files)}))
+    block.append("]")
+    with PYPROJECT.open("a", encoding="utf-8") as f:
+        f.write("\n".join(block) + "\n")
+    base.parent.mkdir(parents=True, exist_ok=True)
+    pyright(files, base, ["--writebaseline"])
+    say(f"init: baselines written to {PYPROJECT} and {base}")
+    return cmd_lint(files) | cmd_format(files) | cmd_types(files)
 
 
-COMMANDS = {"lint": cmd_lint, "format": cmd_format, "types": cmd_types, "shrink": cmd_shrink, "baseline": cmd_baseline}
+COMMANDS = {
+    "lint": cmd_lint,
+    "format": cmd_format,
+    "types": cmd_types,
+    "shrink": cmd_shrink,
+    "init": cmd_init,
+}
 
 
 def main(argv: list[str]) -> int:
     if len(argv) != 1 or argv[0] not in {*COMMANDS, "files"}:
-        print(__doc__)
+        say(__doc__ or "")
         return 0 if argv in (["-h"], ["--help"]) else 2
     try:
         files = file_set()
         if argv[0] == "files":
-            print(*files, sep="\n")
+            say(*files)
             return 0
         return COMMANDS[argv[0]](files)
     except ToolError as e:
-        print(f"octo-feather-lint: {e}", file=sys.stderr)
+        warn(f"octo-feather-lint: {e}")
         return 2
 
 

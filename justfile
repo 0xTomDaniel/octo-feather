@@ -27,10 +27,10 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals"
+export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
-# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit tests.
+# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
 check: check-tests
 
 # shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
@@ -165,6 +165,20 @@ check-skills:
 # Every tracked decisions.jsonl, anywhere in the repo: each line one JSON object matching schemas/decision-log.schema.json (quality #decision-log, docs/adr/0010).
 check-decision-log:
     @python3 "$root/scripts/check-decision-log"
+
+# Kit Python (#244): templates/python's ruff check (every rule), ruff format --check and strict basedpyright
+# over every tracked *.py and Python-shebang file the root ruff config keeps (its extend-exclude names each
+# exclusion and why). Today's violations sit in each tool's own baseline, which only shrinks: pyproject.toml
+# [tool.ruff.lint.extend-per-file-ignores] and [tool.ruff.format] exclude, .basedpyright/baseline.json
+# (scripts/octo-feather-lint --help). Pinned in pyproject.toml and uv.lock, run offline from the uv cache.
+check-lint:
+    @uv run --locked --offline --no-sync octo-feather-lint lint
+
+check-format:
+    @uv run --locked --offline --no-sync octo-feather-lint format
+
+check-types:
+    @uv run --locked --offline --no-sync octo-feather-lint types
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
