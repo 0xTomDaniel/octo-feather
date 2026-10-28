@@ -346,6 +346,19 @@
       {
         "fact": "field_lines",
         "field": "Evidence"
+        }
+      ]
+    },
+  "reviewer-reinvented-parser": {
+    "facts": [
+      {
+        "fact": "field_lines",
+        "field": "Verdict",
+        "includes": [
+          {
+            "text": "blocking"
+          }
+        ]
       }
     ]
   }
