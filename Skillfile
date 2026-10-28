@@ -36,6 +36,8 @@ github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
 github  skill  create-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/create-verification-skill
 github  skill  maintain-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/maintain-verification-skill
+# reflect: agents/reflector.md loads it (comms spec #reflection, roles spec #roles-reflector).
+github  skill  reflect          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/reflect
 # interrogate: whole folder (skillfile deploys only folders holding SKILL.md); no role loads it, the code
 # reviewer reads only references/code-quality-review.md and references/lead-judgment.md (roles spec #roles-reviewer-patch).
 github  skill  interrogate      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/interrogate

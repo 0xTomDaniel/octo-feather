@@ -68,6 +68,13 @@ if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:
   herdr session list 2>/dev/null | awk -v s="$HERDR_SESSION" '$1 == s && $2 == "running" {f=1} END {exit !f}' \
     || { echo "octo-feather-start: Herdr session $HERDR_SESSION is not running; start it in a terminal with: herdr --session $HERDR_SESSION" >&2; exit 69; }
 fi
+# A start runs the director reflection when due (comms spec #reflection-director), in the background so
+# the start never waits on it; its output goes to director-reflection.out in the state dir.
+reflect_due() {
+  local state; state="$("$root/scripts/octo-feather-state")"; mkdir -p "$state"
+  (cd "$cwd" && exec nohup "$root/scripts/octo-feather-lane" reflect --director --due) \
+    >>"$state/director-reflection.out" 2>&1 </dev/null &
+}
 spawn() { # $1: workspace id; run in the target, where pi-role resolves {tracker}
   cd "$cwd" && "$root/.agents/skills/herdr-comms/assets/herdr-spawn" --workspace "$1" --name "$name" \
     --label "$label" --cwd "$cwd" --role "$role" "${model[@]}" "${resume[@]}" "${parent[@]}" -- pi
@@ -80,6 +87,7 @@ existing="$(herdr workspace list 2>/dev/null | jq -r --arg n "$name" \
 if [[ -n "$existing" ]]; then
   ((${#resume[@]})) || { echo "octo-feather-start: workspace $name already exists" >&2; exit 73; }
   spawned="$(spawn "$existing")"
+  reflect_due
   echo "workspace=$existing $spawned"; exit 0
 fi
 
@@ -91,5 +99,6 @@ spawned="$(spawn "$workspace")" || {
   rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
 # The workspace's seed tab is a bare shell; the agent's tab is the only one left.
 herdr tab close "$seed" >/dev/null
+reflect_due
 echo "workspace=$workspace $spawned"
 [[ "$role" != director ]] || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2

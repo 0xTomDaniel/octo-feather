@@ -4,7 +4,7 @@
 # Proves comms#acceptance-report-lanes, #acceptance-report-any-target, #acceptance-report-unreadable,
 # #acceptance-report-owner-queue, #acceptance-report-owner-caught, #acceptance-report-lane-numbers (lane-a: started
 # line's age is its wall time, 2 review rounds, $1.7500 and 2 calls of unknown cost), #acceptance-report-gate-time
-# (lane-a: its PR's last gate run beside o/a main's last).
+# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago).
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -35,6 +35,15 @@ FAKE_HERDR_FAIL=1 "$kit/scripts/octo-feather-lane" report >"$t/out" || fail "Her
 [[ "$(grep -c '^  running: unread: Herdr: herdr agent list failed (error: could not connect to herdr server)$' "$t/out")" == 4 ]] \
   && grep -qx 'unread: Herdr' "$t/out" && grep -qx '  waits: owner gate merge asked 2026-10-22T14:00:00Z (.*)' "$t/out" \
   || fail "Herdr failing: $(cat "$t/out")"
+[[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
+
+# the director log's latest reflection line two days old: the report shows when it ran
+two="$(date -u -d '2 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+printf '{"at": "2026-10-01T09:00:00Z", "kind": "reflection", "findings": 0, "questions": ["owner-asked"]}\n{"at": "%s", "kind": "reflection", "findings": 1, "questions": ["owner-asked"]}\n' "$two" \
+  >>"$S/director.handoffs.jsonl"; before="$(snap)"
+"$kit/scripts/octo-feather-lane" report >"$t/out" || fail "director reflection: exit non-zero"
+grep -qx "director reflection: last ran $two (2d0h[0-9]m ago)" "$t/out" && [[ "$(grep -c '^director reflection' "$t/out")" == 1 ]] \
+  || fail "director reflection two days ago: $(grep '^director reflection' "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
 # no spend ledger and no gate run trend: said per lane, nothing else changes

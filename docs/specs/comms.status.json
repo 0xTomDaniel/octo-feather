@@ -1,6 +1,6 @@
 {
   "spec": "comms.spec.html",
-  "accepted_commit": "1b188f5127ee4556f0aacd5becdfcb733c459310",
+  "accepted_commit": "c4fd14f1b3d7003cee22db645b52429e60d0a3ab",
   "criteria": {
     "acceptance-guard-other-lane": {
       "status": "built",
@@ -69,6 +69,42 @@
     "acceptance-report-unreadable": {
       "status": "built",
       "pr": 252
+    },
+    "acceptance-reflect-lane": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-caught-by-hand": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-before-archive": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-director": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-writer-route": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-missed": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-report-reflection": {
+      "status": "built",
+      "pr": 279
+    },
+    "acceptance-reflect-daily": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-files-correction": {
+      "status": "built",
+      "pr": 279
     }
   }
 }

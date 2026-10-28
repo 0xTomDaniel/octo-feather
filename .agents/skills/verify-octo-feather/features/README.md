@@ -35,4 +35,8 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [install-check](./install-check.md) covers the box's install check (`just install-check`).
 - [contract](./contract.md) covers the app-driver contract validator (`octo-feather-contract`).
 - [evidence](./evidence.md) covers the evidence store command (`octo-feather-evidence append`, `read`).
+- [lane-archive](./lane-archive.md) covers closing a lane (`octo-feather-lane archive`) and the lane reflection it runs first (`octo-feather-lane reflect`).
+- [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
+- [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
+- [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`).
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.

@@ -1,11 +1,11 @@
 ---
 name: verify-octo-feather
-description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence, pi-role --json: short-lived CLIs, no server, no browser) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
+description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence, octo-feather-lane archive, octo-feather-lane report, pi-role --json: short-lived CLIs, no server, no browser) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
 ---
 
 # verify-octo-feather
 
-The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its user surface is its commands: the `just` recipes in the kit's `justfile` and the published commands in `scripts/`, each a short-lived process. There is no server, browser or interactive mode. The helper runs each command on the real user path, through the contract's entry, as a subprocess, in its own empty working directory, against scratch only: new repos, scratch targets and scratch state live in the run state folder, and no drive reaches a live lane, Herdr, `gh` or the network.
+The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its user surface is its commands: the `just` recipes in the kit's `justfile` and the published commands in `scripts/`, each a short-lived process. There is no server, browser or interactive mode. The helper runs each command on the real user path, through the contract's entry, as a subprocess, in its own empty working directory, against scratch only: new repos, scratch targets and scratch state live in the run state folder, and no drive reaches a live lane, Herdr, `gh` or the network. The one exception: a command whose behaviour is a role's model run (the `lane-archive` drive's `reflect-live`, the real reflector) reaches the deployment's model, nothing else; that case fails when the model is unreachable. A drive whose command may file a tracker issue (a reflection's correction lane) runs with the tracker faked: the kit's offline gh (`tests/fixtures/tracker-gh`) first on PATH, its store in the scratch.
 
 Helper (an executable Python script, `python3` 3.11+, standard library only: `tomllib` reads the contract):
 
@@ -47,7 +47,7 @@ What each key means and how its commands run: `schemas/qc.v1.schema.json`. Valid
 
 ## Drive
 
-`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `role-launch`) with the contract's values. Each case:
+`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `lane-archive`, `director-reflection`, `correction-lane`, `factory-report`, `role-launch`) with the contract's values. Each case:
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`;
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;
@@ -62,7 +62,7 @@ Proof standards:
 - Exercise the kit's commands as a user types them, through the contract's entry; never source a script or call its functions.
 - Capture the action (`.cmd`) and the resulting state (stdout, stderr, exit code, observed facts), not just a PASS line.
 - Check side effects: the files a command wrote where it should (the new repo's commit, files and status), nothing in its cwd, no change to the kit's `git status`.
-- No mocks. The network is cut with a namespace, not stubbed: install-check's real `gh` runs and reports what it sees offline.
+- No mocks, but for the faked tracker above. The network is cut with a namespace, not stubbed: install-check's real `gh` runs and reports what it sees offline.
 - Report a skipped case as skipped, never as proved through a different case.
 
 Evidence lives at `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR`: `doctor.txt` (from `run`) and one folder per driven feature. That folder is scratch: the next drive of the feature replaces it.
