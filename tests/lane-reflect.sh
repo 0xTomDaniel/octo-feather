@@ -18,9 +18,12 @@ mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
 import os, sys
-open(os.environ["STUB_ARGV"], "w").write("\0".join(sys.argv[1:]))
+if not any("Director reflection" in a for a in sys.argv):
+    open(os.environ["STUB_ARGV"], "w").write("\0".join(sys.argv[1:]))
 if os.environ.get("STUB_RC", "0") != "0":
     print("Error: 503 model openai/gpt-6.1-sol unreachable", file=sys.stderr); sys.exit(int(os.environ["STUB_RC"]))
+if any("Director reflection" in a for a in sys.argv):   # the director reflection archive runs next: tests/director-reflect.sh
+    print("Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed\nFindings: none"); sys.exit()
 sys.stdout.write(open(os.environ["STUB_REPLY"]).read())
 EOF
 printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"

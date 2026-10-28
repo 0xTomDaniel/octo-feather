@@ -13,7 +13,14 @@ export HOME="$t/home" XDG_STATE_HOME="$t/state"   # never the real state dir
 fail() { echo "lane-archive test: $*" >&2; exit 1; }
 # Stub reflector model: no gap found; Herdr unreachable.
 mkdir -p "$t/bin"
-printf '#!/bin/sh\necho "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed"\necho "Findings: none"\n' >"$t/bin/pi"
+cat >"$t/bin/pi" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *"Director reflection"*) echo "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed" ;;
+  *) echo "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed" ;;
+esac
+echo "Findings: none"
+EOF
 printf '#!/bin/sh\nexit 1\n' >"$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$PATH"
 unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
 reflected() { # ARCHIVED-LOG ORIGINAL-LOG-COPY: the original bytes, a newline if they lacked one, then one reflection line

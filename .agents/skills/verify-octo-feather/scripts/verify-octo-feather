@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -619,12 +619,92 @@ def drive_lane_archive(f: Feature) -> None:
     say(f"lane-archive evidence: {f.d}")
 
 
+def drive_director_reflection(f: Feature) -> None:
+    sc = RUN_DIR / "scratch" / "director-reflection"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    (lanes / "archive").mkdir(parents=True)
+    dlog = lanes.parent / "director.handoffs.jsonl"
+    # Three lanes, one code-review class in each (two archived, gh913 open); gh911's lane reflection found no gap
+    # before gh913's review found the class again. The director log: a director reflection two days ago, then an
+    # owner-caught finding.
+    def cr(at: str, cls: str, summary: str) -> str:
+        return json.dumps({"at": at, "kind": "finding", "source": "code-review", "class": cls, "blocking": True, "summary": summary}) + "\n"
+    (lanes / "archive" / "gh911.handoffs.jsonl").write_text(
+        cr("2026-10-20T00:00:00Z", "duplicated-rule", "help text restates the archive refusal rule of comms #reflection-lane")
+        + '{"at": "2026-10-20T01:00:00Z", "kind": "reflection", "findings": 0, "questions": ["caught-by-hand", "slow-or-from-memory", '
+          '"undetected-rule", "check-misfired", "mechanical-step", "writer-mistake", "reflection-missed"]}\n')
+    (lanes / "archive" / "gh912.handoffs.jsonl").write_text(
+        cr("2026-10-22T00:00:00Z", "duplicated-rule", "test comment restates the hand-off line fields of comms #handoff-kind-finding"))
+    (lanes / "gh913.toml").write_text('supervisor = "w93:p2"\nissue = "gh913"\ngoal = "scratch lane"\n')
+    (lanes / "gh913.handoffs.jsonl").write_text(
+        cr("2026-10-26T00:00:00Z", "duplicated-rule", "eval prompt restates the reflection output rule of comms #reflection-output"))
+    two_days = datetime.fromtimestamp(datetime.now(UTC).timestamp() - 2 * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    seeded = (json.dumps({"at": two_days, "kind": "reflection", "findings": 0, "questions": ["owner-asked"]}) + "\n"
+              + json.dumps({"at": "2026-10-27T00:00:00Z", "kind": "finding", "class": "owner-caught-stranded-worker", "issue": "gh913",
+                            "summary": "owner asked why lane gh913 had not moved for an hour: implementer-gh913 sat at Pi's trust prompt; "
+                                       "the director had read no pane"}) + "\n")
+    dlog.write_text(seeded)
+    args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
+    if not has_netns():
+        f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
+        f.fails += 1
+    else:
+        f.pre = NETNS
+        f.run("refuse-unreachable", "octo-feather-lane", "reflect", "--director")
+        f.pre = []
+        f.obs("refuse-unreachable", "director-log", dlog.read_text())
+        f.check("refuse-unreachable", lambda c: c.code == 1 and "director reflection failed" in c.err
+                and "nothing appended" in c.err and c.o["director-log"] == seeded)
+    # The real reflector, its model reached (SKILL.md: a role's model run is the one exception to offline).
+    f.env["OCTO_FEATHER_REFLECT_TIMEOUT"] = os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800"
+    f.run("reflect-live", "octo-feather-lane", "reflect", "--director")
+    f.obs("reflect-live", "director-log", dlog.read_text())
+    f.obs("reflect-live", "seeded", seeded)
+    ids = [q["id"] for q in json.loads((Path(f.s.repo) / "reflection" / "questions.json").read_text())["questions"]
+           if q["kind"] == "director"]
+
+    def reflected(c: Case) -> bool:
+        """The director log: the seeded lines unchanged, then N finding lines (source reflection, a director question,
+        a route), then one reflection line with findings N and every director question; one finding of class
+        duplicated-rule with its count 3, routed to a writer-side file, not to review."""
+        log = c.o["director-log"]
+        if not log.startswith(c.o["seeded"]):
+            return False
+        new = [json.loads(ln) for ln in log[len(c.o["seeded"]):].splitlines()]
+        if not new:
+            return False
+        found, last = new[:-1], new[-1]
+        m = re.search(r"(?m)^reflection: director, (\d+) findings?, questions ", c.out)
+        return (c.code == 0 and m is not None and int(m[1]) == len(found) == last["findings"] > 0
+                and last["kind"] == "reflection" and sorted(last["questions"]) == sorted(ids)
+                and all(x["kind"] == "finding" and x["source"] == "reflection" and "blocking" not in x
+                        and x["question"] in ids and x["route"] and x["summary"] and x["class"] for x in found)
+                and any("duplicated-rule" in x["class"] + x["summary"] and re.search(r"\b(3|three)\b", x["summary"])
+                        and not re.fullmatch(r"(code[- ])?review.*", x["route"], re.IGNORECASE) for x in found))
+
+    f.check("reflect-live", reflected)
+    for ln in dlog.read_text()[len(seeded):].splitlines():
+        print(f"    director log: {ln}")
+    # Fresh now: a start's --due run does nothing.
+    f.obs("due-fresh", "before", dlog.read_text())
+    f.run("due-fresh", "octo-feather-lane", "reflect", "--director", "--due")
+    f.obs("due-fresh", "director-log", dlog.read_text())
+    f.check("due-fresh", lambda c: c.code == 0 and "director reflection: not due, last ran" in c.out
+            and c.o["director-log"] == c.o["before"])
+    f.env = {}
+    say(f"director-reflection evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
     "contract": drive_contract,
     "evidence": drive_evidence,
     "lane-archive": drive_lane_archive,
+    "director-reflection": drive_director_reflection,
 }
 
 

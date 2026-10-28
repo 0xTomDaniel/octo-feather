@@ -17,7 +17,7 @@ Drive criterion: `comms#acceptance-reflect-before-archive`
 
 ## How to get to it (user POV)
 
-- A supervisor closing a merged lane runs `octo-feather-lane archive <name>` (agents/supervisor.md close step); it runs `octo-feather-lane reflect <name>` first. `octo-feather-lane --help` for both; the reflector's reply form: `scripts/octo-feather-reflect`.
+- A supervisor closing a merged lane runs `octo-feather-lane archive <name>` (agents/supervisor.md close step); it runs `octo-feather-lane reflect <name>` first, then the director reflection ([director-reflection](./director-reflection.md)). `octo-feather-lane --help` for both; the reflector's reply form: `scripts/octo-feather-reflect`.
 
 ## Driving it with verify-octo-feather
 
