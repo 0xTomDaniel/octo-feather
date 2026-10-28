@@ -12,6 +12,7 @@ Repo skills: typescript, pnpm, nodejs, verify-app
 - `src/core.ts` never imports `src/cli.ts` (dependency-cruiser enforces it).
 - Only erasable TypeScript syntax (no enums, namespaces or parameter properties); `tsc` enforces it.
 - Shell is for thin glue: calling commands, environment setup, mounts. Logic, parsing and rules go in TypeScript.
+- Infrastructure (a parser, test runner, protocol, file format, scheduler) comes from Node's built-ins, a popular, well-maintained library pinned with `pnpm add`, or the real tool; the implementer's `Prior art:` line reports the choice. A broken library is patched in place (`pnpm patch`, its patch file committed), never replaced with a hand-written one. Hand-writing one needs its reason stated where it lives (a comment, the spec). Example: TOML is read with smol-toml (`parse`); a hand-written `toml.ts` is the failure.
 - Integrate worker commits with `just integrate TICKET REF...` (the kit's `octo-feather-integrate`); keep the recipe.
 
 ## Commands

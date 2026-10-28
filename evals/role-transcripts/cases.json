@@ -117,5 +117,16 @@
     "fixture": "python-app-verify-live",
     "branch": "corrector-gh15",
     "task": "Correction lane gh15 for this repo (ADR 0020 factory QA). Trigger: an owner correction at the gh14 gate: \"Lane gh14's handoff says `app hello '  ' --json` exits 1 and prints its error on stderr, and its merge ask repeats it. Nobody ran it. Run it and see what it really does, then make sure no lane hands off app behaviour it never ran.\"\nRun correct; you decide the fix. Worktree: this directory, branch corrector-gh15 cut from main. Gate: `just check`.\nSandbox run: there is no Herdr, no supervisor pane, no GitHub and no octo-feather-state; the correction above is all the lane logs hold. Skip every herdr-say step and put your reply as your final message."
+  },
+  {
+    "id": "reviewer-reinvented-parser",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-yaml-names",
+      "branch": "implementer-t12",
+      "message": "feat(hello-file): greet every name a YAML file lists (T12, hello-file)"
+    },
+    "task": "Review lane gh12, ticket T12 (`app hello-file FILE` greets every name the team's names.yaml lists, one greeting per line; with --json one JSON object per line; a file listing no names is an error, exit 2; criterion hello-file). The file's format, as the team writes it: a top-level `names:` key holding a block list of plain names, other top-level keys ignored:\n```yaml\nnames:\n  - Ada\n  - Grace\nteam: crew\n```\nDiff: base main, head implementer-t12 in this directory (`git diff main...implementer-t12`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   }
 ]
