@@ -1,24 +1,38 @@
 #!/usr/bin/env python3
-"""Lane reflection's own parts, imported by octo-feather-lane (its `reflect` and `archive`; comms spec #reflection).
+"""Lane reflection's own parts, imported by octo-feather-lane.
 
-Not a command of its own: run `octo-feather-lane reflect NAME`. Kept beside octo-feather-lane so that
-script does not grow; it loads this file by path, as it loads octo-feather-qa.
+Used by its `reflect` and `archive` (comms spec #reflection). Not a command of its own: run
+`octo-feather-lane reflect NAME`. Kept beside octo-feather-lane so that script does not grow; it
+loads this file by path, as it loads octo-feather-qa.
 
-Here: the question list (reflection/questions.json, the one list), the reflector's brief, the headless
-reflector run (agents/reflector.md through pi-role), the parser of its labelled output, and the hand-off log
-lines it becomes. The reflector's output form is OUTPUT_FORM below (the brief's `Output` section), owned
-here, the parser beside it (docs/adr/0008 rung 3: labelled fields, never prose).
+Here: the question list (reflection/questions.json, the one list), the reflector's brief, the
+headless reflector run (agents/reflector.md through pi-role), the parser of its labelled output,
+and the hand-off log lines it becomes. The reflector's output form is OUTPUT_FORM below (the
+brief's `Output` section), owned here, the parser beside it (docs/adr/0008 rung 3: labelled
+fields, never prose).
 
-Refused (Failed, nothing appended): pi-role exit non-zero or past the timeout, no or two Questions lines,
-a Questions line that is not exactly the brief's ids, no Finding line and no `Findings: none`, both, a
-Finding line not in the form, a class not lower-case kebab or starting owner-caught-, a question not in
-the brief, an empty route or summary.
+Refused (FailedError, nothing appended): pi-role exit non-zero or past the timeout, no or two
+Questions lines, a Questions line that is not exactly the brief's ids, no Finding line and no
+`Findings: none`, both, a Finding line not in the form, a class not lower-case kebab or starting
+owner-caught-, a question not in the brief, an empty route or summary.
 
-Environment: OCTO_FEATHER_REFLECT_ARGS extra pi args (e.g. "--model provider/x" to induce a failure,
-"--thinking off" for a cheap smoke); OCTO_FEATHER_REFLECT_TIMEOUT seconds (default 1800).
+Environment: OCTO_FEATHER_REFLECT_ARGS extra pi args (e.g. "--model provider/x" to induce a
+failure, "--thinking off" for a cheap smoke); OCTO_FEATHER_REFLECT_TIMEOUT seconds (default 1800).
 """
-import datetime, glob, json, os, re, shlex, subprocess, sys
+
+import datetime as dt
+import json
+import os
+import re
+import shlex
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
 from pathlib import Path
+from typing import Any, cast
+
+import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
 
 KIT = Path(__file__).resolve().parent.parent
 QUESTIONS = KIT / "reflection" / "questions.json"
@@ -26,70 +40,116 @@ ROLE = KIT / "agents" / "reflector.md"
 KINDS = ("lane", "director")
 QID = re.compile(r"[a-z0-9][a-z0-9-]*")
 CLASS = re.compile(r"[a-z0-9][a-z0-9-]*")
-SESSIONS = Path(os.path.expanduser("~/.pi/agent/sessions"))
-TAIL = 400   # director log lines about the lane quoted in the brief, the latest kept
+SESSIONS = Path("~/.pi/agent/sessions").expanduser()
+TAIL = 400  # director log lines about the lane quoted in the brief, the latest kept
 
-OUTPUT_FORM = """Reply with exactly these lines and nothing else (no fence, no prose):
-Questions: {ids}
-then one line per gap you found:
-Finding: class: <class, lower-case kebab, never owner-caught-...> | question: <one question id above> | route: <the role, skill, template, command or structure where the fix goes> | summary: <what happened and what would have caught it first, citing file:line or the transcript moment>
-or, when you found no gap, the one line:
-Findings: none"""
+OUTPUT_FORM = (
+    "Reply with exactly these lines and nothing else (no fence, no prose):\n"
+    "Questions: {ids}\n"
+    "then one line per gap you found:\n"
+    "Finding: class: <class, lower-case kebab, never owner-caught-...>"
+    " | question: <one question id above>"
+    " | route: <the role, skill, template, command or structure where the fix goes>"
+    " | summary: <what happened and what would have caught it first,"
+    " citing file:line or the transcript moment>\n"
+    "or, when you found no gap, the one line:\n"
+    "Findings: none"
+)
 
 QUESTIONS_LINE = re.compile(r"^Questions:[ \t]*(.*?)\s*$")
 FINDING_LINE = re.compile(r"^Finding:[ \t]*(.*?)\s*$")
 NONE_LINE = re.compile(r"^Findings:[ \t]*none\s*$")
-FINDING_SHAPE = re.compile(r"class:\s*(\S+)\s*\|\s*question:\s*(\S+)\s*\|\s*route:\s*(.*?)\s*\|\s*summary:\s*(.*)")
+FINDING_SHAPE = re.compile(
+    r"class:\s*(\S+)\s*\|\s*question:\s*(\S+)\s*\|\s*route:\s*(.*?)\s*\|\s*summary:\s*(.*)"
+)
+
+Question = dict[str, str]  # {id, kind, text}
+Finding = dict[str, str]  # {class, question, route, summary}
+LogLine = dict[str, object]  # one parsed hand-off log line
 
 
-class Failed(Exception):
+class FailedError(Exception):
     """The reflection could not run or returned nothing usable: names why."""
 
 
-def questions(kind: str, path: Path = QUESTIONS) -> list[dict]:
-    """The question list's questions of KIND, each {id, kind, text}; Failed on a list that breaks its shape."""
+@dataclass(frozen=True)
+class LaneRecords:
+    """What the brief points the reflector at: the lane's records, the director log's lines about
+    it, the factory report's lines and the transcript lines."""
+
+    name: str
+    record: Path
+    log: Path
+    director_log: Path
+    director_lines: list[str]
+    report: list[str]
+    transcripts: list[str]
+
+
+def questions(kind: str, path: Path = QUESTIONS) -> list[Question]:
+    """The question list's questions of KIND, each {id, kind, text}; FailedError on a list that
+    breaks its shape."""
     try:
         data = json.loads(path.read_text(encoding="utf-8"))
-        qs = data["questions"]
-        assert isinstance(qs, list), "questions is not a list"
+        raw = data["questions"]
+        assert isinstance(raw, list), "questions is not a list"
+        qs = cast("list[Any]", raw)  # JSON: each entry checked below
         ids = [q["id"] for q in qs]
         for q in qs:
-            assert isinstance(q.get("id"), str) and QID.fullmatch(q["id"]), f"id {q.get('id')!r} is not lower-case kebab"
+            assert isinstance(q.get("id"), str), f"id {q.get('id')!r} is not lower-case kebab"
+            assert QID.fullmatch(q["id"]), f"id {q.get('id')!r} is not lower-case kebab"
             assert q.get("kind") in KINDS, f"{q['id']}: kind {q.get('kind')!r} not one of {KINDS}"
-            assert isinstance(q.get("text"), str) and q["text"].strip(), f"{q['id']}: empty text"
+            assert isinstance(q.get("text"), str), f"{q['id']}: empty text"
+            assert q["text"].strip(), f"{q['id']}: empty text"
             assert ids.count(q["id"]) == 1, f"id {q['id']} twice"
     except (OSError, ValueError, KeyError, TypeError, AssertionError) as e:
-        raise Failed(f"question list {path} unusable ({e})") from e
-    mine = [q for q in qs if q["kind"] == kind]
+        msg = f"question list {path} unusable ({e})"
+        raise FailedError(msg) from e
+    mine: list[Question] = [q for q in qs if q["kind"] == kind]
     if not mine:
-        raise Failed(f"question list {path} has no {kind} question")
+        msg = f"question list {path} has no {kind} question"
+        raise FailedError(msg)
     return mine
 
 
-def session_file(session: str) -> str | None:
+def session_file(session: object) -> str | None:
     """The Pi transcript of SESSION id: ~/.pi/agent/sessions/<encoded cwd>/<ts>_<id>.jsonl."""
     if not isinstance(session, str) or not re.fullmatch(r"[0-9A-Za-z-]+", session):
         return None
-    hits = sorted(glob.glob(str(SESSIONS / "*" / f"*_{session}.jsonl")))
+    hits = sorted(str(p) for p in SESSIONS.glob(f"*/*_{session}.jsonl"))
     return hits[-1] if hits else None
 
 
 def session_dir(cwd: str) -> Path:
-    """Pi's transcript folder for an agent started in CWD (Pi encodes the path: / to -, wrapped in --)."""
+    """Pi's transcript folder for an agent started in CWD (Pi encodes the path: / to -, wrapped
+    in --)."""
     return SESSIONS / f"--{cwd.strip('/').replace('/', '-')}--"
 
 
-def lane_transcripts(log_lines: list[dict], supervisor: object) -> list[str]:
-    """One line per agent of the lane with its transcript path: the supervisor (this process's own Pi session
-    when it runs in the supervisor's pane, else a parked line's session), then each session the hand-off log names."""
-    out, seen = [], set()
+def lane_transcripts(log_lines: list[LogLine], supervisor: object) -> list[str]:
+    """One line per agent of the lane with its transcript path: the supervisor (this process's
+    own Pi session when it runs in the supervisor's pane, else a parked line's session), then
+    each session the hand-off log names."""
+    out: list[str] = []
+    seen: set[object] = set()
     mine = os.environ.get("PI_SESSION_FILE")
-    if supervisor and os.environ.get("HERDR_PANE_ID") == supervisor and mine and os.path.isfile(mine):
-        out.append(f"supervisor {supervisor}: {mine}"); seen.add(mine)
+    if (
+        supervisor
+        and os.environ.get("HERDR_PANE_ID") == supervisor
+        and mine
+        and Path(mine).is_file()
+    ):
+        out.append(f"supervisor {supervisor}: {mine}")
+        seen.add(mine)
     else:
         parked = [d for d in log_lines if d.get("pane") == supervisor and d.get("session")]
         f = session_file(parked[-1]["session"]) if parked else None
-        out.append(f"supervisor {supervisor}: {f}" if f else f"supervisor {supervisor}: not found (not run from its pane, no parked line with a session)")
+        out.append(
+            f"supervisor {supervisor}: {f}"
+            if f
+            else f"supervisor {supervisor}: not found"
+            " (not run from its pane, no parked line with a session)"
+        )
         if f:
             seen.add(f)
     for d in log_lines:
@@ -106,24 +166,36 @@ def lane_transcripts(log_lines: list[dict], supervisor: object) -> list[str]:
 
 
 def director_transcript(state: Path) -> str:
-    """The director's transcript folder and its newest transcript, from director.toml's pane and Herdr's cwd for it."""
-    import tomllib
+    """The director's transcript folder and its newest transcript, from director.toml's pane and
+    Herdr's cwd for it."""
     try:
         pane = tomllib.loads((state / "director.toml").read_text(encoding="utf-8")).get("pane")
     except (OSError, ValueError) as e:
         return f"director: not found (director.toml: {e})"
+    herdr = shutil.which("herdr")
+    if herdr is None:  # what running a missing herdr raises, named as before
+        return f"director {pane}: not found (herdr agent get: {FileNotFoundError.__name__})"
     try:
-        p = subprocess.run(["herdr", "agent", "get", str(pane)], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+        p = subprocess.run(
+            [herdr, "agent", "get", str(pane)],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
         cwd = json.loads(p.stdout)["result"]["agent"]["cwd"]
     except (OSError, subprocess.SubprocessError, ValueError, KeyError, TypeError) as e:
         return f"director {pane}: not found (herdr agent get: {type(e).__name__})"
     d = session_dir(cwd)
     files = sorted(d.glob("*.jsonl"), key=lambda f: f.stat().st_mtime)
-    return f"director {pane}: {files[-1] if files else 'none'} (newest in {d}, which other agents started in {cwd} share)"
+    newest = files[-1] if files else "none"
+    return f"director {pane}: {newest} (newest in {d}, which other agents started in {cwd} share)"
 
 
-def about_lane(d: dict, name: str, issue: object) -> bool:
-    """A director log line is about the lane when its issue is the lane's, or a text field names the lane or #<issue>."""
+def about_lane(d: LogLine, name: str, issue: object) -> bool:
+    """A director log line is about the lane when its issue is the lane's, or a text field names
+    the lane or #<issue>."""
     n = str(issue).removeprefix("gh") if issue is not None else None
     if n is not None and str(d.get("issue")).removeprefix("gh").lstrip("#") == n:
         return True
@@ -132,96 +204,156 @@ def about_lane(d: dict, name: str, issue: object) -> bool:
     return any(isinstance(v, str) and pat.search(v) for v in d.values())
 
 
-def brief(name: str, record: Path, log: Path, director_log: Path, director_lines: list[str], report: list[str],
-          transcripts: list[str], qs: list[dict]) -> str:
+def brief(lane: LaneRecords, qs: list[Question]) -> str:
     ids = ", ".join(q["id"] for q in qs)
-    dl = director_lines[-TAIL:]
-    return "\n".join([
-        f"Lane reflection of lane {name} (comms spec #reflection-lane). Read these records, then answer each question.",
-        "", "## Records",
-        f"- Lane record: {record}",
-        f"- Hand-off log (findings, workarounds, spawns, parks): {log}" + ("" if log.exists() else " (none)"),
-        f"- Director log: {director_log}; its {len(director_lines)} line(s) about this lane"
-        + (f", the latest {len(dl)} quoted" if len(dl) < len(director_lines) else "") + ":",
-        *(f"  {l}" for l in dl or ["(none)"]),
-        "- Factory report for the lane (octo-feather-lane report):",
-        *(f"  {l}" for l in report),
-        "- Transcripts (Pi session JSONL; the director's holds the owner conversation):",
-        *(f"  {t}" for t in transcripts),
-        "", "## Questions",
-        *(f"- {q['id']}: {q['text']}" for q in qs),
-        "", "## Output", OUTPUT_FORM.format(ids=ids)])
+    dl = lane.director_lines[-TAIL:]
+    return "\n".join(
+        [
+            (
+                f"Lane reflection of lane {lane.name} (comms spec #reflection-lane)."
+                " Read these records, then answer each question."
+            ),
+            "",
+            "## Records",
+            f"- Lane record: {lane.record}",
+            f"- Hand-off log (findings, workarounds, spawns, parks): {lane.log}"
+            + ("" if lane.log.exists() else " (none)"),
+            f"- Director log: {lane.director_log};"
+            f" its {len(lane.director_lines)} line(s) about this lane"
+            + (f", the latest {len(dl)} quoted" if len(dl) < len(lane.director_lines) else "")
+            + ":",
+            *(f"  {line}" for line in dl or ["(none)"]),
+            "- Factory report for the lane (octo-feather-lane report):",
+            *(f"  {line}" for line in lane.report),
+            "- Transcripts (Pi session JSONL; the director's holds the owner conversation):",
+            *(f"  {t}" for t in lane.transcripts),
+            "",
+            "## Questions",
+            *(f"- {q['id']}: {q['text']}" for q in qs),
+            "",
+            "## Output",
+            OUTPUT_FORM.format(ids=ids),
+        ]
+    )
 
 
 def run(text: str, cwd: Path) -> str:
-    """The reflector's reply to brief TEXT: a fresh headless agents/reflector.md run; Failed when it cannot run."""
-    cmd = [str(KIT / "scripts" / "pi-role"), str(ROLE), *shlex.split(os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")), "-p", text]
+    """The reflector's reply to brief TEXT: a fresh headless agents/reflector.md run; FailedError
+    when it cannot run."""
+    cmd = [
+        str(KIT / "scripts" / "pi-role"),
+        str(ROLE),
+        *shlex.split(os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")),
+        "-p",
+        text,
+    ]
     timeout = float(os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or 1800)
     try:
-        p = subprocess.run(cmd, capture_output=True, text=True, cwd=cwd, timeout=timeout, stdin=subprocess.DEVNULL)
+        p = subprocess.run(
+            cmd,
+            capture_output=True,
+            text=True,
+            cwd=cwd,
+            timeout=timeout,
+            stdin=subprocess.DEVNULL,
+            check=False,
+        )
     except subprocess.TimeoutExpired as e:
-        raise Failed(f"reflector ran past {timeout:.0f}s (OCTO_FEATHER_REFLECT_TIMEOUT)") from e
+        msg = f"reflector ran past {timeout:.0f}s (OCTO_FEATHER_REFLECT_TIMEOUT)"
+        raise FailedError(msg) from e
     except OSError as e:
-        raise Failed(f"reflector did not start ({e})") from e
+        msg = f"reflector did not start ({e})"
+        raise FailedError(msg) from e
     if p.returncode:
         err = (p.stderr or p.stdout).strip().splitlines()
-        raise Failed(f"reflector exited {p.returncode}: {err[-1][:400] if err else 'no output'}")
+        msg = f"reflector exited {p.returncode}: {err[-1][:400] if err else 'no output'}"
+        raise FailedError(msg)
     return p.stdout
 
 
-def parse(reply: str, qs: list[dict]) -> tuple[list[dict], list[str]]:
-    """The findings ({class, question, route, summary}) and the question ids of a reflector's REPLY; Failed when
-    it breaks OUTPUT_FORM."""
+def finding(line: str, want: list[str]) -> Finding | None:
+    """The finding of reply LINE ({class, question, route, summary}), None when it is no Finding
+    line; FailedError when it is one outside OUTPUT_FORM."""
+    m = FINDING_LINE.match(line)
+    if not m:
+        return None
+    s = FINDING_SHAPE.fullmatch(m.group(1))
+    if not s:
+        msg = f"Finding line not in the form `class: | question: | route: | summary:`: {line[:200]}"
+        raise FailedError(msg)
+    cls, q, route, summary = s.groups()
+    if not CLASS.fullmatch(cls) or cls.startswith("owner-caught-"):
+        msg = f"finding class {cls!r} is not lower-case kebab or starts owner-caught-"
+        raise FailedError(msg)
+    if q not in want:
+        msg = f"finding question {q!r} is not one of {want}"
+        raise FailedError(msg)
+    if not route or not summary:
+        msg = f"finding of class {cls} has an empty route or summary"
+        raise FailedError(msg)
+    return {"class": cls, "question": q, "route": route, "summary": summary}
+
+
+def parse(reply: str, qs: list[Question]) -> tuple[list[Finding], list[str]]:
+    """The findings ({class, question, route, summary}) and the question ids of a reflector's
+    REPLY; FailedError when it breaks OUTPUT_FORM."""
     want = [q["id"] for q in qs]
-    lines = [l.strip() for l in reply.splitlines()]
-    qlines = [m.group(1) for l in lines if (m := QUESTIONS_LINE.match(l))]
+    lines = [line.strip() for line in reply.splitlines()]
+    qlines = [m.group(1) for line in lines if (m := QUESTIONS_LINE.match(line))]
     if len(qlines) != 1:
-        raise Failed(f"reflector reply has {len(qlines)} Questions lines, want 1")
+        msg = f"reflector reply has {len(qlines)} Questions lines, want 1"
+        raise FailedError(msg)
     got = [x.strip() for x in qlines[0].split(",") if x.strip()]
     if sorted(got) != sorted(want) or len(set(got)) != len(got):
-        raise Failed(f"reflector answered questions {got}, want each of {want} once")
-    found, none = [], any(NONE_LINE.match(l) for l in lines)
-    for l in lines:
-        m = FINDING_LINE.match(l)
-        if not m:
-            continue
-        s = FINDING_SHAPE.fullmatch(m.group(1))
-        if not s:
-            raise Failed(f"Finding line not in the form `class: | question: | route: | summary:`: {l[:200]}")
-        cls, q, route, summary = s.groups()
-        if not CLASS.fullmatch(cls) or cls.startswith("owner-caught-"):
-            raise Failed(f"finding class {cls!r} is not lower-case kebab or starts owner-caught-")
-        if q not in want:
-            raise Failed(f"finding question {q!r} is not one of {want}")
-        if not route or not summary:
-            raise Failed(f"finding of class {cls} has an empty route or summary")
-        found.append({"class": cls, "question": q, "route": route, "summary": summary})
+        msg = f"reflector answered questions {got}, want each of {want} once"
+        raise FailedError(msg)
+    none = any(NONE_LINE.match(line) for line in lines)
+    found = [f for line in lines if (f := finding(line, want)) is not None]
     if bool(found) == none:
-        raise Failed("reflector reply has both Finding lines and `Findings: none`" if none else "reflector reply has no Finding line and no `Findings: none`")
+        msg = (
+            "reflector reply has both Finding lines and `Findings: none`"
+            if none
+            else "reflector reply has no Finding line and no `Findings: none`"
+        )
+        raise FailedError(msg)
     return found, got
 
 
-def log_lines(found: list[dict], ids: list[str]) -> list[str]:
-    """The hand-off log lines (comms #handoff-kind-finding, #handoff-kind-reflection): one finding line per gap, then
-    one reflection line."""
-    at = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    out = [{"at": at, "kind": "finding", "source": "reflection", "class": f["class"], "blocking": False,
-            "question": f["question"], "route": f["route"], "summary": f["summary"]} for f in found]
+def log_lines(found: list[Finding], ids: list[str]) -> list[str]:
+    """The hand-off log lines (comms #handoff-kind-finding, #handoff-kind-reflection): one
+    finding line per gap, then one reflection line."""
+    at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    out: list[LogLine] = [
+        {
+            "at": at,
+            "kind": "finding",
+            "source": "reflection",
+            "class": f["class"],
+            "blocking": False,
+            "question": f["question"],
+            "route": f["route"],
+            "summary": f["summary"],
+        }
+        for f in found
+    ]
     out.append({"at": at, "kind": "reflection", "findings": len(found), "questions": ids})
     return [json.dumps(d, ensure_ascii=False) for d in out]
 
 
 def append(log: Path, lines: list[str]) -> None:
     """Append LINES in one write, starting on a fresh line when the log lacks a final newline."""
-    with open(log, "ab+") as f:
+    with log.open("ab+") as f:
         f.seek(0, os.SEEK_END)
         lead = b""
         if f.tell():
             f.seek(-1, os.SEEK_END)
             lead = b"" if f.read(1) == b"\n" else b"\n"
-        f.write(lead + "".join(l + "\n" for l in lines).encode("utf-8"))
+        f.write(lead + "".join(line + "\n" for line in lines).encode("utf-8"))
 
 
 if __name__ == "__main__":
-    print("octo-feather-reflect is imported by octo-feather-lane; run `octo-feather-lane reflect NAME`", file=sys.stderr)
+    sys.stderr.write(
+        "octo-feather-reflect is imported by octo-feather-lane;"
+        " run `octo-feather-lane reflect NAME`\n"
+    )
     sys.exit(64)
