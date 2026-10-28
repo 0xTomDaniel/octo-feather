@@ -47,8 +47,8 @@
       "pr": 181
     },
     "acceptance-install-agent-browser": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 271
     }
   }
 }
