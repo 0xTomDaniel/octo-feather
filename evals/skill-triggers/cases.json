@@ -1062,5 +1062,69 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not judge the tests. Run `uv run pytest -q` here and report how many passed and failed, nothing else."
+  },
+  {
+    "id": "impl-createverify-no-harness",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "There is no scripted way in this repo for an agent to launch the app, drive it the way a user would and keep proof of what it did. Set that up as a repo-local skill later agents can load. Do not commit."
+  },
+  {
+    "id": "impl-createverify-ticket",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket for this repo: it needs its own verify skill, named after the app, so later lanes can prove their changes by driving the CLI and keeping evidence. Start on it; no commit needed."
+  },
+  {
+    "id": "impl-createverify-near-run-once",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Run `uv run app hello Ada --json` once and paste its output verbatim, nothing else."
+  },
+  {
+    "id": "impl-createverify-near-list-skills",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Does this repo hold any skill folder of its own? Answer yes or no and show the listing you based it on."
+  },
+  {
+    "id": "impl-maintainverify-audit",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Nobody has checked this repo's verify skill and its feature map against the app in months. Do the full audit pass now: every feature from source and live. Do not commit."
+  },
+  {
+    "id": "impl-maintainverify-drift",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket: the feature files of our verification skill may describe things the app no longer does. Reconcile all of them with the code and a live run of the app; report what drifted."
+  },
+  {
+    "id": "impl-maintainverify-near-define",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file, do not open any file and do not run anything. In one sentence: what is a doctor check in an app's verification harness for?"
+  },
+  {
+    "id": "impl-maintainverify-near-json",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Run `app hello` once with --json through uv and tell me in one line whether it printed JSON."
   }
 ]
