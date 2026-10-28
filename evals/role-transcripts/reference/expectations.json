@@ -174,5 +174,18 @@
         "before": "kit_contract_edit"
       }
     ]
+  },
+  "reviewer-reinvented-parser": {
+    "facts": [
+      {
+        "fact": "field_lines",
+        "field": "Verdict",
+        "includes": [
+          {
+            "text": "blocking"
+          }
+        ]
+      }
+    ]
   }
 }
