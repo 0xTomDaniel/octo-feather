@@ -293,8 +293,13 @@ def mirror(path: str) -> str:
 def pyright(files: list[str], baseline: Path, mode: list[str]) -> Json:
     """basedpyright over the files through a throwaway mirror of links, its project root the
     mirror (the repo's pyproject linked in); diagnostics come back with repo paths. No files:
-    nothing runs (basedpyright given no path scans the project root)."""
+    nothing runs (basedpyright given no path scans the project root), and every baseline entry
+    is stale: auto mode empties the file, as basedpyright prunes a file that is gone."""
     if not files:
+        if "auto" in mode and baseline.is_file():
+            data = as_json(json.loads(baseline.read_text(encoding="utf-8"))) or {}
+            if data.get("files"):
+                baseline.write_text(json.dumps({"files": {}}, indent=4), encoding="utf-8")
         return {"generalDiagnostics": [], "summary": {"filesAnalyzed": 0}}
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp).resolve()
