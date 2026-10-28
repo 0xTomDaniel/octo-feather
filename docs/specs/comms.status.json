@@ -71,40 +71,40 @@
       "pr": 252
     },
     "acceptance-reflect-lane": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-reflect-caught-by-hand": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-reflect-before-archive": {
       "status": "built",
       "pr": 279
     },
     "acceptance-reflect-director": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-reflect-writer-route": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-reflect-missed": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-report-reflection": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     },
     "acceptance-reflect-daily": {
       "status": "planned",
       "pr": null
     },
     "acceptance-reflect-files-correction": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 279
     }
   }
 }
