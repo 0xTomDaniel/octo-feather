@@ -1,0 +1,27 @@
+// The kit's own TypeScript (#245): templates/typescript's compiler settings. This file is the one declaration of
+// which TypeScript the gate checks: tsc reads it and eslint.config.js lints exactly the files
+// it lists (just check-ts). tests/fixtures/ is kit test code (Pi extensions the tests load), so it is in.
+// tsc's wildcard skips dot directories (.agents/skills: vendored upstream skills).
+{
+  "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node22/tsconfig.json"],
+  "compilerOptions": {
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "erasableSyntaxOnly": true,
+    "verbatimModuleSyntax": true,
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"]
+  },
+  "include": ["**/*"],
+  "exclude": [
+    // Installed packages, not kit code.
+    "node_modules",
+    // Eval fixtures are data: seeded target repos whose flaws the eval cases need.
+    "evals/fixtures",
+    // Each template is a target repo with its own tsconfig, eslint config and `just check`.
+    "templates",
+    // Scratch space (.gitignore), never tracked.
+    "tmp"
+  ]
+}
