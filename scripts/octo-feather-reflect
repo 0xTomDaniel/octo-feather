@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""Lane reflection's own parts, imported by octo-feather-lane.
+"""Reflection's own parts (lane and director), imported by octo-feather-lane.
 
 Used by its `reflect` and `archive` (comms spec #reflection). Not a command of its own: run
-`octo-feather-lane reflect NAME`. Kept beside octo-feather-lane so that script does not grow; it
-loads this file by path, as it loads octo-feather-qa.
+`octo-feather-lane reflect NAME` or `octo-feather-lane reflect --director`. Kept beside
+octo-feather-lane so that script does not grow; it loads this file by path, as it loads
+octo-feather-qa.
 
-Here: the question list (reflection/questions.json, the one list), the reflector's brief, the
-headless reflector run (agents/reflector.md through pi-role), the parser of its labelled output,
-and the hand-off log lines it becomes. The reflector's output form is OUTPUT_FORM below (the
+Here: the question list (reflection/questions.json, the one list), the reflector's brief (a lane's
+or the director's), the finding class counts across lane logs, the headless reflector run
+(agents/reflector.md through pi-role), the parser of its labelled output, and the log lines it
+becomes. The reflector's output form is OUTPUT_FORM below (the
 brief's `Output` section), owned here, the parser beside it (docs/adr/0008 rung 3: labelled
 fields, never prose).
 
@@ -204,6 +206,110 @@ def about_lane(d: LogLine, name: str, issue: object) -> bool:
     return any(isinstance(v, str) and pat.search(v) for v in d.values())
 
 
+@dataclass(frozen=True)
+class DirectorRecords:
+    """What the director brief points the reflector at (comms spec #reflection-director): the
+    director log and its lines since the last director reflection, the factory report, the
+    director's transcript, every lane's hand-off log with its reflection lines, and the finding
+    class counts."""
+
+    director_log: Path
+    since: str | None  # the last director reflection's `at`, None when none ran
+    director_lines: list[str]
+    report: list[str]
+    transcript: str
+    lane_logs: list[str]
+    counts: list[str]
+
+
+def since_last_reflection(lines: list[LogLine]) -> tuple[str | None, list[LogLine]]:
+    """The last director reflection line's `at` (None when none ran) and the director log lines
+    after it."""
+    last = max((i for i, d in enumerate(lines) if d.get("kind") == "reflection"), default=None)
+    if last is None:
+        return None, lines
+    return str(lines[last].get("at")), lines[last + 1 :]
+
+
+def reflected_at(lines: list[LogLine]) -> dt.datetime | None:
+    """When the last director reflection of LINES (the director log) ran; None when none ran or its
+    `at` is no UTC instant."""
+    at, _ = since_last_reflection(lines)
+    try:
+        return dt.datetime.strptime(str(at), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.timezone.utc)
+    except ValueError:
+        return None
+
+
+def class_counts(logs: dict[str, list[LogLine]]) -> list[str]:
+    """Finding classes across the lane hand-off logs LOGS ({lane: lines}), one line per source and
+    class, most frequent first (comms spec #reflection-writer-route)."""
+    seen: dict[tuple[str, str], tuple[int, list[str], str]] = {}
+    for lane, lines in logs.items():
+        for d in lines:
+            cls, src = d.get("class"), d.get("source")
+            if d.get("kind") != "finding" or not isinstance(cls, str):
+                continue
+            key = (str(src), cls)
+            n, lanes, last = seen.get(key, (0, [], ""))
+            at = str(d.get("at") or "")
+            seen[key] = (n + 1, lanes if lane in lanes else [*lanes, lane], max(last, at))
+    order = sorted(seen.items(), key=lambda kv: (-kv[1][0], kv[0]))
+    return [
+        f"class {cls}, source {src}: {n} finding{'s' if n != 1 else ''}"
+        f" in {len(lanes)} lane{'s' if len(lanes) != 1 else ''} ({', '.join(lanes)}), last {last}"
+        for (src, cls), (n, lanes, last) in order
+    ]
+
+
+def lane_log_line(lane: str, path: Path, lines: list[LogLine]) -> str:
+    """One brief line per lane hand-off log: its path and its lane reflections (when, findings)."""
+    refl = [
+        f"{d.get('at')} {d.get('findings')} findings"
+        for d in lines
+        if d.get("kind") == "reflection"
+    ]
+    return f"{lane}: {path}; lane reflections: {', '.join(refl) or 'none'}"
+
+
+def director_brief(rec: DirectorRecords, qs: list[Question]) -> str:
+    ids = ", ".join(q["id"] for q in qs)
+    dl = rec.director_lines[-TAIL:]
+    return "\n".join(
+        [
+            (
+                "Director reflection (comms spec #reflection-director): the director's work"
+                f" since the last director reflection ({rec.since or 'none ran'})."
+                " Read these records, then answer each question."
+            ),
+            "",
+            "## Records",
+            f"- Director log: {rec.director_log}"
+            + ("" if rec.director_log.exists() else " (none)")
+            + f"; its {len(rec.director_lines)} line(s) since the last director reflection"
+            + (f", the latest {len(dl)} quoted" if len(dl) < len(rec.director_lines) else "")
+            + ":",
+            *(f"  {line}" for line in dl or ["(none)"]),
+            "- Factory report (octo-feather-lane report):",
+            *(f"  {line}" for line in rec.report),
+            f"- Director transcript (Pi session JSONL, the owner conversation): {rec.transcript}",
+            "- Every lane's hand-off log, archived ones included:",
+            *(f"  {line}" for line in rec.lane_logs or ["(none)"]),
+            (
+                "- Finding class counts across those logs, by source and frequency"
+                " (comms spec #reflection-writer-route):"
+            ),
+            *(f"  {line}" for line in rec.counts or ["(none)"]),
+            "",
+            "## Questions",
+            *(f"- {q['id']}: {q['text']}" for q in qs),
+            "",
+            "## Output",
+            OUTPUT_FORM.format(ids=ids),
+        ]
+    )
+
+
 def brief(lane: LaneRecords, qs: list[Question]) -> str:
     ids = ", ".join(q["id"] for q in qs)
     dl = lane.director_lines[-TAIL:]
@@ -319,9 +425,10 @@ def parse(reply: str, qs: list[Question]) -> tuple[list[Finding], list[str]]:
     return found, got
 
 
-def log_lines(found: list[Finding], ids: list[str]) -> list[str]:
-    """The hand-off log lines (comms #handoff-kind-finding, #handoff-kind-reflection): one
-    finding line per gap, then one reflection line."""
+def log_lines(found: list[Finding], ids: list[str], *, lane: bool = True) -> list[str]:
+    """The log lines: one finding line per gap, then one reflection line; a lane's hand-off log's
+    (comms #handoff-kind-finding, #handoff-kind-reflection) or, LANE false, the director log's
+    (#handoff-director-finding, #handoff-director-reflection: no blocking)."""
     at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     out: list[LogLine] = [
         {
@@ -329,7 +436,7 @@ def log_lines(found: list[Finding], ids: list[str]) -> list[str]:
             "kind": "finding",
             "source": "reflection",
             "class": f["class"],
-            "blocking": False,
+            **({"blocking": False} if lane else {}),
             "question": f["question"],
             "route": f["route"],
             "summary": f["summary"],
@@ -354,6 +461,6 @@ def append(log: Path, lines: list[str]) -> None:
 if __name__ == "__main__":
     sys.stderr.write(
         "octo-feather-reflect is imported by octo-feather-lane;"
-        " run `octo-feather-lane reflect NAME`\n"
+        " run `octo-feather-lane reflect NAME` or `octo-feather-lane reflect --director`\n"
     )
     sys.exit(64)

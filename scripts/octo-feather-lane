@@ -5,8 +5,8 @@
                                    lanes/NAME.handoffs.jsonl into lanes/archive/
 
 The state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).
-Before moving any file `archive` runs the lane reflection (`reflect`, below); when it cannot run,
-the archive refuses naming the failed reflection, every file left in place.
+Before moving any file `archive` runs the lane reflection, then the director reflection (`reflect`,
+below); when either cannot run, the archive refuses naming the failed reflection, every file left in place.
 `archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged
 and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one
 from the reflection (its reflection line). It refuses, non-zero with every file left in
@@ -24,6 +24,21 @@ appends to lanes/NAME.handoffs.jsonl (created when absent) its finding and refle
 #reflection-output; fields: #handoff-kind-finding, #handoff-kind-reflection), in one write; prints
 `reflection: ...` and each finding.
 A reflector that cannot run or replies outside the form appends nothing: exit 1 naming the failed reflection.
+
+  octo-feather-lane reflect --director [--due]
+                                   director reflection (spec comms #reflection-director): a fresh
+                                   headless reflector answers the director questions; appends its
+                                   lines to the director log
+
+`reflect --director` gathers the director log's lines since its last reflection line, the factory report
+(`report`, below), the director's transcript path, every lane hand-off log (lanes/ and lanes/archive/) with its
+lane reflection lines, and the finding class counts across those logs by source and frequency (spec comms
+#reflection-writer-route). It runs the same reflector, parser and refusals as `reflect NAME`, with the director
+questions, and appends to director.handoffs.jsonl its finding and reflection lines (spec comms
+#reflection-output; fields: #handoff-director-finding, #handoff-director-reflection). One director reflection
+runs at a time (a lock on the state dir). --due runs it only when one is due at a start (spec comms
+#reflection-director; `octo-feather-start` runs that in the background) and the director log has lines, else
+prints `director reflection: not due ...`, exit 0; also exit 0, nothing run, while another one runs.
 
   octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
                                    create, or update in place, the PR's one review verdict
@@ -287,6 +302,13 @@ def cmd_archive(args: list[str]) -> int:
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
     pre = log.stat().st_size if log in files else None   # the log's length before the reflection appends
     reflect_lane(name, lanes)   # spec comms #reflection-lane: before any file moves
+    dlog = lanes.parent / DIRECTOR_LOG
+    dpre = dlog.stat().st_size if dlog.is_file() else None
+    try:
+        reflect_director(lanes)
+    except Refuse as e:
+        unreflect(log, pre)   # every file left as it was: the lane reflection's lines cut too
+        raise Refuse(f"{e}; the lane reflection's lines undone, every file left in {lanes}") from e
     if log not in files and os.path.lexists(log):
         cast("list[Path]", files).append(log)   # the reflection wrote the lane's first hand-off line
     try:
@@ -307,6 +329,7 @@ def cmd_archive(args: list[str]) -> int:
     except Exception as e:
         rollback(created, archive)
         unreflect(log, pre)
+        unreflect(dlog, dpre)
         if made_dir:
             try:
                 archive.rmdir()
@@ -361,7 +384,67 @@ def reflect_lane(name: str, lanes: Path) -> None:
         print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
 
 
+DIRECTOR_LOG = "director.handoffs.jsonl"
+DAY = 86400   # when a start's director reflection is due: spec comms #reflection-director
+
+
+def reflect_director(lanes: Path, due: bool = False) -> None:
+    """Run the director reflection and append its lines to the director log; Refuse when it fails. DUE: only when
+    one is due at a start (DAY), and not while another runs."""
+    import contextlib, datetime, fcntl, io
+    r = reflect_module()
+    state = lanes.parent
+    dlog = state / DIRECTOR_LOG
+    try:
+        state.mkdir(parents=True, exist_ok=True)
+        lock = os.open(state, os.O_RDONLY)   # the state dir's own fd: the lock creates no file
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if due else 0))
+        except BlockingIOError:
+            os.close(lock)
+            print(f"director reflection: not due, another one is running ({state})")
+            return
+        try:
+            dlines = cast("list[dict[str, object]]", read_log(dlog)[0] if dlog.exists() else [])
+            now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+            last = r.reflected_at(dlines)
+            if due and (not dlines if last is None else (now - last).total_seconds() <= DAY):
+                print("director reflection: not due, " + (f"last ran {stamp(f'{last:%Y-%m-%dT%H:%M:%SZ}', now)}" if last
+                                                         else f"no director log lines to reflect on ({dlog})"))
+                return
+            since, recent = r.since_last_reflection(dlines)
+            logs: dict[str, list[dict[str, object]]] = {}
+            listed: list[str] = []
+            for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl")):
+                lane = p.name.removesuffix(".handoffs.jsonl")
+                lines = cast("list[dict[str, object]]", read_log(p)[0])
+                logs[lane] = logs.get(lane, []) + lines
+                listed.append(r.lane_log_line(lane, p, lines))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                cmd_report([])
+            rec = r.DirectorRecords(dlog, since, [json.dumps(d, ensure_ascii=False) for d in recent], buf.getvalue().splitlines(),
+                                    r.director_transcript(state), listed, r.class_counts(logs))
+            qs = r.questions("director")
+            found, ids = r.parse(r.run(r.director_brief(rec, qs), Path.cwd()), qs)
+            r.append(dlog, r.log_lines(found, ids, lane=False))
+        finally:
+            os.close(lock)   # releases the lock
+    except r.FailedError as e:
+        raise Refuse(f"director reflection failed ({e}); nothing appended to {dlog}: fix the cause, then rerun") from e
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"director reflection failed: cannot read its inputs or write {dlog} ({e}): fix the cause, then rerun") from e
+    print(f"reflection: director, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {dlog}")
+    for f in found:
+        print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
+
+
 def cmd_reflect(args: list[str]) -> int:
+    if args[:1] == ["--director"]:
+        if args[1:] not in ([], ["--due"]):
+            raise Refuse(f"usage: octo-feather-lane reflect --director [--due] (got {' '.join(args)})")
+        reflect_director(lanes_dir(), due=args[1:] == ["--due"])
+        return 0
     name = lane_name(args, "reflect")
     lanes = lanes_dir()
     if not (lanes / f"{name}.toml").is_file():
