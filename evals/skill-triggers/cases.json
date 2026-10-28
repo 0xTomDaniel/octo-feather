@@ -1126,5 +1126,37 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Run `app hello` once with --json through uv and tell me in one line whether it printed JSON."
+  },
+  {
+    "id": "reflector-reflect-lane-gh5",
+    "role": "reflector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Lane reflection of lane gh5 (merged, workers closed). Hand-off log lines: {\"kind\":\"spawn\",\"name\":\"implementer-gh5\",\"pane\":\"w5:p3\"} {\"kind\":\"finding\",\"source\":\"code-review\",\"class\":\"duplicated-rule\",\"blocking\":true,\"summary\":\"AGENTS.md rule restated in a test comment\"} {\"kind\":\"integration\",\"commit\":\"abc1234\"}. Director log lines about the lane: {\"kind\":\"note\",\"issue\":5,\"text\":\"read pane w5:p3: implementer-gh5 stuck at a trust prompt for 40 min; nudged it\"}. Questions: caught-by-hand: What did anyone catch by hand, and what would have caught it first? writer-mistake: Which review finding is a mistake the writer could have been stopped from making, and where would that go? Reply as `Questions: <ids>` then one `Finding: class: <c> | question: <id> | route: <r> | summary: <s>` line per gap, or `Findings: none`."
+  },
+  {
+    "id": "reflector-reflect-lane-held",
+    "role": "reflector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "gh5 just closed. Here is what got logged, {\"kind\":\"spawn\",\"name\":\"implementer-gh5\",\"pane\":\"w5:p3\"} {\"kind\":\"finding\",\"source\":\"code-review\",\"class\":\"duplicated-rule\",\"blocking\":true,\"summary\":\"AGENTS.md rule restated in a test comment\"} {\"kind\":\"integration\",\"commit\":\"abc1234\"}, and the director wrote {\"kind\":\"note\",\"issue\":5,\"text\":\"read pane w5:p3: implementer-gh5 stuck at a trust prompt for 40 min; nudged it\"}. What slipped past the factory that someone had to notice by hand, and where should the fix live so it doesn't happen again? Question id caught-by-hand; same Questions/Finding/Findings: none reply lines as always."
+  },
+  {
+    "id": "reflector-reflect-near-count",
+    "role": "reflector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Judge nothing and look for no gaps. Count the lines of each kind in this hand-off log and print one `kind: count` line each: {\"kind\":\"spawn\",\"name\":\"implementer-gh5\",\"pane\":\"w5:p3\"} {\"kind\":\"finding\",\"source\":\"code-review\",\"class\":\"duplicated-rule\",\"blocking\":true,\"summary\":\"AGENTS.md rule restated in a test comment\"} {\"kind\":\"integration\",\"commit\":\"abc1234\"}"
+  },
+  {
+    "id": "reflector-reflect-near-quote",
+    "role": "reflector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not reflect or judge. Quote the class and the summary of the one finding line in this log, nothing else: {\"kind\":\"spawn\",\"name\":\"implementer-gh5\",\"pane\":\"w5:p3\"} {\"kind\":\"finding\",\"source\":\"code-review\",\"class\":\"duplicated-rule\",\"blocking\":true,\"summary\":\"AGENTS.md rule restated in a test comment\"} {\"kind\":\"integration\",\"commit\":\"abc1234\"}"
   }
 ]
