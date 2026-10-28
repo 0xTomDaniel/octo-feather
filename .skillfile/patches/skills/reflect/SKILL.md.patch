@@ -44,7 +44,7 @@
 -| Divergent | `reflect judgment, divergent, synthesizer` | `claude-opus-5-5-xhigh` | `references/divergent-reviewer.md` |
 -
 -Pass each template verbatim, substituting the transcript path or digest where marked. Reviewers return findings in the `Task` response body.
-+Answer each question of the brief's question list through the lenses: a question is a lens of its own, and every question gets an answer, a gap or none.
++Answer the brief's question list through the lenses, each question a lens of its own; what each question must give: comms spec `#reflection-questions`.
  
  ## 3. Synthesize
  
@@ -80,4 +80,4 @@
 -- New skills created: `<skill path>`. One line each (rare).
 -- Backlog filed to the devex tracker: `<issue title>` (`<tags>`). One line each.
 -- Dropped: one line per rejected finding + reason from the synthesizer.
-+Return the findings in the exact form your brief gives, and nothing the brief's parser would misread. Each finding names its class, the question it answers, its route (the role, skill, template, command or structure where its fix goes) and a summary citing its evidence (the file and line, or the transcript moment). No edit is proposed for approval and none is applied: the command that started you appends the findings.
++Return the findings in the exact form your brief gives, and nothing the brief's parser would misread; what a finding holds: comms spec `#reflection-output`. No edit is proposed for approval and none is applied: the command that started you appends the findings.

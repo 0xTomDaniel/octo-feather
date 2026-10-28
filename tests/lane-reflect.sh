@@ -3,11 +3,10 @@
 # #acceptance-reflect-before-archive, #reflection-output): scripts/octo-feather-lane archive and reflect run
 # as commands, the real scripts/pi-role starting agents/reflector.md, a stub pi first on PATH standing in
 # for the model (it records its argv and prints the reply the case gives), a stub herdr that is unreachable.
-# Proves: the archived hand-off log holds the lane's lines unchanged, then one finding line per gap (source
-# reflection, class, blocking false, question, route, summary) and one reflection line (findings, questions);
-# the brief names the director log's lines about the lane, the factory report's lane lines and the
-# transcripts; a reflector that cannot run, or replies outside the form, refuses the archive naming the failed
-# reflection with every file left in place. Run by `just check`.
+# Proves: the archived hand-off log holds the lane's lines unchanged, then the finding and reflection lines
+# of spec comms #reflection-output; the brief names the director log's lines about the lane, the factory
+# report's lane lines and the transcripts; a reflector that cannot run, or replies outside the form, refuses
+# the archive naming the failed reflection with every file left in place. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"

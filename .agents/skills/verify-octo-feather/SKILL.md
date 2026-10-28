@@ -5,7 +5,7 @@ description: "Drive the octo-feather kit's own commands (just new-repo, just ins
 
 # verify-octo-feather
 
-The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its user surface is its commands: the `just` recipes in the kit's `justfile` and the published commands in `scripts/`, each a short-lived process. There is no server, browser or interactive mode. The helper runs each command on the real user path, through the contract's entry, as a subprocess, in its own empty working directory, against scratch only: new repos, scratch targets and scratch state live in the run state folder, and no drive reaches a live lane, Herdr, `gh` or the network.
+The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its user surface is its commands: the `just` recipes in the kit's `justfile` and the published commands in `scripts/`, each a short-lived process. There is no server, browser or interactive mode. The helper runs each command on the real user path, through the contract's entry, as a subprocess, in its own empty working directory, against scratch only: new repos, scratch targets and scratch state live in the run state folder, and no drive reaches a live lane, Herdr, `gh` or the network. The one exception: a command whose behaviour is a role's model run (the `lane-archive` drive's `reflect-live`, the real reflector) reaches the deployment's model, nothing else; that case fails when the model is unreachable.
 
 Helper (an executable Python script, `python3` 3.11+, standard library only: `tomllib` reads the contract):
 
