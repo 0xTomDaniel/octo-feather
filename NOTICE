@@ -68,6 +68,10 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     agents to its references): schpet/linear-cli@02571d3 (release v3.1.0,
     https://github.com/schpet/linear-cli), ISC, Copyright (c) Peter Schilling
     and contributors
+    agent-browser (loaded by agents/implementer.md and agents/corrector.md):
+    vercel-labs/agent-browser@c3880a7 (release v0.40.0,
+    https://github.com/vercel-labs/agent-browser), Apache License, Version 2.0,
+    Copyright 2025 Vercel Inc.
     .agents/skills/python, .agents/skills/typescript: ported from
     EmberAGI/scaling-octo-engine@ef11d2b9 at Tom's direction, with the unit-test
     content, the Octo workflow paragraphs and the pnpm build commands removed

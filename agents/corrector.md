@@ -3,8 +3,8 @@ name: corrector
 description: Run pstack correct against a target repo in its own correction lane, started on a trigger issue-lifecycle spec `#lanes-correction` owns, and return its commits.
 model: anthropic/claude-opus-5-5
 thinking: medium
-tools: read, grep, find, ls, bash, edit, write
-skills: commit, correct, eval-cases, github-pr, principle-encode-lessons-in-structure, writing-for-agents
+tools: read, grep, find, ls, bash, edit, write, web
+skills: agent-browser, commit, correct, eval-cases, github-pr, principle-encode-lessons-in-structure, writing-for-agents
 ---
 
 # Corrector

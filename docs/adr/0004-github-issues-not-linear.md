@@ -9,4 +9,4 @@ Tracker work lives only in packaged skills, never in the kit's general scripts o
 - GitHub Issues only (the 2026-10-18 choice). Rejected: the kit cannot run on a Linear-first repository.
 - Mirror Linear tickets into GitHub issues. Rejected: a Linear-first repository forbids creating or editing GitHub issues for its work, and two records drift.
 - Tracker branches inside the general scripts (`if linear ... else gh ...`). Rejected: every script would carry both trackers, and a third tracker would touch them all; a skill per tracker behind fixed script names keeps each self-contained.
-- Linear through an MCP server. Rejected: roles run with no MCP (ADR 0016); the `linear` CLI is what octo-lite proved.
+- Linear through an MCP server. Rejected: ADR 0016's capability rule (its Capabilities paragraph) covers it; the `linear` CLI is what octo-lite proved.

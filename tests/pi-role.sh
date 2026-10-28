@@ -33,17 +33,19 @@ for kv in "${route[@]}"; do
   grep -qx "$kv" "$t/env.pane" || { echo "pi-role test: pane launch child lacks $kv" >&2; exit 1; }
 done
 # #175 (roles#launch-codemode, roles#acceptance-codemode-every-role).
+# #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
-for rt in director:$ro code-reviewer:$ro qc-judge:$ro supervisor:$rw implementer:$rw corrector:$rw; do
+web=',mcp__parallel__*,mcp__exa__*;web'
+for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "corrector:$rw$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
-  got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print(a[a.index("--tools")+1] if "--tools" in a else "none")')"
+  got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print((a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + ("--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"))')"
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }
 done
 
 # #175 (roles#fm-tools).
 # A fixture kit: the real scripts and skills, a director whose tools list codemode.
 mkdir -p "$t/kit/scripts" "$t/kit/.agents"
-cp "$kit/scripts/check-roles" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp -r "$kit/agents" "$t/kit/"
+cp "$kit/scripts/check-roles" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp -r "$kit/agents" "$t/kit/"; cp "$kit/web-mcp.json" "$t/kit/"
 ln -s "$kit/.agents/skills" "$t/kit/.agents/skills"
 sed -i 's/^tools: .*/tools: read, grep, find, ls, bash, codemode/' "$t/kit/agents/director.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role listing codemode" >&2; exit 1; fi
