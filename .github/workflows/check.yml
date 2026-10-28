@@ -59,6 +59,9 @@ jobs:
       - run: |
           npm install -g --ignore-scripts "$(node -p 'require("./templates/typescript/package.json").packageManager')"
           (cd templates/typescript && pnpm fetch --frozen-lockfile)
+      # The kit's TypeScript tools (tsc, eslint: package.json, pnpm-lock.yaml, same pnpm pin) into the same store and
+      # node_modules: check-ts installs from that store with --offline.
+      - run: pnpm install --frozen-lockfile
       # The runner's 4 CPUs are the gate's alone: one pytest worker each (local default: the justfile's check-tests).
       - run: just check
         env:
