@@ -55,8 +55,8 @@
       "pr": null
     },
     "acceptance-web-list-once": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 271
     }
   }
 }
