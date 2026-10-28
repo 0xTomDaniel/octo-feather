@@ -321,7 +321,7 @@ def cmd_archive(args: list[str]) -> int:
         unreflect(log, pre)   # every file left as it was: the lane reflection's lines cut too
         raise Refuse(f"{e}; the lane reflection's lines undone, every file left in {lanes}") from e
     try:
-        file_corrections(lanes, [name, reflect_module().DIRECTOR])   # spec comms #reflection-correction
+        file_corrections(lanes)   # spec comms #reflection-correction
     except Refuse as e:
         unreflect(log, pre)
         unreflect(dlog, dpre)
@@ -464,11 +464,11 @@ def lane_logs(lanes: Path) -> list[tuple[str, Path, list[dict[str, object]]]]:
 GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tracker whose issues the rule can search (gh)
 
 
-def file_corrections(lanes: Path, owners: list[str]) -> list[str]:
-    """Spec comms #reflection-correction: file, through the tracker skill's issue-create, each correction lane the
-    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`) whose owner is in OWNERS: a lane name
-    files in its target's tracker (the current directory's tracker skill, the lane record's repository), the
-    director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
+def file_corrections(lanes: Path) -> list[str]:
+    """Spec comms #reflection-correction: file, through the tracker skill's issue-create, every correction lane the
+    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), whichever reflection ran, each in its
+    own owner's tracker: a lane name files in its target's tracker (the current directory's tracker skill, the lane
+    record's repository), the director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
     import tomllib
     r = reflect_module()
     dlog = lanes.parent / DIRECTOR_LOG
@@ -480,7 +480,7 @@ def file_corrections(lanes: Path, owners: list[str]) -> list[str]:
     except (OSError, UnicodeDecodeError) as e:
         raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
     filed: list[str] = []
-    for owner in owners:
+    for owner in dict.fromkeys(o for d in due for o in d.owners):
         mine = [d for d in due if owner in d.owners]
         if not mine:
             continue
@@ -529,14 +529,14 @@ def cmd_reflect(args: list[str]) -> int:
             raise Refuse(f"usage: octo-feather-lane reflect --director [--due] (got {' '.join(args)})")
         lanes = lanes_dir()
         if reflect_director(lanes, due=args[1:] == ["--due"]):
-            file_corrections(lanes, [reflect_module().DIRECTOR])
+            file_corrections(lanes)
         return 0
     name = lane_name(args, "reflect")
     lanes = lanes_dir()
     if not (lanes / f"{name}.toml").is_file():
         raise Refuse(f"no lane record {lanes / f'{name}.toml'}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
     reflect_lane(name, lanes)
-    file_corrections(lanes, [name])
+    file_corrections(lanes)
     return 0
 
 

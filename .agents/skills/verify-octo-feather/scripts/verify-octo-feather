@@ -710,32 +710,33 @@ def drive_correction_lane(f: Feature) -> None:
     lanes = sc / "state" / "octo-feather" / "lanes"
     (lanes / "archive").mkdir(parents=True)
     store = sc / "gh.json"
-    # Lane gh900 (archived) logged one code-review finding of a class; scratch lane gh901's review the second.
+    # Archived lanes gh900 and gh901 logged one code-review finding of a class each; open scratch lane gh902 none.
     def cr(at: str, summary: str) -> str:
         return json.dumps({"at": at, "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": True,
                            "summary": summary}) + "\n"
     first, second = "help text restates the archive refusal rule of comms #reflection-lane", "test comment restates comms #handoff-fields"
-    for name, at, summary, where in (("gh900", "2026-10-20T00:00:00Z", first, "archive/"), ("gh901", "2026-10-27T00:00:00Z", second, "")):
+    for name, at, summary, where in (("gh900", "2026-10-20T00:00:00Z", first, "archive/"), ("gh901", "2026-10-27T00:00:00Z", second, "archive/")):
         (lanes / f"{where}{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
         (lanes / f"{where}{name}.handoffs.jsonl").write_text(cr(at, summary))
+    (lanes / "gh902.toml").write_text('supervisor = "w92:p2"\nrepository = "scratch/target"\nissue = "gh902"\ngoal = "scratch lane"\n')
     (lanes.parent / "director.handoffs.jsonl").write_text("")
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800",
              **fake_tracker(f.s.repo, sc)}
     # The real reflectors (SKILL.md: a role's model run is the one exception to offline), the tracker faked.
-    f.run("file-live", "octo-feather-lane", "archive", "gh901")
+    f.run("file-live", "octo-feather-lane", "archive", "gh902")
     f.obs("file-live", "tracker", store.read_text() if store.is_file() else "{}")
 
     def filed(c: Case) -> bool:
         """The archive printed the key of one issue in the lane record's repository whose title carries the class's
-        marker and whose body quotes both findings and names a route line; gh901 left lanes/."""
+        marker and whose body quotes both findings and names a route line; gh902 left lanes/."""
         m = re.search(r"(?m)^correction lane: filed (\d+) in github-issues scratch/target for duplicated-rule ", c.out)
         hits = [i for i in json.loads(c.o["tracker"]).get("issues", []) if m and str(i["number"]) == m[1]]
         return (c.code == 0 and len(hits) == 1 and hits[0]["repo"] == "scratch/target"
                 and "[correction-lane duplicated-rule]" in hits[0]["title"]
                 and all(x in hits[0]["body"] for x in (first, second, "Class: duplicated-rule", "Route: "))
-                and (lanes / "archive" / "gh901.toml").is_file())
+                and (lanes / "archive" / "gh902.toml").is_file())
 
     f.check("file-live", filed)
     issues: list[dict[str, Any]] = json.loads(store.read_text()).get("issues", []) if store.is_file() else []
