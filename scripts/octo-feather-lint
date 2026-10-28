@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Ruff and basedpyright over a repo's Python, their own baselines kept shrink-only (#244).
 
-Run in the repo root (its pyproject.toml holds the config), ruff and basedpyright on PATH
-(the kit: `uv run --locked`).
+Run in the repo root (its pyproject.toml holds the config), with ruff, basedpyright and tomlkit
+(pinned, edits pyproject.toml keeping its layout) in the Python environment it runs in: the kit's
+dev group, `uv run --locked`; a target adds all three to its own dev dependencies.
 
   octo-feather-lint files   print the Python file set, one path per line
   octo-feather-lint lint    ruff check over the file set
@@ -29,7 +30,8 @@ The baselines, each the tool's own mechanism:
   basedpyright: its baseline file (`baselineFile` in [tool.basedpyright], default
     .basedpyright/baseline.json; it matches an error by rule and columns, not line).
 A violation outside the baseline fails naming file:line, rule and fix. An entry that no
-longer fires fails naming `octo-feather-lint shrink`, which only deletes entry lines and lets
+longer fires fails naming `octo-feather-lint shrink`, which only deletes entries (tomlkit, the
+rest of pyproject.toml byte for byte as it was) and lets
 basedpyright's auto mode prune its file (auto mode writes only fixed errors away, and nothing
 while any error is new): it never adds a code, path or error.
 Exit: 0 pass, 1 violations or stale entries, 2 usage or tool error.
@@ -47,7 +49,11 @@ import tempfile
 from pathlib import Path
 from typing import cast
 
+import tomlkit
 import tomllib
+from tomlkit.container import Container, OutOfOrderTableProxy
+from tomlkit.exceptions import ParseError
+from tomlkit.items import Array, Table
 
 PYPROJECT = Path("pyproject.toml")
 # The root config for every file: a nested pyproject (an eval fixture, a template) never applies.
@@ -178,13 +184,39 @@ def format_baseline() -> list[str]:
     return str_list((table(FORMAT_TABLE) or {}).get("exclude", []), f"[{FORMAT_TABLE}] exclude")
 
 
-def table_span(text: str, header: str) -> tuple[int, int] | None:
-    """Where table `[header]` sits in the pyproject text: its header line to the next table."""
-    start = text.find(f"[{header}]\n")
-    if start < 0:
-        return None
-    end = text.find("\n[", start)
-    return start, (end + 1 if end >= 0 else len(text))
+# A table split over several headers ([tool.ruff.lint] and [tool.ruff.lint.x]) is a proxy.
+Node = Container | Table | OutOfOrderTableProxy
+
+
+def document() -> tomlkit.TOMLDocument:
+    """pyproject.toml for editing: tomlkit keeps every byte it is not told to change."""
+    try:
+        return tomlkit.parse(PYPROJECT.read_text(encoding="utf-8"))
+    except (OSError, ParseError) as e:
+        msg = f"cannot read {PYPROJECT}: {e}"
+        raise ToolError(msg) from e
+
+
+def edit_node(doc: tomlkit.TOMLDocument, dotted: str, *, create: bool) -> Node | None:
+    """The table at `dotted` in doc; with create, missing tables are made (super tables)."""
+    node: Node = doc
+    for key in dotted.split("."):
+        if key not in node and create:
+            node[key] = tomlkit.table(is_super_table=True)
+        if key not in node:
+            return None
+        child: object = node[key]
+        if not isinstance(child, (Container, Table, OutOfOrderTableProxy)):
+            return None
+        node = child
+    return node
+
+
+def multiline(items: list[str]) -> Array:
+    array = tomlkit.array()
+    for item in items:
+        array.add_line(item)
+    return array.multiline(multiline=True)
 
 
 def ruff_json(args: list[str], files: list[str], config: Path = PYPROJECT) -> list[Json]:
@@ -208,13 +240,14 @@ def lint_findings(files: list[str]) -> list[Json]:
     """Every ruff check violation without the baseline table, the rest of the config as is: a
     copy of pyproject.toml minus that table (a `--config` override merges into the table, never
     empties it; relative paths in a `--config` file resolve against the working directory)."""
-    text = PYPROJECT.read_text(encoding="utf-8")
-    span = table_span(text, LINT_TABLE)
-    if span:
-        text = text[: span[0]] + text[span[1] :]
+    doc = document()
+    parent, _, name = LINT_TABLE.rpartition(".")
+    node = edit_node(doc, parent, create=False)
+    if node is not None and name in node:
+        del node[name]
     with tempfile.TemporaryDirectory() as tmp:
         config = Path(tmp) / PYPROJECT.name
-        config.write_text(text, encoding="utf-8")
+        config.write_text(tomlkit.dumps(doc), encoding="utf-8")
         return ruff_json(["check", "--exit-zero"], files, config)
 
 
@@ -365,44 +398,35 @@ def cmd_types(files: list[str]) -> int:
     return 0
 
 
-def drop_lines(text: str, header: str, key: str, drop: set[str]) -> str:
-    """Delete `"X",` lines (X in drop) from the array `key = [` of table `[header]`."""
-    out: list[str] = []
-    in_table = in_array = False
-    for line in text.splitlines(keepends=True):
-        s = line.strip()
-        if s.startswith("["):
-            in_table, in_array = s == f"[{header}]", False
-        elif in_table and s.endswith("= ["):
-            in_array = s[: -len("= [")].strip() == key
-        elif in_array and s == "]":
-            in_array = False
-        elif in_array and s.rstrip(",").strip('"') in drop:
-            continue
-        out.append(line)
-    return "".join(out)
+def drop(array: object, items: set[str]) -> None:
+    if isinstance(array, Array):
+        values = cast("list[str]", array)
+        for item in [v for v in values if v in items]:
+            values.remove(item)
 
 
 def cmd_shrink(files: list[str]) -> int:
     original = PYPROJECT.read_text(encoding="utf-8")
-    text = original
+    doc = document()
     _, lint_stale = lint_state(files)
-    base = lint_baseline()
-    for path in {p for p, _ in lint_stale}:
+    lint = edit_node(doc, LINT_TABLE, create=False)
+    for path in sorted({p for p, _ in lint_stale}):
         codes = {c for p, c in lint_stale if p == path}
-        text = drop_lines(text, LINT_TABLE, f'"{path}"', set(base[path]) if "" in codes else codes)
-    span = table_span(text, LINT_TABLE)
-    if span:  # keys emptied above, in the baseline table only
-        kept = re.sub(r'^"[^"\n]+" = \[\n\]\n', "", text[span[0] : span[1]], flags=re.MULTILINE)
-        text = text[: span[0]] + kept + text[span[1] :]
+        if lint is not None and path in lint:
+            drop(lint[path], codes)
+            if "" in codes or not lint[path]:  # the file left the set, or its key emptied
+                del lint[path]
     _, fmt_stale = format_state(files)
-    text = drop_lines(text, FORMAT_TABLE, "exclude", set(fmt_stale))
+    fmt = edit_node(doc, FORMAT_TABLE, create=False)
+    if fmt is not None and "exclude" in fmt:
+        drop(fmt["exclude"], set(fmt_stale))
+    text = tomlkit.dumps(doc)
     PYPROJECT.write_text(text, encoding="utf-8")
     left = lint_state(files)[1] + [(p, "") for p in format_state(files)[1]]
     if left:
         PYPROJECT.write_text(original, encoding="utf-8")
-        warn(f"shrink: could not delete {left}; {PYPROJECT} left as it was. Delete those entry")
-        warn("  lines by hand (the baseline layout: one quoted entry per line)")
+        warn(f"shrink: could not delete {left}; {PYPROJECT} left as it was. Delete those")
+        warn("  entries by hand")
         return 1
     base_file = baseline_path()
     if base_file.is_file():
@@ -414,7 +438,11 @@ def cmd_shrink(files: list[str]) -> int:
 
 def cmd_init(files: list[str]) -> int:
     base = baseline_path()
-    taken = [t for t in (LINT_TABLE, FORMAT_TABLE) if table(t) is not None]
+    has_format = "exclude" in (table(FORMAT_TABLE) or {})
+    taken = [
+        *([LINT_TABLE] if table(LINT_TABLE) is not None else []),
+        *([f"{FORMAT_TABLE} exclude"] if has_format else []),
+    ]
     if taken or base.exists():
         warn(f"init: a baseline exists ({', '.join([*taken, str(base)])}); it only shrinks:")
         warn(f"  fix the new violations instead, or run `{SHRINK}`")
@@ -422,15 +450,21 @@ def cmd_init(files: list[str]) -> int:
     codes: dict[str, set[str]] = {}
     for f in lint_findings(files):
         codes.setdefault(where(f)[0], set()).add(str(f["code"]))
-    note = "# Baseline (octo-feather-lint): taken once, only shrinks."
-    block = [f"\n[{LINT_TABLE}]", note]
+    doc = document()
+    lint = tomlkit.table()
+    lint.add(tomlkit.comment("Baseline (octo-feather-lint): taken once, only shrinks."))
     for path in sorted(codes):
-        block.extend([f'"{path}" = [', *(f'  "{c}",' for c in sorted(codes[path])), "]"])
-    block.extend([f"\n[{FORMAT_TABLE}]", note, "exclude = ["])
-    block.extend(f'  "{p}",' for p in sorted({where(f)[0] for f in format_findings(files)}))
-    block.append("]")
-    with PYPROJECT.open("a", encoding="utf-8") as f:
-        f.write("\n".join(block) + "\n")
+        lint.add(path, multiline(sorted(codes[path])))
+    lint.add(tomlkit.nl())  # a blank line before whatever table follows
+    parent, _, name = LINT_TABLE.rpartition(".")
+    node = edit_node(doc, parent, create=True)
+    fmt = edit_node(doc, FORMAT_TABLE, create=True)
+    if node is None or fmt is None:
+        msg = f"{PYPROJECT}: {parent} or {FORMAT_TABLE} is not a table"
+        raise ToolError(msg)
+    node[name] = lint
+    fmt["exclude"] = multiline(sorted({where(f)[0] for f in format_findings(files)}))
+    PYPROJECT.write_text(tomlkit.dumps(doc), encoding="utf-8")
     base.parent.mkdir(parents=True, exist_ok=True)
     pyright(files, base, ["--writebaseline"])
     say(f"init: baselines written to {PYPROJECT} and {base}")
