@@ -28,7 +28,7 @@ sys.stdout.write(open(os.environ["STUB_REPLY"]).read())
 EOF
 printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"
 chmod +x "$t/bin/pi" "$t/bin/herdr"
-export PATH="$t/bin:$PATH"
+export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh: a due correction lane files there (tests/lane-correction.sh)
 state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"; mkdir -p "$lanes"
 Q="Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed"
 

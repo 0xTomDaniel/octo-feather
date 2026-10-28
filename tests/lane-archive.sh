@@ -21,7 +21,7 @@ case "$*" in
 esac
 echo "Findings: none"
 EOF
-printf '#!/bin/sh\nexit 1\n' >"$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$PATH"
+printf '#!/bin/sh\nexit 1\n' >"$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh (tests/lane-correction.sh)
 unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
 reflected() { # ARCHIVED-LOG ORIGINAL-LOG-COPY: the original bytes, a newline if they lacked one, then one reflection line
   python3 - "$1" "$2" <<'PY'

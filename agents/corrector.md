@@ -1,6 +1,6 @@
 ---
 name: corrector
-description: Run pstack correct against a target repo in its own correction lane, started when the owner corrects something at a gate or a finding class repeats, and return its commits.
+description: Run pstack correct against a target repo in its own correction lane, started on a trigger issue-lifecycle spec `#lanes-correction` owns, and return its commits.
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write

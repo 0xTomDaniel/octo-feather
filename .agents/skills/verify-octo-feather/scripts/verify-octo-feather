@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -365,6 +365,12 @@ class Feature:
             fh.write(line + "\n")
 
 
+def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
+    """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
+    store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
+    return {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+
+
 def fresh_path(p: Path) -> None:
     """A path a drive creates; cleanup removes it, and only it. Refuses a path that already holds anything."""
     if p.exists() and (not p.is_dir() or any(p.iterdir())):
@@ -566,7 +572,7 @@ def drive_lane_archive(f: Feature) -> None:
     # OCTO_FEATHER_REFLECT_ARGS from the caller rides along (e.g. "--thinking off" for a cheap smoke).
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
-             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_tracker(f.s.repo, sc)}
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -582,8 +588,8 @@ def drive_lane_archive(f: Feature) -> None:
     f.run("refuse-no-record", "octo-feather-lane", "reflect", "gh404")
     f.check("refuse-no-record", lambda c: c.code == 1 and "no lane record" in c.err)
     # The real reflector on the same lane, its model reached (SKILL.md: a role's model run is the one exception
-    # to offline); the reflect command calls no gh and the reflector has only read, grep, find and ls, Herdr
-    # stays a dead socket and the state a scratch one, so no live lane is reached.
+    # to offline); the reflect command's gh is the fake tracker and the reflector has only read, grep, find and ls,
+    # Herdr stays a dead socket and the state a scratch one, so no live lane is reached.
     f.env["OCTO_FEATHER_REFLECT_TIMEOUT"] = os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800"
     f.run("reflect-live", "octo-feather-lane", "archive", "gh900")
     f.obs("reflect-live", "after", files())
@@ -647,7 +653,7 @@ def drive_director_reflection(f: Feature) -> None:
     dlog.write_text(seeded)
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
-             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_tracker(f.s.repo, sc)}
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -698,6 +704,47 @@ def drive_director_reflection(f: Feature) -> None:
     say(f"director-reflection evidence: {f.d}")
 
 
+def drive_correction_lane(f: Feature) -> None:
+    sc = RUN_DIR / "scratch" / "correction-lane"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    (lanes / "archive").mkdir(parents=True)
+    store = sc / "gh.json"
+    # Lane gh900 (archived) logged one code-review finding of a class; scratch lane gh901's review the second.
+    def cr(at: str, summary: str) -> str:
+        return json.dumps({"at": at, "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": True,
+                           "summary": summary}) + "\n"
+    first, second = "help text restates the archive refusal rule of comms #reflection-lane", "test comment restates comms #handoff-fields"
+    for name, at, summary, where in (("gh900", "2026-10-20T00:00:00Z", first, "archive/"), ("gh901", "2026-10-27T00:00:00Z", second, "")):
+        (lanes / f"{where}{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
+        (lanes / f"{where}{name}.handoffs.jsonl").write_text(cr(at, summary))
+    (lanes.parent / "director.handoffs.jsonl").write_text("")
+    args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800",
+             **fake_tracker(f.s.repo, sc)}
+    # The real reflectors (SKILL.md: a role's model run is the one exception to offline), the tracker faked.
+    f.run("file-live", "octo-feather-lane", "archive", "gh901")
+    f.obs("file-live", "tracker", store.read_text() if store.is_file() else "{}")
+
+    def filed(c: Case) -> bool:
+        """The archive printed the key of one issue in the lane record's repository whose title carries the class's
+        marker and whose body quotes both findings and names a route line; gh901 left lanes/."""
+        m = re.search(r"(?m)^correction lane: filed (\d+) in github-issues scratch/target for duplicated-rule ", c.out)
+        hits = [i for i in json.loads(c.o["tracker"]).get("issues", []) if m and str(i["number"]) == m[1]]
+        return (c.code == 0 and len(hits) == 1 and hits[0]["repo"] == "scratch/target"
+                and "[correction-lane duplicated-rule]" in hits[0]["title"]
+                and all(x in hits[0]["body"] for x in (first, second, "Class: duplicated-rule", "Route: "))
+                and (lanes / "archive" / "gh901.toml").is_file())
+
+    f.check("file-live", filed)
+    issues: list[dict[str, Any]] = json.loads(store.read_text()).get("issues", []) if store.is_file() else []
+    for i in issues:
+        print(f"    filed: {i['repo']}#{i['number']} {i['title']}")
+    f.env = {}
+    say(f"correction-lane evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -705,6 +752,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "evidence": drive_evidence,
     "lane-archive": drive_lane_archive,
     "director-reflection": drive_director_reflection,
+    "correction-lane": drive_correction_lane,
 }
 
 
