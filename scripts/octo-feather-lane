@@ -250,6 +250,8 @@ After the lanes:
     lane <record name> gate <gate> asked <at>    oldest first
   owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
     class <class>: count <N>, last seen <at>     by class name
+  director reflection: last ran <at>             the director log's latest reflection line (`never ran (<log>)`
+                                                 with none; `never ran (<log>: none)` with no log)
   spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
@@ -2293,6 +2295,21 @@ def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
     return out
 
 
+def director_reflection(state: Path, now, unread: list[str]) -> str:
+    """When the director reflection last ran (spec comms #report-reflection)."""
+    log = state / DIRECTOR_LOG
+    if not log.exists():
+        return f"director reflection: never ran ({log.name}: none)"
+    try:
+        lines, _ = read_log(log)
+    except (OSError, UnicodeDecodeError) as e:
+        if f"log {log.name}" not in unread:
+            unread.append(f"log {log.name}")
+        return f"director reflection: unread: log {log.name}: {e}"
+    at, _ = reflect_module().since_last_reflection(lines)
+    return f"director reflection: never ran ({log.name})" if at is None else f"director reflection: last ran {stamp(at, now)}"
+
+
 def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | None:
     """A JSON lines file's object lines with their numbers, and the numbers of the lines that are not one; None with no file."""
     if not path.exists():
@@ -2492,6 +2509,7 @@ def cmd_report(args: list[str]) -> int:
     for name, g, at in queue:
         print(f"  lane {name} gate {g} asked {stamp(at, now)}")
     print("\n".join(owner_caught(lanes.parent, now, unread)))
+    print(director_reflection(lanes.parent, now, unread))
     for n in src.notes():
         print(n)
     print(f"unread: {', '.join(unread) or 'none'}")

@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -745,6 +745,34 @@ def drive_correction_lane(f: Feature) -> None:
     say(f"correction-lane evidence: {f.d}")
 
 
+def drive_factory_report(f: Feature) -> None:
+    sc = RUN_DIR / "scratch" / "factory-report"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    lanes.mkdir(parents=True)
+    dlog = lanes.parent / "director.handoffs.jsonl"
+    # No open lane, so no gh call; Herdr points at no server. The director log: a note, no reflection line yet.
+    dlog.write_text(json.dumps({"at": "2026-10-27T00:00:00Z", "kind": "note", "text": "status sent"}) + "\n")
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock")}
+    f.run("reflection-never", "octo-feather-lane", "report")
+    f.check("reflection-never", lambda c: c.code == 0
+            and re.findall(r"(?m)^director reflection: .*$", c.out) == ["director reflection: never ran (director.handoffs.jsonl)"])
+    # The latest reflection line two days old, after an older one.
+    two_days = datetime.fromtimestamp(datetime.now(UTC).timestamp() - 2 * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with dlog.open("a") as fh:
+        for at in ("2026-10-01T09:00:00Z", two_days):
+            fh.write(json.dumps({"at": at, "kind": "reflection", "findings": 0, "questions": ["owner-asked"]}) + "\n")
+    f.obs("reflection-two-days", "at", two_days)
+    f.obs("reflection-two-days", "before", dlog.read_text())
+    f.run("reflection-two-days", "octo-feather-lane", "report")
+    f.obs("reflection-two-days", "director-log", dlog.read_text())
+    f.check("reflection-two-days", lambda c: c.code == 0 and c.o["director-log"] == c.o["before"]
+            and len(re.findall(r"(?m)^director reflection: ", c.out)) == 1
+            and re.search(rf"(?m)^director reflection: last ran {re.escape(c.o['at'])} \(2d0h\d+m ago\)$", c.out) is not None)
+    f.env = {}
+    say(f"factory-report evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -753,6 +781,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "lane-archive": drive_lane_archive,
     "director-reflection": drive_director_reflection,
     "correction-lane": drive_correction_lane,
+    "factory-report": drive_factory_report,
 }
 
 
