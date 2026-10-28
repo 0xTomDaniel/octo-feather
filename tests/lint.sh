@@ -21,13 +21,8 @@ bad() {
   for s in "$@"; do grep -qF -- "$s" <<<"$out" || fail "$cmd did not print: $s"; done
 }
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
-# grew: either baseline holds an entry its last commit lacks (pyproject.toml: a line added;
-# basedpyright's file: more errors than committed, its JSON layout reflows when it shrinks).
-grew() {
-  [[ "$(g diff --numstat -- pyproject.toml | cut -f1)" =~ ^0?$ ]] || return 0
-  local b=.basedpyright/baseline.json
-  (( $(grep -c '"code"' "$t/$b") <= $(g show "HEAD:$b" | grep -c '"code"') )) && return 1 || return 0
-}
+# grew: a baseline holds an entry its last commit lacks (the comparison: tests/fixtures/lint/baseline_grew.py).
+grew() { ! (cd "$t" && python3 "$kit/tests/fixtures/lint/baseline_grew.py"); }
 
 mkdir -p "$t/pkg" "$t/bin" "$t/.agents/skills/s/scripts"
 cat >"$t/pyproject.toml" <<'EOF'
@@ -85,12 +80,24 @@ printf 'X = {  "a":1 }\n' >"$t/pkg/n.py"; g add pkg/n.py
 bad format 'pkg/n.py:1: unformatted' 'ruff format --diff pkg/n.py'
 g rm -qf pkg/n.py
 
-# Fixed violations leave stale entries naming shrink; shrink deletes only them.
+# Fixed violations leave stale entries naming shrink; shrink deletes only them, never an emptied
+# array outside the baseline table.
+printf '\n[tool.unrelated]\n"extra" = [\n]\n' >>"$t/pyproject.toml"; g commit -qam unrelated
 printf '#!/usr/bin/env python3\nimport sys\n\nN: int = 1\nsys.stdout.write(f"{N}\\n")\n' >"$t/bin/tool"
 bad lint 'T201 no longer fires in bin/tool' 'octo-feather-lint shrink'
 bad types 'no longer occur' 'octo-feather-lint shrink'
 ok shrink "shrink after fixes"
 ! grew || fail "shrink grew a baseline"
 ! grep -qF '"T201",' "$t/pyproject.toml" || fail "shrink left the stale T201"
+grep -qxF '"extra" = [' "$t/pyproject.toml" || fail "shrink deleted [tool.unrelated] extra"
 ok lint "after shrink"; ok types "after shrink"
+
+# No tracked Python: no tool runs, so an untracked file is never linted, formatted or typed.
+rm -rf "$t"; mkdir "$t"
+printf '[tool.ruff.lint]\nselect = ["ALL"]\n\n[tool.basedpyright]\ntypeCheckingMode = "strict"\n' >"$t/pyproject.toml"
+g init -q; g add pyproject.toml; g commit -qm base
+printf 'import nonexistent\n' >"$t/untracked.py"
+ok lint "with only an untracked file"; grep -qF 'lint: ok (0 files' <<<"$out" || fail "lint did not report 0 files"
+ok format "with only an untracked file"; grep -qF 'format: ok (0 files' <<<"$out" || fail "format did not report 0 files"
+ok types "with only an untracked file"; grep -qF 'analyzed 0 files' <<<"$out" || fail "types did not report 0 files"
 echo "lint test: ok"

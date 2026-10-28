@@ -178,7 +178,18 @@ def format_baseline() -> list[str]:
     return str_list((table(FORMAT_TABLE) or {}).get("exclude", []), f"[{FORMAT_TABLE}] exclude")
 
 
+def table_span(text: str, header: str) -> tuple[int, int] | None:
+    """Where table `[header]` sits in the pyproject text: its header line to the next table."""
+    start = text.find(f"[{header}]\n")
+    if start < 0:
+        return None
+    end = text.find("\n[", start)
+    return start, (end + 1 if end >= 0 else len(text))
+
+
 def ruff_json(args: list[str], files: list[str], config: Path = PYPROJECT) -> list[Json]:
+    if not files:  # ruff given no path scans the working directory, untracked files included
+        return []
     opts = ["--config", str(config), "--force-exclude", "--output-format", "json"]
     r = run(["ruff", *args, *opts, *files])
     try:
@@ -198,10 +209,9 @@ def lint_findings(files: list[str]) -> list[Json]:
     copy of pyproject.toml minus that table (a `--config` override merges into the table, never
     empties it; relative paths in a `--config` file resolve against the working directory)."""
     text = PYPROJECT.read_text(encoding="utf-8")
-    start = text.find(f"[{LINT_TABLE}]\n")
-    if start >= 0:
-        end = text.find("\n[", start)
-        text = text[:start] + (text[end + 1 :] if end >= 0 else "")
+    span = table_span(text, LINT_TABLE)
+    if span:
+        text = text[: span[0]] + text[span[1] :]
     with tempfile.TemporaryDirectory() as tmp:
         config = Path(tmp) / PYPROJECT.name
         config.write_text(text, encoding="utf-8")
@@ -282,7 +292,10 @@ def mirror(path: str) -> str:
 
 def pyright(files: list[str], baseline: Path, mode: list[str]) -> Json:
     """basedpyright over the files through a throwaway mirror of links, its project root the
-    mirror (the repo's pyproject linked in); diagnostics come back with repo paths."""
+    mirror (the repo's pyproject linked in); diagnostics come back with repo paths. No files:
+    nothing runs (basedpyright given no path scans the project root)."""
+    if not files:
+        return {"generalDiagnostics": [], "summary": {"filesAnalyzed": 0}}
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp).resolve()
         config = root / PYPROJECT.name
@@ -373,7 +386,10 @@ def cmd_shrink(files: list[str]) -> int:
     for path in {p for p, _ in lint_stale}:
         codes = {c for p, c in lint_stale if p == path}
         text = drop_lines(text, LINT_TABLE, f'"{path}"', set(base[path]) if "" in codes else codes)
-    text = re.sub(r'^"[^"\n]+" = \[\n\]\n', "", text, flags=re.MULTILINE)  # emptied keys
+    span = table_span(text, LINT_TABLE)
+    if span:  # keys emptied above, in the baseline table only
+        kept = re.sub(r'^"[^"\n]+" = \[\n\]\n', "", text[span[0] : span[1]], flags=re.MULTILINE)
+        text = text[: span[0]] + kept + text[span[1] :]
     _, fmt_stale = format_state(files)
     text = drop_lines(text, FORMAT_TABLE, "exclude", set(fmt_stale))
     PYPROJECT.write_text(text, encoding="utf-8")
