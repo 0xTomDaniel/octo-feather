@@ -69,6 +69,34 @@
     "acceptance-report-unreadable": {
       "status": "built",
       "pr": 252
+    },
+    "acceptance-reflect-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-caught-by-hand": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-before-archive": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-director": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-writer-route": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-missed": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-report-reflection": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

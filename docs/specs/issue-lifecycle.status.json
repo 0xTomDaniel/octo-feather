@@ -141,6 +141,14 @@
     "acceptance-no-github-issue": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-reflection-missed-lane": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-writer-route-lane": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
