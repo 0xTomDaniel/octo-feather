@@ -2295,13 +2295,13 @@ def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
     return out
 
 
-def director_reflection(state: Path, now, unread: list[str]) -> str:
+def director_reflection(state: Path, now: object, unread: list[str]) -> str:
     """When the director reflection last ran (spec comms #report-reflection)."""
     log = state / DIRECTOR_LOG
     if not log.exists():
         return f"director reflection: never ran ({log.name}: none)"
     try:
-        lines, _ = read_log(log)
+        lines = cast("list[dict[str, object]]", read_log(log)[0])
     except (OSError, UnicodeDecodeError) as e:
         if f"log {log.name}" not in unread:
             unread.append(f"log {log.name}")
