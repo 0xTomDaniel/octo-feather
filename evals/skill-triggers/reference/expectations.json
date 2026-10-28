@@ -144,7 +144,7 @@
   "dir-lever-teardown-steps": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "dir-lever-near-test-command": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
   "dir-lever-near-lane-waiting": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
-  "sup-lever-reformat-drafts": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
+  "sup-lever-finding-lines": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "sup-lever-handoff-stamp": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "sup-lever-near-goal-line": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
   "sup-lever-near-handoff-count": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
