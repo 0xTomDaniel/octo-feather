@@ -138,7 +138,7 @@ def norm(text):
 
 
 def skill_text(path):
-    """The SKILL.md as the kit under test holds it, normalized (rule: schema, Skill load)."""
+    """The SKILL.md at PATH (the kit under test's or the case repo's), normalized (rule: schema, Skill load)."""
     if path not in _SKILL_TEXT:
         try:
             _SKILL_TEXT[path] = norm(Path(path).read_text(encoding="utf-8")).rstrip("\n")
@@ -166,9 +166,9 @@ def result_texts(lines):
 
 
 def loads(fact, text):
-    """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md, as skill_text reads it
-    from the kit under test, found whole in TEXT."""
-    want = skill_text(fact.get("_skill_md", ""))
+    """skill_read on one tool result's TEXT (rule: schema, Skill load): the fact's SKILL.md text (skill_source),
+    found whole in TEXT."""
+    want = fact["_skill_text"] if "_skill_text" in fact else skill_text(fact.get("_skill_md", ""))
     return bool(want) and text is not None and want in text
 
 
@@ -613,6 +613,16 @@ def fixture_copy(src, scratch, case=None, evals=None):
     return repo, head
 
 
+def skill_source(fact, kit, repo):
+    """FACT with the SKILL.md it grades (rule: schema, Facts): the kit's (_skill_md, read when graded), else the case repo's
+    as set up, before the agent runs (_skill_text: its text now, as the agent first sees it)."""
+    p = kit / ".agents" / "skills" / str(fact.get("skill")) / "SKILL.md"
+    if p.is_file():
+        return dict(fact, _skill_md=str(p))
+    p = repo / ".agents" / "skills" / str(fact.get("skill")) / "SKILL.md"
+    return dict(fact, _skill_md=str(p), _skill_text=skill_text(str(p)))
+
+
 def kit_at(ref):
     """(kit dir, full sha): the head kit for ref None, else COMMIT's tree archived into scratch (caller removes it)."""
     git = lambda *a: subprocess.run(["git", "-C", str(KIT), *a], capture_output=True, text=True)
@@ -651,8 +661,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
             why = e.stderr.strip()[-200:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)
             return finish(out, suite, case, role_model, 0.0, "FAIL", [f"fixture: {why}; case not run"], [], None, kits)
         task = case["task"].replace("{repo}", str(repo)).replace("{head}", head)
-        facts = [dict(f, _skill_md=p) if "skill" in f else f
-                 for f in facts for p in [str(kit / ".agents" / "skills" / str(f.get("skill")) / "SKILL.md")]]
+        facts = [skill_source(f, kit, repo) if "skill" in f else f for f in facts]
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")

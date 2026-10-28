@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "qc.v1.schema.json",
+  "title": "App-driver contract, format 1 (quality spec #qc-contract, docs/adr/0025): qc.toml at a target's root",
+  "description": "Keys follow annotateanything's qa.toml where they fit. Commands run under sh with QC_REPO set to the repo root; no key names a path on this box (#evidence-portable).",
+  "type": "object",
+  "required": ["format", "entry", "services", "fixture", "values"],
+  "properties": {
+    "format": {"description": "This contract's format version: picks schemas/qc.v<format>.schema.json", "type": "integer", "const": 1},
+    "setup": {"description": "Installs or builds the app once, run from the repo root", "type": "string", "minLength": 1},
+    "entry": {
+      "description": "How the app is entered",
+      "type": "object",
+      "required": ["command"],
+      "properties": {
+        "command": {"description": "The app command a user runs; a drive appends its arguments and runs it from the drive's own working directory", "type": "string", "minLength": 1}
+      },
+      "additionalProperties": false
+    },
+    "services": {
+      "description": "Services the app needs, by name; empty for an app with none",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["command"],
+        "properties": {
+          "command": {"description": "Starts the service, run from the repo root", "type": "string", "minLength": 1},
+          "ready": {"description": "How the service is known to be ready: the path its URL answers on", "type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "fixture": {
+      "description": "Fixtures, by name; empty for an app that keeps no data",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["reset"],
+        "properties": {
+          "reset": {"description": "Resets the fixture, run from the repo root before a drive", "type": "string", "minLength": 1},
+          "path": {"description": "Where the fixture's data lives, relative to the repo root", "type": "string", "minLength": 1}
+        },
+        "additionalProperties": false
+      }
+    },
+    "values": {
+      "description": "Named values criteria refer to and drives use",
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    }
+  },
+  "additionalProperties": false
+}
