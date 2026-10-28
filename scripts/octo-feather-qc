@@ -130,7 +130,13 @@ def github_snapshot(skip, runid):
 
 
 def drop(path):
-    subprocess.run(["chmod", "-R", "u+w", str(path)], capture_output=True)
+    # No child process here: a killed run's 2nd signal (timeout sends one to its whole group) would kill it
+    # mid-cleanup and leave the read-only snapshot behind (issue #235).
+    for d, _, _ in os.walk(path):   # top-down: each dir writable before its entries go
+        try:
+            os.chmod(d, os.lstat(d).st_mode | 0o700)
+        except OSError:
+            pass
     shutil.rmtree(path, ignore_errors=True)
 
 
@@ -216,6 +222,12 @@ def sandboxed(judge, session, gh, history=True, kit=None):
         stdout = p.stdout.read().decode(errors="replace"); p.wait()
     except BaseException:   # qc killed (timeout, ^C): its PID 1 and unshare --fork ignore SIGTERM, so take the
         os.killpg(p.pid, signal.SIGKILL); p.wait()   # sandbox's group down here, or it judges on unwatched
+        for _ in range(300):   # and exit only once that group is gone, its judge included (issue #235)
+            try:
+                os.killpg(p.pid, 0)
+            except OSError:
+                break
+            time.sleep(0.01)
         raise
     for th in threads:
         th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
