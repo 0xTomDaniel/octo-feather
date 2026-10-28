@@ -97,6 +97,14 @@
     "acceptance-report-reflection": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-reflect-daily": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-reflect-files-correction": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
