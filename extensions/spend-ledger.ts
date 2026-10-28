@@ -54,7 +54,7 @@ function line(model: string, usage: any, timestamp: unknown, unpriced = false): 
   const t = typeof timestamp === "number" ? new Date(timestamp) : new Date();
   return {
     model,
-    purpose: flagRole || process.env.OCTO_FEATHER_ROLE || "agent",
+    purpose: flagRole || process.env["OCTO_FEATHER_ROLE"] || "agent",
     input_tokens: count(usage?.input) + count(usage?.cacheRead) + count(usage?.cacheWrite),
     output_tokens: count(usage?.output),
     cost_usd: typeof cost === "number" && Number.isFinite(cost) && cost >= 0 ? cost : null,
