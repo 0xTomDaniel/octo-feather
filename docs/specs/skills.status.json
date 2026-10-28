@@ -37,6 +37,10 @@
     "acceptance-tracker-scripts": {
       "status": "built",
       "pr": 103
+    },
+    "acceptance-browser": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

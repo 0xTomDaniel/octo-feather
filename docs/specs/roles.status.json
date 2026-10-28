@@ -45,6 +45,18 @@
     "acceptance-codemode-every-role": {
       "status": "built",
       "pr": 179
+    },
+    "acceptance-web-roles": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-web-no-other-mcp": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-web-list-once": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

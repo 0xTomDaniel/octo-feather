@@ -41,6 +41,10 @@
     "acceptance-install-linear": {
       "status": "built",
       "pr": 103
+    },
+    "acceptance-install-browser": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
