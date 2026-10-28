@@ -118,7 +118,8 @@ start() { mkdir -p "$t/h$1"; env -u HERDR_WORKSPACE_ID -u OCTO_FEATHER_PARENT -u
 s=$SECONDS; out="$(start 12 2>&1)" || fail "start failed: $out"
 (( SECONDS - s < 8 )) || fail "start waited on the reflection ($((SECONDS - s))s)"
 [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$b" ]] || fail "reflection line before the reflector returned"
-for _ in $(seq 80); do [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$((b + 1))" ]] && break; sleep 0.5; done
+# The reflector appends the log line, then prints its report line: wait for both observables, bounded.
+for _ in $(seq 80); do [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$((b + 1))" ]] && grep -qF "reflection: director, 0 findings" "$state/director-reflection.out" 2>/dev/null && break; sleep 0.5; done
 [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$((b + 1))" ]] || fail "start ran no director reflection: $(cat "$state/director-reflection.out" 2>/dev/null)"
 grep -qF "reflection: director, 0 findings" "$state/director-reflection.out" || fail "no output in director-reflection.out"
 # Fresh now: a second start runs none.
