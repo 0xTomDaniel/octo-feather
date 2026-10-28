@@ -69,7 +69,7 @@ Evidence lives at `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR`: `doctor.txt` (from `run`)
 
 The kept record is the kit's evidence store (quality spec `#evidence-store`), outside the repo and both folders above: every `drive`, passed or failed, appends one record through `octo-feather-evidence`, entered by the contract, and prints `verify-octo-feather: evidence record <id> (criterion <spec>#<anchor>; ...)`. The record holds the feature folder's files as outputs and names the commit (and whether the tree was dirty), the criterion with its text hash from the kit's own spec, the contract and fixture versions.
 
-- The criterion is the one the feature file's `Drive criterion:` line names; a feature with several lines appends one record per line.
+- The criterion is the one the feature file's `Drive criterion:` line names; records per line: [features/README.md#feature-entry-contract](features/README.md#feature-entry-contract).
 - Read a criterion's records at a commit: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` (`--json` for data). Where the store lives and the record format: `octo-feather-evidence --help`.
 - Drive at a committed head for a record that names it clean.
 
