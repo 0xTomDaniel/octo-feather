@@ -35,3 +35,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [install-check](./install-check.md) covers the box's install check (`just install-check`).
 - [contract](./contract.md) covers the app-driver contract validator (`octo-feather-contract`).
 - [evidence](./evidence.md) covers the evidence store command (`octo-feather-evidence append`, `read`).
+- [lane-archive](./lane-archive.md) covers closing a lane (`octo-feather-lane archive`) and the lane reflection it runs first (`octo-feather-lane reflect`).

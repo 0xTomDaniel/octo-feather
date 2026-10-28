@@ -5,10 +5,25 @@
                                    lanes/NAME.handoffs.jsonl into lanes/archive/
 
 The state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).
+Before moving any file `archive` runs the lane reflection (`reflect`, below); when it cannot run,
+the archive refuses naming the failed reflection, every file left in place.
 `archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged
-and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log
-archives its record alone and says so. It refuses, non-zero with every file left in
+and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one
+from the reflection (its reflection line). It refuses, non-zero with every file left in
 place, when the record is missing or either archive target already exists.
+
+  octo-feather-lane reflect NAME   lane reflection (spec comms #reflection-lane): a fresh headless
+                                   reflector answers the lane questions; appends its lines to the log
+
+`reflect` gathers what the reflector cannot compute without bash: the record and hand-off log paths, the
+director log's lines about the lane (its issue, or a text naming the lane, #N or ghN), the factory report's
+lines for the lane (`report`, below), and the transcript paths of the supervisor, each worker the log names
+with a session, and the director. It starts agents/reflector.md through pi-role with the lane questions of
+reflection/questions.json, parses its labelled reply (form and refusals: scripts/octo-feather-reflect) and
+appends to lanes/NAME.handoffs.jsonl (created when absent) one finding line per gap, then one reflection
+line (fields: spec comms #handoff-kind-finding, #handoff-kind-reflection), in one write; prints
+`reflection: ...` and each finding.
+A reflector that cannot run or replies outside the form appends nothing: exit 1 naming the failed reflection.
 
   octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
                                    create, or update in place, the PR's one review verdict
@@ -242,9 +257,9 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def lane_name(args: list[str]) -> str:
+def lane_name(args: list[str], cmd: str = "archive") -> str:
     if len(args) != 1 or not NAME.fullmatch(args[0]) or args[0].endswith((".toml", ".jsonl")):
-        raise Refuse(f"usage: octo-feather-lane archive NAME (the lane record's name without .toml, e.g. supervisor-gh12; got {' '.join(args) or 'nothing'})")
+        raise Refuse(f"usage: octo-feather-lane {cmd} NAME (the lane record's name without .toml, e.g. supervisor-gh12; got {' '.join(args) or 'nothing'})")
     return args[0]
 
 
@@ -269,6 +284,10 @@ def cmd_archive(args: list[str]) -> int:
     for f in (record, log):
         if (archive / f.name).exists() or (archive / f.name).is_symlink():
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
+    pre = os.path.getsize(log) if log in files else None   # the log's length before the reflection appends
+    reflect_lane(name, lanes)   # spec comms #reflection-lane: before any file moves
+    if log not in files and os.path.lexists(log):
+        files.append(log)   # the reflection wrote the lane's first hand-off line
     try:
         before = {f.name: sha256(f) for f in files}
     except OSError as e:
@@ -286,6 +305,7 @@ def cmd_archive(args: list[str]) -> int:
             f.unlink()
     except Exception as e:
         rollback(created, archive)
+        unreflect(log, pre)
         if made_dir:
             try:
                 archive.rmdir()
@@ -294,9 +314,66 @@ def cmd_archive(args: list[str]) -> int:
         raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
     for f in files:
         print(f"archived: {archive / f.name} sha256={before[f.name]}")
-    if log not in files:
-        print(f"no hand-off log: {log}; archived the record alone")
     return 0
+
+
+@functools.cache
+def reflect_module():
+    """scripts/octo-feather-reflect: the question list, brief, reflector run, reply parser and log lines."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_reflect", str(KIT / "scripts" / "octo-feather-reflect"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_reflect", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def reflect_lane(name: str, lanes: Path) -> None:
+    """Run the lane reflection of lane NAME and append its lines to the lane's hand-off log; Refuse when it fails."""
+    import datetime, tomllib
+    r = reflect_module()
+    record, log, state = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl", lanes.parent
+    try:
+        rec = tomllib.loads(record.read_text(encoding="utf-8"))
+        lines = read_log(log)[0] if log.exists() else []
+        dlog = state / "director.handoffs.jsonl"
+        dl = [json.dumps(d, ensure_ascii=False) for d in (read_log(dlog)[0] if dlog.exists() else [])
+              if r.about_lane(d, name, rec.get("issue"))]
+        qs = r.questions("lane")
+        now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+        unread: list[str] = []
+        try:
+            agents, why = herdr_agents(), None
+        except Refuse as e:
+            agents, why = None, str(e)
+        report = report_lane(record, agents, why, now, unread, [], ReportSources(state, unread))
+        talk = r.lane_transcripts(lines, rec.get("supervisor")) + [r.director_transcript(state)]
+        brief = r.brief(name, record, log, dlog, dl, report, talk, qs)
+        found, ids = r.parse(r.run(brief, Path.cwd()), qs)
+        r.append(log, r.log_lines(found, ids))
+    except r.Failed as e:
+        raise Refuse(f"lane reflection of {name} failed ({e}); nothing appended, every file left in {lanes}: fix the cause, then rerun") from e
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refuse(f"lane reflection of {name} failed: cannot read its inputs or write its log ({e}); every file left in {lanes}: fix the cause, then rerun") from e
+    print(f"reflection: lane {name}, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {log}")
+    for f in found:
+        print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
+
+
+def cmd_reflect(args: list[str]) -> int:
+    name = lane_name(args, "reflect")
+    lanes = lanes_dir()
+    if not (lanes / f"{name}.toml").is_file():
+        raise Refuse(f"no lane record {lanes / f'{name}.toml'}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+    reflect_lane(name, lanes)
+    return 0
+
+
+def unreflect(log: Path, pre: int | None) -> None:
+    """Undo this archive's reflection lines after a failed move, so every file is left as it was: the log cut back
+    to its length PRE, or removed when the reflection created it (PRE None)."""
+    try:
+        os.truncate(log, pre) if pre is not None else log.unlink(missing_ok=True)
+    except OSError as e:
+        print(f"could not undo the reflection lines in {log} ({e}): cut them by hand", file=sys.stderr)
 
 
 def rollback(created: list[Path], archive: Path) -> None:
@@ -2245,6 +2322,7 @@ def cmd_report(args: list[str]) -> int:
 
 COMMANDS = {
     "archive": cmd_archive,
+    "reflect": cmd_reflect,
     "verdict": cmd_verdict,
     "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,

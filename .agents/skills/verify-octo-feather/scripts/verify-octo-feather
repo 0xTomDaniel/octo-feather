@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -545,11 +545,50 @@ def drive_evidence(f: Feature) -> None:
     say(f"evidence evidence: {f.d}")
 
 
+def drive_lane_archive(f: Feature) -> None:
+    sc = RUN_DIR / "scratch" / "lane-archive"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    lanes.mkdir(parents=True)
+    # A scratch merged lane: a review finding in its log, a stranded-worker catch in the director log.
+    (lanes / "gh900.toml").write_text('supervisor = "w90:p2"\nissue = "gh900"\ngoal = "scratch lane"\n')
+    (lanes / "gh900.handoffs.jsonl").write_text(
+        '{"at": "2026-10-28T01:00:00Z", "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": true, "summary": "restated rule"}\n')
+    (lanes.parent / "director.handoffs.jsonl").write_text(
+        '{"at": "2026-10-28T00:40:00Z", "kind": "note", "issue": 900, "text": "read pane w90:p3: implementer stranded at a prompt"}\n')
+
+    def files() -> str:
+        return "".join(f"{p.relative_to(lanes)} {hashlib.sha256(p.read_bytes()).hexdigest()}\n" for p in sorted(lanes.rglob("*")) if p.is_file())
+
+    # Scratch state, a dead Herdr socket, no saved Pi session; the reflector's model unreachable (no network).
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "OCTO_FEATHER_REFLECT_ARGS": "--no-session", "OCTO_FEATHER_REFLECT_TIMEOUT": "120"}
+    if not has_netns():
+        f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
+        f.fails += 1
+    else:
+        f.obs("refuse-unreachable", "before", files())
+        f.pre = NETNS
+        f.run("refuse-unreachable", "octo-feather-lane", "archive", "gh900")
+        f.pre = []
+        f.obs("refuse-unreachable", "after", files())
+        f.check("refuse-unreachable", lambda c: c.code == 1 and "lane reflection of gh900 failed" in c.err
+                and "nothing appended" in c.err and c.o["before"] == c.o["after"] and "gh900.toml" in c.o["after"]
+                and "archive/" not in c.o["after"])
+    f.run("refuse-no-record", "octo-feather-lane", "reflect", "gh404")
+    f.check("refuse-no-record", lambda c: c.code == 1 and "no lane record" in c.err)
+    f.unreachable_step("reflect-live", "the reflector's model is reached over the network, and drives stay offline (SKILL.md); "
+                       "prerequisite: a live model run; route: the demo in features/lane-archive.md, recorded in the lane's evidence/")
+    f.env = {}
+    say(f"lane-archive evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
     "contract": drive_contract,
     "evidence": drive_evidence,
+    "lane-archive": drive_lane_archive,
 }
 
 
