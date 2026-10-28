@@ -22,7 +22,10 @@ Frontmatter (one `key: value` per line, lists comma-separated):
   model        --model
   thinking     --thinking
   tools        --tools (built-in Pi tools only; spec roles#launch-codemode);
-               an empty list stays --no-tools
+               an empty list stays --no-tools. `web` (spec roles#launch-web):
+               --extension extensions/web-servers.ts with the kit's web-mcp.json,
+               and an `mcp__<server>__*` --tools entry per server in it; any
+               other role gets --no-mcp
   skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018);
                {tracker} is the target's tracker skill: `tracker` in
                .octo-feather.toml at the working directory's checkout top,
@@ -55,6 +58,17 @@ DEFAULT_TRACKER = "github"
 TRACKER_SLOT = "{tracker}"
 # The kit's Pi extensions every role loads, in the kit's extensions/ (issues #152, #187).
 EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
+# A role's `web` tool: the kit's one web server list, loaded by the web extension (spec roles#launch-web).
+WEB = "web"
+WEB_LIST = "web-mcp.json"
+WEB_EXTENSION = "web-servers.ts"
+
+
+def web_patterns(kit):
+    """One --tools entry per server in the kit's web list: Pi's tool name rule, mcp__<server>__*."""
+    with open(os.path.join(kit, WEB_LIST), encoding="utf-8") as f:
+        servers = json.load(f).get("mcpServers", {})
+    return [f"mcp__{re.sub(r'[^A-Za-z0-9_]', '_', s)}__*" for s in servers]
 
 
 def parse(path):
@@ -123,12 +137,19 @@ def launch(path, to_file=False):
         args += ["--model", fm["model"]]
     if fm.get("thinking"):
         args += ["--thinking", fm["thinking"]]
+    kit = os.path.dirname(os.path.dirname(os.path.abspath(path)))
+    web = WEB in fm.get("tools", [])
     if "tools" in fm:
-        args += ["--tools", ",".join(fm["tools"] + ["codemode"])] if fm["tools"] else ["--no-tools"]
-    args += ["--no-mcp", "--no-skills"]
+        tools = [t for t in fm["tools"] if t != WEB] + ["codemode"] + (web_patterns(kit) if web else [])
+        args += ["--tools", ",".join(tools)] if fm["tools"] else ["--no-tools"]
+    args += [] if web else ["--no-mcp"]
+    args += ["--no-skills"]
     roots = skill_roots(path)
     for e in EXTENSIONS:
         args += ["--extension", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(path))), "extensions", e)]
+    if web:
+        args += ["--extension", os.path.join(kit, "extensions", WEB_EXTENSION),
+                 "--octo-feather-web-servers", os.path.join(kit, WEB_LIST)]
     args += ["--octo-feather-role", os.path.splitext(os.path.basename(path))[0]]
     tracker = tracker_skill(roots[0])
     for s in fm.get("skills", []):

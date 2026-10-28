@@ -3,7 +3,7 @@ name: corrector
 description: Run pstack correct against a target repo in its own correction lane, started when the owner corrects something at a gate or a finding class repeats, and return its commits.
 model: anthropic/claude-opus-5-5
 thinking: medium
-tools: read, grep, find, ls, bash, edit, write
+tools: read, grep, find, ls, bash, edit, write, web
 skills: commit, correct, eval-cases, github-pr, principle-encode-lessons-in-structure, writing-for-agents
 ---
 
