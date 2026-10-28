@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model spend: one ledger - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+
+<header data-anchor="header">
+<h1 data-anchor="title">Model spend: one ledger</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / spend.spec.html</nav>
+<p class="lede" data-anchor="context">Every model call the kit makes costs money.
+The kit records each call where it is made, in one ledger, so the owner sees what the factory spent and checks it against the provider's own count.</p>
+</header>
+
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-spend-seen">As the owner, I see what the factory spent on classifier models by day, by lane, by purpose and by model, from records the kit's own call path wrote, never from what an agent reports.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-spend-reconciled">As the owner, I see whether the ledger's OpenRouter spend matches what OpenRouter counted for the kit's key, and how big any gap is.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-agent-spend">As the owner, the agents' own model use sits in the same ledger, so each lane's whole model cost shows by role.</p>
+</section>
+
+<section data-spec-section="acceptance" data-acceptance-scope="traceability" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-spend-bench" data-story="story-spend-seen"><span data-acceptance-scenario>Given a maintainer in no lane who has run a judgment question's bench, When they ask the kit for its spend totals,</span> <span data-acceptance-observable>Then the bench's classifier calls show under the bench purpose and no lane, by day and by model, with their tokens and a cost that matches the cost the bench reported.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-spend-judge" data-story="story-spend-seen"><span data-acceptance-scenario>Given a supervisor whose lane ran the advisory judge on its pull request, When the supervisor asks the kit for its spend totals,</span> <span data-acceptance-observable>Then the judge's classifier call shows under that lane and the judge purpose, with its model, tokens and cost.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-spend-reconcile" data-story="story-spend-reconciled"><span data-acceptance-scenario>Given the owner with the OpenRouter key the kit's classifiers use, When the owner asks the kit for its spend totals,</span> <span data-acceptance-observable>Then beside the totals, for today, this week and this month, OpenRouter's own count for the key shows next to the ledger's OpenRouter total and the gap between them.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-spend-agents" data-story="story-agent-spend"><span data-acceptance-scenario>Given a lane whose supervisor, workers and product judge ran, When the owner asks the kit for its spend totals by lane,</span> <span data-acceptance-observable>Then that lane's agent spend shows under each role that ran, beside its classifier spend, with the lane's total.</span></p>
+</section>
+
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-ledger"><span data-boundary-responsibility>The ledger owns one record per model call: when, lane, purpose, model, tokens and cost.</span> <span data-boundary-seam>Caller-facing seam: the call paths below append to it at the call; the spend command reads it.</span> <span data-boundary-dependency>Dependency direction: self-contained; it lives in the kit's state and depends on no model.</span> <span data-boundary-scope>Observable scope: every recorded call, in the order made.</span></p>
+<p data-modular-boundary data-anchor="boundary-spend-command"><span data-boundary-responsibility>The spend command owns the totals and the reconcile.</span> <span data-boundary-seam>Caller-facing seam: one kit command anyone on the box runs.</span> <span data-boundary-dependency>Dependency direction: external-provider; it reads the ledger and asks OpenRouter for the key's usage.</span> <span data-boundary-scope>Observable scope: totals by day, lane, purpose and model, and per window OpenRouter's count, the ledger's OpenRouter total and the gap.</span></p>
+</section>
+
+<section data-anchor="writers" id="writers">
+<h2>Who records what</h2>
+<p data-anchor="writers-note">Each kind of call has one writer, the code that makes the call; no agent writes or edits the ledger.</p>
+<div class="table-scroll" data-anchor="writer-list-wrap">
+<table data-anchor="writer-list">
+<thead><tr><th>Call</th><th>Recorded by</th><th>Purpose</th></tr></thead>
+<tbody>
+<tr data-anchor="writer-bench"><td>A bench's classifier call (<a href="./judgment.spec.html#boundary-bench">judgment#boundary-bench</a>)</td><td>The kit's one classify path</td><td>bench</td></tr>
+<tr data-anchor="writer-judge"><td>An advisory judge's classifier call (<a href="./judgment.spec.html#boundary-advisory-judge">judgment#boundary-advisory-judge</a>)</td><td>The kit's one classify path</td><td>judge</td></tr>
+<tr data-anchor="writer-agent"><td>An agent's model call, and model work its tools do</td><td>The kit's extension every role loads</td><td>The agent's role</td></tr>
+</tbody>
+</table>
+</div>
+</section>
+
+<section data-anchor="rules" id="rules">
+<h2>Rules</h2>
+<p data-anchor="rule-lane">A call's lane is the lane whose space it runs in, a product judge or factory eval run included; a call made in no lane's space is recorded under no lane.</p>
+<p data-anchor="rule-cost">A call's cost is what the provider reported for it; a call with no reported cost is recorded as unknown, and the totals count those calls apart from the dollars.</p>
+<p data-anchor="rule-append">The ledger only grows: no record is changed or removed.</p>
+<p data-anchor="rule-write-fails">A call whose record cannot be written still returns its answer and says on its error output that its spend went unrecorded; the reconcile shows the gap.</p>
+<p data-anchor="rule-gap">The gap is OpenRouter's count minus the ledger's OpenRouter total over the same window; spend on the key the kit did not make, or a call path that missed its record, shows there.</p>
+<p data-anchor="rule-no-budget">The ledger records and reports; it sets no budget and blocks no call.</p>
+</section>
+
+</article>
+</body>
+</html>

@@ -20,7 +20,7 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-judge test: $*" >&2; exit 1; }
 export TMPDIR="$t/tmp"; mkdir "$TMPDIR"
 export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log"
-unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV HERDR_WORKSPACE_ID OPENROUTER_API_KEY
 mkdir -p "$HOME" "$t/bin" "$FAKE_GH/pr"
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -86,7 +86,7 @@ const modelRegistry = {
       answers[k] = {type: "choice", choice: pick, confidence: 0.87,
                     probabilities: Object.fromEntries(L.map((l) => [l, l === pick ? 0.87 : 0.13 / (L.length - 1)]))};
     }
-    return {provider: m.provider, model: m.id, answers, usage: {cost: {total: 0.001}}, stopReason: "stop"};
+    return {provider: m.provider, model: m.id, answers, usage: {input: 120, output: 3, totalTokens: 123, cost: {total: 0.001}}, stopReason: "stop"};
   },
 };
 process.stdout.write = process.stderr.write.bind(process.stderr);
@@ -177,7 +177,18 @@ grep -qi "model judgment" <<<"$without" && fail "a judgment shown with none post
 
 # --- judge: the kit's model alone answers the state file's text; one labelled comment ---
 STUB_WANT="$(cat "$t/state"; echo .)"; STUB_WANT="${STUB_WANT%.}"; export STUB_WANT   # the text, its trailing newline kept
-run 0 judge 7 test-quality --state "$t/state"
+# Lane gh5, its supervisor in Herdr workspace w5: the judge runs in its space (spec spend#rule-lane).
+mkdir -p "$HOME/.local/state/octo-feather/lanes"; printf 'supervisor = "w5:p2"\n' > "$HOME/.local/state/octo-feather/lanes/gh5.toml"
+HERDR_WORKSPACE_ID=w5 run 0 judge 7 test-quality --state "$t/state"
+# spec spend#acceptance-spend-judge: the stub reports 120 tokens in, 3 out, $0.001.
+spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend` (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "$@" <<< "$spent")" || fail "spend: $r in: $spent"; }
+spent="$("$L" spend)" || fail "spend failed: $spent"
+grep -qF "Spend ledger: $HOME/.local/state/octo-feather/spend.jsonl (1 calls)" <<< "$spent" || fail "spend: not 1 call: $spent"
+spend_row lane gh5 0.001000 1 0 120 3
+spend_row purpose judge 0.001000 1 0 120 3
+spend_row model "$M" 0.001000 1 0 120 3
+spend_row 'day (UTC)' "$(date -u +%F)" 0.001000 1 0 120 3
 [[ "$out" == "https://github.com/o/r/pull/7#issuecomment-1002" ]] || fail "judge printed $out"
 grep -qxE "judge: created \(test-quality: tautological, confidence 0\.870, model judgment by ${M//./\\.}; calibration: $CAL\)" <<<"$err" || fail "judge said: $err"
 python3 - "$FAKE_GH/pr/7.json" "$H" "$J" "$M" "$CAL" <<'EOF' || fail "judgment comment body: $(cat "$FAKE_GH/pr/7.json")"
@@ -274,4 +285,12 @@ calib '{"accuracy": 0.8, "brier": 0.2}' '{"accuracy_min": 0.699, "brier_max": 0.
 run 0 judge 7 test-quality --state "$t/state-test-quality"
 grep -qF "calibration: meets accepted threshold (held-out accuracy 0.800, Brier 0.200; threshold held-out accuracy >= 0.699 and Brier <= 0.390, accepted))" <<<"$err" || fail "meets: $err"
 ready
+# spec spend#rule-write-fails, a directory in the ledger's place: the same output and exit.
+run 0 judge 7 test-quality --state "$t/state-test-quality"; ok_out="$out"; ok_err="$err"
+ledger="$HOME/.local/state/octo-feather/spend.jsonl"; mv "$ledger" "$t/ledger"; mkdir "$ledger"
+run 0 judge 7 test-quality --state "$t/state-test-quality"
+rmdir "$ledger"; mv "$t/ledger" "$ledger"
+[[ "$out" == "$ok_out" ]] || fail "spend: an unwritable ledger changed the judge's output: $ok_out / $out"
+grep -qxF "$(grep '^judge: ' <<< "$ok_err")" <<< "$err" || fail "spend: an unwritable ledger changed the judge's line: $ok_err / $err"
+grep -qF 'octo-feather-lane spend record: spend unrecorded (1 call(s), $0.001000): cannot write ' <<< "$err" || fail "spend: unrecorded not said: $err"
 echo "lane-judge: ok (refusals before a verdict comment, unknown question, missing or empty state, the kit's model unavailable: no write; the kit's one judgment model (evals/judgment-model.json) alone answers every question on the state file's text; one comment labelled model judgment with answer and confidence, updated in place; merge-ask shows it beside the review verdict and passes or fails the same without it; a malformed judgment comment changes nothing; calibration status per question: no accepted threshold for the four real suites, below and meets an accepted threshold, merge-ask ready the same)"
