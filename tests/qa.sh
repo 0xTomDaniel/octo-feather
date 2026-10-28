@@ -25,7 +25,8 @@ real_uv="$(command -v uv)" || fail "uv not found on PATH: the python-app fixture
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_OFFLINE=1
 # A throwaway HOME: the sandbox masks its (empty) live state, never the box's.
 export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
-unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
+# No HERDR_WORKSPACE_ID: every bench is outside any lane (spec spend#rule-lane); no OpenRouter key: `spend` asks no network.
+unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV HERDR_WORKSPACE_ID OPENROUTER_API_KEY
 mkdir -p "$HOME" "$t/bin" "$t/evals/trig/reference" "$t/evals/fixtures/fx"
 cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
@@ -787,6 +788,28 @@ for x in ("--no-tools", "--no-extensions", "--no-session", "--no-skills", "--no-
 assert "--model" not in argv and "--mode" not in argv and "--tools" not in argv, argv
 assert argv[argv.index("-p") + 1].startswith("/octo-feather-bench "), argv
 EOF
+# spec spend#acceptance-spend-bench: 8 benched x 15 cases = 120 calls, $0.126 as bench.json above; broken and yesno (30)
+# report no usage, the 90 others 1 in, 1 out each.
+spend_row() { # TITLE KEY USD CALLS UNKNOWN IN OUT: that row under "By TITLE:" in `octo-feather-lane spend` (tests/spend-out)
+  local r; r="$("$kit/tests/spend-out" row "$@" <<< "$spent")" || fail "spend: $r in: $spent"; }
+spent="$("$kit/scripts/octo-feather-lane" spend)" || fail "spend failed: $spent"
+grep -qF "Spend ledger: $HOME/.local/state/octo-feather/spend.jsonl (120 calls)" <<< "$spent" || fail "spend: not 120 calls: $spent"
+spend_row purpose bench 0.126000 120 30 90 90
+spend_row lane '(no lane)' 0.126000 120 30 90 90
+spend_row 'day (UTC)' "$(date -u +%F)" 0.126000 120 30 90 90
+spend_row model stub/cheap-train 0.042000 15 0 15 15
+spend_row model stub/cheap-total 0.024000 15 0 15 15
+spend_row model stub/token 0.015000 15 0 15 15
+spend_row model stub/broken 0.000000 15 15 0 0
+spend_row model stub/yesno 0.000000 15 15 0 0
+# spec spend#rule-write-fails, a directory in the ledger's place: the same report and exit.
+ledger="$HOME/.local/state/octo-feather/spend.jsonl"; mv "$ledger" "$t/ledger"; mkdir "$ledger"
+run 0 "$Q" --evals "$t/jg"
+mv "$(ls -dt "$t"/out/*/ | head -1)/jb/report.txt" "$t/report-unwritable"
+rmdir "$ledger"; mv "$t/ledger" "$ledger"
+cmp -s "$d/jb/report.txt" "$t/report-unwritable" || fail "spend: an unwritable ledger changed the bench report: $(diff "$d/jb/report.txt" "$t/report-unwritable")"
+jl "DONE bench jb: kit model stub/first, best stub/token"
+jl 'octo-feather-lane spend record: spend unrecorded (120 call(s), $0.126000 + 30 of unknown cost): cannot write '
 run 0 "$Q" --evals "$t/jg" --classifier stub/first --classifier stub/nope
 jl "bench jb: benched only --classifier stub/first, stub/nope (not available: stub/nope)"
 jl "DONE bench jb: kit model stub/first, best stub/first"
