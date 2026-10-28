@@ -41,9 +41,8 @@ runs at a time (a lock on the state dir). --due runs it only when one is due at 
 prints `director reflection: not due ...`, exit 0; also exit 0, nothing run, while another one runs.
 
 After its reflection, `reflect NAME`, `reflect --director` (when it ran) and `archive` (after both, before any file
-moves) file every correction lane due, whichever lane's or the director's findings it rests on (spec comms
-#reflection-correction; the rule: issue-lifecycle #lanes-correction) through the tracker skill's `issue-create`,
-each in its own owner's: a lane's in its target's tracker (the current directory's tracker skill,
+moves) file the correction lanes due (spec comms #reflection-correction; the rule: issue-lifecycle #lanes-correction)
+through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
 the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
 scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
 `correction lane: filed <key> in <tracker> for <subject> (...)` per issue, else `correction lanes: none filed`;

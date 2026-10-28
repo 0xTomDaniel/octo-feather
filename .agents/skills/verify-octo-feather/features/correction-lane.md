@@ -14,7 +14,7 @@ Drive criterion: `comms#acceptance-reflect-files-correction`
 
 ## How to get to it (user POV)
 
-- Nobody files one by hand: `octo-feather-lane archive <name>` (after both reflections), `octo-feather-lane reflect <name>` and `octo-feather-lane reflect --director` file every correction lane due, whichever lanes or director log its findings sit in, each in its owner's tracker, through the tracker skill and print each key; the supervisor's close report names them and the director starts each lane. `octo-feather-lane --help` for the output lines; the rule: issue-lifecycle spec `#lanes-correction`; the issue's title marker and body: `scripts/octo-feather-reflect`.
+- Nobody files one by hand: `octo-feather-lane archive <name>` (after both reflections), `octo-feather-lane reflect <name>` and `octo-feather-lane reflect --director` file the correction lanes due through the tracker skill and print each key; the supervisor's close report names them and the director starts each lane. `octo-feather-lane --help` for the output lines; the rule: issue-lifecycle spec `#lanes-correction`; the issue's title marker and body: `scripts/octo-feather-reflect`.
 
 ## Driving it with verify-octo-feather
 
