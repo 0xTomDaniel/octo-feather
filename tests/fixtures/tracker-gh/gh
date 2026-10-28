@@ -1,23 +1,36 @@
 #!/usr/bin/env python3
 """gh: an offline fake of the GitHub CLI for the kit's correction-lane tests; never the network.
-One JSON store, $FAKE_GH_STORE: {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt"}]}
-(created when absent). The repo is --repo, else $GH_REPO, else "local/repo". It takes only:
-  issue list [--repo R] --state all --limit N --search 'WORDS in:title' --json FIELDS   issues whose title has WORDS
-  issue create --title T --body-file F|-                                                 prints the new issue's url
-Anything else is refused, exit 1, naming the call."""
-import json, os, sys
 
-STORE = os.environ["FAKE_GH_STORE"]
+One JSON store, $FAKE_GH_STORE:
+  {"issues": [{"number", "repo", "title", "body", "state" (OPEN|CLOSED), "closedAt"}]}
+(created when absent). The repo is --repo, else $GH_REPO, else "local/repo". It takes only:
+  issue list [--repo R] --state all --limit N --search 'WORDS in:title' --json FIELDS
+    issues whose title has WORDS
+  issue create --title T --body-file F|-
+    prints the new issue's url
+Anything else is refused, exit 1, naming the call.
+"""
+
+import json
+import os
+import sys
+from pathlib import Path
+from typing import NoReturn, cast
+
+Issue = dict[str, object]
+
+STORE = Path(os.environ["FAKE_GH_STORE"])
 argv = sys.argv[1:]
 
 
-def refuse(why):
-    print(f"gh (offline fake): {why}: gh {' '.join(argv)}", file=sys.stderr)
+def refuse(why: str) -> NoReturn:
+    sys.stderr.write(f"gh (offline fake): {why}: gh {' '.join(argv)}\n")
     sys.exit(1)
 
 
-def opts(args):
-    out, i = {}, 0
+def opts(args: list[str]) -> dict[str, str]:
+    out: dict[str, str] = {}
+    i = 0
     while i < len(args):
         if not args[i].startswith("--") or i + 1 >= len(args):
             refuse(f"unsupported argument {args[i]}")
@@ -26,7 +39,15 @@ def opts(args):
     return out
 
 
-db = json.load(open(STORE)) if os.path.exists(STORE) else {"issues": []}
+def load() -> dict[str, list[Issue]]:
+    if not STORE.exists():
+        return {"issues": []}
+    with STORE.open() as f:
+        return cast("dict[str, list[Issue]]", json.load(f))
+
+
+db = load()
+issues = db["issues"]
 if argv[:2] == ["issue", "list"]:
     o = opts(argv[2:])
     if set(o) - {"--repo", "--state", "--limit", "--search", "--json"} or o.get("--state") != "all":
@@ -34,18 +55,29 @@ if argv[:2] == ["issue", "list"]:
     repo = o.get("--repo") or os.environ.get("GH_REPO") or "local/repo"
     words = o["--search"].removesuffix(" in:title").strip('"')
     fields = o["--json"].split(",")
-    hits = [i for i in db["issues"] if i["repo"] == repo and words in i["title"]][: int(o["--limit"])]
-    print(json.dumps([{f: i.get(f) for f in fields} for i in hits]))
+    hits = [i for i in issues if i["repo"] == repo and words in str(i["title"])]
+    hits = hits[: int(o["--limit"])]
+    sys.stdout.write(json.dumps([{f: i.get(f) for f in fields} for i in hits]) + "\n")
 elif argv[:2] == ["issue", "create"]:
     o = opts(argv[2:])
     if set(o) != {"--title", "--body-file"}:
         refuse("unsupported flags")
     f = o["--body-file"]
-    body = sys.stdin.read() if f == "-" else open(f).read()
+    body = sys.stdin.read() if f == "-" else Path(f).read_text()
     repo = os.environ.get("GH_REPO") or "local/repo"
-    n = max((i["number"] for i in db["issues"]), default=900) + 1
-    db["issues"].append({"number": n, "repo": repo, "title": o["--title"], "body": body, "state": "OPEN", "closedAt": None})
-    json.dump(db, open(STORE, "w"), indent=1)
-    print(f"https://github.com/{repo}/issues/{n}")
+    n = max((cast("int", i["number"]) for i in issues), default=900) + 1
+    issues.append(
+        {
+            "number": n,
+            "repo": repo,
+            "title": o["--title"],
+            "body": body,
+            "state": "OPEN",
+            "closedAt": None,
+        }
+    )
+    with STORE.open("w") as out:
+        json.dump(db, out, indent=1)
+    sys.stdout.write(f"https://github.com/{repo}/issues/{n}\n")
 else:
     refuse("unsupported call")
