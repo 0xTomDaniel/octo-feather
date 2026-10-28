@@ -1,0 +1,21 @@
+{
+  "about": "The reflection question list (comms spec #reflection-questions): each question once, with its id, the reflection it belongs to (lane or director) and its text. octo-feather-lane reflect reads it; a reflection-missed finding's correction lane changes it. Seeded from issue #230 (body and comments).",
+  "questions": [
+    {"id": "caught-by-hand", "kind": "lane", "text": "What did anyone (owner, director, supervisor) catch by hand, for example a stranded worker found by reading its pane, and what would have caught it first?"},
+    {"id": "slow-or-from-memory", "kind": "lane", "text": "What took long, was repeated, or was answered from memory where a tool could have answered it?"},
+    {"id": "undetected-rule", "kind": "lane", "text": "Which rule or promise the lane touched has nothing that would detect it breaking (absence)?"},
+    {"id": "check-misfired", "kind": "lane", "text": "Which check, eval or report field never fired, or fired wrongly, during the lane?"},
+    {"id": "mechanical-step", "kind": "lane", "text": "Which step did an agent (supervisor, worker) perform that is mechanical, i.e. the same inputs always give the same action? Route: make it a command (docs/adr/0008 rung 1); role prose then only says when to run it."},
+    {"id": "writer-mistake", "kind": "lane", "text": "Which code-review or qc finding in this lane is a mistake the writer could have been stopped from making, and which role, skill, template or structure would stop it, not only more review?"},
+    {"id": "reflection-missed", "kind": "lane", "text": "What did anything (a review, the director, the owner) catch about this lane after an earlier reflection covered it? Each is a finding of class reflection-missed naming the question to add to this list or reword."},
+    {"id": "owner-asked", "kind": "director", "text": "What did the owner have to ask or catch, and what would have caught it first?"},
+    {"id": "answered-from-memory", "kind": "director", "text": "What did the director answer from memory where a tool or record could have answered it?"},
+    {"id": "rework-decision", "kind": "director", "text": "Which director decisions led to rework?"},
+    {"id": "unblocking-first", "kind": "director", "text": "Which in-flight change would have unblocked or sped the most lanes this period, and was it first in merge order before the owner asked?"},
+    {"id": "outside-owner-gates", "kind": "director", "text": "Which owner questions this period were outside spec accept, merge, a scope-changing decision and owner-held access, i.e. the director's to decide and notify?"},
+    {"id": "fact-already-recorded", "kind": "director", "text": "What did the owner ask that a factory fact already answered (stranded, waiting, gate time, cost), and which report field would have surfaced it first?"},
+    {"id": "writer-route", "kind": "director", "text": "Which code-review finding classes recur across lanes (by frequency), why do writers keep making them, and which role, skill, template or structure would stop the writer, not only more review?"},
+    {"id": "director-mechanical-step", "kind": "director", "text": "Which step did the director perform that is mechanical, i.e. the same inputs always give the same action? Route: make it a command (docs/adr/0008 rung 1); role prose then only says when to run it."},
+    {"id": "director-reflection-missed", "kind": "director", "text": "What did anything (a lane, a review, the director, the owner) catch after an earlier reflection covered it? Each is a finding of class reflection-missed naming the question to add to this list or reword."}
+  ]
+}

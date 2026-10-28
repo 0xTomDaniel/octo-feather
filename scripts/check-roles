@@ -7,12 +7,13 @@ import tempfile, json, os, re, subprocess, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 AGENTS = os.path.join(ROOT, "agents")
-ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector", "qc-judge"]
+ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector", "qc-judge", "reflector"]
 # Models the deployment can reach. Add one here, on purpose, to allow it.
 MODELS = {"openai/gpt-6.1-sol", "openai/gpt-6-luna", "openai/gpt-6-astra",
           "anthropic/claude-opus-5-5", "anthropic/claude-sonnet-5-5"}
 THINKING = {"off", "minimal", "low", "medium", "high", "xhigh", "max"}
-TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write"}
+TOOLS = {"read", "grep", "find", "ls", "bash", "edit", "write",
+         "web"}  # web: the kit's web server list's tools, given by pi-role (spec roles#fm-tools)
 # Exactly the keys scripts/pi-role reads; anything else would be silently ignored.
 FIELDS = {"name", "description", "model", "thinking", "tools", "skills"}
 OPTIONAL = {"externalSkills"}  # resolved at launch; absent ones are skipped

@@ -75,6 +75,7 @@ Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape chec
 Internal, the in-sandbox stop rule (not for callers):
   octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S SETUP_JSON -- CMD...
 """
+from typing import cast
 import hashlib, importlib.machinery, importlib.util, json, os, queue, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
 from pathlib import Path
 
@@ -344,6 +345,8 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
         return judge_fields(fact, final, last)
     if fact["fact"] == "branch_paths":
         return judge_branch(fact, final, last, lines)
+    if fact["fact"] == "tool_called":
+        return judge_tool(cast("list[str]", fact["tools"]), cast("list[str] | None", lines), final=cast("bool", final))
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], None if record is None else list(record), final)
     t, s, n = fact["fact"], fact["skill"], len(calls)
@@ -378,6 +381,36 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
             return "open", f"skill_read_before {s} {b}: no {b} yet"
         return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"loaded at {at(r)}" if r is not None else none)
     raise ValueError(f"unknown fact {t!r}")
+
+
+def judge_tool(names: list[str], lines: list[str] | list[bytes] | None, *, final: bool) -> tuple[str, str]:
+    """tool_called NAMES (schema, Tool call): a call to one of them ended, not an error, with text in its result."""
+    head = f"tool_called {' | '.join(names)}"
+    starts: dict[str, tuple[int, str, str]] = {}
+    seen: list[str] = []
+    for line in lines or []:
+        e: object = safe_json(line)
+        if not isinstance(e, dict):
+            continue
+        ev = cast("dict[str, object]", e)
+        cid = str(ev.get("toolCallId", ""))
+        if ev.get("type") == "tool_execution_start":
+            starts[cid] = (len(starts), str(ev.get("toolName", "")), json.dumps(ev.get("args"))[:120])
+        elif ev.get("type") == "tool_execution_end" and cid in starts:
+            i, n, a = starts[cid]
+            if n not in names:
+                continue
+            r = ev.get("result")
+            content = cast("dict[str, object]", r).get("content") if isinstance(r, dict) else None
+            parts = cast("list[object]", content) if isinstance(content, list) else []
+            text = "".join(str(cast("dict[str, object]", c).get("text", "")) for c in parts
+                           if isinstance(c, dict) and cast("dict[str, object]", c).get("type") == "text")
+            if ev.get("isError") is not True and text.strip():
+                return "pass", f"{head}: tool call {i + 1} {n} {a} returned {len(text)} characters"
+            seen.append(f"call {i + 1} {n}: " + ("error" if ev.get("isError") is True else "empty result"))
+    if not final:
+        return "open", f"{head}: no result yet"
+    return "fail", f"{head}: " + ("; ".join(seen) if seen else f"no call to any of them in {len(starts)} tool calls")
 
 
 def judge_attempt(kind, record, final):

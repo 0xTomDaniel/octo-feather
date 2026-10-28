@@ -1,14 +1,38 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-lane archive (spec comms #acceptance-lane-archive):
 # seeds a temp state dir (default and named HERDR_SESSION), closes a lane through the
-# command, and proves sha256 before = after, lanes/ no longer lists it, archive/ holds
-# both; a lane without a hand-off log; each refusal leaves every file in place. Run by `just check`.
+# command, and proves sha256 before = after (the hand-off log: its lines unchanged, then the lane
+# reflection's line, spec comms #reflection-lane), lanes/ no longer lists it, archive/ holds both; a lane
+# without a hand-off log; each refusal leaves every file in place. A stub pi stands in for the reflector's
+# model (tests/lane-reflect.sh covers the reflection itself). Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'chmod -R u+w "$t"; rm -rf "$t"' EXIT
 export HOME="$t/home" XDG_STATE_HOME="$t/state"   # never the real state dir
 fail() { echo "lane-archive test: $*" >&2; exit 1; }
+# Stub reflector model: no gap found; Herdr unreachable.
+mkdir -p "$t/bin"
+cat >"$t/bin/pi" <<'EOF'
+#!/bin/sh
+case "$*" in
+  *"Director reflection"*) echo "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed" ;;
+  *) echo "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed" ;;
+esac
+echo "Findings: none"
+EOF
+printf '#!/bin/sh\nexit 1\n' >"$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh (tests/lane-correction.sh)
+unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
+reflected() { # ARCHIVED-LOG ORIGINAL-LOG-COPY: the original bytes, a newline if they lacked one, then one reflection line
+  python3 - "$1" "$2" <<'PY'
+import json, sys
+got, orig = open(sys.argv[1], "rb").read(), open(sys.argv[2], "rb").read()
+head = orig + (b"\n" if orig and not orig.endswith(b"\n") else b"")
+assert got.startswith(head), "lane lines changed"
+tail = got[len(head):].decode().splitlines()
+assert len(tail) == 1 and json.loads(tail[0])["kind"] == "reflection" and json.loads(tail[0])["findings"] == 0, tail
+PY
+}
 sums() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0r sha256sum); }
 seed() { # DIR NAME [nolog]
   mkdir -p "$1"
@@ -18,12 +42,13 @@ seed() { # DIR NAME [nolog]
 archive_ok() { # LANES NAME SESSION: run, then check every claim
   local lanes="$1" name="$2" out rec log
   rec="$(sha256sum <"$lanes/$name.toml")"; rec="${rec%% *}"
-  log="$(sha256sum <"$lanes/$name.handoffs.jsonl")"; log="${log%% *}"
+  cp "$lanes/$name.handoffs.jsonl" "$t/orig.jsonl"
   out="$(HERDR_SESSION="$3" "$L" archive "$name")" || fail "archive $name failed"
   grep -qxF "archived: $lanes/archive/$name.toml sha256=$rec" <<<"$out" || fail "no record sha line: $out"
+  log="$(sha256sum <"$lanes/archive/$name.handoffs.jsonl")"; log="${log%% *}"
   grep -qxF "archived: $lanes/archive/$name.handoffs.jsonl sha256=$log" <<<"$out" || fail "no log sha line: $out"
   [[ "$(sha256sum <"$lanes/archive/$name.toml")" == "$rec  -" ]] || fail "record bytes changed"
-  [[ "$(sha256sum <"$lanes/archive/$name.handoffs.jsonl")" == "$log  -" ]] || fail "log bytes changed"
+  reflected "$lanes/archive/$name.handoffs.jsonl" "$t/orig.jsonl" || fail "archived log is not the lane's bytes plus one reflection line"
   [[ -z "$(find "$lanes" -maxdepth 1 -name "$name.*")" ]] || fail "lanes/ still lists $name: $(ls "$lanes")"
 }
 
@@ -39,11 +64,12 @@ seed "$named" gh2; seed "$top" gh2
 archive_ok "$named" gh2 s1
 [[ -f "$top/gh2.toml" && ! -e "$top/archive/gh2.toml" ]] || fail "named session touched the default session"
 
-# No hand-off log: the record alone, said so.
+# No hand-off log: the reflection writes its first line, archived beside the record.
 seed "$top" gh3 nolog
 out="$(HERDR_SESSION='' "$L" archive gh3)" || fail "archive without a log failed"
-grep -qF "archived: $top/archive/gh3.toml sha256=" <<<"$out" && grep -qF "no hand-off log" <<<"$out" || fail "record-alone output: $out"
-[[ ! -e "$top/gh3.toml" && ! -e "$top/archive/gh3.handoffs.jsonl" ]] || fail "record-alone move wrong"
+grep -qF "archived: $top/archive/gh3.toml sha256=" <<<"$out" && grep -qF "archived: $top/archive/gh3.handoffs.jsonl sha256=" <<<"$out" || fail "no-log output: $out"
+: >"$t/empty"; reflected "$top/archive/gh3.handoffs.jsonl" "$t/empty" || fail "no-log archive: log is not one reflection line"
+[[ ! -e "$top/gh3.toml" && ! -e "$top/gh3.handoffs.jsonl" ]] || fail "no-log move wrong"
 
 tree() { (cd "$1" && find . -printf '%p %y %n %l\n' | sort); sums "$1"; }   # entries, types, link counts, symlink targets, bytes
 refuse() { # WANT NAME: non-zero, message, every entry under the state dir unchanged
@@ -100,4 +126,4 @@ if [[ "$(id -u)" != 0 ]]; then
   archive_ok "$ro_lanes" gh6 ro
   ro="read-only lanes/ rolls back, retry succeeds"
 fi
-echo "lane-archive: ok (default + named session, sha256 before = after; record alone; refusals: missing record, archived record, archived log, bad name, symlinked record, symlinked log, directory record, directory log; $ro)"
+echo "lane-archive: ok (default + named session, sha256 before = after; no log (reflection line archived); refusals: missing record, archived record, archived log, bad name, symlinked record, symlinked log, directory record, directory log; $ro)"

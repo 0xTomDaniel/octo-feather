@@ -33,7 +33,8 @@ spawn() { # $1: case dir; rest: env assignments
 # 1. A plain spawn launches Pi with --approve, so no dialog opens and it succeeds.
 spawn ok
 grep -qx -- --approve "$t/ok/start-argv" || fail "agent start argv lacks --approve: $(tr '\n' ' ' <"$t/ok/start-argv")"
-for f in --no-skills --no-mcp; do grep -qx -- "$f" "$t/ok/start-argv" || fail "pi-role --json args lost $f beside --approve"; done
+# The implementer lists web: its tab gets the kit's web list, not --no-mcp (#262, roles#launch-web).
+for f in --no-skills --octo-feather-web-servers; do grep -qx -- "$f" "$t/ok/start-argv" || fail "pi-role --json args lost $f beside --approve"; done
 [[ "$rc" == 0 ]] || fail "spawn exited $rc: $(cat "$t/ok/err")"
 grep -q 'tab=w9:t1 pane=w9:p1' "$t/ok/out" || fail "spawn printed no tab and pane: $(cat "$t/ok/out")"
 [[ ! -s "$t/ok/keys" ]] || fail "keys sent to a ready pane: $(cat "$t/ok/keys")"

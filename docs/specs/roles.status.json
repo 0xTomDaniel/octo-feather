@@ -1,6 +1,6 @@
 {
   "spec": "roles.spec.html",
-  "accepted_commit": "c2cf665361eef5eb95a46f809ba1777bbce0ecea",
+  "accepted_commit": "0a8518b30d3381cd4f119e4b77cb4577df52d4dc",
   "criteria": {
     "acceptance-tab-headless-same": {
       "status": "built",
@@ -28,7 +28,7 @@
     },
     "acceptance-director-tools": {
       "status": "built",
-      "pr": 179
+      "pr": 271
     },
     "acceptance-supervise-layout": {
       "status": "built",
@@ -45,6 +45,22 @@
     "acceptance-codemode-every-role": {
       "status": "built",
       "pr": 179
+    },
+    "acceptance-web-roles": {
+      "status": "built",
+      "pr": 271
+    },
+    "acceptance-web-no-other-mcp": {
+      "status": "built",
+      "pr": 271
+    },
+    "acceptance-web-list-once": {
+      "status": "built",
+      "pr": 271
+    },
+    "acceptance-reflector-tools": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

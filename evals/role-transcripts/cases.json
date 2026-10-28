@@ -128,5 +128,12 @@
       "message": "feat(hello-file): greet every name a YAML file lists (T12, hello-file)"
     },
     "task": "Review lane gh12, ticket T12 (`app hello-file FILE` greets every name the team's names.yaml lists, one greeting per line; with --json one JSON object per line; a file listing no names is an error, exit 2; criterion hello-file). The file's format, as the team writes it: a top-level `names:` key holding a block list of plain names, other top-level keys ignored:\n```yaml\nnames:\n  - Ada\n  - Grace\nteam: crew\n```\nDiff: base main, head implementer-t12 in this directory (`git diff main...implementer-t12`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
+  },
+  {
+    "id": "implementer-library-web",
+    "role": "implementer",
+    "fixture": "python-app",
+    "branch": "implementer-t9",
+    "task": "Ticket T9 (lane gh9, parent #9): `app hello-file PATH` greets every name listed in a YAML file, one greeting per line, in file order. The file is a mapping with one key, `names`, a list of strings, and may use any YAML syntax for it (block or flow lists, quoted or plain scalars, comments, anchors). `--json` prints a list of the greetings as `app hello --json` prints one. A file that is not valid YAML, or has no `names` list of strings, exits 2 with an error naming the file.\nAcceptance criterion: hello-file. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t9, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
   }
 ]
