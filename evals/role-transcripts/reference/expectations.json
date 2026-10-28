@@ -361,5 +361,19 @@
         ]
       }
     ]
+  },
+  "reviewer-prose-duty-blocks": {
+    "facts": [
+      {
+        "fact": "declared_includes",
+        "field": "blocking",
+        "items": [
+          {
+            "path": "agents/worker.md",
+            "class": "prose-duty"
+          }
+        ]
+      }
+    ]
   }
 }

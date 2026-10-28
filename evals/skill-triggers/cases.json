@@ -1126,5 +1126,197 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Run `app hello` once with --json through uv and tell me in one line whether it printed JSON."
+  },
+  {
+    "id": "dir-lever-status-by-hand",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "For the fifth time today you copied each lane's waiting_on by hand into a status summary for the owner, and one copy was stale. Stop doing that by hand from now on."
+  },
+  {
+    "id": "dir-lever-teardown-steps",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "At every lane close you run the same teardown steps by hand, and twice this week one was skipped and a worktree was left behind. Fix how this gets done."
+  },
+  {
+    "id": "dir-lever-near-test-command",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. Which command does AGENTS.md give for running the tests?"
+  },
+  {
+    "id": "dir-lever-near-lane-waiting",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. Is the lane in notes/lane.toml waiting on anything? One line."
+  },
+  {
+    "id": "sup-lever-reformat-drafts",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Every ticket draft in notes/tickets.md needs its criterion line rewritten to the `<spec slug>#<anchor>` form, and more drafts are coming each pilot. Get them all fixed."
+  },
+  {
+    "id": "sup-lever-handoff-stamp",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Each time a worker finishes you hand-edit last_handoff_at in notes/lane.toml, and twice it was wrong. Make that stop being a manual step."
+  },
+  {
+    "id": "sup-lever-near-goal-line",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Show the one line of notes/lane.toml that names the goal."
+  },
+  {
+    "id": "sup-lever-near-handoff-count",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. How many lines does notes/handoffs.jsonl hold? One number."
+  },
+  {
+    "id": "cor-lever-call-sites",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Every caller in src/ and tests/ that builds a greeting string itself must switch to the helper in app.core, and a reviewer must be able to confirm none was missed."
+  },
+  {
+    "id": "cor-lever-rename",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Rename `greet` to `greeting` everywhere in src/ and tests/, in a way the reviewer can rerun to confirm the result."
+  },
+  {
+    "id": "cor-lever-near-which-function",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Which function in src/app/core.py builds the greeting text?"
+  },
+  {
+    "id": "cor-lever-near-add-line",
+    "role": "corrector",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Add one line to AGENTS.md's Commands section: '- `uv run app --help` the app help.' Only that edit, no commit."
+  },
+  {
+    "id": "dir-encode-route-ruling",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The owner ruled that every lane brief names the gate command, and three briefs this week left it out. Route the ruling so it holds from now on."
+  },
+  {
+    "id": "dir-encode-waiting-reminders",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Supervisors keep forgetting to set waiting_on when they park, and you have reminded four of them by hand. Make it stick."
+  },
+  {
+    "id": "dir-encode-near-first-handoff",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Do not message anyone. What happened according to the first line of notes/handoffs.jsonl?"
+  },
+  {
+    "id": "dir-encode-near-planned",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Do not message anyone. Which criteria does docs/specs/greet.status.json list as planned?"
+  },
+  {
+    "id": "sup-encode-brief-demo",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Two implementers in a row shipped tickets with no demo command, and the brief template you send them has no line for it. Fix it so this cannot happen again."
+  },
+  {
+    "id": "sup-encode-free-class",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "The owner says your workers keep inventing a new free-text class for every finding line. Change how this lane handles that, durably."
+  },
+  {
+    "id": "sup-encode-near-last-class",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. What class does the last finding line in notes/handoffs.jsonl carry?"
+  },
+  {
+    "id": "sup-encode-near-blocked",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which ticket in notes/tickets.md is blocked, and by what?"
+  },
+  {
+    "id": "impl-encode-release-duty",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket T8 (criterion changelog-release): at each release someone must move every `## Unreleased` entry of CHANGELOG.md under a new `## <version>` heading, and reviewers keep finding it skipped. Make this repo carry that duty, and commit."
+  },
+  {
+    "id": "impl-encode-forgotten-tests",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket T9 (criterion changelog-tests-first): agents keep editing CHANGELOG.md without running `uv run pytest -q` first; the changelog skill should make sure that stops happening. Change it and commit."
+  },
+  {
+    "id": "impl-encode-near-imports",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not commit. Per AGENTS.md, which module may import which?"
+  },
+  {
+    "id": "impl-encode-near-entry",
+    "role": "implementer",
+    "fixture": "python-app-skill",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T10: `app hello --json` gained a `greeting` field in #11. Add its CHANGELOG.md entry and commit. Change nothing else."
   }
 ]
