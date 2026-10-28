@@ -1160,12 +1160,12 @@
     "task": "Do not change any file and do not commit. Do not message anyone. Is the lane in notes/lane.toml waiting on anything? One line."
   },
   {
-    "id": "sup-lever-reformat-drafts",
+    "id": "sup-lever-finding-lines",
     "role": "supervisor",
     "fixture": "lane-mini",
     "should_trigger": true,
     "split": "train",
-    "task": "Every ticket draft in notes/tickets.md needs its criterion line rewritten to the `<spec slug>#<anchor>` form, and more drafts are coming each pilot. Get them all fixed."
+    "task": "Every review round you hand-copy each finding from the reviewer's report into notes/handoffs.jsonl, the same fields every time, and two lines went in malformed last week. Change how this lane records findings from now on."
   },
   {
     "id": "sup-lever-handoff-stamp",
