@@ -56,7 +56,7 @@ Report the findings, each marked **block** or **note**, then the verdict: the on
 - **Block**: a breach of a documented hard standard of the repo (cite file and rule), or a named simplification that lists the lines it deletes.
 - **Never a block**: every baseline smell, preferences, and any finding that cannot name a consequence.
 
-**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
+**Report fields.** This step owns the form of every report field it names (`Verdict:`, `Check:` or `Checks: none`, `Owner:` or `Owners: none`, `Prior art:`), for every role that reports one, the implementer's check field included (docs/adr/0008 rung 3 names them). Each is a plain line: its label at column 0, then its value, outside code blocks. A report with one check and no owned rule ends:
 
 ```
 Verdict: blocking
@@ -73,6 +73,16 @@ Then classify every check, and every other decision docs/adr/0008 "Who builds wh
 `<path>` is one path with no spaces: the check's own file (a product command's: the file holding its decision), or `justfile:<recipe>` for a recipe.
 
 `<rule>` (the owned rule), `<owner>`, `exact` and `proxy` are as docs/adr/0008 rung 2 defines them. A proxy check blocks, class `proxy-check`.
+
+**Prior art.** Infrastructure is a parser, test runner, protocol, file format or scheduler. A writer (implementer) reports one line per piece of infrastructure its diff adds or uses, or the one line `Prior art: none` when it touches none:
+
+`Prior art: <library or tool> <pinned version> | released: <latest release date> | activity: <commits or releases in recent months, issue response> | adoption: <downloads or dependents> | license: <license>[ | reason: <why>]`
+
+`Prior art: none found: <what was searched, where> | reason: <why hand-written>`
+
+The chosen library is popular and well maintained: a recent release, commits or releases in recent months, issues answered, real adoption, a license compatible with the repo's, an exact pinned version. A choice failing any of these carries `reason:`.
+
+The reviewer checks each line against the diff and the package index, and blocks, class `reinvented-library`, naming the library or tool to use: hand-written infrastructure where a maintained library or the real tool does the job and no reason is stated (a `reason:`, a comment, the spec), a hand-written replacement for a broken library, a library the diff adds with no line, a fact that is false, or a failing fact with no `reason:`. This holds in any target, whether or not its AGENTS.md states the rule. Failure example: `toml.ts`, a hand-written TOML parser in templates/typescript, cleared review and the owner caught it at the merge ask (#136; smol-toml exists).
 
 Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule, or the one line `Owners: none`:
 

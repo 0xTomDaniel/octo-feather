@@ -69,5 +69,16 @@
     "origin": true,
     "fake_gh": true,
     "task": "Lane gh1 (parent issue #12, \"app hello --shout\"), branch gh1 in this directory, cut from main. The pilot ticket's commit is already integrated on gh1 and `just check` is green on it.\nYour step now: publish the lane: push gh1 to origin and open the lane's draft PR closing #12. Only that step: no workers, no review, no qc.\nSandbox run: there is no Herdr and no octo-feather-state; skip every herdr-say step and lane-record write; GitHub is reachable through gh. Put your report as your final message."
+  },
+  {
+    "id": "reviewer-reinvented-parser",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-yaml-names",
+      "branch": "implementer-t12",
+      "message": "feat(hello-file): greet every name a YAML file lists (T12, hello-file)"
+    },
+    "task": "Review lane gh12, ticket T12 (`app hello-file FILE` greets every name the team's names.yaml lists, one greeting per line; with --json one JSON object per line; a file listing no names is an error, exit 2; criterion hello-file). The file's format, as the team writes it: a top-level `names:` key holding a block list of plain names, other top-level keys ignored:\n```yaml\nnames:\n  - Ada\n  - Grace\nteam: crew\n```\nDiff: base main, head implementer-t12 in this directory (`git diff main...implementer-t12`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   }
 ]

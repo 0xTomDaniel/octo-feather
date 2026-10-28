@@ -22,5 +22,6 @@ Use this skill only when the repo already selects pnpm through `pnpm-lock.yaml`,
 - Preserve workspace boundaries and existing `.npmrc` behavior.
 - Record exact pnpm validation commands in the PR or handoff.
 
-Stop for clarification when the issue requires dependency or package-manager
-changes without an observable acceptance need.
+A library the work needs is a scoped dependency change: `pnpm add` it
+(agents/implementer.md Rules). Stop for clarification before switching package
+managers.
