@@ -9,7 +9,9 @@ octo-feather-qa.
 Here: the question list (reflection/questions.json, the one list), the reflector's brief (a lane's
 or the director's), the finding class counts across lane logs, the headless reflector run
 (agents/reflector.md through pi-role), the parser of its labelled output, and the log lines it
-becomes. The reflector's output form is OUTPUT_FORM below (the
+becomes, and the correction lanes the finding lines make due (`corrections`, `still_due`, the
+issue's title marker `MARK` and body; comms spec #reflection-correction). The reflector's output
+form is OUTPUT_FORM below (the
 brief's `Output` section), owned here, the parser beside it (docs/adr/0008 rung 3: labelled
 fields, never prose).
 
@@ -23,6 +25,7 @@ failure, "--thinking off" for a cheap smoke); OCTO_FEATHER_REFLECT_TIMEOUT secon
 """
 
 import datetime as dt
+import hashlib
 import json
 import os
 import re
@@ -445,6 +448,105 @@ def log_lines(found: list[Finding], ids: list[str], *, lane: bool = True) -> lis
     ]
     out.append({"at": at, "kind": "reflection", "findings": len(found), "questions": ids})
     return [json.dumps(d, ensure_ascii=False) for d in out]
+
+
+# Correction lanes (comms spec #reflection-correction; the rule: issue-lifecycle #lanes-correction).
+MARK_WORD = "correction-lane"
+MARK = f"[{MARK_WORD} {{}}]"  # a correction-lane issue's one title marker: found and filed by it
+MISSED = "reflection-missed"
+REPEAT = 2  # findings of one class that make its correction lane due (#lanes-correction)
+GATE = "owner-caught-"  # the director's (issue-lifecycle #acceptance-gate-correction-lane)
+DIRECTOR = "director"  # a Due's owner when no lane log holds the subject's findings
+KIT_REPO = "0xTomDaniel/octo-feather"  # the kit's tracker: the director's correction lanes
+
+
+@dataclass(frozen=True)
+class Due:
+    """One correction lane the rule makes due, before the tracker is asked: its subject (the class,
+    or for a reflection-missed finding that one finding), the findings it quotes as (log, line), the
+    reflections' routes, the latest finding's `at`, and its owners: the lanes holding its latest
+    lane finding, or (DIRECTOR,) when no lane log holds one."""
+
+    subject: str
+    cls: str
+    findings: list[tuple[str, LogLine]]
+    routes: list[str]
+    latest: str
+    owners: tuple[str, ...]
+
+    def title(self) -> str:
+        what = "change the question list" if self.cls == MISSED else "repeated finding class"
+        return f"{MARK.format(self.subject)} {what}: {self.cls}"
+
+    def route(self) -> str:
+        return "; ".join(self.routes) or "none given by a reflection"
+
+    def body(self) -> str:
+        quoted = [
+            f"- {log} {d.get('at')} {d.get('source') or DIRECTOR}"
+            + (f" ({d['question']})" if d.get("question") else "")
+            + (f", route {d['route']}" if d.get("route") else "")
+            + f": {d.get('summary')}"
+            for log, d in self.findings
+        ]
+        changes = (
+            "Changes: the question list, reflection/questions.json"
+            " (comms spec #reflection-questions)"
+        )
+        return "\n".join(
+            [
+                (
+                    "Correction lane (issue-lifecycle spec #lanes-correction), filed by"
+                    " `octo-feather-lane reflect` (comms spec #reflection-correction)."
+                ),
+                "",
+                f"Class: {self.cls}",
+                f"Route: {self.route()}",
+                *([changes] if self.cls == MISSED else []),
+                "",
+                f"Findings ({len(self.findings)}):",
+                *quoted,
+            ]
+        )
+
+
+def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list[Due]:
+    """Each correction lane the rule makes due on the finding lines of the lane hand-off logs LOGS
+    ({lane: lines}, archived included) and the DIRECTOR log, before the tracker is asked."""
+    by: dict[str, list[tuple[str, LogLine]]] = {}
+    for log, lines in [*logs.items(), (DIRECTOR, director)]:
+        for d in lines:
+            cls = d.get("class")
+            if d.get("kind") != "finding" or not isinstance(cls, str) or cls.startswith(GATE):
+                continue
+            if cls == MISSED:  # each one at once: its own subject
+                tag = hashlib.sha256(str(d.get("summary")).encode()).hexdigest()[:8]
+                by[f"{cls} {d.get('at')} {tag}"] = [(log, d)]
+            else:
+                by.setdefault(cls, []).append((log, d))
+    out: list[Due] = []
+    for subject, found in by.items():
+        cls = str(found[0][1]["class"])
+        if cls != MISSED and len(found) < REPEAT:
+            continue
+        latest = max(str(d.get("at") or "") for _, d in found)
+        lane = [(str(d.get("at") or ""), log) for log, d in found if log != DIRECTOR]
+        top = max((at for at, _ in lane), default=None)
+        owners = tuple(sorted({log for at, log in lane if at == top})) or (DIRECTOR,)
+        routes = list(dict.fromkeys(str(d["route"]) for _, d in found if d.get("route")))
+        out.append(Due(subject, cls, found, routes, latest, owners))
+    return out
+
+
+def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
+    """Whether DUE files, given the tracker's ISSUES ({title, state, closedAt}): none carries its
+    marker, or none such is open and its latest finding is dated after the last one closed."""
+    mine = [i for i in issues if MARK.format(due.subject) in str(i.get("title"))]
+    if not mine:
+        return True
+    if any(str(i.get("state")).upper() == "OPEN" for i in mine):
+        return False
+    return due.latest > max(str(i.get("closedAt") or "") for i in mine)
 
 
 def append(log: Path, lines: list[str]) -> None:

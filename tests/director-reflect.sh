@@ -29,7 +29,7 @@ sys.stdout.write(open(f"{d}/reply.{who}").read())
 EOF
 printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"
 chmod +x "$t/bin/pi" "$t/bin/herdr"
-export PATH="$t/bin:$PATH"
+export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh: a due correction lane files there (tests/lane-correction.sh)
 state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"; dlog="$state/director.handoffs.jsonl"
 mkdir -p "$lanes/archive"
 ago() { python3 -c 'import datetime as d, sys; print((d.datetime.now(d.timezone.utc) - d.timedelta(hours=float(sys.argv[1]))).strftime("%Y-%m-%dT%H:%M:%SZ"))' "$1"; }

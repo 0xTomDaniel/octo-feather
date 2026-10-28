@@ -40,6 +40,15 @@ runs at a time (a lock on the state dir). --due runs it only when one is due at 
 #reflection-director; `octo-feather-start` runs that in the background) and the director log has lines, else
 prints `director reflection: not due ...`, exit 0; also exit 0, nothing run, while another one runs.
 
+After its reflection, `reflect NAME`, `reflect --director` (when it ran) and `archive` (after both, before any file
+moves) file the correction lanes due (spec comms #reflection-correction; the rule: issue-lifecycle #lanes-correction)
+through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
+the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
+scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
+`correction lane: filed <key> in <tracker> for <subject> (...)` per issue, else `correction lanes: none filed`;
+a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
+A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
+
   octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
                                    create, or update in place, the PR's one review verdict
                                    comment (marker, head, verdict, findings); prints its URL
@@ -309,6 +318,12 @@ def cmd_archive(args: list[str]) -> int:
     except Refuse as e:
         unreflect(log, pre)   # every file left as it was: the lane reflection's lines cut too
         raise Refuse(f"{e}; the lane reflection's lines undone, every file left in {lanes}") from e
+    try:
+        file_corrections(lanes, [name, reflect_module().DIRECTOR])   # spec comms #reflection-correction
+    except Refuse as e:
+        unreflect(log, pre)
+        unreflect(dlog, dpre)
+        raise Refuse(f"{e}; the reflections' lines undone, every file left in {lanes}") from e
     if log not in files and os.path.lexists(log):
         cast("list[Path]", files).append(log)   # the reflection wrote the lane's first hand-off line
     try:
@@ -388,9 +403,9 @@ DIRECTOR_LOG = "director.handoffs.jsonl"
 DAY = 86400   # when a start's director reflection is due: spec comms #reflection-director
 
 
-def reflect_director(lanes: Path, due: bool = False) -> None:
+def reflect_director(lanes: Path, due: bool = False) -> bool:
     """Run the director reflection and append its lines to the director log; Refuse when it fails. DUE: only when
-    one is due at a start (DAY), and not while another runs."""
+    one is due at a start (DAY), and not while another runs. Whether it ran."""
     import contextlib, datetime, fcntl, io
     r = reflect_module()
     state = lanes.parent
@@ -403,7 +418,7 @@ def reflect_director(lanes: Path, due: bool = False) -> None:
         except BlockingIOError:
             os.close(lock)
             print(f"director reflection: not due, another one is running ({state})")
-            return
+            return False
         try:
             dlines = cast("list[dict[str, object]]", read_log(dlog)[0] if dlog.exists() else [])
             now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
@@ -411,13 +426,11 @@ def reflect_director(lanes: Path, due: bool = False) -> None:
             if due and (not dlines if last is None else (now - last).total_seconds() <= DAY):
                 print("director reflection: not due, " + (f"last ran {stamp(f'{last:%Y-%m-%dT%H:%M:%SZ}', now)}" if last
                                                          else f"no director log lines to reflect on ({dlog})"))
-                return
+                return False
             since, recent = r.since_last_reflection(dlines)
             logs: dict[str, list[dict[str, object]]] = {}
             listed: list[str] = []
-            for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl")):
-                lane = p.name.removesuffix(".handoffs.jsonl")
-                lines = cast("list[dict[str, object]]", read_log(p)[0])
+            for lane, p, lines in lane_logs(lanes):
                 logs[lane] = logs.get(lane, []) + lines
                 listed.append(r.lane_log_line(lane, p, lines))
             buf = io.StringIO()
@@ -437,19 +450,91 @@ def reflect_director(lanes: Path, due: bool = False) -> None:
     print(f"reflection: director, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {dlog}")
     for f in found:
         print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
+    return True
+
+
+def lane_logs(lanes: Path) -> list[tuple[str, Path, list[dict[str, object]]]]:
+    """Every lane hand-off log, archived ones first: (lane, path, its lines)."""
+    return [(p.name.removesuffix(".handoffs.jsonl"), p, cast("list[dict[str, object]]", read_log(p)[0]))
+            for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl"))]
+
+
+GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tracker whose issues the rule can search (gh)
+
+
+def file_corrections(lanes: Path, owners: list[str]) -> list[str]:
+    """Spec comms #reflection-correction: file, through the tracker skill's issue-create, each correction lane the
+    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`) whose owner is in OWNERS: a lane name
+    files in its target's tracker (the current directory's tracker skill, the lane record's repository), the
+    director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
+    import tomllib
+    r = reflect_module()
+    dlog = lanes.parent / DIRECTOR_LOG
+    try:
+        logs: dict[str, list[dict[str, object]]] = {}
+        for lane, _, lines in lane_logs(lanes):
+            logs[lane] = logs.get(lane, []) + lines
+        due = r.corrections(logs, read_log(dlog)[0] if dlog.exists() else [])
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
+    filed: list[str] = []
+    for owner in owners:
+        mine = [d for d in due if owner in d.owners]
+        if not mine:
+            continue
+        if owner == r.DIRECTOR:
+            skill, repo = GITHUB_ISSUES, r.KIT_REPO
+        else:
+            skill = tracker_skill(Refuse)
+            rec = next((p for p in (lanes / f"{owner}.toml", lanes / "archive" / f"{owner}.toml") if p.is_file()), None)
+            try:
+                repo = tomllib.loads(rec.read_text(encoding="utf-8")).get("repository") if rec else None
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+                raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
+        where = f"{skill} {repo or 'of the current directory'}"
+        env = {"GH_REPO": str(repo)} if repo else {}
+        if skill != GITHUB_ISSUES:
+            for d in mine:
+                print(f"correction lane: due, not filed: {d.subject}: tracker skill {skill} offers no search for an existing"
+                      f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
+            continue
+        out = gh(["issue", "list", *(["--repo", str(repo)] if repo else []), "--state", "all", "--limit", "1000",
+                  "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt"],
+                 "check gh auth and network, then rerun")
+        try:
+            issues = json.loads(out)
+        except ValueError as e:
+            raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
+        for d in mine:
+            if not r.still_due(d, issues):
+                continue
+            try:
+                key = tracker("issue-create", "--title", d.title(), "--body-file", "-", err=Refuse, skill=skill, env=env,
+                              stdin=d.body()).strip()
+            except Refuse as e:
+                raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
+            filed.append(key)
+            print(f"correction lane: filed {key} in {where} for {d.subject} ({len(d.findings)} finding"
+                  f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
+    if not filed:
+        print("correction lanes: none filed")
+    return filed
 
 
 def cmd_reflect(args: list[str]) -> int:
     if args[:1] == ["--director"]:
         if args[1:] not in ([], ["--due"]):
             raise Refuse(f"usage: octo-feather-lane reflect --director [--due] (got {' '.join(args)})")
-        reflect_director(lanes_dir(), due=args[1:] == ["--due"])
+        lanes = lanes_dir()
+        if reflect_director(lanes, due=args[1:] == ["--due"]):
+            file_corrections(lanes, [reflect_module().DIRECTOR])
         return 0
     name = lane_name(args, "reflect")
     lanes = lanes_dir()
     if not (lanes / f"{name}.toml").is_file():
         raise Refuse(f"no lane record {lanes / f'{name}.toml'}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
     reflect_lane(name, lanes)
+    file_corrections(lanes, [name])
     return 0
 
 
@@ -1763,20 +1848,27 @@ def strip_subst(cmd: str) -> str:
     return "".join(out)
 
 
-def tracker(script: str, *args: str, err: type = Unchecked) -> str:
-    """Run SCRIPT of the target's tracker skill (scripts/pi-role's tracker_skill resolves it from the
-    .octo-feather.toml of the git repo at the current directory, docs/adr/0004); its stdout. A failure
-    raises ERR naming the script and its reason."""
+def tracker_skill(err: type = Unchecked) -> str:
+    """The target's tracker skill: scripts/pi-role's tracker_skill resolves it from the .octo-feather.toml of the git
+    repo at the current directory, docs/adr/0004."""
     loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
     pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
     loader.exec_module(pr)
     try:
-        skill = pr.tracker_skill(str(KIT / ".agents" / "skills"))
+        return pr.tracker_skill(str(KIT / ".agents" / "skills"))
     except SystemExit as e:
         raise err(f"{e.code}: set `tracker` in the target's .octo-feather.toml to a tracker the kit has, then rerun") from e
+
+
+def tracker(script: str, *args: str, err: type = Unchecked, skill: str | None = None, env: dict[str, str] | None = None,
+            stdin: str | None = None) -> str:
+    """Run SCRIPT of SKILL, by default the target's tracker skill (tracker_skill); its stdout. ENV is added to the
+    script's environment, STDIN its input. A failure raises ERR naming the script and its reason."""
+    skill = skill or tracker_skill(err)
     path = KIT / ".agents" / "skills" / skill / "scripts" / script
     try:
-        p = subprocess.run([str(path), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL, timeout=120)
+        p = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=120, env={**os.environ, **(env or {})},
+                           input=stdin, stdin=subprocess.DEVNULL if stdin is None else None)
     except (OSError, subprocess.TimeoutExpired) as e:
         raise err(f"tracker script {skill}/{script} {' '.join(args)} did not run ({e}): check the tracker CLI and network, then rerun") from e
     if p.returncode:
