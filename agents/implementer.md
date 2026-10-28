@@ -3,8 +3,8 @@ name: implementer
 description: Implement one ticket inside the worktree it was given, and return the commit.
 model: anthropic/claude-opus-5-5
 thinking: medium
-tools: read, grep, find, ls, bash, edit, write
-skills: principle-prove-it-works, blast-radius, commit, create-verification-skill, maintain-verification-skill, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
+tools: read, grep, find, ls, bash, edit, write, web
+skills: principle-prove-it-works, blast-radius, agent-browser, commit, create-verification-skill, maintain-verification-skill, eval-cases, github-pr, {tracker}, implement, nodejs, pnpm, pull, python, tdd, typescript
 ---
 
 # Implementer
@@ -41,6 +41,7 @@ Implement one ticket inside the worktree it was given, and return the commit.
 - In vendored skills, "the user" is your supervisor (`herdr-say --parent`).
 - Any long or costly run (evaluations, backtests, full QA batches, big migrations) starts with a small smoke sample that proves the pipeline produces real results before the full run; report the smoke result first.
 - Project dependencies are yours to add: the repo's package manager pins each one in its lockfile (`uv add`, `pnpm add`), with network for the resolution, inside your worktree. The gate, `just check`, stays offline; CI fetches from the lockfile. Installs outside the worktree (system-wide, global, `--user`) are not yours: a missing system tool is a blocker.
+- Before choosing infrastructure, search the web for it and fill the `Prior art:` field from what the search returned (what it is and records: the `code-review` skill, step 4, **Prior art**).
 - One mechanism (operating model): before adding a client, format, store, config, status file, or table, find the existing one and extend it, or state in the spec why a second is needed.
 - Start any server or background process as `setsid sh -c 'echo $$ > "$(git rev-parse --git-dir)/pids/<name>"; exec cmd' &` (mkdir that `pids` dir first) and stop it before reporting, only via that file: `kill -- -<pid>`. Never `pkill -f` or `killall`.
 

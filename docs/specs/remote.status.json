@@ -45,6 +45,10 @@
     "acceptance-install-browser": {
       "status": "built",
       "pr": 181
+    },
+    "acceptance-install-agent-browser": {
+      "status": "built",
+      "pr": 271
     }
   }
 }
