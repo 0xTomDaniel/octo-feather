@@ -2,7 +2,7 @@
 
 TypeScript app built with the octo-feather kit. Node runs `src/*.ts` directly (type stripping, no build step). Everything the app does is reachable through its CLI, `app` (`src/cli.ts`), and every command prints JSON with `--json`.
 
-Repo skills: typescript, pnpm, nodejs
+Repo skills: typescript, pnpm, nodejs, verify-app
 
 ## Rules
 

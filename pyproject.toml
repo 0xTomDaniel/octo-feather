@@ -1,11 +1,12 @@
 # The kit's test runner (#224): `just check` runs every gate recipe and every tests/*.sh as one pytest
 # item each, by subprocess (tests/gate/, docs/adr/0002); and the kit's Python lint, format and type tools
-# (#244, below). Not a package; no kit code imports from here.
+# (#244, below). Not a package; no kit code imports from here but a kit script's runtime dep below.
 [project]
 name = "octo-feather-kit-tests"
 version = "0"
 requires-python = ">=3.10"
-dependencies = []
+# octo-feather-contract validates qc.toml with jsonschema, re-running itself here (uv run --locked --offline).
+dependencies = ["jsonschema==4.26.0"]
 
 [dependency-groups]
 dev = [

@@ -1,0 +1,36 @@
+# octo-feather (mini) kit commands. `just check` is the one gate (AGENTS.md).
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+set positional-arguments
+
+export root := justfile_directory()
+export PATH := root + "/scripts:" + env_var('PATH')
+
+default:
+    @just --list
+
+# The gate: script syntax, then every test.
+check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    for f in scripts/* .agents/skills/*/scripts/*; do
+      if head -1 "$f" | grep -q python; then python3 -m py_compile "$f"; else bash -n "$f"; fi
+    done
+    for t in tests/*.sh; do bash "$t"; done
+    echo "just check: ok"
+
+# The box's tools, as the full kit checks them.
+install-check target=invocation_directory():
+    #!/usr/bin/env bash
+    set -uo pipefail
+    bad=0
+    for t in git just python3; do
+      if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
+      else printf '%-6s MISSING\n' "$t"; bad=1; fi
+    done
+    exit "$bad"
+
+# A new target repo from templates/LANG.
+new-repo $lang $dest *$flags:
+    octo-feather-new-repo "$@"
