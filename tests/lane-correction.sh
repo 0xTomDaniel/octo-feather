@@ -8,7 +8,9 @@
 # lane record's repository naming the class, quoting its findings and the director reflection's route, and the
 # archive prints its key; an open issue, or one closed after the class's latest finding, files nothing; one
 # closed before it files again; a reflection-missed finding files at once (a lane's in the target, the
-# director's in the kit's repo) naming the question list; an owner-caught class files nothing. Run by `just check`.
+# director's in the kit's repo) naming the question list; an owner-caught class files nothing; every due subject files
+# whichever lane's reflection runs (archive of an unrelated lane, reflect --director routing a lane class), each in
+# its own owner's target. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -107,4 +109,42 @@ EOF
 none; out="$("$L" reflect --director 2>&1)" || fail "reflect --director failed: $out"
 [[ "$(count)" == 4 ]] && grep -qxF "correction lanes: none filed" <<<"$out" || fail "refiled: $out $(issues)"
 
-echo "lane-correction: ok (second finding files in the lane's repo with findings and route, key printed; open or closed-after files nothing, closed-before refiles; reflection-missed files at once, lane's in the target, director's in the kit, naming the question list; owner-caught not filed)"
+# Every due subject files, whichever lane's reflection runs: archived gh1 and gh2 hold one dup-rule finding each, the
+# archive of unrelated gh3 files the class in gh1/gh2's target quoting both; a further archive files nothing.
+fresh() { export XDG_STATE_HOME="$t/$1" FAKE_GH_STORE="$t/$1.gh.json"; state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"
+  dlog="$state/director.handoffs.jsonl"; mkdir -p "$lanes/archive"; : >"$dlog"; }
+archived() { lane "$@"; mv "$lanes/$1.toml" "$lanes/$1.handoffs.jsonl" "$lanes/archive/"; }
+fresh other
+archived gh1 "$(cr 2026-10-20T00:00:00Z dup-rule "gh1 restated the merge rule")"
+archived gh2 "$(cr 2026-10-21T00:00:00Z dup-rule "gh2 restated the gate rule")"
+lane gh3; none
+out="$("$L" archive gh3 2>&1)" || fail "other lane: archive gh3 failed: $out"
+grep -qE '^correction lane: filed 901 in github-issues o/t for dup-rule \(2 findings; route: none given by a reflection\)$' <<<"$out" \
+  || fail "other lane: due class not filed: $out"
+[[ -f "$lanes/archive/gh3.toml" ]] || fail "other lane: gh3 not archived: $out"
+python3 - "$(issues)" <<'EOF' || fail "other lane: issue wrong: $(issues)"
+import json, sys
+(i,) = json.loads(sys.argv[1])
+assert i["repo"] == "o/t" and "[correction-lane dup-rule]" in i["title"], i
+for want in ("gh1 restated the merge rule", "gh2 restated the gate rule"):
+    assert want in i["body"], (want, i["body"])
+EOF
+lane gh4; none
+out="$("$L" archive gh4 2>&1)" || fail "other lane: archive gh4 failed: $out"
+[[ "$(count)" == 1 ]] && grep -qxF "correction lanes: none filed" <<<"$out" || fail "other lane: refiled: $out $(issues)"
+
+# acceptance-writer-route-lane through reflect --director: the class's findings in lanes, the director routes it.
+fresh routed
+archived gh1 "$(cr 2026-10-20T00:00:00Z stale-check "gh1 check missed a stale doc")"
+archived gh2 "$(cr 2026-10-21T00:00:00Z stale-check "gh2 check missed a stale doc")"
+none; printf '%s\n%s\n' "$DQ" 'Finding: class: stale-check | question: writer-route | route: agents/code-reviewer.md Rules | summary: 2 code-review findings in gh1, gh2' >"$t/reply.director"
+out="$("$L" reflect --director 2>&1)" || fail "routed: reflect --director failed: $out"
+grep -qE '^correction lane: filed 901 in github-issues o/t for stale-check \(3 findings; route: agents/code-reviewer.md Rules\)$' <<<"$out" \
+  || fail "routed: not filed: $out"
+python3 - "$(issues)" <<'EOF' || fail "routed: issue wrong: $(issues)"
+import json, sys
+(i,) = json.loads(sys.argv[1])
+assert i["repo"] == "o/t" and "Route: agents/code-reviewer.md Rules" in i["body"], i
+EOF
+
+echo "lane-correction: ok (every due subject files whichever lane reflects, in its own lane's target; director-routed lane class files naming the route; second finding files in the lane's repo with findings and route, key printed; open or closed-after files nothing, closed-before refiles; reflection-missed files at once, lane's in the target, director's in the kit, naming the question list; owner-caught not filed)"
