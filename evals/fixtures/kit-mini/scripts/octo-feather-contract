@@ -1,0 +1,119 @@
+#!/usr/bin/env python3
+"""octo-feather-contract [REPO-OR-QC.TOML]
+
+Validate a target's app-driver contract, qc.toml at its root (quality spec #qc-contract,
+docs/adr/0025), against the kit's versioned schema: its `format` key picks
+schemas/qc.v<format>.schema.json. With no argument, ./qc.toml. Prints
+`octo-feather-contract: <file>: ok (format N)` and exits 0, or names each problem
+(FILE: KEY: what is wrong) and exits 1. Usage or an unusable schema exits 2.
+
+The validator honours exactly the schema keywords below and refuses any other, so a
+schema edit it cannot enforce fails instead of passing silently.
+"""
+import glob, json, os, re, sys, tomllib
+
+ME = "octo-feather-contract"
+SCHEMAS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "schemas")
+KEYWORDS = {"$schema", "$id", "title", "description", "type", "required", "properties",
+            "additionalProperties", "const", "minLength"}
+TYPES = {"object": dict, "string": str, "integer": int}
+
+
+class SchemaError(Exception):
+    pass
+
+
+def supported():
+    found = (re.fullmatch(r"qc\.v(\d+)\.schema\.json", os.path.basename(p)) for p in glob.glob(os.path.join(SCHEMAS, "qc.v*.schema.json")))
+    return sorted(int(m[1]) for m in found if m)
+
+
+def audit(schema, where="top"):
+    """Raise SchemaError on any keyword or type this validator does not enforce, anywhere in SCHEMA."""
+    if not isinstance(schema, dict) or (extra := sorted(set(schema) - KEYWORDS)):
+        raise SchemaError(f"{where}: unsupported keyword {extra[0] if isinstance(schema, dict) else 'form'}")
+    if "type" in schema and schema["type"] not in TYPES:
+        raise SchemaError(f"{where}: unsupported type {schema['type']!r}")
+    for key, sub in schema.get("properties", {}).items():
+        audit(sub, key)
+    if isinstance(schema.get("additionalProperties"), dict):
+        audit(schema["additionalProperties"], f"{where}.*")
+
+
+def check(value, schema, where, out):
+    """Append to OUT each problem of VALUE against SCHEMA (audited); WHERE is the dotted key path ('' at the top)."""
+    name = where or "the contract"
+    want = schema.get("type")
+    if want is not None:
+        # bool is an int in Python; TOML true is never an integer.
+        if not isinstance(value, TYPES[want]) or isinstance(value, bool):
+            article = "an" if want[0] in "aeiou" else "a"
+            out.append(f"{name} must be {article} {want}")
+            return
+    if "const" in schema and value != schema["const"]:
+        out.append(f"{name} must be {schema['const']!r}")
+    if "minLength" in schema and isinstance(value, str) and len(value) < schema["minLength"]:
+        out.append(f"{name} must not be empty")
+    if not isinstance(value, dict):
+        return
+    prefix = f"{where}: " if where else ""
+    out += [f"{prefix}missing {r}" for r in schema.get("required", []) if r not in value]
+    props, extra = schema.get("properties", {}), schema.get("additionalProperties", True)
+    for key, v in value.items():
+        sub = f"{where}.{key}" if where else key
+        if key in props:
+            check(v, props[key], sub, out)
+        elif extra is False:
+            out.append(f"{prefix}unknown key {key}")
+        elif isinstance(extra, dict):
+            check(v, extra, sub, out)
+
+
+def main(argv):
+    if len(argv) > 1 or (argv and argv[0] in ("-h", "--help")):
+        print(f"usage: {ME} [REPO-OR-QC.TOML]   (default ./qc.toml)", file=sys.stderr)
+        return 0 if argv and argv[0] in ("-h", "--help") else 2
+    path = argv[0] if argv else "."
+    if os.path.isdir(path):
+        path = os.path.join(path, "qc.toml")
+    try:
+        with open(path, "rb") as fh:
+            doc = tomllib.load(fh)
+    except FileNotFoundError:
+        print(f"{ME}: no qc.toml at {path}: write the app-driver contract at the repo root (quality spec #qc-contract)", file=sys.stderr)
+        return 1
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        print(f"{ME}: {path}: not TOML: {e}", file=sys.stderr)
+        return 1
+    versions = supported()
+    have = ", ".join(map(str, versions)) or "none"
+    if "format" not in doc:
+        print(f"{ME}: {path}: missing format (the contract's format version; supported: {have})", file=sys.stderr)
+        return 1
+    fmt = doc["format"]
+    if type(fmt) is not int:
+        print(f"{ME}: {path}: format must be an integer (the contract's format version; supported: {have})", file=sys.stderr)
+        return 1
+    if fmt not in versions:
+        print(f"{ME}: {path}: format {fmt} is not a supported format version (supported: {have})", file=sys.stderr)
+        return 1
+    schema_path = os.path.join(SCHEMAS, f"qc.v{fmt}.schema.json")
+    problems = []
+    try:
+        with open(schema_path, encoding="utf-8") as fh:
+            schema = json.load(fh)
+        audit(schema)
+        check(doc, schema, "", problems)
+    except (OSError, ValueError, AttributeError, TypeError, SchemaError) as e:
+        print(f"{ME}: {schema_path}: unusable schema: {e}; fix the schema, the contract cannot be validated", file=sys.stderr)
+        return 2
+    for p in problems:
+        print(f"{ME}: {path}: {p}", file=sys.stderr)
+    if problems:
+        return 1
+    print(f"{ME}: {path}: ok (format {fmt})")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

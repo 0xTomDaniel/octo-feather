@@ -131,5 +131,13 @@
   "rev-tdd-shout-tests": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
   "rev-tdd-would-catch": {"facts": [{"fact": "skill_read", "skill": "tdd"}]},
   "rev-tdd-near-count-tests": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]},
-  "rev-tdd-near-run-suite": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]}
+  "rev-tdd-near-run-suite": {"facts": [{"fact": "skill_not_read", "skill": "tdd"}]},
+  "impl-createverify-no-harness": {"facts": [{"fact": "skill_read", "skill": "create-verification-skill"}]},
+  "impl-createverify-ticket": {"facts": [{"fact": "skill_read", "skill": "create-verification-skill"}]},
+  "impl-createverify-near-run-once": {"facts": [{"fact": "skill_not_read", "skill": "create-verification-skill"}]},
+  "impl-createverify-near-list-skills": {"facts": [{"fact": "skill_not_read", "skill": "create-verification-skill"}]},
+  "impl-maintainverify-audit": {"facts": [{"fact": "skill_read", "skill": "maintain-verification-skill"}]},
+  "impl-maintainverify-drift": {"facts": [{"fact": "skill_read", "skill": "maintain-verification-skill"}]},
+  "impl-maintainverify-near-define": {"facts": [{"fact": "skill_not_read", "skill": "maintain-verification-skill"}]},
+  "impl-maintainverify-near-json": {"facts": [{"fact": "skill_not_read", "skill": "maintain-verification-skill"}]}
 }

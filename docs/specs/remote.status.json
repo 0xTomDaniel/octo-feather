@@ -1,6 +1,6 @@
 {
   "spec": "remote.spec.html",
-  "accepted_commit": "e02cc630c51705b91accf54e1ec7ef7c6ea9dd9e",
+  "accepted_commit": "cbd9bfadcaf3aa1b47f3bfa9c215b6d315155483",
   "criteria": {
     "acceptance-login-gate": {
       "status": "built",
@@ -43,6 +43,10 @@
       "pr": 103
     },
     "acceptance-install-browser": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-install-agent-browser": {
       "status": "planned",
       "pr": null
     }

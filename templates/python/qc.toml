@@ -1,0 +1,21 @@
+# This app's driver contract (octo-feather quality spec #qc-contract), read by the verify-app skill.
+# Validate it with the kit's octo-feather-contract.
+format = 1
+
+# The repo's own install (`just setup` minus the hook).
+setup = "uv sync --locked"
+
+# The installed `app` console script.
+[entry]
+command = '"$QC_REPO/.venv/bin/app"'
+
+# None: a short-lived CLI, no server.
+[services]
+
+# None: the app keeps no data.
+[fixture]
+
+# The hello drive's input and its expected greeting (a worked example, not computed).
+[values]
+name = "Ada"
+greeting = "Hello, Ada"
