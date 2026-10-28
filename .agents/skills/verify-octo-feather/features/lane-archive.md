@@ -31,7 +31,7 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 
 - **Model unreachable** (`refuse-unreachable`). Under `unshare -Un`, run `octo-feather-lane archive gh900`. Observe exit 1, stderr naming `lane reflection of gh900 failed` and `nothing appended`, the lane files' sha256 unchanged, no archive/.
 - **No record** (`refuse-no-record`). Run `octo-feather-lane reflect gh404`. Observe exit 1, `no lane record`.
-- **Live reflection** (`reflect-live`). Without the namespace, run `octo-feather-lane archive gh900`: the real reflector through pi-role. Observe exit 0, `reflection: lane gh900, N findings, questions ...` with each finding, and the archived log (`reflect-live.obs.archived-log`, printed as `archived log:` lines) holding the seeded lines unchanged, then N finding lines (source reflection, blocking false, a lane question, a route) and one reflection line naming every lane question; one `caught-by-hand` finding names the stranded worker; gh900 left lanes/ for archive/.
+- **Live reflection** (`reflect-live`). Without the namespace, run `octo-feather-lane archive gh900`: the real reflector through pi-role. Observe exit 0, `reflection: lane gh900, N findings, questions ...` with each finding, and the archived log (`reflect-live.obs.archived-log`, printed as `archived log:` lines) holding the seeded lines unchanged, then the finding and reflection lines of comms spec `#reflection-output` (N findings, every lane question); one `caught-by-hand` finding names the stranded worker; gh900 left lanes/ for archive/.
 
 ## Gotchas
 
