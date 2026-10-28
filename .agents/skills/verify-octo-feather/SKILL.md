@@ -1,6 +1,6 @@
 ---
 name: verify-octo-feather
-description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence: short-lived CLIs, no server, no browser) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
+description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence, pi-role --json: short-lived CLIs, no server, no browser) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
 ---
 
 # verify-octo-feather
@@ -24,7 +24,7 @@ Helper (an executable Python script, `python3` 3.11+, standard library only: `to
 - `entry.command`: `launch` writes it as `bin/kit` in the run state; every case, the doctor's probes and the evidence record run that with the command a user types appended.
 - `services`: none. The helper starts no service: `launch` fails naming any declared one.
 - `fixture`: none. `drive` runs each declared `reset` before its cases.
-- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion.
+- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion; `web_roles` and `web_servers` are the role-launch drive's expected web roles and web list servers.
 
 What each key means and how its commands run: `schemas/qc.v1.schema.json`. Validate the contract: `octo-feather-contract .` (prints ok, or names the missing or wrong key).
 
@@ -43,11 +43,11 @@ What each key means and how its commands run: `schemas/qc.v1.schema.json`. Valid
 
 ## Doctor
 
-`verify-octo-feather doctor` (read-only) answers "is this checkout worth driving?": the recorded kit command exists; `just`, `git`, `python3` on PATH; `octo-feather-new-repo`, `octo-feather-contract`, `octo-feather-evidence` resolve through the entry to this checkout's `scripts/`; the kit `justfile` lists `new-repo` and `install-check`; the kit's own `qc.toml` validates; the checkout is still at the launch rev (WARN means relaunch); the Spec Chat installer new-repo needs (WARN when absent); a network namespace for install-check (WARN when absent); the scratch dir. Exit non-zero on any FAIL. Run it first whenever a drive result looks wrong.
+`verify-octo-feather doctor` (read-only) answers "is this checkout worth driving?": the recorded kit command exists; `just`, `git`, `python3` on PATH; `octo-feather-new-repo`, `octo-feather-contract`, `octo-feather-evidence`, `pi-role` resolve through the entry to this checkout's `scripts/`; the kit `justfile` lists `new-repo` and `install-check`; the kit's own `qc.toml` validates; the checkout is still at the launch rev (WARN means relaunch); the Spec Chat installer new-repo needs (WARN when absent); a network namespace for install-check (WARN when absent); the scratch dir. Exit non-zero on any FAIL. Run it first whenever a drive result looks wrong.
 
 ## Drive
 
-`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`) with the contract's values. Each case:
+`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `role-launch`) with the contract's values. Each case:
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`;
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;
@@ -69,7 +69,7 @@ Evidence lives at `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR`: `doctor.txt` (from `run`)
 
 The kept record is the kit's evidence store (quality spec `#evidence-store`), outside the repo and both folders above: every `drive`, passed or failed, appends one record through `octo-feather-evidence`, entered by the contract, and prints `verify-octo-feather: evidence record <id> (criterion <spec>#<anchor>; ...)`. The record holds the feature folder's files as outputs and names the commit (and whether the tree was dirty), the criterion with its text hash from the kit's own spec, the contract and fixture versions.
 
-- The criterion is the one the feature file's `Drive criterion:` line names.
+- The criterion is the one the feature file's `Drive criterion:` line names; a feature with several lines appends one record per line.
 - Read a criterion's records at a commit: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` (`--json` for data). Where the store lives and the record format: `octo-feather-evidence --help`.
 - Drive at a committed head for a record that names it clean.
 

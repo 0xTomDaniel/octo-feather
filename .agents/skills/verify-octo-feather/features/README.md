@@ -27,7 +27,7 @@ The kit's specs are in `docs/specs/`. Each feature file links its criteria by an
 
 ## Feature entry contract
 
-Each feature file has an H1 title, its criteria links, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-octo-feather`, `Gotchas`. Criteria are linked by anchor, never restated. One line, ``Drive criterion: `<spec>#<anchor>` ``, after the criteria links names the criterion the feature's drive serves, its evidence record's criterion id.
+Each feature file has an H1 title, its criteria links, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-octo-feather`, `Gotchas`. Criteria are linked by anchor, never restated. One line, ``Drive criterion: `<spec>#<anchor>` ``, after the criteria links names the criterion the feature's drive serves, its evidence record's criterion id; a drive serving several has one line each, and one record per line.
 
 ## Features
 
@@ -35,3 +35,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [install-check](./install-check.md) covers the box's install check (`just install-check`).
 - [contract](./contract.md) covers the app-driver contract validator (`octo-feather-contract`).
 - [evidence](./evidence.md) covers the evidence store command (`octo-feather-evidence append`, `read`).
+- [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
