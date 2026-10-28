@@ -8,7 +8,7 @@
 # violation present. ruff and basedpyright come from the kit's uv environment, offline. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.before"' EXIT
 lint() { (cd "$t" && uv run --project "$kit" --locked --offline --no-sync "$kit/scripts/octo-feather-lint" "$@"); }
 fail() { echo "lint test: $1" >&2; [[ -z "${out:-}" ]] || echo "$out" >&2; exit 1; }
 # run CMD: octo-feather-lint CMD into $out and $rc.
@@ -34,12 +34,16 @@ requires-python = ">=3.12"
 [tool.ruff]
 line-length = 100
 
+# A table between [tool.ruff] and its sub-tables: init and shrink edit it as split tables.
+[tool.basedpyright]
+typeCheckingMode = "strict"
+
 [tool.ruff.lint]
 select = ["ALL"]
 ignore = ["COM812", "CPY001", "D"]
 
-[tool.basedpyright]
-typeCheckingMode = "strict"
+[tool.ruff.format]
+quote-style = "double"  # config beside the baseline's exclude, kept as written
 EOF
 printf 'def double(n: int) -> int:\n    return n * 2\n' >"$t/pkg/m.py"
 # bin/tool: one ruff code (T201) and one type error, both baselined by init.
@@ -86,7 +90,11 @@ printf '\n[tool.unrelated]\n"extra" = [\n]\n' >>"$t/pyproject.toml"; g commit -q
 printf '#!/usr/bin/env python3\nimport sys\n\nN: int = 1\nsys.stdout.write(f"{N}\\n")\n' >"$t/bin/tool"
 bad lint 'T201 no longer fires in bin/tool' 'octo-feather-lint shrink'
 bad types 'no longer occur' 'octo-feather-lint shrink'
+cp "$t/pyproject.toml" "$t.before"
 ok shrink "shrink after fixes"
+# Only bin/tool's emptied key went; every other byte of pyproject.toml is as it was.
+gone="$(diff --unchanged-line-format= --old-line-format='-%L' --new-line-format='+%L' "$t.before" "$t/pyproject.toml" || true)"
+[[ "$gone" == $'-"bin/tool" = [\n-    "T201",\n-]' ]] || fail "shrink changed more of pyproject.toml than bin/tool's key: $gone"
 ! grew || fail "shrink grew a baseline"
 ! grep -qF '"T201",' "$t/pyproject.toml" || fail "shrink left the stale T201"
 grep -qxF '"extra" = [' "$t/pyproject.toml" || fail "shrink deleted [tool.unrelated] extra"
