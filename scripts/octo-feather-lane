@@ -238,6 +238,7 @@ One subcommand per function, listed in COMMANDS; add a subcommand there.
 import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import cast
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 KIT = Path(__file__).resolve().parent.parent
@@ -284,10 +285,10 @@ def cmd_archive(args: list[str]) -> int:
     for f in (record, log):
         if (archive / f.name).exists() or (archive / f.name).is_symlink():
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
-    pre = os.path.getsize(log) if log in files else None   # the log's length before the reflection appends
+    pre = log.stat().st_size if log in files else None   # the log's length before the reflection appends
     reflect_lane(name, lanes)   # spec comms #reflection-lane: before any file moves
     if log not in files and os.path.lexists(log):
-        files.append(log)   # the reflection wrote the lane's first hand-off line
+        cast("list[Path]", files).append(log)   # the reflection wrote the lane's first hand-off line
     try:
         before = {f.name: sha256(f) for f in files}
     except OSError as e:
@@ -321,7 +322,9 @@ def cmd_archive(args: list[str]) -> int:
 def reflect_module():
     """scripts/octo-feather-reflect: the question list, brief, reflector run, reply parser and log lines."""
     loader = importlib.machinery.SourceFileLoader("octo_feather_reflect", str(KIT / "scripts" / "octo-feather-reflect"))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_reflect", loader))
+    spec = importlib.util.spec_from_loader("octo_feather_reflect", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
     loader.exec_module(mod)
     return mod
 
@@ -333,23 +336,23 @@ def reflect_lane(name: str, lanes: Path) -> None:
     record, log, state = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl", lanes.parent
     try:
         rec = tomllib.loads(record.read_text(encoding="utf-8"))
-        lines = read_log(log)[0] if log.exists() else []
+        lines = cast("list[dict[str, object]]", read_log(log)[0] if log.exists() else [])
         dlog = state / "director.handoffs.jsonl"
-        dl = [json.dumps(d, ensure_ascii=False) for d in (read_log(dlog)[0] if dlog.exists() else [])
-              if r.about_lane(d, name, rec.get("issue"))]
+        dlines = cast("list[dict[str, object]]", read_log(dlog)[0] if dlog.exists() else [])
+        dl = [json.dumps(d, ensure_ascii=False) for d in dlines if r.about_lane(d, name, rec.get("issue"))]
         qs = r.questions("lane")
         now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         unread: list[str] = []
         try:
-            agents, why = herdr_agents(), None
+            agents, why = cast("list[dict[str, object]]", herdr_agents()), None
         except Refuse as e:
             agents, why = None, str(e)
         report = report_lane(record, agents, why, now, unread, [], ReportSources(state, unread))
         talk = r.lane_transcripts(lines, rec.get("supervisor")) + [r.director_transcript(state)]
-        brief = r.brief(name, record, log, dlog, dl, report, talk, qs)
+        brief = r.brief(r.LaneRecords(name, record, log, dlog, dl, report, talk), qs)
         found, ids = r.parse(r.run(brief, Path.cwd()), qs)
         r.append(log, r.log_lines(found, ids))
-    except r.Failed as e:
+    except r.FailedError as e:
         raise Refuse(f"lane reflection of {name} failed ({e}); nothing appended, every file left in {lanes}: fix the cause, then rerun") from e
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
         raise Refuse(f"lane reflection of {name} failed: cannot read its inputs or write its log ({e}); every file left in {lanes}: fix the cause, then rerun") from e
