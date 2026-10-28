@@ -143,10 +143,12 @@ echo "forged exit $?"; herdr agent prompt w9:ok hi; echo "delivered exit $?"''']
              "result": {"content": [{"type": "text", "text": o + (f"\n\nCommand exited with code {p.returncode}" if p.returncode else "")}],
                         "structuredContent": {"output": o, "exit_code": p.returncode}}})
 if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] | ["say", TEXT]...]; @S is skill S's
-    import os                 # SKILL.md, @@S its dir, @rel:S its SKILL.md relative to the cwd,
-    # @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit (tokens, not paths: schema.md, Leaks)
+    import os, re             # SKILL.md, @@S its dir, @rel:S its SKILL.md relative to the cwd,
+    # @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit, @repo:S the case repo's
+    # .agents/skills/S/SKILL.md (tokens, not paths: schema.md, Leaks)
     sk = {os.path.basename(a[i + 1]): a[i + 1] for i, x in enumerate(a) if x == "--skill"}
     def sub(s):
+        s = re.sub(r"@repo:([a-z0-9-]+)", r".agents/skills/\1/SKILL.md", s)
         for n, d in sk.items():
             s = s.replace(f"@rel:{n}", os.path.relpath(d + "/SKILL.md")).replace(f"@dot:{n}", f"{d}/../{n}/SKILL.md") \
                  .replace(f"@other:{n}", f"/nowhere/{n}/SKILL.md").replace(f"@@{n}", d).replace(f"@{n}", d + "/SKILL.md")
@@ -459,6 +461,9 @@ dl FAIL earlyrb 'skill_read_before tdd final_message: target never reached (run 
 # declared_includes (rules: schema.md, Case, Skill load, Before targets, Final JSON). A scripted stub runs real commands.
 mkdir -p "$t/rt/rt/reference" "$t/rt/fixtures/fx2/tests"; cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/"
 echo "head" > "$t/rt/fixtures/fx2/README.md"; echo "def test_y(): pass" > "$t/rt/fixtures/fx2/tests/test_y.py"
+# A skill only the fixture holds, as a target's declared repo skill (rule: schema.md, Facts, Skill load).
+cp -r "$t/good/fixtures/fx" "$t/rt/fixtures/fxs"; mkdir -p "$t/rt/fixtures/fxs/.agents/skills/repo-only"
+printf -- '---\nname: repo-only\ndescription: a fixture skill\n---\n\nDrive the app this way.\n' > "$t/rt/fixtures/fxs/.agents/skills/repo-only/SKILL.md"
 # test_write (rule: schema.md, Before targets): py is the kit's python-app; spec declares testpaths specs and python_files
 # *_check.py, so tests/test_*.py is not one of its tests.
 cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/py"; cp -r "$kit/evals/fixtures/python-app" "$t/rt/fixtures/spec"
@@ -520,6 +525,12 @@ cases = [
   (case("declared", [["bash", "echo r > tests/README.md"], ["read", "@tdd"], ["bash", "echo 'def test_y(): pass' > tests/test_y.py"],
                      ["bash", "echo 'def test_c(): pass' > specs/cli_check.py"]], fixture="spec"),
    [rb("tdd", "test_write"), fx]),
+  # A fixture-only skill (rule: schema.md, Facts, Skill load): a cat of it loads it; an ls of its dir, or a cat after the
+  # agent rewrote it, does not (graded on the text the repo held at setup).
+  (case("repoload", [["bash", "ls .agents/skills"], ["bash", "cat @repo:repo-only"]], fixture="fxs"),
+   [{"fact": "skill_read", "skill": "repo-only"}]),
+  (case("reponone", [["bash", "ls -l @repo:repo-only; sed -i s/Drive/Walk/ @repo:repo-only; cat @repo:repo-only"]], fixture="fxs"),
+   [{"fact": "skill_read", "skill": "repo-only"}]),
 ]
 json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
 json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
@@ -535,6 +546,10 @@ rl PASS loads | grep -q "skill_read commit: loaded at tool call 2 of [0-9] (bash
   || fail "loads: a cat, a dotted or a relative read of the kit's SKILL.md did not count: $out"
 rl FAIL inclmiss | grep -qF 'declared_includes blocking: no entry with {"test": "t.py::b"} in [{"test": "t.py::a"}]' \
   && rl FAIL inclmiss | grep -qF 'declared_includes criteria: no entry with {"id": "x", "verdict": "pass"}' || fail "inclmiss: missing items not named: $out"
+rl PASS repoload | grep -q "skill_read repo-only: loaded at tool call 3 of 3 (bash cat .agents/skills/repo-only/SKILL.md)" \
+  || fail "repoload: a cat of the fixture-only skill did not count: $out"
+rl FAIL reponone | grep -q "skill_read repo-only: no load of repo-only/SKILL.md (its full content in a tool result) in 2 tool calls" \
+  || fail "reponone: an ls or a cat of the rewritten fixture skill counted: $out"
 rl FAIL inclflat | grep -qF "declared_includes blocking: top-level 'blocking' is \"t.py::a\", want a list" || fail "inclflat: $out"
 rl PASS incl | grep -qF 'declared_includes blocking: holds {"test": "t.py::a"}; {"test": "t.py::b"}' || fail "incl: $out"
 python3 - "$d/rt" <<'EOF' || fail "rt artifacts wrong"
@@ -636,7 +651,9 @@ bad 'del c[0]["task"]' "trig/cases.json case reads: field task: missing"
 bad 'del c[1]["split"]' "trig/cases.json case near: field split: missing"
 bad 'c[0]["facts"] = e["reads"]["facts"]' "trig/cases.json case reads: field facts: unknown field"
 bad 'e["reads"]["facts"][0]["fact"] = "skill_vibes"' "case reads fact #1: field fact: unknown fact type 'skill_vibes'"
-bad 'e["reads"]["facts"][0]["skill"] = "nope"' "case reads fact #1: field skill: no kit skill"
+bad 'e["reads"]["facts"][0]["skill"] = "nope"' "case reads fact #1: field skill: no .agents/skills/nope/SKILL.md in the kit or in fixture fx"
+# A fixture-only skill resolves in the tree the agent sees: the head fixture's when the case has one (schema.md, Facts).
+bad 'c[[x["id"] for x in c].index("repoload")]["head"] = {"fixture": "fx2", "branch": "hb", "message": "m"}' "case repoload fact #1: field skill: no .agents/skills/repo-only/SKILL.md in the kit or in fixture fx2" "$t/rt-good" rt
 bad 'del e["quiet"]' "trig/cases.json case quiet: field id: no expectations"
 bad 'e["ghost"] = e["quiet"]' "trig/reference/expectations.json case ghost: field id: no case in cases.json"
 bad 'c[0]["task"] += " Read .agents/skills/tdd/SKILL.md first."' "case reads: field task: shows the agent its grade (skill path tdd/SKILL.md)"

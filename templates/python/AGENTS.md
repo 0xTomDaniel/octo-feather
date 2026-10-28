@@ -2,7 +2,7 @@
 
 Python app built with the octo-feather kit. Everything it does is reachable through its CLI, `app`, and every command prints JSON with `--json`.
 
-Repo skills: python
+Repo skills: python, verify-app
 
 ## Rules
 

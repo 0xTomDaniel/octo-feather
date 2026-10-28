@@ -31,7 +31,8 @@ export SPEC_CHAT_CLONE="$clone"
 run() { (cd "$t/work" && just --justfile "$kit/justfile" new-repo "$@"); }
 # tracked files of a repo, or of a template dir, sorted
 tracked() { git -C "$1" ls-files | sort; }
-ondisk() { (cd "$1" && find . \( -name .git -o -name .agents \) -prune -o \( -type f -o -type l \) -print | sed 's|^\./||' | sort); }
+# Spec Chat's links are checked apart below; a template's own .agents/skills files count (#178).
+ondisk() { (cd "$1" && find . \( -name .git -o -path ./.agents/skills/spec-chat-shape -o -path ./.agents/skills/spec-chat-review -o -path ./.agents/skills/repair-specs \) -prune -o \( -type f -o -type l \) -print | sed 's|^\./||' | sort); }
 
 mapfile -t langs < <(git -C "$kit" ls-files -- templates | cut -d/ -f2 | sort -u)
 [[ ${#langs[@]} -ge 2 ]] || fail "expected at least two templates, got: ${langs[*]}"
@@ -58,7 +59,9 @@ for lang in "${langs[@]}"; do
         grep -qxF "/.agents/skills/$s" "$d/.git/info/exclude" || fail "$lang: link $s not ignored"
       done
     else
-      [[ ! -e "$d/.agents" ]] || fail "$lang --no-spec-chat: .agents exists"
+      for s in spec-chat-shape spec-chat-review repair-specs; do
+        [[ ! -e "$d/.agents/skills/$s" && ! -L "$d/.agents/skills/$s" ]] || fail "$lang --no-spec-chat: Spec Chat link $s exists"
+      done
     fi
   done
 done

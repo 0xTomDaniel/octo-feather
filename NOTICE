@@ -48,7 +48,8 @@ keep anchor names from octo-lite's domains/octo-lite.spec.html.
 Copied unmodified from Spec Chat (commit 0f4e0fa), licensed under the Apache
 License, Version 2.0: docs/specs/.viz/runtime.js and docs/specs/.style/spec.css (Spec Chat's
 page runtime and fallback style). docs/specs/.viz/vendor/echarts-5.5.1.min.js is
-Apache ECharts, Apache-2.0.
+Apache ECharts, Apache-2.0. templates/python/docs/specs/.style/spec.css and
+templates/typescript/docs/specs/.style/spec.css are copies of that same fallback style.
 
 Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/patches/skills/
 (pins in Skillfile.lock):
@@ -58,7 +59,8 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     writing-for-agents:
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
     correct, principle-prove-it-works, blast-radius, sharpen,
-    principle-encode-lessons-in-structure, interrogate (its references
+    principle-encode-lessons-in-structure, create-verification-skill,
+    maintain-verification-skill, interrogate (its references
     code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md):
     cursor/plugins@0b8e952
     (pstack), MIT, Copyright 2026 Lauren Tan

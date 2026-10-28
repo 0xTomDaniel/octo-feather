@@ -1,6 +1,6 @@
 {
   "spec": "skills.spec.html",
-  "accepted_commit": "a26a417de95e6051df6603816fe3bc510eb7ea58",
+  "accepted_commit": "72636f5e8216814e54a8be28495a1099e81e99d8",
   "criteria": {
     "acceptance-patch-only": {
       "status": "built",
@@ -37,6 +37,14 @@
     "acceptance-tracker-scripts": {
       "status": "built",
       "pr": 103
+    },
+    "acceptance-repo-skill-roles": {
+      "status": "built",
+      "pr": 181
+    },
+    "acceptance-verification-pi": {
+      "status": "built",
+      "pr": 181
     }
   }
 }
