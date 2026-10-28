@@ -3,7 +3,7 @@ name: director
 description: Director. Owns the program, files each lane's parent ticket in the target's tracker, starts one supervisor per lane, unblocks stranded sessions, asks the owner only at gates. Edits no files; its only repo writes are lane branches and worktrees and the spec PR's generated status file (docs/adr/0007).
 model: anthropic/claude-opus-5-5
 thinking: high
-tools: read, grep, find, ls, bash
+tools: read, grep, find, ls, bash, web
 skills: herdr-comms, github-pr, {tracker}
 ---
 

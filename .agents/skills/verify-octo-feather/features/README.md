@@ -27,7 +27,7 @@ The kit's specs are in `docs/specs/`. Each feature file links its criteria by an
 
 ## Feature entry contract
 
-Each feature file has an H1 title, its criteria links, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-octo-feather`, `Gotchas`. Criteria are linked by anchor, never restated. One line, ``Drive criterion: `<spec>#<anchor>` ``, after the criteria links names the criterion the feature's drive serves, its evidence record's criterion id.
+Each feature file has an H1 title, its criteria links, then exactly four H2s in order: `Sub-features`, `How to get to it (user POV)`, `Driving it with verify-octo-feather`, `Gotchas`. Criteria are linked by anchor, never restated. One line, ``Drive criterion: `<spec>#<anchor>` ``, after the criteria links names the criterion the feature's drive serves, its evidence record's criterion id; a drive serving several has one line each, and one record per line.
 
 ## Features
 
@@ -39,3 +39,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
 - [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`).
+- [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.

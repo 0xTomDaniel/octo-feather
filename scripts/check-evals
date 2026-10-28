@@ -16,15 +16,16 @@ Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable fi
 EVALS_DIR is not a dir.
 """
 import importlib.machinery, importlib.util, json, re, sys, tomllib
+from typing import cast
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
          "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
-         "field_lines": {"field"}, "branch_paths": set()}
+         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}}
 OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
 FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
-FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*")
+FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
 NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
@@ -545,6 +546,8 @@ def check_exp(at, exp, errs, fixture=None):
             errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
         if t == "field_lines":
             check_fields(fa, f, errs)
+        if t == "tool_called" and "tools" in f:
+            check_tools(fa, cast("object", f["tools"]), cast("list[str]", errs))
         if t == "branch_paths":
             if not set(f) & OPTIONAL[t]:
                 errs.append(f"{fa}: field untouched: missing (give untouched, touched or both)")
@@ -553,6 +556,13 @@ def check_exp(at, exp, errs, fixture=None):
                     errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
         if "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+def check_tools(fa: str, tools: object, errs: list[str]) -> None:
+    """A tool_called fact's tools: tool names (.agents/skills/eval-cases/references/schema.md, Facts)."""
+    names = cast("list[object]", tools) if isinstance(tools, list) else []
+    if not names or not all(isinstance(x, str) and re.fullmatch(r"\S+", x) for x in names):
+        errs.append(f"{fa}: field tools: must be a non-empty list of tool names (no whitespace)")
 
 
 def check_fields(fa, f, errs):

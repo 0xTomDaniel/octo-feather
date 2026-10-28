@@ -22,3 +22,6 @@ lang = "python"
 # The criterion the evidence drive's scratch records serve, and its text (the scratch repo has no specs).
 scratch_criterion = "scratch#acceptance-drive"
 scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evidence drive appends a record, Then it reads back by commit."
+# The role-launch drive's expected web roles and the servers of the kit's web list (roles spec #acceptance-web-roles).
+web_roles = "director implementer corrector code-reviewer"
+web_servers = "parallel exa"

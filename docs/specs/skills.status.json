@@ -45,6 +45,10 @@
     "acceptance-verification-pi": {
       "status": "built",
       "pr": 181
+    },
+    "acceptance-browser": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

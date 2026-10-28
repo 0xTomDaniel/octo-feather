@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "parallel": {
+      "url": "https://search.parallel.ai/mcp",
+      "description": "Parallel web search and page fetch, keyless"
+    },
+    "exa": {
+      "url": "https://mcp.exa.ai/mcp",
+      "description": "Exa web search and page fetch, keyless"
+    }
+  }
+}
