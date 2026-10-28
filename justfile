@@ -289,7 +289,7 @@ check-roles:
 check-behavior-smoke:
     @python3 "$root/scripts/check-behavior-smoke"
 
-# Verify the runtime tools on this box (octo-lite's install --check equivalent), and the tracker CLI of the target
+# Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin.
 install-check target=invocation_directory():
@@ -313,6 +313,17 @@ install-check target=invocation_directory():
       v="$(just --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
       if [[ "$v" == "$pin" ]]; then printf 'just   version %s ok (just-version)\n' "$v"
       else printf 'just   WRONG VERSION %s reports %s, want %s (just-version); install just %s: https://github.com/casey/just/releases/tag/%s\n' "$p" "${v:-no version}" "$pin" "$pin" "$pin"; bad=1; fi
+    fi
+    # agent-browser at the pin in agent-browser-version, the vendored agent-browser skill's release (spec remote#host-tools).
+    # Its postinstall marks the native binary executable, so no --ignore-scripts. It starts a Chrome it finds (Playwright's
+    # included); `agent-browser doctor` names it, `agent-browser install` downloads one where none is found.
+    pin="$(tr -d '[:space:]' <"$root/agent-browser-version")"
+    how="npm install -g agent-browser@$pin (then agent-browser doctor --offline; no Chrome found: agent-browser install)"
+    if ! p="$(command -v agent-browser)"; then printf 'agent-browser MISSING (want %s, agent-browser-version); %s\n' "$pin" "$how"; bad=1
+    else
+      v="$(agent-browser --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+      if [[ "$v" == "$pin" ]]; then printf 'agent-browser version %s ok (agent-browser-version)\n' "$v"
+      else printf 'agent-browser WRONG VERSION %s reports %s, want %s (agent-browser-version); %s\n' "$p" "${v:-no version}" "$pin" "$how"; bad=1; fi
     fi
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:

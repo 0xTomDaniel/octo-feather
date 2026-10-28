@@ -4,7 +4,7 @@ description: Run pstack correct against a target repo in its own correction lane
 model: anthropic/claude-opus-5-5
 thinking: medium
 tools: read, grep, find, ls, bash, edit, write, web
-skills: commit, correct, eval-cases, github-pr, principle-encode-lessons-in-structure, writing-for-agents
+skills: agent-browser, commit, correct, eval-cases, github-pr, principle-encode-lessons-in-structure, writing-for-agents
 ---
 
 # Corrector

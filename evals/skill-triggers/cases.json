@@ -1126,5 +1126,69 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not change any file and do not commit. Run `app hello` once with --json through uv and tell me in one line whether it printed JSON."
+  },
+  {
+    "id": "impl-browser-rendered-banner",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Add docs/banner.html whose inline script inserts a paragraph reading 'Beta' into the body once the page loads. Then tell me what a browser actually shows when it renders that file, not what the source says. No commit."
+  },
+  {
+    "id": "impl-browser-screenshot",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "I need a screenshot of https://example.com as it renders, saved as shot.png in the repo root, and one line on what the page shows. No commit."
+  },
+  {
+    "id": "impl-browser-near-selector",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not run anything. In one line: the CSS selector for a paragraph that is a direct child of body."
+  },
+  {
+    "id": "impl-browser-near-html-grep",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Does any file under src/ contain an HTML tag? One line."
+  },
+  {
+    "id": "cor-browser-reproduce-render",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner correction, second time: implementers here say a page shows its banner without ever looking at it rendered. Reproduce the trigger first: write docs/banner.html whose script adds a 'Beta' paragraph on load, and report what a real browser renders for it. No fix yet, no commit."
+  },
+  {
+    "id": "cor-browser-visible-paragraphs",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before I file a lesson about it, check the owner's claim that https://example.com shows more paragraphs once its scripts run than its raw HTML holds. Report both counts. Change nothing."
+  },
+  {
+    "id": "cor-browser-near-headless",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not change any file and do not run anything. In one sentence: what is the difference between a headless and a headed browser?"
+  },
+  {
+    "id": "cor-browser-near-readme-link",
+    "role": "corrector",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. List every URL written in AGENTS.md, one per line, or say none."
   }
 ]

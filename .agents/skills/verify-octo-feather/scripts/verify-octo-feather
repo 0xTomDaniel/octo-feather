@@ -460,6 +460,7 @@ def drive_install_check(f: Feature) -> None:
     f.check("offline", lambda c: c.code == 1
             and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING$)", c.out) for t in tools)
             and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", c.out)
+            and re.search(r"(?m)^agent-browser (version \S+ ok|WRONG VERSION|MISSING)", c.out)
             and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", c.out)
             and re.search(r"(?m)^tracker \S+ \(target " + re.escape(c.kit) + r"\)$", c.out))
     say(f"install-check evidence: {f.d}")

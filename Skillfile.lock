@@ -78,5 +78,9 @@
   "github/skill/maintain-verification-skill": {
     "sha": "0b8e952052d482ee6de06deebf14d590d77b1b34",
     "raw_url": "https://api.github.com/repos/cursor/plugins/contents/pstack/skills/maintain-verification-skill?ref=0b8e952052d482ee6de06deebf14d590d77b1b34"
+  },
+  "github/skill/agent-browser": {
+    "sha": "c3880a7de9be3b075c8779e8aaca4b530b7f0e10",
+    "raw_url": "https://api.github.com/repos/vercel-labs/agent-browser/contents/skills/agent-browser?ref=c3880a7de9be3b075c8779e8aaca4b530b7f0e10"
   }
 }
