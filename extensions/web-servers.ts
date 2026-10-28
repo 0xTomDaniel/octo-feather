@@ -6,16 +6,27 @@
 // defaults to direct, so the web tools are declared to the model and callable from codemode.
 import { readFileSync } from "node:fs";
 
+// Pi's extension API, only the parts this file uses: local types, as resume-on-error.ts (#245).
+interface Pi {
+  registerFlag(name: string, options: { description: string; type: "string" }): void;
+  getFlag(name: string): unknown;
+  on(event: "session_start", handler: () => void): void;
+  registerMcpServer(name: string, config: Record<string, unknown>): void;
+}
+
+// The list's shape: Pi's mcp.json, each server's config passed to Pi as it is.
+interface WebList { mcpServers?: Record<string, Record<string, unknown>> }
+
 const FLAG = "octo-feather-web-servers";
 
-export default function (pi: any) {
+export default function (pi: Pi) {
   pi.registerFlag(FLAG, { description: "the kit's web server list (Pi mcpServers format)", type: "string" });
-  pi.on("session_start", async () => {
+  pi.on("session_start", () => {
     const path = pi.getFlag(FLAG);
     if (typeof path !== "string" || !path) return;
-    const servers = JSON.parse(readFileSync(path, "utf8")).mcpServers ?? {};
+    const servers = (JSON.parse(readFileSync(path, "utf8")) as WebList).mcpServers ?? {};
     for (const [name, config] of Object.entries(servers)) {
-      pi.registerMcpServer(name, { exposure: "direct", ...(config as object) });
+      pi.registerMcpServer(name, { exposure: "direct", ...config });
     }
   });
 }

@@ -578,7 +578,6 @@ typeCheckingMode = "strict"
   "C901",
   "E401",
   "E501",
-  "FBT002",
   "FURB167",
   "I001",
   "PLR0912",

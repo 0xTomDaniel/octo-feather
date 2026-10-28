@@ -46,6 +46,7 @@ Pi always gets --extension for the kit's extensions/resume-on-error.ts
 --octo-feather-role <the role file's name> for the latter's purpose.
 """
 import hashlib, json, os, re, subprocess, sys, tomllib
+from typing import Any
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
 LIST_KEYS = {"tools", "skills", "externalSkills"}
@@ -64,19 +65,19 @@ WEB_LIST = "web-mcp.json"
 WEB_EXTENSION = "web-servers.ts"
 
 
-def web_patterns(kit):
+def web_patterns(kit: str) -> list[str]:
     """One --tools entry per server in the kit's web list: Pi's tool name rule, mcp__<server>__*."""
     with open(os.path.join(kit, WEB_LIST), encoding="utf-8") as f:
-        servers = json.load(f).get("mcpServers", {})
+        servers: dict[str, object] = json.load(f).get("mcpServers", {})
     return [f"mcp__{re.sub(r'[^A-Za-z0-9_]', '_', s)}__*" for s in servers]
 
 
-def parse(path):
+def parse(path: str) -> tuple[dict[str, Any], str]:
     text = open(path, encoding="utf-8").read()
     m = re.match(r"---\n(.*?)\n---\n?(.*)", text, re.S)
     if not m:
         sys.exit(f"pi-role: {path} has no frontmatter")
-    fm = {}
+    fm: dict[str, Any] = {}
     for line in m.group(1).splitlines():
         k, sep, v = line.partition(":")
         k, v = k.strip(), v.strip()
@@ -130,7 +131,7 @@ def tracker_skill(skills_root, cwd="."):
     return TRACKERS[name]
 
 
-def launch(path, to_file=False):
+def launch(path: str, *, to_file: bool = False):
     fm, body = parse(path)
     args = ["--approve"]
     if fm.get("model"):
@@ -138,9 +139,10 @@ def launch(path, to_file=False):
     if fm.get("thinking"):
         args += ["--thinking", fm["thinking"]]
     kit = os.path.dirname(os.path.dirname(os.path.abspath(path)))
-    web = WEB in fm.get("tools", [])
+    role_tools: list[str] = fm.get("tools", [])
+    web = WEB in role_tools
     if "tools" in fm:
-        tools = [t for t in fm["tools"] if t != WEB] + ["codemode"] + (web_patterns(kit) if web else [])
+        tools = [t for t in role_tools if t != WEB] + ["codemode"] + (web_patterns(kit) if web else [])
         args += ["--tools", ",".join(tools)] if fm["tools"] else ["--no-tools"]
     args += [] if web else ["--no-mcp"]
     args += ["--no-skills"]
