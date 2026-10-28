@@ -27,8 +27,8 @@
       "pr": 16
     },
     "acceptance-director-tools": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 271
     },
     "acceptance-supervise-layout": {
       "status": "built",
@@ -47,12 +47,12 @@
       "pr": 179
     },
     "acceptance-web-roles": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 271
     },
     "acceptance-web-no-other-mcp": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 271
     },
     "acceptance-web-list-once": {
       "status": "built",
