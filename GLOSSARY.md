@@ -25,7 +25,7 @@ Combining the finished changes of a work item's tickets into its one result. A s
 _Avoid_: Integrator, merger
 
 **Corrector**:
-A fresh agent, run as its own correction lane when the owner corrects something at a gate or a finding class repeats, that finds the mistakes agents keep repeating and makes each one impossible to repeat. Factory quality, not product quality.
+A fresh agent, run as its own correction lane (when one is due: issue-lifecycle spec `#lanes-correction`), that finds the mistakes agents keep repeating and makes each one impossible to repeat. Factory quality, not product quality.
 _Avoid_: Fixer
 
 **Code reviewer**:

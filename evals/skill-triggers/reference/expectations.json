@@ -171,5 +171,9 @@
   "cor-browser-reproduce-render": {"facts": [{"fact": "skill_read", "skill": "agent-browser"}]},
   "cor-browser-visible-paragraphs": {"facts": [{"fact": "skill_read", "skill": "agent-browser"}]},
   "cor-browser-near-headless": {"facts": [{"fact": "skill_not_read", "skill": "agent-browser"}]},
-  "cor-browser-near-readme-link": {"facts": [{"fact": "skill_not_read", "skill": "agent-browser"}]}
+  "cor-browser-near-readme-link": {"facts": [{"fact": "skill_not_read", "skill": "agent-browser"}]},
+  "reflector-reflect-lane-gh5": {"facts": [{"fact": "skill_read", "skill": "reflect"}]},
+  "reflector-reflect-lane-held": {"facts": [{"fact": "skill_read", "skill": "reflect"}]},
+  "reflector-reflect-near-count": {"facts": [{"fact": "skill_not_read", "skill": "reflect"}]},
+  "reflector-reflect-near-quote": {"facts": [{"fact": "skill_not_read", "skill": "reflect"}]}
 }
