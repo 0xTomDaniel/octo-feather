@@ -234,12 +234,12 @@ def cmd_doctor(tee: Path | None = None) -> int:
         report("ok", f"checkout at launch rev {s.rev}")
     else:
         report("WARN", f"checkout moved: launched at {s.rev}, now {rev} (relaunch)")
-    clone = os.environ.get("SPEC_CHAT_CLONE") or f"{Path.home()}/src/spec-chat"
-    installer = f"{clone}/scripts/install-spec-chat"
+    installer = spec_chat_installer()
     if os.access(installer, os.X_OK):
         report("ok", f"Spec Chat installer {installer} (new-repo links it)")
     else:
-        report("WARN", f"no Spec Chat installer at {installer}: the new-repo drive fails (features/new-repo.md Gotchas)")
+        report("WARN", f"no Spec Chat installer at {installer}: the new-repo drive creates with --no-spec-chat and reports "
+               "the Spec Chat link step unreachable (features/new-repo.md Gotchas)")
     if has_netns():
         report("ok", "unshare -Un: install-check drives without network")
     else:
@@ -255,6 +255,12 @@ def cmd_doctor(tee: Path | None = None) -> int:
 
 
 NETNS = ["unshare", "-Un", "--map-current-user"]
+
+
+def spec_chat_installer() -> str:
+    """Where new-repo looks for Spec Chat's installer: $SPEC_CHAT_CLONE (default ~/src/spec-chat)/scripts/install-spec-chat."""
+    clone = os.environ.get("SPEC_CHAT_CLONE") or f"{Path.home()}/src/spec-chat"
+    return f"{clone}/scripts/install-spec-chat"
 
 
 def has_netns() -> bool:
@@ -282,6 +288,7 @@ class Feature:
     s: State
     d: Path
     fails: int = 0
+    unreachable: list[str] = field(default_factory=list[str])  # steps not reached, each with its prerequisite
     env: dict[str, str] = field(default_factory=dict[str, str])  # scratch env for the next cases
     pre: list[str] = field(default_factory=list[str])  # a wrapper such as unshare for the next cases
 
@@ -342,6 +349,16 @@ class Feature:
         if verdict != "PASS":
             self.fails += 1
 
+    def unreachable_step(self, name: str, why: str) -> None:
+        """A step this box cannot reach: printed and recorded with its prerequisite, never counted as passed."""
+        self.unreachable.append(name)
+        self.summary(f"UNREACHABLE {name}: {why}")
+
+    def verdict(self) -> str:
+        if self.fails:
+            return "FAIL"
+        return "PASS-with-unreachable" if self.unreachable else "PASS"
+
     def summary(self, line: str) -> None:
         print(line, flush=True)
         with (self.d / "summary.txt").open("a") as fh:
@@ -371,23 +388,46 @@ def drive_new_repo(f: Feature) -> None:
     fresh_path(dest)
     fresh_path(bad)
     say(f"new-repo dest: {dest}")
-    # The template's tracked files, which the new repo must hold exactly.
-    f.obs("create", "template-files", sorted_lines(output(["git", "-C", f"{s.repo}/templates/{lang}", "ls-files"])[1]))
-    f.obs("create", "dest", f"{dest}\n")
     # Spec Chat's installer writes its onboarding state under XDG_STATE_HOME: a scratch one, never the box's.
     f.env = {"XDG_STATE_HOME": str(RUN_DIR / "scratch" / "state")}
 
-    f.run("create", "just", "--justfile", kitjust, "new-repo", lang, str(dest))
-    f.obs_cmd("create", "log", "git", "-C", str(dest), "log", "--format=%s", "main")
-    f.obs_cmd("create", "branch", "git", "-C", str(dest), "branch", "--show-current")
-    f.obs_cmd("create", "status", "git", "-C", str(dest), "status", "--porcelain=v1")
-    f.obs("create", "files", sorted_lines(output(["git", "-C", str(dest), "ls-files"])[1]))
+    installer = spec_chat_installer()
+    linked = os.access(installer, os.X_OK)
+    create, flags = ("create", []) if linked else ("create-no-spec-chat", ["--no-spec-chat"])
+    # The template's tracked files, which the new repo must hold exactly.
+    f.obs(create, "template-files", sorted_lines(output(["git", "-C", f"{s.repo}/templates/{lang}", "ls-files"])[1]))
+    f.obs(create, "dest", f"{dest}\n")
+    if not linked:
+        # No installer on this box: the Spec Chat link step is unreachable. Attempt the plain create (the
+        # route), record its refusal, then prove everything else new-repo does with --no-spec-chat.
+        f.run("spec-chat-link", "just", "--justfile", kitjust, "new-repo", lang, str(dest))
+        err = (f.d / "spec-chat-link.stderr").read_text()
+        code = int((f.d / "spec-chat-link.exit").read_text())
+        refused = [ln for ln in err.splitlines() if "no Spec Chat installer at" in ln]
+        clean = (f.d / "spec-chat-link.files").read_text() == "" and (f.d / "spec-chat-link.kit-status").read_text() == ""
+        if code == 1 and refused and not dest.exists() and clean:
+            f.unreachable_step("spec-chat-link", f"Spec Chat installer not at $SPEC_CHAT_CLONE/scripts/install-spec-chat "
+                               f"({installer}; SPEC_CHAT_CLONE defaults to ~/src/spec-chat); prerequisite: a Spec Chat "
+                               f"clone there or SPEC_CHAT_CLONE set to one; route attempted: "
+                               f"{(f.d / 'spec-chat-link.cmd').read_text().strip()} -> exit 1: {refused[0]}")
+        else:
+            f.summary(f"FAIL spec-chat-link: installer absent at {installer}, but new-repo without --no-spec-chat "
+                      f"did not refuse it (exit {code}; spec-chat-link.stderr)")
+            f.fails += 1
+
+    f.run(create, "just", "--justfile", kitjust, "new-repo", lang, str(dest), *flags)
+    f.obs_cmd(create, "log", "git", "-C", str(dest), "log", "--format=%s", "main")
+    f.obs_cmd(create, "branch", "git", "-C", str(dest), "branch", "--show-current")
+    f.obs_cmd(create, "status", "git", "-C", str(dest), "status", "--porcelain=v1")
+    f.obs(create, "files", sorted_lines(output(["git", "-C", str(dest), "ls-files"])[1]))
     agents = dest / "AGENTS.md"
     lines = agents.read_text().splitlines() if agents.is_file() else []
-    f.obs("create", "repo-skills", "".join(f"{ln}\n" for ln in lines if ln.startswith("Repo skills:")))
-    f.obs("create", "verify-skill", "".join(f"{p}\n" for p in sorted(glob.glob(f"{glob.escape(str(dest))}/.agents/skills/verify-*/SKILL.md"))))
-    f.obs_cmd("create", "contract", s.kit, "octo-feather-contract", str(dest))
-    f.check("create", lambda c: c.code == 0 and c.o["dest"].strip() + " from templates/" + c.v["lang"] in c.out
+    f.obs(create, "repo-skills", "".join(f"{ln}\n" for ln in lines if ln.startswith("Repo skills:")))
+    f.obs(create, "verify-skill", "".join(f"{p}\n" for p in sorted(glob.glob(f"{glob.escape(str(dest))}/.agents/skills/verify-*/SKILL.md"))))
+    f.obs_cmd(create, "contract", s.kit, "octo-feather-contract", str(dest))
+    # Without the installer the summary must say no Spec Chat was linked: never claim the links were made.
+    f.check(create, lambda c: c.code == 0 and c.o["dest"].strip() + " from templates/" + c.v["lang"] in c.out
+            and (not flags or ", no Spec Chat (--no-spec-chat)" in c.out)
             and re.fullmatch(r"Initial commit from octo-feather templates/" + c.v["lang"] + r" @ [0-9a-f]+\n", c.o["log"])
             and c.o["branch"] == "main\n" and c.o["status"] == "" and c.o["files"] == c.o["template-files"]
             and re.search(r"\bverify-\w+", c.o["repo-skills"]) and c.o["verify-skill"].strip()
@@ -531,8 +571,11 @@ def cmd_drive(feature: str | None) -> int:
     (d / "summary.txt").write_text(f"{feature} @ rev {s.rev}, {now()}\n")
     f = Feature(s=s, d=d)
     DRIVES[feature](f)
+    result = f.verdict()
+    unreached = f" (unreachable: {', '.join(f.unreachable)})" if f.unreachable else ""
     with (d / "summary.txt").open("a") as fh:
-        fh.write(f"{'PASS' if f.fails == 0 else 'FAIL'} {feature}\n")
+        fh.write(f"{result} {feature}{unreached}\n")
+    say(f"drive {feature} {result}{unreached}")
     record_evidence(s, feature)
     return 0 if f.fails == 0 else 1
 
@@ -581,14 +624,17 @@ def cmd_cleanup() -> None:
 def cmd_run(feature: str | None) -> int:
     cmd_launch()
     code = cmd_doctor(tee=EVIDENCE_DIR / "doctor.txt")
+    unreached = False
     if code == 0:
         code = cmd_drive(feature or "new-repo")
+        summary = EVIDENCE_DIR / (feature or "new-repo") / "summary.txt"
+        unreached = summary.read_text().splitlines()[-1].startswith("PASS-with-unreachable ")
     cmd_cleanup()
     if not EVIDENCE_DIR.is_dir():
         die(f"evidence folder gone after cleanup: {EVIDENCE_DIR}")
     sys.stdout.flush()
     subprocess.run(["ls", "-laR", str(EVIDENCE_DIR)], check=False)
-    say("run PASS" if code == 0 else "run FAIL")
+    say(("run PASS-with-unreachable" if unreached else "run PASS") if code == 0 else "run FAIL")
     return code
 
 
