@@ -1,6 +1,6 @@
 ---
 name: verify-octo-feather
-description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence, octo-feather-lane archive, octo-feather-lane report, pi-role --json, just qc on a scratch target, a browser demo's headless shell inside it, its agent fallback for a criterion with no demo: short-lived CLIs, no server) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
+description: "Drive the octo-feather kit's own commands (just new-repo, just install-check, octo-feather-contract, octo-feather-evidence, octo-feather-lane archive, octo-feather-lane report, pi-role --json, just qc on a scratch target, a browser demo's headless shell inside it, its agent fallback for a criterion with no demo, octo-feather-spec-status show naming a built criterion stale: short-lived CLIs, no server) the way an owner or agent runs them, in scratch only, and keep the proof in the kit's evidence store. Use to prove a change to a kit command works before handoff, to check a kit criterion's behavior, or when a kit command looks off."
 ---
 
 # verify-octo-feather
