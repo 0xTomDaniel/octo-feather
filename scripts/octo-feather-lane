@@ -155,7 +155,7 @@ dependencies included, none a gate or factory recipe: just parses the words besi
 unless it objects to more than their recipe words and overrides (a subcommand such as --show, --list or
 --command runs no recipe), dry-runs them with --verbose, naming each recipe; executing nothing,
 evaluating no backtick; every option, parameter and default is just's to read, and anything just refuses,
--q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's just-version is
+-q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's mise.toml is
 the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone

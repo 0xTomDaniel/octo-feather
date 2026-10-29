@@ -4,20 +4,53 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
 set positional-arguments
 
+# This repo's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, the git
+# hook, CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read),
+# placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin
+# /bin; at the end when it has none): mise replaces only what would resolve from the system, and every dir the
+# caller put earlier still wins. A tool not installed is named on stderr with the fix.
+export PATH := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"`
+
 default:
     @just --list
 
-# Install dependencies and the git hook.
+# Install the pinned tools (mise.toml, mise.lock), dependencies and the git hook.
 setup:
+    mise install --locked
     uv sync --locked
     git config core.hooksPath .githooks
 
 # The gate's steps, each one pytest item (tests/test_gate.py) beside the integration and E2E tests.
-export GATE_RECIPES := "check-lint check-format check-types check-imports"
+export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"
 
 # Lint, format, types, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md Commands;
 # trend line: tests/conftest.py). Timing never decides pass or fail.
 check: check-tests
+
+# Every language scc finds in the tracked files has its lint and type step here; rules and what passes by design:
+# the head of scripts/check-languages (the octo-feather kit's, a byte copy).
+check-languages:
+    uv run --locked scripts/check-languages
+
+# check-languages' data (the head of scripts/check-languages): one LANGUAGE:TOOL:GATE_RECIPE:FILES_RECIPE entry
+# per language scc can name and gate tool that must cover its files; FILES_RECIPE prints that tool's own file list.
+check_languages := "Python:ruff:check-lint:ruff-files Python:basedpyright:check-types:pyright-files Shell:shellcheck:check-scripts:shell-files BASH:shellcheck:check-scripts:shell-files"
+
+# ruff's own file list: name an extensionless script in pyproject.toml [tool.ruff] extend-include
+ruff-files:
+    @uv run --locked ruff check --show-files
+
+# Its --verbose --stats listing, both projects (check-types).
+# basedpyright's analyzed files: add a path to [tool.basedpyright] include (under .agents/: .agents/pyrightconfig.json)
+pyright-files:
+    @{ uv run --locked basedpyright --verbose --stats || true; uv run --locked basedpyright -p .agents --verbose --stats || true; } | sed -n 's|^[0-9]*ms: file://||p'
+
+# ShellCheck's file list: give a file the `shell` attribute in .gitattributes
+shell-files:
+    @git ls-files ':(attr:shell)'
+
+check-scripts:
+    just shell-files | xargs -d '\n' shellcheck -S warning
 
 check-lint:
     uv run --locked ruff check .
@@ -25,8 +58,10 @@ check-lint:
 check-format:
     uv run --locked ruff format --check .
 
+# Two projects: basedpyright's CLI skips dot directories, so .agents/ has its own (.agents/pyrightconfig.json).
 check-types:
     uv run --locked basedpyright
+    uv run --locked basedpyright -p .agents
 
 check-imports:
     uv run --locked lint-imports
