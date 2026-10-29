@@ -51,15 +51,11 @@
 #   11. the run's model spend: the lines the spend ledger's writer appended to the scratch state dir's
 #      spend.jsonl (no lane: the route is unset), one JSON line {"spend": [line...]} on QC_FD_POST;
 #      octo-feather-qc records them (its record_spend).
-#   6b. (setup, with step 6) mise installs nothing (docs/adr/0022): offline, no auto-install, and a shim of a tool
-#      not installed fails rather than run another same-named binary (mise settings offline, auto_install, which turns
-#      off its exec and task forms, and not_found_auto_install with not_found_system_fallback, as mise's docs pair
-#      them); its data, cache and config dirs pinned as mise reports them before the run (unless the caller pinned
-#      them), so a judge, or a test it runs, that moves HOME still finds the box's installs (read-only) and a shim
-#      never installs into the empty dirs of the new HOME
+#   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
+#      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
+#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs
 # Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool of the worktree or the
-#      kit not installed: FAIL naming the fix, `mise install --locked`, run outside the sandbox); then go to the recorder
+#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b); then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
@@ -709,14 +705,36 @@ else
   r=$(t gh issue list)
   check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
 fi
-if command -v mise > /dev/null; then   # step 6b: what a judge's tool call would need installed is installed
+if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's mise tools installed
   # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
-  ms=$(mktemp -d); mm=(); for d in "$WT" "$kit"; do
-    if m=$(MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing 2> /dev/null); then m=$(awk 'NF {print $1 "@" $2}' <<< "$m" | paste -sd ' ' -)
-    else m="mise ls --missing failed"; fi
-    [[ -z "$m" ]] || mm+=("$d: $m")
-  done; rm -rf "$ms"
-  check "${#mm[@]}" "mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR${mm:+ (NOT installed: ${mm[*]}; the sandbox installs nothing: run outside it, in each: mise install --locked)}"
+  ms=$(mktemp -d); ml=()
+  for d in "$WT" "$kit"; do
+    f="$ms/ls-${#ml[@]}.json"; MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing --json > "$f" 2> /dev/null; ml+=("$d" "$f" "$?")
+  done
+  mline=$(python3 - "$MISE_DATA_DIR" "${ml[@]}" <<'EOF'
+# DATA_DIR then DIR FILE EXIT per dir: FILE is `mise ls --local --missing --json` ({tool: [{version, installed}]}).
+import json, sys
+data, a = sys.argv[1], sys.argv[2:]
+miss = []
+for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
+    try:
+        tools = json.load(open(f)) if rc == "0" else None
+    except (OSError, ValueError):
+        tools = None
+    if not isinstance(tools, dict):
+        m = ["mise ls --missing failed"]
+    else:
+        m = [f"{t}@{v.get('version')}" for t, vs in tools.items() for v in vs if not v.get("installed")]
+    if m:
+        miss.append(f"{d}: {' '.join(m)}")
+line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
+if miss:
+    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it, in each: mise install --locked)"
+print(line)
+sys.exit(1 if miss else 0)
+EOF
+  ); mrc=$?; rm -rf "$ms"
+  check "$mrc" "$mline"
 fi
 # Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
 go=$(python3 -c 'import socket, sys
