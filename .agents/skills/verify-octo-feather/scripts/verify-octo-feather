@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-insufficient")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -931,6 +931,67 @@ def drive_qc_capture(f: Feature) -> None:
     say(f"qc-capture evidence: {f.d}")
 
 
+def drive_qc_insufficient(f: Feature) -> None:
+    """`just qc` on a scratch target whose declared demo needs a step the qc sandbox cannot run (GitHub, which its
+    offline gh refuses), then `octo-feather-lane merge-ask` on a PR (served by the offline gh from a scratch snapshot)
+    whose merge ask lists that criterion as a triaged failure: insufficient evidence naming what is missing, still
+    planned, no status commit, and the merge ask check failing naming it."""
+    demo = f.s.contract.values.get("qc_demo_insufficient")
+    if not demo:
+        die("qc.toml [values] needs qc_demo_insufficient: the qc-insufficient drive's scratch demo")
+    sc = RUN_DIR / "scratch" / "qc-insufficient"
+    r, snap = sc / "repo", sc / "ghsnap"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (snap / "pr").mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-insufficient: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+                               f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(demo)}\ncovers = ["docs/specs"]\ntests = ["none"]\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract with a demo that needs GitHub")
+    head = git("rev-parse", "HEAD")
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports and the scratch evidence store; never a live lane's
+    f.pre = ["env", "-C", str(r)]   # where the supervisor stands: the lane worktree
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.obs("qc", "after", f"{git('rev-parse', 'HEAD')} {json.loads(git('show', 'HEAD:docs/specs/demo.status.json'))['criteria']['acceptance-a']['status']}"
+                         f" {git('status', '--porcelain') or 'clean'}\n")
+    line = (r"(?m)^INSUFFICIENT EVIDENCE acceptance-a: \$ .*\n  missing: demo did not run to its end \(exit 77, a step it needs could not run "
+            r"here\): needs GitHub.*\n  evidence incomplete; decision demo checks; record [0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
+    f.check("qc", lambda c: c.code == 2 and re.search(line, c.out) and not re.search(r"(?m)^FAIL ", c.out)
+            and "insufficient evidence, never a failure to triage: acceptance-a" in c.out and c.o["after"] == f"{head} planned clean\n")
+    # The PR as GitHub would serve it (snapshot layout: octo-feather-qc-ghsnap), its merge ask triaging the criterion as a failure.
+    (snap / "meta.json").write_text(json.dumps({"repo": "o/r", "fetched_at": now(), "counts": {}, "capped": []}))
+    (snap / "fetched_at").write_text(now() + "\n")
+    body = (f"Closes #6\n\n## Merge ask\n\nHead: {head[:12]}\nChecks: check passes\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n"
+            f"| demo#acceptance-a | fail | judged {head[:12]} | qc report, demo exit 77 |\nBuilt: none\nFailed:\n- acceptance-a: repair ticket\n")
+    (snap / "pr" / "7.json").write_text(json.dumps({
+        "number": 7, "headRefName": "gh6", "headRefOid": head, "body": body, "comments": [],
+        "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
+        "commits": [{"oid": head, "messageHeadline": "contract with a demo that needs GitHub", "messageBody": ""}]}))
+    f.env |= {"OCTO_FEATHER_GHSNAP": str(snap), "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
+    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json")
+    f.check("merge-ask", lambda c: c.code == 1 and not c.out and re.search(
+        rf"criterion demo#acceptance-a: insufficient evidence at the judged head {head[:12]} \(demo did not run to its end \(exit 77, "
+        r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
+    f.pre, f.env = [], {}
+    say(f"qc-insufficient evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -942,6 +1003,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
+    "qc-insufficient": drive_qc_insufficient,
 }
 
 

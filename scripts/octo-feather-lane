@@ -118,6 +118,9 @@ at H: same files, same content. Anything else fails naming the commit and file: 
 and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
 the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
+says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
+OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
 `class: proxy`). Pass: the section on stdout, then `Review check classes` listing the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
@@ -1189,6 +1192,28 @@ def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]
     return at[0].lower(), None
 
 
+def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
+    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
+    (quality spec #qc-results), named with what is missing and its report; reports: octo-feather-qc --help."""
+    d = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc")
+    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    for p in sorted(d.glob(f"{judged.lower()}-*.json"), key=lambda p: (p.name.split("-")[1], p.stat().st_mtime_ns)):
+        try:   # <head>-<UTC stamp>-<runid>.json, oldest first: a rerun's result replaces the earlier one
+            rep = json.loads(p.read_text(encoding="utf-8"))
+            spec, results = str(rep.get("spec")), list(rep.get("results") or [])
+        except (OSError, ValueError, AttributeError, TypeError):
+            continue
+        for r in results if spec in specs else []:
+            try:
+                short = r.get("verdict") == "insufficient evidence"
+                latest[f"{spec}#{r['id']}"] = (("; ".join(map(str, r.get("missing") or [])) or "evidence incomplete") if short else "", p.name)
+            except (AttributeError, KeyError, TypeError):
+                continue
+    return [f"criterion {cid}: insufficient evidence at the judged head {judged[:12]} ({why}; qc report {name}): never triaged; "
+            "make what is missing available, then rerun just qc on it until it gives pass or fail"
+            for cid, (why, name) in sorted(latest.items()) if why]
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -1252,7 +1277,9 @@ def cmd_merge_ask(args: list[str]) -> int:
                 miss.append(f"criterion row: {why}"); continue
             if cid in rows:
                 miss.append(f"criterion row {cid}: listed twice; keep one")
-            if v not in ("pass", "fail"):
+            if v == "insufficient evidence":   # a result, never a failure to triage (quality spec #qc-results)
+                miss.append(f"criterion row {cid}: insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail")
+            elif v not in ("pass", "fail"):
                 miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
             if not cells[3]:
                 miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
@@ -1265,6 +1292,8 @@ def cmd_merge_ask(args: list[str]) -> int:
     if len(judged_at) > 1:
         miss.append(f"criterion table: rows name {len(judged_at)} judged heads ({', '.join(sorted(s[:12] for s in judged_at))}); "
                     "qc and the review judge one head: run just qc, naming every criterion the lane builds, and the review on one integrated head")
+    if judged and specs:
+        miss += qc_insufficient(judged, {str(s) for s in specs})
     jl = field(lines, "Judged")
     if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
         judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)

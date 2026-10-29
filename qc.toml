@@ -28,12 +28,19 @@ web_servers = "parallel exa"
 # The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail.
 qc_demo_pass = "echo demo checks pass"
 qc_demo_fail = "echo demo checks fail >&2; exit 1"
+# The qc-insufficient drive's scratch demo: it needs GitHub, which the qc sandbox's offline gh refuses, and says so (exit 77).
+qc_demo_insufficient = 'gh api user >/dev/null || { echo "needs GitHub: gh api user, refused in the qc sandbox" >&2; exit 77; }; echo demo checks pass'
 
 # The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
 [demo."quality#acceptance-qc-capture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
 tests = ["tests/qc-capture.sh"]
+
+[demo."quality#acceptance-qc-insufficient"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-insufficient"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+tests = ["tests/qc-insufficient.sh", "tests/lane-merge-ask.sh"]
 
 [demo."quality#acceptance-qc-same-verdict"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
