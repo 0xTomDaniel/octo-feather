@@ -50,6 +50,13 @@ refused() { # $1: case label
 #    parent is a pane the supervisor had before its own park and resume).
 setup lane
 park gh2 w5:p3 impl1 w5:p0 S2
+printf 'not JSON\n{"kind":\n42\n\377\n' >"$c/state/octo-feather/lanes/other.handoffs.jsonl"
+say supervisor w5:p1 w2:p1 --parked impl1
+[[ "$rc" == 0 ]] || fail "corrupt log lookup: exit $rc: $(cat "$c/err")"
+jq -e '.session == "S2" and .name == "impl1"' "$c/out" >/dev/null || fail "lost parked record"
+for n in 1 2 3 4; do
+  grep -q "other.handoffs.jsonl:$n:" "$c/err" || fail "missing file:line diagnostic $n"
+done
 say supervisor w5:p1 w2:p1 impl1 "go on"
 [[ "$rc" == 0 ]] || fail "lane log: exit $rc, want 0: $(cat "$c/err")"
 resumed "lane log" S2
