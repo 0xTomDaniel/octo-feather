@@ -33,6 +33,8 @@ requires-python = ">=3.12"
 
 [tool.ruff]
 line-length = 100
+# The extensionless scripts by name: the file set is ruff's own list (bin/shell stays out).
+extend-include = ["bin/tool", ".agents/skills/s/scripts/run"]
 
 # A table between [tool.ruff] and its sub-tables: init and shrink edit it as split tables.
 [tool.basedpyright]

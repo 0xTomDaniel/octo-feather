@@ -1,6 +1,7 @@
 # The kit gate in CI: the same `just check` agents and git hooks run
-# (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs;
-# ubuntu-latest already ships bash, git, python3 and shellcheck.
+# (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs; ubuntu-latest ships bash, git and
+# python3. Native tools (node, pnpm, uv, just, shellcheck, scc) come from mise at the kit's mise.toml and mise.lock,
+# the pins the box installs (owner ruling, issue #261).
 name: check
 on:
   # When: docs/specs/templates.spec.html#acceptance-same-gate.
@@ -16,12 +17,21 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0 # check-behavior-smoke compares the PR with its base (origin/$GITHUB_BASE_REF)
-      # just at the pin in just-version: the gate reads just's own answers (check-gate-free), so box and CI run one just.
+      # mise at mise-version (the action verifies its signed checksums), then `mise install --locked` (the action adds
+      # --locked when mise.lock exists): every tool from mise.lock's URLs, sha256-checked. Cached: mise's downloads, which
+      # it verifies again on use, never installed tool trees (owner ruling, issue #261); the key is mise.lock.
       - id: pins
-        run: echo "just=$(tr -d '[:space:]' < just-version)" >> "$GITHUB_OUTPUT"
-      - uses: extractions/setup-just@v2
+        run: echo "mise=$(tr -d '[:space:]' < mise-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (no moving tag)
         with:
-          just-version: ${{ steps.pins.outputs.just }}
+          path: ~/.local/share/mise/downloads
+          key: mise-downloads-${{ runner.os }}-${{ hashFiles('mise.lock') }}
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4 (no moving tag)
+        env:
+          MISE_ALWAYS_KEEP_DOWNLOAD: "1"
+        with:
+          version: ${{ steps.pins.outputs.mise }}
+          cache: false
       # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       # The spec-chat pin is a private repo: its read-only deploy key, used for that repo's URL only.
@@ -37,29 +47,22 @@ jobs:
       # network step runs first, on its own: the pinned skillfile binary (sha256-checked) and each
       # Skillfile pin commit (fetch-only entries included) from github.com, every call time-bounded. The gate then reads them offline.
       - run: just vendored-fetch
-      # Pi at the pin in pi-version (docs/adr/0023 Consequences): the second network step. Node 22.x, whose latest
-      # is above Pi's engines floor (>= 22.19). npm, not Pi's installer, because only npm takes a version; its
-      # transitive dependencies are not pinned (Pi's README).
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-      - run: npm install -g --ignore-scripts "@earendil-works/pi-coding-agent@$(tr -d '[:space:]' < pi-version)"
-      # uv at an exact version, sha256-checked (the release's own .sha256), then the kit's test deps (pytest, pytest-xdist:
-      # uv.lock) and each eval fixture's locked deps into uv's cache: the third network step. The gate runs pytest with
-      # --offline, and tests/qa.sh syncs python-app copies inside it with UV_OFFLINE=1, from this cache only.
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2 (no moving v10 tag)
-        with:
-          version: "0.13.1"
-          checksum: eadd9d27c134ab5ac1ffd4473b97a741407f3ea238288f03121fc4deddf90220 # uv-x86_64-unknown-linux-gnu.tar.gz
-          enable-cache: false
-      - run: uv sync --locked --quiet && for l in evals/fixtures/*/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
-      # pnpm at the TypeScript template's packageManager pin, then that template's locked packages into pnpm's store: the
-      # fourth network step. The gate's tests (tests/contract.sh, tests/evidence.sh) install template copies with
-      # pnpm install --offline --frozen-lockfile, from this store only.
-      - run: |
-          npm install -g --ignore-scripts "$(node -p 'require("./templates/typescript/package.json").packageManager')"
-          (cd templates/typescript && pnpm fetch --frozen-lockfile)
-      # The kit's TypeScript tools (tsc, eslint: package.json, pnpm-lock.yaml, same pnpm pin) into the same store and
+      # Pi at the pin in pi-version (docs/adr/0023 Consequences): the second network step, on mise's node (above Pi's
+      # engines floor, >= 22.19). npm, not Pi's installer, because only npm takes a version; its transitive
+      # dependencies are not pinned (Pi's README).
+      # Into ~/.local (bin on the justfile's PATH), where the box has Pi, never mise's node prefix: a global there joins
+      # mise's tool dirs and its shims (#261: on eaeaf95a it shadowed the tests' stub pi).
+      - run: npm install -g --ignore-scripts --prefix "$HOME/.local" "@earendil-works/pi-coding-agent@$(tr -d '[:space:]' < pi-version)"
+      # The kit's test deps (pytest, pytest-xdist: uv.lock), each eval fixture's and templates/python's locked deps
+      # (tests/template-languages.sh) into uv's cache, with
+      # mise's uv: the third network step. The gate runs pytest with --offline, and tests/qa.sh syncs python-app copies
+      # inside it with UV_OFFLINE=1, from this cache only.
+      - run: uv sync --locked --quiet && for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
+      # The TypeScript template's locked packages into pnpm's store, with mise's pnpm: the fourth network step. The gate's
+      # tests (tests/contract.sh, tests/evidence.sh) install template copies with pnpm install --offline
+      # --frozen-lockfile, from this store only.
+      - run: pnpm fetch --frozen-lockfile --dir templates/typescript
+      # The kit's TypeScript tools (tsc, eslint: package.json, pnpm-lock.yaml) into the same store and
       # node_modules: check-ts installs from that store with --offline.
       - run: pnpm install --frozen-lockfile
       # The runner's 4 CPUs are the gate's alone: one pytest worker each (local default: the justfile's check-tests).

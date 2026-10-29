@@ -7,7 +7,9 @@ and the body appended to Pi's system prompt. Pi still loads the target repo's
 AGENTS.md from the working directory, so roles never read it by hand.
 
 Pane:      herdr-spawn --role <role> (calls `pi-role --json` and hands the args
-           to `herdr agent start`).
+           to `herdr agent start`, and "path", the caller's PATH with mise's
+           shims placed before its system dirs when the working directory's
+           repo has a mise.toml, as the tab's PATH).
 Headless:  pi-role agents/<role>.md -p "<brief>" in the worktree; the final
            message is on stdout. A -p (--print) run has no route to any pane:
            its child gets no OCTO_FEATHER_PARENT, HERDR_PANE_ID, HERDR_TAB_ID
@@ -45,7 +47,7 @@ Pi always gets --extension for the kit's extensions/resume-on-error.ts
 (docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
 """
-import hashlib, json, os, re, subprocess, sys, tomllib
+import hashlib, json, os, re, shutil, subprocess, sys, tomllib
 from typing import Any
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
@@ -186,6 +188,49 @@ def launch(path: str, *, to_file: bool = False):
     return args
 
 
+def mise_shims():
+    """mise's shims dir, as mise itself reports it, when the working directory's repo has its own mise.toml
+    (the kit, a repo the kit created, or one that chose mise itself); else None. Agent shells are
+    non-interactive, so no mise activate hook runs: the headless exec below and herdr-spawn's tab (from
+    --json's "path") put this dir on PATH before the system dirs (with_mise; owner ruling, #261).
+    Never in a repo without mise.toml: there a shim would read its .tool-versions and install or swap a tool the repo's own setup runs
+    (carry gh261 shims-foreign). No mise on PATH: None (`just install-check` names the missing mise)."""
+    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    top = r.stdout.strip() if r.returncode == 0 else "."
+    if not os.path.isfile(os.path.join(top, "mise.toml")) or not shutil.which("mise"):
+        return None
+    r = subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True)
+    try:
+        return json.loads(r.stdout)["dirs"]["shims"]
+    except (ValueError, KeyError, TypeError):
+        sys.exit(f"pi-role: mise doctor --json gave no dirs.shims (exit {r.returncode}): {r.stderr.strip()}")
+
+
+# The system default dirs: mise's dir goes just before the first of these on a PATH, so it replaces only
+# what would resolve from the system; every dir a caller put earlier (a test stub, a user's tools, an npm
+# global) still wins (#261: CI's real Pi in mise's node prefix shadowed the tests' stub pi).
+SYSTEM_DIRS = ("/usr/local/sbin", "/usr/local/bin", "/usr/sbin", "/usr/bin", "/sbin", "/bin")
+
+
+def with_mise(path: str, mise_dir: str) -> str:
+    """PATH with mise_dir before its first system dir (at the end when it has none), once."""
+    dirs = [d for d in path.split(os.pathsep) if d and d != mise_dir]
+    at = next((i for i, d in enumerate(dirs) if d.rstrip("/") in SYSTEM_DIRS), len(dirs))
+    return os.pathsep.join([*dirs[:at], mise_dir, *dirs[at:]])
+
+
+def mise_path():
+    """The caller's PATH with mise's shims placed (with_mise), or None when there are no shims to place."""
+    shims = mise_shims()
+    return with_mise(os.environ.get("PATH", ""), shims) if shims else None
+
+
+def mise_shims_first():
+    path = mise_path()
+    if path:
+        os.environ["PATH"] = path
+
+
 def main(argv):
     as_json = bool(argv) and argv[0] == "--json"
     if as_json:
@@ -195,7 +240,8 @@ def main(argv):
         sys.exit(64)
     args = launch(argv[0], to_file=as_json) + argv[1:]
     if as_json:
-        print(json.dumps({"args": args}))
+        path = mise_path()
+        print(json.dumps({"args": args, **({"path": path} if path else {})}))
         return
     flags = argv[1:argv.index("--")] if "--" in argv else argv[1:]
     if "-p" in flags or "--print" in flags:
@@ -203,6 +249,7 @@ def main(argv):
             os.environ["OCTO_FEATHER_SPEND_SPACE"] = os.environ["HERDR_WORKSPACE_ID"]
         for v in HEADLESS_UNSET:
             os.environ.pop(v, None)
+    mise_shims_first()
     os.execvp("pi", ["pi", *args])
 
 

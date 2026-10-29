@@ -25,7 +25,7 @@ Repo skills: verify-octo-feather
 - `agents/` role files; frontmatter and launcher: `scripts/pi-role` (docs/adr/0013). Role launch details: `scripts/pi-role --help`.
 - `docs/specs/` the kit's Spec Chat HTML specs (`*.spec.html`, index `docs/specs/index.spec.html`), with Spec Chat's runtime and style in `.viz/` and `.style/`. Role contracts cite their anchors as spec `#anchor`; the index maps each anchor to its spec. `docs/adr/` wins where they differ.
 - `reflection/questions.json` the reflection question list (comms spec `#reflection-questions`); `agents/reflector.md` owns the reflector role.
-- `extensions/` kit Pi extensions; loading and web configuration: `scripts/pi-role`, `web-mcp.json` (docs/specs/roles.spec.html#launch-web). `pi-version` the Pi pin (docs/adr/0023 Consequences); `just-version` the just pin.
+- `extensions/` kit Pi extensions; loading and web configuration: `scripts/pi-role`, `web-mcp.json` (docs/specs/roles.spec.html#launch-web). `pi-version` the Pi pin (docs/adr/0023 Consequences); `mise.toml`, `mise.lock`, `mise-version` the native tool pins.
 - `.agents/skills/` every kit skill, vendored (`Skillfile` github entries) or local (docs/adr/0018). Vendored sources and pins: `Skillfile`, `Skillfile.lock`; patches: `.skillfile/patches/`. Role files stay in `agents/`.
 - `.agents/skills/verify-octo-feather/` the kit's own verify skill (quality spec `#verify-skill-what`); its feature map in `features/`. `qc.toml` the kit's driver contract (quality spec `#qc-contract`).
 - `templates/python`, `templates/typescript` starter target repos; each template's `AGENTS.md` describes its layout. Dependency owners: Python's `pyproject.toml` and `uv.lock`, TypeScript's `package.json` and `pnpm-lock.yaml`.

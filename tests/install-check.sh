@@ -14,6 +14,13 @@
 #     GitHub target (no qc.toml [browser]): no browser line. No browser is downloaded: the folder is faked.
 #   agent-browser (spec remote#acceptance-install-agent-browser), a stub: at 0.40.0 ok; 0.39.4 WRONG VERSION; none on
 #     PATH: MISSING naming 0.40.0 and the npm install, exit 1.
+#   mise (owner ruling #261): at mise-version ok; a mise reporting another release: WRONG VERSION naming
+#     mise-version, exit 1; a target with its own mise.toml (a repo the kit created): its tools ok at their lock with
+#     mise's shims first, a pin not installed
+#     MISSING naming `mise -C TARGET install --locked`, exit 1; a target without one: no tool line.
+#   just, which the kit runs in every target, at the kit mise.lock version, also in a target without mise.toml:
+#     ok; a just reporting 0.0.1: WRONG VERSION naming the kit lock and the fix, exit 1.
+#     Uses the box's mise installs (MISE_DATA_DIR kept while HOME is a fresh dir); installs nothing.
 # herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
 # the exit. Run by `just check`.
 set -euo pipefail
@@ -26,14 +33,18 @@ for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
 printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
 printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"   # at the pin; the cases below swap or drop it
 printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* "$t/old/linear"
-cp "$(command -v just)" "$t/bin/just"   # its own dir goes on the recipe's PATH: the test's, never one holding a linear
+# mise's own just, linked: its dir goes on the recipe's PATH (the test's, never one holding a linear), and the link
+# resolves to mise's install, so install-check's PATH rule holds.
+ln -s "$(mise which just)" "$t/bin/just"
+export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
+shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 # PATH without any linear: every dir holding one is dropped (the recipe adds HOME/.local/bin: HOME is a fresh dir).
 clean=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -x "$d/linear" ]] || clean+=":$d"; done
 lin_target="$t/linear"; gh_target="$t/github"
 git init -q "$lin_target"; git init -q "$gh_target"; mkdir -p "$lin_target/sub"
 cp "$kit/tests/fixtures/install-check/linear/.octo-feather.toml" "$lin_target/"
 check() { # WANT DIR EXTRA_PATH [TARGET]: run in DIR; output in $out
-  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME HOME="$t/home" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="$t/bin${3:+:$3}$clean" \
+  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME HOME="$t/home" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="$t/bin${3:+:$3}:$shims$clean" \
     just -f "$kit/justfile" install-check ${4:+"$4"} 2>&1)" || rc=$?
   [[ "$rc" == "$1" ]] || fail "in $2 (PATH extra '${3:-}'): want exit $1, got $rc: $out"
 }
@@ -55,16 +66,39 @@ grep -qx "pi     WRONG VERSION $t/bin/pi reports 0.0.1, want $pin (pi-version); 
   || fail "pi 0.0.1: no WRONG VERSION line naming the pin and the install command: $out"
 printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
 ! grep -qi '^browser' <<<"$out" || fail "GitHub target without qc.toml [browser] has a browser line: $out"
-# just at the kit's pin (just-version): the just on PATH (the copy above) ok; a just reporting another release: WRONG VERSION
-# naming the pin and its release page, exit 1. The stub forwards all but --version to the real just (the gate guard asks it).
-jpin="$(tr -d '[:space:]' <"$kit/just-version")"
+# mise at mise-version everywhere; a repo the kit created (its own mise.toml, here the kit's pins) gets each tool
+# checked at its lock, PATH resolving to mise's; a repo the kit did not create (gh_target) gets no tool line.
+mpin="$(tr -d '[:space:]' <"$kit/mise-version")"
+mise_target="$t/created"; git init -q "$mise_target"; cp "$kit/mise.toml" "$kit/mise.lock" "$mise_target/"
+check 0 "$mise_target" ""
+grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" && grep -qE "^mise   shellcheck [0-9.]+ ok \($mise_target/mise.lock\)$" <<<"$out" \
+  || fail "created repo at the pins: no ok lines: $out"
 check 0 "$gh_target" ""
-grep -qx "just   version $jpin ok (just-version)" <<<"$out" || fail "just at the pin: no ok version line: $out"
+grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" && ! grep -qE '^mise   [^v]' <<<"$out" || fail "a repo the kit did not create got mise tool lines: $out"
 o="$t/home/.local/bin"; mkdir -p "$o"   # first on the recipe's PATH (the justfile's export)
+printf '#!/bin/sh\n[ "$1" = --version ] && { echo "2000.1.1 linux-x64"; exit 0; }\nexec "%s" "$@"\n' "$(command -v mise)" >"$o/mise"; chmod +x "$o/mise"
+check 1 "$gh_target" ""; rm -rf "$t/home/.local"
+grep -qE "^mise   WRONG VERSION $o/mise reports 2000\.1\.1, want $mpin \(mise-version\); install mise $mpin: " <<<"$out" \
+  || fail "mise 2000.1.1: no WRONG VERSION line naming mise-version: $out"
+# just, which the kit runs in every target, at the kit mise.lock version even in a repo the kit did not create:
+# ok there with no mise tool or MISSING line; a just reporting another release: WRONG VERSION naming the
+# kit lock and the fix, exit 1. The stub forwards all but --version to the real just (the gate guard asks it).
+jv="$(mise -C "$kit" ls --local --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["just"][0]["version"])')"
+check 0 "$gh_target" ""
+grep -qx "just   version $jv ok (kit mise.lock)" <<<"$out" && ! grep -qE 'MISSING' <<<"$out" \
+  || fail "foreign target, just at the kit version: no ok line, or a mise demand: $out"
+o="$t/home/.local/bin"; mkdir -p "$o"
 printf '#!/bin/sh\n[ "$1" = --version ] && { echo "just 0.0.1"; exit 0; }\nexec "%s" "$@"\n' "$t/bin/just" >"$o/just"; chmod +x "$o/just"
 check 1 "$gh_target" ""; rm -rf "$t/home/.local"
-grep -qx "just   WRONG VERSION $o/just reports 0.0.1, want $jpin (just-version); install just $jpin: https://github.com/casey/just/releases/tag/$jpin" <<<"$out" \
-  || fail "just 0.0.1: no WRONG VERSION line naming the pin and its release: $out"
+grep -qx "just   WRONG VERSION $o/just reports 0.0.1, want $jv (kit mise.lock); the kit runs it in every target: .*" <<<"$out" \
+  || fail "foreign target, just 0.0.1: no WRONG VERSION line naming the kit lock: $out"
+printf '[tools]\njust = "%s"\n' "$jv" >"$mise_target/mise.toml"
+check 0 "$mise_target" ""
+grep -qx "mise   just $jv ok ($mise_target/mise.lock)" <<<"$out" || fail "created repo, just at an installed pin: no ok line: $out"
+printf '[tools]\njust = "0.0.1"\n' >"$mise_target/mise.toml"
+check 1 "$mise_target" ""
+grep -qx "mise   just 0.0.1 MISSING ($mise_target/mise.lock); mise -C $mise_target install --locked" <<<"$out" \
+  || fail "created repo, just at a pin not installed: no MISSING line naming the install: $out"
 # Browser target: qc.toml declares the headless browser at a Playwright pin.
 br_target="$t/browser"; git init -q "$br_target"
 printf 'format = 1\n[entry]\ncommand = "app"\n[services]\n[fixture]\n[values]\n[browser]\nplaywright = "1.64.1"\n' >"$br_target/qc.toml"
@@ -98,4 +132,4 @@ check 1 "$gh_target" ""; clean="$saved"
 grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
   || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
 printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"
-echo "install-check: ok (agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; just $jpin (just-version) ok, just 0.0.1 WRONG VERSION naming the pin, exit 1; Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
+echo "install-check: ok (agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
