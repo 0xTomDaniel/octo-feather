@@ -49,8 +49,8 @@ Own one issue or one epic coordination layer from brief through closure.
   (ticket, role, outside issue), `""` on resume or at an owner gate; never a gate value.
   Only the supervisor updates the lane record, and keeps it current as things change;
   a stale record misleads the board, the owner, and cross-lane sequencing.
-  At each hand-off moment, record one line to `<lane record name>.handoffs.jsonl`
-  beside it with the `herdr-comms` recording command, per spec `#handoff-fields`. Each code-review or QC finding gets its own
+  At each hand-off moment, append one line to `<lane record name>.handoffs.jsonl`
+  beside it, per spec `#handoff-fields`. Each code-review or QC finding gets its own
   line: `{"at": ..., "kind": "finding", "source": "code-review" or "qc", "class": <its class tag>,
   "blocking": true or false, "summary": ...}`; the reflection files the correction lanes they make due (comms spec `#reflection-correction`).
 
