@@ -21,7 +21,7 @@ call that changed a file (on what: schema, Before targets), no test module impor
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
 and, for attempt_blocked and ran only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
-Attempt record, Run record; a ran fact's program gets the sandbox's recording shim first on PATH), against the
+Attempt record, Run record), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
@@ -433,8 +433,7 @@ def judge_attempt(kind, record, final):
 
 
 def arg_matches(want: str, got: str, head: str | None) -> bool:
-    """A ran fact's argument WANT against a recorded one: equal, a {head} in WANT standing for a prefix of the case's
-    HEAD sha of 7 or more hex digits (rule: schema, Run record)."""
+    """Whether a ran fact's argument WANT matches a recorded one GOT, HEAD the case's sha (rule: schema, Run record)."""
     if "{head}" not in want or not head:
         return want == got
     m = re.fullmatch("([0-9a-f]{7,40})".join(map(re.escape, want.split("{head}"))), got)
@@ -442,8 +441,7 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
 
 
 def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
-    """ran PROGRAM ARGS over the sandbox's RECORD: a recorded run of PROGRAM whose argv starts with ARGS, its exit not
-    judged (rule: schema, Run record)."""
+    """ran PROGRAM ARGS over the sandbox's RECORD (rule: schema, Run record)."""
     p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
     name = f"ran {' '.join([p, *want])}"
     if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
@@ -463,8 +461,8 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
 
 
 def ran_setup(facts: list[dict[str, object]], head: str) -> tuple[list[dict[str, object]], str]:
-    """FACTS with each ran fact's _head (the case HEAD its {head} stands for), and the sandbox's QC_RECORD: the programs
-    those facts name, one per line, the only ones it shims (schema, Run record)."""
+    """FACTS with each ran fact's _head (the case HEAD), and the sandbox's QC_RECORD: the programs those facts name, one
+    per line (which ones are shimmed: schema, Run record)."""
     ran = [f for f in facts if f.get("fact") == "ran"]
     return [dict(f, _head=head) if f.get("fact") == "ran" else f for f in facts], "\n".join(sorted({str(f["program"]) for f in ran}))
 

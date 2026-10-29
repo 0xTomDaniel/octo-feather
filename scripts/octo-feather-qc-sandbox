@@ -28,7 +28,7 @@
 #      on the hidden run tmpfs; the judge sees it only through a read-only bind ($SCR/rec: the live
 #      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket, write-only, mode 0200, not removable; each sender returns only once the recorder has written its entry).
 #      Senders: the herdr shim (a start message with the argv before the call, its exit after), each run shim (the same
-#      shim, for a program QC_RECORD names: first on PATH, it runs the next one of that name unchanged, kind run),
+#      shim, one per program QC_RECORD names, kind run: .agents/skills/eval-cases/references/schema.md, Run record),
 #      the git helper,
 #      the offline gh's refusals, and the recorder's own inotify watch on the tmpfs masks (gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state,
 #      other repos as repo;
@@ -333,8 +333,7 @@ EOF
   n=${GIT_CONFIG_COUNT:-0}
   export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=credential.helper" "GIT_CONFIG_VALUE_$n=" \
     "GIT_CONFIG_KEY_$((n + 1))=credential.helper" "GIT_CONFIG_VALUE_$((n + 1))=$SCR/bin/git-credential-qc"
-  # QC_RECORD: the programs a case's ran facts name (schema.md, Run record), one per line; each gets a run shim in
-  # $SCR/rbin, first on PATH, wrapping the next one of its name on PATH. No other program is shimmed.
+  # QC_RECORD: program names, one per line, each a run shim in $SCR/rbin (which, and what it does: schema.md, Run record).
   mkdir -p "$SCR/rbin"; recs=()
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue

@@ -654,9 +654,7 @@ fl FAIL fwebnone 'field_lines Prior art: no column-0 `Prior art:` line'
 fl FAIL fwebempty 'tool_called web_a | web_b: call 2 web_b: empty result'
 fl FAIL fwebno 'tool_called web_a | web_b: no call to any of them in 2 tool calls'
 
-# ran (schema.md, Run record): a program really run through the sandbox's recording shim, its argv a prefix match ({head}
-# a short sha), its stdin, stdout and non-zero exit passed through; echoing its name or other arguments fail naming the record;
-# a program no fact names gets no shim.
+# ran (rule: schema.md, Run record): cases rpass, recho, rother; then rpass's transcript and record.
 printf '#!/usr/bin/env bash\necho "runme: $* stdin=$(cat)"; exit 3\n' > "$t/bin/runme"
 printf '#!/usr/bin/env bash\necho other\n' > "$t/bin/other-prog"; chmod +x "$t/bin/runme" "$t/bin/other-prog"
 mkdir -p "$t/ran/ran/reference" "$t/ran/fixtures"; cp -r "$t/good/fixtures/fx" "$t/ran/fixtures/"
