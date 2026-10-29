@@ -24,8 +24,9 @@ Helper (an executable Python script, `python3` 3.11+, standard library only: `to
 - `entry.command`: `launch` writes it as `bin/kit` in the run state; every case, the doctor's probes and the evidence record run that with the command a user types appended.
 - `services`: none. The helper starts no service: `launch` fails naming any declared one.
 - `fixture`: none. `drive` runs each declared `reset` before its cases.
-- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion; `web_roles` and `web_servers` are the role-launch drive's expected web roles and web list servers; `qc_demo_pass` and `qc_demo_fail` are the qc-capture drive's scratch demos.
+- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion; `web_roles` and `web_servers` are the role-launch drive's expected web roles and web list servers; `qc_demo_pass` and `qc_demo_fail` are the qc-capture drive's scratch demos; `qc_demo_browser` is the qc-browser drive's scratch browser demo.
 - `demo`: the kit's own criteria's demos, which `just qc` runs (quality spec `#qc-capture`); the helper does not read them.
+- `browser.playwright`: the pin the qc-browser drive's scratch target declares, whose headless shell `just install-check` checks on the box.
 
 What each key means and how its commands run: `schemas/qc.v1.schema.json`. Validate the contract: `octo-feather-contract .` (prints ok, or names the missing or wrong key).
 
@@ -48,7 +49,7 @@ What each key means and how its commands run: `schemas/qc.v1.schema.json`. Valid
 
 ## Drive
 
-`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `lane-archive`, `director-reflection`, `correction-lane`, `factory-report`, `role-launch`, `qc-capture`) with the contract's values. Each case:
+`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `lane-archive`, `director-reflection`, `correction-lane`, `factory-report`, `role-launch`, `qc-capture`, `qc-browser`) with the contract's values. Each case:
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`;
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;
