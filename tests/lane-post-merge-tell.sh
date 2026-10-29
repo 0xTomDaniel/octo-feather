@@ -2,7 +2,9 @@
 # Integration test for octo-feather-lane post-merge step 4, tell supervisors (owner ruling 2026-10-29 on issue
 # 206; issue 398), offline: a throwaway git repo holds the merge commit, a fake gh PR #7 merged there with a
 # green push run, a fake herdr whose `agent get` finds only the live panes, a fake herdr-say that logs each send,
-# and a throwaway state dir (XDG_STATE_HOME) holding the lane records and the director log. A live supervisor of
+# a throwaway state dir (XDG_STATE_HOME) holding the lane records and the director log, and a throwaway kit
+# install clone (OCTO_FEATHER_KIT_INSTALL, always set: never the live kit) whose origin is o/kit, so step 3 leaves
+# it unchanged on an o/r PR and refreshes it with fake mise, just, uv and pnpm on an o/kit PR. A live supervisor of
 # the PR's repo gets one message naming the merge commit, PR, title and changed rule files; the --lane lane and a
 # lane of another repo get none (unless the PR is the kit's own); a parked one is listed, never sent to. Each lane
 # told gets one prod line in the director log, and a rerun sends nothing new. A failed send is named, writes no
@@ -12,7 +14,7 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-post-merge-tell test: $*" >&2; exit 1; }
-export HOME="$t/home" XDG_STATE_HOME="$t/state" GH_STORE="$t/gh.json" HERDR_LOG="$t/herdr.log" SAY_LOG="$t/say.log" \
+export HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$t/kit" GH_STORE="$t/gh.json" HERDR_LOG="$t/herdr.log" SAY_LOG="$t/say.log" \
   HERDR_LIVE="$t/live" SAY_RC="$t/say.rc" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 unset GH_REPO GH_TOKEN HERDR_SESSION OCTO_FEATHER_ROLE
 mkdir -p "$HOME" "$t/bin" "$t/state/octo-feather/lanes"
@@ -28,6 +30,9 @@ git checkout -q main; git merge -q --no-ff gh7 -m "Merge #7"; M="$(git rev-parse
 # A second merge that touches no rule file (docs/notes.md is under no rule path).
 git checkout -qb gh8; echo c > docs/notes.md; git commit -qam notes; H2="$(git rev-parse HEAD)"
 git checkout -q main; git merge -q --no-ff gh8 -m "Merge #8"; M2="$(git rev-parse HEAD)"
+# The kit install: a clone of this repo at main, origin named o/kit (fetched from the local repo).
+git clone -q "$r" "$t/kit"; git -C "$t/kit" remote set-url origin https://github.com/o/kit.git
+git -C "$t/kit" config "url.$r.insteadOf" https://github.com/o/kit.git
 
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -36,6 +41,8 @@ a = sys.argv[1:]; db = json.load(open(os.environ["GH_STORE"]))
 def opt(f): return a[a.index(f) + 1] if f in a else None
 if a[:2] == ["pr", "view"] and a[2] in db["prs"]:
     print(json.dumps({k: db["prs"][a[2]][k] for k in opt("--json").split(",")})); sys.exit(0)
+if a[:2] == ["repo", "view"] and opt("--json") == "nameWithOwner":
+    print(json.dumps({"nameWithOwner": a[2].removeprefix("https://github.com/").removesuffix(".git")})); sys.exit(0)
 if a[:2] == ["run", "list"]:
     print(json.dumps([{"databaseId": 1, "status": "completed", "conclusion": "success", "workflowName": "check",
                        "url": "https://github.com/o/r/actions/runs/1"}])); sys.exit(0)
@@ -57,6 +64,7 @@ rc="$(awk -v p="$1" '$1 == p {print $2}' "$SAY_RC" 2>/dev/null)"
 [[ "${rc:-0}" == 0 ]] || echo "herdr-say: $1 is blocked on interactive input; not delivered" >&2
 exit "${rc:-0}"
 EOF
+printf '#!/bin/sh\nexit 0\n' > "$t/bin/tool"; for x in mise just uv pnpm; do ln -s tool "$t/bin/$x"; done   # step 3's refresh
 chmod +x "$t/bin/"*
 store() { # TITLE URL
   jq -n --arg h "$H" --arg m "$M" --arg h2 "$H2" --arg m2 "$M2" --arg ti "$1" --arg u "$2" \
@@ -109,10 +117,10 @@ run 0 post-merge 8 "$H2" --lane gh7 --repo o/r --wait 0
 tail -n1 "$dlog" | jq -e --arg n "post-merge $M2 #8: main moved, told live1 to re-read none" '.note == $n' >/dev/null || fail "none prod: $(tail -n1 "$dlog")"
 
 # A kit PR: every lane runs kit roles, so another repo's live lane is told too.
-kitrepo="$(git -C "$kit" remote get-url origin | sed -E 's#^.*github\.com[:/]##; s#\.git$##')"
+kitrepo=o/kit
 store "Kit rule" "https://github.com/$kitrepo/pull/7"; : > "$SAY_LOG"; : > "$dlog"
 run 0 post-merge 7 "$H" --lane gh7 --repo "$kitrepo" --wait 0
-[[ "$(said)" == "w1:p1 w3:p1 " ]] || fail "kit PR sent to $(said), want w1:p1 w3:p1"
+[[ "$(said)" == "w1:p1 w3:p1 " ]] || fail "kit PR sent to $(said), want w1:p1 w3:p1: $out"
 [[ "$(jq -r .issue "$dlog" | sort | tr '\n' ' ')" == "11 13 " ]] || fail "kit PR prod lines: $(cat "$dlog")"
 
 # A failed send: named, no prod line for it, the rest still tried, the step stops (exit 1).

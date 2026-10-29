@@ -263,12 +263,20 @@ Exit 0; 1 on any argument.
                                    the director's post-merge routine for lane NAME, its steps in order
 
 `post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
-report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: only step 4 writes, and
-its rerun tells no lane twice.
+report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
+step 4 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
                    lists is completed; ok only when every run concluded success
+  step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
+                   `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
+                   PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
+                   --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
+                   fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
+                   not move. Then in the install, each failure stopping named: `mise install --locked` (only with
+                   a mise.toml there), `just vendored-fetch`, `uv sync --locked`, `pnpm install --frozen-lockfile`,
+                   `just install-check <the current repo's top>`. No service restart; a rerun reruns these
   step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
@@ -2614,6 +2622,78 @@ def pm_ci(pm: PostMerge) -> str:
             + ", ".join(f"{x['workflowName']} {x['url']}" for x in runs))
 
 
+# Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos
+# name a throwaway clone). Never a branch checkout there: live install clones stay on main, detached or not.
+PM_REFRESH = (("mise", "install", "--locked"), ("just", "vendored-fetch"), ("uv", "sync", "--locked"),
+              ("pnpm", "install", "--frozen-lockfile"))
+
+
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if p.returncode not in ok:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     "fix the install clone, then rerun")
+    return p.returncode, p.stdout.strip()
+
+
+def pm_repo(target: str | None, what: str) -> str:
+    """OWNER/NAME of TARGET (a repo, a URL, or None for this directory's repo) as gh names it."""
+    out = gh(["repo", "view", *([target] if target else []), "--json", "nameWithOwner"], f"check {what} and gh auth status, then rerun")
+    try:
+        name = json.loads(out)["nameWithOwner"]
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh repo view printed no nameWithOwner for {what} ({out[:100]!r}): check the gh on PATH")
+    return str(name)
+
+
+def pm_kit(pm: PostMerge) -> str:
+    """Step 3: fast-forward the live kit install to the merge commit, then refresh its tools; any failure stops."""
+    kit = Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+    if not (kit / ".git").exists():
+        raise Refuse(f"kit install {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the install clone, then rerun")
+    origin = pm_git(kit, "config", "--get", "remote.origin.url", ok=(0, 1))[1]
+    if not origin:
+        raise Refuse(f"kit install {kit} has no origin remote: add it (git remote add origin <url>), then rerun")
+    pr_repo, kit_repo = pm_repo(pm.repo, f"the repo of PR #{pm.pr}"), pm_repo(origin, f"the kit install's origin {origin}")
+    if pr_repo.lower() != kit_repo.lower():
+        return f"kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if top.returncode:
+        raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
+    if dirty := pm_git(kit, "status", "--porcelain")[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    pm_git(kit, "fetch", "origin")
+    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
+        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
+    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
+        pm_git(kit, "merge", "--ff-only", pm.merge)
+        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
+    else:
+        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    done: list[str] = []
+    cmds = [c for c in PM_REFRESH if c[0] != "mise" or (kit / "mise.toml").exists()]
+    for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
+        shown = " ".join(cmd)
+        try:
+            p = subprocess.run(list(cmd), cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            rc, err = p.returncode, (p.stderr.strip() or p.stdout).strip().splitlines()
+        except FileNotFoundError:
+            rc, err = 127, [f"{cmd[0]} not on PATH"]
+        if rc:
+            raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
+                         f"fix it in {kit}, then rerun")
+        done.append(f"{shown} ok")
+    return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "mise" else " (no mise.toml: mise install skipped)")
+
+
 # --- post-merge step 4: tell running supervisors main moved (issue 398) ---
 
 # The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
@@ -2621,7 +2701,7 @@ PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/
 GH_REPO_URL = re.compile(r"(?:https://|ssh://git@|git@)github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?")
 
 
-def pm_git(*args: str) -> subprocess.CompletedProcess[str]:
+def pm_git_here(*args: str) -> subprocess.CompletedProcess[str]:
     try:
         return subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     except FileNotFoundError:
@@ -2630,9 +2710,9 @@ def pm_git(*args: str) -> subprocess.CompletedProcess[str]:
 
 def pm_rule_files(pm: PostMerge) -> list[str]:
     """The rule files the merge commit changed against its first parent, from git in the current repo."""
-    if pm_git("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
-        pm_git("fetch", "--quiet", "origin", pm.merge)
-    p = pm_git("diff", "--name-only", "--no-renames", f"{pm.merge}^1", pm.merge)
+    if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+        pm_git_here("fetch", "--quiet", "origin", pm.merge)
+    p = pm_git_here("diff", "--name-only", "--no-renames", f"{pm.merge}^1", pm.merge)
     if p.returncode:
         err = (p.stderr or p.stdout).strip().splitlines()
         raise Refuse(f"git diff of merge commit {pm.merge[:12]} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
@@ -2641,8 +2721,8 @@ def pm_rule_files(pm: PostMerge) -> list[str]:
 
 
 def pm_kit_repo() -> str | None:
-    """OWNER/NAME of the kit install's origin, None when it has none on GitHub."""
-    p = pm_git("-C", str(KIT), "remote", "get-url", "origin")
+    """OWNER/NAME of the kit install's origin (step 3's install: OCTO_FEATHER_KIT_INSTALL or KIT), None when not on GitHub."""
+    p = pm_git_here("-C", os.environ.get("OCTO_FEATHER_KIT_INSTALL") or str(KIT), "config", "--get", "remote.origin.url")
     m = GH_REPO_URL.fullmatch(p.stdout.strip()) if not p.returncode else None
     return m.group(1).lower() if m else None
 
@@ -2742,7 +2822,8 @@ def pm_tell(pm: PostMerge) -> str:
 
 
 # The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
-POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("tell supervisors", pm_tell))
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
+                    ("tell supervisors", pm_tell))
 
 
 def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
