@@ -8,11 +8,14 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
+git -C "$t" init -q
+git -C "$t" add -A
 planted=()
 # plant FILE SHEBANG BODY: an executable FILE (under the copy) with that shebang and body, removed by the next run.
 plant() { printf '%s\n%s\n' "$2" "$3" > "$t/$1"; chmod +x "$t/$1"; planted+=("$1"); }
 # run: `just check-scripts` over the planted scripts; sets rc, out; removes them.
 run() {
+  git -C "$t" add -A
   set +e; out="$(cd "$t" && just check-scripts 2>&1)"; rc=$?; set -e
   for f in "${planted[@]}"; do rm -f "${t:?}/$f"; done; planted=()
 }

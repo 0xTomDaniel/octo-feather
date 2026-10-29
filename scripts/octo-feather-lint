@@ -51,6 +51,7 @@ from typing import cast
 
 import tomlkit
 import tomllib
+from language_support import classify, read_declaration, tool_argv
 from tomlkit.container import Container, OutOfOrderTableProxy
 from tomlkit.exceptions import ParseError
 from tomlkit.items import Array, Table
@@ -114,6 +115,8 @@ def runs_python(path: Path) -> bool:
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+    if Path("languages.json").is_file() and cmd[0] in {"ruff", "basedpyright"}:
+        cmd = [*tool_argv(cmd[0]), *cmd[1:]]
     try:
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -132,20 +135,27 @@ def file_set() -> list[str]:
     if r.returncode != 0:
         msg = f"git ls-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    cands = [
-        name
-        for name in r.stdout.split("\0")
-        if name
-        and Path(name).is_file()
-        and (Path(name).suffix == ".py" or (not Path(name).suffix and runs_python(Path(name))))
-    ]
+    if Path("languages.json").is_file():
+        cands = classify(Path.cwd(), read_declaration(Path("languages.json")))["python"]
+    else:
+        cands = [
+            name
+            for name in r.stdout.split("\0")
+            if name
+            and Path(name).is_file()
+            and (Path(name).suffix == ".py" or (not Path(name).suffix and runs_python(Path(name))))
+        ]
     if not cands:
         return []
     r = run(["ruff", "check", *ROOT_CONFIG, "--force-exclude", "--show-files", *cands])
     if r.returncode != 0:
         msg = f"ruff check --show-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    return sorted(rel(line) for line in r.stdout.splitlines() if line)
+    files = sorted(rel(line) for line in r.stdout.splitlines() if line)
+    if Path("languages.json").is_file() and files != sorted(cands):
+        msg = "ruff exclusions omit declared Python; reconcile languages.json and root ruff config"
+        raise ToolError(msg)
+    return files
 
 
 def pyproject() -> Json:

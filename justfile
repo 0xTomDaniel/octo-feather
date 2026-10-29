@@ -27,52 +27,17 @@ default:
 
 # The recipes the gate runs, in order, each one pytest item of check-tests (tests/gate/). Only check-* recipes,
 # so check-gate-free's scan of them sees every recipe the gate runs.
-export GATE_RECIPES := "check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
+export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
 # The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
 check: check-tests
 
-# shellcheck when installed, else bash -n; python scripts byte-compile (#121 D1 D2).
-# runs_python reads each file's shebang line; which shebangs count as python: #121 D2.
 check-scripts:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    runs_python() {
-      local l w i=0 x; IFS= read -r l < "$1" || true
-      [[ "$l" == '#!'* ]] || return 1
-      read -ra w <<<"${l#??}"
-      if [[ "${w[0]:-}" == */env || "${w[0]:-}" == env ]]; then
-        for ((i = 1; i < ${#w[@]}; i++)); do
-          case "${w[i]}" in
-            -u|--unset|-C|--chdir) i=$((i + 1)) ;;
-            -S?*) w[i]="${w[i]#-S}"; break ;;
-            -*|*=*) ;;
-            *) break ;;
-          esac
-        done
-      fi
-      x="${w[i]:-}"; x="${x##*/}"
-      [[ "$x" =~ ^(python|pypy)[0-9.]*$ ]] && return 0
-      [[ "$x" == uv && "${w[i + 1]:-}" == run ]] || return 1
-      for x in "${w[@]:i + 2}"; do [[ "$x" == --script ]] && return 0; done
-      return 1
-    }
-    files=(); py=()
-    for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
-      [[ -f "$f" ]] || continue   # tests/fixtures/ holds data, not scripts
-      if runs_python "$f"; then py+=("$f"); else files+=("$f"); fi
-    done
-    # compile(), not ast.parse: byte-compile refuses what parses but cannot run (top-level return, break, yield).
-    for f in "${py[@]}"; do python3 -c 'import sys; compile(open(sys.argv[1], "rb").read(), sys.argv[1], "exec", dont_inherit=True)' "$f"; done
-    echo "python: ok (${#py[@]} files)"
-    if command -v shellcheck >/dev/null; then
-      shellcheck -S warning "${files[@]}"; echo "scripts: shellcheck ok (${#files[@]} files)"
-    else
-      for f in "${files[@]}"; do bash -n "$f"; done; echo "scripts: bash -n ok (${#files[@]} files; shellcheck not installed)"
-    fi
-    for f in "${files[@]}" "${py[@]}"; do [[ -x "$f" ]] || { echo "not executable: $f" >&2; exit 1; }; done
+    @python3 scripts/check-languages run check-scripts
+
+check-languages:
+    @python3 scripts/check-languages
 
 # No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
@@ -172,13 +137,13 @@ check-decision-log:
 # [tool.ruff.lint.extend-per-file-ignores] and [tool.ruff.format] exclude, .basedpyright/baseline.json
 # (scripts/octo-feather-lint --help). Pinned in pyproject.toml and uv.lock, run offline from the uv cache.
 check-lint:
-    @uv run --locked --offline --no-sync octo-feather-lint lint
+    @python3 scripts/check-languages run check-lint
 
 check-format:
-    @uv run --locked --offline --no-sync octo-feather-lint format
+    @python3 scripts/check-languages run check-format
 
 check-types:
-    @uv run --locked --offline --no-sync octo-feather-lint types
+    @python3 scripts/check-languages run check-types
 
 # Kit TypeScript (#245): templates/typescript's tsc (@tsconfig/strictest) and eslint (typescript-eslint
 # strict-type-checked and stylistic-type-checked) over the files tsconfig.json declares (its exclude names each
@@ -190,20 +155,7 @@ check-types:
 # until pruned. tsc has no baseline: its errors are fixed in place.
 # One recipe, not two: two gate items installing node_modules at once would race.
 check-ts:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
-      echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
-    cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
-    mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
-    (( ${#files[@]} )) || { echo "check-ts: tsconfig.json lists no files" >&2; exit 1; }
-    bad=0
-    pnpm exec tsc || { bad=1; echo "check-ts: fix each tsc error above at its file(line,col)" >&2; }
-    pnpm exec eslint --max-warnings 0 -- "${files[@]}" || { bad=1
-      echo "check-ts: fix each eslint finding above at its file, line:col; rule docs: https://typescript-eslint.io/rules/<rule> or https://eslint.org/docs/latest/rules/<rule> (an exception: // eslint-disable-next-line <rule> -- <reason>, on its line). Never add to eslint-suppressions.json; an unused entry there is pruned: pnpm exec eslint --prune-suppressions -- ${files[*]}" >&2; }
-    [[ "$bad" == 0 ]] && echo "ts: ok (${#files[@]} files: tsc, eslint)"
-    exit "$bad"
+    @python3 scripts/check-languages run check-ts
 
 # Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
 # justfile with `check` and `integrate`, a git hook and CI that run `just check`.
@@ -236,13 +188,7 @@ check-templates:
 # copy fails on its recipe, never fans out a nested gate (#208).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
 check-tests *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
-    err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
-      echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
-    GATE_NESTED=1 exec uv run --locked --offline --no-sync pytest "$@"
+    @python3 scripts/check-languages gate "$@"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
 test *args:
@@ -300,6 +246,20 @@ install-check target=invocation_directory():
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
+    # Native gate tools use the same release files as CI.
+    for t in node pnpm uv shellcheck; do
+      pin="$(tr -d '[:space:]' <"$root/$t-version")"
+      case "$t" in
+        node) how="install node: https://nodejs.org/dist/v$pin/" ;;
+        pnpm) how="npm install -g pnpm@$pin" ;;
+        uv) how="install uv: https://github.com/astral-sh/uv/releases/tag/$pin" ;;
+        shellcheck) how="install shellcheck: https://github.com/koalaman/shellcheck/releases/tag/v$pin" ;;
+      esac
+      if ! p="$(command -v "$t")"; then echo "$t MISSING ($t-version); $how"; bad=1; continue; fi
+      v="$("$t" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
+      if [[ "$v" == "$pin" ]]; then echo "$t version $v ok ($t-version)"
+      else echo "$t WRONG VERSION $p reports ${v:-no version}, want $pin ($t-version); $how"; bad=1; fi
+    done
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
@@ -330,6 +290,32 @@ install-check target=invocation_directory():
     # pnpm under another HOME (corepack's shim) would download itself.
     if cmp -s "$root/pnpm-lock.yaml" "$root/node_modules/.pnpm/lock.yaml"; then echo "pnpm   kit TypeScript tools ok (pnpm-lock.yaml)"
     else echo "pnpm   kit TypeScript tools NOT FETCHED (pnpm-lock.yaml); fetch them once, with network: pnpm install --frozen-lockfile --dir $root"; bad=1; fi
+    # Resolve locked Python distributions in the kit environment without fetching or syncing.
+    uv run --locked --offline --no-sync --project "$root" python -c 'import importlib.metadata as m, pathlib, sys, tomllib
+    root = pathlib.Path(sys.argv[1]); lock = tomllib.loads((root / "uv.lock").read_text())
+    bad = False
+    for name in ("ruff", "basedpyright", "pytest", "pytest-xdist", "tomlkit", "pyyaml", "jsonschema"):
+        want = next(p["version"] for p in lock["package"] if p["name"] == name)
+        try: got = m.version(name)
+        except m.PackageNotFoundError: got = "MISSING"
+        if got == want: print(f"{name} version {got} ok (uv.lock)")
+        else:
+            print(f"{name} WRONG VERSION {got}, want {want} (uv.lock); uv sync --locked --project {root}"); bad = True
+    sys.exit(int(bad))' "$root" || bad=1
+    # Compare actual installed distributions with resolved importer versions, never manifest ranges.
+    uv run --locked --offline --no-sync --project "$root" python -c 'import json, pathlib, subprocess, sys, yaml
+    root = pathlib.Path(sys.argv[1]); lock = yaml.safe_load((root / "pnpm-lock.yaml").read_text())
+    result = subprocess.run(["pnpm", "--dir", str(root), "list", "--json", "--depth", "0"], capture_output=True, text=True)
+    try: installed = json.loads(result.stdout)[0].get("devDependencies", {})
+    except (ValueError, IndexError): installed = {}
+    bad = False
+    for name in lock["importers"]["."]["devDependencies"]:
+        want = str(lock["importers"]["."]["devDependencies"][name]["version"]).split("(", 1)[0]
+        got = installed.get(name, {}).get("version", "MISSING")
+        if got == want: print(f"{name} version {got} ok (pnpm-lock.yaml)")
+        else:
+            print(f"{name} WRONG VERSION {got}, want {want} (pnpm-lock.yaml); pnpm install --frozen-lockfile --dir {root}"); bad = True
+    sys.exit(int(bad))' "$root" || bad=1
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
     # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
     skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
