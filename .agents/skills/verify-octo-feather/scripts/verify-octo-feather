@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -104,6 +104,7 @@ class Contract:
     services: list[str]
     fixtures: dict[str, str]  # name: reset command
     values: dict[str, str]
+    browser: str = ""  # [browser] playwright: the Playwright release whose headless shell the qc-browser drive needs
 
 
 def read_contract() -> Contract:
@@ -122,7 +123,8 @@ def read_contract() -> Contract:
             and isinstance(c.get("setup", ""), str)):
         die(f"{CONTRACT} does not match format 1 (validate: octo-feather-contract)")
     return Contract(setup=c.get("setup", ""), entry=entry["command"], services=list(services),
-                    fixtures={k: f["reset"] for k, f in fixture.items()}, values=dict(values))
+                    fixtures={k: f["reset"] for k, f in fixture.items()}, values=dict(values),
+                    browser=str(c.get("browser", {}).get("playwright", "")))
 
 
 def sh_in_repo(command: str) -> bool:
@@ -931,6 +933,63 @@ def drive_qc_capture(f: Feature) -> None:
     say(f"qc-capture evidence: {f.d}")
 
 
+def drive_qc_browser(f: Feature) -> None:
+    """`just qc` on a scratch target whose qc.toml pins the kit's Playwright release and declares a browser demo that
+    screenshots a page: the demo runs in the qc sandbox with the box's headless shell, its screenshot in its new record."""
+    v = f.s.contract.values
+    if "qc_demo_browser" not in v or not f.s.contract.browser:
+        die("qc.toml needs [values] qc_demo_browser and [browser] playwright: the qc-browser drive's scratch demo and its pin")
+    sc = RUN_DIR / "scratch" / "qc-browser"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)   # qc commits the status file in this repo
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    (r / "page.html").write_text('<!doctype html><title>qc-browser</title><body style="background:#2a7"><h1>qc-browser drive</h1></body>\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec and page")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-browser: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+                               f'[browser]\nplaywright = {json.dumps(f.s.contract.browser)}\n'
+                               f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(v["qc_demo_browser"])}\nbrowser = true\n'
+                               'covers = ["page.html"]\ntests = ["none"]\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract with a browser demo")
+    head = git("rev-parse", "HEAD")
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports, the scratch target's evidence store; the box's browser
+    f.pre = ["env", "-C", str(r)]
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.pre = []
+    f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"],
+                                env={**os.environ, **f.env})[1])
+    rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
+
+    def holds(c: Case) -> bool:
+        m = re.search(r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record " + rid + "$", c.out)
+        rec = [x for x in json.loads(c.o["store"]) if m and x["record"]["id"] == m.group(1)]
+        if c.code != 0 or not rec or rec[0]["record"]["revision"] != head or "qc sandbox: FAIL" in c.err:
+            return False
+        png = Path(rec[0]["dir"], "outputs", "screenshots", "page.png")
+        return (re.search(r"(?m)^qc sandbox: ok   browser: PLAYWRIGHT_BROWSERS_PATH=\S+ read-only, headless shell \S+$", c.err) is not None
+                and png.is_file() and png.read_bytes()[:8] == b"\x89PNG\r\n\x1a\n")
+    f.check("qc", holds)
+    f.run("read", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-a", "--commit", head)
+    f.check("read", lambda c: c.code == 0 and "1 record(s)" in c.out and "screenshots/page.png (" in c.out)
+    f.env = {}
+    say(f"qc-browser evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -942,6 +1001,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
+    "qc-browser": drive_qc_browser,
 }
 
 
