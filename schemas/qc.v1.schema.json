@@ -48,6 +48,22 @@
       "type": "object",
       "additionalProperties": {"type": "string"}
     },
+    "demo": {
+      "description": "Each criterion's demo, keyed by its criterion id <spec>#<anchor> (the spec's file stem and the criterion's anchor). `just qc` runs a claimed criterion's demo at the exact head in the qc sandbox, stores its command, exit status and output in the evidence store, and its exit status is the demo's own checks: 0 passes, any other fails (quality spec #qc-run). Absent or empty: no criterion has a demo. Added compatibly to format 1: a contract without it reads as before",
+      "type": "object",
+      "propertyNames": {"pattern": "^[a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9._-]*$"},
+      "additionalProperties": {
+        "type": "object",
+        "required": ["command", "covers", "tests"],
+        "properties": {
+          "command": {"description": "Drives the criterion and runs its checks, run under sh from the repo root with QC_REPO set; it does its own setup and fixture resets; its exit status reports its checks", "type": "string", "minLength": 1},
+          "browser": {"description": "True when the demo drives a headless browser (the [browser] key's pin); default false", "type": "boolean"},
+          "covers": {"description": "The code paths the demo covers, relative to the repo root", "type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}},
+          "tests": {"description": "The tests that enforce the criterion, as the repo's test runner names them (paths relative to the repo root, or test ids)", "type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}}
+        },
+        "additionalProperties": false
+      }
+    },
     "browser": {
       "description": "Present only when the verify skill drives a headless browser: Playwright's headless Chromium shell, installed once per box where `just install-check` names, which a drive reaches by PLAYWRIGHT_BROWSERS_PATH (remote spec #host-tools)",
       "type": "object",

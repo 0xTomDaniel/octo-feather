@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """octo-feather-qc STATUS PR ID... [--no-sandbox] [--no-github]   interim product QC (`just qc`, docs/adr/0022)
 
-Run in a lane worktree at its integrated head. A fresh, read-only qc judge
+Run in a lane worktree at its integrated head. Capture first (quality spec #qc-capture), no model: each
+named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
+[demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
+and its command, exit status, stdout and stderr appended to the target's evidence store
+(octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr). Its result is then read
+from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
+the spec's, every output there), decision source the demo's checks, pass on exit status 0, else fail.
+The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
+A fresh, read-only qc judge
 (agents/qc-judge.md, headless through pi-role) gets a QC brief: judge the
 whole head against each named criterion of STATUS's spec, run each criterion's
 demo path, and report one pass or fail per criterion with the command and its
@@ -35,7 +43,8 @@ reads no Linear ticket; the sandbox proof fails if it is set.
   OCTO_FEATHER_QC_RO_BINDS, OCTO_FEATHER_QC_PATH  ":"-separated paths bound
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
-(judge's report, raw run, proof and cleanup).
+(judge's report, raw run, proof and cleanup; each demo's capture; `results`, one per criterion: verdict,
+evidence state, decision source, evidence record id, judged head).
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
@@ -44,15 +53,21 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time
+import fcntl, hashlib, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any, NoReturn
+
+Result = dict[str, Any]   # one claimed criterion's result (quality spec #qc-results)
 
 KIT = Path(__file__).resolve().parent.parent
 STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
+EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
+CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
+DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
 
 
-def die(code, msg):
+def die(code: int, msg: str) -> NoReturn:
     print(f"octo-feather-qc: {msg}", file=sys.stderr); sys.exit(code)
 
 
@@ -88,7 +103,7 @@ class _Text(HTMLParser):
             self.out[self.cur] += d
 
 
-def criteria_text(spec):
+def criteria_text(spec: Path) -> dict[str, str]:
     p = _Text(); p.feed(spec.read_text(encoding="utf-8"))
     return {k: " ".join(v.split()) for k, v in p.out.items()}
 
@@ -168,7 +183,8 @@ def oauth_warning():
     return None
 
 
-def sandboxed(judge, session, gh, history=True, kit=None):
+def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
+              kit: Path | None = None) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph)."""
@@ -266,6 +282,95 @@ def worktree_writes(upper):
     return [f"{k} {p}" for k, p in rel if p in tracked or (k == "new" and p not in ignored)]
 
 
+def contract_demos(root: str) -> dict[str, dict[str, Any]]:
+    """The demos the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec #qc-contract); none
+    without a qc.toml. A qc.toml octo-feather-contract refuses is refused here, before anything runs."""
+    path = Path(root) / "qc.toml"
+    if not path.is_file():
+        return {}
+    p = subprocess.run([str(CONTRACT_TOOL), str(path)], capture_output=True, text=True)
+    if p.returncode:
+        die(64, f"qc.toml is not a valid contract (octo-feather-contract); nothing ran:\n{(p.stderr or p.stdout).strip()}")
+    demos: dict[str, dict[str, Any]] = tomllib.loads(path.read_text(encoding="utf-8")).get("demo", {})
+    return demos
+
+
+def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: dict[str, str], stem: str, runid: str,
+            report_path: Path, *, nosb: bool) -> tuple[dict[str, Result], list[dict[str, Any]]]:
+    """Capture (quality spec #qc-capture), no model, deciding nothing: each declared demo run at HEAD in its own qc
+    sandbox, what it captured appended to the target's evidence store; then each result judged from its stored
+    record alone (judged). --no-sandbox: run with this shell's access, stored nowhere. Returns (results by id, captures)."""
+    root = git("rev-parse", "--show-toplevel")
+    done: dict[str, Result] = {}
+    caps: list[dict[str, Any]] = []
+    for n, i in enumerate(i for i in ids if i in demos):
+        cid, line = f"{stem}#{i}", str(demos[i]["command"])
+        cmd = ["env", f"QC_REPO={root}", "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
+        print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
+        run: subprocess.CompletedProcess[str] | None
+        sandbox: dict[str, Any] | bool
+        if nosb:
+            run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
+        else:
+            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"})
+            assert isinstance(sandbox, dict)
+            sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
+        rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
+        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox})
+        if run is None:
+            report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
+            die(66, f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})")
+        if nosb:
+            done[i] = {"id": i, "verdict": "pass" if rc == 0 else "fail", "command": line, "exit": rc, "output": tail(run.stdout + run.stderr),
+                       "why": f"demo exit status {rc}", "evidence": "unrecorded (--no-sandbox)", "decision": "demo checks", "record": None, "head": head}
+            continue
+        with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
+            for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
+                Path(d, name).write_text(body)
+            p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
+                                "--outputs", d], capture_output=True, text=True)
+        if p.returncode:
+            report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
+            die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
+        caps[-1]["record"] = rid = p.stdout.strip()
+        done[i] = judged(i, cid, rid, head, text[i], root)
+    bad = [f"{r['id']} (record {r['record']}): {'; '.join(r['missing'])}" for r in done.values() if r["evidence"] == "incomplete"]
+    if bad:
+        report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps,
+                                           "results": list(done.values())}, indent=2))
+        die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
+    return done, caps
+
+
+def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Result:
+    """One criterion's result from its stored record alone (quality spec #qc-judgment): its evidence state, complete
+    or incomplete naming what is missing, then the demo's checks, which its exit status reports."""
+    p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", head, "--json"],
+                       capture_output=True, text=True)
+    found: list[Any] = [x for x in json.loads(p.stdout) if x["record"]["id"] == rid] if p.returncode == 0 else []
+    res: Result = {"id": i, "evidence": "incomplete", "decision": "demo checks", "record": rid, "head": head}
+    if not found:
+        return res | {"missing": [f"record not in the store at {head[:12]} ({p.stderr.strip() or 'no match'})"]}
+    r: dict[str, Any] = found[0]["record"]
+    d = Path(found[0]["dir"]) / "outputs"
+    missing = [m for m, bad in (
+        (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
+        ("captured from a dirty worktree", r["dirty"]),
+        ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
+        (f"outputs missing: {' '.join(o for o in DEMO_OUTPUTS if o not in r['outputs'])}", any(o not in r["outputs"] for o in DEMO_OUTPUTS)),
+    ) if bad]
+    if missing:
+        return res | {"missing": missing}
+    rc = int((d / "demo.exit").read_text())
+    return res | {"verdict": "pass" if rc == 0 else "fail", "command": (d / "demo.cmd").read_text().rstrip("\n"), "exit": rc,
+                  "output": tail((d / "demo.stdout").read_text() + (d / "demo.stderr").read_text()),
+                  "why": f"demo exit status {rc}", "evidence": "complete"}
+
+
+def tail(out: str, lines: int = 40) -> str:
+    return "\n".join(out.splitlines()[-lines:])[-4000:]
+
+
 def gate_free():
     """Never inside a check run, whatever pi the judge would launch."""
     p = subprocess.run([str(KIT / "scripts" / "check-gate-free"), "--refuse", "the product judge (octo-feather-qc)"],
@@ -274,7 +379,7 @@ def gate_free():
         die(70, "refused inside just check, which stays deterministic and free (message above)")
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     gate_free()
     flags = {"--no-sandbox", "--no-github"}
     nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
@@ -299,10 +404,13 @@ def main(argv):
     missing = [i for i in ids if not text.get(i)]
     if missing:
         die(64, f"no criterion text in {spec}: {' '.join(missing)}")
+    stem = spec.name.removesuffix(".spec.html")
+    declared = contract_demos(git("rev-parse", "--show-toplevel"))
+    demos = {i: declared[f"{stem}#{i}"] for i in ids if f"{stem}#{i}" in declared}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")
-    if model.split("/")[0] == impl.split("/")[0]:
+    if len(demos) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
     runid = secrets.token_hex(3)
@@ -313,24 +421,33 @@ def main(argv):
     killed.once = False
     for s in (signal.SIGTERM, signal.SIGHUP):
         signal.signal(s, killed)
-    gh = {}
+    gh: dict[str, Any] = {}
     try:
-        gh = github_snapshot(nogh, runid)
+        gh = github_snapshot(nogh, runid) if len(demos) < len(ids) else {"off": "github: none (every criterion has a declared demo: no judge)"}
         print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
-        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb)
+        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, nosb=nosb)
     finally:
         if "dir" in gh:
             drop(gh["dir"])
 
 
-def judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb):
+def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], spec: Path, text: dict[str, str], model: str,
+          runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, *, nosb: bool) -> int:
+    rest = [i for i in ids if i not in demos]   # no declared demo: the agent judge's
     brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh),
-                         criteria="\n".join(f"- {i}: {text[i]}" for i in ids))
+                         criteria="\n".join(f"- {i}: {text[i]}" for i in rest))
     cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
+    done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
+    if not rest:
+        try:
+            return settle(status, pr, ids, head, data, done, {"head": head, "ids": ids, "run_id": runid, "sandbox": not nosb,
+                                                              "captures": caps}, report_path, 0, nosb=nosb)
+        finally:
+            restore(status)
     t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
@@ -350,17 +467,24 @@ def judge(status, pr, ids, head, data, spec, text, model, runid, gh, nosb):
             die(66, f"sandbox proof failed or sandbox unavailable; judge not started (report {report_path})")
         ghrec["misses"] = sandbox.get("gh_miss_log", [])
     nmiss = len(ghrec["misses"])
-    raw = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "gh_misses": nmiss, "sandbox": sandbox,
+    raw: dict[str, Any] = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "gh_misses": nmiss, "sandbox": sandbox,
            "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    if caps:
+        raw["captures"] = caps
     try:   # from here on the judge has run: never leave the status file modified and uncommitted
-        return verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss)
+        return verdict(status, pr, ids, head, data, run, raw, report_path, nmiss, done, nosb=nosb)
     finally:
-        if git("status", "--porcelain", "--", str(status)):
-            git("checkout", "HEAD", "--", str(status))
-            print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
+        restore(status)
 
 
-def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss):
+def restore(status: Path) -> None:
+    if git("status", "--porcelain", "--", str(status)):
+        git("checkout", "HEAD", "--", str(status))
+        print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
+
+
+def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], run: subprocess.CompletedProcess[str],
+            raw: dict[str, Any], report_path: Path, nmiss: int, done: dict[str, Result], *, nosb: bool) -> int:
     sandbox = raw["sandbox"]
     if sandbox:
         upper = sandbox.pop("upper", [])
@@ -381,7 +505,8 @@ def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss):
         twice = sorted({i for i in named if named.count(i) > 1})
         assert not twice, f"judged more than once: {' '.join(map(str, twice))}"
         verdicts = {c["id"]: c for c in rep["criteria"]}
-        assert sorted(verdicts) == sorted(ids), f"ids {sorted(verdicts)} != {sorted(ids)}"
+        rest = [i for i in ids if i not in done]
+        assert sorted(verdicts) == sorted(rest), f"ids {sorted(verdicts)} != {sorted(rest)}"
         for c in verdicts.values():
             assert c.get("verdict") in ("pass", "fail"), f"{c.get('id')}: verdict {c.get('verdict')!r}"
             assert c.get("command") and "output" in c, f"{c['id']}: needs command and output"
@@ -389,13 +514,23 @@ def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss):
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"judge report unusable ({e}); raw run in {report_path}")
     raw["report"] = rep
+    for c in verdicts.values():   # the agent judge's results: no evidence record yet (#407 stores its report as one)
+        c.update(evidence=None, decision="agent judge", record=None, head=head)
+    return settle(status, pr, ids, head, data, verdicts | done, raw, report_path, nmiss, nosb=nosb)
+
+
+def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], verdicts: dict[str, Result], raw: dict[str, Any],
+           report_path: Path, nmiss: int, *, nosb: bool) -> int:
+    """One result per claimed criterion (quality spec #qc-results) into the report, then, sandboxed, the status file:
+    passed built, failed planned, one status-only commit."""
+    raw["results"] = [verdicts[i] for i in ids]
     report_path.write_text(json.dumps(raw, indent=2))
 
     passed = [i for i in ids if verdicts[i]["verdict"] == "pass"]
     failed = [i for i in ids if i not in passed]
     if nosb:
         for i in ids:
-            print(f"{verdicts[i]['verdict'].upper()} {i}: $ {verdicts[i]['command']}")
+            print(f"{verdicts[i]['verdict'].upper()} {i}: $ {verdicts[i]['command']}\n  {decided(verdicts[i])}")
         print(f"qc: UNSANDBOXED, {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; status file not changed; report {report_path}")
         return 1
     for i in passed:
@@ -414,9 +549,14 @@ def verdict(status, pr, ids, head, data, run, raw, report_path, nosb, nmiss):
             die(3, f"status commit failed ({(e.stderr or '').strip()[:300]}); report {report_path}")
     for i in ids:
         v = verdicts[i]
-        print(f"{v['verdict'].upper()} {i}: $ {v['command']}\n  {v.get('why', '')}")
+        print(f"{v['verdict'].upper()} {i}: $ {v['command']}\n  {v.get('why', '')}\n  {decided(v)}")
     print(f"qc: {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; head now {git('rev-parse', 'HEAD')[:12]}; report {report_path}")
     return 0 if not failed else 1
+
+
+def decided(v: Result) -> str:
+    """The result's evidence state, decision source and record, as the report line shows them."""
+    return f"evidence {v['evidence'] or 'none'}; decision {v['decision']}; record {v['record'] or 'none'}"
 
 
 if __name__ == "__main__":
