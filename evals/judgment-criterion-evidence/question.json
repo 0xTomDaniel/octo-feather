@@ -1,0 +1,13 @@
+{
+ "id": "e-criterion-evidence",
+ "question": "Does this evidence (the command run and its output) show this acceptance criterion met?",
+ "labels": [
+  "shows",
+  "does-not-show"
+ ],
+ "label_help": {
+  "shows": "the output itself shows the criterion's observable outcome for its scenario: the behaviour, message or state the criterion names is visible in what the command printed; where the criterion asks for proof by an integration test, that test passing counts",
+  "does-not-show": "the output is a failure, an error before the behaviour ran, a different or partial behaviour, a launch or setup check only, missing history, or only a summary line claiming the behaviour where the criterion asks for the behaviour itself"
+ },
+ "state_shape": "Criterion <spec>#<anchor>: the criterion's text from the spec at the judged head, then Command: the command run, then Output: its output as recorded (a qc result's output: a demo's stdout and stderr tail, or the agent judge's trimmed output); never the verdict, its why, or the exit status"
+}

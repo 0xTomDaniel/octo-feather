@@ -1,0 +1,44 @@
+#!/usr/bin/env python3
+"""Stub `pi` at the classifier boundary, put first on PATH by a test or a verify drive: `pi --version` exits 0, and an
+extension command (`pi ... -e EXT -p "/cmd args"`, the kit's one classify path) runs for real under node with a stub
+model registry listing one classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json).
+Its every answer is STUB_ANSWER at confidence STUB_CONFIDENCE (default 0.91), the rest spread over the other labels;
+STUB_ANSWER unset: each call fails with a provider error. STUB_WANT: a state not containing it is refused with an
+error naming it (the caller's proof of what the classifier was shown). Anything else exits 2. As pi's print mode, an
+extension's process.stdout goes to stderr."""
+import json, os, subprocess, sys
+from pathlib import Path
+
+a = sys.argv[1:]
+if a == ["--version"]:
+    sys.exit(0)
+if "-p" not in a or "-e" not in a or not a[a.index("-p") + 1].startswith("/"):
+    sys.exit(f"stub pi: only an extension command, got {a}")
+kit_model = os.environ.get("STUB_KIT") or json.loads((Path(__file__).resolve().parents[3] / "evals" / "judgment-model.json").read_text())["model"]
+name, _, args = a[a.index("-p") + 1][1:].partition(" ")
+harness = """import {pathToFileURL} from "node:url";
+const [ext, name, args, kit] = process.argv.slice(1);
+const cmds = {};
+(await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
+const cut = kit.indexOf("/");
+const models = [{type: "classifier", provider: kit.slice(0, cut), id: kit.slice(cut + 1), name: kit, api: "stub", input: ["text"]}];
+const answer = process.env.STUB_ANSWER, want = process.env.STUB_WANT, conf = Number(process.env.STUB_CONFIDENCE || "0.91");
+const modelRegistry = {
+  getAvailableOfType: async (type) => (type === "classifier" ? models : []),
+  classify: async (m, {state, questions}) => {
+    const out = {provider: m.provider, model: m.id, usage: {input: 100, output: 2, totalTokens: 102, cost: {total: 0.0001}}};
+    if (!answer) return {...out, answers: {}, stopReason: "error", errorMessage: "stub: provider error"};
+    if (want !== undefined && !state.includes(want)) return {...out, answers: {}, stopReason: "error", errorMessage: "stub: state lacks " + JSON.stringify(want)};
+    const answers = {};
+    for (const [k, q] of Object.entries(questions)) {
+      const L = Object.keys(q.criteria);
+      answers[k] = {type: "choice", choice: answer, confidence: conf,
+                    probabilities: Object.fromEntries(L.map((l) => [l, l === answer ? conf : (1 - conf) / (L.length - 1)]))};
+    }
+    return {...out, answers, stopReason: "stop"};
+  },
+};
+process.stdout.write = process.stderr.write.bind(process.stderr);
+await cmds[name].handler(args, {mode: "print", hasUI: false, modelRegistry});
+"""
+sys.exit(subprocess.run(["node", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args, kit_model]).returncode)

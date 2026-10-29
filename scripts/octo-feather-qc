@@ -11,7 +11,8 @@ headless Chromium shell at the contract's [browser] playwright pin where `just i
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there), decision source the demo's checks, pass on exit status 0, else fail.
-The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
+The criteria with no declared demo go to the judge below; with none left, no judge and no agent run.
+Each result with a record then gets the kit's judgment model's advisory answer (advise; no gate reads it).
 A fresh, read-only qc judge
 (agents/qc-judge.md, headless through pi-role) gets a QC brief: judge the
 whole head against each named criterion of STATUS's spec, run each criterion's
@@ -47,7 +48,8 @@ reads no Linear ticket; the sandbox proof fails if it is set.
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (judge's report, raw run, proof and cleanup; each demo's capture; `results`, one per criterion: verdict,
-evidence state, decision source, evidence record id, judged head).
+evidence state, decision source, evidence record id, judged head, and with a record `advisory`: the model's answer and
+confidence, or unavailable with why).
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
@@ -56,7 +58,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import base64, fcntl, hashlib, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib
+import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
@@ -401,6 +403,72 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
                   "why": f"demo exit status {rc}", "evidence": "complete"}
 
 
+ADVICE = "criterion-evidence"   # the closed question each recorded result gets (judgment spec #question-criterion-evidence)
+
+
+def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str, runid: str) -> None:
+    """Each result with an evidence record gets the kit's one judgment model's answer to one closed question, whether this
+    evidence shows this criterion, given the criterion's text and the record's command and output (quality spec
+    #qc-judgment), asked through octo-feather-qa's classify path, the bench's and `octo-feather-lane judge`'s (one
+    mechanism). Advisory (judgment spec #rule-advisory): stored beside the result as `advisory`, never read to decide it;
+    any failure to get an answer shows as unavailable with its reason and changes nothing else."""
+    ids = [i for i, r in done.items() if r.get("record") and r.get("evidence") == "complete"]
+    if not ids:
+        return
+    loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
+    spec = importlib.util.spec_from_loader("octo_feather_qa", loader)
+    assert spec is not None
+    qa = importlib.util.module_from_spec(spec)
+    loader.exec_module(qa)
+    base: dict[str, Any] = {"judgment": qa.JUDGMENT, "question": ADVICE, "model": None}
+    try:   # every error here is the advice's, never the result's: shown as unavailable
+        got, why = ask(qa, base, ids, [f"Criterion {stem}#{i}: {text[i]}\nCommand: {done[i]['command']}\nOutput:\n{done[i]['output']}"
+                                       for i in ids], f"qc-{head[:12]}-{runid}-advice")
+    except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.SubprocessError) as e:
+        got, why = {}, f"{type(e).__name__}: {e}"
+    for i in ids:
+        done[i]["advisory"] = base | got.get(i, {"unavailable": why})
+
+
+def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list[str], session: str) -> tuple[dict[str, dict[str, Any]], str]:
+    """The kit's judgment model (into BASE) asked the ADVICE question on each state by qa's classify: ({id: answer and
+    confidence, or unavailable with the classifier's error}, why an id has no entry)."""
+    d = KIT / "evals" / f"judgment-{ADVICE}"
+    q, suite = (json.loads((d / f).read_text()) for f in ("question.json", "suite.json"))
+    labels: list[str] = q["labels"]
+    base.update(model=(model := qa.judgment_model(KIT / "evals")), calibration=suite.get("calibration"))
+    inp = {"question": q["question"], "labels": labels, "criteria": {lb: q["label_help"][lb] for lb in labels},
+           "cases": [{"id": i, "state": st} for i, st in zip(ids, states, strict=True)], "classifiers": [model]}
+    print(f"qc: advisory {ADVICE} question to {model} for {len(ids)} recorded criteria (no gate reads it)", file=sys.stderr)
+    bench, _, _, problem = qa.classify(sys.modules[__name__], inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), session, purpose="judge")
+    if problem:
+        return {}, str(problem)
+    if model not in (bench.get("benched") or []):
+        return {}, f"{model} not an available classifier (available: {', '.join(bench.get('available') or []) or 'none'})"
+    errors: list[str] = bench.get("errors") or []
+    rows: list[list[Any]] = bench.get("rows") or []   # each [model, case, choice, probabilities in label order, cost, error index]
+    got: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        ci: int = row[1]
+        choice: Any = row[2]
+        ei: int | None = row[5]
+        probs: list[Any] = row[3] or [None] * len(labels)
+        got[ids[ci]] = ({"answer": choice, "confidence": probs[labels.index(choice)]} if choice in labels else
+                        {"unavailable": errors[ei] if ei is not None else f"answer {choice!r} is not one of {labels}"})
+    return got, "no answer"
+
+def advised(a: dict[str, Any]) -> str:
+    """The advisory line shown beside a result."""
+    by = f"{a['question']} by {a['model'] or 'the kit judgment model'}"
+    if "unavailable" in a:
+        return f"advisory model judgment unavailable ({by}): {a['unavailable']}; the result stands as decided"
+    c = a["confidence"]
+    cal = "uncalibrated" if not a.get("calibration") else ("threshold accepted" if a["calibration"]["threshold"]["accepted"] is True
+                                                       else "threshold proposed, not accepted")
+    return (f"advisory model judgment (no gate reads it): {a['answer']}, confidence "
+            f"{f'{c:.3f}' if isinstance(c, (int, float)) else 'unreported'} ({by}; {cal})")
+
+
 def tail(out: str, lines: int = 40) -> str:
     return "\n".join(out.splitlines()[-lines:])[-4000:]
 
@@ -476,6 +544,7 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
+    advise(done, text, stem, head, runid)
     if not rest:
         try:
             return settle(status, pr, ids, head, data, done, {"head": head, "ids": ids, "run_id": runid, "sandbox": not nosb,
@@ -590,7 +659,8 @@ def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any
 
 def decided(v: Result) -> str:
     """The result's evidence state, decision source and record, as the report line shows them."""
-    return f"evidence {v['evidence'] or 'none'}; decision {v['decision']}; record {v['record'] or 'none'}"
+    return f"evidence {v['evidence'] or 'none'}; decision {v['decision']}; record {v['record'] or 'none'}" + (
+        f"\n  {advised(v['advisory'])}" if v.get("advisory") else "")
 
 
 if __name__ == "__main__":

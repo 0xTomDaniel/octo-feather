@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -990,6 +990,66 @@ def drive_qc_browser(f: Feature) -> None:
     say(f"qc-browser evidence: {f.d}")
 
 
+def drive_qc_advisory(f: Feature) -> None:
+    """`just qc` on a scratch target whose qc.toml declares a passing demo, with the classifier boundary stubbed (the
+    kit's tests/fixtures/classify-stub/pi first on PATH, never a real model): the kit's judgment model is induced to
+    answer does-not-show; the criterion still passes, its advisory answer and confidence shown beside it and in the report."""
+    v = f.s.contract.values
+    if "qc_demo_pass" not in v:
+        die("qc.toml [values] needs qc_demo_pass: the qc-advisory drive's scratch demo")
+    sc = RUN_DIR / "scratch" / "qc-advisory"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (sc / "state").mkdir()
+    (sc / "bin").mkdir()
+    (sc / "bin" / "pi").symlink_to(Path(f.s.repo) / "tests" / "fixtures" / "classify-stub" / "pi")
+    model = json.loads((Path(f.s.repo) / "evals" / "judgment-model.json").read_text())["model"]
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)   # qc commits the status file in this repo
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-advisory: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+                               f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(v["qc_demo_pass"])}\ncovers = ["docs/specs"]\ntests = ["none"]\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract with a passing demo")
+    head = git("rev-parse", "HEAD")
+    # Scratch box state; the stub classifier first on the qc sandbox's PATH (OCTO_FEATHER_QC_PATH: the kit justfile puts
+    # ~/.local/bin, the box's real pi, before a caller's PATH), induced to answer does-not-show at 0.91.
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "STUB_ANSWER": "does-not-show", "STUB_CONFIDENCE": "0.91"}
+    f.pre = ["env", "-C", str(r)]
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.pre = []
+    reports = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{head}-*.json"))
+    f.obs("qc", "results", json.dumps(json.loads(reports[-1].read_text()).get("results") if reports else None, indent=1) + "\n")
+    st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
+    f.obs("qc", "built", f"{st['acceptance-a']['status']}\n")
+    line = (r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record [0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\n"
+            r"  advisory model judgment \(no gate reads it\): does-not-show, confidence 0\.910 \(criterion-evidence by " + re.escape(model) + r"; [^)]+\)$")
+
+    def holds(c: Case) -> bool:
+        res: list[dict[str, Any]] = json.loads(c.o["results"]) or [{}]
+        a: dict[str, Any] = res[0].get("advisory") or {}
+        return (c.code == 0 and re.search(line, c.out) is not None and c.o["built"] == "built\n" and res[0].get("verdict") == "pass"
+                and (a.get("answer"), a.get("confidence"), a.get("model")) == ("does-not-show", 0.91, model)
+                and str(a.get("judgment", "")).startswith("model judgment") and "no gate reads it" in a["judgment"])
+    f.check("qc", holds)
+    f.env = {}
+    say(f"qc-advisory evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -1002,6 +1062,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
+    "qc-advisory": drive_qc_advisory,
 }
 
 
