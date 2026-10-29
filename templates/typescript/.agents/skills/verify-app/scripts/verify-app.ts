@@ -44,6 +44,11 @@ const BASE = path.join(envOr("TMPDIR", "/tmp"), `${ME}.${String(process.getuid?.
 const RUN_DIR = envOr("VERIFY_APP_RUN_DIR", path.join(BASE, "run"));
 const EVIDENCE_DIR = envOr("VERIFY_APP_EVIDENCE_DIR", path.join(BASE, "evidence"));
 const STATE = path.join(RUN_DIR, "state");
+// The default folders sit in the shared temp dir under a predictable name, so each is used only when
+// it is private: a real directory (never a symlink), owned by this user, writable by no one else.
+// An absent one is made 0700. A folder set by VERIFY_APP_RUN_DIR or VERIFY_APP_EVIDENCE_DIR is the
+// caller's choice and is used as given.
+const DEFAULTS = [RUN_DIR, EVIDENCE_DIR].filter((dir) => path.dirname(dir) === BASE);
 
 function say(msg: string): void {
   process.stdout.write(`${ME}: ${msg}\n`);
@@ -58,8 +63,34 @@ function now(): string {
   return new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 
+/** Refuse a default folder that is not this user's private directory; make it when absent. */
+function privateDir(dir: string, create: boolean): void {
+  let info = fs.lstatSync(dir, { throwIfNoEntry: false });
+  if (info === undefined) {
+    if (!create) return;
+    try {
+      fs.mkdirSync(dir, { mode: 0o700 });
+      info = fs.lstatSync(dir);
+    } catch (e) {
+      die(`cannot make private folder ${dir}: ${String(e)}`);
+    }
+  }
+  if (!info.isDirectory()) die(`${dir} is not a real directory (a symlink or file); it is not yours to trust: remove it`);
+  if (info.uid !== process.getuid?.()) die(`${dir} is owned by uid ${String(info.uid)}, not you; remove it (or set VERIFY_APP_*_DIR)`);
+  if ((info.mode & 0o022) !== 0) {
+    die(`${dir} is writable by others (mode ${(info.mode & 0o777).toString(8)}); fix: chmod 700 ${dir}`);
+  }
+}
+
+/** BASE and each default folder in it: checked if present, made private if absent. */
+function secureDefaults(): void {
+  if (DEFAULTS.length > 0) privateDir(BASE, true);
+  for (const dir of DEFAULTS) privateDir(dir, false);
+}
+
 /** Prove a folder is writable by writing to it; `test -w` lies under some sandboxes. */
 function writable(dir: string): boolean {
+  if (DEFAULTS.includes(dir)) privateDir(dir, true);
   try {
     fs.mkdirSync(dir, { recursive: true });
     const probe = path.join(dir, `.verify-app-probe.${String(process.pid)}`);
@@ -440,6 +471,7 @@ function cmdRun(): number {
 }
 
 function main(argv: string[]): number {
+  secureDefaults();
   switch (argv[0]) {
     case "setup":
       cmdSetup();

@@ -1,7 +1,12 @@
 {
+  // tsc checks exactly these files, and eslint (`eslint .`) the same tree; scripts/check-languages.ts fails when scc
+  // finds tracked TypeScript or JavaScript tsc's list misses. tsc's wildcards skip dot directories and dotfiles, so
+  // those are named. allowJs and checkJs: the tooling JavaScript is checked too.
   "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node22/tsconfig.json"],
   "compilerOptions": {
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
@@ -9,5 +14,5 @@
     "moduleResolution": "nodenext",
     "types": ["node"]
   },
-  "include": ["src", "tests", ".agents/skills/verify-app/scripts"]
+  "include": ["src", "tests", "scripts", ".agents/skills/verify-app/scripts", "eslint.config.js", ".dependency-cruiser.cjs"]
 }

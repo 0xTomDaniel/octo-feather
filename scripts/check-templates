@@ -1,0 +1,200 @@
+#!/usr/bin/env python3
+"""Check each starter template under templates/ (`just check-templates`, in the kit's gate).
+
+  check-templates [KIT_ROOT]
+
+Per template: AGENTS.md has a `Repo skills:` line; its justfile (just's own JSON dump) has check,
+integrate and qc recipes, and its gate reaches check-languages (GATE_RECIPES, or a dependency of
+check); .githooks/pre-commit, run in a throwaway copy with a recording `just` first on PATH, calls
+exactly `just check` once and exits 0 when just does and non-zero when just fails (the rule run,
+not its text; whether CI runs the gate is review's and the repo's real CI's call); it
+pins its native tools with mise (mise.toml, mise.lock, mise-version), mise-version is the kit's,
+and each tool it shares with the kit's mise.toml has the kit's version (one version on the box:
+the kit runs just in every repo it created). templates/python's tests/conftest.py and
+scripts/check-languages are byte copies of the kit's (the kit owns them). Whether each
+template's own gate covers its languages is that template's check-languages, run in a created
+repo (tests/template-languages.sh).
+Exit: 0 all templates pass, 1 the first failure, named with its fix.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+from typing import cast
+
+import tomllib
+
+# templates/python copies this kit file byte for byte (kit path: template path).
+COPIES = {
+    "tests/gate/conftest.py": "tests/conftest.py",
+    "scripts/check-languages": "scripts/check-languages",
+}
+MISE_FILES = ("mise.toml", "mise.lock", "mise-version")
+# A `just` first on PATH for the hook run: records each call's argv, exits with RECORD_EXIT.
+RECORDER = """#!/bin/sh
+for a in "$@"; do printf '%s\\037' "$a"; done >>"$RECORD_LOG"
+printf '\\n' >>"$RECORD_LOG"
+exit "$RECORD_EXIT"
+"""
+
+
+class TemplateError(Exception):
+    """A template fails a rule; the message names the file and the fix."""
+
+
+def run_hook(template: Path, tmp: Path, just_exit: int) -> tuple[int, list[list[str]]]:
+    """The template's .githooks/pre-commit run in a throwaway copy of its tracked files, a recording
+    `just` first on PATH exiting just_exit: the hook's exit and each just call's argv."""
+    repo = tmp / f"repo{just_exit}"
+    git = shutil.which("git")
+    if git is None:
+        msg = "git: missing executable"
+        raise TemplateError(msg)
+    listed = subprocess.run(
+        [git, "-C", str(template), "ls-files", "-z"], capture_output=True, text=True, check=False
+    )
+    if listed.returncode:
+        msg = f"{template}: git ls-files failed: {listed.stderr.strip()}"
+        raise TemplateError(msg)
+    for name in filter(None, listed.stdout.split("\0")):
+        if not (template / name).is_symlink() and not (template / name).exists():
+            continue  # tracked but deleted in the worktree: the pin checks below name it
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(template / name, repo / name, follow_symlinks=False)
+    bin_dir = tmp / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    recorder = bin_dir / "just"
+    recorder.write_text(RECORDER, encoding="utf-8")
+    recorder.chmod(0o755)
+    log = tmp / f"calls{just_exit}"
+    log.touch()
+    env = dict(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        RECORD_LOG=str(log),
+        RECORD_EXIT=str(just_exit),
+    )
+    hook = repo / ".githooks/pre-commit"
+    try:
+        r = subprocess.run([hook], cwd=repo, env=env, capture_output=True, timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        msg = f"{template}/.githooks/pre-commit cannot run: {e}"
+        raise TemplateError(msg) from e
+    lines = log.read_text(encoding="utf-8").splitlines()
+    return r.returncode, [line.split("\x1f")[:-1] for line in lines]
+
+
+def check_hook(template: Path) -> None:
+    """The hook runs the gate: exactly one call, `just check`, and the hook's exit follows it."""
+    hook = template / ".githooks/pre-commit"
+    fix = f"{hook} must run `just check` and exit with its status (e.g. `exec just check`)"
+    if not os.access(hook, os.X_OK):
+        msg = f"{hook} is not executable; {fix}"
+        raise TemplateError(msg)
+    with tempfile.TemporaryDirectory() as tmp:
+        ok_exit, ok_calls = run_hook(template, Path(tmp), 0)
+        bad_exit, bad_calls = run_hook(template, Path(tmp), 1)
+    if ok_calls != [["check"]] or bad_calls != [["check"]]:
+        msg = f"{fix}; it called just {ok_calls or 'never'}"
+        raise TemplateError(msg)
+    if ok_exit != 0 or bad_exit == 0:
+        got = f"with just exiting 0 it exited {ok_exit}, with just exiting 1 it exited {bad_exit}"
+        msg = f"{fix}; {got}"
+        raise TemplateError(msg)
+
+
+def dump(template: Path) -> dict[str, object]:
+    just = shutil.which("just")
+    if just is None:
+        msg = "just: missing executable; install the kit's tools: mise install --locked"
+        raise TemplateError(msg)
+    result = subprocess.run(
+        [just, "--dump", "--dump-format", "json"],
+        cwd=template,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode:
+        msg = f"{template}/justfile: just cannot read it: {result.stderr.strip()}"
+        raise TemplateError(msg)
+    return cast("dict[str, object]", json.loads(result.stdout))
+
+
+def check_wiring(template: Path) -> None:
+    agents = (template / "AGENTS.md").read_text(encoding="utf-8")
+    if not re.search(r"^Repo skills:", agents, re.MULTILINE):
+        msg = f"{template}/AGENTS.md lacks a 'Repo skills:' line"
+        raise TemplateError(msg)
+    data = dump(template)
+    recipes = cast("dict[str, dict[str, object]]", data["recipes"])
+    if not {"check", "integrate", "qc"} <= recipes.keys():
+        msg = (
+            f"{template}/justfile needs check, integrate and product-judge recipes (docs/adr/0022)"
+        )
+        raise TemplateError(msg)
+    check_hook(template)
+    assignments = cast("dict[str, dict[str, object]]", data["assignments"])
+    gate = set(str(assignments.get("GATE_RECIPES", {}).get("value", "")).split())
+    deps = cast("list[dict[str, object]]", recipes["check"].get("dependencies") or [])
+    gate |= {str(d["recipe"]) for d in deps}
+    if "check-languages" not in gate:
+        msg = (
+            f"{template}/justfile: the gate never runs check-languages; add it to GATE_RECIPES"
+            " or as a dependency of check"
+        )
+        raise TemplateError(msg)
+
+
+def check_pins(kit: Path, template: Path) -> None:
+    for name in MISE_FILES:
+        if not (template / name).is_file():
+            msg = f"{template}/{name} is missing: a repo the kit creates pins its tools with mise"
+            raise TemplateError(msg)
+    want = (kit / "mise-version").read_text(encoding="utf-8").strip()
+    got = (template / "mise-version").read_text(encoding="utf-8").strip()
+    if got != want:
+        msg = f"{template}/mise-version is {got}, the kit's is {want}: one mise; set {want}"
+        raise TemplateError(msg)
+    kit_tools = tomllib.loads((kit / "mise.toml").read_text(encoding="utf-8")).get("tools", {})
+    tools = tomllib.loads((template / "mise.toml").read_text(encoding="utf-8")).get("tools", {})
+    for tool, version in tools.items():
+        if tool in kit_tools and kit_tools[tool] != version:
+            fix = f"set {tool} = {kit_tools[tool]!r} there, then mise lock"
+            msg = f"{template}/mise.toml pins {tool} {version}, the kit {kit_tools[tool]}: {fix}"
+            raise TemplateError(msg)
+
+
+def check_copies(kit: Path, template: Path) -> None:
+    for source, copy in COPIES.items():
+        if (kit / source).read_bytes() != (template / copy).read_bytes():
+            fix = f"cp {source} {template}/{copy}"
+            msg = f"{template}/{copy} differs from the kit's {source}; fix: {fix}"
+            raise TemplateError(msg)
+
+
+def main(argv: list[str]) -> int:
+    kit = Path(argv[0] if argv else ".").resolve()
+    templates = sorted(path for path in (kit / "templates").iterdir() if path.is_dir())
+    try:
+        for template in templates:
+            check_wiring(template)
+            check_pins(kit, template)
+            if template.name == "python":
+                check_copies(kit, template)
+    except (TemplateError, OSError, KeyError, tomllib.TOMLDecodeError) as error:
+        sys.stderr.write(f"check-templates: {error}\n")
+        return 1
+    sys.stdout.write(f"templates: ok ({len(templates)})\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

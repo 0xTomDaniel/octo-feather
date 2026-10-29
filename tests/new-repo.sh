@@ -10,6 +10,9 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
 fail() { echo "new-repo test: $*" >&2; exit 1; }
 export HOME="$t/home" XDG_STATE_HOME="$t/state" XDG_CONFIG_HOME="$t/config" GIT_CONFIG_NOSYSTEM=1
+# mise (new-repo trusts the created mise.toml): its trust store and cache in this test's dirs, never the box's
+# (the kit justfile keeps a caller's MISE_* dirs).
+export MISE_STATE_DIR="$t/state/mise" MISE_CACHE_DIR="$t/mise-cache"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 mkdir -p "$HOME" "$t/work"
 
@@ -53,6 +56,10 @@ for lang in "${langs[@]}"; do
     [[ -z "$(git -C "$d" status --porcelain)" ]] || fail "$lang-$mode: git status not clean: $(git -C "$d" status --porcelain)"
     [[ -z "$(git -C "$d" config --get core.hooksPath || true)" ]] || fail "$lang-$mode: set core.hooksPath (that is just setup's job)"
     grep -q 'just setup' <<<"$out" && grep -q 'gh repo create' <<<"$out" || fail "$lang-$mode: next steps not printed: $out"
+    # #261: mise trusts exactly the created repo's mise.toml (that file, nothing else).
+    grep -qF 'mise.toml trusted (that file only)' <<<"$out" || fail "$lang-$mode: mise.toml trust not reported: $out"
+    trusted="$(cd "$d" && mise trust --show 2>&1)"
+    grep -qxF "$d: trusted" <<<"$trusted" || fail "$lang-$mode: mise does not trust $d/mise.toml: $trusted"
     if [[ "$mode" == links ]]; then
       for s in spec-chat-shape spec-chat-review repair-specs; do
         [[ -L "$d/.agents/skills/$s" ]] || fail "$lang: missing Spec Chat link $s"
