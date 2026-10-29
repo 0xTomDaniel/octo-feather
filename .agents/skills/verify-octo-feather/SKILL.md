@@ -10,10 +10,10 @@ The kit is a target of its own lanes (quality spec `#verify-skill-what`). Its us
 Helper (an executable Python script, `python3` 3.11+, standard library only: `tomllib` reads the contract):
 
 ```
-.agents/skills/verify-octo-feather/scripts/verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
+.agents/skills/verify-octo-feather/scripts/verify-octo-feather launch|doctor|drive <feature>|cleanup|run [--unreachable-exit N] [feature]
 ```
 
-`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed or, for a `PASS-with-unreachable` drive, every case but the named unreachable steps passed.
+`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed or, for a `PASS-with-unreachable` drive, every case but the named unreachable steps passed. With `--unreachable-exit N`, a `PASS-with-unreachable` run exits N instead and prints its `UNREACHABLE` lines last on stderr: the kit's `qc.toml` demos pass 77, which `just qc` reads as a demo that did not run to its end (`schemas/qc.v1.schema.json`, demo `command`).
 
 ## Contract
 
