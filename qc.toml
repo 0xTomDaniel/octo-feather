@@ -53,6 +53,11 @@ browser = true
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
 tests = ["tests/qc-browser.sh"]
 
+[demo."quality#acceptance-qc-advisory"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-advisory"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]
+tests = ["tests/qc-advisory.sh"]
+
 [demo."quality#acceptance-qc-fallback"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-fallback"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]

@@ -25,7 +25,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-browser`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-browser/`.
 
-The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, a `page.html`, a `qc.toml` with the kit's `[browser]` pin and one browser demo, `values.qc_demo_browser`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-browser/state`).
+The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, a `page.html`, a `qc.toml` with the kit's `[browser]` pin and one browser demo, `values.qc_demo_browser`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-browser/state`); the classifier faked (SKILL.md), so the advisory line says unavailable.
 
 - **Capture** (`qc`). In the scratch target, run `just --justfile <kit>/justfile qc docs/specs/demo.status.json 7 acceptance-a`. Observe exit 0, `PASS acceptance-a` with `evidence complete; decision demo checks; record <id>`, no `qc sandbox: FAIL` line, the proof line `browser: PLAYWRIGHT_BROWSERS_PATH=<folder> read-only, headless shell <dir>`, and the record at the head holding `screenshots/page.png`, a PNG.
 - **Read** (`read`). Run `octo-feather-evidence read --repo <scratch> --criterion demo#acceptance-a --commit <head>`. Observe one record listing `screenshots/page.png`.
