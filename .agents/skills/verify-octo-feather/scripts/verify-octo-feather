@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -858,6 +858,79 @@ def drive_role_launch(f: Feature) -> None:
     say(f"role-launch evidence: {f.d}")
 
 
+def drive_qc_capture(f: Feature) -> None:
+    """`just qc` twice at one head of a scratch target whose qc.toml declares a passing and a failing demo: each run
+    captures both into the scratch target's evidence store and decides from the demos' own checks, the same both times."""
+    v = f.s.contract.values
+    if "qc_demo_pass" not in v or "qc_demo_fail" not in v:
+        die("qc.toml [values] needs qc_demo_pass and qc_demo_fail: the qc-capture drive's scratch demos")
+    sc = RUN_DIR / "scratch" / "qc-capture"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)   # qc commits the status file in this repo
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-capture: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n' + "".join(
+        f'[demo."demo#{a}"]\ncommand = {json.dumps(cmd)}\ncovers = ["docs/specs"]\ntests = ["none"]\n'
+        for a, cmd in (("acceptance-a", v["qc_demo_pass"]), ("acceptance-b", v["qc_demo_fail"]))))
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract with two demos")
+    head = git("rev-parse", "HEAD")
+    # Scratch box state: qc's reports, the scratch target's evidence store; never a live lane's.
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}
+    qc = ("just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
+    line = r"(?m)^{v} {a}: \$ .*\n  demo exit status {x}\n  evidence complete; decision demo checks; record ([0-9]{{8}}T[0-9]{{6}}Z-[0-9a-f]{{8}})$"
+
+    def ids(out: str) -> list[str]:
+        return [m.group(1) for v_, a, x in (("PASS", "acceptance-a", "0"), ("FAIL", "acceptance-b", "[1-9][0-9]*"))
+                if (m := re.search(line.format(v=v_, a=a, x=x), out))]
+
+    def stored(c: Case, rec: str) -> dict[str, Any]:
+        found: list[dict[str, Any]] = [x["record"] for x in json.loads(c.o["store"]) if x["record"]["id"] == rec]
+        return found[0] if found else {}
+
+    def holds(c: Case) -> bool:
+        got = ids(c.out)
+        return (c.code == 1 and len(got) == 2 and "head now" in c.out and c.o["built"] == "built planned\n"
+                and all(stored(c, rec).get("revision") == head and not stored(c, rec).get("dirty")
+                        and {"demo.cmd", "demo.exit", "demo.stdout", "demo.stderr"} <= set(stored(c, rec).get("outputs", {}))
+                        and stored(c, rec)["contract"]["format"] == 1 for rec in got))
+
+    first: list[str] = []
+    for n in ("qc-1", "qc-2"):
+        git("reset", "-q", "--hard", head)   # the second run judges the same head the first did
+        f.pre = ["env", "-C", str(r)]   # just qc runs where the supervisor stands: the target's worktree
+        f.run(n, *qc)
+        f.pre = []
+        f.obs(n, "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"],
+                                 env={**os.environ, **f.env})[1])
+        st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
+        f.obs(n, "built", f"{st['acceptance-a']['status']} {st['acceptance-b']['status']}\n")
+        if n == "qc-1":
+            f.check(n, holds)
+            first = ids((f.d / f"{n}.stdout").read_text())
+        else:
+            f.check(n, lambda c, a=tuple(first): holds(c) and len(a) == 2 and not set(a) & set(ids(c.out)))
+    f.run("read", "octo-feather-evidence", "read", "--repo", str(r), "--commit", head)
+    f.check("read", lambda c: c.code == 0 and "4 record(s)" in c.out and c.out.count("demo.exit (") == 4)
+    f.env = {}
+    say(f"qc-capture evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -868,6 +941,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "correction-lane": drive_correction_lane,
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
+    "qc-capture": drive_qc_capture,
 }
 
 

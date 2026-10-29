@@ -25,3 +25,17 @@ scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evi
 # The role-launch drive's expected web roles and the servers of the kit's web list (roles spec #acceptance-web-roles).
 web_roles = "director implementer corrector code-reviewer"
 web_servers = "parallel exa"
+# The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail.
+qc_demo_pass = "echo demo checks pass"
+qc_demo_fail = "echo demo checks fail >&2; exit 1"
+
+# The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
+[demo."quality#acceptance-qc-capture"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+tests = ["tests/qc-capture.sh"]
+
+[demo."quality#acceptance-qc-same-verdict"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+tests = ["tests/qc-capture.sh"]

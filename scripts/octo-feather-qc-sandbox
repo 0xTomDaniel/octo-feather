@@ -680,7 +680,7 @@ for _ in range(100):
 EOF
 panes=0
 [[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
-headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))
+headless=$(( $(cat "$SCR/agents.log" 2>/dev/null | wc -l) ))   # no log: no pi started (a declared demo)
 ((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
 reap
 left=$(nsprocs); left=$(wc -w <<< "$left")

@@ -61,6 +61,17 @@ variant browser-latest '$a [browser]\nplaywright = "latest"'
 bad browser-latest 'qc.toml: browser.playwright must match ^[0-9]+\.[0-9]+\.[0-9]+$'
 variant browser-no-pin '$a [browser]'
 bad browser-no-pin 'qc.toml: browser: missing playwright'
+# [demo."<spec>#<anchor>"]: a criterion's demo (quality spec #qc-contract), added compatibly to format 1.
+variant demo '$a [demo."app#acceptance-hello-json"]\ncommand = "app hello Ada --json"\nbrowser = false\ncovers = ["src"]\ntests = ["tests/test_cli.py"]'
+run "$t/demo"; [[ "$rc" == 0 && "$out" == *"ok (format 1)" ]] || fail "a contract with a demo not ok (exit $rc): $out"
+variant demo-no-command '$a [demo."app#acceptance-hello-json"]\ncovers = ["src"]\ntests = ["t"]'
+bad demo-no-command 'qc.toml: demo.app#acceptance-hello-json: missing command'
+variant demo-no-covers '$a [demo."app#acceptance-hello-json"]\ncommand = "x"\ncovers = []\ntests = ["t"]'
+bad demo-no-covers 'qc.toml: demo.app#acceptance-hello-json.covers: [] should be non-empty'
+variant demo-extra '$a [demo."app#acceptance-hello-json"]\ncommand = "x"\ncovers = ["src"]\ntests = ["t"]\nchecks = "y"'
+bad demo-extra 'qc.toml: demo.app#acceptance-hello-json: unknown key checks'
+variant demo-bad-id '$a [demo.acceptance-hello-json]\ncommand = "x"\ncovers = ["src"]\ntests = ["t"]'
+bad demo-bad-id 'qc.toml: demo must match ^[a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9._-]*$'
 mkdir -p "$t/none"
 bad none "no qc.toml at $t/none/qc.toml"
 run "$t/python" "$t/python"
@@ -94,4 +105,4 @@ sed -i '/^\[services\]$/d' "$repo/qc.toml"
 set +e; vout="$("$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] && grep -qF 'qc.toml declares services (web)' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
   || fail "a declared service was not refused before setup (exit $rc): $vout"
-echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, bad TOML and no file fail naming the field; ts verify-app names the missing install, then follows qc.toml's setup and values)"
+echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, a demo missing its command or covers, with an unknown key or not keyed <spec>#<anchor>, bad TOML and no file fail naming the field; ts verify-app names the missing install, then follows qc.toml's setup and values)"
