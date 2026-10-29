@@ -8,9 +8,8 @@ and its command, exit status, stdout and stderr appended to the target's evidenc
 (octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
-status 0, else fail. A demo did not run to its end when its exit status says a step it needs could not run:
-77 (the demo's own word for it, Automake's skip status), 126 or 127 (the shell could not run or find a command)
-or above 128 (killed by a signal). Incomplete evidence is the result insufficient evidence, naming what is
+status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v1.schema.json, demo
+command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
 missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
 until a rerun gives it pass or fail.
 The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
@@ -372,7 +371,7 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
 
 
 def unfinished(rc: int) -> str:
-    """What a demo's exit status RC says stopped it before its end (docstring: 77, 126, 127, above 128)."""
+    """What a demo's exit status RC says stopped it before its end (schemas/qc.v1.schema.json, demo command)."""
     why = {77: "a step it needs could not run here", 126: "a command it runs could not execute",
            127: "a command it runs was not found"}.get(rc, f"killed by signal {rc - 128}")
     return f"exit {rc}, {why}"
