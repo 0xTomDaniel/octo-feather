@@ -42,7 +42,6 @@ Load each skill when its step comes: before the first `gh` call (the spec PR, CI
 Briefs state the outcome, done condition, owner decisions already made, exact source pointers (files and anchors), and open questions; the owning skill decides which artifact holds each answer.
 
 Brief commands verbatim: `review-host register --slug <the spec's own slug> --owner "${HERDR_SESSION:-default}/$HERDR_PANE_ID"` (one review row per spec, under the slug it was shaped with, which is its acceptance record; a lane never registers it again under its lane key; the supervisor names its session, spec `#session-wake-owner`), and push as its own command, `git push -u origin <branch>`.
-Before deleting a remote branch at teardown, retarget every open PR based on it to its merge target (`gh pr list --base <branch>`); deleting a base branch auto-closes the PRs stacked on it.
 
 You are the only role that talks to the owner (docs/adr/0015). Escalations and owner gates reach you from supervisors, never from workers directly; resolve what your authority covers first, then bring the owner what is blocked, what was tried, and the options.
 Ask the owner only at the owner gates (spec `#gates-list`; QA evidence: docs/adr/0020 (a)), for decisions that change what gets built, and for owner-held access. Decide everything else yourself and notify in one line (issue #234).
@@ -61,12 +60,7 @@ change. Its only state writes, outside the repository: at its own launch, write
 its own Herdr pane id. Beside it, it is sole writer of `director.handoffs.jsonl`:
 on each prod (waking or redirecting a supervisor), note to the owner worth keeping, and finding (spec `#handoff-director-finding`), append one JSON line per
 spec `#handoff-operator` (`docs/specs/comms.spec.html`). Parking a supervisor appends its parked line to that lane's handoffs log (Behavior).
-After spawning a supervisor, create its lane record from the spawn output, exactly like this; at teardown of the finished
-lane and its children, derive its space id (the supervisor pane id's prefix, `w5` in
-`w5:pP8`). Close the space with `herdr-close <space id>` only when it is the lane's
-own: no other lane record's supervisor and not your pane (`director.toml`), both read
-from `$(octo-feather-state)`, has that prefix (spec `#transport-space-derived`, `#transport-close-space`). Otherwise close only the supervisor's tab with
-`herdr-close <supervisor tab>` (the spawn's `tab=`). Then remove the supervisor's worktree (`git worktree remove <lane worktree>`): the supervisor reports first and never removes its own (spec `#transport-close-space`). Touch no record: its supervisor archived it. Never move
+After spawning a supervisor, create its lane record from the spawn output, exactly like this. Never move
 a lane pane to another space; Herdr rewrites its ids.
 
 Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec is the handoff. It comes with a kickoff brief (the kit's `docs/kickoff-brief.md`: target, accepted spec and commit, the project's tooling, gate, QA path, deadline, merges); ask the owner for any field it lacks before cutting a lane, and copy its tooling, gate, QA and factory fields into every lane brief. When the owner says "build <spec path>" (one or several), run `octo-feather-accepted <spec path> --repo <target>` for each. Exit 0 prints the accepted commit and the acceptance id; anything else, refuse that spec and tell the owner the printed reason. Never shape, and never accept on the owner's behalf.
@@ -103,10 +97,10 @@ scripts and documented launch commands, do not invent args. If the project
 publishes a conformance check, run it to verify services are healthy. After
 every service restart, confirm it answers.
 
-After every merge (the supervisor reports it merged), check the target's main CI; a red main gets a fix lane at once, and a merge ask always states its CI result.
+Post-merge: on a supervisor's merge report, run `octo-feather-lane post-merge <PR> <merged head> --lane <lane name>` in the target repo, in the background with a self-callback (herdr-comms; its main CI wait can take ~10 min); it exits 3 pending until the lane is archived, so rerun it on that supervisor's close report, which tears the lane down. What it does: `octo-feather-lane --help`. No hook runs it: both reports are Herdr messages no kit hook sees (docs/adr/0008 Duties). Judgment stays yours: read its summary line; a red main CI gets a fix lane at once, any other stopped step you resolve and rerun; a merge ask always states its CI result.
 
 
-Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer, live install clones on main, tear a lane down after its supervisor's close report, per the teardown rule above. No re-checking a lane's merge-ask items beyond a spot check.
+Cross-lane and shared only: merge order across lanes, restart shared services and confirm they answer. No re-checking a lane's merge-ask items beyond a spot check.
 
 The director's own PRs follow the same finish order (CI green before a merge ask).
 
@@ -147,7 +141,6 @@ The file name is the agent name. A wrong `supervisor` shows the lane as stalled.
 
 BOOTSTRAP_ACK: parent confirmed before mutation; never self-verify it. Verify outcome-critical claims at source.
 Goals drive continuation, so there is no sweep timer and no supervised launcher. This role is always a persistent Herdr pane started bare with `octo-feather-start --director` (Herdr workspace `director`), its `/goal` then its brief sent by `herdr-say`; any director-like pane you start gets the same, a `/goal` for its outcome first. Wake idle supervisors directly through `herdr-comms`.
-After instruction or contract changes merge, tell running supervisors to re-read their contract and relevant skills; agents load contracts only at start.
 Poke stale supervisor to investigate (one layer down); resume parked, relaunch dead (Behavior).
 
 ## Never

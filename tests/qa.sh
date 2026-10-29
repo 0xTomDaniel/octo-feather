@@ -654,6 +654,39 @@ fl FAIL fwebnone 'field_lines Prior art: no column-0 `Prior art:` line'
 fl FAIL fwebempty 'tool_called web_a | web_b: call 2 web_b: empty result'
 fl FAIL fwebno 'tool_called web_a | web_b: no call to any of them in 2 tool calls'
 
+# ran (rule: schema.md, Run record): cases rpass, recho, rother; then rpass's transcript and record.
+printf '#!/usr/bin/env bash\necho "runme: $* stdin=$(cat)"; exit 3\n' > "$t/bin/runme"
+printf '#!/usr/bin/env bash\necho other\n' > "$t/bin/other-prog"; chmod +x "$t/bin/runme" "$t/bin/other-prog"
+mkdir -p "$t/ran/ran/reference" "$t/ran/fixtures"; cp -r "$t/good/fixtures/fx" "$t/ran/fixtures/"
+echo '{"suite": "ran", "kind": "role-transcript", "description": "stub ran", "max_tool_calls": 10, "timeout_s": 60}' > "$t/ran/ran/suite.json"
+python3 - "$t/ran/ran" <<'EOF'
+import json, sys
+d = sys.argv[1]
+case = lambda i, steps: {"id": i, "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(steps)}
+ran = {"fact": "ran", "program": "runme", "args": ["lane", "show", "{head}"]}
+cases = [
+  (case("rpass", [["bash", 'echo IN | runme lane show "$(git rev-parse --short HEAD)" extra; echo "rc=$?"; command -v runme other-prog']]), [ran]),
+  (case("recho", [["bash", "echo runme lane show HEAD"]]), [ran]),
+  (case("rother", [["bash", "runme lane show 0000000 < /dev/null; runme lane list < /dev/null; true"]]), [ran]),
+]
+json.dump([c for c, _ in cases], open(f"{d}/cases.json", "w"), indent=1)
+json.dump({c["id"]: {"facts": f} for c, f in cases}, open(f"{d}/reference/expectations.json", "w"), indent=1)
+EOF
+cp -r "$t/ran" "$t/ran-good"
+run 1 "$Q" --evals "$t/ran"
+rn() { grep -E "^$1 ran/$2: " <<< "$out" | grep -qE "$3" || fail "ran $2: want $1 with '$3': $out"; }
+rn PASS rpass 'ran runme lane show \{head\}: recorded run runme lane show [0-9a-f]{7,} extra \(exit 3\)'
+rn FAIL recho "ran runme lane show \\{head\\}: no run of runme with these leading arguments in the sandbox's record \\([0-9]+ entries; no run of runme recorded\\)"
+rn FAIL rother 'runs of runme: runme lane show 0000000 \(exit 3\); runme lane list \(exit 3\)\)'
+grep -q "qc sandbox: ok   run record: shims first on PATH for runme " <<< "$out" || fail "ran: no proof line naming the run shims: $out"
+d="$(ls -dt "$t"/out/*/ | head -1)"
+ro="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/ran/rpass/transcript.jsonl")"
+grep -qE '^runme: lane show [0-9a-f]+ extra stdin=IN$' <<< "$ro" && grep -qx 'rc=3' <<< "$ro" \
+  || fail "ran: the shim did not pass argv, stdin, stdout and exit through: $ro"
+grep -qx "$t/bin/other-prog" <<< "$ro" || fail "ran: shim only for the named program: $ro"
+jq -e '[.attempts[] | select(.kind == "run" and .program == "runme" and .exit == 3 and .attempt == false)] | length == 1' \
+  "$d/ran/rpass/sandbox.json" > /dev/null || fail "ran: run not in the record: $(cat "$d/ran/rpass/sandbox.json")"
+
 # Shape check (rules: schema.md, by section; output and exit: check-evals --help, octo-feather-qa --help).
 bad() {   # bad PY_EDIT WANT [GOOD SUITE]: apply a python edit to a fresh copy's cases (c), expectations (e) and suite.json (s), expect WANT
   rm -rf "$t/evals"; cp -r "${3:-$t/good}" "$t/evals"
@@ -717,6 +750,10 @@ bad 'e["fnone"]["facts"][0]["none"] = "yes"' "case fnone fact #1: field none: on
 bad 'e["fexact"]["facts"][0]["includes"] = [{"klass": "exact"}]' "case fexact fact #1: field includes: must be a non-empty list of non-empty objects of string values, keys from" "$t/fl-good" fl
 bad 'e["fexact"]["facts"][0]["every"] = {"class": "exact"}' "case fexact fact #1: field every: must be a non-empty object of string lists" "$t/fl-good" fl
 bad 'e["fnone"]["facts"][3] = {"fact": "branch_paths"}' "case fnone fact #4: field untouched: missing" "$t/fl-good" fl
+bad 'del e["rpass"]["facts"][0]["program"]' "case rpass fact #1: field program: missing" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["program"] = "a/b"' "case rpass fact #1: field program: must be a command name" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["args"] = "lane show"' "case rpass fact #1: field args: must be a list of strings" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["exit"] = 0' "case rpass fact #1: field exit: unknown field for ran" "$t/ran-good" ran
 bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
 bad 'e["fweb"]["facts"][0]["tools"] = ["web a"]' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
 bad 'del e["fweb"]["facts"][0]["tools"]' "case fweb fact #1: field tools: missing" "$t/fl-good" fl
@@ -973,4 +1010,4 @@ for m in stub 'stub/' '/x' 'stub/a b' ''; do
   badm 'm["model"] = "'"$m"'"' "judgment-model.json: field model: must be a classifier <provider>/<id>, got '$m'"
 done
 badm 'm["evidence"] = "evidence/none.md"' "judgment-model.json: field evidence: no file evidence/none.md beside evals/"
-echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, other repos and the --kit-ref head kit masked (attempt_blocked repo), missing role file named, unknown ref 64, attempt_blocked from the sandbox attempt record (herdr-say called through a variable and herdr both recorded, a delivered message then a failing command not blocked, never attempted, a delivered call after 510 forged refusals fails: the record graded whole), declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields, a two-word field), tool_called (an error or empty result skipped, a named tool's text result passes, none called fails), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (schema.md, Bench; catalogue and --classifier; moving alias and yes/no only skipped, never called), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, best's tie-break, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json and classifiers.json shape (schema.md))"
+echo "qa: ok (PASS/FAIL per case with deciding facts, exit 1/0, train and held-out scores, --sample, role-skill coverage ({tracker} resolved per fixture), --suite/--case, artifacts, stop once decided, dead pi fails, sandbox proof failure fails, refused in a check run, --kit-ref FAIL before and PASS at a kit change with its sha, other repos and the --kit-ref head kit masked (attempt_blocked repo), missing role file named, unknown ref 64, attempt_blocked from the sandbox attempt record (herdr-say called through a variable and herdr both recorded, a delivered message then a failing command not blocked, never attempted, a delivered call after 510 forged refusals fails: the record graded whole), declared pass/outside list/no block/two blocks/stopped early, no lane history bound, role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), before-targets from filesystem snapshots incl. kit_contract_edit, a target never reached fails, declared_includes pass/missing/not a list, field_lines column-0 only (bullet and fenced fail; none, every, includes, Owner restated, other fields, a two-word field), tool_called (an error or empty result skipped, a named tool's text result passes, none called fails), ran (a run through the sandbox's recording shim matched by argv prefix and {head}, stdin/stdout/exit passed through, an echo or other arguments fail naming the record, a shim only for a named program), branch_paths committed and uncommitted (untouched, touched), exact leak rule, shape check names case and field, judgment bench: per classifier accuracy/calibration/cost train and held-out apart, classifiers.json lists applied (schema.md, Bench; catalogue and --classifier; moving alias and yes/no only skipped, never called), a classifier that cannot accept the question's form listed unavailable with the real question's provider error (no probe), one answering some cases scored, unavailable named, the kit's model beside the best (train) and its threshold, --classifier, best's tie-break, a kit model unscored fails, a dead bench command fails, judgment shape names case and field, labeller record labelled_by/relabel, calibration: evidence file, held_out and threshold shape, judgment suites only, no suite names a model; judgment-model.json and classifiers.json shape (schema.md))"

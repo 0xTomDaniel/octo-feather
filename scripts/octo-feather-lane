@@ -265,9 +265,60 @@ read prints as `unread: <source>: <reason>` where its facts would be; a log's un
 counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
 Exit 0; 1 on any argument.
 
+  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
+                                   the director's post-merge routine for lane NAME, its steps in order
+
+`post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
+report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
+step 4 tells no lane twice.
+  step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
+  step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
+                   for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
+                   lists is completed; ok only when every run concluded success
+  step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
+                   `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
+                   PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
+                   --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
+                   fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
+                   not move. Then in the install, each failure stopping named: `mise install --locked` (only with
+                   a mise.toml there), `just vendored-fetch`, `uv sync --locked`, `pnpm install --frozen-lockfile`,
+                   `just install-check <the current repo's top>`. No service restart; a rerun reruns these
+  step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+                   install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
+                   gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
+                   none>; re-read the changed ones before your next step." Rule files: what the merge commit
+                   changed against its first parent (git in the current repo, fetched from origin when missing)
+                   under agents/*.md, .agents/skills/, .skillfile/patches/, AGENTS.md, docs/adr/, docs/specs/.
+                   A pane Herdr does not find is never sent to (why: herdr-comms SKILL.md, herdr-say): it is listed
+                   `not woken: <lane> <pane>` for the director. Each lane told gets one line in
+                   $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
+                   "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
+                   #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
+                   A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
+                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...`
+  step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+                   moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
+                   close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
+                   record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
+                   else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
+                   closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
+                   list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
+                   git's words); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
+                   based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
+                   deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
+                   when origin has it. Gone already prints `already`; review rows, spools and records stay
+Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
+a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`. Exit 0 when every step is ok, 1 when one
+stopped (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch
+that failed, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+at the close report), 1 with usage on stderr for bad arguments.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import cast
@@ -2561,6 +2612,480 @@ def cmd_report(args: list[str]) -> int:
     return 0
 
 
+# --- post-merge (owner ruling 2026-10-29 on issue 206; steps 1-2: issue 396) ---
+
+PM_FIELDS = "databaseId,status,conclusion,workflowName,url"
+PM_POLL = 10   # seconds between run lists while no run has appeared, or a watched run still reads unfinished
+
+
+class PostMerge:
+    """One post-merge run: its arguments, and what each step learns for the next."""
+
+    def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
+        self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
+        self.merge, self.base = "", ""
+
+    def r(self) -> list[str]:
+        return ["-R", self.repo] if self.repo else []
+
+
+def pm_merged(pm: PostMerge) -> str:
+    """Step 1: the PR merged at the pinned head; read its merge commit."""
+    d = cast("dict[str, object]", pr_view(pm.pr, "state,headRefOid,mergeCommit,baseRefName,headRefName", pm.repo))
+    oid = str(d["headRefOid"])
+    if d["state"] != "MERGED":
+        raise Refuse(f"PR #{pm.pr} is {d['state']}, not merged: merge it at {pm.head} first (gh pr merge --match-head-commit), then rerun")
+    if not head_matches(pm.head, oid):
+        raise Refuse(f"PR #{pm.pr} merged at head {oid[:12]}, not at the pinned head {pm.head}: "
+                     "what merged is not what was judged; tell the owner, nothing after this step runs")
+    mc = d["mergeCommit"]
+    merge = str(cast("dict[str, object]", mc).get("oid") or "") if isinstance(mc, dict) else ""
+    if not SHA.fullmatch(merge):
+        raise Refuse(f"PR #{pm.pr} reads MERGED with no merge commit ({d['mergeCommit']!r}): check it on GitHub, then rerun")
+    pm.merge, pm.base = merge, str(d["baseRefName"])
+    return f"PR #{pm.pr} ({d['headRefName']}) merged into {pm.base} at head {oid[:12]}, merge commit {merge[:12]}"
+
+
+def pm_runs(pm: PostMerge) -> list[dict[str, str]]:
+    """The merge commit's push runs as gh lists them, each field as text (a null conclusion as "")."""
+    out = gh(["run", "list", "--commit", pm.merge, "--event", "push", "--json", PM_FIELDS, *pm.r()],
+             f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+    raw: object = json.loads(out)
+    fields = PM_FIELDS.split(",")
+    runs: list[dict[str, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else [None]:
+        if not isinstance(x, dict) or any(f not in x for f in fields):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        r = cast("dict[str, object]", x)
+        runs.append({f: "" if r[f] is None else str(r[f]) for f in fields})
+    return runs
+
+
+def pm_ci(pm: PostMerge) -> str:
+    """Step 2: wait for main CI on the merge commit; ok only when every push run concluded success."""
+    m, deadline = pm.merge[:12], time.monotonic() + pm.wait
+    runs = pm_runs(pm)
+    while not runs:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise Refuse(f"no push run on merge commit {m} within {pm.wait}s: check the workflows that run on push to "
+                         f"{pm.base} (gh run list --commit {pm.merge}), then rerun")
+        time.sleep(min(PM_POLL, left)); runs = pm_runs(pm)
+    while pending := [x for x in runs if x["status"] != "completed"]:
+        failed: dict[str, str] = {}
+        for x in pending:
+            p = subprocess.run(["gh", "run", "watch", x["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            if p.returncode:
+                failed[x["databaseId"]] = ((p.stderr or p.stdout).strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
+        runs = pm_runs(pm)
+        for x in runs:   # a failed watch is the run's red end, or gh's own failure while the run goes on
+            if x["databaseId"] in failed and x["status"] != "completed":
+                raise Refuse(f"gh run watch {x['databaseId']} failed ({failed[x['databaseId']]}) while {x['workflowName']} "
+                             f"reads {x['status']}: {x['url']}; check gh auth status, then rerun")
+        if not failed and any(x["status"] != "completed" for x in runs):
+            time.sleep(PM_POLL)
+    red = [x for x in runs if x["conclusion"] != "success"]
+    if red:
+        raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
+                     + f"; fix {pm.base} first, nothing after this step runs")
+    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: "
+            + ", ".join(f"{x['workflowName']} {x['url']}" for x in runs))
+
+
+# Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos
+# name a throwaway clone). Never a branch checkout there: live install clones stay on main, detached or not.
+PM_REFRESH = (("mise", "install", "--locked"), ("just", "vendored-fetch"), ("uv", "sync", "--locked"),
+              ("pnpm", "install", "--frozen-lockfile"))
+
+
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if p.returncode not in ok:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     "fix the install clone, then rerun")
+    return p.returncode, p.stdout.strip()
+
+
+def pm_repo(target: str | None, what: str) -> str:
+    """OWNER/NAME of TARGET (a repo, a URL, or None for this directory's repo) as gh names it."""
+    out = gh(["repo", "view", *([target] if target else []), "--json", "nameWithOwner"], f"check {what} and gh auth status, then rerun")
+    try:
+        name = json.loads(out)["nameWithOwner"]
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh repo view printed no nameWithOwner for {what} ({out[:100]!r}): check the gh on PATH")
+    return str(name)
+
+
+def pm_kit(pm: PostMerge) -> str:
+    """Step 3: fast-forward the live kit install to the merge commit, then refresh its tools; any failure stops."""
+    kit = Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+    if not (kit / ".git").exists():
+        raise Refuse(f"kit install {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the install clone, then rerun")
+    origin = pm_git(kit, "config", "--get", "remote.origin.url", ok=(0, 1))[1]
+    if not origin:
+        raise Refuse(f"kit install {kit} has no origin remote: add it (git remote add origin <url>), then rerun")
+    pr_repo, kit_repo = pm_repo(pm.repo, f"the repo of PR #{pm.pr}"), pm_repo(origin, f"the kit install's origin {origin}")
+    if pr_repo.lower() != kit_repo.lower():
+        return f"kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if top.returncode:
+        raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
+    if dirty := pm_git(kit, "status", "--porcelain")[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    pm_git(kit, "fetch", "origin")
+    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
+        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
+    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
+        pm_git(kit, "merge", "--ff-only", pm.merge)
+        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
+    else:
+        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    done: list[str] = []
+    cmds = [c for c in PM_REFRESH if c[0] != "mise" or (kit / "mise.toml").exists()]
+    for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
+        shown = " ".join(cmd)
+        try:
+            p = subprocess.run(list(cmd), cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            rc, err = p.returncode, (p.stderr.strip() or p.stdout).strip().splitlines()
+        except FileNotFoundError:
+            rc, err = 127, [f"{cmd[0]} not on PATH"]
+        if rc:
+            raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
+                         f"fix it in {kit}, then rerun")
+        done.append(f"{shown} ok")
+    return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "mise" else " (no mise.toml: mise install skipped)")
+
+
+# --- post-merge step 4: tell running supervisors main moved (issue 398) ---
+
+# The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
+PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md|docs/adr/.+|docs/specs/.+")
+GH_REPO_URL = re.compile(r"(?:https://|ssh://git@|git@)github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?")
+
+
+def pm_git_here(*args: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("git not on PATH: install git")
+
+
+def pm_rule_files(pm: PostMerge) -> list[str]:
+    """The rule files the merge commit changed against its first parent, from git in the current repo."""
+    if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+        pm_git_here("fetch", "--quiet", "origin", pm.merge)
+    p = pm_git_here("diff", "--name-only", "--no-renames", f"{pm.merge}^1", pm.merge)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git diff of merge commit {pm.merge[:12]} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     f"run post-merge in a clone of PR #{pm.pr}'s repo (git fetch origin), then rerun")
+    return sorted(f for f in p.stdout.splitlines() if PM_RULES.fullmatch(f))
+
+
+def pm_kit_repo() -> str | None:
+    """OWNER/NAME of the kit install's origin (step 3's install: OCTO_FEATHER_KIT_INSTALL or KIT), None when not on GitHub."""
+    p = pm_git_here("-C", os.environ.get("OCTO_FEATHER_KIT_INSTALL") or str(KIT), "config", "--get", "remote.origin.url")
+    m = GH_REPO_URL.fullmatch(p.stdout.strip()) if not p.returncode else None
+    return m.group(1).lower() if m else None
+
+
+def pm_live(pane: str) -> bool:
+    """Whether Herdr finds PANE (`herdr agent get`); agent_not_found is a parked or gone pane. Refuse otherwise."""
+    try:
+        p = subprocess.run(["herdr", "agent", "get", pane], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    try:
+        d: object = json.loads(p.stdout)
+    except ValueError:
+        d = None
+    d = cast("dict[str, object]", d) if isinstance(d, dict) else {}
+    if not p.returncode and isinstance(d.get("result"), dict):
+        return True
+    err = d.get("error")
+    if p.returncode and isinstance(err, dict) and cast("dict[str, object]", err).get("code") == "agent_not_found":
+        return False
+    out = (p.stderr or p.stdout).strip().splitlines()
+    raise Refuse(f"herdr agent get {pane} failed ({out[-1][:200] if out else f'exit {p.returncode}'})")
+
+
+def pm_tell(pm: PostMerge) -> str:
+    """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
+    which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
+    Herdr does not find is listed, never sent to (why: herdr-comms SKILL.md, herdr-say)."""
+    import datetime, tomllib
+    from handoff_log import encode
+    lanes = lanes_dir()
+    recs = [p for p in sorted(lanes.glob("*.toml")) if p.stem != pm.lane]
+    if not recs:
+        return f"no other open lane in {lanes} to tell"
+    d = cast("dict[str, object]", pr_view(pm.pr, "title,url", pm.repo))
+    m = re.match(r"https://github\.com/([\w.-]+/[\w.-]+)/pull/", str(d["url"]))
+    if not m:
+        raise Refuse(f"gh pr view {pm.pr} printed url {d['url']!r}, no GitHub PR url: check the gh on PATH, then rerun")
+    repo, kit = m.group(1), pm_kit_repo()
+    dlog = lanes.parent / DIRECTOR_LOG
+    try:
+        dlines = read_log(dlog)[0] if dlog.exists() else []
+    except OSError as e:
+        raise Refuse(f"cannot read the director log {dlog} ({e}): fix it, then rerun")
+    mark = f"post-merge {pm.merge} #{pm.pr}: "
+    told: list[str] = []
+    already: list[str] = []
+    parked: list[str] = []
+    failed: list[str] = []
+    due: list[tuple[str, str, object]] = []
+    for rec_path in recs:
+        name = rec_path.stem
+        try:
+            rec: dict[str, object] = tomllib.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            failed.append(f"record {rec_path.name} unread ({e})"); continue
+        if repo.lower() != kit and str(rec.get("repository", "")).lower() != repo.lower():
+            continue
+        issue, sup = rec.get("issue"), rec.get("supervisor")
+        if any(x.get("kind") == "prod" and x.get("issue") == issue and str(x.get("note", "")).startswith(mark)
+               and f" told {name} to " in str(x.get("note")) for x in dlines):
+            already.append(name); continue
+        if not isinstance(sup, str) or ":" not in sup:
+            failed.append(f"{name}: the record's supervisor {sup!r} is no pane id"); continue
+        due.append((name, sup, issue))
+    files = pm_rule_files(pm) if due else []
+    listed = ", ".join(files) or "none"
+    msg = (f"main moved to {pm.merge[:12]} (#{pm.pr} {d['title']}); rule files changed: {listed}; "
+           "re-read the changed ones before your next step.")
+    for name, sup, issue in due:
+        try:
+            live = pm_live(sup)
+        except Refuse as e:
+            failed.append(f"{name} {sup}: {e}"); continue
+        if not live:
+            parked.append(f"{name} {sup}"); continue
+        try:
+            p = subprocess.run(["herdr-say", sup, msg], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        except FileNotFoundError:
+            failed.append(f"herdr-say failed: {name} {sup}: herdr-say not on PATH"); continue
+        if p.returncode:
+            err = (p.stderr or p.stdout).strip().splitlines()
+            failed.append(f"herdr-say failed: {name} {sup} exit {p.returncode}" + (f" ({err[-1][:200]})" if err else "")); continue
+        at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        line: dict[str, object] = {"at": at, "kind": "prod", "issue": issue, "note": f"{mark}main moved, told {name} to re-read {listed}"}
+        try:
+            with dlog.open("a", encoding="utf-8") as f:
+                f.write(encode(line) + "\n")
+        except OSError as e:
+            failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})"); continue
+        told.append(f"{name} {sup}")
+    who = (f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; told: {', '.join(told) or 'none'}; "
+           f"already told: {', '.join(already) or 'none'}; not woken: {', '.join(parked) or 'none'}")
+    if failed:
+        raise Refuse(f"{'; '.join(failed)}; no prod line for these: fix each, then rerun (a rerun skips lanes told); {who}")
+    return who
+
+
+# --- post-merge step 5: tear down the closed lane (issue 399) ---
+
+class Pending(Exception):
+    """A step not due yet: its message names when to rerun; exit 3."""
+
+
+def pm_herdr_gone(what: str, target: str, code: str) -> bool:
+    """Whether Herdr reports TARGET gone: `herdr WHAT get TARGET` fails with error CODE."""
+    try:
+        p = subprocess.run(["herdr", what, "get", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    try:
+        d: object = json.loads(p.stdout)
+    except ValueError:
+        d = None
+    err = cast("dict[str, object]", d).get("error") if isinstance(d, dict) else None
+    return bool(p.returncode) and isinstance(err, dict) and cast("dict[str, object]", err).get("code") == code
+
+
+def pm_close(target: str, space: str, shared: bool) -> str:
+    """`herdr-close TARGET` (the lane's own space, or its supervisor pane, which herdr-close maps to its tab). On a
+    failed close, Herdr is asked whether TARGET is gone: then it was closed already."""
+    what = f"tab of {target}" if shared else f"space {target}"
+    try:
+        p = subprocess.run(["herdr-close", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr-close not on PATH: put the kit's scripts on PATH (herdr-comms skill), then rerun")
+    if not p.returncode:
+        return f"{what} closed" + (f" in shared space {space}" if shared else "")
+    if pm_herdr_gone(*(("agent", target, "agent_not_found") if shared else ("workspace", target, "workspace_not_found"))):
+        return f"{what} already closed"
+    out = (p.stderr or p.stdout).strip().splitlines()
+    raise Refuse(f"herdr-close {target} failed (exit {p.returncode}: {out[-1][:200] if out else 'no output'}): "
+                 "close it by hand (herdr-comms skill), then rerun")
+
+
+def pm_review_roots() -> list[tuple[str, str, str]]:
+    """(real root, row slug, registry) of every Spec Chat review row, its registries read as octo-feather-accepted
+    reads them; an unreadable registry stops, as it may name the worktree as a preview."""
+    import tomllib
+    base = os.environ.get("XDG_STATE_HOME")
+    state = (Path(base) if base else Path.home() / ".local" / "state") / "spec-chat"
+    roots: list[tuple[str, str, str]] = []
+    for reg in sorted(state.glob("hosting/*/registry.toml")):
+        try:
+            data = tomllib.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read Spec Chat registry {reg} ({e}): fix it, then rerun (a review row's root stays)")
+        rows = [cast("dict[str, object]", r) for r in cast("list[object]", data.get("resource", [])) if isinstance(r, dict)]
+        roots.extend((os.path.realpath(str(r["root"])), str(r.get("slug", "?")), str(reg)) for r in rows if r.get("root"))
+    return roots
+
+
+def pm_git_ok(what: str, *args: str) -> str:
+    """git ARGS in the current repo; its stdout, or Refuse naming WHAT with git's own words."""
+    p = pm_git_here(*args)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"{what} ({err[-1][:200] if err else f'exit {p.returncode}'})")
+    return p.stdout
+
+
+def pm_worktree(branch: str) -> str:
+    """Remove the clean worktree on BRANCH; the kit install, the main worktree and a review row's root are kept."""
+    listing = pm_git_ok("git worktree list failed", "worktree", "list", "--porcelain").strip().split("\n\n")
+    entries = [{k: v for k, _, v in (x.partition(" ") for x in e.splitlines())} for e in listing]
+    hit = [i for i, e in enumerate(entries) if e.get("branch") == f"refs/heads/{branch}"]
+    if not hit:
+        return f"worktree of {branch} already removed"
+    path = entries[hit[0]]["worktree"]
+    real = os.path.realpath(path)
+    if real == os.path.realpath(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT):
+        raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
+    if hit[0] == 0:
+        raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")
+    for root, slug, reg in pm_review_roots():
+        if root == real:
+            raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
+                         "a preview stays, remove it by hand once its review ends")
+    pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
+    return f"worktree {path} removed"
+
+
+def pm_teardown(pm: PostMerge) -> str:
+    """Step 5: once the lane's record is archived for this PR (its close report), close its own space (or only its
+    supervisor tab in a shared one), remove its worktree, retarget PRs based on its branch, delete the branch locally
+    (merged only) and on origin. Any refusal stops the step, what ran before named."""
+    import tomllib
+    lanes = lanes_dir()
+    path = lanes / "archive" / f"{pm.lane}.toml"
+    if not path.exists():
+        raise Pending(f"lane {pm.lane} not archived; rerun on its close report")
+    try:
+        rec: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refuse(f"cannot read archived record {path} ({e}): fix it, then rerun; nothing torn down")
+    if rec.get("pr") != pm.pr:
+        raise Refuse(f"archived lane {pm.lane} names PR #{rec.get('pr')}, not #{pm.pr}: name the lane's own PR, then rerun; nothing torn down")
+    sup = rec.get("supervisor")
+    if not isinstance(sup, str) or ":" not in sup:
+        raise Refuse(f"archived lane {pm.lane}'s supervisor {sup!r} is no pane id: nothing torn down")
+    space = sup.split(":", 1)[0]
+    others: list[object] = []
+    for p in [*sorted(lanes.glob("*.toml")), lanes.parent / "director.toml"]:
+        try:
+            d = tomllib.loads(p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read {p} ({e}): fix it, then rerun (it may share space {space}); nothing torn down")
+        others.append(d.get("pane" if p.name == "director.toml" else "supervisor"))
+    shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
+    done: list[str] = []
+    try:
+        done.append(pm_close(sup if shared else space, space, shared))
+        branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
+        done.append(pm_worktree(branch))
+        out = gh(["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
+                 "check gh auth status, then rerun")
+        try:
+            based = [int(str(cast("dict[str, object]", x)["number"])) for x in cast("list[object]", json.loads(out))]
+        except (ValueError, TypeError, KeyError) as e:
+            raise Refuse(f"gh pr list --base {branch} printed no PR list ({out[:100]!r}, {e}): check the gh on PATH")
+        for n in based:
+            gh(["pr", "edit", str(n), "--base", pm.base, *pm.r()], f"retarget PR #{n} to {pm.base} by hand, then rerun")
+            done.append(f"PR #{n} retargeted from {branch} to {pm.base}")
+        if not based:
+            done.append(f"no open PR based on {branch}")
+        if pm_git_here("rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode:
+            done.append(f"local branch {branch} already deleted")
+        else:
+            if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+                pm_git_here("fetch", "--quiet", "origin", pm.merge)
+            if pm_git_here("merge-base", "--is-ancestor", f"refs/heads/{branch}", pm.merge).returncode:
+                raise Refuse(f"local branch {branch} kept: it is not an ancestor of merge commit {pm.merge[:12]} "
+                             f"(git log {pm.merge[:12]}..{branch} names what did not merge)")
+            pm_git_ok(f"local branch {branch} not deleted", "branch", "-D", branch)
+            done.append(f"local branch {branch} deleted")
+        if pm_git_ok(f"git ls-remote origin {branch} failed", "ls-remote", "--heads", "origin", branch).strip():
+            pm_git_ok(f"remote branch {branch} not deleted", "push", "--quiet", "origin", "--delete", branch)
+            done.append(f"remote branch {branch} deleted from origin")
+        else:
+            done.append(f"remote branch {branch} already deleted from origin")
+    except Refuse as e:
+        raise Refuse("; ".join([*done, f"{e}; nothing after it ran: fix it, then rerun"]))
+    return "; ".join(done)
+
+
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
+                    ("tell supervisors", pm_tell), ("teardown", pm_teardown))
+
+
+def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
+    if flag not in args:
+        return args, None
+    i = args.index(flag)
+    if i + 1 >= len(args):
+        raise Refuse(f"{flag} needs a value")
+    return args[:i] + args[i + 2:], args[i + 1]
+
+
+def cmd_post_merge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    args, lane = take_opt(args, "--lane")
+    args, wait = take_opt(args, "--wait")
+    if len(args) != 2 or not lane or not NAME.fullmatch(lane):
+        raise Refuse("usage: octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R] "
+                     f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'})")
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the pinned head the PR merged at, 7 to 40 hex, got {args[1]!r}")
+    if wait is not None and not wait.isdigit():
+        raise Refuse(f"--wait needs whole seconds, got {wait!r}")
+    pm = PostMerge(pr_number(args[0]), args[1].lower(), lane, int(wait or 300), repo)
+    outcomes: list[str] = []
+    for n, (name, step) in enumerate(POST_MERGE_STEPS, 1):
+        if all(o.endswith(" ok") for o in outcomes):
+            try:
+                line, outcome = f"ok: {step(pm)}", "ok"
+            except Refuse as e:
+                line, outcome = f"stopped: {e}", "stopped"
+            except Pending as e:
+                line, outcome = f"pending: {e}", "pending"
+            except (KeyError, TypeError, AttributeError, ValueError) as e:
+                line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
+            print(f"step {n} {name}: {line}", flush=True)
+            outcomes.append(f"step {n} {name} {outcome}")
+        else:
+            outcomes.append(f"step {n} {name} not run")
+    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}", flush=True)
+    if all(o.endswith((" ok", " pending")) for o in outcomes):
+        return 0 if all(o.endswith(" ok") for o in outcomes) else 3
+    return 1
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "reflect": cmd_reflect,
@@ -2573,6 +3098,7 @@ COMMANDS = {
     "ticket": cmd_ticket,
     "spend": cmd_spend,
     "report": cmd_report,
+    "post-merge": cmd_post_merge,
 }
 
 
