@@ -16,6 +16,11 @@ node_dir="$(mise -C "$kit" where node)"; node_dir="$t/mise/${node_dir#"$data"/}"
 mkdir -p "$t/mise" "$t/home" "$t/mbin" "$t/stub" "$t/work" "$t/pkg/bin"
 cp -rs "$data/installs" "$t/mise/installs"
 ln -s "$(command -v mise)" "$t/mbin/mise"
+# The real just, reached as a caller reaches it (its own PATH entry, or mise's shim, whose target `mise which` names:
+# on CI just exists only through mise), linked into the same tool dir, so the justfile's own calls find it.
+just="$(command -v just)"
+[[ "$(realpath "$just")" != "$(realpath "$(command -v mise)")" ]] || just="$(mise -C "$kit" which just)"
+ln -s "$just" "$t/mbin/just"; just="$t/mbin/just"
 export HOME="$t/home" MISE_DATA_DIR="$t/mise" MISE_CACHE_DIR="$t/cache" MISE_STATE_DIR="$t/state" MISE_CONFIG_DIR="$t/config"
 # The global Pi CI installed with `npm install -g` under mise's node: here a package whose `pi` prints a marker.
 printf '{"name":"global-pi","version":"0.0.0","bin":{"pi":"bin/pi.js"}}\n' >"$t/pkg/package.json"
@@ -31,9 +36,8 @@ caller="$t/stub:$t/mbin:/usr/local/bin:/usr/bin:/bin"; plain="$t/mbin:/usr/local
 # The kit (a copy of its tracked files) and a repo made from the TypeScript template.
 mkdir -p "$t/kit"; (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t/kit"
 git -C "$t/kit" init -q
-(cd "$t/work" && PATH="$plain:$(dirname "$(command -v just)")" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t \
-  GIT_COMMITTER_EMAIL=t@t just --justfile "$kit/justfile" new-repo typescript "$t/ts" --no-spec-chat >/dev/null)
-just="$(command -v just)"
+(cd "$t/work" && PATH="$plain" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t \
+  GIT_COMMITTER_EMAIL=t@t "$just" --justfile "$kit/justfile" new-repo typescript "$t/ts" --no-spec-chat >/dev/null)
 for repo in "$t/kit" "$t/ts"; do
   out="$(cd "$repo" && PATH="$caller" "$just" --command pi 2>&1)" || fail "$repo: just --command pi failed"
   [[ "$out" == "stub pi" ]] || fail "$repo: the justfile's PATH ran $out, not the caller's stub pi"
