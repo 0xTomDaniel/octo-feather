@@ -65,7 +65,7 @@ set +e; out="$(cd "$w" && PATH="$t/scripts:$PATH" CHECK_GATE_FREE_TEST_COPY=1 ju
 printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
 [[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'qa: run ' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
 # Script forms: a repo script a gate recipe runs reaches qa or the judge at run time, through just or directly.
-# A fake `pi` first on the check run's PATH (HOME moved: no ~/.local/bin ahead of it) logs any launch.
+# A fake `pi` first on the check run's PATH (the justfile keeps the caller's PATH ahead of ~/.local/bin) logs any launch.
 sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
 # script_form BODY [BODY2]: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
 # With BODY2, the justfile also has check-probe, which runs scripts/quality-probe2 (BODY2).
