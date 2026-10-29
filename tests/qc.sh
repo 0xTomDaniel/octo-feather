@@ -151,6 +151,10 @@ P
     rm -rf "$vc/git" 2>/dev/null; [[ -d "$vc/git" ]] || echo "ESCAPE deleted cached git"
     unshare -rm sh -c 'mount -o remount,bind,rw "$1" && touch "$1/judge2"' _ "$vc" 2>/dev/null && echo "ESCAPE remounted cache rw"
     printf "$ok" ;;
+  newrepo)   # the kit's new-repo (its `mise trust` included) in the sandbox, mise's dirs as the caller pinned them (#428)
+    kit="$(dirname "$(command -v octo-feather-state)")/.."; d="$(mktemp -d /tmp/qc-nr-XXXXXX)"
+    (cd "$d" && just --justfile "$kit/justfile" new-repo python "$d/app" --no-spec-chat 2>&1); echo "NEWREPO exit $?"
+    printf "$ok" ;;
   nested)   # `just check` in the sandbox runs this test (fresh HOME, its own state): a sandboxed qc inside the judge's gets past its proof
     h="$(mktemp -d)"; git clone -q "$PWD" "$h/repo"   # its own worktree: the outer overlay is covered there
     # The judge's PATH as is: `herdr` there is the outer sandbox's shim; the nested run wraps the real (fake) binary.
@@ -395,6 +399,18 @@ grep -q "qc sandbox: ok   vendored-skill cache $vc bound read-only" <<< "$out" &
   || fail "no read-only cache proof: $out"
 [[ "$(vsum)" == "$v0" ]] || fail "the judge changed the vendored-skill cache"
 rm -rf "$HOME/.cache"
+# #428: new-repo in the sandbox, mise's state dir pinned (as the kit justfile pins it) to a path the sandbox makes
+# read-only: its `mise trust` lands in a per-run state dir on the run's /tmp, named by the proof; nothing persists.
+# The per-run dir starts empty: the caller's trust entry for another repo never reaches the judge.
+command -v mise > /dev/null || fail "no mise on PATH: the new-repo case proves its mise trust in the sandbox"
+ms="$HOME/.local/state/mise"; mkdir -p "$ms/trusted-configs"; ln -s "$HOME/src/sib" "$ms/trusted-configs/src-sib-0123456789abcdef"
+MISE_STATE_DIR="$ms" run 0 newrepo $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -q "NEWREPO exit 0" <<< "$judge" && grep -q "mise.toml trusted (that file only)" <<< "$judge" || fail "new-repo in the sandbox: $judge"
+grep -q "qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entries" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" \
+  || fail "no per-run mise state proof: $out"
+[[ "$(ls -A "$ms/trusted-configs")" == src-sib-0123456789abcdef ]] || fail "the run's mise trust persisted: $(ls -A "$ms/trusted-configs")"
+rm -rf "$HOME/.local/state/mise"
 # A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes its proof.
 run 0 nested $st 5 acceptance-a
 judge="$(report '["stdout"]')"
@@ -407,4 +423,4 @@ for jf in "$kit/justfile" "$kit/templates/python/justfile" "$kit/templates/types
   [[ "$rc" != 0 && ! -e pwned && ! -e pwned2 && ! -e "$kit/pwned" ]] || fail "$jf qc ran its arguments as shell (exit $rc): $o"
   grep -q 'not in docs/specs/demo.status.json: acceptance-a$(touch pwned) x;touch pwned2' <<< "$o" || fail "$jf qc mangled its arguments: $o"
 done
-echo "qc: ok (pass flips built, fail stays planned, status-only commit, judge from agents/qc-judge.md, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, other repos masked (listing recorded and refused; a failed mask aborts), cleanup count, vendored cache read-only (check-vendored green, writes refused), nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
+echo "qc: ok (pass flips built, fail stays planned, status-only commit, judge from agents/qc-judge.md, same family, dirty, unusable report, judge wrote (non-ignored, tracked), unique reports, killed run leaves no scratch, sandbox escapes, no persistent write (credential copies: >64 MiB, intermediate refresh, token only, HOME; auth.json and models.json: per-run copies rewritten, box files unchanged, OAuth warned), proof abort, other repos masked (listing recorded and refused; a failed mask aborts), cleanup count, vendored cache read-only (check-vendored green, writes refused), new-repo's mise trust in an empty per-run state dir, nested sandbox, judge pane in the sandbox ($mode herdr), --no-sandbox, recipe args as data; offline, runs bounded)"
