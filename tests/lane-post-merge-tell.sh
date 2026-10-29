@@ -8,7 +8,7 @@
 # the PR's repo gets one message naming the merge commit, PR, title and changed rule files; the --lane lane and a
 # lane of another repo get none (unless the PR is the kit's own); a parked one is listed, never sent to. Each lane
 # told gets one prod line in the director log, and a rerun sends nothing new. A failed send is named, writes no
-# prod line, and stops the step after the rest are tried. Run by `just check`.
+# prod line, and stops the step after the rest are tried. Step 5 finds the lane unarchived: pending, exit 3. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -92,12 +92,12 @@ printf '%s\n' w0:p1 w1:p1 w3:p1 > "$HERDR_LIVE"
 echo '{"at": "2026-10-29T00:00:00+00:00", "kind": "prod", "issue": 11, "note": "earlier prod"}' > "$dlog"
 
 # A live supervisor of the PR's repo gets one message; the merged lane, a parked one, another repo's: none.
-run 0 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0
+run 3 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0
 [[ "$(said)" == "w1:p1 " ]] || fail "sent to $(said), want only w1:p1: $(cat "$SAY_LOG")"
 want="main moved to ${M:0:12} (#7 Add foo); rule files changed: .agents/skills/foo/SKILL.md, agents/supervisor.md; re-read the changed ones before your next step."
 [[ "$(cut -f2 "$SAY_LOG")" == "$want" ]] || fail "message: $(cut -f2 "$SAY_LOG")"
 [[ "$tell" == *"told: live1 w1:p1"* && "$tell" == *"not woken: parked w2:p1"* ]] || fail "tell line: $tell"
-[[ "$last" == *"tell supervisors ok" ]] || fail "summary: $last"
+[[ "$last" == *"tell supervisors ok; step 5 teardown pending" ]] || fail "summary: $last"
 ! grep -q 'agent get w3:p1' "$HERDR_LOG" || fail "another repo's lane was looked up: $(cat "$HERDR_LOG")"
 # One prod line per lane told, canonical shape, after the director's own lines.
 [[ "$(wc -l < "$dlog")" == 2 ]] || fail "director log: $(cat "$dlog")"
@@ -106,12 +106,12 @@ tail -n1 "$dlog" | jq -e --arg n "post-merge $M #7: main moved, told live1 to re
    and (.at | test("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:.]+\\+00:00$"))' >/dev/null || fail "prod line: $(tail -n1 "$dlog")"
 
 # Rerun: the prod line names this merge for live1, so nothing new is sent or logged.
-run 0 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0
+run 3 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0
 [[ "$(wc -l < "$SAY_LOG")" == 1 && "$(wc -l < "$dlog")" == 2 ]] || fail "rerun sent again: $(cat "$SAY_LOG") $(cat "$dlog")"
 [[ "$tell" == *"already told: live1"* && "$tell" == *"not woken: parked w2:p1"* ]] || fail "rerun tell line: $tell"
 
 # A merge touching no rule file: "none", and a new merge is told again.
-run 0 post-merge 8 "$H2" --lane gh7 --repo o/r --wait 0
+run 3 post-merge 8 "$H2" --lane gh7 --repo o/r --wait 0
 [[ "$(tail -n1 "$SAY_LOG" | cut -f2)" == "main moved to ${M2:0:12} (#8 Notes); rule files changed: none; re-read the changed ones before your next step." ]] \
   || fail "no rule files: $(tail -n1 "$SAY_LOG")"
 tail -n1 "$dlog" | jq -e --arg n "post-merge $M2 #8: main moved, told live1 to re-read none" '.note == $n' >/dev/null || fail "none prod: $(tail -n1 "$dlog")"
@@ -119,7 +119,7 @@ tail -n1 "$dlog" | jq -e --arg n "post-merge $M2 #8: main moved, told live1 to r
 # A kit PR: every lane runs kit roles, so another repo's live lane is told too.
 kitrepo=o/kit
 store "Kit rule" "https://github.com/$kitrepo/pull/7"; : > "$SAY_LOG"; : > "$dlog"
-run 0 post-merge 7 "$H" --lane gh7 --repo "$kitrepo" --wait 0
+run 3 post-merge 7 "$H" --lane gh7 --repo "$kitrepo" --wait 0
 [[ "$(said)" == "w1:p1 w3:p1 " ]] || fail "kit PR sent to $(said), want w1:p1 w3:p1: $out"
 [[ "$(jq -r .issue "$dlog" | sort | tr '\n' ' ')" == "11 13 " ]] || fail "kit PR prod lines: $(cat "$dlog")"
 
@@ -131,7 +131,7 @@ run 1 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0
 [[ "$tell" == *"stopped: "*"herdr-say failed: live1 w1:p1 exit 75"* && "$tell" == *"told: live2 w4:p1"* ]] || fail "failed send line: $tell"
 [[ "$(jq -r .issue "$dlog")" == 14 ]] || fail "failed send prod lines: $(cat "$dlog")"
 [[ "$last" == *"tell supervisors stopped"* ]] || fail "failed send summary: $last"
-rm "$SAY_RC"; run 0 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0   # rerun tells only the one that failed
+rm "$SAY_RC"; run 3 post-merge 7 "$H" --lane gh7 --repo o/r --wait 0   # rerun tells only the one that failed
 [[ "$(said)" == "w1:p1 w1:p1 w4:p1 " && "$(jq -r .issue "$dlog" | tr '\n' ' ')" == "14 11 " ]] || fail "retry: $(said) $(cat "$dlog")"
 echo "lane-post-merge-tell: ok (live told once with merge, PR, title, rule files; merged lane, parked, other repo not sent;" \
   "kit PR tells every lane; one prod line per lane told; rerun sends nothing new; failed send named, no prod line, exit 1)"
