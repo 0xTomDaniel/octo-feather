@@ -279,7 +279,9 @@ if [[ "$phase" == setup ]]; then
   REC="$SCR/rec/attempts.jsonl" RSOCK="$SCR/rec/sock" PY=$(command -v python3 || echo python3)
   # 6b. mise (rule: header).
   if command -v mise > /dev/null; then
-    md=$(mise doctor --json 2> /dev/null) || die "mise doctor --json failed: mise's dirs unknown"
+    # Its own state dir a throwaway (removed): the judge's per-run MISE_STATE_DIR starts empty (step 6).
+    ms=$(mktemp -d) && md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null) || die "mise doctor --json failed: mise's dirs unknown"
+    rm -rf "$ms"
     for d in data cache config; do
       v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(jq -r --arg d "$d" '.dirs[$d]' <<< "$md")"
     done
@@ -707,18 +709,19 @@ else
   r=$(t gh issue list)
   check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
 fi
+if command -v mise > /dev/null; then   # step 6b: what a judge's tool call would need installed is installed
+  # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
+  ms=$(mktemp -d); mm=(); for d in "$WT" "$kit"; do
+    if m=$(MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing 2> /dev/null); then m=$(awk 'NF {print $1 "@" $2}' <<< "$m" | paste -sd ' ' -)
+    else m="mise ls --missing failed"; fi
+    [[ -z "$m" ]] || mm+=("$d: $m")
+  done; rm -rf "$ms"
+  check "${#mm[@]}" "mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR${mm:+ (NOT installed: ${mm[*]}; the sandbox installs nothing: run outside it, in each: mise install --locked)}"
+fi
 # Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
 go=$(python3 -c 'import socket, sys
 c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(sys.argv[1]); c.send(b"{\"t\": \"go\"}"); print(c.recv(16).decode())' "$SCR/rec/sock" 2>&1)
 check "$(t test "$go" = live)" "attempt record live from here (recorder answered: ${go:-nothing}); the judge's view of it read-only: $SCR/rec"
-if command -v mise > /dev/null; then   # step 6b: what a judge's tool call would need installed is installed
-  mm=(); for d in "$WT" "$kit"; do
-    if m=$(mise -C "$d" ls --local --missing 2> /dev/null); then m=$(awk 'NF {print $1 "@" $2}' <<< "$m" | paste -sd ' ' -)
-    else m="mise ls --missing failed"; fi
-    [[ -z "$m" ]] || mm+=("$d: $m")
-  done
-  check "${#mm[@]}" "mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR${mm:+ (NOT installed: ${mm[*]}; the sandbox installs nothing: run outside it, in each: mise install --locked)}"
-fi
 dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(t test "$(wc -l <<< "$dirty")" = 1)" "worktree clean at $dirty"
 ((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; reap; exit 66; }
 
