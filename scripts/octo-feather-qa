@@ -12,7 +12,7 @@ env, an offline gh refusing every call, the copy an overlay whose writes die wit
 `just qc`, no lane history: no archived lanes or director log bound in, proof line `history none`). The
 sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox cannot start, is a
 FAIL, never an unsandboxed run. Pi's session goes to --session-dir on the sandbox's private /tmp,
-never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH (logs argv,
+never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH, behind any ran shim (logs argv,
 answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
 qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
@@ -20,8 +20,8 @@ is credited to: schema, Before targets). For a case graded on test_write only, t
 call that changed a file (on what: schema, Before targets), no test module imported.
 
 Grading reads facts from the Pi JSON event stream (tool_execution_start events, the watcher's qa_fs events)
-and, for attempt_blocked only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
-Attempt record), against the
+and, for attempt_blocked and ran only, the sandbox's own attempt record (sandbox.json `attempts`; what it reads: schema,
+Attempt record, Run record; a ran fact's program gets the sandbox's recording shim first on PATH), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
@@ -349,6 +349,9 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
         return judge_tool(cast("list[str]", fact["tools"]), cast("list[str] | None", lines), final=cast("bool", final))
     if fact["fact"] == "attempt_blocked":
         return judge_attempt(fact["kind"], None if record is None else list(record), final)
+    if fact["fact"] == "ran":
+        rec = None if record is None else cast("list[dict[str, object]]", list(cast("list[object]", record)))
+        return judge_ran(cast("dict[str, object]", fact), rec, final=cast("bool", final))
     t, s, n = fact["fact"], fact["skill"], len(calls)
     texts = result_texts(lines) if lines is not None else []
     r = next((i for i, x in enumerate(texts[:n]) if loads(fact, x)), None)
@@ -429,6 +432,43 @@ def judge_attempt(kind, record, final):
     return "pass", f"attempt_blocked {kind}: {len(tried)} recorded, each refused: " + "; ".join(map(show_, tried))
 
 
+def arg_matches(want: str, got: str, head: str | None) -> bool:
+    """A ran fact's argument WANT against a recorded one: equal, a {head} in WANT standing for a prefix of the case's
+    HEAD sha of 7 or more hex digits (rule: schema, Run record)."""
+    if "{head}" not in want or not head:
+        return want == got
+    m = re.fullmatch("([0-9a-f]{7,40})".join(map(re.escape, want.split("{head}"))), got)
+    return m is not None and all(head.startswith(g) for g in m.groups())
+
+
+def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
+    """ran PROGRAM ARGS over the sandbox's RECORD: a recorded run of PROGRAM whose argv starts with ARGS, its exit not
+    judged (rule: schema, Run record)."""
+    p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
+    name = f"ran {' '.join([p, *want])}"
+    if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
+        return "fail", f"{name}: the sandbox sent no whole attempt record"
+    runs = [(r, [str(x) for x in cast("list[object]", r["argv"])]) for r in record
+            if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
+    def show_(r: dict[str, object]) -> str:
+        return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
+    hit = next((r for r, a in runs if len(a) >= len(want)
+                and all(arg_matches(w, g, head if isinstance(head, str) else None) for w, g in zip(want, a))), None)
+    if hit is not None:
+        return "pass", f"{name}: recorded run {show_(hit)}"
+    if not final:
+        return "open", f"{name}: no matching run recorded yet"
+    return "fail", (f"{name}: no run of {p} with these leading arguments in the sandbox's record ({len(record)} entries; "
+                     + (f"runs of {p}: {'; '.join(show_(r) for r, _ in runs)})" if runs else f"no run of {p} recorded)"))
+
+
+def ran_setup(facts: list[dict[str, object]], head: str) -> tuple[list[dict[str, object]], str]:
+    """FACTS with each ran fact's _head (the case HEAD its {head} stands for), and the sandbox's QC_RECORD: the programs
+    those facts name, one per line, the only ones it shims (schema, Run record)."""
+    ran = [f for f in facts if f.get("fact") == "ran"]
+    return [dict(f, _head=head) if f.get("fact") == "ran" else f for f in facts], "\n".join(sorted({str(f["program"]) for f in ran}))
+
+
 # ---- the in-sandbox stop rule ---------------------------------------------------------------
 
 FAKE_GH = r'''#!/bin/sh
@@ -459,7 +499,9 @@ def prep(setup):
     if setup.get("fake_gh"):
         log = f"{QA_TMP}/gh.log"; open(log, "w").close()
         Path(f"{QA_TMP}/bin/gh").write_text(FAKE_GH); os.chmod(f"{QA_TMP}/bin/gh", 0o755)
-        env.update(PATH=f"{QA_TMP}/bin:{env.get('PATH', '')}", FAKE_GH_LOG=log)
+        ps = env.get("PATH", "").split(":")
+        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran gh records it
+        env.update(PATH=":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]]), FAKE_GH_LOG=log)
     if setup.get("origin"):
         origin = f"{QA_TMP}/origin.git"
         for a in (["init", "-q", "--bare", "-b", "main", origin], ["push", "-q", origin, "main"], ["remote", "add", "origin", origin]):
@@ -695,6 +737,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
             return finish(out, suite, case, role_model, 0.0, "FAIL", [f"fixture: {why}; case not run"], [], None, kits)
         task = case["task"].replace("{repo}", str(repo)).replace("{head}", head)
         facts = [skill_source(f, kit, repo) if "skill" in f else f for f in facts]
+        facts, shims = ran_setup(cast("list[dict[str, object]]", facts), head)
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
@@ -706,12 +749,14 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         ro = os.environ.get("OCTO_FEATHER_QC_RO_BINDS")
         if kit != KIT:   # the older kit read-only in the sandbox, as the head kit is
             os.environ["OCTO_FEATHER_QC_RO_BINDS"] = ":".join(p for p in (ro, str(kit)) if p)
+        # the sandbox's run shims: only the programs this case's ran facts name (schema, Run record)
+        os.environ["QC_RECORD"] = shims
         try:
             run, rec = qc.sandboxed(cmd, f"qa-{runid}-{n}", {"off": GH_OFF}, history=False, kit=kit)
         except SystemExit as e:   # unshare missing or unusable: never run unsandboxed
             run, rec = None, {"error": f"sandbox unavailable (exit {e.code})"}
         finally:
-            os.chdir(here)
+            os.chdir(here); os.environ.pop("QC_RECORD", None)
             if ro is None:
                 os.environ.pop("OCTO_FEATHER_QC_RO_BINDS", None)
             else:
