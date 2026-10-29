@@ -860,6 +860,15 @@ def drive_role_launch(f: Feature) -> None:
     say(f"role-launch evidence: {f.d}")
 
 
+def classify_stub(f: Feature, sc: Path) -> str:
+    """A dir under SC holding the kit's stub classifier `pi` (tests/fixtures/classify-stub/pi), for OCTO_FEATHER_QC_PATH: first
+    on the qc sandbox's PATH, so `just qc`'s advisory question never reaches a real model (the kit justfile puts ~/.local/bin,
+    the box's pi, before a caller's PATH). STUB_ANSWER unset: every advisory answer shows unavailable."""
+    (sc / "bin").mkdir(exist_ok=True)
+    (sc / "bin" / "pi").symlink_to(Path(f.s.repo) / "tests" / "fixtures" / "classify-stub" / "pi")
+    return str(sc / "bin")
+
+
 def drive_qc_capture(f: Feature) -> None:
     """`just qc` twice at one head of a scratch target whose qc.toml declares a passing and a failing demo: each run
     captures both into the scratch target's evidence store and decides from the demos' own checks, the same both times."""
@@ -892,8 +901,8 @@ def drive_qc_capture(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract with two demos")
     head = git("rev-parse", "HEAD")
-    # Scratch box state: qc's reports, the scratch target's evidence store; never a live lane's.
-    f.env = {"XDG_STATE_HOME": str(sc / "state")}
+    # Scratch box state: qc's reports, the scratch target's evidence store; never a live lane's. No real classifier.
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
     qc = ("just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
     line = r"(?m)^{v} {a}: \$ .*\n  demo exit status {x}\n  evidence complete; decision demo checks; record ([0-9]{{8}}T[0-9]{{6}}Z-[0-9a-f]{{8}})$"
 
@@ -967,7 +976,7 @@ def drive_qc_browser(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract with a browser demo")
     head = git("rev-parse", "HEAD")
-    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports, the scratch target's evidence store; the box's browser
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}   # qc's reports, the scratch target's evidence store; the box's browser; no real classifier
     f.pre = ["env", "-C", str(r)]
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     f.pre = []
@@ -1002,8 +1011,6 @@ def drive_qc_advisory(f: Feature) -> None:
     shutil.rmtree(sc, ignore_errors=True)
     (r / "docs" / "specs").mkdir(parents=True)
     (sc / "state").mkdir()
-    (sc / "bin").mkdir()
-    (sc / "bin" / "pi").symlink_to(Path(f.s.repo) / "tests" / "fixtures" / "classify-stub" / "pi")
     model = json.loads((Path(f.s.repo) / "evals" / "judgment-model.json").read_text())["model"]
 
     def git(*args: str) -> str:
@@ -1025,9 +1032,8 @@ def drive_qc_advisory(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract with a passing demo")
     head = git("rev-parse", "HEAD")
-    # Scratch box state; the stub classifier first on the qc sandbox's PATH (OCTO_FEATHER_QC_PATH: the kit justfile puts
-    # ~/.local/bin, the box's real pi, before a caller's PATH), induced to answer does-not-show at 0.91.
-    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+    # Scratch box state; the stub classifier induced to answer does-not-show at 0.91.
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc),
              "STUB_ANSWER": "does-not-show", "STUB_CONFIDENCE": "0.91"}
     f.pre = ["env", "-C", str(r)]
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
