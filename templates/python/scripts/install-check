@@ -1,0 +1,157 @@
+#!/usr/bin/env python3
+"""Compare each gate tool installed here with the one pin CI installs it from.
+
+  scripts/install-check        (just install-check; a step of just check)
+
+  uv          pyproject.toml [tool.uv] required-version (CI: setup-uv version-file)
+  just        just-version (CI: setup-just reads it)
+  python      .python-version (uv makes the venv from it, here and in CI)
+  packages    uv.lock: each dev tool installed at its locked version, and uv's own check that
+              .venv holds exactly the lock (uv sync --locked --offline --check)
+  shellcheck  uv.lock shellcheck-py: the program it ships, executed, reports that version
+
+Prints one ok, MISSING or WRONG VERSION line per tool naming its pin and install fix.
+Exit: 0 every tool matches, 1 any mismatch.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+import subprocess
+import sys
+import tomllib
+from pathlib import Path
+from typing import cast
+
+UV_RUN = ["uv", "run", "--locked", "--offline", "--no-sync"]
+SYNC = "uv sync --locked"
+
+
+def answer(argv: list[str]) -> str | None:
+    """The command's stdout, or None when it cannot run or fails."""
+    try:
+        result = subprocess.run(argv, capture_output=True, text=True, check=False)
+    except OSError:
+        return None
+    return result.stdout if result.returncode == 0 else None
+
+
+def compare(tool: str, want: str, got: str | None, source: str, fix: str) -> bool:
+    if got is None:
+        sys.stdout.write(f"{tool} MISSING (want {want}, pin: {source}); install: {fix}\n")
+        return False
+    if got != want:
+        sys.stdout.write(
+            f"{tool} WRONG VERSION {got} (want {want}, pin: {source}); install: {fix}\n"
+        )
+        return False
+    sys.stdout.write(f"{tool} ok {got} ({source})\n")
+    return True
+
+
+def word(text: str | None, index: int) -> str | None:
+    words = (text or "").split()
+    return words[index] if len(words) > index else None
+
+
+def locked(root: Path) -> dict[str, str]:
+    lock = tomllib.loads((root / "uv.lock").read_text(encoding="utf-8"))
+    packages = cast("list[dict[str, object]]", lock.get("package", []))
+    editable = {
+        str(item["name"])
+        for item in packages
+        if "editable" in cast("dict[str, object]", item.get("source", {}))
+    }
+    return {
+        str(item["name"]): str(item["version"]) for item in packages if item["name"] not in editable
+    }
+
+
+def normal(name: str) -> str:
+    """A package name as the lock writes it (PEP 503)."""
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
+def installed() -> dict[str, str] | None:
+    text = answer(["uv", "pip", "list", "--format", "json"])
+    if text is None:
+        return None
+    return {
+        normal(str(item["name"])): str(item["version"])
+        for item in cast("list[dict[str, object]]", json.loads(text))
+    }
+
+
+def shellcheck_version() -> str | None:
+    for line in (answer([*UV_RUN, "shellcheck", "--version"]) or "").splitlines():
+        if line.startswith("version: "):
+            return line.removeprefix("version: ").strip()
+    return None
+
+
+def main() -> int:
+    root = Path.cwd()
+    project = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+    tool = cast("dict[str, dict[str, object]]", project.get("tool", {}))
+    uv_pin = str(tool.get("uv", {}).get("required-version", "")).removeprefix("==")
+    just_pin = (root / "just-version").read_text(encoding="utf-8").strip()
+    python_pin = (root / ".python-version").read_text(encoding="utf-8").strip()
+    results = [
+        compare(
+            "uv",
+            uv_pin,
+            word(answer(["uv", "--version"]), 1),
+            "pyproject.toml [tool.uv] required-version",
+            f"https://docs.astral.sh/uv/getting-started/installation/ (uv {uv_pin})",
+        ),
+        compare(
+            "just",
+            just_pin,
+            word(answer(["just", "--version"]), 1),
+            "just-version",
+            f"https://just.systems (just {just_pin})",
+        ),
+        compare(
+            "python",
+            python_pin,
+            word(answer([*UV_RUN, "python", "--version"]), 1),
+            ".python-version",
+            f"uv python install {python_pin} && {SYNC}",
+        ),
+    ]
+    pins = locked(root)
+    present = installed() or {}
+    groups = cast("dict[str, list[str]]", project.get("dependency-groups", {}))
+    tools = sorted(
+        {normal(re.split(r"[<>=!~;\[ ]", item, maxsplit=1)[0]) for item in groups["dev"]}
+    )
+    results.extend(
+        compare(name, pins.get(name, "(not in uv.lock)"), present.get(name), "uv.lock", SYNC)
+        for name in tools
+    )
+    environment = answer(["uv", "sync", "--locked", "--offline", "--check"])
+    results.append(
+        compare(
+            "environment",
+            "uv.lock",
+            "uv.lock" if environment is not None else "differs",
+            "uv.lock (uv sync --locked --offline --check)",
+            SYNC,
+        )
+    )
+    shipped = ".".join(pins.get("shellcheck-py", "").split(".")[:3])
+    results.append(
+        compare(
+            "shellcheck (executed)",
+            shipped,
+            shellcheck_version(),
+            "uv.lock shellcheck-py, which ships ShellCheck " + shipped,
+            SYNC,
+        )
+    )
+    return 0 if all(results) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

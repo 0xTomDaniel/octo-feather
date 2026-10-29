@@ -8,11 +8,16 @@ dependencies = []
 app = "app.cli:main"
 
 [dependency-groups]
-dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff"]
+dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff", "shellcheck-py"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.uv]
+# The one uv pin: uv refuses any other version, CI's setup-uv installs it (version-file) and
+# `just install-check` compares it.
+required-version = "==0.13.1"
 
 [tool.ruff]
 line-length = 100

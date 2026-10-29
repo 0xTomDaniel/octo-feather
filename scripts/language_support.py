@@ -64,6 +64,13 @@ class DeclarationError(ValueError):
     """The declaration cannot guarantee the claimed execution."""
 
 
+# The argv prefixes a declared tool may run its program through (complete argv, nothing else).
+LAUNCHERS = (
+    ["pnpm", "exec"],
+    ["uv", "run", "--locked", "--offline", "--no-sync"],
+)
+
+
 def read_declaration(path: Path) -> Declaration:
     return cast("Declaration", json.loads(path.read_text()))
 
@@ -177,9 +184,9 @@ def validate_bindings(root: Path, declaration: Declaration) -> None:
             msg = f"{key}: bind {tool['recipe']} in the reachable gate"
             raise DeclarationError(msg)
         argv = tool["argv"]
-        prefix = (
-            ["pnpm", "exec", tool["program"]] if argv[:2] == ["pnpm", "exec"] else [tool["program"]]
-        )
+        empty: list[str] = []
+        launcher = next((item for item in LAUNCHERS if argv[: len(item)] == item), empty)
+        prefix = [*launcher, tool["program"]]
         if not argv or argv[: len(prefix)] != prefix or not all(argv):
             msg = f"{key}: argv must execute declared program {tool['program']}"
             raise DeclarationError(msg)
@@ -249,6 +256,67 @@ def typescript(root: Path, tool: Tool, files: list[str]) -> int:
     return result.returncode
 
 
+def mirror(path: str) -> str:
+    """A repo path with each dot-leading component `.x` written `_.x`."""
+    return "/".join(f"_{c}" if c.startswith(".") else c for c in path.split("/"))
+
+
+def pyright_report(
+    root: Path, argv: list[str], files: list[str], options: list[str]
+) -> dict[str, object]:
+    """basedpyright (argv) over exactly the files, through a throwaway mirror of links whose
+    project root holds the repo's pyproject.toml linked in: basedpyright drops a file under a dot
+    directory (.agents/) even when named, so `.x` reads `_.x` there. Diagnostics come back with
+    repo paths; fewer files analyzed than named is an error."""
+    with tempfile.TemporaryDirectory() as folder:
+        mirrored = Path(folder).resolve()
+        config = mirrored / "pyproject.toml"
+        config.symlink_to((root / "pyproject.toml").resolve())
+        back: dict[str, str] = {}
+        for name in files:
+            link = mirrored / mirror(name)
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to((root / name).resolve())
+            back[str(link)] = name
+        command = [*argv, "--outputjson", "-p", str(config), *options, *back]
+        result = subprocess.run(command, cwd=root, capture_output=True, text=True, check=False)
+    # --writebaseline prints its summary line before the JSON report.
+    start = result.stdout.find("{\n")
+    try:
+        report = cast("dict[str, object]", json.loads(result.stdout[max(start, 0) :]))
+    except json.JSONDecodeError as error:
+        msg = (
+            f"basedpyright gave no JSON (exit {result.returncode}): {result.stdout} {result.stderr}"
+        ).strip()
+        raise DeclarationError(msg) from error
+    summary = cast("dict[str, int]", report.get("summary") or {})
+    if summary.get("filesAnalyzed") != len(files):
+        analyzed = summary.get("filesAnalyzed")
+        msg = f"basedpyright analyzed {analyzed} files, not the {len(files)} named"
+        raise DeclarationError(msg)
+    for item in cast("list[dict[str, object]]", report.get("generalDiagnostics") or []):
+        item["file"] = back.get(str(item.get("file")), str(item.get("file")))
+    return report
+
+
+def pyright(root: Path, tool: Tool, files: list[str]) -> int:
+    report = pyright_report(root, tool["argv"], files, [])
+    bad = 0
+    for item in cast("list[dict[str, object]]", report.get("generalDiagnostics") or []):
+        if item.get("severity") not in {"error", "warning"}:
+            continue
+        start = cast("dict[str, dict[str, int]]", item.get("range") or {}).get("start", {})
+        sys.stdout.write(
+            f"{item['file']}:{start.get('line', 0) + 1}: {item.get('rule')} {item.get('message')}\n"
+        )
+        bad = 1
+    if bad:
+        sys.stderr.write("check-types: change the code so basedpyright accepts each line above\n")
+    else:
+        sys.stdout.write(f"types: ok (basedpyright analyzed {len(files)} files)\n")
+    return bad
+
+
 def execute_tool(root: Path, tool: Tool, files: list[str]) -> int:
     adapter = tool.get("adapter", "direct")
     if adapter in ("lint", "format", "types"):
@@ -268,6 +336,8 @@ def execute_tool(root: Path, tool: Tool, files: list[str]) -> int:
         return compile_python(root, tool, files)
     elif adapter == "tsc":
         return typescript(root, tool, files)
+    elif adapter == "pyright":
+        return pyright(root, tool, files)
     elif adapter == "direct":
         command = [*tool["argv"], *files]
     else:

@@ -157,25 +157,11 @@ check-types:
 check-ts:
     @python3 scripts/check-languages run check-ts
 
-# Every template wires the same gate: AGENTS.md with a `Repo skills:` line, a
-# justfile with `check` and `integrate`, a git hook and CI that run `just check`.
-# Structure only; each template's own `just check` runs in its repo (deterministic, no network here).
-# code() drops `#` comments (line start or after white space) before the hook and CI greps (#118).
+# Every template wires the same gate (scripts/check-templates): AGENTS.md with a `Repo skills:` line, check,
+# integrate and qc recipes, a git hook and CI that run `just check`, its language check and install-check in
+# GATE_RECIPES, its own checker green in place, and templates/python's checker a byte copy of the kit's.
 check-templates:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    cd "$root"
-    code() { sed -E 's/(^|[[:space:]])#.*//' "$1"; }
-    n=0
-    for t in templates/*/; do
-      t="${t%/}"
-      grep -q '^Repo skills:' "$t/AGENTS.md" || { echo "check-templates: $t/AGENTS.md lacks a 'Repo skills:' line" >&2; exit 1; }
-      grep -q '^check:' "$t/justfile" && grep -q '^integrate ' "$t/justfile" && grep -q '^q[c] ' "$t/justfile" || { echo "check-templates: $t/justfile needs check, integrate and product-judge recipes (docs/adr/0022)" >&2; exit 1; }
-      [[ -x "$t/.githooks/pre-commit" ]] && grep -qE '(^|[^[:alnum:]_-])just check([^[:alnum:]_-]|$)' <(code "$t/.githooks/pre-commit") || { echo "check-templates: $t/.githooks/pre-commit must run just check" >&2; exit 1; }
-      grep -qE 'run: just check([^[:alnum:]_-]|$)' <(code "$t/.github/workflows/check.yml") || { echo "check-templates: $t CI must run just check" >&2; exit 1; }
-      n=$((n + 1))
-    done
-    echo "templates: ok ($n)"
+    @python3 scripts/check-templates "$root"
 
 # Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
 # script's public surface is review's call, not a check (docs/adr/0008, #118).

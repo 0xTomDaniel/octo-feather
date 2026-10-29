@@ -9,9 +9,17 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v6
-      - uses: extractions/setup-just@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)
+      # Each tool from its one pin, the same file `just install-check` (a gate step) compares.
+      - id: pins
+        run: echo "just=$(tr -d '[:space:]' < just-version)" >> "$GITHUB_OUTPUT"
+      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        with:
+          just-version: ${{ steps.pins.outputs.just }}
+      # uv at pyproject.toml [tool.uv] required-version; uv installs .python-version's Python.
+      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+        with:
+          version-file: pyproject.toml
       - run: uv sync --locked
       - run: just check
         env:

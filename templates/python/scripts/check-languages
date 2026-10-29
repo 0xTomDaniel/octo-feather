@@ -1,0 +1,80 @@
+#!/usr/bin/env python3
+"""Validate or execute the repository's language argv declaration."""
+
+import argparse
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+from language_support import (
+    DeclarationError,
+    classify,
+    executable,
+    execute,
+    gate_dump,
+    read_declaration,
+    validate_bindings,
+)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "command", nargs="?", default="check", choices=["check", "run", "gate", "files"]
+    )
+    parser.add_argument("name", nargs="?")
+    args, extra = parser.parse_known_args()
+    if args.command != "gate" and extra:
+        parser.error("unexpected arguments: " + " ".join(extra))
+    root = Path.cwd()
+    declaration = read_declaration(root / "languages.json")
+    validate_bindings(root, declaration)
+    if args.command == "run":
+        if not isinstance(args.name, str):
+            parser.error("run requires a recipe name")
+        return execute(root, declaration, args.name)
+    if args.command == "files":
+        if not isinstance(args.name, str):
+            parser.error("files requires a language name")
+        sys.stdout.write("\n".join(classify(root, declaration)[args.name]) + "\n")
+        return 0
+    if args.command == "gate":
+        dump = gate_dump(root)
+        gate = dump["assignments"]["GATE_RECIPES"]["value"]
+        if not isinstance(gate, str):
+            parser.error("GATE_RECIPES must be a literal recipe list")
+        nested = bool(os.environ.get("GATE_NESTED"))
+        env = dict(os.environ, GATE_RECIPES=gate, GATE_NESTED="1")
+        result = subprocess.run(
+            [executable("uv"), "sync", "--locked", "--offline", "--quiet"], env=env, check=False
+        )
+        if result.returncode:
+            return result.returncode
+        options = ["-n", "0", "-x"] if nested else ["-n", os.environ.get("GATE_WORKERS", "2")]
+        return subprocess.run(
+            [
+                executable("uv"),
+                "run",
+                "--locked",
+                "--offline",
+                "--no-sync",
+                "pytest",
+                *options,
+                *sys.argv[2:],
+            ],
+            env=env,
+            check=False,
+        ).returncode
+    files = classify(root, declaration)
+    sys.stdout.write(
+        "languages: ok " + ", ".join(f"{name}={len(paths)}" for name, paths in files.items()) + "\n"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        sys.exit(main())
+    except (DeclarationError, OSError, ValueError, KeyError) as error:
+        sys.exit(f"check-languages: {error}")

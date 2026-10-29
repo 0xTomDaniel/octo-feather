@@ -12,13 +12,42 @@ setup:
     pnpm install --frozen-lockfile
     git config core.hooksPath .githooks
 
-# Types, lint, architecture, dead code, integration and E2E tests.
-check:
-    pnpm exec tsc
-    pnpm exec eslint --max-warnings 0 .
+# The gate's steps, each one vitest test (tests/gate.test.ts) beside the integration and E2E tests.
+# Every tracked file's language and the tools that gate it: languages.json, checked and run by
+# scripts/check-languages.ts (the octo-feather kit's checker, ported to TypeScript: no Python here).
+export GATE_RECIPES := "install-check check-languages check-scripts check-ts check-arch check-dead-code"
+
+# Types, lint, shell, architecture, dead code, integration and E2E tests.
+check: check-tests
+
+# Every tracked file is of a declared language, each tool bound below.
+check-languages:
+    @node scripts/check-languages.ts
+
+check-scripts:
+    @node scripts/check-languages.ts run check-scripts
+
+check-ts:
+    @node scripts/check-languages.ts run check-ts
+
+check-arch:
     pnpm exec depcruise src tests
+
+check-dead-code:
     pnpm exec knip
-    pnpm exec vitest run
+
+# Each gate tool at the one pin CI installs from: scripts/install-check.ts.
+install-check:
+    node scripts/install-check.ts
+
+# pnpm install (offline, frozen), then vitest; a gate run inside another gate's test (GATE_NESTED set) is
+# sequential and stops at its first failure. Extra arguments go to vitest.
+check-tests *args:
+    @node scripts/check-languages.ts gate "$@"
+
+# The gate's vitest tests, all or a subset by vitest arguments (`just test -t check-ts`).
+test *args:
+    @just check-tests "$@"
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:

@@ -13,31 +13,41 @@ setup:
     git config core.hooksPath .githooks
 
 # The gate's steps, each one pytest item (tests/test_gate.py) beside the integration and E2E tests.
-export GATE_RECIPES := "check-lint check-format check-types check-imports"
+# Every tracked file's language and the tools that gate it: languages.json, checked and run by
+# scripts/check-languages (the octo-feather kit's checker, copied byte for byte).
+export GATE_RECIPES := "install-check check-languages check-scripts check-lint check-format check-types check-imports"
 
-# Lint, format, types, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md Commands;
-# trend line: tests/conftest.py). Timing never decides pass or fail.
+# Lint, format, types, shell, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md
+# Commands; trend line: tests/conftest.py). Timing never decides pass or fail.
 check: check-tests
 
+# Every tracked file is of a declared language or a reasoned exemption, each tool bound below.
+check-languages:
+    @python3 scripts/check-languages
+
+check-scripts:
+    @python3 scripts/check-languages run check-scripts
+
 check-lint:
-    uv run --locked ruff check .
+    @python3 scripts/check-languages run check-lint
 
 check-format:
-    uv run --locked ruff format --check .
+    @python3 scripts/check-languages run check-format
 
 check-types:
-    uv run --locked basedpyright
+    @python3 scripts/check-languages run check-types
 
 check-imports:
-    uv run --locked lint-imports
+    uv run --locked --offline --no-sync lint-imports
 
-# A gate run inside another gate's item (GATE_NESTED set) is sequential and stops at its first failure
-# (-n 0 -x). Extra arguments go to pytest.
+# Each gate tool at the one pin CI installs from: scripts/install-check.
+install-check:
+    python3 scripts/install-check
+
+# uv sync, then pytest; a gate run inside another gate's item (GATE_NESTED set) is sequential and stops at
+# its first failure (-n 0 -x). Extra arguments go to pytest.
 check-tests *args:
-    #!/usr/bin/env bash
-    set -euo pipefail
-    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
-    GATE_NESTED=1 exec uv run --locked pytest "$@"
+    @python3 scripts/check-languages gate "$@"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-types`, `just test --lf`).
 test *args:

@@ -1,13 +1,34 @@
 {
-  "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node22/tsconfig.json"],
+  "extends": [
+    "@tsconfig/strictest/tsconfig.json",
+    "@tsconfig/node22/tsconfig.json"
+  ],
   "compilerOptions": {
     "noEmit": true,
+    "allowJs": true,
+    "checkJs": true,
     "allowImportingTsExtensions": true,
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "types": ["node"]
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "es2024",
+      "ESNext.Array",
+      "ESNext.Collection",
+      "ESNext.Iterator",
+      "DOM"
+    ]
   },
-  "include": ["src", "tests", ".agents/skills/verify-app/scripts"]
+  "include": [
+    "**/*",
+    ".agents/skills/verify-app/scripts",
+    ".dependency-cruiser.cjs"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
 }

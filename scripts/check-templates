@@ -1,0 +1,154 @@
+#!/usr/bin/env python3
+"""Check each starter template under templates/ (`just check-templates`, in the kit's gate).
+
+  check-templates [KIT_ROOT]
+
+Per template: AGENTS.md has a `Repo skills:` line; its justfile (just's own JSON dump) has check,
+integrate and qc recipes; .githooks/pre-commit is executable and runs `just check`, and so does
+its CI workflow; GATE_RECIPES lists check-languages and install-check, check-languages is bound to
+the template's checker; the template's own checker passes in place (every tracked file of a
+declared language, each tool bound in the reachable gate); every declared language lists a tool and
+the hook's language lists the `shellcheck` tool. templates/python's checker files and trend hook
+are byte-for-byte copies of the kit's (the kit owns them); templates/typescript's checker is the
+TypeScript port, held to the kit checker's verdicts by tests/language-parity.sh.
+Exit: 0 all templates pass, 1 the first failure, named with its fix.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+from typing import cast
+
+# Each template's checker invocation, the binding its justfile must carry.
+CHECKERS = {
+    "python": ["python3", "scripts/check-languages"],
+    "typescript": ["node", "scripts/check-languages.ts"],
+}
+# templates/python copies these kit files byte for byte (kit path: template path).
+COPIES = {
+    "scripts/check-languages": "scripts/check-languages",
+    "scripts/language_support.py": "scripts/language_support.py",
+    "tests/gate/conftest.py": "tests/conftest.py",
+}
+GATE = re.compile(r"(^|[^\w-])just check([^\w-]|$)")
+
+
+class TemplateError(Exception):
+    """A template fails a rule; the message names the file and the fix."""
+
+
+def code(text: str) -> list[str]:
+    """Lines with shell comments removed (a # at line start or after whitespace)."""
+    return [re.sub(r"(^|\s)#.*", "", line) for line in text.splitlines()]
+
+
+def runs_gate(lines: list[str], *, ci: bool) -> bool:
+    if ci:
+        return any(re.search(r"run: just check([^\w-]|$)", line) for line in lines)
+    return any(GATE.search(line) for line in lines)
+
+
+def dump(template: Path) -> dict[str, object]:
+    just = shutil.which("just")
+    if just is None:
+        msg = "just: missing executable; install it (just-version) before the gate"
+        raise TemplateError(msg)
+    result = subprocess.run(
+        [just, "--dump", "--dump-format", "json"],
+        cwd=template,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode:
+        msg = f"{template}/justfile: just cannot read it: {result.stderr.strip()}"
+        raise TemplateError(msg)
+    return cast("dict[str, object]", json.loads(result.stdout))
+
+
+def check_wiring(template: Path) -> None:
+    agents = (template / "AGENTS.md").read_text(encoding="utf-8")
+    if not re.search(r"^Repo skills:", agents, re.MULTILINE):
+        msg = f"{template}/AGENTS.md lacks a 'Repo skills:' line"
+        raise TemplateError(msg)
+    data = dump(template)
+    recipes = cast("dict[str, dict[str, object]]", data["recipes"])
+    if not {"check", "integrate", "qc"} <= recipes.keys():
+        msg = (
+            f"{template}/justfile needs check, integrate and product-judge recipes (docs/adr/0022)"
+        )
+        raise TemplateError(msg)
+    hook = template / ".githooks/pre-commit"
+    if not os.access(hook, os.X_OK) or not runs_gate(code(hook.read_text("utf-8")), ci=False):
+        msg = f"{hook} must run just check"
+        raise TemplateError(msg)
+    ci = template / ".github/workflows/check.yml"
+    if not runs_gate(code(ci.read_text("utf-8")), ci=True):
+        msg = f"{template} CI must run just check ({ci})"
+        raise TemplateError(msg)
+    assignments = cast("dict[str, dict[str, object]]", data["assignments"])
+    gate = str(assignments.get("GATE_RECIPES", {}).get("value", "")).split()
+    for name in ("check-languages", "install-check"):
+        if name not in gate:
+            msg = f"{template}/justfile: add {name} to GATE_RECIPES (the gate runs it)"
+            raise TemplateError(msg)
+    checker = CHECKERS.get(template.name)
+    if checker is None:
+        msg = f"{template}: no language checker known for this template; add it to {__file__}"
+        raise TemplateError(msg)
+    line = "@" + " ".join(checker)
+    if recipes["check-languages"]["body"] != [[line]]:
+        msg = f"{template}/justfile: check-languages must be exactly `{line}`"
+        raise TemplateError(msg)
+
+
+def check_declaration(template: Path) -> None:
+    declaration = json.loads((template / "languages.json").read_text(encoding="utf-8"))
+    languages = cast("dict[str, dict[str, list[str]]]", declaration["languages"])
+    for name, entry in languages.items():
+        if not entry["tools"]:
+            msg = f"{template}/languages.json: {name} lists no tool; bind the tool that gates it"
+            raise TemplateError(msg)
+    if not any("bash" in e["shebangs"] and "shellcheck" in e["tools"] for e in languages.values()):
+        msg = f"{template}/languages.json: the bash hook's language must list the shellcheck tool"
+        raise TemplateError(msg)
+    result = subprocess.run(
+        CHECKERS[template.name], cwd=template, capture_output=True, text=True, check=False
+    )
+    if result.returncode:
+        msg = f"{template}: its gate's language check fails: {result.stderr.strip()}"
+        raise TemplateError(msg)
+
+
+def check_copies(kit: Path, template: Path) -> None:
+    for source, copy in COPIES.items():
+        if (kit / source).read_bytes() != (template / copy).read_bytes():
+            fix = f"cp {source} {template}/{copy}"
+            msg = f"{template}/{copy} differs from the kit's {source}; fix: {fix}"
+            raise TemplateError(msg)
+
+
+def main(argv: list[str]) -> int:
+    kit = Path(argv[0] if argv else ".").resolve()
+    templates = sorted(path for path in (kit / "templates").iterdir() if path.is_dir())
+    try:
+        for template in templates:
+            check_wiring(template)
+            check_declaration(template)
+            if template.name == "python":
+                check_copies(kit, template)
+    except (TemplateError, OSError, KeyError) as error:
+        sys.stderr.write(f"check-templates: {error}\n")
+        return 1
+    sys.stdout.write(f"templates: ok ({len(templates)})\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
