@@ -16,7 +16,7 @@ Drive criterion: `quality#acceptance-evidence-stale`
 ## How to get to it (user POV)
 
 - A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head; each passed criterion's entry in the status file names `record`, `commit` and `tests` (the entry's shape: `octo-feather-spec-status` usage).
-- The owner runs `octo-feather-spec-status show [DIR|STATUS...]` (default `docs/specs`) in the target: one line per criterion, planned, built with no evidence link (built before qc linked records), or built current or `STALE` with what made it stale. Read-only; never part of `just check`. Its usage owns the stale rules.
+- The owner runs `octo-feather-spec-status show [DIR|STATUS...]` in the target: one line per criterion. Its usage owns what each line means and when a built criterion is stale.
 
 ## Driving it with verify-octo-feather
 
@@ -35,6 +35,4 @@ The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/dem
 
 ## Gotchas
 
-- `show` compares code at HEAD, not the worktree: an uncommitted change to a covered path leaves it current until committed. A criterion's text is read from the worktree's spec.
-- A criterion the agent fallback built (no demo at its capture commit) has no covers or tests: only a change to its text makes it stale; its line says so.
-- The kit's own status files predate the links: their built rows show `no evidence link` until a lane's `just qc` judges them again.
+- What `show` compares (HEAD or worktree, code or text), what a fallback-built criterion's line means, and why the kit's own built rows show `no evidence link`: `octo-feather-spec-status` usage, the `show` paragraph.
