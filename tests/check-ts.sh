@@ -11,8 +11,6 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "check-ts test: $1" >&2; [[ -z "${out:-}" ]] || echo "$out" >&2; exit 1; }
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
-git -C "$t" init -q
-git -C "$t" add -A
 # run [ENV...]: just check-ts in the copy into $out and $rc.
 run() { set +e; out="$(cd "$t" && env "$@" just check-ts 2>&1)"; rc=$?; set -e; }
 # has TEXT...: each TEXT is in $out.

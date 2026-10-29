@@ -10,16 +10,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)
-      # Each tool from its one pin, the same file `just install-check` (a gate step) compares.
+      # Native tools from mise.toml and mise.lock, the pins `just setup` installs: mise at mise-version (the action
+      # verifies its signed checksums), then `mise install --locked`. Cached: mise's downloads, which it verifies
+      # again on use, never installed tool trees; the key is mise.lock.
       - id: pins
-        run: echo "just=$(tr -d '[:space:]' < just-version)" >> "$GITHUB_OUTPUT"
-      - uses: extractions/setup-just@53165ef7e734c5c07cb06b3c8e7b647c5aa16db3 # v4
+        run: echo "mise=$(tr -d '[:space:]' < mise-version)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (no moving tag)
         with:
-          just-version: ${{ steps.pins.outputs.just }}
-      # uv at pyproject.toml [tool.uv] required-version; uv installs .python-version's Python.
-      - uses: astral-sh/setup-uv@07a047e608db84b3d8c06cd9a7c7dcc9c355c18e # v10.3.2
+          path: ~/.local/share/mise/downloads
+          key: mise-downloads-${{ runner.os }}-${{ hashFiles('mise.lock') }}
+      - uses: jdx/mise-action@6be3c7ed4c21d4f76b208d351d95aac273ebb76d # v5.2.4 (no moving tag)
+        env:
+          MISE_ALWAYS_KEEP_DOWNLOAD: "1"
         with:
-          version-file: pyproject.toml
+          version: ${{ steps.pins.outputs.mise }}
+          cache: false
       - run: uv sync --locked
       - run: just check
         env:

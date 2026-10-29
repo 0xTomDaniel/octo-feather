@@ -9,7 +9,7 @@ set -euo pipefail
 # The one `just check` case in the copy runs this test there too (its tests/*.sh step): stop there, nested.
 [[ -z "${CHECK_DECISION_LOG_TEST_COPY:-}" ]] || { echo "check-decision-log test: nested run in a copy (a planted log passed check-decision-log)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin" "$t.mise"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
 g init -q; g add -A; g commit -qm base
@@ -173,13 +173,15 @@ schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type
 ln -s missing "$t/$L"; g add -f "$L"; run check-decision-log; unplant "$L"
 [[ "$rc" != 0 ]] && grep -qF "check-decision-log: $L: cannot read" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" \
   || { echo "check-decision-log test: unreadable log not reported" >&2; echo "$out" >&2; exit 1; }
-# Fails closed: a broken python3 or git (a stub first on the justfile's PATH, $HOME/.local/bin,
-# via a throwaway HOME) fails the gate, never decision-log: ok.
+# Fails closed: a broken python3, git or node (a stub first on the justfile's PATH after the kit's mise tools,
+# $HOME/.local/bin, via a throwaway HOME; a mise tool is dropped from the copy's mise.toml for its case) fails the
+# gate, never decision-log: ok.
 broken() {
   local h="$t.home"; mkdir -p "$h/.local/bin"
   printf '#!/bin/sh\necho "%s: broken (check-decision-log test stub)" >&2\nexit 2\n' "$1" > "$h/.local/bin/$1"; chmod +x "$h/.local/bin/$1"
+  cp "$t/mise.toml" "$t.mise"; sed -i "/^$1 = /d" "$t/mise.toml"
   set +e; out="$(cd "$t" && HOME="$h" just check-decision-log 2>&1)"; rc=$?; set -e
-  rm -rf "$h"
+  mv "$t.mise" "$t/mise.toml"; rm -rf "$h"
   [[ "$rc" != 0 ]] && grep -qF "$1: broken" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" || { echo "check-decision-log test: broken $1 passed check-decision-log" >&2; echo "$out" >&2; exit 1; }
 }
 broken python3

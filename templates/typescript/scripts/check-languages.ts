@@ -1,321 +1,201 @@
-/**
- * Validate or execute the repository's language argv declaration (languages.json).
- *
- * The TypeScript port of the octo-feather kit's scripts/check-languages and language_support.py, so a
- * TypeScript repo gates its tracked languages without Python (Python would then be a language it must
- * gate). Same declaration schema, same verdicts and messages: the kit's tests/language-parity.sh runs
- * both on the same git fixture repos. Node builtins only (node runs this file directly, type stripping):
- * real `git ls-files` and `just --dump --dump-format json` answers, JSON declaration.
- *
- *   node scripts/check-languages.ts [check]       classify every tracked file, validate gate bindings
- *   node scripts/check-languages.ts run RECIPE    execute the declared argv of RECIPE's tools
- *   node scripts/check-languages.ts files LANG    print LANG's classified tracked files
- *   node scripts/check-languages.ts gate [ARGS]   the gate: each GATE_RECIPES recipe a vitest item
- */
-import { spawnSync, type SpawnSyncOptions } from "node:child_process";
+// Every language in this repo's tracked files has its lint and type step in `just check`.
+//
+// The octo-feather kit's rule for the repos it creates (owner rulings: issue #225, every tracked language gated
+// from a declared mapping; issue #261, scc classifies, a small comparison checks, mise owns the native pins).
+// TypeScript, run by node itself: this repo needs no Python.
+//
+// Inputs, each the tool's own answer: `git ls-files`; scc (pinned in mise.toml) walking the repo; each gate tool's
+// own file list (tsc: `tsc --showConfig`; eslint: its own config for each file, through its API; ShellCheck:
+// `just shell-files`); the recipes `check` depends on, from `just --dump`; `mise ls --local --json`; package.json.
+// The mapping (LANGUAGES, DATA, LOCKFILES, EXEMPT) is declared below.
+//
+// Fails, naming each file and its fix, when:
+//   1. scc names a tracked file's type Unknown (LOCKFILES, tool-written lockfiles, excepted);
+//   2. scc finds a language that is neither mapped to gate tools nor declared DATA;
+//   3. a mapped tool's own file list misses a file of its language;
+//   4. a mapped tool's recipe is not a dependency of check;
+//   5. a tracked file scc does not list starts with `#!`: scc cannot read that shebang (it drops `env -S` forms),
+//      so its language is unknown;
+//   6. mise.toml pins pnpm and package.json has `packageManager`: two pnpm pins.
+// Passes by design: a tracked file scc does not list and that does not start with `#!` (justfile, .gitignore,
+// version files): no language is found in it, and the ruling gates the languages found. Paths under EXEMPT are
+// not scanned. scc walks the directory, never a file list: scc 4.1.0 skips the shebang of a file named on its
+// command line under a dot directory.
+import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
-import { isDeepStrictEqual } from "node:util";
+import { ESLint } from "eslint";
 
-interface Tool {
-  program: string;
-  argv: string[];
-  recipe: string;
-  install: string;
-  adapter?: string;
-}
+type Tool = "tsc" | "eslint" | "shellcheck";
 
-interface Language {
-  extensions: string[];
-  shebangs: string[];
-  tools: string[];
-}
+// Each language scc can name -> the gate tools that must cover its files (scc's language names).
+const LANGUAGES: Readonly<Record<string, readonly Tool[]>> = {
+  TypeScript: ["tsc", "eslint"],
+  JavaScript: ["tsc", "eslint"],
+  Shell: ["shellcheck"],
+  BASH: ["shellcheck"],
+};
+// Languages that are data, with no lint or type step: a new one is a decision, made here.
+const DATA = new Set(["Markdown", "JSON", "JSONL", "TOML", "YAML", "HTML", "CSS", "Patch", "Plain Text", "License"]);
+// Tool-written lockfiles scc calls Unknown (a .lock extension), by file name: never hand-edited.
+const LOCKFILES = new Set(["mise.lock"]);
+// Each gate tool: the recipe `check` must depend on, and the fix when its own list misses a file.
+const RECIPES: Readonly<Record<Tool, string>> = { tsc: "check-ts", eslint: "check-ts", shellcheck: "check-scripts" };
+const FIX: Readonly<Record<Tool, string>> = {
+  tsc: "add it to tsconfig.json include (a dot path or dotfile by name)",
+  eslint: "lint it in eslint.config.js (out of its ignores, inside a files pattern)",
+  shellcheck: "give it the `shell` attribute in .gitattributes",
+};
+// Paths not scanned, each with its reason.
+const EXEMPT: Readonly<Record<string, string>> = { "docs/specs/.style/": "Spec Chat's vendored style" };
 
-interface Declaration {
-  languages: Record<string, Language>;
-  tools: Record<string, Tool>;
-  exemptions: { path: string; reason: string }[];
-  noncode_extensions: string[];
-  noncode_paths: string[];
-  executable_roots?: string[];
-}
+class UnansweredError extends Error {}
 
-interface Dump {
-  recipes: Record<string, { body: unknown; dependencies: unknown[] } | undefined>;
-  assignments: Record<string, { value: unknown } | undefined>;
-}
-
-/** The declaration cannot guarantee the claimed execution. */
-class DeclarationError extends Error {}
-
-const INVOCATION = "node scripts/check-languages.ts";
-// The argv prefixes a declared tool may run its program through (complete argv, nothing else).
-const LAUNCHERS = [["pnpm", "exec"], ["uv", "run", "--locked", "--offline", "--no-sync"]];
-
-function readDeclaration(file: string): Declaration {
-  return JSON.parse(fs.readFileSync(file, "utf8")) as Declaration;
-}
-
-/** Python's KeyError text, which the kit checker prints for a missing key. */
-function key<T>(table: Record<string, T | undefined>, name: string): T {
-  const value = table[name];
-  if (value === undefined) throw new Error(`'${name}'`);
-  return value;
-}
-
-function output(command: string, args: string[], cwd: string): Buffer {
-  const result = spawnSync(command, args, { cwd, maxBuffer: 1 << 30 });
-  if (result.error) throw new DeclarationError(`${command}: missing executable; install it before running the gate`);
-  if (result.status !== 0) {
-    process.stderr.write(result.stderr);
-    throw new Error(`Command '${[command, ...args].join(" ")}' returned non-zero exit status ${String(result.status)}.`);
+/** The fix for a tool not on PATH, as mise answers for this repo's mise.toml. */
+function missingTool(tool: string): string {
+  const r = spawnSync("mise", ["which", tool], { encoding: "utf8" });
+  if (r.error !== undefined) return "mise is not on PATH: install mise at mise-version, then: mise install --locked";
+  if (r.status === 0) {
+    return `${tool} is installed (${r.stdout.trim()}) but not on PATH: run this through just (the justfile puts this` +
+      " repo's mise tools on PATH), or put mise's shims first";
   }
-  return result.stdout;
+  return `${tool} is not installed: mise install --locked (mise.toml, mise.lock)`;
 }
 
-/** Exit status of argv run with inherited output; a spawn failure is an OSError text like Python's. */
-function run(argv: string[], options: SpawnSyncOptions = {}): number {
-  const [command = "", ...args] = argv;
-  const result = spawnSync(command, args, { stdio: "inherit", ...options });
-  if (result.error) {
-    const code = (result.error as NodeJS.ErrnoException).code;
-    throw new Error(code === "ENOENT" ? `[Errno 2] No such file or directory: '${command}'` : result.error.message);
-  }
-  return result.status ?? 1;
+function ask(cmd: readonly string[], fix: string): string {
+  const [program = "", ...args] = cmd;
+  const r = spawnSync(program, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+  if (r.error !== undefined) throw new UnansweredError(`cannot run ${program}: ${r.error.message}; ${missingTool(program)}`);
+  if (r.status !== 0) throw new UnansweredError(`${cmd.join(" ")} exited ${String(r.status)}: ${r.stderr.trim()}; ${fix}`);
+  return r.stdout;
 }
 
-/** Path(name).suffix of Python 3.12: the last dot of the last component, not leading, not trailing. */
-function suffix(name: string): string {
-  const base = path.posix.basename(name);
-  const index = base.lastIndexOf(".");
-  return index > 0 && index < base.length - 1 ? base.slice(index) : "";
-}
-
-function interpreter(first: Buffer): string {
-  if (first.subarray(0, 2).toString("latin1") !== "#!") return "";
-  // A shebang line is split on whitespace (the kernel and env -S do not apply shell quoting).
-  let words = first.subarray(2).toString("utf8").split(/\s+/u).filter(Boolean);
-  if (words[0] !== undefined && path.posix.basename(words[0]) === "env") {
-    words = words.slice(1);
-    for (let word = words[0]; word !== undefined; word = words[0]) {
-      if (["-u", "--unset", "-C", "--chdir"].includes(word)) words = words.slice(2);
-      else if (word.startsWith("-") || word.includes("=")) words = words.slice(1);
-      else break;
+function sccLanguages(scanned: ReadonlySet<string>): Map<string, string> {
+  const out = ask(
+    ["scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", "--no-scc-ignore", "."],
+    "scc failed",
+  );
+  const found = new Map<string, string>();
+  for (const lang of JSON.parse(out) as { Name: string; Files: { Location: string }[] | null }[]) {
+    for (const f of lang.Files ?? []) {
+      const file = f.Location.replace(/^\.\//u, "");
+      if (scanned.has(file)) found.set(file, lang.Name);
     }
   }
-  if (words[0] === undefined) return "";
-  const program = path.posix.basename(words[0]);
-  if (/^(python|pypy)[0-9.]*$/u.test(program)) return "python";
-  if (program === "uv" && words[1] === "run" && words.slice(2).includes("--script")) return "python";
-  return program;
+  return found;
 }
 
-function classify(root: string, declaration: Declaration): Record<string, string[]> {
-  const names = output("git", ["ls-files", "-z"], root).toString("utf8").split("\0");
-  const result: Record<string, string[]> = {};
-  for (const language of Object.keys(declaration.languages)) result[language] = [];
-  for (const name of names.filter(Boolean)) {
-    const exempt = declaration.exemptions.some(
-      (item) =>
-        item.reason.trim() !== "" &&
-        (name === item.path || name.startsWith(item.path.replace(/\/+$/u, "") + "/")),
-    );
-    if (exempt) continue;
-    const bytes = fs.readFileSync(path.join(root, name));
-    const end = bytes.indexOf(10);
-    const shebang = interpreter(end < 0 ? bytes : bytes.subarray(0, end));
-    const ext = suffix(name);
-    const matches = Object.entries(declaration.languages)
-      .filter(([, entry]) => entry.extensions.includes(ext) || entry.shebangs.includes(shebang))
-      .map(([language]) => language);
-    const [only] = matches;
-    if (matches.length === 1 && only !== undefined) key(result, only).push(name);
-    else if (matches.length > 1) throw new DeclarationError(`${name}: ambiguous language; fix declaration`);
-    else if (!declaration.noncode_extensions.includes(ext) && !declaration.noncode_paths.includes(name)) {
-      throw new DeclarationError(`${name}: unknown type; declare its language or reasoned exemption`);
-    }
+async function toolFiles(files: readonly string[]): Promise<Record<Tool, Set<string>>> {
+  const fetch = "install the packages: pnpm install --frozen-lockfile";
+  const config = JSON.parse(ask(["pnpm", "exec", "tsc", "--showConfig"], fetch)) as { files?: string[] };
+  const tsc = new Set((config.files ?? []).map((f) => f.replace(/^\.\//u, "")));
+  const eslint = new ESLint();
+  const linted = new Set<string>();
+  for (const f of files) {
+    if (!(await eslint.isPathIgnored(f)) && (await eslint.calculateConfigForFile(f)) !== undefined) linted.add(f);
   }
-  return result;
+  const shell = new Set(ask(["just", "--justfile", "justfile", "shell-files"], "fix the recipe").split("\n").filter(Boolean));
+  return { tsc, eslint: linted, shellcheck: shell };
 }
 
-function gateDump(root: string): Dump {
-  return JSON.parse(output("just", ["--dump", "--dump-format", "json"], root).toString("utf8")) as Dump;
+interface Recipe {
+  dependencies: { recipe: string }[];
 }
 
-function gateRecipes(dump: Dump): string | undefined {
-  const gate = key(dump.assignments, "GATE_RECIPES").value;
-  return typeof gate === "string" ? gate : undefined;
-}
-
-function validateBindings(root: string, declaration: Declaration): void {
-  const dump = gateDump(root);
-  const { recipes } = dump;
-  const { tools } = declaration;
-  for (const entry of Object.values(declaration.languages)) {
-    for (const name of entry.tools) {
-      if (!(name in tools)) throw new DeclarationError(`${name}: missing tool; restore its executable declaration`);
-    }
-  }
-  const names = new Set(Object.values(tools).map((tool) => tool.recipe));
-  names.add("check-tests");
-  for (const name of names) {
-    const command = name === "check-tests" ? 'gate "$@"' : `run ${name}`;
-    const line = `@${INVOCATION} ${command}`;
-    const recipe = recipes[name];
-    if (recipe === undefined || !isDeepStrictEqual(recipe.body, [[line]]) || recipe.dependencies.length > 0) {
-      throw new DeclarationError(`${name}: altered binding; use the complete invocation ${line}`);
-    }
-  }
-  const check = recipes["check"];
-  if (check === undefined || !isDeepStrictEqual(check.dependencies, [{ arguments: [], recipe: "check-tests" }])) {
-    throw new DeclarationError("check: restore the check-tests dependency");
-  }
-  const gate = gateRecipes(dump);
-  if (gate === undefined) throw new DeclarationError("GATE_RECIPES: use a literal recipe list");
-  const reachable = gate.split(/\s+/u).filter(Boolean);
-  for (const [name, tool] of Object.entries(tools)) {
-    if (!reachable.includes(tool.recipe)) {
-      throw new DeclarationError(`${name}: bind ${tool.recipe} in the reachable gate`);
-    }
-    const { argv } = tool;
-    const launcher = LAUNCHERS.find((prefix) => isDeepStrictEqual(argv.slice(0, prefix.length), prefix)) ?? [];
-    const prefix = [...launcher, tool.program];
-    if (argv.length === 0 || !isDeepStrictEqual(argv.slice(0, prefix.length), prefix) || argv.some((word) => !word)) {
-      throw new DeclarationError(`${name}: argv must execute declared program ${tool.program}`);
-    }
-  }
-}
-
-function requireExecutables(root: string, declaration: Declaration, files: Record<string, string[]>): void {
-  const roots = declaration.executable_roots ?? [];
-  for (const paths of Object.values(files)) {
-    for (const name of paths) {
-      if (!roots.includes(path.posix.dirname(name))) continue;
-      try {
-        fs.accessSync(path.join(root, name), fs.constants.X_OK);
-      } catch {
-        throw new DeclarationError(`not executable: ${name}; chmod +x ${name}`);
+function gateRecipes(): Set<string> {
+  const dump = JSON.parse(ask(["just", "--justfile", "justfile", "--dump", "--dump-format", "json"], "fix the justfile")) as {
+    recipes: Record<string, Recipe | undefined>;
+  };
+  const seen = new Set<string>();
+  const visit = (name: string): void => {
+    for (const dep of dump.recipes[name]?.dependencies ?? []) {
+      if (!seen.has(dep.recipe)) {
+        seen.add(dep.recipe);
+        visit(dep.recipe);
       }
     }
-  }
+  };
+  visit("check");
+  return seen;
 }
 
-function prepareTypescript(root: string): number {
-  const status = run(["pnpm", "install", "--offline", "--frozen-lockfile"], { cwd: root });
-  if (status) {
-    process.stderr.write(`check-ts: fetch them once, with network: pnpm install --frozen-lockfile --dir ${root}\n`);
-  }
-  return status;
+function bothPnpmPins(): string[] {
+  const pins = JSON.parse(ask(["mise", "ls", "--local", "--json"], "mise failed")) as Record<string, unknown>;
+  const manifest = fs.existsSync("package.json")
+    ? (JSON.parse(fs.readFileSync("package.json", "utf8")) as Record<string, unknown>)
+    : {};
+  if (!("pnpm" in pins) || !("packageManager" in manifest)) return [];
+  return [
+    "package.json: packageManager and mise.toml [tools] pnpm both pin pnpm; delete packageManager: mise owns pnpm" +
+      " (owner ruling, issue #261), and pnpm's switch to packageManager would override it and need the network",
+  ];
 }
 
-function typescript(root: string, tool: Tool, files: string[]): number {
-  const folder = fs.mkdtempSync(path.join(root, "tmp"));
-  let status: number;
-  try {
-    const config = path.join(folder, "tsconfig.json");
-    fs.writeFileSync(
-      config,
-      JSON.stringify({
-        extends: path.join(root, "tsconfig.json"),
-        files: files.map((name) => path.join(root, name)),
-        include: [],
-        exclude: [],
-        compilerOptions: { typeRoots: [path.join(root, "node_modules/@types")] },
-      }),
+function unreadableShebangs(unlisted: readonly string[]): string[] {
+  return unlisted
+    .filter((f) => fs.readFileSync(f).subarray(0, 2).toString() === "#!")
+    .map(
+      (f) =>
+        `${f}: scc cannot name the language of its shebang (it drops \`env -S\` forms); start it with` +
+        " #!/usr/bin/env <interpreter> or give it an extension",
     );
-    status = run([...tool.argv, "--project", config], { cwd: root });
-  } finally {
-    fs.rmSync(folder, { recursive: true, force: true });
-  }
-  if (status) process.stderr.write("check-ts: fix each tsc error above at its file(line,col)\n");
-  return status;
 }
 
-function executeTool(root: string, tool: Tool, files: string[]): number {
-  const adapter = tool.adapter ?? "direct";
-  if (!["direct", "tsc"].includes(adapter)) {
-    // The Python adapters (lint, format, types, compile) belong to the kit's Python checker.
-    throw new DeclarationError(`${tool.program}: unknown native adapter ${adapter}`);
+function languageFindings(lang: string, files: string[], lists: Record<Tool, Set<string>>, gate: Set<string>): string[] {
+  if (DATA.has(lang)) return [];
+  if (lang === "Unknown") {
+    return files
+      .filter((f) => !LOCKFILES.has(path.basename(f)))
+      .map(
+        (f) =>
+          `${f}: scc does not know this file type; give it a known extension, or exempt its tree in` +
+          " scripts/check-languages.ts EXEMPT with the reason",
+      );
   }
-  if (files.length === 0) return 0;
-  if (adapter === "tsc") return typescript(root, tool, files);
-  const status = run([...tool.argv, ...files], { cwd: root });
-  if (status && tool.program === "eslint") {
-    process.stderr.write("check-ts: fix each eslint finding; stale suppressions: pnpm exec eslint --prune-suppressions\n");
+  const tools = LANGUAGES[lang];
+  if (tools === undefined) {
+    return [
+      `${lang} (${files.join(", ")}) has no lint or type step: add its tools to the gate and to LANGUAGES in` +
+        " scripts/check-languages.ts, or declare it DATA there",
+    ];
   }
-  return status;
-}
-
-function execute(root: string, declaration: Declaration, recipe: string): number {
-  validateBindings(root, declaration);
-  const classified = classify(root, declaration);
-  const selected = Object.entries(declaration.tools).filter(([, tool]) => tool.recipe === recipe);
-  if (selected.length === 0) throw new DeclarationError(`${recipe}: no declared tools; restore its binding`);
-  if (recipe === "check-scripts") requireExecutables(root, declaration, classified);
-  if (selected.some(([, tool]) => tool.program === "tsc")) {
-    const status = prepareTypescript(root);
-    if (status) return status;
-  }
-  let bad = 0;
-  for (const [name, tool] of selected) {
-    const files = new Set<string>();
-    for (const [language, entry] of Object.entries(declaration.languages)) {
-      if (entry.tools.includes(name)) for (const file of key(classified, language)) files.add(file);
-    }
-    let status: number;
-    try {
-      status = executeTool(root, tool, [...files].sort());
-    } catch (error) {
-      if (error instanceof DeclarationError || !(error instanceof Error)) throw error;
-      throw new DeclarationError(`${name}: ${error.message}; ${tool.install}`);
-    }
-    bad = bad || status;
-  }
-  if (recipe === "check-ts" && !bad) {
-    process.stdout.write("ts: ok (classified tracked TypeScript and JavaScript: tsc, eslint)\n");
+  const bad: string[] = [];
+  for (const tool of tools) {
+    if (!gate.has(RECIPES[tool])) bad.push(`${tool} gates ${lang}, but its recipe ${RECIPES[tool]} is not a dependency of check`);
+    for (const f of files) if (!lists[tool].has(f)) bad.push(`${f}: ${lang}, but ${tool}'s own file list misses it; ${FIX[tool]}`);
   }
   return bad;
 }
 
-function gate(root: string, extra: string[]): number {
-  const recipes = gateRecipes(gateDump(root));
-  if (recipes === undefined) throw new DeclarationError("GATE_RECIPES must be a literal recipe list");
-  const nested = Boolean(process.env["GATE_NESTED"]);
-  const env = { ...process.env, GATE_RECIPES: recipes, GATE_NESTED: "1" };
-  const status = prepareTypescript(root);
-  if (status) return status;
-  const options = nested ? ["--bail", "1", "--no-file-parallelism"] : ["--maxWorkers", process.env["GATE_WORKERS"] ?? "2"];
-  return run(["pnpm", "exec", "vitest", "run", ...options, ...extra], { cwd: root, env });
-}
-
-function usage(message: string): never {
-  process.stderr.write(`usage: check-languages.ts [check|run RECIPE|files LANGUAGE|gate ARGS...]\ncheck-languages.ts: error: ${message}\n`);
-  process.exit(2);
-}
-
-function main(argv: string[]): number {
-  const [command = "check", name, ...extra] = argv;
-  if (!["check", "run", "gate", "files"].includes(command)) usage(`invalid choice: '${command}'`);
-  if (command !== "gate" && extra.length > 0) usage(`unexpected arguments: ${extra.join(" ")}`);
-  const root = process.cwd();
-  const declaration = readDeclaration(path.join(root, "languages.json"));
-  validateBindings(root, declaration);
-  if (command === "run") return name === undefined ? usage("run requires a recipe name") : execute(root, declaration, name);
-  if (command === "files") {
-    if (name === undefined) usage("files requires a language name");
-    process.stdout.write(key(classify(root, declaration), name).join("\n") + "\n");
-    return 0;
+async function main(): Promise<number> {
+  const exempt = Object.keys(EXEMPT);
+  const scanned = new Set(
+    ask(["git", "ls-files", "-z"], "run in the repo")
+      .split("\0")
+      .filter((f) => f !== "" && !exempt.some((e) => f.startsWith(e)) && fs.lstatSync(f, { throwIfNoEntry: false })?.isFile() === true),
+  );
+  const found = sccLanguages(scanned);
+  const byLang = new Map<string, string[]>();
+  for (const [f, lang] of found) byLang.set(lang, [...(byLang.get(lang) ?? []), f]);
+  const code = [...found].filter(([, lang]) => LANGUAGES[lang] !== undefined).map(([f]) => f);
+  const lists = await toolFiles(code);
+  const gate = gateRecipes();
+  const bad = unreadableShebangs([...scanned].filter((f) => !found.has(f)).sort());
+  for (const [lang, files] of [...byLang].sort(([a], [b]) => a.localeCompare(b))) {
+    bad.push(...languageFindings(lang, files.sort(), lists, gate));
   }
-  if (command === "gate") return gate(root, argv.slice(1));
-  const files = classify(root, declaration);
-  const counts = Object.entries(files).map(([language, paths]) => `${language}=${String(paths.length)}`);
-  process.stdout.write(`languages: ok ${counts.join(", ")}\n`);
+  bad.push(...bothPnpmPins());
+  for (const line of bad) process.stderr.write(`check-languages: ${line}\n`);
+  if (bad.length > 0) return 1;
+  const counts = [...byLang].map(([lang, files]) => `${lang}=${String(files.length)}`).sort().join(", ");
+  process.stdout.write(`languages: ok (${String(scanned.size)} tracked files scanned; ${counts})\n`);
   return 0;
 }
 
 try {
-  process.exitCode = main(process.argv.slice(2));
-} catch (error) {
-  process.stderr.write(`check-languages: ${error instanceof Error ? error.message : String(error)}\n`);
+  process.exitCode = await main();
+} catch (e) {
+  if (!(e instanceof UnansweredError || e instanceof SyntaxError)) throw e;
+  process.stderr.write(`check-languages: ${e.message}\n`);
   process.exitCode = 1;
 }

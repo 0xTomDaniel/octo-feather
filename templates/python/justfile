@@ -4,50 +4,61 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
 set positional-arguments
 
+# This repo's tools (mise.toml at mise.lock versions) first on PATH for every recipe, from any caller (a shell, the
+# git hook, CI, an agent pane): mise's own answer for this repo's config, the config its shims read. A tool not
+# installed is named on stderr with the fix.
+mise_bins := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; mise bin-paths 2>/dev/null | paste -sd : -`
+export PATH := if mise_bins == "" { env_var('PATH') } else { mise_bins + ":" + env_var('PATH') }
+
 default:
     @just --list
 
-# Install dependencies and the git hook.
+# Install the pinned tools (mise.toml, mise.lock), dependencies and the git hook.
 setup:
+    mise install --locked
     uv sync --locked
     git config core.hooksPath .githooks
 
 # The gate's steps, each one pytest item (tests/test_gate.py) beside the integration and E2E tests.
-# Every tracked file's language and the tools that gate it: languages.json, checked and run by
-# scripts/check-languages (the octo-feather kit's checker, copied byte for byte).
-export GATE_RECIPES := "install-check check-languages check-scripts check-lint check-format check-types check-imports"
+export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"
 
-# Lint, format, types, shell, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md
-# Commands; trend line: tests/conftest.py). Timing never decides pass or fail.
+# Lint, format, types, import boundaries, integration and E2E tests, each a pytest item (AGENTS.md Commands;
+# trend line: tests/conftest.py). Timing never decides pass or fail.
 check: check-tests
 
-# Every tracked file is of a declared language or a reasoned exemption, each tool bound below.
+# Every language scc finds in the tracked files has its lint and type step here; rules and what passes by design:
+# scripts/check-languages --help.
 check-languages:
-    @python3 scripts/check-languages
+    uv run --locked scripts/check-languages
+
+# ShellCheck's file list: the `shell` attribute in .gitattributes.
+shell-files:
+    @git ls-files ':(attr:shell)'
 
 check-scripts:
-    @python3 scripts/check-languages run check-scripts
+    just shell-files | xargs -d '\n' shellcheck -S warning
 
 check-lint:
-    @python3 scripts/check-languages run check-lint
+    uv run --locked ruff check .
 
 check-format:
-    @python3 scripts/check-languages run check-format
+    uv run --locked ruff format --check .
 
+# Two projects: basedpyright's CLI skips dot directories, so .agents/ has its own (.agents/pyrightconfig.json).
 check-types:
-    @python3 scripts/check-languages run check-types
+    uv run --locked basedpyright
+    uv run --locked basedpyright -p .agents
 
 check-imports:
-    uv run --locked --offline --no-sync lint-imports
+    uv run --locked lint-imports
 
-# Each gate tool at the one pin CI installs from: scripts/install-check.
-install-check:
-    python3 scripts/install-check
-
-# uv sync, then pytest; a gate run inside another gate's item (GATE_NESTED set) is sequential and stops at
-# its first failure (-n 0 -x). Extra arguments go to pytest.
+# A gate run inside another gate's item (GATE_NESTED set) is sequential and stops at its first failure
+# (-n 0 -x). Extra arguments go to pytest.
 check-tests *args:
-    @python3 scripts/check-languages gate "$@"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    GATE_NESTED=1 exec uv run --locked pytest "$@"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-types`, `just test --lf`).
 test *args:

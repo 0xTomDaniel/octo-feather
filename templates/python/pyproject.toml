@@ -8,19 +8,16 @@ dependencies = []
 app = "app.cli:main"
 
 [dependency-groups]
-dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff", "shellcheck-py"]
+dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff"]
 
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
-[tool.uv]
-# The one uv pin: uv refuses any other version, CI's setup-uv installs it (version-file) and
-# `just install-check` compares it.
-required-version = "==0.13.1"
-
 [tool.ruff]
 line-length = 100
+# Extensionless Python scripts, each by path: ruff skips a file without a .py suffix unless it is named.
+extend-include = [".agents/skills/verify-app/scripts/verify-app", "scripts/check-languages"]
 # The octo-feather kit's trend hook (tests/gate/conftest.py), copied byte for byte; the kit owns it and
 # does not lint it, so it is outside this repo's lint, format and type checks.
 extend-exclude = ["tests/conftest.py"]
@@ -40,7 +37,9 @@ ignore = [
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
-include = ["src", "tests"]
+# Extensionless scripts by path (skipped unless named). The Python under .agents/ is its own project
+# (.agents/pyrightconfig.json): basedpyright's CLI skips dot directories.
+include = ["src", "tests", "scripts/check-languages"]
 exclude = ["tests/conftest.py"]  # the kit's trend hook, copied byte for byte (see [tool.ruff])
 
 [tool.importlinter]

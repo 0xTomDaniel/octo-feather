@@ -13,11 +13,13 @@ dev group, `uv run --locked`; a target adds all three to its own dev dependencie
   octo-feather-lint init    take the baselines once, for a repo adopting the lint late; refuses
                             when any baseline exists
 
-The file set: every git-tracked `*.py` file and every extensionless file whose shebang runs
-Python (python*, pypy*, directly or through env, or `uv run --script`), minus what the root
-pyproject's ruff config excludes (`extend-exclude`; nested configs of fixtures or templates
-never apply). Both tools skip an extensionless file unless it is named, so every file is
-named. basedpyright also drops a file under a dot directory (.agents/) even when named, so it
+The file set: ruff's own list (`ruff check --show-files` under the root pyproject's config, nested
+configs of fixtures or templates never apply), git-tracked files only: every `*.py` file ruff
+finds, plus each extensionless Python script the config names in `[tool.ruff] extend-include`
+(ruff and basedpyright skip an extensionless file unless it is named), minus `extend-exclude`.
+scripts/check-languages fails when scc finds tracked Python this list misses. basedpyright
+also drops a file under a dot directory (.agents/) even when named (its CLI always adds `**/.*`
+to the excludes; the switch, useDefaultExcludes, is a language-server setting only), so it
 runs over a throwaway mirror of links in which a dot-leading component `.x` reads `_.x`; its
 baseline keys are those mirror paths. `types` fails unless basedpyright analyzed exactly the
 files named.
@@ -41,7 +43,6 @@ from __future__ import annotations
 
 import filecmp
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -51,13 +52,6 @@ from typing import cast
 
 import tomlkit
 import tomllib
-from language_support import (
-    DeclarationError,
-    classify,
-    pyright_report,
-    read_declaration,
-    tool_argv,
-)
 from tomlkit.container import Container, OutOfOrderTableProxy
 from tomlkit.exceptions import ParseError
 from tomlkit.items import Array, Table
@@ -68,8 +62,6 @@ ROOT_CONFIG = ["--config", str(PYPROJECT)]
 LINT_TABLE = "tool.ruff.lint.extend-per-file-ignores"
 FORMAT_TABLE = "tool.ruff.format"
 SHRINK = "octo-feather-lint shrink"
-PY_NAME = re.compile(r"(python|pypy)[0-9.]*")
-ENV_ARG_OPTS = {"-u", "--unset", "-C", "--chdir"}
 
 Json = dict[str, object]
 
@@ -86,43 +78,7 @@ def warn(line: str) -> None:
     sys.stderr.write(f"{line}\n")
 
 
-def shebang_words(path: Path) -> list[str]:
-    try:
-        with path.open("rb") as f:
-            first = f.readline().decode("utf-8", "replace").rstrip("\r\n")
-    except OSError:
-        return []
-    return first[2:].split() if first.startswith("#!") else []
-
-
-def runs_python(path: Path) -> bool:
-    """Whether the file's shebang runs Python (the rule check-scripts applies, #121 D2)."""
-    words = shebang_words(path)
-    i = 0
-    if words and Path(words[0]).name == "env":
-        i = 1
-        while i < len(words):
-            w = words[i]
-            if w in ENV_ARG_OPTS:
-                i += 2
-            elif w.startswith("-S") and len(w) > len("-S"):
-                words[i] = w[len("-S") :]
-                break
-            elif w.startswith("-") or "=" in w:
-                i += 1
-            else:
-                break
-    if i >= len(words):
-        return False
-    prog = Path(words[i]).name
-    if PY_NAME.fullmatch(prog):
-        return True
-    return prog == "uv" and words[i + 1 : i + 2] == ["run"] and "--script" in words[i + 2 :]
-
-
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
-    if Path("languages.json").is_file() and cmd[0] in {"ruff", "basedpyright"}:
-        cmd = [*tool_argv(cmd[0]), *cmd[1:]]
     try:
         return subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -141,27 +97,14 @@ def file_set() -> list[str]:
     if r.returncode != 0:
         msg = f"git ls-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    if Path("languages.json").is_file():
-        cands = classify(Path.cwd(), read_declaration(Path("languages.json")))["python"]
-    else:
-        cands = [
-            name
-            for name in r.stdout.split("\0")
-            if name
-            and Path(name).is_file()
-            and (Path(name).suffix == ".py" or (not Path(name).suffix and runs_python(Path(name))))
-        ]
-    if not cands:
-        return []
-    r = run(["ruff", "check", *ROOT_CONFIG, "--force-exclude", "--show-files", *cands])
+    tracked = {name for name in r.stdout.split("\0") if name}
+    r = run(["ruff", "check", *ROOT_CONFIG, "--show-files"])
     if r.returncode != 0:
         msg = f"ruff check --show-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    files = sorted(rel(line) for line in r.stdout.splitlines() if line)
-    if Path("languages.json").is_file() and files != sorted(cands):
-        msg = "ruff exclusions omit declared Python; reconcile languages.json and root ruff config"
-        raise ToolError(msg)
-    return files
+    # ruff also lists the pyproject.toml files it checks (RUF200): config, not Python.
+    files = {rel(line) for line in r.stdout.splitlines() if line}
+    return sorted(f for f in files & tracked if Path(f).name != PYPROJECT.name)
 
 
 def pyproject() -> Json:
@@ -334,27 +277,48 @@ def cmd_format(files: list[str]) -> int:
     return 0
 
 
+def mirror(path: str) -> str:
+    """A repo path with each dot-leading component `.x` written `_.x`."""
+    return "/".join(f"_{c}" if c.startswith(".") else c for c in path.split("/"))
+
+
 def pyright(files: list[str], baseline: Path, mode: list[str]) -> Json:
-    """basedpyright over the files through language_support's throwaway mirror of links (its
-    project root the mirror, the repo's pyproject linked in); diagnostics come back with repo
-    paths. No files: nothing runs (basedpyright given no path scans the project root), and every
-    baseline entry is stale: auto mode empties the file, as basedpyright prunes a gone file."""
+    """basedpyright over the files through a throwaway mirror of links, its project root the
+    mirror (the repo's pyproject linked in); diagnostics come back with repo paths. No files:
+    nothing runs (basedpyright given no path scans the project root), and every baseline entry
+    is stale: auto mode empties the file, as basedpyright prunes a file that is gone."""
     if not files:
         if "auto" in mode and baseline.is_file():
             data = as_json(json.loads(baseline.read_text(encoding="utf-8"))) or {}
             if data.get("files"):
                 baseline.write_text(json.dumps({"files": {}}, indent=4), encoding="utf-8")
         return {"generalDiagnostics": [], "summary": {"filesAnalyzed": 0}}
-    argv = tool_argv("basedpyright") if Path("languages.json").is_file() else ["basedpyright"]
-    options = ["--baselinefile", str(baseline.resolve()), *mode]
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp).resolve()
+        config = root / PYPROJECT.name
+        config.symlink_to(PYPROJECT.resolve())
+        back: dict[str, str] = {}
+        for f in files:
+            link = root / mirror(f)
+            link.parent.mkdir(parents=True, exist_ok=True)
+            link.symlink_to(Path(f).resolve())
+            back[str(link)] = f
+        cmd = ["basedpyright", "--outputjson", "-p", str(config)]
+        r = run([*cmd, "--baselinefile", str(baseline.resolve()), *mode, *back])
+    # --writebaseline prints its summary line before the JSON report.
+    start = r.stdout.find("{\n")
     try:
-        return pyright_report(Path.cwd(), argv, files, options)
-    except OSError as e:
-        fetch = "fetch once, with network: uv sync --locked"
-        msg = f"cannot run {argv[0]}: {e}; put it on PATH ({fetch})"
+        report = cast("Json", json.loads(r.stdout[max(start, 0) :]))
+    except json.JSONDecodeError as e:
+        msg = f"basedpyright gave no JSON (exit {r.returncode}): {r.stdout} {r.stderr}".strip()
         raise ToolError(msg) from e
-    except DeclarationError as e:
-        raise ToolError(str(e)) from e
+    analyzed = cast("dict[str, int]", report.get("summary") or {}).get("filesAnalyzed")
+    if analyzed != len(files):
+        msg = f"basedpyright analyzed {analyzed} files, not the {len(files)} named"
+        raise ToolError(msg)
+    for d in diagnostics(report):
+        d["file"] = back.get(str(d.get("file")), str(d.get("file")))
+    return report
 
 
 def diagnostics(report: Json) -> list[Json]:
