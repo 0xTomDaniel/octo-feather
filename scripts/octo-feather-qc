@@ -288,6 +288,26 @@ def worktree_writes(upper):
     return [f"{k} {p}" for k, p in rel if p in tracked or (k == "new" and p not in ignored)]
 
 
+def browsers(root: str, ids: list[str], stem: str) -> str | None:
+    """The box's Playwright browsers folder for the browser demos IDS (none: None), where `just install-check` names it
+    (remote spec #host-tools): ${XDG_DATA_HOME:-~/.local/share}/octo-feather/ms-playwright/<the contract's [browser]
+    playwright pin>. No pin, or no headless shell installed there, is refused before any demo runs."""
+    if not ids:
+        return None
+    pin = tomllib.loads((Path(root) / "qc.toml").read_text(encoding="utf-8")).get("browser", {}).get("playwright")
+    if not pin:
+        die(64, f"demo {' '.join(f'{stem}#{i}' for i in ids)}: browser = true but qc.toml has no [browser] playwright pin; nothing ran")
+    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    folder = data / "octo-feather" / "ms-playwright" / pin
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    if folder.resolve().is_relative_to(cache.resolve()):
+        die(66, f"browser folder {folder} is under {cache}, which the qc sandbox masks; set XDG_DATA_HOME outside it (just install-check)")
+    if not list(folder.glob("chromium_headless_shell-*/INSTALLATION_COMPLETE")):
+        die(66, f"no Playwright {pin} headless Chromium shell in {folder}; nothing ran. Install it once per box (just install-check "
+                f"names it): PLAYWRIGHT_BROWSERS_PATH={folder} npx -y playwright@{pin} install --only-shell chromium")
+    return str(folder)
+
+
 def contract_demos(root: str) -> dict[str, dict[str, Any]]:
     """The demos the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec #qc-contract); none
     without a qc.toml. A qc.toml octo-feather-contract refuses is refused here, before anything runs."""
@@ -354,26 +374,6 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
                                            "results": list(done.values())}, indent=2))
         die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
     return done, caps
-
-
-def browsers(root: str, ids: list[str], stem: str) -> str | None:
-    """The box's Playwright browsers folder for the browser demos IDS (none: None), where `just install-check` names it
-    (remote spec #host-tools): ${XDG_DATA_HOME:-~/.local/share}/octo-feather/ms-playwright/<the contract's [browser]
-    playwright pin>. No pin, or no headless shell installed there, is refused before any demo runs."""
-    if not ids:
-        return None
-    pin = tomllib.loads((Path(root) / "qc.toml").read_text(encoding="utf-8")).get("browser", {}).get("playwright")
-    if not pin:
-        die(64, f"demo {' '.join(f'{stem}#{i}' for i in ids)}: browser = true but qc.toml has no [browser] playwright pin; nothing ran")
-    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
-    folder = data / "octo-feather" / "ms-playwright" / pin
-    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    if folder.resolve().is_relative_to(cache.resolve()):
-        die(66, f"browser folder {folder} is under {cache}, which the qc sandbox masks; set XDG_DATA_HOME outside it (just install-check)")
-    if not list(folder.glob("chromium_headless_shell-*/INSTALLATION_COMPLETE")):
-        die(66, f"no Playwright {pin} headless Chromium shell in {folder}; nothing ran. Install it once per box (just install-check "
-                f"names it): PLAYWRIGHT_BROWSERS_PATH={folder} npx -y playwright@{pin} install --only-shell chromium")
-    return str(folder)
 
 
 def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Result:
