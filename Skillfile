@@ -34,6 +34,7 @@ github  skill  principle-prove-it-works cursor/plugins@0b8e952052d482ee6de06deeb
 github  skill  blast-radius     cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/blast-radius
 github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/sharpen
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
+github  skill  principle-build-the-lever cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-build-the-lever
 github  skill  create-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/create-verification-skill
 github  skill  maintain-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/maintain-verification-skill
 # reflect: agents/reflector.md loads it (comms spec #reflection, roles spec #roles-reflector).

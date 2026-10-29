@@ -59,7 +59,8 @@ Vendored, not from octo-lite, under .agents/skills/ with patches in .skillfile/p
     writing-for-agents:
     mattpocock/skills@49dd158, MIT, Copyright Matt Pocock
     correct, principle-prove-it-works, blast-radius, sharpen,
-    principle-encode-lessons-in-structure, create-verification-skill,
+    principle-encode-lessons-in-structure, principle-build-the-lever,
+    create-verification-skill,
     maintain-verification-skill, reflect, interrogate (its references
     code-quality-review.md and lead-judgment.md, read by agents/code-reviewer.md):
     cursor/plugins@0b8e952

@@ -362,10 +362,19 @@
       }
     ]
   },
-  "implementer-library-web": {
+  "reviewer-prose-duty-blocks": {
     "facts": [
-      {"fact": "tool_called", "tools": ["mcp__exa__web_search_exa", "mcp__parallel__web_search"]},
-      {"fact": "field_lines", "field": "Prior art"}
+      {
+        "fact": "declared_includes",
+        "field": "blocking",
+        "items": [
+          {
+            "path": "agents/worker.md",
+            "class": "prose-duty"
+          }
+        ]
+      }
     ]
-  }
+  },
+  "implementer-library-web": {"facts": [{"fact": "tool_called", "tools": ["mcp__exa__web_search_exa", "mcp__parallel__web_search"]}, {"fact": "field_lines", "field": "Prior art"}]}
 }
