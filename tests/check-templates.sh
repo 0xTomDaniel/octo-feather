@@ -50,10 +50,13 @@ mv "$t/templates/python/mise.lock" "$t/.lock-old"
 set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
 mv "$t/.lock-old" "$t/templates/python/mise.lock"
 [[ "$rc" != 0 ]] && grep -qF "templates/python/mise.lock is missing" <<<"$out" || { echo "check-templates test: a missing mise.lock passed or was not named" >&2; echo "$out" >&2; exit 1; }
-# The template's trend hook drifts from the kit's: one appended line, nothing read from the source.
-copy=templates/python/tests/conftest.py
-cp "$t/$copy" "$t/.copy-old"; printf '# copy drift\n' >> "$t/$copy"
-set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
-mv "$t/.copy-old" "$t/$copy"
-[[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's tests/gate/conftest.py; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
-echo "check-templates: ok (hook run against a recording just: echo-only, commented, wrong recipe, called twice, exit swallowed fail; #362 check-languages in each gate, mise files and versions, trend hook copy)"
+# Each byte copy (the trend hook, the language checker) drifts from the kit's: one appended line, nothing read from
+# the source.
+for pair in tests/conftest.py:tests/gate/conftest.py scripts/check-languages:scripts/check-languages; do
+  copy="templates/python/${pair%%:*}"
+  cp "$t/$copy" "$t/.copy-old"; printf '# copy drift\n' >> "$t/$copy"
+  set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
+  mv "$t/.copy-old" "$t/$copy"
+  [[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's ${pair#*:}; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
+done
+echo "check-templates: ok (hook run against a recording just: echo-only, commented, wrong recipe, called twice, exit swallowed fail; #362 check-languages in each gate, mise files and versions, trend hook and checker copies)"

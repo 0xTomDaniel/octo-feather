@@ -32,8 +32,8 @@ g add -A
 run; [[ "$rc" != 0 ]] || fail "planted files passed"
 has "notes.xyz: scc does not know this file type" \
   "Go (tool.go) has no lint or type step" \
-  "scripts/x-shell: BASH, but shellcheck's own file list misses it; give it the \`shell\` attribute in .gitattributes" \
-  "scripts/x-py: Python, but ruff's own file list misses it; name it in pyproject.toml [tool.ruff] extend-include" \
+  "scripts/x-shell: BASH, but shellcheck's own file list misses it; ShellCheck's file list: give a file the \`shell\` attribute in .gitattributes (just shell-files)" \
+  "scripts/x-py: Python, but ruff's own file list misses it; ruff's own file list, which basedpyright gets whole: name an extensionless script in pyproject.toml extend-include (just python-files)" \
   "scripts/x-envs: scc cannot name the language of its shebang" \
   ".agents/skills/herdr-comms/assets/x.ts: TypeScript, but tsc's own file list misses it" \
   "package.json: packageManager and mise.toml [tools] pnpm both pin pnpm; delete packageManager"
@@ -43,5 +43,5 @@ g reset -q --hard; g clean -qfd
 sed -i 's/^export GATE_RECIPES := "check-languages check-scripts /export GATE_RECIPES := "check-languages /' "$t/justfile"
 g add -A
 run; [[ "$rc" != 0 ]] || fail "GATE_RECIPES without check-scripts passed"
-has "shellcheck gates BASH, but its recipe check-scripts is not in the justfile's GATE_RECIPES"
+has "shellcheck gates BASH, but its recipe check-scripts is not in the gate"
 echo "languages test: ok (clean green; Unknown, Go, uncovered shell, Python, TypeScript, env -S shebang, two pnpm pins and a missing gate recipe each named; shebang-less data passes)"
