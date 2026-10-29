@@ -4,12 +4,13 @@
 The FIFO is held until process exit, not merely until the invocation is recorded.
 Python stdlib handles the handshake; pidfd is the real Linux process-exit API.
 """
+
 import json
 import os
-from pathlib import Path
 import select
 import signal
 import sys
+from pathlib import Path
 
 if Path(sys.argv[0]).name == "nohup":
     fd = os.open(os.environ["START_COMPLETION"], os.O_WRONLY)
@@ -18,7 +19,7 @@ if Path(sys.argv[0]).name == "nohup":
     os._exit(0)
 
 signal.alarm(10)
-with open(sys.argv[1], encoding="utf-8") as stream:
+with Path(sys.argv[1]).open(encoding="utf-8") as stream:
     pid, argv = json.load(stream)
 assert argv == [sys.argv[2], "reflect", "--director", "--due"], argv
 try:
@@ -30,4 +31,4 @@ else:
         assert select.select([fd], [], [], 10)[0], "nohup fixture still alive"
     finally:
         os.close(fd)
-print("start reflection boundary: invocation recorded, process exited")
+sys.stdout.write("start reflection boundary: invocation recorded, process exited\n")
