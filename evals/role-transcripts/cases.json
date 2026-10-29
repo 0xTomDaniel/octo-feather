@@ -130,6 +130,17 @@
     "task": "Review lane gh12, ticket T12 (`app hello-file FILE` greets every name the team's names.yaml lists, one greeting per line; with --json one JSON object per line; a file listing no names is an error, exit 2; criterion hello-file). The file's format, as the team writes it: a top-level `names:` key holding a block list of plain names, other top-level keys ignored:\n```yaml\nnames:\n  - Ada\n  - Grace\nteam: crew\n```\nDiff: base main, head implementer-t12 in this directory (`git diff main...implementer-t12`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message."
   },
   {
+    "id": "reviewer-prose-duty-blocks",
+    "role": "code-reviewer",
+    "fixture": "docs-rules",
+    "head": {
+      "fixture": "docs-rules-prose-duty",
+      "branch": "implementer-t11",
+      "message": "feat(lane): log each worker commit (T11, commit-log)"
+    },
+    "task": "Review lane gh11, ticket T11 (every commit a worker makes is recorded in .lane/commits.jsonl, one JSON line per commit with its time, commit id and ticket, so the lane can see what landed; criterion commit-log).\nDiff: base main, head implementer-t11 in this directory (`git diff main...implementer-t11`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
     "id": "implementer-library-web",
     "role": "implementer",
     "fixture": "python-app",

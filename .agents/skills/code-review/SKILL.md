@@ -84,6 +84,8 @@ The chosen library is popular and well maintained: a recent release, commits or 
 
 The reviewer checks each line against the diff and the package index, and blocks, class `reinvented-library`, naming the library or tool to use: hand-written infrastructure where a maintained library or the real tool does the job and no reason is stated (a `reason:`, a comment, the spec), a hand-written replacement for a broken library, a library the diff adds with no line, a fact that is false, or a failing fact with no `reason:`. This holds in any target, whether or not its AGENTS.md states the rule. Failure example: `toml.ts`, a hand-written TOML parser in templates/typescript, cleared review and the owner caught it at the merge ask (#136; smol-toml exists).
 
+**Duties.** Block, class `prose-duty`, each line of a role file or skill (its patch included) the diff adds or changes that holds a mechanical duty below the tier docs/adr/0008, Duties, gives it (that ADR in the kit, two levels above the folder holding this skill), naming the command, trigger or skill to use instead. This holds in any target, whether or not its AGENTS.md states the rule. Failure example (#269): teardown order, review-row registration, lane-log writes and main-moved broadcasts stayed role prose, and each failed quietly until the owner caught it.
+
 Then, for every rule the diff writes or changes where it is owned (owners: docs/adr/0008 rung 2; terms: GLOSSARY.md), search the whole repo, unchanged files and the diff's other hunks alike, for text that restates the rule instead of pointing to it (docs/adr/0008 rung 1). One line per owned rule, or the one line `Owners: none`:
 
 `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`
