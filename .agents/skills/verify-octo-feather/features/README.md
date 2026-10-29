@@ -42,3 +42,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-browser](./qc-browser.md) covers `just qc` running a declared browser demo in the qc sandbox and storing its screenshots in the record.
+- [qc-fallback](./qc-fallback.md) covers `just qc` sending a criterion with no declared demo to the agent fallback: a fresh, time-capped qc judge whose report becomes that criterion's record.

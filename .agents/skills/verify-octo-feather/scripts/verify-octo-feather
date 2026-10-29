@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-fallback")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -990,6 +990,75 @@ def drive_qc_browser(f: Feature) -> None:
     say(f"qc-browser evidence: {f.d}")
 
 
+def drive_qc_fallback(f: Feature) -> None:
+    """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b: acceptance-a
+    decided by its demo's checks, acceptance-b by the agent fallback, a fresh qc judge (the kit's stub judge,
+    tests/fixtures/qc-judge/pi, as pi: SKILL.md) under the time cap, its report read back as acceptance-b's record."""
+    v = f.s.contract.values
+    if "qc_demo_pass" not in v:
+        die("qc.toml [values] needs qc_demo_pass: the qc-fallback drive's scratch demo")
+    sc = RUN_DIR / "scratch" / "qc-fallback"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)   # qc commits the status file in this repo
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-fallback: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+                               f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(v["qc_demo_pass"])}\ncovers = ["docs/specs"]\ntests = ["none"]\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract: a demo for acceptance-a, none for acceptance-b")
+    head = git("rev-parse", "HEAD")
+    # Scratch box state (qc's reports, the scratch target's evidence store); the kit's stub judge first on the sandbox's
+    # PATH (OCTO_FEATHER_QC_PATH: a plain PATH entry loses to the Pi a mise-shimmed `just` puts ahead of it, #261).
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": f"{f.s.repo}/tests/fixtures/qc-judge"}
+    f.pre = ["env", "-C", str(r)]   # just qc runs where the supervisor stands: the target's worktree
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
+    f.pre = []
+    reports = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{head}-*.json"))
+    f.obs("qc", "report", reports[-1].read_text() if reports else "{}")
+    f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head, "--json"],
+                                env={**os.environ, **f.env})[1])
+    st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
+    f.obs("qc", "built", f"{st['acceptance-a']['status']} {st['acceptance-b']['status']}\n")
+    rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
+
+    def holds(c: Case) -> bool:
+        a = re.search(r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record " + rid + "$", c.out)
+        b = re.search(r"(?m)^PASS acceptance-b: \$ judge acceptance-b\n  why acceptance-b\n  evidence complete; decision agent fallback; record " + rid + "$", c.out)
+        rep = json.loads(c.o["report"])
+        run = rep.get("fallback", {}).get("acceptance-b", {})
+        brief = [ln for ln in run.get("stdout", "").splitlines() if ln.startswith("BRIEF ")]
+        rec = [x for x in json.loads(c.o["store"]) if b and x["record"]["id"] == b.group(1)]
+        if c.code != 0 or not a or not rec or sorted(rep.get("fallback", {})) != ["acceptance-b"] or c.o["built"] != "built built\n":
+            return False
+        stored = json.loads(Path(rec[0]["dir"], "outputs", "judge.report.json").read_text())
+        cap = rep.get("cap_s")   # the fixed cap qc states (its FALLBACK_CAP_S): the judge's parent is timeout at it
+        return (isinstance(cap, int) and cap > 0 and f"qc: agent fallback demo#acceptance-b: a fresh qc judge, time cap {cap} s" in c.err
+                and run.get("stdout", "").startswith(f"PARENT timeout --foreground -k 10 {cap} ") and len(brief) == 1
+                and brief[0].startswith("BRIEF - acceptance-b: ") and rec[0]["record"]["revision"] == head
+                and stored["criteria"] == [{"id": "acceptance-b", "verdict": "pass", "command": "judge acceptance-b",
+                                            "output": "out acceptance-b", "why": "why acceptance-b"}])
+    f.check("qc", holds)
+    f.run("read", "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head)
+    f.check("read", lambda c: c.code == 0 and "1 record(s)" in c.out and "judge.report.json (" in c.out)
+    f.env = {}
+    say(f"qc-fallback evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -1002,6 +1071,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
+    "qc-fallback": drive_qc_fallback,
 }
 
 

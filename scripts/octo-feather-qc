@@ -11,12 +11,14 @@ headless Chromium shell at the contract's [browser] playwright pin where `just i
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there), decision source the demo's checks, pass on exit status 0, else fail.
-The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
-A fresh, read-only qc judge
-(agents/qc-judge.md, headless through pi-role) gets a QC brief: judge the
-whole head against each named criterion of STATUS's spec, run each criterion's
-demo path, and report one pass or fail per criterion with the command and its
-output. Then this script, not the judge, sets each passed criterion to built in
+The criteria with no declared demo go to the agent fallback below (quality spec #qc-fallback); with none left, no
+judge and no model run. Each gets its own fresh, read-only qc judge (agents/qc-judge.md, headless through pi-role),
+one at a time, in its own sandbox, under a fixed time cap (FALLBACK_CAP_S, through coreutils timeout): its QC brief
+names that criterion alone (judge the whole head against it, run its demo path, report pass or fail with the command
+and its output). Its report is appended to the evidence store as that criterion's record (judge.exit, judge.stdout,
+judge.report.json; a judge stopped by the cap leaves no report, so its record's evidence is incomplete and, until
+#406, the run exits 3 naming it), and the result is read back from that record alone, decision source agent fallback.
+Then this script, not the judge, sets each passed criterion to built in
 PR and each failed one to planned, and commits only the status file. The judge
 model's family (the part before "/") must differ from the implementer's.
 
@@ -46,8 +48,8 @@ reads no Linear ticket; the sandbox proof fails if it is set.
   OCTO_FEATHER_QC_RO_BINDS, OCTO_FEATHER_QC_PATH  ":"-separated paths bound
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
-(judge's report, raw run, proof and cleanup; each demo's capture; `results`, one per criterion: verdict,
-evidence state, decision source, evidence record id, judged head).
+(`fallback`, by criterion: each judge's report, raw run, exit, proof and cleanup, record; `cap_s`; each demo's capture;
+`results`, one per criterion: verdict, evidence state, decision source, evidence record id, judged head).
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
@@ -68,6 +70,8 @@ STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
 EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
 CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
 DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
+FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
+CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
 
 
 def die(code: int, msg: str) -> NoReturn:
@@ -467,10 +471,7 @@ def main(argv: list[str]) -> int:
 
 def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], spec: Path, text: dict[str, str], model: str,
           runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, *, nosb: bool) -> int:
-    rest = [i for i in ids if i not in demos]   # no declared demo: the agent judge's
-    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh),
-                         criteria="\n".join(f"- {i}: {text[i]}" for i in rest))
-    cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+    rest = [i for i in ids if i not in demos]   # no declared demo: the agent fallback's
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
@@ -482,33 +483,103 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
                                                               "captures": caps}, report_path, 0, nosb=nosb)
         finally:
             restore(status)
-    t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
+    ghrec["misses"] = []
+    raw: dict[str, Any] = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "sandbox": not nosb,
+                           "cap_s": FALLBACK_CAP_S, "fallback": {}}
+    if caps:
+        raw["captures"] = caps
+    try:   # from here on a judge runs: never leave the status file modified and uncommitted
+        for n, i in enumerate(rest):   # one fresh judge per criterion, one after another (each a Pi run)
+            done[i] = fallback(i, n, head, spec, text, stem, model, runid, gh, raw, report_path, nosb=nosb)
+        nmiss = raw["gh_misses"] = len(ghrec["misses"])
+        bad = [f"{i} (record {done[i]['record'] or 'none'}): {'; '.join(done[i]['missing'])}" for i in rest if done[i]["evidence"] == "incomplete"]
+        if bad:   # until #406 gives such a criterion the result insufficient evidence, as capture() does
+            raw["results"] = [done[i] for i in ids]
+            report_path.write_text(json.dumps(raw, indent=2))
+            die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
+        return settle(status, pr, ids, head, data, done, raw, report_path, nmiss, nosb=nosb)
+    finally:
+        restore(status)
+
+
+def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: str, model: str, runid: str, gh: dict[str, Any],
+             raw: dict[str, Any], report_path: Path, *, nosb: bool) -> Result:
+    """The agent fallback for I, a criterion its contract declares no demo for (quality spec #qc-fallback): a fresh qc judge
+    from its own role, in its own qc sandbox, judging I alone under the fixed time cap; its report appended to the evidence
+    store as I's record, and I's result read back from that record alone (fell_back). --no-sandbox: stored nowhere."""
+    cid = f"{stem}#{i}"
+    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh), criteria=f"- {i}: {text[i]}")
+    cmd = ["timeout", "--foreground", "-k", "10", str(FALLBACK_CAP_S),   # --foreground: a killed qc's group signal reaches the judge
+           str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+    print(f"qc: agent fallback {cid}: a fresh qc judge, time cap {FALLBACK_CAP_S} s", file=sys.stderr)
+    t0 = time.time()
+    if nosb:
         miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
         env = dict(os.environ, PATH=f"{KIT / '.agents' / 'skills' / 'github-pr' / 'scripts'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
                    OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
         env.pop("LINEAR_API_KEY", None)
         try:
             run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
-            ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
+            misses = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
         finally:
             miss.unlink(missing_ok=True)
     else:
-        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}", gh)
+        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-j{n}", gh)
         if run is None:
-            report_path.write_text(json.dumps({"head": head, "model": model, "ids": ids, "github": ghrec, "sandbox": sandbox}, indent=2))
-            die(66, f"sandbox proof failed or sandbox unavailable; judge not started (report {report_path})")
-        ghrec["misses"] = sandbox.get("gh_miss_log", [])
-    nmiss = len(ghrec["misses"])
-    raw: dict[str, Any] = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "gh_misses": nmiss, "sandbox": sandbox,
-           "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
-    if caps:
-        raw["captures"] = caps
-    try:   # from here on the judge has run: never leave the status file modified and uncommitted
-        return verdict(status, pr, ids, head, data, run, raw, report_path, nmiss, done, nosb=nosb)
-    finally:
-        restore(status)
+            raw["fallback"][i] = {"sandbox": sandbox}
+            report_path.write_text(json.dumps(raw, indent=2))
+            die(66, f"sandbox proof failed or sandbox unavailable; judge of {cid} not started (report {report_path})")
+        misses = sandbox.get("gh_miss_log", [])
+    raw["github"]["misses"] += misses
+    rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode in CAPPED, "seconds": round(time.time() - t0),
+                                "gh_misses": len(misses), "sandbox": sandbox, "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    rep = verdict(i, head, run, rec, raw, report_path)
+    capped = f"the judge hit its {FALLBACK_CAP_S} s time cap before reporting"
+    if nosb:
+        res: Result = {"id": i, "decision": "agent fallback", "record": None, "head": head}
+        if rep is None:
+            return res | {"evidence": "incomplete", "missing": [capped]}
+        c = rep["criteria"][0]
+        return res | {k: c[k] for k in ("verdict", "command", "output")} | {"why": c.get("why", ""), "evidence": "unrecorded (--no-sandbox)"}
+    root = git("rev-parse", "--show-toplevel")
+    with tempfile.TemporaryDirectory(prefix=f"qc-judge-{runid}-") as d:
+        Path(d, "judge.exit").write_text(f"{run.returncode}\n")
+        Path(d, "judge.stdout").write_text(run.stdout)
+        if rep is not None:
+            Path(d, "judge.report.json").write_text(json.dumps(rep, indent=2) + "\n")
+        p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
+                            "--outputs", d], capture_output=True, text=True)
+    if p.returncode:
+        report_path.write_text(json.dumps(raw, indent=2))
+        die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
+    rec["record"] = rid = p.stdout.strip()
+    return fell_back(i, cid, rid, head, text[i], root, capped)
+
+
+def fell_back(i: str, cid: str, rid: str, head: str, text: str, root: str, capped: str) -> Result:
+    """An agent fallback result from its stored record alone, as judged() reads a demo's: evidence complete when the record
+    is at the head, clean, with the spec's criterion text hash and the judge's report; the verdict is that report's."""
+    p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", head, "--json"],
+                       capture_output=True, text=True)
+    found: list[Any] = [x for x in json.loads(p.stdout) if x["record"]["id"] == rid] if p.returncode == 0 else []
+    res: Result = {"id": i, "evidence": "incomplete", "decision": "agent fallback", "record": rid, "head": head}
+    if not found:
+        return res | {"missing": [f"record not in the store at {head[:12]} ({p.stderr.strip() or 'no match'})"]}
+    r: dict[str, Any] = found[0]["record"]
+    d = Path(found[0]["dir"]) / "outputs"
+    missing = [m for m, bad in (
+        (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
+        ("captured from a dirty worktree", r["dirty"]),
+        ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
+        (capped, "judge.exit" in r["outputs"] and (d / "judge.exit").read_text().strip() in {str(c) for c in CAPPED}),
+        ("outputs missing: judge.report.json", "judge.report.json" not in r["outputs"]),
+    ) if bad]
+    if missing:
+        return res | {"missing": missing}
+    c = next(c for c in json.loads((d / "judge.report.json").read_text())["criteria"] if c["id"] == i)
+    return res | {k: c[k] for k in ("verdict", "command", "output")} | {"why": c.get("why", ""), "evidence": "complete"}
 
 
 def restore(status: Path) -> None:
@@ -517,13 +588,15 @@ def restore(status: Path) -> None:
         print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
 
 
-def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], run: subprocess.CompletedProcess[str],
-            raw: dict[str, Any], report_path: Path, nmiss: int, done: dict[str, Result], *, nosb: bool) -> int:
-    sandbox = raw["sandbox"]
+def verdict(i: str, head: str, run: subprocess.CompletedProcess[str], rec: dict[str, Any], raw: dict[str, Any],
+            report_path: Path) -> dict[str, Any] | None:
+    """The judge's report on I, refused (exit 3) when the judge broke read-only or the report is unusable; None when the
+    time cap stopped the judge first. REC: this judge's run in the run report RAW."""
+    sandbox = rec["sandbox"]
     if sandbox:
         upper = sandbox.pop("upper", [])
-        raw["discarded_writes"] = len(upper)
-        raw["worktree_writes"] = wrote = worktree_writes(upper)
+        rec["discarded_writes"] = len(upper)
+        rec["worktree_writes"] = wrote = worktree_writes(upper)
         print(f"qc: worktree overlay: {len(upper)} judge writes discarded with the run, {len(wrote)} outside ignored paths", file=sys.stderr)
         if wrote:
             report_path.write_text(json.dumps(raw, indent=2))
@@ -531,6 +604,8 @@ def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, An
     if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"the worktree or head changed during the run; read-only was broken (report {report_path})")
+    if rec["timed_out"]:
+        return None
     blocks = re.findall(r"```json\s*(\{.*?\})\s*```", run.stdout, re.S)
     try:
         rep = json.loads(blocks[-1])
@@ -539,18 +614,15 @@ def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, An
         twice = sorted({i for i in named if named.count(i) > 1})
         assert not twice, f"judged more than once: {' '.join(map(str, twice))}"
         verdicts = {c["id"]: c for c in rep["criteria"]}
-        rest = [i for i in ids if i not in done]
-        assert sorted(verdicts) == sorted(rest), f"ids {sorted(verdicts)} != {sorted(rest)}"
+        assert sorted(verdicts) == [i], f"ids {sorted(verdicts)} != {[i]}"
         for c in verdicts.values():
             assert c.get("verdict") in ("pass", "fail"), f"{c.get('id')}: verdict {c.get('verdict')!r}"
             assert c.get("command") and "output" in c, f"{c['id']}: needs command and output"
     except (IndexError, ValueError, KeyError, TypeError, AssertionError) as e:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"judge report unusable ({e}); raw run in {report_path}")
-    raw["report"] = rep
-    for c in verdicts.values():   # the agent judge's results: no evidence record yet (#407 stores its report as one)
-        c.update(evidence=None, decision="agent judge", record=None, head=head)
-    return settle(status, pr, ids, head, data, verdicts | done, raw, report_path, nmiss, nosb=nosb)
+    rec["report"] = rep
+    return rep
 
 
 def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], verdicts: dict[str, Result], raw: dict[str, Any],

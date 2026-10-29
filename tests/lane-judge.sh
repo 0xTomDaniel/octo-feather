@@ -208,7 +208,7 @@ line="$(grep -xE -- "- test-quality: tautological, confidence 0\.870 \(model jud
 python3 - "$with" "$without" "$line" <<'EOF' || fail "judgment not beside the review, or more changed: $with"
 import sys; w, wo, line = sys.argv[1:]; ls = w.split("\n"); r = ls.index(line) - 1
 assert ls[r] == "Model judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):", ls[r]
-assert ls[r - 1] == "" and ls[r - 2].startswith("Failed:") and ls[r + 2] == "" and ls[r + 3].startswith("Review check classes"), ls
+assert ls[r - 1] == "" and ls[r - 2].endswith(": agent fallback") and ls[r + 2] == "" and ls[r + 3].startswith("Review check classes"), ls
 assert "\n".join(ls[:r - 1] + ls[r + 2:]) == wo, (w, wo)
 EOF
 
