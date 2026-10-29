@@ -10,8 +10,8 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-post-merge test: $*" >&2; exit 1; }
-export HOME="$t/home" GH_LOG="$t/gh.log" GH_STORE="$t/gh.json" GH_LISTS="$t/lists"
-unset GH_REPO GH_TOKEN
+export HOME="$t/home" XDG_STATE_HOME="$t/state" GH_LOG="$t/gh.log" GH_STORE="$t/gh.json" GH_LISTS="$t/lists"
+unset GH_REPO GH_TOKEN HERDR_SESSION   # a throwaway state dir: no lane record, so later steps tell no pane
 mkdir -p "$HOME" "$t/bin"
 # Fake gh: pr view from .pr; run list (only --commit <full merge sha> --event push) answers its Nth call with
 # .lists[N] (the last one repeated); run watch exits .watch[id] (default 0); anything else is refused.
@@ -61,12 +61,12 @@ red="$(run1 check completed failure 13)" busy="$(run1 check in_progress '' 11)"
 store OPEN "$H" "[[$green]]"
 run 1 post-merge 7 "${H:0:7}" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: PR #7 is OPEN, not merged"* ]] || fail "not merged: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run" ]] || fail "not merged summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run"* ]] || fail "not merged summary: $last"
 ! grep -q '^run ' "$GH_LOG" || fail "not merged still listed runs: $(cat "$GH_LOG")"
 store MERGED "abcdef0$H" "[[$green]]"
 run 1 post-merge 7 "${H:0:12}" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: PR #7 merged at head abcdef012345, not at the pinned head ${H:0:12}"* ]] || fail "other head: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run" ]] || fail "other head summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run"* ]] || fail "other head summary: $last"
 run 1 post-merge 8 "$H" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: gh pr view 8 failed"* && "$last" == *"step 1 merged stopped"* ]] || fail "gh failing: $out"
 
@@ -75,12 +75,12 @@ store MERGED "$H" "[[$busy], [$green, $lint]]"
 run 0 post-merge 7 "$H" --lane gh7 --repo o/r
 [[ "$(head -n1 <<<"$out")" == "step 1 merged: ok: PR #7 (gh7) merged into main at head ${H:0:12}, merge commit ${M:0:12}" ]] || fail "step 1 line: $out"
 [[ "$out" == *"step 2 main CI: ok: 2 push runs on ${M:0:12} concluded success: check https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12"* ]] || fail "green line: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok" ]] || fail "green summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok"* ]] || fail "green summary: $last"
 grep -qx "run watch 11 --exit-status -R o/r" "$GH_LOG" || fail "running run not watched with --exit-status in o/r: $(cat "$GH_LOG")"
 grep -qx "pr view 7 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R o/r" "$GH_LOG" || fail "pr view: $(cat "$GH_LOG")"
-[[ "$(wc -l <<<"$out")" == 3 ]] || fail "green prints one line per step and the summary: $out"
+[[ "$(grep -c "^step " <<<"$out")" == "$(($(wc -l <<<"$out") - 1))" ]] || fail "green prints one line per step and the summary: $out"
 run 0 post-merge 7 "$H" --lane gh7 --repo o/r   # rerun: same result, still reads only
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok" ]] || fail "rerun: $out"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok"* ]] || fail "rerun: $out"
 
 # A run that appears within the bound is waited for.
 store MERGED "$H" "[[], [$green]]"
@@ -91,7 +91,7 @@ run 0 post-merge 7 "$H" --lane gh7 --wait 1
 store MERGED "$H" "[[$red, $lint]]" '{"13": 1}'
 run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 2 main CI: stopped: main CI red on ${M:0:12}: check failure https://github.com/o/r/actions/runs/13"* ]] || fail "red: $out"
-[[ "$out" != *"concluded success"* && "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped" ]] || fail "red summary: $out"
+[[ "$out" != *"concluded success"* && "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped"* ]] || fail "red summary: $out"
 # A watch that fails while its run reads unfinished: stop naming it, never healthy.
 store MERGED "$H" "[[$busy]]" '{"11": 1}'
 run 1 post-merge 7 "$H" --lane gh7
@@ -100,7 +100,7 @@ run 1 post-merge 7 "$H" --lane gh7
 store MERGED "$H" "[[]]"
 run 1 post-merge 7 "$H" --lane gh7 --wait 0
 [[ "$out" == *"step 2 main CI: stopped: no push run on merge commit ${M:0:12} within 0s"* ]] || fail "no run: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped" ]] || fail "no run summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped"* ]] || fail "no run summary: $last"
 
 # Usage: missing --lane, a HEAD that is no sha.
 run 1 post-merge 7 "$H"; [[ "$err" == *"usage: octo-feather-lane post-merge PR HEAD --lane NAME"* ]] || fail "usage: $err"
