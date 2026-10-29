@@ -28,11 +28,24 @@ export GATE_RECIPES := "check-languages check-scripts check-lint check-format ch
 check: check-tests
 
 # Every language scc finds in the tracked files has its lint and type step here; rules and what passes by design:
-# scripts/check-languages --help.
+# the head of scripts/check-languages (the octo-feather kit's, a byte copy).
 check-languages:
     uv run --locked scripts/check-languages
 
-# ShellCheck's file list: the `shell` attribute in .gitattributes.
+# check-languages' data (the head of scripts/check-languages): one LANGUAGE:TOOL:GATE_RECIPE:FILES_RECIPE entry
+# per language scc can name and gate tool that must cover its files; FILES_RECIPE prints that tool's own file list.
+check_languages := "Python:ruff:check-lint:ruff-files Python:basedpyright:check-types:pyright-files Shell:shellcheck:check-scripts:shell-files BASH:shellcheck:check-scripts:shell-files"
+
+# ruff's own file list: name an extensionless script in pyproject.toml [tool.ruff] extend-include
+ruff-files:
+    @uv run --locked ruff check --show-files
+
+# Its --verbose --stats listing, both projects (check-types).
+# basedpyright's analyzed files: add a path to [tool.basedpyright] include (under .agents/: .agents/pyrightconfig.json)
+pyright-files:
+    @{ uv run --locked basedpyright --verbose --stats || true; uv run --locked basedpyright -p .agents --verbose --stats || true; } | sed -n 's|^[0-9]*ms: file://||p'
+
+# ShellCheck's file list: give a file the `shell` attribute in .gitattributes
 shell-files:
     @git ls-files ':(attr:shell)'
 

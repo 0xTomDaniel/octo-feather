@@ -31,3 +31,42 @@ scripts/octo-feather-start shell
 scripts/octo-feather-state shell
 tests/fixtures/herdr-say/herdr shell
 tests/fixtures/herdr-spawn/herdr shell
+
+# `language-exempt`: paths scripts/check-languages does not scan, each with its reason.
+# Each template is a target repo with its own gate and check-languages.
+templates/** language-exempt
+# Eval fixtures and judgment sources: deliberately flawed data the cases grade.
+evals/** language-exempt
+# Frozen records of past runs.
+evidence/** language-exempt
+# Spec Chat's vendored runtime and style (NOTICE).
+docs/specs/.viz/** language-exempt
+docs/specs/.style/** language-exempt
+# Vendored skills (Skillfile github entries): upstream code, changed only through .skillfile/patches.
+.agents/skills/tdd/** language-exempt
+.agents/skills/implement/** language-exempt
+.agents/skills/implement-spec/** language-exempt
+.agents/skills/to-tickets/** language-exempt
+.agents/skills/grill-with-docs/** language-exempt
+.agents/skills/grilling/** language-exempt
+.agents/skills/domain-modeling/** language-exempt
+.agents/skills/code-review/** language-exempt
+.agents/skills/writing-for-agents/** language-exempt
+.agents/skills/correct/** language-exempt
+.agents/skills/improve-codebase-architecture/** language-exempt
+.agents/skills/codebase-design/** language-exempt
+.agents/skills/principle-prove-it-works/** language-exempt
+.agents/skills/blast-radius/** language-exempt
+.agents/skills/sharpen/** language-exempt
+.agents/skills/principle-encode-lessons-in-structure/** language-exempt
+.agents/skills/principle-build-the-lever/** language-exempt
+.agents/skills/create-verification-skill/** language-exempt
+.agents/skills/maintain-verification-skill/** language-exempt
+.agents/skills/reflect/** language-exempt
+.agents/skills/interrogate/** language-exempt
+.agents/skills/linear-cli/** language-exempt
+.agents/skills/agent-browser/** language-exempt
+# Tool-written lockfiles, never hand-edited (scc calls a .lock file Unknown).
+uv.lock language-exempt
+mise.lock language-exempt
+Skillfile.lock language-exempt

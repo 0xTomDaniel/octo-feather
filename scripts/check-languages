@@ -1,27 +1,17 @@
 #!/usr/bin/env python3
-"""Every language in the kit's tracked files has its lint and type step in `just check`.
+"""Every language in this repo's tracked files has its lint and type step in `just check`.
 
-Owner rulings: issue #225 (2026-10-27: every tracked language gated, from a declared mapping) and
-issue #261 (2026-10-29: scc classifies, a small comparison checks, mise owns the native pins).
+The octo-feather kit's check; templates/python carries a byte copy, templates/typescript a port
+(scripts/check-languages.ts). Rule owners: issue #261 comment 6498859284 (with #225 comment
+6446828103). Each repo's own data, read at run time: the justfile's `check_languages` (language,
+tool, gate recipe, the recipe printing the tool's file list), its gate (GATE_RECIPES and what
+`check` depends on), and .gitattributes `language-exempt` (paths not scanned).
 
-Inputs, each the tool's own answer: `git ls-files`; scc (pinned in mise.toml) walking the repo;
-each gate tool's own file list (ruff: `octo-feather-lint files`, which basedpyright gets whole;
-ShellCheck: `just shell-files`; tsc: `tsc --showConfig`, which eslint gets whole in check-ts);
-GATE_RECIPES from `just --dump`; `mise ls --local --json`; package.json. The mapping (LANGUAGES,
-DATA, LOCKFILES, EXEMPT) is declared below.
-
-Fails, naming each file and its fix, when:
-  1. scc names a tracked file's type Unknown (LOCKFILES, tool-written lockfiles, excepted);
-  2. scc finds a language that is neither mapped to gate tools nor declared DATA;
-  3. a mapped tool's own file list misses a file of its language;
-  4. a mapped tool's recipe is not in GATE_RECIPES;
-  5. a tracked file scc does not list starts with `#!`: scc cannot read that shebang (it drops
-     `env -S` forms), so its language is unknown;
-  6. mise.toml pins pnpm and package.json has `packageManager`: two pnpm pins.
-Passes by design: a tracked file scc does not list and that does not start with `#!` (justfile,
-.gitignore, LICENSE, version files): no language is found in it, and the ruling gates the
-languages found. Paths under EXEMPT are not scanned. scc walks the directory, never a file list:
-scc 4.1.0 skips the shebang of a file named on its command line under a dot directory.
+Fails, naming each file and its fix: 1. scc calls a tracked file Unknown;
+2. a language is neither in `check_languages` nor DATA; 3. a tool's file list misses a file of its
+language; 4. a tool's gate recipe is not in the gate; 5. a file scc does not list starts with `#!`
+(scc drops `env -S` shebangs); 6. mise.toml pins pnpm and package.json has `packageManager`.
+Passes by design: a file scc does not list that does not start with `#!` (no language found).
 """
 
 import json
@@ -29,17 +19,9 @@ import shutil
 import subprocess
 import sys
 from pathlib import Path
-from typing import cast
+from typing import Any
 
-# Each language scc can name -> the gate tools that must cover its files (scc's language names).
-LANGUAGES = {
-    "Python": ("ruff", "basedpyright"),
-    "Shell": ("shellcheck",),
-    "BASH": ("shellcheck",),
-    "TypeScript": ("tsc", "eslint"),
-    "JavaScript": ("tsc", "eslint"),
-}
-# Languages that are data, with no lint or type step: a new one is a decision, made here.
+# Languages that are data, with no lint or type step.
 DATA = {
     "Markdown",
     "JSON",
@@ -52,34 +34,6 @@ DATA = {
     "Plain Text",
     "License",
 }
-# Tool-written lockfiles scc calls Unknown (a .lock extension), by file name: never hand-edited.
-LOCKFILES = {"uv.lock", "mise.lock", "Skillfile.lock"}
-# Each gate tool: the GATE_RECIPES recipe that runs it, and the fix when its list misses a file.
-RECIPES = {
-    "ruff": "check-lint",
-    "basedpyright": "check-types",
-    "shellcheck": "check-scripts",
-    "tsc": "check-ts",
-    "eslint": "check-ts",
-}
-FIX = {
-    "ruff": "name it in pyproject.toml [tool.ruff] extend-include, or out of its extend-exclude",
-    "basedpyright": "name it in pyproject.toml [tool.ruff] extend-include (it gets ruff's list)",
-    "shellcheck": "give it the `shell` attribute in .gitattributes",
-    "tsc": "add it to tsconfig.json include (a dot path by name), or out of its exclude",
-    "eslint": "add it to tsconfig.json include: eslint gets tsc's list (check-ts)",
-}
-# Trees not scanned, each with its reason; vendored skills (Skillfile `github` entries) join them.
-EXEMPT = {
-    "templates/": "each template is a target repo with its own gate and check-languages",
-    "evals/": "eval fixtures and judgment sources: deliberately flawed data the cases grade",
-    "evidence/": "frozen records of past runs",
-    "docs/specs/.viz/": "Spec Chat's vendored runtime (NOTICE)",
-    "docs/specs/.style/": "Spec Chat's vendored style (NOTICE)",
-}
-UV = ["uv", "run", "--locked", "--offline", "--no-sync"]
-SCC = ["scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config"]
-SKILLFILE_NAME = 2  # Skillfile columns: kind, type, name, ...
 
 
 class UnansweredError(Exception):
@@ -87,71 +41,114 @@ class UnansweredError(Exception):
 
 
 def missing_tool(tool: str) -> str:
-    """The fix for a tool not on PATH, as mise answers for this repo's mise.toml."""
     mise = shutil.which("mise")
     if mise is None:
         return "mise is not on PATH: install mise at mise-version, then: mise install --locked"
     r = subprocess.run([mise, "which", tool], capture_output=True, text=True, check=False)
     if r.returncode == 0:
-        return (
-            f"{tool} is installed ({r.stdout.strip()}) but not on PATH: run this through just"
-            " (the justfile puts this repo's mise tools on PATH), or put mise's shims first"
-        )
+        return f"{tool} is installed ({r.stdout.strip()}) but not on PATH: run this through just"
     return f"{tool} is not installed: mise install --locked (mise.toml, mise.lock)"
 
 
-def ask(cmd: list[str], fix: str) -> str:
+def ask(*cmd: str) -> str:
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
         msg = f"cannot run {cmd[0]}: {e}; {missing_tool(cmd[0])}"
         raise UnansweredError(msg) from e
     if r.returncode != 0:
-        msg = f"{' '.join(cmd)} exited {r.returncode}: {r.stderr.strip()}; {fix}"
+        msg = f"{' '.join(cmd)} exited {r.returncode}: {r.stderr.strip()}"
         raise UnansweredError(msg)
     return r.stdout
 
 
-def vendored() -> set[str]:
-    rows = (line.split() for line in Path("Skillfile").read_text(encoding="utf-8").splitlines())
-    return {f".agents/skills/{w[SKILLFILE_NAME]}/" for w in rows if w[:1] == ["github"]}
+def relative(line: str) -> str:
+    path = Path(line)
+    if path.is_absolute():
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    return line.removeprefix("./")
 
 
-def scc_languages(scanned: set[str]) -> dict[str, str]:
-    out = ask([*SCC, "--no-scc-ignore", "."], "scc failed")
+def scanned() -> set[str]:
+    out = ask("git", "ls-files", "-z", "--", ".", ":(exclude,attr:language-exempt)")
+    return {f for f in out.split("\0") if f and Path(f).is_file() and not Path(f).is_symlink()}
+
+
+def scc_languages(files: set[str]) -> dict[str, str]:
+    # scc walks the directory: named on its command line, a file under a dot dir loses its shebang.
+    out = ask("scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", ".")
     found: dict[str, str] = {}
-    rows: list[dict[str, object]] = json.loads(out)
-    for lang in rows:
-        files = cast("list[dict[str, object]]", lang.get("Files") or [])
-        for f in files:
-            path = str(f["Location"]).removeprefix("./")
-            if path in scanned:
-                found[path] = str(lang["Name"])
+    langs: list[dict[str, Any]] = json.loads(out)
+    for lang in langs:
+        entries: list[dict[str, str]] = lang.get("Files") or []
+        for f in entries:
+            if relative(f["Location"]) in files:
+                found[relative(f["Location"])] = lang["Name"]
     return found
 
 
-def tool_files() -> dict[str, set[str]]:
-    python = set(ask([*UV, "octo-feather-lint", "files"], "fetch: uv sync --locked").split())
-    shell = set(ask(["just", "--justfile", "justfile", "shell-files"], "fix the recipe").split())
-    fetch = "fetch the kit's TypeScript tools once, with network: pnpm install --frozen-lockfile"
-    cfg = json.loads(ask(["pnpm", "exec", "tsc", "--showConfig"], fetch))
-    ts = {str(f).removeprefix("./") for f in cfg.get("files", [])}
-    return {"ruff": python, "basedpyright": python, "shellcheck": shell, "tsc": ts, "eslint": ts}
+def justfile() -> tuple[list[list[str]], set[str], dict[str, Any]]:
+    dump: dict[str, Any] = json.loads(
+        ask("just", "--justfile", "justfile", "--dump", "--dump-format", "json")
+    )
+    rows = [e.split(":") for e in dump["assignments"]["check_languages"]["value"].split()]
+    gate = set(dump["assignments"].get("GATE_RECIPES", {}).get("value", "").split())
+    todo = ["check"]
+    while todo:
+        for dep in dump["recipes"].get(todo.pop(), {}).get("dependencies", []):
+            if dep["recipe"] not in gate:
+                gate.add(dep["recipe"])
+                todo.append(dep["recipe"])
+    return rows, gate, dump
 
 
-def gate_recipes() -> set[str]:
-    cmd = ["just", "--justfile", "justfile", "--dump", "--dump-format", "json"]
-    value = json.loads(ask(cmd, "fix the justfile"))["assignments"]["GATE_RECIPES"]["value"]
-    if not isinstance(value, str):
-        msg = "justfile: GATE_RECIPES must be a literal list of recipe names"
-        raise UnansweredError(msg)
-    return set(value.split())
+def findings(
+    found: dict[str, str], rows: list[list[str]], gate: set[str], dump: dict[str, Any]
+) -> list[str]:
+    bad: list[str] = []
+    lists: dict[str, set[str]] = {}
+    for lang in sorted(set(found.values())):
+        files = sorted(f for f, name in found.items() if name == lang)
+        tools = [row for row in rows if row[0] == lang]
+        if lang == "Unknown":
+            bad += [
+                f"{f}: scc does not know this file type; give it a known extension, or mark it"
+                " `language-exempt` in .gitattributes with the reason"
+                for f in files
+            ]
+        elif not tools and lang not in DATA:
+            bad.append(
+                f"{lang} ({', '.join(files)}) has no lint or type step: add its tools to the gate"
+                " and to the justfile's check_languages, or declare it DATA in check-languages"
+            )
+        for _, tool, recipe, files_recipe in tools:
+            if recipe not in gate:
+                bad.append(f"{tool} gates {lang}, but its recipe {recipe} is not in the gate")
+            if files_recipe not in lists:
+                out = ask("just", "--justfile", "justfile", files_recipe)
+                lists[files_recipe] = {relative(line) for line in out.splitlines() if line}
+            how = str(dump["recipes"][files_recipe]["doc"])
+            bad += [
+                f"{f}: {lang}, but {tool}'s own file list misses it; {how} (just {files_recipe})"
+                for f in files
+                if f not in lists[files_recipe]
+            ]
+    return bad
+
+
+def unreadable_shebangs(unlisted: set[str]) -> list[str]:
+    return [
+        f"{f}: scc cannot name the language of its shebang (it drops `env -S` forms); start it"
+        " with #!/usr/bin/env <interpreter> or give it an extension"
+        for f in sorted(unlisted)
+        if Path(f).read_bytes()[:2] == b"#!"
+    ]
 
 
 def both_pnpm_pins() -> list[str]:
-    pins = json.loads(ask(["mise", "ls", "--local", "--json"], "mise failed"))
+    pins = json.loads(ask("mise", "ls", "--local", "--json"))
     package = Path("package.json")
-    manifest: dict[str, object] = (
+    manifest: dict[str, Any] = (
         json.loads(package.read_text(encoding="utf-8")) if package.is_file() else {}
     )
     if "pnpm" not in pins or "packageManager" not in manifest:
@@ -165,74 +162,20 @@ def both_pnpm_pins() -> list[str]:
     ]
 
 
-def unreadable_shebangs(unlisted: set[str]) -> list[str]:
-    bad: list[str] = []
-    for f in sorted(unlisted):
-        with Path(f).open("rb") as h:
-            if h.read(2) == b"#!":
-                bad.append(
-                    f"{f}: scc cannot name the language of its shebang (it drops `env -S` forms);"
-                    " start it with #!/usr/bin/env <interpreter> or give it an extension"
-                )
-    return bad
-
-
-def language_findings(
-    lang: str, files: list[str], lists: dict[str, set[str]], gate: set[str]
-) -> list[str]:
-    if lang in DATA:
-        return []
-    if lang == "Unknown":
-        return [
-            f"{f}: scc does not know this file type; give it a known extension, or exempt its"
-            " tree in scripts/check-languages EXEMPT with the reason"
-            for f in sorted(files)
-            if Path(f).name not in LOCKFILES
-        ]
-    if lang not in LANGUAGES:
-        return [
-            (
-                f"{lang} ({', '.join(sorted(files))}) has no lint or type step: add its tools to"
-                " the gate and to LANGUAGES in scripts/check-languages, or declare it DATA there"
-            )
-        ]
-    bad: list[str] = []
-    for tool in LANGUAGES[lang]:
-        if RECIPES[tool] not in gate:
-            bad.append(
-                f"{tool} gates {lang}, but its recipe {RECIPES[tool]} is not in the justfile's"
-                " GATE_RECIPES"
-            )
-        bad.extend(
-            f"{f}: {lang}, but {tool}'s own file list misses it; {FIX[tool]}"
-            for f in sorted(set(files) - lists[tool])
-        )
-    return bad
-
-
 def main() -> int:
-    tracked = set(ask(["git", "ls-files", "-z"], "run in the repo").split("\0")) - {""}
-    exempt = (*EXEMPT, *sorted(vendored()))
-    scanned = {
-        f
-        for f in tracked
-        if not f.startswith(exempt) and Path(f).is_file() and not Path(f).is_symlink()
-    }
-    found = scc_languages(scanned)
-    lists, gate = tool_files(), gate_recipes()
-    by_lang: dict[str, list[str]] = {}
-    for f, lang in found.items():
-        by_lang.setdefault(lang, []).append(f)
-    bad = unreadable_shebangs(scanned - found.keys())
-    for lang, files in sorted(by_lang.items()):
-        bad += language_findings(lang, files, lists, gate)
-    bad += both_pnpm_pins()
+    files = scanned()
+    found = scc_languages(files)
+    rows, gate, dump = justfile()
+    bad = (
+        findings(found, rows, gate, dump)
+        + unreadable_shebangs(files - found.keys())
+        + both_pnpm_pins()
+    )
     for line in bad:
         sys.stderr.write(f"check-languages: {line}\n")
     if bad:
         return 1
-    counts = ", ".join(f"{lang}={len(files)}" for lang, files in sorted(by_lang.items()))
-    sys.stdout.write(f"languages: ok ({len(scanned)} tracked files scanned; {counts})\n")
+    sys.stdout.write(f"languages: ok ({len(files)} tracked files scanned)\n")
     return 0
 
 

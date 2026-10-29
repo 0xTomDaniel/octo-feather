@@ -10,10 +10,10 @@ exactly `just check` once and exits 0 when just does and non-zero when just fail
 not its text; whether CI runs the gate is review's and the repo's real CI's call); it
 pins its native tools with mise (mise.toml, mise.lock, mise-version), mise-version is the kit's,
 and each tool it shares with the kit's mise.toml has the kit's version (one version on the box:
-the kit runs just in every repo it created). templates/python's tests/conftest.py is a byte copy
-of the kit's tests/gate/conftest.py (the kit owns it). Whether each template's own gate covers
-its languages is that template's check-languages, run in a created repo
-(tests/template-languages.sh).
+the kit runs just in every repo it created). templates/python's tests/conftest.py and
+scripts/check-languages are byte copies of the kit's (the kit owns them). Whether each
+template's own gate covers its languages is that template's check-languages, run in a created
+repo (tests/template-languages.sh).
 Exit: 0 all templates pass, 1 the first failure, named with its fix.
 """
 
@@ -32,7 +32,10 @@ from typing import cast
 import tomllib
 
 # templates/python copies this kit file byte for byte (kit path: template path).
-COPIES = {"tests/gate/conftest.py": "tests/conftest.py"}
+COPIES = {
+    "tests/gate/conftest.py": "tests/conftest.py",
+    "scripts/check-languages": "scripts/check-languages",
+}
 MISE_FILES = ("mise.toml", "mise.lock", "mise-version")
 # A `just` first on PATH for the hook run: records each call's argv, exits with RECORD_EXIT.
 RECORDER = """#!/bin/sh

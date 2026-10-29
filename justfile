@@ -50,13 +50,25 @@ export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes ch
 # The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
 check: check-tests
 
-# Every language scc finds in the tracked files has its lint and type step here (owner rulings #225, #261);
-# two pnpm pins fail. Rules, inputs and what passes by design: scripts/check-languages --help.
+# Every language scc finds in the tracked files has its lint and type step here; two pnpm pins fail (rules and
+# what passes by design: the head of scripts/check-languages).
 check-languages:
     @python3 "$root/scripts/check-languages"
 
-# ShellCheck's file list: the `shell` attribute in .gitattributes (git's attribute pathspec), minus the trees with
-# their own gate (templates/) or frozen data (evals/, evidence/). check-languages compares it with scc's shell.
+# check-languages' data (the head of scripts/check-languages): one LANGUAGE:TOOL:GATE_RECIPE:FILES_RECIPE entry
+# per language scc can name and gate tool that must cover its files; FILES_RECIPE prints that tool's own file list.
+check_languages := "Python:ruff:check-lint:python-files Python:basedpyright:check-types:python-files Shell:shellcheck:check-scripts:shell-files BASH:shellcheck:check-scripts:shell-files TypeScript:tsc:check-ts:ts-files TypeScript:eslint:check-ts:ts-files JavaScript:tsc:check-ts:ts-files JavaScript:eslint:check-ts:ts-files"
+
+# ruff's own file list, which basedpyright gets whole: name an extensionless script in pyproject.toml extend-include
+python-files:
+    @uv run --locked --offline --no-sync octo-feather-lint files
+
+# tsc's own file list, which eslint gets whole (check-ts): add a path to tsconfig.json include (dot paths by name)
+ts-files:
+    @pnpm exec tsc --showConfig | python3 -c 'import json, sys; print(*json.load(sys.stdin).get("files", []), sep="\n")'
+
+# Minus the trees with their own gate (templates/) or frozen data (evals/, evidence/).
+# ShellCheck's file list: give a file the `shell` attribute in .gitattributes
 shell-files:
     @git -C "$root" ls-files ':(attr:shell)' ':(exclude)templates/' ':(exclude)evals/' ':(exclude)evidence/'
 

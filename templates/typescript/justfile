@@ -29,7 +29,20 @@ check: check-languages check-scripts check-ts check-arch check-dead-code check-t
 check-languages:
     node scripts/check-languages.ts
 
-# ShellCheck's file list: the `shell` attribute in .gitattributes.
+# check-languages' data (the head of scripts/check-languages.ts): one LANGUAGE:TOOL:GATE_RECIPE:FILES_RECIPE entry
+# per language scc can name and gate tool that must cover its files; FILES_RECIPE prints that tool's own file list.
+check_languages := "TypeScript:tsc:check-ts:ts-files TypeScript:eslint:check-ts:eslint-files JavaScript:tsc:check-ts:ts-files JavaScript:eslint:check-ts:eslint-files Shell:shellcheck:check-scripts:shell-files BASH:shellcheck:check-scripts:shell-files"
+
+# tsc's own file list: add a path to tsconfig.json include (a dot path or dotfile by name)
+ts-files:
+    @pnpm exec tsc --showConfig | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const f of JSON.parse(s).files ?? []) console.log(f); })'
+
+# Its JSON report of `eslint .`, as check-ts runs it.
+# The files eslint lints: lint the file in eslint.config.js (out of its ignores)
+eslint-files:
+    @{ pnpm exec eslint --format json . || true; } | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const r of JSON.parse(s)) console.log(r.filePath); })'
+
+# ShellCheck's file list: give a file the `shell` attribute in .gitattributes
 shell-files:
     @git ls-files ':(attr:shell)'
 
