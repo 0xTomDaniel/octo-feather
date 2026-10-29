@@ -36,6 +36,11 @@ echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 chmod +x "$t/bin/herdr"; ln -s "$kit/tests/fixtures/classify-stub/pi" "$t/bin/pi"
 export PATH="$t/bin:$kit/scripts:$PATH"
+# The stub, never the box's pi, is the pi a recipe resolves (the kit justfile rebuilds PATH; a mise shim or ~/.local/bin
+# ahead of the stub would reach a real model): checked before any run.
+rp="$(cd "$t" && PATH="$(just --justfile "$kit/justfile" --evaluate PATH)" command -v pi)"
+echo "qc-advisory: recipe pi: $rp"
+[[ "$rp" == "$t/bin/pi" ]] || fail "a recipe resolves pi to $rp, not the stub $t/bin/pi: nothing run"
 M="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["model"])' "$kit/evals/judgment-model.json")"
 
 cd "$t/repo"; git init -q -b main .
