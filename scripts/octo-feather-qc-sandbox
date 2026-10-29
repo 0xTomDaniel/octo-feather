@@ -17,7 +17,11 @@
 #      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
 #      never written back); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
-#      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge
+#      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge. It mounts with userxattr
+#      (#395): in a user namespace overlayfs cannot write trusted.overlay.* on the tmpfs upper, so removing a
+#      directory the lower holds (uv add replacing a .venv package) failed with EIO; with userxattr its whiteouts
+#      and opaque dirs are user.overlay.*, which step 10 reads. Needs kernel >= 5.11 and tmpfs user xattrs
+#      (>= 6.6): a kernel without them fails closed (exit 66), never an overlay without userxattr
 #   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
 #      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
@@ -240,9 +244,12 @@ if [[ "$phase" == setup ]]; then
     exec 7<&-
   fi
   # The worktree: an overlay on the read-only real one, its upper and work dirs on the run tmpfs,
-  # so the judge's writes die with the run.
+  # so the judge's writes die with the run. userxattr: rule in the header, step 5.
   exec 9<"$WT"
-  mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w" "$WT" || die "worktree overlay"
+  kreq="needs kernel >= 5.11 (overlay userxattr) and >= 6.6 (tmpfs user xattrs), this one $(uname -r)"
+  python3 -c 'import os, sys; os.setxattr(sys.argv[1], "user.qc.probe", b"y"); os.removexattr(sys.argv[1], "user.qc.probe")' "$OV/u" \
+    || die "run tmpfs takes no user.* xattrs: the worktree overlay $kreq"
+  mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w,userxattr" "$WT" || die "worktree overlay with userxattr: $kreq"
   exec 8<"$OV"; mount -t tmpfs -o ro,mode=000 tmpfs "$OV" || die "mask overlay upper"
   echo "$OV/u" > "$SCR/ovupper"
   cd "$PWD" || die "re-enter $PWD"

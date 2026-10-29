@@ -40,6 +40,7 @@ for fam, addr in ((socket.AF_INET, ("192.0.2.1", 9)), (socket.AF_INET6, ("2001:d
     sys.exit(f"{addr[0]}: connected")
 EOF
 echo "qc test: offline: no route to any network (user+network namespace)" >&2
+echo "qc test: kernel $(uname -r) (worktree overlay needs: scripts/octo-feather-qc-sandbox header)" >&2
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 Q="$kit/scripts/octo-feather-qc"; S="$kit/scripts/octo-feather-spec-status"
 t="$(mktemp -d)"
@@ -104,6 +105,11 @@ case "$FAKE_QC" in
   argv) python3 -c 'import json, sys; print("ARGV", json.dumps(sys.argv[1:]))' "$@"; printf "$ok" ;;
   hang) exec sleep 3040@TOK@ ;;
   writes) echo hacked > judge-was-here; mkdir -p scratch; echo ignored > scratch/fine; printf '```json\n{"criteria": []}\n```\n' ;;
+  venv)   # uv add's reinstall: remove an ignored nested dir the real worktree holds, then recreate it
+    rm -rf .venv 2>&1; echo "VENV rm exit $?"
+    mkdir -p .venv/lib/x.dist-info && echo judge > .venv/lib/x.dist-info/RECORD && echo "VENV recreated"
+    printf "$ok" ;;
+  opaque) rm -rf docs && mkdir -p docs/specs && echo x > docs/specs/other.html; printf "$ok" ;;   # a tracked dir replaced: opaque in the upper
   tracked) echo hacked >> .gitignore; rm docs/specs/demo.spec.html; printf "$ok" ;;
   copycreds) mkdir -p scratch; cp -p "$HOME/.pi/agent/auth.json" scratch/a; cp -p "$HOME/.pi/agent/models.json" .git/m; printf "$ok" ;;
   bigcopy) mkdir -p scratch; cp "$HOME/.pi/agent/auth.json" scratch/big; truncate -s 67108865 scratch/big; printf "$ok" ;;
@@ -217,8 +223,10 @@ run 3 writes $st 5 acceptance-a                                                 
 grep -q "new judge-was-here" <<< "$out" && ! grep -q scratch/fine <<< "$out" || fail "non-ignored write not listed alone: $out"
 run 3 tracked $st 5 acceptance-a                                                                # judge changed and deleted tracked files
 grep -q "changed .gitignore; deleted docs/specs/demo.spec.html" <<< "$out" || fail "tracked writes not listed: $out"
+run 3 opaque $st 5 acceptance-a                                                                 # judge replaced a tracked dir (opaque upper dir)
+grep -q "deleted docs/specs/demo.spec.html; deleted docs/specs/demo.status.json; new docs/specs/other.html" <<< "$out" || fail "opaque dir writes not listed: $out"
 [[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain --ignored)" ]] || fail "refused run changed the real worktree"
-[[ "$(find "$t/reports" -name "$before-*.json" | wc -l)" == 3 ]] || fail "three runs at one head must leave three reports"
+[[ "$(find "$t/reports" -name "$before-*.json" | wc -l)" == 4 ]] || fail "four runs at one head must leave four reports"
 grep -q "qc sandbox: ok   live Herdr unreachable" <<< "$out" || fail "no pre-run proof printed: $out"
 grep -q "qc sandbox: ok   worktree $PWD is an overlay" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none" <<< "$out" \
   || fail "no overlay / persistent-writable proof: $out"
@@ -336,6 +344,16 @@ for a in '{"anthropic": {"type": "oauth", "refresh": "SECRET-pi-oauth-r", "acces
   ! grep -q 'SECRET-pi-oauth' <<< "$out" || fail "oauth: credential value printed"
 done
 cp -p "$t/auth-plain" "$pa"
+# #395: removing an ignored directory the real worktree holds (a .venv with a nested dir and file) succeeds in the
+# overlay (userxattr: whiteouts and opaque dirs on the tmpfs upper), and recreating it works; all discarded.
+echo .venv/ >> .git/info/exclude; mkdir -p .venv/lib/x.dist-info; echo real > .venv/lib/x.dist-info/RECORD
+run 0 venv $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -q "VENV rm exit 0" <<< "$judge" && grep -q "VENV recreated" <<< "$judge" || fail "venv: removing an ignored lower dir failed in the sandbox: $judge"
+[[ "$(report '["worktree_writes"]')" == "[]" && "$(report '["discarded_writes"]')" -gt 0 ]] || fail "venv: want ignored writes discarded, none listed: $(report '["worktree_writes"]')"
+[[ "$(cat .venv/lib/x.dist-info/RECORD)" == real && "$(find .venv | wc -l)" == 4 && -z "$(git status --porcelain)" ]] || fail "venv: real worktree changed"
+echo "qc test: venv: rm -rf of an ignored lower dir exits 0, recreated, $(report '["discarded_writes"]') writes discarded" >&2
+rm -rf .venv; sed -i '/^\.venv\/$/d' .git/info/exclude
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
   || fail "judge wrote live state"
