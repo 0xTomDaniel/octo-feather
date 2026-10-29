@@ -50,6 +50,7 @@ Each one is put to a classifier model as one closed question, and its answer cou
 <tr data-anchor="question-fact-or-meaning"><td>Exact or proxy</td><td>Whether a check or grader tests its rule itself, as stated where the rule is owned (a spec criterion, an ADR or a recorded owner ruling, never the check's own text), so any case it lets through is a defect to fix, or tests a stand-in that only correlates with the rule, such as code tokens for coupling, words for reachability or a pattern over prose for intent</td><td>The rule as stated where it is owned, and what the check reads</td></tr>
 <tr data-anchor="question-ticket-slice"><td>Ticket slice</td><td>Whether a ticket is a real end-to-end slice</td><td>The ticket as filed</td></tr>
 <tr data-anchor="question-call-evidence"><td>Call evidence</td><td>Whether a spec call's evidence shows its accepted criterion cannot pass as written</td><td>The criterion as accepted and the call's change, reason and evidence</td></tr>
+<tr data-anchor="question-criterion-evidence"><td>Criterion evidence</td><td>Whether an evidence record shows its acceptance criterion met, for <code>just qc</code> (quality <code>#qc-judgment</code>); its labelled cases come from past qc reports</td><td>The criterion's text and the record's captured outputs</td></tr>
 </tbody>
 </table>
 </div>

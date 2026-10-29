@@ -93,6 +93,38 @@
     "acceptance-evidence-read": {
       "status": "built",
       "pr": 181
+    },
+    "acceptance-qc-capture": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-capture-browser": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-same-verdict": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-advisory": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-insufficient": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-fallback": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-built-links": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-evidence-stale": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
