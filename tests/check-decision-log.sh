@@ -158,6 +158,10 @@ schema_bad() {
 schema_bad missing
 schema_bad '{"type": "object", "required": ["why"'
 schema_bad '[]'
+# Preserve malformed-schema refusal while the library owns structural validation.
+schema_bad '{"type": "object", "required": ["why", "why"]}'
+schema_bad '{"type": "object", "properties": {"why": {"minLength": 1.0}}}'
+schema_bad '{"type": "object", "properties": {"why": {"minLength": true}}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": "string", "maxLength": 9}}}'
 schema_bad '{"type": "object", "required": ["why"], "patternProperties": {}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": ["string", "null"]}}}'
@@ -185,7 +189,9 @@ broken node
 grep -qF 'node exited 2; the check cannot pass' <<<"$out" || { echo "check-decision-log test: broken node not reported" >&2; echo "$out" >&2; exit 1; }
 # No node on PATH: fails closed naming the fix.
 mkdir -p "$t.bin"; ln -s "$(command -v git)" "$t.bin/git"
-set +e; out="$(cd "$t" && PATH="$t.bin" "$(command -v python3)" scripts/check-decision-log 2>&1)"; rc=$?; set -e; rm -rf "$t.bin"
+# Use the locked interpreter: PATH isolation removes uv too, not just node.
+python="$(cd "$kit" && uv run --locked --offline --no-sync python -c 'import sys; print(sys.executable)')"
+set +e; out="$(cd "$t" && PATH="$t.bin" "$python" scripts/check-decision-log 2>&1)"; rc=$?; set -e; rm -rf "$t.bin"
 [[ "$rc" == 2 ]] && grep -qF 'check-decision-log: node not found on PATH: install node (Pi needs it too); the check cannot pass' <<<"$out" \
   || { echo "check-decision-log test: missing node did not fail closed" >&2; echo "$out" >&2; exit 1; }
 rm -f "$t.schema"
