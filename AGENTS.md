@@ -29,7 +29,7 @@ Repo skills: verify-octo-feather
 - `.agents/skills/` every kit skill, vendored (`Skillfile` github entries) or local (docs/adr/0018). Vendored sources and pins: `Skillfile`, `Skillfile.lock`; patches: `.skillfile/patches/`. Role files stay in `agents/`.
 - `.agents/skills/verify-octo-feather/` the kit's own verify skill (quality spec `#verify-skill-what`); its feature map in `features/`. `qc.toml` the kit's driver contract (quality spec `#qc-contract`).
 - `templates/python`, `templates/typescript` starter target repos; each template's `AGENTS.md` describes its layout. Dependency owners: Python's `pyproject.toml` and `uv.lock`, TypeScript's `package.json` and `pnpm-lock.yaml`.
-- `scripts/` published commands on every agent's `PATH`; command details at each script's `--help`.
+- `scripts/` published commands on every agent's `PATH`; each script owns its command details: read its source, and its `--help` where supported.
 - `justfile` owns kit recipes, listed by `just --list`; `just check` is the gate. Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
