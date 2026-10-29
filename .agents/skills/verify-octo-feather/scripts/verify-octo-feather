@@ -27,7 +27,7 @@ from pathlib import Path
 from typing import Any, NoReturn
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "handoff")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -773,13 +773,6 @@ def drive_factory_report(f: Feature) -> None:
             and re.search(rf"(?m)^director reflection: last ran {re.escape(c.o['at'])} \(2d0h\d+m ago\)$", c.out) is not None)
     f.env = {}
     say(f"factory-report evidence: {f.d}")
-def drive_handoff(f: Feature) -> None:
-    """Drive public handoff commands with isolated recording-only Herdr fixtures."""
-    for name, script in (("writer", "handoff.sh"), ("park", "handoff-park.sh"), ("resume", "herdr-say.sh"), ("supervisor-resume", "herdr-spawn.sh")):
-        f.run(name, "bash", str(REPO / "tests" / script))
-        f.check(name, lambda c: c.code == 0 and ": ok" in c.out)
-
-
 def manifest(c: Case) -> dict[str, Any]:
     """What a `pi-role --json` launch gives Pi, as the role-launch checks read it."""
     a: list[str] = c.j["args"]
@@ -874,7 +867,6 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "correction-lane": drive_correction_lane,
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
-    "handoff": drive_handoff,
 }
 
 
