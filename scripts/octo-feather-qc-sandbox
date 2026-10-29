@@ -271,11 +271,10 @@ if [[ "$phase" == setup ]]; then
     printf 'echo "$$" >> %q\n' "$SCR/agents.log"
     printf 'exec %q "$@"\n' "$realpi"
   } > "$SCR/bin/pi"
-  # recshim FILE KIND NAME REAL PRE DROP ENVDROP: the one recording shim, herdr's and each run program's: drop DROP
-  # options (each with its value), send its argv to the recorder before it runs (unreachable: not run), run REAL (empty:
-  # the next NAME on PATH past the shim's own dir) with PRE before the argv, stdin, stdout and stderr its own, send its
-  # exit after, return once the recorder has written the entry, and exit with the program's status
-  # (.agents/skills/eval-cases/references/schema.md, Attempt record, Run record).
+  # recshim FILE KIND NAME REAL PRE DROP ENVDROP: write to FILE the one recording shim, herdr's and each run program's:
+  # DROP options dropped (each with its value), REAL run (empty: the next NAME on PATH past the shim's own dir) with PRE
+  # before the argv. What it records and passes through: .agents/skills/eval-cases/references/schema.md, Attempt
+  # record, Run record.
   recshim() {
     { echo "#!$PY"
       echo "# qc sandbox $2 shim for $3: record the call (argv before, exit after), run the real program unchanged."
