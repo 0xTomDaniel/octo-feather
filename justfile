@@ -6,10 +6,6 @@ set positional-arguments
 
 # Exported so recipes use "$root" as data, never pasted text (#61).
 export root := justfile_directory()
-# macOS: GNU coreutils and util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen),
-# Homebrew's bash 5 and python3, ahead of the system's; missing dirs are skipped by the shell. The running just's
-# own dir comes next so recipes and tests find the same just.
-mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" } else { "" }
 # mise's own dirs, as mise reports them, pinned for every recipe and test, so a test that points HOME elsewhere
 # leaves nothing of mise's there and still finds its installs. Asked only when unset (a nested run inherits them):
 # asking mise with HOME redirected is itself what wrote its cache under that HOME (#261 gate run 983e89dc).
@@ -20,13 +16,18 @@ export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { e
 # Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
 # #boundary-gate); `mise install --locked` fills them, outside the gate.
 export MISE_OFFLINE := "1"
-# The kit's tools (mise.toml at mise.lock versions) first on PATH for every recipe, from any caller (a shell, a git
-# hook, CI, an agent pane): mise's own answer for this repo's config, the config its shims read for panes
-# (scripts/pi-role). Only when just is invoked inside this repo: `just -f KIT/justfile ...` from a repo the kit did
-# not create keeps that repo's PATH (no mise there). A tool not installed is named on stderr with the fix.
-mise_bins := if replace(invocation_directory() + "/", root + "/", "") == invocation_directory() + "/" { "" } else { `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; mise bin-paths 2>/dev/null | paste -sd : -` }
-mise_path := if mise_bins == "" { "" } else { mise_bins + ":" }
-export PATH := mise_path + env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
+# The kit's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, a git hook,
+# CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read for
+# panes, scripts/pi-role), placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin
+# /usr/sbin /usr/bin /sbin /bin; at the end when it has none, pi-role's with_mise rule): mise replaces only what
+# would resolve from the system, and every dir the caller put earlier (a test's stub, a user's tools) still wins.
+# Only when just is invoked inside this repo: `just -f KIT/justfile ...` from a repo the kit did not create keeps
+# that repo's PATH (no mise there). A tool not installed is named on stderr with the fix. macOS: GNU coreutils and
+# util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen), Homebrew's bash 5 and python3, also before the
+# system dirs, after mise's. The running just's own dir comes last, so recipes and tests still find a just.
+mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin" } else { "" }
+caller_path := if replace(invocation_directory() + "/", root + "/", "") == invocation_directory() + "/" { env_var('PATH') } else { `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; [[ "$(uname -s)" != Darwin ]] || add="${add:+$add:}/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"` }
+export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + (if caller_path == env_var('PATH') { if mac_path == "" { "" } else { mac_path + ":" } } else { "" }) + caller_path + ":" + parent_directory(just_executable())
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
 # this before any recipe runs, so a check or check-* recipe depending on the qa or qc recipe, directly or transitively, fails
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
@@ -213,8 +214,8 @@ check-ts:
 
 # Every template wires the same gate and pins its tools with mise at the kit's versions (rules: the head of
 # scripts/check-templates): AGENTS.md with a `Repo skills:` line, check, integrate and qc recipes, check-languages
-# in the gate, a git hook and CI that run `just check` (comments dropped first, #118), mise.toml, mise.lock and the
-# kit's mise-version. Structure only; each template's own `just check` runs in its repo (no network here).
+# in the gate, a git hook that runs `just check` (the hook is run against a recording just), mise.toml, mise.lock
+# and the kit's mise-version. Each template's own `just check` runs in its repo (no network here).
 check-templates:
     @python3 "$root/scripts/check-templates" "$root"
 

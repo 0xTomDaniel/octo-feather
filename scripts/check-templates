@@ -5,7 +5,9 @@
 
 Per template: AGENTS.md has a `Repo skills:` line; its justfile (just's own JSON dump) has check,
 integrate and qc recipes, and its gate reaches check-languages (GATE_RECIPES, or a dependency of
-check); .githooks/pre-commit is executable and runs `just check`, and so does its CI workflow; it
+check); .githooks/pre-commit, run in a throwaway copy with a recording `just` first on PATH, calls
+exactly `just check` once and exits 0 when just does and non-zero when just fails (the rule run,
+not its text; whether CI runs the gate is review's and the repo's real CI's call); it
 pins its native tools with mise (mise.toml, mise.lock, mise-version), mise-version is the kit's,
 and each tool it shares with the kit's mise.toml has the kit's version (one version on the box:
 the kit runs just in every repo it created). templates/python's tests/conftest.py is a byte copy
@@ -23,6 +25,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import cast
 
@@ -31,22 +34,77 @@ import tomllib
 # templates/python copies this kit file byte for byte (kit path: template path).
 COPIES = {"tests/gate/conftest.py": "tests/conftest.py"}
 MISE_FILES = ("mise.toml", "mise.lock", "mise-version")
-GATE = re.compile(r"(^|[^\w-])just check([^\w-]|$)")
+# A `just` first on PATH for the hook run: records each call's argv, exits with RECORD_EXIT.
+RECORDER = """#!/bin/sh
+for a in "$@"; do printf '%s\\037' "$a"; done >>"$RECORD_LOG"
+printf '\\n' >>"$RECORD_LOG"
+exit "$RECORD_EXIT"
+"""
 
 
 class TemplateError(Exception):
     """A template fails a rule; the message names the file and the fix."""
 
 
-def code(text: str) -> list[str]:
-    """Lines with shell comments removed (a # at line start or after whitespace)."""
-    return [re.sub(r"(^|\s)#.*", "", line) for line in text.splitlines()]
+def run_hook(template: Path, tmp: Path, just_exit: int) -> tuple[int, list[list[str]]]:
+    """The template's .githooks/pre-commit run in a throwaway copy of its tracked files, a recording
+    `just` first on PATH exiting just_exit: the hook's exit and each just call's argv."""
+    repo = tmp / f"repo{just_exit}"
+    git = shutil.which("git")
+    if git is None:
+        msg = "git: missing executable"
+        raise TemplateError(msg)
+    listed = subprocess.run(
+        [git, "-C", str(template), "ls-files", "-z"], capture_output=True, text=True, check=False
+    )
+    if listed.returncode:
+        msg = f"{template}: git ls-files failed: {listed.stderr.strip()}"
+        raise TemplateError(msg)
+    for name in filter(None, listed.stdout.split("\0")):
+        if not (template / name).is_symlink() and not (template / name).exists():
+            continue  # tracked but deleted in the worktree: the pin checks below name it
+        (repo / name).parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(template / name, repo / name, follow_symlinks=False)
+    bin_dir = tmp / "bin"
+    bin_dir.mkdir(exist_ok=True)
+    recorder = bin_dir / "just"
+    recorder.write_text(RECORDER, encoding="utf-8")
+    recorder.chmod(0o755)
+    log = tmp / f"calls{just_exit}"
+    log.touch()
+    env = dict(
+        os.environ,
+        PATH=f"{bin_dir}{os.pathsep}{os.environ.get('PATH', '')}",
+        RECORD_LOG=str(log),
+        RECORD_EXIT=str(just_exit),
+    )
+    hook = repo / ".githooks/pre-commit"
+    try:
+        r = subprocess.run([hook], cwd=repo, env=env, capture_output=True, timeout=60, check=False)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        msg = f"{template}/.githooks/pre-commit cannot run: {e}"
+        raise TemplateError(msg) from e
+    lines = log.read_text(encoding="utf-8").splitlines()
+    return r.returncode, [line.split("\x1f")[:-1] for line in lines]
 
 
-def runs_gate(lines: list[str], *, ci: bool) -> bool:
-    if ci:
-        return any(re.search(r"run: just check([^\w-]|$)", line) for line in lines)
-    return any(GATE.search(line) for line in lines)
+def check_hook(template: Path) -> None:
+    """The hook runs the gate: exactly one call, `just check`, and the hook's exit follows it."""
+    hook = template / ".githooks/pre-commit"
+    fix = f"{hook} must run `just check` and exit with its status (e.g. `exec just check`)"
+    if not os.access(hook, os.X_OK):
+        msg = f"{hook} is not executable; {fix}"
+        raise TemplateError(msg)
+    with tempfile.TemporaryDirectory() as tmp:
+        ok_exit, ok_calls = run_hook(template, Path(tmp), 0)
+        bad_exit, bad_calls = run_hook(template, Path(tmp), 1)
+    if ok_calls != [["check"]] or bad_calls != [["check"]]:
+        msg = f"{fix}; it called just {ok_calls or 'never'}"
+        raise TemplateError(msg)
+    if ok_exit != 0 or bad_exit == 0:
+        got = f"with just exiting 0 it exited {ok_exit}, with just exiting 1 it exited {bad_exit}"
+        msg = f"{fix}; {got}"
+        raise TemplateError(msg)
 
 
 def dump(template: Path) -> dict[str, object]:
@@ -79,14 +137,7 @@ def check_wiring(template: Path) -> None:
             f"{template}/justfile needs check, integrate and product-judge recipes (docs/adr/0022)"
         )
         raise TemplateError(msg)
-    hook = template / ".githooks/pre-commit"
-    if not os.access(hook, os.X_OK) or not runs_gate(code(hook.read_text("utf-8")), ci=False):
-        msg = f"{hook} must run just check"
-        raise TemplateError(msg)
-    ci = template / ".github/workflows/check.yml"
-    if not runs_gate(code(ci.read_text("utf-8")), ci=True):
-        msg = f"{template} CI must run just check ({ci})"
-        raise TemplateError(msg)
+    check_hook(template)
     assignments = cast("dict[str, dict[str, object]]", data["assignments"])
     gate = set(str(assignments.get("GATE_RECIPES", {}).get("value", "")).split())
     deps = cast("list[dict[str, object]]", recipes["check"].get("dependencies") or [])

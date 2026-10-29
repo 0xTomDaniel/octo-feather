@@ -32,14 +32,16 @@ child pane
 for kv in "${route[@]}"; do
   grep -qx "$kv" "$t/env.pane" || { echo "pi-role test: pane launch child lacks $kv" >&2; exit 1; }
 done
-# #261: agent shells are non-interactive, so in a repo with its own mise.toml pi-role puts mise's shims dir (mise's
-# own answer) first on PATH; in a repo without one (a repo the kit did not create, here gh1) and with no mise on
-# PATH, PATH is left as it was.
+# #261: agent shells are non-interactive, so in a repo with its own mise.toml pi-role places mise's shims dir (mise's
+# own answer) just before the caller PATH's first system dir: the caller's earlier dirs (here $t/bin, the stub pi)
+# still win. In a repo without one (a repo the kit did not create, here gh1) and with no mise on PATH, PATH is left
+# as it was. The PATHs are fixed here, so an empty entry in the caller's PATH cannot change the comparison.
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
+mkdir -p "$t/mbin"; ln -s "$(command -v mise)" "$t/mbin/mise"
 grep -qxF "PATH=$t/bin:$PATH" "$t/env.pane" || { echo "pi-role test: child PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/env.pane")" >&2; exit 1; }
 git init -q "$t/made"; printf '[tools]\n' >"$t/made/mise.toml"
-(cd "$t/made" && env PATH="$t/bin:$PATH" PI_ENV_OUT="$t/env.made" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
-grep -qxF "PATH=$shims:$t/bin:$(tr ':' '\n' <<<"$PATH" | grep -vxF "$shims" | paste -sd:)" "$t/env.made" || { echo "pi-role test: child PATH in a mise.toml repo does not start with mise's shims $shims: $(grep ^PATH= "$t/env.made")" >&2; exit 1; }
+(cd "$t/made" && env PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin" PI_ENV_OUT="$t/env.made" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
+grep -qxF "PATH=$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin" "$t/env.made" || { echo "pi-role test: child PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/env.made")" >&2; exit 1; }
 (cd "$t/made" && env PATH="$t/bin:/usr/bin:/bin" PI_ENV_OUT="$t/env.nomise" "$kit/scripts/pi-role" "$kit/agents/implementer.md" 2>/dev/null)
 grep -qx "PATH=$t/bin:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: without mise, child PATH changed: $(grep ^PATH= "$t/env.nomise")" >&2; exit 1; }
 # #175 (roles#launch-codemode, roles#acceptance-codemode-every-role).
@@ -60,4 +62,4 @@ ln -s "$kit/.agents/skills" "$t/kit/.agents/skills"
 sed -i 's/^tools: .*/tools: read, grep, find, ls, bash, codemode/' "$t/kit/agents/director.md"
 if "$t/kit/scripts/check-roles" >/dev/null 2>"$t/cr"; then echo "pi-role test: check-roles passed a role listing codemode" >&2; exit 1; fi
 grep -q 'agents/director.md: .*`codemode`.*pi-role adds it' "$t/cr" || { echo "pi-role test: check-roles did not name the file and codemode: $(cat "$t/cr")" >&2; exit 1; }
-echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims first on PATH in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools))"
+echo "pi-role: ok (repo skill from a lane worktree, home ignored, missing one warned; -p/--print child has no OCTO_FEATHER_PARENT or HERDR_PANE_ID/TAB_ID/WORKSPACE_ID, a pane launch keeps them; mise's shims before the system dirs in a mise.toml repo, none elsewhere or without mise (#261); #175 (roles#launch-codemode, roles#fm-tools))"

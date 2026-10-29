@@ -89,12 +89,12 @@ launch_argv+=(--session-id "$session")
 
 # A tab starts with the Herdr server's environment, not the caller's. HOME is
 # forwarded so the agent and every descendant keep the caller's git identity
-# and sessions; PATH gains the kit commands (herdr-say, octo-feather-state), and first mise's shims dir as
-# pi-role reports it ("shims"; none without mise or in a repo without mise.toml): agent shells run no mise
-# activate hook (#261).
-shims="$(jq -r '.shims // empty' <<<"$role_json")"
+# and sessions; PATH gains the kit commands (herdr-say, octo-feather-state). The rest is the caller's PATH, or
+# pi-role's "path" when given: that PATH with mise's shims before its system dirs (a repo with mise.toml; agent
+# shells run no mise activate hook, #261).
+rest="$(jq -r '.path // empty' <<<"$role_json")"
 tab_env=(--env "HOME=$HOME"
-  --env "PATH=${shims:+$shims:}$root/.agents/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:$PATH"
+  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:${rest:-$PATH}"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")

@@ -79,15 +79,18 @@ filed="$(echo body | env -i "${tabenv[@]}" PATH="$t/key:$(sed -n 's/^PATH=//p' "
 unset LINEAR_API_KEY; spawn nokey
 [[ "$rc" == 0 ]] || fail "spawn without LINEAR_API_KEY: exit $rc: $(cat "$t/nokey/err")"
 ! grep -q '^LINEAR_API_KEY=' "$t/nokey/tab-env" || fail "LINEAR_API_KEY set in a tab whose caller had none"
-# 1d. #261: in a repo with its own mise.toml the tab's PATH starts with mise's shims dir as pi-role reports it; in a
-#     repo without one (the cases above: a repo the kit did not create) or with no mise on PATH, no shims entry.
+# 1d. #261: in a repo with its own mise.toml the tab's PATH is the kit dirs, then the caller's PATH with mise's
+#     shims dir (as pi-role reports it, "path") just before its first system dir; in a repo without one (the cases
+#     above: a repo the kit did not create) or with no mise on PATH, the caller's PATH as it was.
 shims="$(mise doctor --json | jq -r .dirs.shims)"
 kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts:$HOME/.local/bin"
 grep -qxF "PATH=$kitpath:$t/bin:$PATH" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
+mkdir -p "$t/mbin"; ln -sf "$(command -v mise)" "$t/mbin/mise"; ln -sf "$(command -v jq)" "$t/mbin/jq"
 printf '[tools]\n' >"$t/cwd/mise.toml"
-spawn made
+spawn made PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn in a mise.toml repo: exit $rc: $(cat "$t/made/err")"
-grep -qxF "PATH=$shims:$kitpath:$t/bin:$PATH" "$t/made/tab-env" || fail "tab PATH in a mise.toml repo does not start with mise's shims $shims: $(grep ^PATH= "$t/made/tab-env")"
+grep -qxF "PATH=$kitpath:$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin" "$t/made/tab-env" \
+  || fail "tab PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/made/tab-env")"
 spawn nomise PATH="$t/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn without mise: exit $rc: $(cat "$t/nomise/err")"
 grep -qxF "PATH=$kitpath:$t/bin:/usr/bin:/bin" "$t/nomise/tab-env" || fail "tab PATH without mise changed: $(grep ^PATH= "$t/nomise/tab-env")"
@@ -204,4 +207,4 @@ run "$kit/scripts/octo-feather-start" --issue 2 --cwd "$t/cwd"
 [[ "$rc" == 73 ]] || fail "resume: fresh start on existing gh2: exit $rc, want 73: $(cat "$c/err")"
 grep -qE '^(tab|workspace) create' "$c/argv" && fail "resume: fresh start on existing gh2: created a tab or workspace"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims first on the tab's PATH in a mise.toml repo (none elsewhere or without mise), in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"
