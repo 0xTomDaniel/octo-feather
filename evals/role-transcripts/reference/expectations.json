@@ -376,5 +376,6 @@
       }
     ]
   },
-  "implementer-library-web": {"facts": [{"fact": "tool_called", "tools": ["mcp__exa__web_search_exa", "mcp__parallel__web_search"]}, {"fact": "field_lines", "field": "Prior art"}]}
+  "implementer-library-web": {"facts": [{"fact": "tool_called", "tools": ["mcp__exa__web_search_exa", "mcp__parallel__web_search"]}, {"fact": "field_lines", "field": "Prior art"}]},
+  "director-merge-report-post-merge": {"facts": [{"fact": "ran", "program": "octo-feather-lane", "args": ["post-merge", "12", "{head}"]}]}
 }
