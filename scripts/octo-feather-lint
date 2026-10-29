@@ -13,11 +13,13 @@ dev group, `uv run --locked`; a target adds all three to its own dev dependencie
   octo-feather-lint init    take the baselines once, for a repo adopting the lint late; refuses
                             when any baseline exists
 
-The file set: every git-tracked `*.py` file and every extensionless file whose shebang runs
-Python (python*, pypy*, directly or through env, or `uv run --script`), minus what the root
-pyproject's ruff config excludes (`extend-exclude`; nested configs of fixtures or templates
-never apply). Both tools skip an extensionless file unless it is named, so every file is
-named. basedpyright also drops a file under a dot directory (.agents/) even when named, so it
+The file set: ruff's own list (`ruff check --show-files` under the root pyproject's config, nested
+configs of fixtures or templates never apply), git-tracked files only: every `*.py` file ruff
+finds, plus each extensionless Python script the config names in `[tool.ruff] extend-include`
+(ruff and basedpyright skip an extensionless file unless it is named), minus `extend-exclude`.
+scripts/check-languages fails when scc finds tracked Python this list misses. basedpyright
+also drops a file under a dot directory (.agents/) even when named (its CLI always adds `**/.*`
+to the excludes; the switch, useDefaultExcludes, is a language-server setting only), so it
 runs over a throwaway mirror of links in which a dot-leading component `.x` reads `_.x`; its
 baseline keys are those mirror paths. `types` fails unless basedpyright analyzed exactly the
 files named.
@@ -41,7 +43,6 @@ from __future__ import annotations
 
 import filecmp
 import json
-import re
 import shutil
 import subprocess
 import sys
@@ -61,8 +62,6 @@ ROOT_CONFIG = ["--config", str(PYPROJECT)]
 LINT_TABLE = "tool.ruff.lint.extend-per-file-ignores"
 FORMAT_TABLE = "tool.ruff.format"
 SHRINK = "octo-feather-lint shrink"
-PY_NAME = re.compile(r"(python|pypy)[0-9.]*")
-ENV_ARG_OPTS = {"-u", "--unset", "-C", "--chdir"}
 
 Json = dict[str, object]
 
@@ -77,40 +76,6 @@ def say(*lines: str) -> None:
 
 def warn(line: str) -> None:
     sys.stderr.write(f"{line}\n")
-
-
-def shebang_words(path: Path) -> list[str]:
-    try:
-        with path.open("rb") as f:
-            first = f.readline().decode("utf-8", "replace").rstrip("\r\n")
-    except OSError:
-        return []
-    return first[2:].split() if first.startswith("#!") else []
-
-
-def runs_python(path: Path) -> bool:
-    """Whether the file's shebang runs Python (the rule check-scripts applies, #121 D2)."""
-    words = shebang_words(path)
-    i = 0
-    if words and Path(words[0]).name == "env":
-        i = 1
-        while i < len(words):
-            w = words[i]
-            if w in ENV_ARG_OPTS:
-                i += 2
-            elif w.startswith("-S") and len(w) > len("-S"):
-                words[i] = w[len("-S") :]
-                break
-            elif w.startswith("-") or "=" in w:
-                i += 1
-            else:
-                break
-    if i >= len(words):
-        return False
-    prog = Path(words[i]).name
-    if PY_NAME.fullmatch(prog):
-        return True
-    return prog == "uv" and words[i + 1 : i + 2] == ["run"] and "--script" in words[i + 2 :]
 
 
 def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
@@ -132,20 +97,14 @@ def file_set() -> list[str]:
     if r.returncode != 0:
         msg = f"git ls-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    cands = [
-        name
-        for name in r.stdout.split("\0")
-        if name
-        and Path(name).is_file()
-        and (Path(name).suffix == ".py" or (not Path(name).suffix and runs_python(Path(name))))
-    ]
-    if not cands:
-        return []
-    r = run(["ruff", "check", *ROOT_CONFIG, "--force-exclude", "--show-files", *cands])
+    tracked = {name for name in r.stdout.split("\0") if name}
+    r = run(["ruff", "check", *ROOT_CONFIG, "--show-files"])
     if r.returncode != 0:
         msg = f"ruff check --show-files failed: {r.stderr.strip()}"
         raise ToolError(msg)
-    return sorted(rel(line) for line in r.stdout.splitlines() if line)
+    # ruff also lists the pyproject.toml files it checks (RUF200): config, not Python.
+    files = {rel(line) for line in r.stdout.splitlines() if line}
+    return sorted(f for f in files & tracked if Path(f).name != PYPROJECT.name)
 
 
 def pyproject() -> Json:
