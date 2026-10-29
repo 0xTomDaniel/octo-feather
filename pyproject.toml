@@ -109,7 +109,7 @@ typeCheckingMode = "strict"
   "ANN401",
   "C901",
   "E501",
-  "PERF203",  # Existing cleanup loop: preserve behavior while linting at the Python floor.
+  "PERF203",  # Pre-3.11 cost rule is nonapplicable: this helper requires Python 3.11+.
   "PLR0912",
   "PLR0915",
   "PLR2004",
