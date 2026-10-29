@@ -7,10 +7,26 @@ set positional-arguments
 # Exported so recipes use "$root" as data, never pasted text (#61).
 export root := justfile_directory()
 # macOS: GNU coreutils and util-linux (realpath -m, readlink -f, timeout, setsid, uuidgen),
-# Homebrew's bash 5 and python3, and mise's shims, ahead of the system's; missing dirs are skipped by the shell.
-# The running just's own dir comes first so recipes and tests find it without a mise shim.
-mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" + env_var('HOME') + "/.local/share/mise/shims:" } else { "" }
-export PATH := env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
+# Homebrew's bash 5 and python3, ahead of the system's; missing dirs are skipped by the shell. The running just's
+# own dir comes next so recipes and tests find the same just.
+mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin:/usr/local/bin:" } else { "" }
+# mise's own dirs, as mise reports them, pinned for every recipe and test, so a test that points HOME elsewhere
+# leaves nothing of mise's there and still finds its installs. Asked only when unset (a nested run inherits them):
+# asking mise with HOME redirected is itself what wrote its cache under that HOME (#261 gate run 983e89dc).
+export MISE_DATA_DIR := if env_var_or_default('MISE_DATA_DIR', '') != '' { env_var('MISE_DATA_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["data"])' || true` }
+export MISE_CACHE_DIR := if env_var_or_default('MISE_CACHE_DIR', '') != '' { env_var('MISE_CACHE_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["cache"])' || true` }
+export MISE_STATE_DIR := if env_var_or_default('MISE_STATE_DIR', '') != '' { env_var('MISE_STATE_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["state"])' || true` }
+export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { env_var('MISE_CONFIG_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["config"])' || true` }
+# Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
+# #boundary-gate); `mise install --locked` fills them, outside the gate.
+export MISE_OFFLINE := "1"
+# The kit's tools (mise.toml at mise.lock versions) first on PATH for every recipe, from any caller (a shell, a git
+# hook, CI, an agent pane): mise's own answer for this repo's config, the config its shims read for panes
+# (scripts/pi-role). Only when just is invoked inside this repo: `just -f KIT/justfile ...` from a repo the kit did
+# not create keeps that repo's PATH (no mise there). A tool not installed is named on stderr with the fix.
+mise_bins := if replace(invocation_directory() + "/", root + "/", "") == invocation_directory() + "/" { "" } else { `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; mise bin-paths 2>/dev/null | paste -sd : -` }
+mise_path := if mise_bins == "" { "" } else { mise_bins + ":" }
+export PATH := mise_path + env_var('HOME') + "/.local/bin:" + root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + parent_directory(just_executable()) + ":" + mac_path + env_var('PATH')
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
 # this before any recipe runs, so a check or check-* recipe depending on the qa or qc recipe, directly or transitively, fails
 # every run before one starts. Anything but the script's exact ok line fails closed; the one other value is the
@@ -30,14 +46,39 @@ default:
 export GATE_RECIPES := "check-languages check-scripts check-refs check-dashes check-skills check-decision-log check-roles check-behavior-smoke check-vendored check-spec-status check-templates check-evals check-lint check-format check-types check-ts"
 
 # Every GATE_RECIPES recipe and every tests/*.sh, through check-tests (#201, #224).
-# The gate: script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
+# The gate: every tracked language gated, script syntax, Pi-only references, no dashes, skill frontmatter, decision logs, vendored skills, eval case shape, kit Python lint, format and types, kit tests.
 check: check-tests
 
-check-scripts:
-    @python3 scripts/check-languages run check-scripts
-
+# Every language scc finds in the tracked files has its lint and type step here (owner rulings #225, #261);
+# two pnpm pins fail. Rules, inputs and what passes by design: scripts/check-languages --help.
 check-languages:
-    @python3 scripts/check-languages
+    @python3 "$root/scripts/check-languages"
+
+# ShellCheck's file list: the `shell` attribute in .gitattributes (git's attribute pathspec), minus the trees with
+# their own gate (templates/) or frozen data (evals/, evidence/). check-languages compares it with scc's shell.
+shell-files:
+    @git -C "$root" ls-files ':(attr:shell)' ':(exclude)templates/' ':(exclude)evals/' ':(exclude)evidence/'
+
+# ShellCheck (mise.toml pin) over shell-files, never a bash -n fallback (#361); every Python file of the kit's
+# set (octo-feather-lint files: ruff's own list) byte-compiles: compile(), not ast.parse, refuses what parses but
+# cannot run (top-level return, break, yield; #121 D1); scripts/, the herdr-comms assets and tests/ hold executables.
+check-scripts:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    mapfile -t sh < <(just --justfile "$root/justfile" shell-files)
+    shellcheck -S warning "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
+    mapfile -t py < <(uv run --locked --offline --no-sync octo-feather-lint files)
+    python3 -c 'import sys
+    bad = 0
+    for f in sys.argv[1:]:
+        try: compile(open(f, "rb").read(), f, "exec", dont_inherit=True)
+        except SyntaxError as e: print(f"{f}:{e.lineno}: {e.msg}; fix it: Python cannot run this file", file=sys.stderr); bad = 1
+    sys.exit(bad)' "${py[@]}"
+    echo "python: ok (${#py[@]} files compile)"
+    for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
+      [[ ! -f "$f" || -x "$f" ]] || { echo "check-scripts: not executable: $f; chmod +x $f" >&2; exit 1; }
+    done
 
 # No CLAUDE.md, no .claude/.codex projections, no octo-lite product names, no lane branch default.
 # Exempt: docs/ (ADRs name what was rejected), AGENTS.md, README.md, NOTICE,
@@ -137,13 +178,13 @@ check-decision-log:
 # [tool.ruff.lint.extend-per-file-ignores] and [tool.ruff.format] exclude, .basedpyright/baseline.json
 # (scripts/octo-feather-lint --help). Pinned in pyproject.toml and uv.lock, run offline from the uv cache.
 check-lint:
-    @python3 scripts/check-languages run check-lint
+    @uv run --locked --offline --no-sync octo-feather-lint lint
 
 check-format:
-    @python3 scripts/check-languages run check-format
+    @uv run --locked --offline --no-sync octo-feather-lint format
 
 check-types:
-    @python3 scripts/check-languages run check-types
+    @uv run --locked --offline --no-sync octo-feather-lint types
 
 # Kit TypeScript (#245): templates/typescript's tsc (@tsconfig/strictest) and eslint (typescript-eslint
 # strict-type-checked and stylistic-type-checked) over the files tsconfig.json declares (its exclude names each
@@ -155,13 +196,27 @@ check-types:
 # until pruned. tsc has no baseline: its errors are fixed in place.
 # One recipe, not two: two gate items installing node_modules at once would race.
 check-ts:
-    @python3 scripts/check-languages run check-ts
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
+    cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
+    mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
+    (( ${#files[@]} )) || { echo "check-ts: tsconfig.json lists no files" >&2; exit 1; }
+    bad=0
+    pnpm exec tsc || { bad=1; echo "check-ts: fix each tsc error above at its file(line,col)" >&2; }
+    pnpm exec eslint --max-warnings 0 -- "${files[@]}" || { bad=1
+      echo "check-ts: fix each eslint finding above at its file, line:col; rule docs: https://typescript-eslint.io/rules/<rule> or https://eslint.org/docs/latest/rules/<rule> (an exception: // eslint-disable-next-line <rule> -- <reason>, on its line). Never add to eslint-suppressions.json; an unused entry there is pruned: pnpm exec eslint --prune-suppressions -- ${files[*]}" >&2; }
+    [[ "$bad" == 0 ]] && echo "ts: ok (${#files[@]} files: tsc, eslint)"
+    exit "$bad"
 
-# Every template wires the same gate (scripts/check-templates): AGENTS.md with a `Repo skills:` line, check,
-# integrate and qc recipes, a git hook and CI that run `just check`, its language check and install-check in
-# GATE_RECIPES, its own checker green in place, and templates/python's checker a byte copy of the kit's.
+# Every template wires the same gate and pins its tools with mise at the kit's versions (rules: the head of
+# scripts/check-templates): AGENTS.md with a `Repo skills:` line, check, integrate and qc recipes, check-languages
+# in the gate, a git hook and CI that run `just check` (comments dropped first, #118), mise.toml, mise.lock and the
+# kit's mise-version. Structure only; each template's own `just check` runs in its repo (no network here).
 check-templates:
-    @python3 scripts/check-templates "$root"
+    @python3 "$root/scripts/check-templates" "$root"
 
 # Integration tests of the kit scripts, each in a throwaway repo (tests/*.sh). Whether a test reaches past a
 # script's public surface is review's call, not a check (docs/adr/0008, #118).
@@ -174,7 +229,17 @@ check-templates:
 # copy fails on its recipe, never fans out a nested gate (#208).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
 check-tests *args:
-    @python3 scripts/check-languages gate "$@"
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
+    # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
+    # runs, and two installs at once would race (check-ts's own install is then a no-op).
+    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
+    GATE_NESTED=1 exec uv run --locked --offline --no-sync pytest "$@"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
 test *args:
@@ -232,8 +297,6 @@ install-check target=invocation_directory():
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
-    # Native gate tools and locked packages at the pins CI installs from: scripts/octo-feather-tool-pins.
-    python3 "$root/scripts/octo-feather-tool-pins" "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
@@ -241,13 +304,45 @@ install-check target=invocation_directory():
       if [[ "$v" == "$pin" ]]; then printf 'pi     version %s ok (pi-version)\n' "$v"
       else printf 'pi     WRONG VERSION %s reports %s, want %s (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@%s\n' "$p" "${v:-no version}" "$pin" "$pin"; bad=1; fi
     fi
-    # just at the pin in just-version: the gate reads just's own answers (check-gate-free), one just on box and CI.
-    pin="$(tr -d '[:space:]' <"$root/just-version")"
-    if p="$(command -v just)"; then
-      v="$(just --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-      if [[ "$v" == "$pin" ]]; then printf 'just   version %s ok (just-version)\n' "$v"
-      else printf 'just   WRONG VERSION %s reports %s, want %s (just-version); install just %s: https://github.com/casey/just/releases/tag/%s\n' "$p" "${v:-no version}" "$pin" "$pin" "$pin"; bad=1; fi
-    fi
+    # Native tools (owner ruling #261): mise at mise-version, then each mise.toml tool at its mise.lock version in the
+    # target (the kit itself when run there) when it has its own mise.toml; a repo without one (a repo the kit did not
+    # create) keeps its own pins: no tool line, its panes get no mise shims (scripts/pi-role). Each repo's justfile
+    # puts its own mise tools on PATH for its recipes, so where the caller's PATH resolves them is not checked here.
+    # A mise.toml with only [tools] needs no trust; a "not trusted" answer means it gained [env], [tasks] or hooks.
+    python3 -c 'import json, os, shutil, subprocess, sys
+    root, top = sys.argv[1], sys.argv[2]
+    pin = open(os.path.join(root, "mise-version")).read().strip()
+    how = f"install mise {pin}: https://github.com/jdx/mise/releases/tag/v{pin} (sha256 from its SHASUMS256.txt)"
+    exe = shutil.which("mise")
+    if not exe: sys.exit(f"mise   MISSING (want {pin}, mise-version); {how}")
+    v = subprocess.run(["mise", "--version"], capture_output=True, text=True).stdout.split()
+    got = v[0] if v else "no version"
+    if got != pin: sys.exit(f"mise   WRONG VERSION {exe} reports {got}, want {pin} (mise-version); {how}")
+    print(f"mise   version {pin} ok (mise-version)")
+    shims = json.loads(subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True).stdout or "{}").get("dirs", {}).get("shims", "")
+    bad = 0
+    # Tools the kit itself runs from PATH in any target, so at the kit mise.lock version there too: just (the kit
+    # recipes, just integrate, check-gate-free and octo-feather-lane read the --dump and --dry-run answers of just).
+    # Only the version on PATH is compared: nothing is installed or resolved through mise in the target.
+    kit_pins = json.loads(subprocess.run(["mise", "-C", root, "ls", "--local", "--json"], capture_output=True, text=True).stdout or "{}")
+    for tool in ("just",):
+        want = (kit_pins.get(tool) or [{}])[0].get("version")
+        path = shutil.which(tool)
+        got = (subprocess.run([tool, "--version"], capture_output=True, text=True).stdout.split() + ["", ""])[1] if path else "nothing"
+        if got == want: print(f"{tool:<6} version {got} ok (kit mise.lock)")
+        else: print(f"{tool:<6} WRONG VERSION {path or tool} reports {got}, want {want} (kit mise.lock); the kit runs it in every target: put {tool} {want} first on PATH (the kit mise install: cd {root} and mise install --locked, then {shims} first), or install {tool} {want}"); bad = 1
+    for d in [os.path.realpath(top)]:
+        if not os.path.isfile(os.path.join(d, "mise.toml")): continue
+        fix = f"mise -C {d} install --locked"
+        r = subprocess.run(["mise", "-C", d, "ls", "--local", "--json"], capture_output=True, text=True)
+        if r.returncode:
+            print(f"mise   {d}/mise.toml UNREADABLE: {r.stderr.strip()} (a [tools]-only mise.toml needs no trust; review it, then mise trust {d}/mise.toml)"); bad = 1; continue
+        for tool, rows in json.loads(r.stdout or "{}").items():
+            row = rows[0] if rows else {}
+            have, want = row.get("version"), row.get("requested_version")
+            if row.get("installed"): print(f"mise   {tool} {have} ok ({d}/mise.lock)")
+            else: print(f"mise   {tool} {want} MISSING ({d}/mise.lock); {fix}"); bad = 1
+    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" || bad=1
     # agent-browser at the pin in agent-browser-version, the vendored agent-browser skill's release (spec remote#host-tools).
     # Its postinstall marks the native binary executable, so no --ignore-scripts. It starts a Chrome it finds (Playwright's
     # included); `agent-browser doctor` names it, `agent-browser install` downloads one where none is found.

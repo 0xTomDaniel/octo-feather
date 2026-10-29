@@ -1,6 +1,8 @@
-// Compiler settings for kit TypeScript and tooling JavaScript. languages.json owns the tracked
-// file set; check-ts supplies that exact set through a temporary native tsc project. The include
-// below also lets eslint projectService and editors resolve the same live files.
+// The kit's own TypeScript and JavaScript (#245, #361): templates/typescript's compiler settings, allowJs and
+// checkJs so tooling JavaScript (eslint.config.js) is gated too. This file is the one declaration of which files the
+// gate checks: tsc reads it and eslint.config.js lints exactly the files it lists (just check-ts); check-languages
+// fails when scc finds tracked TypeScript or JavaScript it misses. tests/fixtures/ is kit test code (Pi extensions
+// the tests load), so it is in. tsc's wildcard skips dot directories: a dot path is named here.
 {
   "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node22/tsconfig.json"],
   "compilerOptions": {

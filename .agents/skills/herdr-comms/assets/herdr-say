@@ -43,13 +43,8 @@ here="$(dirname "$(readlink -f "$0")")"
 # The latest parked line naming TARGET by pane or name. A line without name is
 # the supervisor: the lane's name, its log's stem.
 parked() {
-  local line logs=("$("$here/../../../../scripts/octo-feather-state")"/lanes/*.handoffs.jsonl)
-  [[ -f "${logs[0]}" ]] || return 1
-  line="$(jq -nc --arg t "$1" '[inputs | select(.kind == "parked")
-    | .lane = (input_filename | split("/") | last | rtrimstr(".handoffs.jsonl"))
-    | .name //= .lane
-    | select(.pane == $t or .name == $t)] | sort_by(.at) | last // empty' "${logs[@]}")" &&
-    [[ -n "$line" ]] && printf '%s\n' "$line"
+  "$here/../../../../scripts/octo-feather-handoff" parked "$1" \
+    "$("$here/../../../../scripts/octo-feather-state")/lanes"
 }
 
 while (($#)); do

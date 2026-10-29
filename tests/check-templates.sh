@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Integration test for the check-templates gate (owner: docs/specs/templates.spec.html#acceptance-same-gate,
-# #118, #362): the hook and CI workflow lines it reads, each template's language gate wiring and
-# templates/python's byte copy of the kit checker. In a throwaway git repo of the kit's tracked files,
+# #118, #362): the hook and CI workflow lines it reads, check-languages in each template's gate, each template's
+# mise pins (files present, the kit's mise-version, shared tools at the kit's versions) and templates/python's
+# byte copy of the kit's trend hook. In a throwaway git repo of the kit's tracked files,
 # each edit makes `just check-templates` fail or pass. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -40,19 +41,20 @@ expect "$ci" '      - run: just check' '      - run: echo ok # run: just check'
 expect "$ci" '      - run: just check' '      - run: just check-scripts'
 allow "$ci" '      - run: just check' '      - run: just check  # the gate'
 pj=templates/python/justfile; tj=templates/typescript/justfile
-expect "$pj" '    @python3 scripts/check-languages' '    @echo python3 scripts/check-languages' 'check-languages must be exactly `@python3 scripts/check-languages`'
-expect "$tj" '    @node scripts/check-languages.ts run check-scripts' '    @echo node scripts/check-languages.ts run check-scripts' 'altered binding; use the complete invocation @node scripts/check-languages.ts run check-scripts'
-expect "$pj" 'export GATE_RECIPES := "install-check check-languages check-scripts check-lint check-format check-types check-imports"' 'export GATE_RECIPES := "install-check check-scripts check-lint check-format check-types check-imports"' 'add check-languages to GATE_RECIPES'
-expect "$tj" 'export GATE_RECIPES := "install-check check-languages check-scripts check-ts check-arch check-dead-code"' 'export GATE_RECIPES := "install-check check-languages check-ts check-arch check-dead-code"' 'shellcheck: bind check-scripts in the reachable gate'
-expect templates/typescript/languages.json '        "shellcheck"' '' 'shell lists no tool'
-# The template's checker copy drifts from the kit's: one appended line, nothing read from the source.
-copy=templates/python/scripts/language_support.py
+expect "$pj" 'export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"' \
+  'export GATE_RECIPES := "check-scripts check-lint check-format check-types check-imports"' 'the gate never runs check-languages'
+expect "$tj" 'check: check-languages check-scripts check-ts check-arch check-dead-code check-tests' \
+  'check: check-scripts check-ts check-arch check-dead-code check-tests' 'the gate never runs check-languages'
+expect templates/python/mise-version "$(cat "$t/mise-version")" '2000.1.1' "templates/python/mise-version is 2000.1.1, the kit's is $(cat "$t/mise-version")"
+expect templates/typescript/mise.toml 'just = "1.21.0"' 'just = "1.20.0"' "templates/typescript/mise.toml pins just 1.20.0, the kit 1.21.0: set just = '1.21.0' there, then mise lock"
+mv "$t/templates/python/mise.lock" "$t/.lock-old"
+set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
+mv "$t/.lock-old" "$t/templates/python/mise.lock"
+[[ "$rc" != 0 ]] && grep -qF "templates/python/mise.lock is missing" <<<"$out" || { echo "check-templates test: a missing mise.lock passed or was not named" >&2; echo "$out" >&2; exit 1; }
+# The template's trend hook drifts from the kit's: one appended line, nothing read from the source.
+copy=templates/python/tests/conftest.py
 cp "$t/$copy" "$t/.copy-old"; printf '# copy drift\n' >> "$t/$copy"
 set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
 mv "$t/.copy-old" "$t/$copy"
-[[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's scripts/language_support.py; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
-# A tracked file of no declared language in a template.
-printf 'package main\n' > "$t/templates/typescript/main.go"; (cd "$t" && git add templates/typescript/main.go)
-set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
-[[ "$rc" != 0 ]] && grep -qF 'main.go: unknown type; declare its language or reasoned exemption' <<<"$out" || { echo "check-templates test: a tracked main.go passed or was not named" >&2; echo "$out" >&2; exit 1; }
-echo "check-templates: ok (#118 hook and CI lines; #362 language bindings, gate reachability, shellcheck coverage, checker copy, unknown file)"
+[[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's tests/gate/conftest.py; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
+echo "check-templates: ok (#118 hook and CI lines; #362 check-languages in each gate, mise files and versions, trend hook copy)"

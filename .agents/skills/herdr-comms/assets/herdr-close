@@ -56,9 +56,9 @@ if [[ "${1:-}" == --park ]]; then
   tabs="$(herdr workspace get "$space" 2>/dev/null | jq -r '.result.workspace.tab_count // empty')"
   label="$(herdr tab get "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")" 2>/dev/null | jq -r '.result.tab.label // empty')"
   [[ "$tabs" == 1 ]] && set -- "$space" || set -- "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")"
-  line="$(jq -nc --arg at "$(date -u +%FT%TZ)" --arg pane "$pane" --arg name "$name" \
-    --arg role "$role" --arg cwd "$cwd" --arg session "$session" --arg label "$label" --arg parent "$parent" \
-    '{at: $at, kind: "parked", pane: $pane, name: $name, label: $label, role: $role, parent: $parent, cwd: $cwd, session: $session}')"
+  line="$("$(dirname "$(readlink -f "$0")")/../../../../scripts/octo-feather-handoff" encode \
+    --field at "$(date -u +%FT%TZ)" --field kind parked --field pane "$pane" --field name "$name" \
+    --field role "$role" --field cwd "$cwd" --field session "$session" --field label "$label" --field parent "$parent")"
 fi
 
 id="${1:-}"

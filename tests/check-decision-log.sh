@@ -9,7 +9,7 @@ set -euo pipefail
 # The one `just check` case in the copy runs this test there too (its tests/*.sh step): stop there, nested.
 [[ -z "${CHECK_DECISION_LOG_TEST_COPY:-}" ]] || { echo "check-decision-log test: nested run in a copy (a planted log passed check-decision-log)" >&2; exit 1; }
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.home" "$t.schema" "$t.bin" "$t.mise"' EXIT
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
 g init -q; g add -A; g commit -qm base
@@ -158,6 +158,10 @@ schema_bad() {
 schema_bad missing
 schema_bad '{"type": "object", "required": ["why"'
 schema_bad '[]'
+# Preserve malformed-schema refusal while the library owns structural validation.
+schema_bad '{"type": "object", "required": ["why", "why"]}'
+schema_bad '{"type": "object", "properties": {"why": {"minLength": 1.0}}}'
+schema_bad '{"type": "object", "properties": {"why": {"minLength": true}}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": "string", "maxLength": 9}}}'
 schema_bad '{"type": "object", "required": ["why"], "patternProperties": {}}'
 schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type": ["string", "null"]}}}'
@@ -169,13 +173,15 @@ schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type
 ln -s missing "$t/$L"; g add -f "$L"; run check-decision-log; unplant "$L"
 [[ "$rc" != 0 ]] && grep -qF "check-decision-log: $L: cannot read" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" \
   || { echo "check-decision-log test: unreadable log not reported" >&2; echo "$out" >&2; exit 1; }
-# Fails closed: a broken python3 or git (a stub first on the justfile's PATH, $HOME/.local/bin,
-# via a throwaway HOME) fails the gate, never decision-log: ok.
+# Fails closed: a broken python3, git or node (a stub first on the justfile's PATH after the kit's mise tools,
+# $HOME/.local/bin, via a throwaway HOME; a mise tool is dropped from the copy's mise.toml for its case) fails the
+# gate, never decision-log: ok.
 broken() {
   local h="$t.home"; mkdir -p "$h/.local/bin"
   printf '#!/bin/sh\necho "%s: broken (check-decision-log test stub)" >&2\nexit 2\n' "$1" > "$h/.local/bin/$1"; chmod +x "$h/.local/bin/$1"
+  cp "$t/mise.toml" "$t.mise"; sed -i "/^$1 = /d" "$t/mise.toml"
   set +e; out="$(cd "$t" && HOME="$h" just check-decision-log 2>&1)"; rc=$?; set -e
-  rm -rf "$h"
+  mv "$t.mise" "$t/mise.toml"; rm -rf "$h"
   [[ "$rc" != 0 ]] && grep -qF "$1: broken" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" || { echo "check-decision-log test: broken $1 passed check-decision-log" >&2; echo "$out" >&2; exit 1; }
 }
 broken python3
@@ -185,7 +191,9 @@ broken node
 grep -qF 'node exited 2; the check cannot pass' <<<"$out" || { echo "check-decision-log test: broken node not reported" >&2; echo "$out" >&2; exit 1; }
 # No node on PATH: fails closed naming the fix.
 mkdir -p "$t.bin"; ln -s "$(command -v git)" "$t.bin/git"
-set +e; out="$(cd "$t" && PATH="$t.bin" "$(command -v python3)" scripts/check-decision-log 2>&1)"; rc=$?; set -e; rm -rf "$t.bin"
+# Use the locked interpreter: PATH isolation removes uv too, not just node.
+python="$(cd "$kit" && uv run --locked --offline --no-sync python -c 'import sys; print(sys.executable)')"
+set +e; out="$(cd "$t" && PATH="$t.bin" "$python" scripts/check-decision-log 2>&1)"; rc=$?; set -e; rm -rf "$t.bin"
 [[ "$rc" == 2 ]] && grep -qF 'check-decision-log: node not found on PATH: install node (Pi needs it too); the check cannot pass' <<<"$out" \
   || { echo "check-decision-log test: missing node did not fail closed" >&2; echo "$out" >&2; exit 1; }
 rm -f "$t.schema"

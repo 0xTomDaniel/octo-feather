@@ -4,9 +4,11 @@
 # Make a new target repo at DEST from the kit's templates/LANG: only the
 # template's git-tracked files (modes kept), `git init -b main`, one initial
 # commit with the caller's git identity (else the kit checkout's), then Spec Chat's skills through
-# octo-feather-spec-chat unless --no-spec-chat. Never runs `just setup`, never
-# touches the network or creates a GitHub repo. Every refusal happens before
-# anything is created.
+# octo-feather-spec-chat unless --no-spec-chat. The template's mise.toml (its native
+# tool pins, reviewed in the kit) is trusted by mise for exactly that file: `mise trust
+# DEST/mise.toml`, never a directory or blanket trust (owner ruling, issue #261). Never
+# runs `just setup`, never touches the network or creates a GitHub repo. Every refusal
+# happens before anything is created.
 set -euo pipefail
 me="octo-feather-new-repo"
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -78,9 +80,14 @@ printf '%s\0' "${files[@]}" | git -C "$dest" --literal-pathspecs add -f --pathsp
   || { echo "$me: staged files differ from templates/$lang's tracked files" >&2; false; }
 git -C "$dest" -c core.hooksPath=/dev/null commit -q -m "Initial commit from octo-feather templates/$lang @ $sha"
 if [[ "$spec_chat" == 1 ]]; then "$kit/scripts/octo-feather-spec-chat" "$dest"; fi
+trusted=""
+if [[ -f "$dest/mise.toml" ]]; then
+  if command -v mise >/dev/null; then mise trust --quiet "$dest/mise.toml"; trusted=", mise.toml trusted (that file only)"
+  else trusted=", mise.toml NOT trusted: no mise on PATH (install mise at the kit's mise-version, then: mise trust $dest/mise.toml)"; fi
+fi
 trap - ERR
 
-echo "$me: $dest from templates/$lang @ $sha, one commit on main by $who$([[ "$spec_chat" == 1 ]] || echo ', no Spec Chat (--no-spec-chat)')"
+echo "$me: $dest from templates/$lang @ $sha, one commit on main by $who$([[ "$spec_chat" == 1 ]] || echo ', no Spec Chat (--no-spec-chat)')$trusted"
 cat <<EOF
 Next steps:
   cd $dest

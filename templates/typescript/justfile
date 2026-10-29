@@ -4,31 +4,40 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
 set positional-arguments
 
+# This repo's tools (mise.toml at mise.lock versions) first on PATH for every recipe, from any caller (a shell, the
+# git hook, CI, an agent pane): mise's own answer for this repo's config, the config its shims read. A tool not
+# installed is named on stderr with the fix.
+mise_bins := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; mise bin-paths 2>/dev/null | paste -sd : -`
+export PATH := if mise_bins == "" { env_var('PATH') } else { mise_bins + ":" + env_var('PATH') }
+
 default:
     @just --list
 
-# Install dependencies and the git hook.
+# Install the pinned tools (mise.toml, mise.lock), dependencies and the git hook.
 setup:
+    mise install --locked
     pnpm install --frozen-lockfile
     git config core.hooksPath .githooks
 
-# The gate's steps, each one vitest test (tests/gate.test.ts) beside the integration and E2E tests.
-# Every tracked file's language and the tools that gate it: languages.json, checked and run by
-# scripts/check-languages.ts (the octo-feather kit's checker, ported to TypeScript: no Python here).
-export GATE_RECIPES := "install-check check-languages check-scripts check-ts check-arch check-dead-code"
+# Every tracked language gated, shell, types and lint, architecture, dead code, integration and E2E tests: each a
+# dependency of check, so what the gate runs is just's own answer (scripts/check-languages.ts reads it).
+check: check-languages check-scripts check-ts check-arch check-dead-code check-tests
 
-# Types, lint, shell, architecture, dead code, integration and E2E tests.
-check: check-tests
-
-# Every tracked file is of a declared language, each tool bound below.
+# Every language scc finds in the tracked files has its lint and type step in check; rules and what passes by
+# design: the head of scripts/check-languages.ts.
 check-languages:
-    @node scripts/check-languages.ts
+    node scripts/check-languages.ts
+
+# ShellCheck's file list: the `shell` attribute in .gitattributes.
+shell-files:
+    @git ls-files ':(attr:shell)'
 
 check-scripts:
-    @node scripts/check-languages.ts run check-scripts
+    just shell-files | xargs -d '\n' shellcheck -S warning
 
 check-ts:
-    @node scripts/check-languages.ts run check-ts
+    pnpm exec tsc
+    pnpm exec eslint --max-warnings 0 .
 
 check-arch:
     pnpm exec depcruise src tests
@@ -36,18 +45,8 @@ check-arch:
 check-dead-code:
     pnpm exec knip
 
-# Each gate tool at the one pin CI installs from: scripts/install-check.ts.
-install-check:
-    node scripts/install-check.ts
-
-# pnpm install (offline, frozen), then vitest; a gate run inside another gate's test (GATE_NESTED set) is
-# sequential and stops at its first failure. Extra arguments go to vitest.
-check-tests *args:
-    @node scripts/check-languages.ts gate "$@"
-
-# The gate's vitest tests, all or a subset by vitest arguments (`just test -t check-ts`).
-test *args:
-    @just check-tests "$@"
+check-tests:
+    pnpm exec vitest run
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:

@@ -1,0 +1,33 @@
+# `shell`: ShellCheck's file list. ShellCheck has no config file list, so `just check-scripts` runs it over
+# `just shell-files`: `git ls-files ':(attr:shell)'` (git's attribute pathspec) minus the exempt trees. An
+# extensionless shell script is named here once; scripts/check-languages fails, naming the file, when scc finds
+# shell this list misses.
+*.sh shell
+.agents/skills/github-issues/scripts/issue-comment shell
+.agents/skills/github-issues/scripts/issue-create shell
+.agents/skills/github-issues/scripts/issue-done shell
+.agents/skills/github-issues/scripts/issue-view shell
+.agents/skills/github-issues/scripts/key-from-branch shell
+.agents/skills/github-issues/scripts/lane-key shell
+.agents/skills/github-issues/scripts/pr-line shell
+.agents/skills/herdr-comms/assets/herdr-close shell
+.agents/skills/herdr-comms/assets/herdr-say shell
+.agents/skills/herdr-comms/assets/herdr-spawn shell
+.agents/skills/herdr-comms/assets/herdr-wake shell
+.agents/skills/linear/scripts/install-check shell
+.agents/skills/linear/scripts/issue-comment shell
+.agents/skills/linear/scripts/issue-create shell
+.agents/skills/linear/scripts/issue-done shell
+.agents/skills/linear/scripts/issue-view shell
+.agents/skills/linear/scripts/key-from-branch shell
+.agents/skills/linear/scripts/lane-key shell
+.agents/skills/linear/scripts/pr-line shell
+scripts/octo-feather-exclude shell
+scripts/octo-feather-integrate shell
+scripts/octo-feather-new-repo shell
+scripts/octo-feather-qc-sandbox shell
+scripts/octo-feather-spec-chat shell
+scripts/octo-feather-start shell
+scripts/octo-feather-state shell
+tests/fixtures/herdr-say/herdr shell
+tests/fixtures/herdr-spawn/herdr shell

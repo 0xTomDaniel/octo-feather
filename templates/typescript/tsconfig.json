@@ -1,8 +1,8 @@
 {
-  "extends": [
-    "@tsconfig/strictest/tsconfig.json",
-    "@tsconfig/node22/tsconfig.json"
-  ],
+  // tsc checks exactly these files, and eslint (`eslint .`) the same tree; scripts/check-languages.ts fails when scc
+  // finds tracked TypeScript or JavaScript tsc's list misses. tsc's wildcards skip dot directories and dotfiles, so
+  // those are named. allowJs and checkJs: the tooling JavaScript is checked too.
+  "extends": ["@tsconfig/strictest/tsconfig.json", "@tsconfig/node22/tsconfig.json"],
   "compilerOptions": {
     "noEmit": true,
     "allowJs": true,
@@ -12,23 +12,7 @@
     "verbatimModuleSyntax": true,
     "module": "nodenext",
     "moduleResolution": "nodenext",
-    "types": [
-      "node"
-    ],
-    "lib": [
-      "es2024",
-      "ESNext.Array",
-      "ESNext.Collection",
-      "ESNext.Iterator",
-      "DOM"
-    ]
+    "types": ["node"]
   },
-  "include": [
-    "**/*",
-    ".agents/skills/verify-app/scripts",
-    ".dependency-cruiser.cjs"
-  ],
-  "exclude": [
-    "node_modules"
-  ]
+  "include": ["src", "tests", "scripts", ".agents/skills/verify-app/scripts", "eslint.config.js", ".dependency-cruiser.cjs"]
 }

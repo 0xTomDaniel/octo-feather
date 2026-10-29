@@ -13,7 +13,6 @@ dev = [
     "basedpyright==1.40.2",
     "pytest==9.1.1",
     "pytest-xdist==3.8.0",
-    "pyyaml==6.0.3",
     "ruff==0.17.1",
     "tomlkit==0.15.2",
 ]
@@ -27,9 +26,46 @@ testpaths = ["tests/gate"]
 addopts = "--strict-markers --durations=0 --junitxml=.pytest_cache/junit.xml"
 
 # Kit Python lint, format and types: templates/python's config as written there (#244), run by
-# `octo-feather-lint` over every tracked *.py and Python-shebang file (check-lint, check-format, check-types).
+# `octo-feather-lint` over ruff's own file list (check-lint, check-format, check-types).
 [tool.ruff]
 line-length = 100
+# Extensionless Python scripts, each by exact path: ruff (and basedpyright) skip a file without a .py
+# suffix unless it is named. scripts/check-languages fails, naming the file, when scc finds tracked
+# Python ruff's list misses.
+extend-include = [
+  ".agents/skills/github-pr/scripts/gh",
+  ".agents/skills/linear/scripts/linear",
+  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+  "scripts/check-behavior-smoke",
+  "scripts/check-decision-log",
+  "scripts/check-evals",
+  "scripts/check-gate-free",
+  "scripts/check-languages",
+  "scripts/check-roles",
+  "scripts/check-skills",
+  "scripts/check-templates",
+  "scripts/check-vendored",
+  "scripts/octo-feather-accepted",
+  "scripts/octo-feather-contract",
+  "scripts/octo-feather-evidence",
+  "scripts/octo-feather-handoff",
+  "scripts/octo-feather-lane",
+  "scripts/octo-feather-lint",
+  "scripts/octo-feather-qa",
+  "scripts/octo-feather-qc",
+  "scripts/octo-feather-qc-ghsnap",
+  "scripts/octo-feather-reflect",
+  "scripts/octo-feather-shape",
+  "scripts/octo-feather-spec-status",
+  "scripts/pi-role",
+  "scripts/review-host",
+  "tests/fixtures/lane-report/gh",
+  "tests/fixtures/lane-report/herdr",
+  "tests/fixtures/lane-spend/curl",
+  "tests/fixtures/start-nohup",
+  "tests/fixtures/tracker-gh/gh",
+  "tests/spend-out",
+]
 # Out of the kit's Python file set, each once with its reason (the template's own extend-exclude names its
 # copy of tests/gate/conftest.py, which the kit does lint):
 extend-exclude = [
@@ -39,10 +75,6 @@ extend-exclude = [
   # vendored skills (Skillfile github entries): upstream code, changed only through .skillfile/patches
   ".agents/skills/{tdd,implement,implement-spec,to-tickets,grill-with-docs,grilling,domain-modeling,code-review,writing-for-agents,correct,improve-codebase-architecture,codebase-design,principle-prove-it-works,blast-radius,sharpen,principle-encode-lessons-in-structure,interrogate,linear-cli}/",
 ]
-# Not a baseline (ruff baselines rule codes, and a syntax error has none): this file, from main (#181), uses
-# Python 3.12 f-string quoting (line 169) though the project's floor is 3.10 and its skill says 3.11+. Checked
-# as 3.12 until its owner fixes the line or raises the floor; then drop this entry.
-per-file-target-version = { ".agents/skills/verify-octo-feather/scripts/verify-octo-feather" = "py312" }
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -114,6 +146,7 @@ typeCheckingMode = "strict"
   "ANN401",
   "C901",
   "E501",
+  "PERF203",  # Pre-3.11 cost rule is nonapplicable: this helper requires Python 3.11+.
   "PLR0912",
   "PLR0915",
   "PLR2004",
@@ -166,7 +199,6 @@ typeCheckingMode = "strict"
   "PTH120",
   "PTH123",
   "S607",
-  "SIM102",
   "T201",
   "TRY003",
 ]

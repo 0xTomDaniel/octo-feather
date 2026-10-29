@@ -1,0 +1,7 @@
+{
+  // basedpyright's CLI always excludes dot directories (**/.*), so the Python under .agents/ is its own project,
+  // rooted here, with the repo's settings: `just check-types` runs both. Each file by path (extensionless scripts
+  // are skipped unless named); scripts/check-languages fails when scc finds Python this list misses.
+  "extends": "../pyproject.toml",
+  "include": ["skills/verify-app/scripts/verify-app"]
+}
