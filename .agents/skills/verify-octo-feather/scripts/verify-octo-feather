@@ -19,12 +19,13 @@ import shlex
 import shutil
 import subprocess
 import sys
-import tomllib
 from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NoReturn
+
+import tomllib
 
 ME = "verify-octo-feather"
 FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch")
@@ -166,7 +167,7 @@ def cmd_launch() -> None:
         (RUN_DIR / "scratch").mkdir(parents=True, exist_ok=True)
     except OSError:
         die(f"cannot write run state folder: {RUN_DIR}")
-    wrapper = f'#!/usr/bin/env bash\nexport QC_REPO={shlex.quote(str(REPO))}\nexec sh -c {shlex.quote(c.entry + ' "$@"')} kit "$@"\n'
+    wrapper = f"""#!/usr/bin/env bash\nexport QC_REPO={shlex.quote(str(REPO))}\nexec sh -c {shlex.quote(c.entry + ' "$@"')} kit "$@"\n"""
     try:
         kit.write_text(wrapper)
         kit.chmod(0o755)
