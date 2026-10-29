@@ -38,10 +38,6 @@ extend-exclude = [
   # vendored skills (Skillfile github entries): upstream code, changed only through .skillfile/patches
   ".agents/skills/{tdd,implement,implement-spec,to-tickets,grill-with-docs,grilling,domain-modeling,code-review,writing-for-agents,correct,improve-codebase-architecture,codebase-design,principle-prove-it-works,blast-radius,sharpen,principle-encode-lessons-in-structure,interrogate,linear-cli}/",
 ]
-# Not a baseline (ruff baselines rule codes, and a syntax error has none): this file, from main (#181), uses
-# Python 3.12 f-string quoting (line 169) though the project's floor is 3.10 and its skill says 3.11+. Checked
-# as 3.12 until its owner fixes the line or raises the floor; then drop this entry.
-per-file-target-version = { ".agents/skills/verify-octo-feather/scripts/verify-octo-feather" = "py312" }
 
 [tool.ruff.lint]
 select = ["ALL"]
@@ -113,6 +109,7 @@ typeCheckingMode = "strict"
   "ANN401",
   "C901",
   "E501",
+  "PERF203",  # Pre-3.11 cost rule is nonapplicable: this helper requires Python 3.11+.
   "PLR0912",
   "PLR0915",
   "PLR2004",
