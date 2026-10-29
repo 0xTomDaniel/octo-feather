@@ -259,9 +259,24 @@ read prints as `unread: <source>: <reason>` where its facts would be; a log's un
 counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
 Exit 0; 1 on any argument.
 
+  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
+                                   the director's post-merge routine for lane NAME, its steps in order
+
+`post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
+report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). It writes nothing so far: rerun it freely.
+  step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
+  step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
+                   for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
+                   lists is completed; ok only when every run concluded success
+Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
+a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`. Exit 0 when every step is ok, 1 when one
+stopped (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch
+that failed), 1 with usage on stderr for bad arguments.
+
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
-import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import cast
@@ -2504,6 +2519,129 @@ def cmd_report(args: list[str]) -> int:
     return 0
 
 
+# --- post-merge (owner ruling 2026-10-29 on issue 206; steps 1-2: issue 396) ---
+
+PM_FIELDS = "databaseId,status,conclusion,workflowName,url"
+PM_POLL = 10   # seconds between run lists while no run has appeared, or a watched run still reads unfinished
+
+
+class PostMerge:
+    """One post-merge run: its arguments, and what each step learns for the next."""
+
+    def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
+        self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
+        self.merge, self.base = "", ""
+
+    def r(self) -> list[str]:
+        return ["-R", self.repo] if self.repo else []
+
+
+def pm_merged(pm: PostMerge) -> str:
+    """Step 1: the PR merged at the pinned head; read its merge commit."""
+    d = cast("dict[str, object]", pr_view(pm.pr, "state,headRefOid,mergeCommit,baseRefName,headRefName", pm.repo))
+    oid = str(d["headRefOid"])
+    if d["state"] != "MERGED":
+        raise Refuse(f"PR #{pm.pr} is {d['state']}, not merged: merge it at {pm.head} first (gh pr merge --match-head-commit), then rerun")
+    if not head_matches(pm.head, oid):
+        raise Refuse(f"PR #{pm.pr} merged at head {oid[:12]}, not at the pinned head {pm.head}: "
+                     "what merged is not what was judged; tell the owner, nothing after this step runs")
+    mc = d["mergeCommit"]
+    merge = str(cast("dict[str, object]", mc).get("oid") or "") if isinstance(mc, dict) else ""
+    if not SHA.fullmatch(merge):
+        raise Refuse(f"PR #{pm.pr} reads MERGED with no merge commit ({d['mergeCommit']!r}): check it on GitHub, then rerun")
+    pm.merge, pm.base = merge, str(d["baseRefName"])
+    return f"PR #{pm.pr} ({d['headRefName']}) merged into {pm.base} at head {oid[:12]}, merge commit {merge[:12]}"
+
+
+def pm_runs(pm: PostMerge) -> list[dict[str, str]]:
+    """The merge commit's push runs as gh lists them, each field as text (a null conclusion as "")."""
+    out = gh(["run", "list", "--commit", pm.merge, "--event", "push", "--json", PM_FIELDS, *pm.r()],
+             f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+    raw: object = json.loads(out)
+    fields = PM_FIELDS.split(",")
+    runs: list[dict[str, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else [None]:
+        if not isinstance(x, dict) or any(f not in x for f in fields):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        r = cast("dict[str, object]", x)
+        runs.append({f: "" if r[f] is None else str(r[f]) for f in fields})
+    return runs
+
+
+def pm_ci(pm: PostMerge) -> str:
+    """Step 2: wait for main CI on the merge commit; ok only when every push run concluded success."""
+    m, deadline = pm.merge[:12], time.monotonic() + pm.wait
+    runs = pm_runs(pm)
+    while not runs:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise Refuse(f"no push run on merge commit {m} within {pm.wait}s: check the workflows that run on push to "
+                         f"{pm.base} (gh run list --commit {pm.merge}), then rerun")
+        time.sleep(min(PM_POLL, left)); runs = pm_runs(pm)
+    while pending := [x for x in runs if x["status"] != "completed"]:
+        failed: dict[str, str] = {}
+        for x in pending:
+            p = subprocess.run(["gh", "run", "watch", x["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            if p.returncode:
+                failed[x["databaseId"]] = ((p.stderr or p.stdout).strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
+        runs = pm_runs(pm)
+        for x in runs:   # a failed watch is the run's red end, or gh's own failure while the run goes on
+            if x["databaseId"] in failed and x["status"] != "completed":
+                raise Refuse(f"gh run watch {x['databaseId']} failed ({failed[x['databaseId']]}) while {x['workflowName']} "
+                             f"reads {x['status']}: {x['url']}; check gh auth status, then rerun")
+        if not failed and any(x["status"] != "completed" for x in runs):
+            time.sleep(PM_POLL)
+    red = [x for x in runs if x["conclusion"] != "success"]
+    if red:
+        raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
+                     + f"; fix {pm.base} first, nothing after this step runs")
+    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: "
+            + ", ".join(f"{x['workflowName']} {x['url']}" for x in runs))
+
+
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci))
+
+
+def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
+    if flag not in args:
+        return args, None
+    i = args.index(flag)
+    if i + 1 >= len(args):
+        raise Refuse(f"{flag} needs a value")
+    return args[:i] + args[i + 2:], args[i + 1]
+
+
+def cmd_post_merge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    args, lane = take_opt(args, "--lane")
+    args, wait = take_opt(args, "--wait")
+    if len(args) != 2 or not lane or not NAME.fullmatch(lane):
+        raise Refuse("usage: octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R] "
+                     f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'})")
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the pinned head the PR merged at, 7 to 40 hex, got {args[1]!r}")
+    if wait is not None and not wait.isdigit():
+        raise Refuse(f"--wait needs whole seconds, got {wait!r}")
+    pm = PostMerge(pr_number(args[0]), args[1].lower(), lane, int(wait or 300), repo)
+    outcomes: list[str] = []
+    for n, (name, step) in enumerate(POST_MERGE_STEPS, 1):
+        if all(o.endswith(" ok") for o in outcomes):
+            try:
+                line, outcome = f"ok: {step(pm)}", "ok"
+            except Refuse as e:
+                line, outcome = f"stopped: {e}", "stopped"
+            except (KeyError, TypeError, AttributeError, ValueError) as e:
+                line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
+            print(f"step {n} {name}: {line}", flush=True)
+            outcomes.append(f"step {n} {name} {outcome}")
+        else:
+            outcomes.append(f"step {n} {name} not run")
+    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}", flush=True)
+    return 0 if all(o.endswith(" ok") for o in outcomes) else 1
+
+
 COMMANDS = {
     "archive": cmd_archive,
     "reflect": cmd_reflect,
@@ -2516,6 +2654,7 @@ COMMANDS = {
     "ticket": cmd_ticket,
     "spend": cmd_spend,
     "report": cmd_report,
+    "post-merge": cmd_post_merge,
 }
 
 
