@@ -6,7 +6,7 @@ Labels: `shows`, `does-not-show`; what each means: question.json `label_help`.
 
 State shape: question.json `state_shape`; built per recorded result by `just qc` (scripts/octo-feather-qc, advise).
 
-Status: drafted by the lane implementer (#408), for the director to check and own, the owner to review later (spec judgment#rule-labels-owned). No `labelled_by` yet: the director adds it on checking. Not benched: no `calibration` in suite.json until `just qa --suite judgment-criterion-evidence` runs and its held-out score and proposed threshold are copied in (shape: scripts/check-evals --help, Calibration); until then `just qc` shows each answer as uncalibrated.
+Status: drafted by the lane implementer (#408); the director checked all 28 labels and the doubts below as drafted (`labelled_by: director, checked 2026-10-29`) and owns them; the owner reviews later, nothing waits on it (spec judgment#rule-labels-owned). Not benched: no `calibration` in suite.json until `just qa --suite judgment-criterion-evidence` runs and its held-out score and proposed threshold are copied in (shape: scripts/check-evals --help, Calibration); until then `just qc` shows each answer as uncalibrated.
 
 ## Real history
 

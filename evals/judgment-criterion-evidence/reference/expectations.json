@@ -2,141 +2,169 @@
  "24d1b5e-retired-words": {
   "label": "does-not-show",
   "reason": "the third case adds the retired words and check-refs exits 0, so the gate does not fail on every such change",
-  "source": "$(octo-feather-state)/qc/24d1b5e6515d78ddf4abf159c524ac4712981aa1-20261020T004614Z-975bb3.json report.criteria acceptance-retired-words (verdict fail); criterion text: docs/specs/overview.spec.html@24d1b5e6515d"
+  "source": "$(octo-feather-state)/qc/24d1b5e6515d78ddf4abf159c524ac4712981aa1-20261020T004614Z-975bb3.json report.criteria acceptance-retired-words (verdict fail); criterion text: docs/specs/overview.spec.html@24d1b5e6515d",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "468d0a1-retired-words": {
   "label": "shows",
   "reason": "every staged change with operator or human makes just check fail with the message naming director and owner",
-  "source": "$(octo-feather-state)/qc/468d0a157318c763b0d98cbdee042d935c02e661-20261021T212005Z-060ad5.json report.criteria acceptance-retired-words (verdict pass); criterion text: docs/specs/overview.spec.html@468d0a157318"
+  "source": "$(octo-feather-state)/qc/468d0a157318c763b0d98cbdee042d935c02e661-20261021T212005Z-060ad5.json report.criteria acceptance-retired-words (verdict pass); criterion text: docs/specs/overview.spec.html@468d0a157318",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "b6b7013-gate-no-model": {
   "label": "does-not-show",
   "reason": "the gate failed only because the qa stub errored; its message never says the gate stays deterministic and free",
-  "source": "$(octo-feather-state)/qc/b6b7013162021b6019c68cad01ff66b80938b87c-20261021T221052Z-e3ae01.json report.criteria acceptance-gate-no-model (verdict fail); criterion text: docs/specs/quality.spec.html@b6b701316202"
+  "source": "$(octo-feather-state)/qc/b6b7013162021b6019c68cad01ff66b80938b87c-20261021T221052Z-e3ae01.json report.criteria acceptance-gate-no-model (verdict fail); criterion text: docs/specs/quality.spec.html@b6b701316202",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "661a57b-decision-log-schema": {
   "label": "shows",
   "reason": "a line without why makes just check fail naming the file, line 2 and the missing why field",
-  "source": "$(octo-feather-state)/qc/661a57bce57042eb395bd2701370297ce649a494-20261021T225902Z-d75fe3.json report.criteria acceptance-decision-log-schema (verdict pass); criterion text: docs/specs/quality.spec.html@661a57bce570"
+  "source": "$(octo-feather-state)/qc/661a57bce57042eb395bd2701370297ce649a494-20261021T225902Z-d75fe3.json report.criteria acceptance-decision-log-schema (verdict pass); criterion text: docs/specs/quality.spec.html@661a57bce570",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "c8c06be-call-guard": {
   "label": "does-not-show",
   "reason": "the full just check stopped at check-vendored before the spec check; only a targeted recipe named the unlogged change",
-  "source": "$(octo-feather-state)/qc/c8c06be1a9a360c763704573298243fa600f64e5-20261022T004408Z-7b4b92.json report.criteria acceptance-call-guard (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@c8c06be1a9a3"
+  "source": "$(octo-feather-state)/qc/c8c06be1a9a360c763704573298243fa600f64e5-20261022T004408Z-7b4b92.json report.criteria acceptance-call-guard (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@c8c06be1a9a3",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "19fc66a-lane-archive": {
   "label": "shows",
   "reason": "the criterion asks for an integration test, and lane-archive.sh passes showing the lane removed and both files archived unchanged",
-  "source": "$(octo-feather-state)/qc/19fc66a4fe54e2a585001600b18081e42c689e4b-20261022T013221Z-86cca7.json report.criteria acceptance-lane-archive (verdict pass); criterion text: docs/specs/comms.spec.html@19fc66a4fe54"
+  "source": "$(octo-feather-state)/qc/19fc66a4fe54e2a585001600b18081e42c689e4b-20261022T013221Z-86cca7.json report.criteria acceptance-lane-archive (verdict pass); criterion text: docs/specs/comms.spec.html@19fc66a4fe54",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "19fc66a-tracer-tickets": {
   "label": "does-not-show",
   "reason": "the ticket check printed ok for a storage-only ticket whose demo is an unchanged command, the layer-only ticket the criterion forbids",
-  "source": "$(octo-feather-state)/qc/19fc66a4fe54e2a585001600b18081e42c689e4b-20261022T013311Z-c26f7a.json report.criteria acceptance-tracer-tickets (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@19fc66a4fe54"
+  "source": "$(octo-feather-state)/qc/19fc66a4fe54e2a585001600b18081e42c689e4b-20261022T013311Z-c26f7a.json report.criteria acceptance-tracer-tickets (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@19fc66a4fe54",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "e4307c7-call-guard": {
   "label": "shows",
   "reason": "just check fails with check-spec-status naming the spec and the changed anchor with no call, and the integration test passed",
-  "source": "$(octo-feather-state)/qc/e4307c7b399d7c7b814a73bd5735dcbaa445fa74-20261022T014717Z-65eef8.json report.criteria acceptance-call-guard (verdict pass); criterion text: docs/specs/issue-lifecycle.spec.html@e4307c7b399d"
+  "source": "$(octo-feather-state)/qc/e4307c7b399d7c7b814a73bd5735dcbaa445fa74-20261022T014717Z-65eef8.json report.criteria acceptance-call-guard (verdict pass); criterion text: docs/specs/issue-lifecycle.spec.html@e4307c7b399d",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "d4e2caa-one-head": {
   "label": "does-not-show",
   "reason": "only a test's summary line; no merge ask is shown to the owner naming one judged head with the review and qc report",
-  "source": "$(octo-feather-state)/qc/d4e2caa26e3a59d793c6e176601312b08ce37629-20261022T212204Z-e2f3b9.json report.criteria acceptance-one-head (verdict pass); criterion text: docs/specs/issue-lifecycle.spec.html@d4e2caa26e3a"
+  "source": "$(octo-feather-state)/qc/d4e2caa26e3a59d793c6e176601312b08ce37629-20261022T212204Z-e2f3b9.json report.criteria acceptance-one-head (verdict pass); criterion text: docs/specs/issue-lifecycle.spec.html@d4e2caa26e3a",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "02cee48-tracker-unknown": {
   "label": "shows",
   "reason": "pi-role names the unknown tracker jira and the kit's github, start refuses, and the Herdr boundary records no start",
-  "source": "$(octo-feather-state)/qc/02cee4808cc45f9ec08aec67abe6ff65c3add635-20261022T231949Z-9dcb10.json report.criteria acceptance-tracker-unknown (verdict pass); criterion text: docs/specs/skills.spec.html@02cee4808cc4"
+  "source": "$(octo-feather-state)/qc/02cee4808cc45f9ec08aec67abe6ff65c3add635-20261022T231949Z-9dcb10.json report.criteria acceptance-tracker-unknown (verdict pass); criterion text: docs/specs/skills.spec.html@02cee4808cc4",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "4a14b7b-merge-linear": {
   "label": "does-not-show",
   "reason": "the audit finds no merged Linear lane and names the parent and ticket read-back as missing",
-  "source": "$(octo-feather-state)/qc/4a14b7b262d3bc34e56f8399b4aa8a4a932409e7-20261023T010147Z-f8c937.json report.criteria acceptance-merge-linear (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@4a14b7b262d3"
+  "source": "$(octo-feather-state)/qc/4a14b7b262d3bc34e56f8399b4aa8a4a932409e7-20261023T010147Z-f8c937.json report.criteria acceptance-merge-linear (verdict fail); criterion text: docs/specs/issue-lifecycle.spec.html@4a14b7b262d3",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "4a14b7b-linear-key-qc": {
   "label": "shows",
   "reason": "just qc ran in a Linear target with the key set; the judge boundary saw no key and the Linear read was denied",
-  "source": "$(octo-feather-state)/qc/4a14b7b262d3bc34e56f8399b4aa8a4a932409e7-20261023T010611Z-945e8e.json report.criteria acceptance-linear-key-qc (verdict pass); criterion text: docs/specs/remote.spec.html@4a14b7b262d3"
+  "source": "$(octo-feather-state)/qc/4a14b7b262d3bc34e56f8399b4aa8a4a932409e7-20261023T010611Z-945e8e.json report.criteria acceptance-linear-key-qc (verdict pass); criterion text: docs/specs/remote.spec.html@4a14b7b262d3",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "0119d59-qa-per-case": {
   "label": "does-not-show",
   "reason": "only a test's summary line; no factory eval case is shown with its pass or fail and deciding facts, nor the run failing",
-  "source": "$(octo-feather-state)/qc/0119d598a9d8073d9774e0b55bddb7d781264bad-20261023T073045Z-0d2be2.json report.criteria acceptance-qa-per-case (verdict pass); criterion text: docs/specs/quality.spec.html@0119d598a9d8"
+  "source": "$(octo-feather-state)/qc/0119d598a9d8073d9774e0b55bddb7d781264bad-20261023T073045Z-0d2be2.json report.criteria acceptance-qa-per-case (verdict pass); criterion text: docs/specs/quality.spec.html@0119d598a9d8",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "852117f-qa-isolated": {
   "label": "does-not-show",
   "reason": "the sandbox proof failed and the case never ran, so no attempt is shown blocked",
-  "source": "$(octo-feather-state)/qc/852117f9d33f762c8e8c398f23a088bb5180b447-20261023T190541Z-a52360.json report.criteria acceptance-qa-isolated (verdict fail); criterion text: docs/specs/quality.spec.html@852117f9d33f"
+  "source": "$(octo-feather-state)/qc/852117f9d33f762c8e8c398f23a088bb5180b447-20261023T190541Z-a52360.json report.criteria acceptance-qa-isolated (verdict fail); criterion text: docs/specs/quality.spec.html@852117f9d33f",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "a0ec772-prompt-eval": {
   "label": "does-not-show",
   "reason": "the owed-evals file says the supervisor ordering smoke is none yet; a check demo is not the changed behaviour",
-  "source": "$(octo-feather-state)/qc/a0ec772603a2be08474a82af30c5fb06035e6f32-20261023T193705Z-78ba8b.json report.criteria acceptance-prompt-eval (verdict fail); criterion text: docs/specs/quality.spec.html@a0ec772603a2"
+  "source": "$(octo-feather-state)/qc/a0ec772603a2be08474a82af30c5fb06035e6f32-20261023T193705Z-78ba8b.json report.criteria acceptance-prompt-eval (verdict fail); criterion text: docs/specs/quality.spec.html@a0ec772603a2",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "091d096-judge-labelled": {
   "label": "does-not-show",
   "reason": "only 13 cases are factory history once constructed and skill-example cases are removed, below the fifteen required",
-  "source": "$(octo-feather-state)/qc/091d096e03e3a0f611bda246421e5cbb27dfe1c6-20261023T223418Z-ec3a2a.json report.criteria acceptance-judge-labelled (verdict fail); criterion text: docs/specs/judgment.spec.html@091d096e03e3"
+  "source": "$(octo-feather-state)/qc/091d096e03e3a0f611bda246421e5cbb27dfe1c6-20261023T223418Z-ec3a2a.json report.criteria acceptance-judge-labelled (verdict fail); criterion text: docs/specs/judgment.spec.html@091d096e03e3",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "6aea298-judge-labelled": {
   "label": "shows",
   "reason": "the set prints one question, fixed labels, 18 factory-history cases each with label, reason, source and split",
-  "source": "$(octo-feather-state)/qc/6aea29859e2ef202b622f2fbac7fd30c04f7ec02-20261025T051642Z-0d4cb8.json report.criteria acceptance-judge-labelled (verdict pass); criterion text: docs/specs/judgment.spec.html@6aea29859e2e"
+  "source": "$(octo-feather-state)/qc/6aea29859e2ef202b622f2fbac7fd30c04f7ec02-20261025T051642Z-0d4cb8.json report.criteria acceptance-judge-labelled (verdict pass); criterion text: docs/specs/judgment.spec.html@6aea29859e2e",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "56510dd-verify-declared": {
   "label": "does-not-show",
   "reason": "both template verify skills print FAIL missing Helpers, a section the criterion requires",
-  "source": "$(octo-feather-state)/qc/56510dd50d2717867a41f6c94735d33b9a4c354e-20261027T050010Z-b1467f.json report.criteria acceptance-verify-declared (verdict fail); criterion text: docs/specs/quality.spec.html@56510dd50d27"
+  "source": "$(octo-feather-state)/qc/56510dd50d2717867a41f6c94735d33b9a4c354e-20261027T050010Z-b1467f.json report.criteria acceptance-verify-declared (verdict fail); criterion text: docs/specs/quality.spec.html@56510dd50d27",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "dc60987-qc-contract": {
   "label": "does-not-show",
   "reason": "the output is an incomplete merge ask; nothing shows qc.toml or the verify skill invoking only what it declares",
-  "source": "$(octo-feather-state)/qc/dc60987466c5813df54e9eaf96365f3dbff37b63-20261027T061240Z-3cf60e.json report.criteria acceptance-qc-contract (verdict fail); criterion text: docs/specs/quality.spec.html@dc60987466c5"
+  "source": "$(octo-feather-state)/qc/dc60987466c5813df54e9eaf96365f3dbff37b63-20261027T061240Z-3cf60e.json report.criteria acceptance-qc-contract (verdict fail); criterion text: docs/specs/quality.spec.html@dc60987466c5",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "124b0b1-verify-declared": {
   "label": "shows",
   "reason": "AGENTS.md declares the verify skill, all six sections are listed, and the feature map holds the lane's contract feature file",
-  "source": "$(octo-feather-state)/qc/124b0b1a1872fe4cc397c96b6357d229afa17736-20261027T061951Z-0b5e3c.json report.criteria acceptance-verify-declared (verdict pass); criterion text: docs/specs/quality.spec.html@124b0b1a1872"
+  "source": "$(octo-feather-state)/qc/124b0b1a1872fe4cc397c96b6357d229afa17736-20261027T061951Z-0b5e3c.json report.criteria acceptance-verify-declared (verdict pass); criterion text: docs/specs/quality.spec.html@124b0b1a1872",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "16cbb7b-repo-skill-roles": {
   "label": "shows",
   "reason": "each of the three role runs reads verify-app with its role and stack skills before driving",
-  "source": "$(octo-feather-state)/qc/16cbb7b72f33fe810530427cb062ca4814293f93-20261027T222126Z-3d34a1.json report.criteria acceptance-repo-skill-roles (verdict pass); criterion text: docs/specs/skills.spec.html@16cbb7b72f33"
+  "source": "$(octo-feather-state)/qc/16cbb7b72f33fe810530427cb062ca4814293f93-20261027T222126Z-3d34a1.json report.criteria acceptance-repo-skill-roles (verdict pass); criterion text: docs/specs/skills.spec.html@16cbb7b72f33",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "5e6ab40-report-owner-queue": {
   "label": "shows",
   "reason": "the owner queue lists the spec-review and merge gates oldest first with lane, gate and wait time",
-  "source": "$(octo-feather-state)/qc/5e6ab4004c227c814f42620f4b3aedc4970756e5-20261027T231937Z-6a7127.json report.criteria acceptance-report-owner-queue (verdict pass); criterion text: docs/specs/comms.spec.html@5e6ab4004c22"
+  "source": "$(octo-feather-state)/qc/5e6ab4004c227c814f42620f4b3aedc4970756e5-20261027T231937Z-6a7127.json report.criteria acceptance-report-owner-queue (verdict pass); criterion text: docs/specs/comms.spec.html@5e6ab4004c22",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "5e6ab40-report-gate-time": {
   "label": "shows",
   "reason": "the report prints the lane's last gate wall time beside main's last",
-  "source": "$(octo-feather-state)/qc/5e6ab4004c227c814f42620f4b3aedc4970756e5-20261027T231937Z-6a7127.json report.criteria acceptance-report-gate-time (verdict pass); criterion text: docs/specs/comms.spec.html@5e6ab4004c22"
+  "source": "$(octo-feather-state)/qc/5e6ab4004c227c814f42620f4b3aedc4970756e5-20261027T231937Z-6a7127.json report.criteria acceptance-report-gate-time (verdict pass); criterion text: docs/specs/comms.spec.html@5e6ab4004c22",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "4a05a2d-spend-bench": {
   "label": "shows",
   "reason": "the spend totals list the bench's 2 calls under purpose bench and no lane, by day and model, with tokens and the bench's cost",
-  "source": "$(octo-feather-state)/qc/4a05a2d6d72e8d94efae50ffc09d28743daff34e-20261028T000218Z-035533.json report.criteria acceptance-spend-bench (verdict pass); criterion text: docs/specs/spend.spec.html@4a05a2d6d72e"
+  "source": "$(octo-feather-state)/qc/4a05a2d6d72e8d94efae50ffc09d28743daff34e-20261028T000218Z-035533.json report.criteria acceptance-spend-bench (verdict pass); criterion text: docs/specs/spend.spec.html@4a05a2d6d72e",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "38ecbbf-verify-launch-fails": {
   "label": "shows",
   "reason": "launch fails naming the unwritable run folder and the process-group check finds no survivors",
-  "source": "$(octo-feather-state)/qc/38ecbbfe2628319a01036be8cbf845b53acd86ce-20261028T015630Z-f6e7e7.json report.criteria acceptance-verify-launch-fails (verdict pass); criterion text: docs/specs/quality.spec.html@38ecbbfe2628"
+  "source": "$(octo-feather-state)/qc/38ecbbfe2628319a01036be8cbf845b53acd86ce-20261028T015630Z-f6e7e7.json report.criteria acceptance-verify-launch-fails (verdict pass); criterion text: docs/specs/quality.spec.html@38ecbbfe2628",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "38ecbbf-verify-created": {
   "label": "does-not-show",
   "reason": "the history shows a copied template skill and a drive, not a skill made with create-verification-skill",
-  "source": "$(octo-feather-state)/qc/38ecbbfe2628319a01036be8cbf845b53acd86ce-20261028T015630Z-f6e7e7.json report.criteria acceptance-verify-created (verdict pass); criterion text: docs/specs/quality.spec.html@38ecbbfe2628"
+  "source": "$(octo-feather-state)/qc/38ecbbfe2628319a01036be8cbf845b53acd86ce-20261028T015630Z-f6e7e7.json report.criteria acceptance-verify-created (verdict pass); criterion text: docs/specs/quality.spec.html@38ecbbfe2628",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "069cb33-web-roles": {
   "label": "does-not-show",
   "reason": "the drive checks launch arguments only; no role ran in a tab and no search returned results",
-  "source": "$(octo-feather-state)/qc/069cb331492733e138028c98cfc80b3bcce1b9a7-20261028T032925Z-dfe171.json report.criteria acceptance-web-roles (verdict fail); criterion text: docs/specs/roles.spec.html@069cb3314927"
+  "source": "$(octo-feather-state)/qc/069cb331492733e138028c98cfc80b3bcce1b9a7-20261028T032925Z-dfe171.json report.criteria acceptance-web-roles (verdict fail); criterion text: docs/specs/roles.spec.html@069cb3314927",
+  "labelled_by": "director, checked 2026-10-29"
  },
  "34dd7f1-browser": {
   "label": "does-not-show",
   "reason": "the verify skill's doctor failed on an uncached download; no implementer ever opened a page",
-  "source": "$(octo-feather-state)/qc/34dd7f165803607b0e33be53e36dab8990c69118-20261028T053658Z-f4faf5.json report.criteria acceptance-browser (verdict fail); criterion text: docs/specs/skills.spec.html@34dd7f165803"
+  "source": "$(octo-feather-state)/qc/34dd7f165803607b0e33be53e36dab8990c69118-20261028T053658Z-f4faf5.json report.criteria acceptance-browser (verdict fail); criterion text: docs/specs/skills.spec.html@34dd7f165803",
+  "labelled_by": "director, checked 2026-10-29"
  }
 }
