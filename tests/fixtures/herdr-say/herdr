@@ -25,6 +25,8 @@ case "$1 $2" in
     echo "$(opt --label "$@") w8" >>"$d/spaces"
     echo '{"result":{"workspace":{"workspace_id":"w8"},"tab":{"tab_id":"w8:t1"}}}' ;;
   "workspace close") ;;
+  "workspace get") echo '{"result":{"workspace":{"tab_count":2}}}' ;;
+  "tab get") echo '{"result":{"tab":{"label":"worker"}}}' ;;
   "tab create")
     w="$(opt --workspace "$@")"
     printf '{"result":{"tab":{"tab_id":"%s:t9"},"root_pane":{"pane_id":"%s:p9"}}}\n' "$w" "$w" ;;

@@ -1,0 +1,56 @@
+#!/usr/bin/env python3
+"""Encode a handoff record, or find a parked record in the caller's lane logs.
+
+Kit-only stdlib json suffices; Herdr still owns transport. Encode prints one JSON
+line for redirection, with string fields via --field KEY VALUE and arbitrary JSON
+fields via --json-field KEY JSON. No handoff schema or policy is imposed.
+"""
+
+import argparse
+import json
+import sys
+from pathlib import Path
+from typing import cast
+
+from handoff_log import encode, read_log
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command", required=True)
+    writer = commands.add_parser("encode")
+    writer.add_argument("--field", nargs=2, action="append", default=[])
+    writer.add_argument("--json-field", nargs=2, action="append", default=[])
+    parked = commands.add_parser("parked")
+    parked.add_argument("target")
+    parked.add_argument("lanes", type=Path)
+    args = parser.parse_args()
+    if args.command == "encode":
+        record: dict[str, object] = dict(args.field)
+        for key, value in args.json_field:
+            record[key] = json.loads(value)
+        sys.stdout.write(encode(record) + "\n")
+        return 0
+    matches: list[dict[str, object]] = []
+    for path in sorted(args.lanes.glob("*.handoffs.jsonl")):
+        records, bad = read_log(path)
+        for number in bad:
+            sys.stderr.write(f"herdr-say: {path}:{number}: skipping malformed handoff line\n")
+        for record in records:
+            if record.get("kind") != "parked":
+                continue
+            record["lane"] = path.name.removesuffix(".handoffs.jsonl")
+            if record.get("name") is None or record.get("name") is False:
+                record["name"] = record["lane"]
+            if args.target in (record.get("pane"), record.get("name")):
+                matches.append(record)
+    if not matches:
+        return 1
+    # Stable ordering retains the last record when timestamps tie, like jq sort_by.
+    matches.sort(key=lambda record: cast("str", record.get("at") or ""))
+    sys.stdout.write(encode(matches[-1]) + "\n")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

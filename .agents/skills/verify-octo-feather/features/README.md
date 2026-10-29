@@ -31,6 +31,8 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 
 ## Features
 
+- [handoff](./handoff.md) covers JSON-safe recording, parked lookup and isolated resume.
+
 - [new-repo](./new-repo.md) covers creating a target repo from a template (`just new-repo`) and its refusals.
 - [install-check](./install-check.md) covers the box's install check (`just install-check`).
 - [contract](./contract.md) covers the app-driver contract validator (`octo-feather-contract`).

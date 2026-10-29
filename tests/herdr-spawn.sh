@@ -140,7 +140,14 @@ delivered() { # $1: pane. The message that pane got.
 # 4a. Live space (#acceptance-resume-live-space): the lane workspace gh2 (w5)
 #    still holds a worker tab. The supervisor resumes in a new tab of w5, no 73.
 setup live "gh2 w5"$'\n' "$sup"
-say w5:p1 hello
+printf 'unrelated corrupt log\n' >"$c/state/octo-feather/lanes/other.handoffs.jsonl"
+say --parked gh2
+[[ "$rc" == 0 ]] || fail "parked gh2: exit $rc: $(cat "$c/err")"
+jq -e '.session == "S1" and .name == "gh2"' "$c/out" >/dev/null || fail "parked gh2: lost session"
+grep -q 'other.handoffs.jsonl:1:' "$c/err" || fail "parked gh2: no corruption diagnostic"
+printf 'herdr-say --parked gh2: %s\n' "$(cat "$c/out")"
+printf 'diagnostic: %s\n' "$(cat "$c/err")"
+say gh2 hello
 [[ "$rc" == 0 ]] || fail "resume: live space: herdr-say exit $rc, want 0: $(cat "$c/err")"
 grep -q '^workspace create' "$c/argv" && fail "resume: live space: a new workspace was created: $(cat "$c/argv")"
 grep -q '^tab create --workspace w5 ' "$c/argv" || fail "resume: live space: no tab created in w5: $(cat "$c/argv")"
@@ -149,6 +156,8 @@ grep -qx 'pane=w5:p9' "$c/out" || fail "resume: live space: new pane not printed
 [[ "$(delivered w5:p9)" == "Resumed from park as pane=w5:p9. hello" ]] ||
   fail "resume: live space: delivered '$(delivered w5:p9)', want the resume notice naming w5:p9"
 [[ ! -s "$c/closed" ]] || fail "resume: live space: tabs closed in the live workspace: $(cat "$c/closed")"
+grep -q -- '--session-id S1' "$c/argv" || fail "resume: supervisor lost original session"
+printf 'herdr-say gh2 hello: %s; delivered=%s; session=S1\n' "$(cat "$c/out")" "$(delivered w5:p9)"
 
 # 4b. Space gone (#roles-park): resume opens a new lane workspace gh2 and closes
 #    only its seed tab.

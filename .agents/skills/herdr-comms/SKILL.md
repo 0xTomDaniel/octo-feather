@@ -124,7 +124,9 @@ herdr-close --park PANE >>"$lanes/<lane>.handoffs.jsonl"
 `herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
 that tab is the space's only one (a supervisor in its own space), and prints
 one parked line (`at kind pane name role cwd session`) on stdout, even when the
-close fails; the close report goes to stderr. The parker appends the line: the
+close fails; the close report goes to stderr. Other handoff producers encode with `octo-feather-handoff encode --field KEY VALUE`
+(`--json-field KEY JSON` for nonstrings) and redirect stdout to the log; all fields
+are retained. Park already uses that encoder. The parker appends the line: the
 director for a supervisor, the supervisor for a worker. An agent Herdr does not report
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.

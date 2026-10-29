@@ -266,6 +266,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from typing import cast
 
+from handoff_log import read_log
+
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
 KIT = Path(__file__).resolve().parent.parent
 
@@ -376,9 +378,9 @@ def reflect_lane(name: str, lanes: Path) -> None:
     record, log, state = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl", lanes.parent
     try:
         rec = tomllib.loads(record.read_text(encoding="utf-8"))
-        lines = cast("list[dict[str, object]]", read_log(log)[0] if log.exists() else [])
+        lines = read_log(log)[0] if log.exists() else []
         dlog = state / "director.handoffs.jsonl"
-        dlines = cast("list[dict[str, object]]", read_log(dlog)[0] if dlog.exists() else [])
+        dlines = read_log(dlog)[0] if dlog.exists() else []
         dl = [json.dumps(d, ensure_ascii=False) for d in dlines if r.about_lane(d, name, rec.get("issue"))]
         qs = r.questions("lane")
         now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
@@ -422,7 +424,7 @@ def reflect_director(lanes: Path, due: bool = False) -> bool:
             print(f"director reflection: not due, another one is running ({state})")
             return False
         try:
-            dlines = cast("list[dict[str, object]]", read_log(dlog)[0] if dlog.exists() else [])
+            dlines = read_log(dlog)[0] if dlog.exists() else []
             now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
             last = r.reflected_at(dlines)
             if due and (not dlines if last is None else (now - last).total_seconds() <= DAY):
@@ -457,7 +459,7 @@ def reflect_director(lanes: Path, due: bool = False) -> bool:
 
 def lane_logs(lanes: Path) -> list[tuple[str, Path, list[dict[str, object]]]]:
     """Every lane hand-off log, archived ones first: (lane, path, its lines)."""
-    return [(p.name.removesuffix(".handoffs.jsonl"), p, cast("list[dict[str, object]]", read_log(p)[0]))
+    return [(p.name.removesuffix(".handoffs.jsonl"), p, read_log(p)[0])
             for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl"))]
 
 
@@ -2233,20 +2235,6 @@ def herdr_agents() -> list[dict]:
     return agents
 
 
-def read_log(path: Path) -> tuple[list[dict], list[int]]:
-    """The hand-off log's JSON object lines, and the numbers of the lines that are not one."""
-    lines, bad = [], []
-    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
-        if not l.strip():
-            continue
-        try:
-            d = json.loads(l)
-        except ValueError:
-            d = None
-        (lines.append(d) if isinstance(d, dict) else bad.append(i))
-    return lines, bad
-
-
 def pending_gates(lines: list[dict]) -> list[tuple[str, object]]:
     """Each pending owner gate (spec comms #report-owner-queue), with its asked time."""
     latest: dict[str, dict] = {}
@@ -2301,7 +2289,7 @@ def director_reflection(state: Path, now: object, unread: list[str]) -> str:
     if not log.exists():
         return f"director reflection: never ran ({log.name}: none)"
     try:
-        lines = cast("list[dict[str, object]]", read_log(log)[0])
+        lines = read_log(log)[0]
     except (OSError, UnicodeDecodeError) as e:
         if f"log {log.name}" not in unread:
             unread.append(f"log {log.name}")
