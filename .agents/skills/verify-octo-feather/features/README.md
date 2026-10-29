@@ -40,3 +40,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
 - [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`).
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
+- [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
