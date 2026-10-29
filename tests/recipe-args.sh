@@ -3,8 +3,8 @@
 # the invocation directory to the called command as data (#61). Each recipe runs
 # through `just` from a cwd whose path holds `$`, a backtick, both quotes and a
 # space, with arguments holding the same; stub octo-feather-* commands record
-# the exact cwd and argv; nothing expands. Offline, HOME redirected (the kit
-# justfile puts $HOME/.local/bin first on PATH, so the stubs live there).
+# the exact cwd and argv; nothing expands. Offline, HOME redirected. The kit justfile puts its own scripts/ first
+# on PATH, so its recipes run from a copy of it whose scripts/ holds the stubs (the rest linked to the kit's).
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -12,7 +12,7 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
 fail() { echo "recipe-args test: $*" >&2; exit 1; }
 export HOME="$t/home" XDG_STATE_HOME="$t/state" XDG_CONFIG_HOME="$t/config"
-stubs="$HOME/.local/bin"; mkdir -p "$stubs"
+stubs="$t/stubs"; mkdir -p "$stubs"
 log="$t/log"; export RECIPE_ARGS_LOG="$log"
 cat > "$stubs/stub" <<'EOF'
 #!/usr/bin/env bash
@@ -21,6 +21,8 @@ EOF
 chmod +x "$stubs/stub"
 for c in shape spec-chat integrate start qc new-repo; do ln -s stub "$stubs/octo-feather-$c"; done
 export PATH="$stubs:$PATH"   # the templates' justfiles keep the caller's PATH
+k="$t/kit"; mkdir -p "$k/scripts"; cp "$kit/justfile" "$k/"; ln -s "$kit"/scripts/* "$k/scripts/"
+for c in shape spec-chat integrate start qc new-repo; do ln -sf "$stubs/stub" "$k/scripts/octo-feather-$c"; done
 
 w="$t/a \$b \`c\` 'd\" e/w"; mkdir -p "$w"
 a1='x $y'; a2='$(touch pwned)'; a3='`touch pwned2`'; a4="q'r\"s"; a5='z w'
@@ -33,16 +35,16 @@ check() {
   [[ "$(cat "$log")" == "$want" ]] || fail "$name: got"$'\n'"$(cat "$log")"$'\n'"want"$'\n'"$want"
   rm -f "$log"
 }
-kj() { out="$(cd "$w" && just --justfile "$kit/justfile" "$@" 2>&1)" || fail "just $1 failed: $out"; }
+kj() { out="$(cd "$w" && just --justfile "$k/justfile" "$@" 2>&1)" || fail "just $1 failed: $out"; }
 
 kj shape "$a1" "$a2" "$a3" "$a4" "$a5";     check shape octo-feather-shape "$w" "$a1" "$a2" "$a3" "$a4" "$a5"
 kj shape;                                    check 'shape (no args)' octo-feather-shape "$w"
 kj spec-chat "$a4 $a2";                      check spec-chat octo-feather-spec-chat "$w" "$a4 $a2"
 kj integrate 59 "$a1" "$a5" "$a2" "$a3";    check integrate octo-feather-integrate "$w" 59 "$a1" "$a5" "$a2" "$a3"
-kj start;                                    check 'start (default cwd)' octo-feather-start "$kit" --director --cwd "$w"
-kj start "$a4 $a2";                          check start octo-feather-start "$kit" --director --cwd "$a4 $a2"
-kj supervise 61;                             check 'supervise (default cwd)' octo-feather-start "$kit" --issue 61 --cwd "$w"
-kj supervise "$a1" "$a3";                    check supervise octo-feather-start "$kit" --issue "$a1" --cwd "$a3"
+kj start;                                    check 'start (default cwd)' octo-feather-start "$k" --director --cwd "$w"
+kj start "$a4 $a2";                          check start octo-feather-start "$k" --director --cwd "$a4 $a2"
+kj supervise 61;                             check 'supervise (default cwd)' octo-feather-start "$k" --issue 61 --cwd "$w"
+kj supervise "$a1" "$a3";                    check supervise octo-feather-start "$k" --issue "$a1" --cwd "$a3"
 kj qc "$a4" 7 "$a1" "$a5" "$a2";            check qc octo-feather-qc "$w" "$a4" 7 "$a1" "$a5" "$a2"
 kj new-repo python "$a1" --no-spec-chat "$a5" "$a2"; check new-repo octo-feather-new-repo "$w" python "$a1" --no-spec-chat "$a5" "$a2"
 kj new-repo "$a3" "$a4";                     check 'new-repo (no flags)' octo-feather-new-repo "$w" "$a3" "$a4"

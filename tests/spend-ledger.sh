@@ -86,8 +86,10 @@ printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-c
 
 state="$t/state/octo-feather"; ledger="$state/spend.jsonl"
 mkdir -p "$state/lanes"; printf 'supervisor = "w37:p2"\n' > "$state/lanes/gh149.toml"
-# Pi's environment: nothing inherited but PATH, plus the given variables.
-pienv() { env -i PATH="$PATH" HOME="$t/home" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
+# Pi's environment: nothing inherited but PATH and mise's data dir, plus the given variables. mise's data dir as mise
+# reports it here: the qc sandbox installs nothing, so the moved HOME must not hide the box's installs (#437).
+mdata="$(mise doctor --json | jq -r .dirs.data)"
+pienv() { env -i PATH="$PATH" MISE_DATA_DIR="$mdata" HOME="$t/home" TMPDIR="$t" XDG_CACHE_HOME="$t/cache" XDG_STATE_HOME="$t/state" \
   PI_CODING_AGENT_DIR="$t/agent" PI_OFFLINE=1 PI_SKIP_VERSION_CHECK=1 PI_TELEMETRY=0 "$@"; }
 # run PROMPT [VAR=VALUE...]: one headless pi with the extension; $out, $rc, stderr in $t/err.
 run() {
