@@ -28,12 +28,24 @@ web_servers = "parallel exa"
 # The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail.
 qc_demo_pass = "echo demo checks pass"
 qc_demo_fail = "echo demo checks fail >&2; exit 1"
+# The qc-browser drive's scratch browser demo: the [browser] pin's headless shell screenshots the scratch target's page.
+qc_demo_browser = 'shell=$(ls -d "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell | head -1) && "$shell" --no-sandbox --user-data-dir="$TMPDIR/profile" --window-size=640,400 --screenshot="$QC_SCREENSHOTS/page.png" "file://$QC_REPO/page.html"'
+
+# The verify skill's qc-browser drive runs a headless browser: Playwright's headless Chromium shell at this release.
+[browser]
+playwright = "1.64.1"
 
 # The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
 [demo."quality#acceptance-qc-capture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
 tests = ["tests/qc-capture.sh"]
+
+[demo."quality#acceptance-qc-capture-browser"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-browser"
+browser = true
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+tests = ["tests/qc-browser.sh"]
 
 [demo."quality#acceptance-qc-same-verdict"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"

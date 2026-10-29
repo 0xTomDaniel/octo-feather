@@ -5,7 +5,10 @@ Run in a lane worktree at its integrated head. Capture first (quality spec #qc-c
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
 [demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
-(octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr). Its result is then read
+(octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr, and screenshots/<name> for each file
+the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
+headless Chromium shell at the contract's [browser] playwright pin where `just install-check` names it, bound
+read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there), decision source the demo's checks, pass on exit status 0, else fail.
 The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
@@ -53,7 +56,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, hashlib, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib
+import base64, fcntl, hashlib, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
@@ -184,10 +187,13 @@ def oauth_warning():
 
 
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
-              kit: Path | None = None) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
+              kit: Path | None = None, browser: str | None = None,
+              shots: bool = False) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
-    test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph)."""
+    test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
+    Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
+    the record's "shots" ([name, base64] pairs)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
@@ -202,7 +208,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     got = {n: [] for n in names}
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
-    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else [])
+    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else []) + ([browser] if browser else [])
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
     worktree = git("rev-parse", "--show-toplevel")
     # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
@@ -215,7 +221,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
                QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_HISTORY="" if history else "none",
+               QC_HISTORY="" if history else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
     if (w := oauth_warning()):
         print(w, file=sys.stderr)
@@ -303,20 +309,25 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
     root = git("rev-parse", "--show-toplevel")
     done: dict[str, Result] = {}
     caps: list[dict[str, Any]] = []
+    folder = browsers(root, [i for i in ids if i in demos and demos[i].get("browser")], stem)
     for n, i in enumerate(i for i in ids if i in demos):
         cid, line = f"{stem}#{i}", str(demos[i]["command"])
-        cmd = ["env", f"QC_REPO={root}", "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
+        br = folder if demos[i].get("browser") else None   # never downloads one: the box's, read-only
+        cmd = ["env", f"QC_REPO={root}", *([f"PLAYWRIGHT_BROWSERS_PATH={br}", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"] if br else []),
+               "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
         print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
         run: subprocess.CompletedProcess[str] | None
         sandbox: dict[str, Any] | bool
         if nosb:
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
-            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"})
+            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
+                                     browser=br, shots=True)
             assert isinstance(sandbox, dict)
             sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
+        shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
-        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox})
+        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
         if run is None:
             report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
             die(66, f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})")
@@ -327,6 +338,9 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
             for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
                 Path(d, name).write_text(body)
+            for name, b64 in shots:
+                Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
+                Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
             p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
                                 "--outputs", d], capture_output=True, text=True)
         if p.returncode:
@@ -340,6 +354,26 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
                                            "results": list(done.values())}, indent=2))
         die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
     return done, caps
+
+
+def browsers(root: str, ids: list[str], stem: str) -> str | None:
+    """The box's Playwright browsers folder for the browser demos IDS (none: None), where `just install-check` names it
+    (remote spec #host-tools): ${XDG_DATA_HOME:-~/.local/share}/octo-feather/ms-playwright/<the contract's [browser]
+    playwright pin>. No pin, or no headless shell installed there, is refused before any demo runs."""
+    if not ids:
+        return None
+    pin = tomllib.loads((Path(root) / "qc.toml").read_text(encoding="utf-8")).get("browser", {}).get("playwright")
+    if not pin:
+        die(64, f"demo {' '.join(f'{stem}#{i}' for i in ids)}: browser = true but qc.toml has no [browser] playwright pin; nothing ran")
+    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    folder = data / "octo-feather" / "ms-playwright" / pin
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    if folder.resolve().is_relative_to(cache.resolve()):
+        die(66, f"browser folder {folder} is under {cache}, which the qc sandbox masks; set XDG_DATA_HOME outside it (just install-check)")
+    if not list(folder.glob("chromium_headless_shell-*/INSTALLATION_COMPLETE")):
+        die(66, f"no Playwright {pin} headless Chromium shell in {folder}; nothing ran. Install it once per box (just install-check "
+                f"names it): PLAYWRIGHT_BROWSERS_PATH={folder} npx -y playwright@{pin} install --only-shell chromium")
+    return str(folder)
 
 
 def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Result:
