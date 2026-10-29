@@ -257,7 +257,6 @@
     "pi-version",
     "just-version",
     "node-version",
-    "pnpm-version",
     "shellcheck-version",
     "uv-version",
     "agent-browser-version",

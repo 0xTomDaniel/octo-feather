@@ -1,0 +1,180 @@
+#!/usr/bin/env python3
+"""Compare the gate tools installed here with the pins CI installs from (#225, #361).
+
+  octo-feather-tool-pins ROOT
+
+Native tools: node (node-version), pnpm (package.json packageManager, which Corepack and pnpm
+honour), uv (uv-version), shellcheck (shellcheck-version), each run for its own --version.
+Locked packages: the kit's Python tools against uv.lock and the TypeScript tools against
+pnpm-lock.yaml's resolved importer versions (never manifest ranges); that half re-runs this
+script inside the kit's uv environment, where PyYAML (uv.lock) reads the pnpm lock.
+Prints one ok, MISSING or WRONG VERSION line per tool naming its pin source and install fix.
+Exit: 0 every tool matches, 1 any mismatch, 2 usage.
+"""
+
+from __future__ import annotations
+
+import importlib
+import importlib.metadata
+import json
+import re
+import shutil
+import subprocess
+import sys
+from dataclasses import dataclass
+from pathlib import Path
+from typing import cast
+
+import tomllib
+
+VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+")
+LOCKED_MODE = "--locked-packages"
+PYTHON_TOOLS = ("ruff", "basedpyright", "pytest", "pytest-xdist", "tomlkit", "pyyaml", "jsonschema")
+
+
+@dataclass(frozen=True)
+class Pin:
+    tool: str
+    version: str
+    source: str
+    install: str
+
+
+def say(line: str) -> None:
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
+def file_pin(root: Path, tool: str) -> str:
+    return (root / f"{tool}-version").read_text(encoding="utf-8").strip()
+
+
+def pnpm_pin(root: Path) -> str:
+    manifest = cast("dict[str, object]", json.loads((root / "package.json").read_text("utf-8")))
+    name, _, version = str(manifest.get("packageManager", "")).partition("@")
+    if name != "pnpm" or not version:
+        return ""
+    return version.split("+", 1)[0]
+
+
+def native_pins(root: Path) -> list[Pin]:
+    node, pnpm, uv, shellcheck = (
+        file_pin(root, "node"),
+        pnpm_pin(root),
+        file_pin(root, "uv"),
+        file_pin(root, "shellcheck"),
+    )
+    return [
+        Pin("node", node, "node-version", f"install node: https://nodejs.org/dist/v{node}/"),
+        Pin("pnpm", pnpm, "package.json packageManager", f"npm install -g pnpm@{pnpm}"),
+        Pin(
+            "uv", uv, "uv-version", f"install uv: https://github.com/astral-sh/uv/releases/tag/{uv}"
+        ),
+        Pin(
+            "shellcheck",
+            shellcheck,
+            "shellcheck-version",
+            f"install shellcheck: https://github.com/koalaman/shellcheck/releases/tag/v{shellcheck}",
+        ),
+    ]
+
+
+def check_native(root: Path, pin: Pin) -> bool:
+    path = shutil.which(pin.tool)
+    if path is None:
+        say(f"{pin.tool} MISSING ({pin.source}); {pin.install}")
+        return False
+    run = subprocess.run([path, "--version"], cwd=root, capture_output=True, text=True, check=False)
+    found = VERSION.search(run.stdout)
+    got = found.group(0) if found else ""
+    if got and got == pin.version:
+        say(f"{pin.tool} version {got} ok ({pin.source})")
+        return True
+    reported = got or "no version"
+    want = pin.version or "a pnpm@X.Y.Z packageManager"
+    wrong = f"{pin.tool} WRONG VERSION {path} reports {reported}, want {want} ({pin.source})"
+    say(f"{wrong}; {pin.install}")
+    return False
+
+
+def check_python_lock(root: Path) -> bool:
+    lock = cast(
+        "dict[str, list[dict[str, str]]]", tomllib.loads((root / "uv.lock").read_text("utf-8"))
+    )
+    ok = True
+    for name in PYTHON_TOOLS:
+        want = next(p["version"] for p in lock["package"] if p["name"] == name)
+        try:
+            got = importlib.metadata.version(name)
+        except importlib.metadata.PackageNotFoundError:
+            got = "MISSING"
+        if got == want:
+            say(f"{name} version {got} ok (uv.lock)")
+        else:
+            fix = f"uv sync --locked --project {root}"
+            say(f"{name} WRONG VERSION {got}, want {want} (uv.lock); {fix}")
+            ok = False
+    return ok
+
+
+def installed_node_packages(root: Path) -> dict[str, dict[str, str]]:
+    pnpm = shutil.which("pnpm") or "pnpm"
+    listed = subprocess.run(
+        [pnpm, "--dir", str(root), "list", "--json", "--depth", "0"],
+        cwd=root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    try:
+        projects = cast("list[dict[str, dict[str, dict[str, str]]]]", json.loads(listed.stdout))
+        return projects[0].get("devDependencies", {})
+    except (ValueError, IndexError):
+        return {}
+
+
+def check_node_lock(root: Path) -> bool:
+    # PyYAML (uv.lock): this half runs in the kit's environment.
+    yaml = importlib.import_module("yaml")
+    lock = cast("dict[str, object]", yaml.safe_load((root / "pnpm-lock.yaml").read_text("utf-8")))
+    importers = cast("dict[str, dict[str, dict[str, dict[str, object]]]]", lock["importers"])
+    resolved = importers["."]["devDependencies"]
+    installed = installed_node_packages(root)
+    ok = True
+    for name, entry in resolved.items():
+        want = str(entry["version"]).split("(", 1)[0]
+        got = installed.get(name, {}).get("version", "MISSING")
+        if got == want:
+            say(f"{name} version {got} ok (pnpm-lock.yaml)")
+        else:
+            fix = f"pnpm install --frozen-lockfile --dir {root}"
+            say(f"{name} WRONG VERSION {got}, want {want} (pnpm-lock.yaml); {fix}")
+            ok = False
+    return ok
+
+
+def locked_packages(root: Path) -> int:
+    python_ok = check_python_lock(root)
+    node_ok = check_node_lock(root)
+    return 0 if python_ok and node_ok else 1
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] == [LOCKED_MODE] and len(argv) == 2:  # noqa: PLR2004
+        return locked_packages(Path(argv[1]))
+    if len(argv) != 1:
+        sys.stderr.write("usage: octo-feather-tool-pins ROOT\n")
+        return 2
+    root = Path(argv[0])
+    results = [check_native(root, pin) for pin in native_pins(root)]
+    uv = shutil.which("uv")
+    if uv is None:
+        say(f"locked packages not checked: uv MISSING; install uv {file_pin(root, 'uv')}")
+        return 1
+    command = [uv, "run", "--locked", "--offline", "--no-sync", "--project", str(root), "python"]
+    locked = subprocess.run([*command, __file__, LOCKED_MODE, str(root)], check=False)
+    return 0 if all(results) and locked.returncode == 0 else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

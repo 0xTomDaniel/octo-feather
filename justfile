@@ -246,20 +246,8 @@ install-check target=invocation_directory():
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
-    # Native gate tools use the same release files as CI.
-    for t in node pnpm uv shellcheck; do
-      pin="$(tr -d '[:space:]' <"$root/$t-version")"
-      case "$t" in
-        node) how="install node: https://nodejs.org/dist/v$pin/" ;;
-        pnpm) how="npm install -g pnpm@$pin" ;;
-        uv) how="install uv: https://github.com/astral-sh/uv/releases/tag/$pin" ;;
-        shellcheck) how="install shellcheck: https://github.com/koalaman/shellcheck/releases/tag/v$pin" ;;
-      esac
-      if ! p="$(command -v "$t")"; then echo "$t MISSING ($t-version); $how"; bad=1; continue; fi
-      v="$("$t" --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)"
-      if [[ "$v" == "$pin" ]]; then echo "$t version $v ok ($t-version)"
-      else echo "$t WRONG VERSION $p reports ${v:-no version}, want $pin ($t-version); $how"; bad=1; fi
-    done
+    # Native gate tools and locked packages at the pins CI installs from: scripts/octo-feather-tool-pins.
+    python3 "$root/scripts/octo-feather-tool-pins" "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
@@ -290,32 +278,6 @@ install-check target=invocation_directory():
     # pnpm under another HOME (corepack's shim) would download itself.
     if cmp -s "$root/pnpm-lock.yaml" "$root/node_modules/.pnpm/lock.yaml"; then echo "pnpm   kit TypeScript tools ok (pnpm-lock.yaml)"
     else echo "pnpm   kit TypeScript tools NOT FETCHED (pnpm-lock.yaml); fetch them once, with network: pnpm install --frozen-lockfile --dir $root"; bad=1; fi
-    # Resolve locked Python distributions in the kit environment without fetching or syncing.
-    uv run --locked --offline --no-sync --project "$root" python -c 'import importlib.metadata as m, pathlib, sys, tomllib
-    root = pathlib.Path(sys.argv[1]); lock = tomllib.loads((root / "uv.lock").read_text())
-    bad = False
-    for name in ("ruff", "basedpyright", "pytest", "pytest-xdist", "tomlkit", "pyyaml", "jsonschema"):
-        want = next(p["version"] for p in lock["package"] if p["name"] == name)
-        try: got = m.version(name)
-        except m.PackageNotFoundError: got = "MISSING"
-        if got == want: print(f"{name} version {got} ok (uv.lock)")
-        else:
-            print(f"{name} WRONG VERSION {got}, want {want} (uv.lock); uv sync --locked --project {root}"); bad = True
-    sys.exit(int(bad))' "$root" || bad=1
-    # Compare actual installed distributions with resolved importer versions, never manifest ranges.
-    uv run --locked --offline --no-sync --project "$root" python -c 'import json, pathlib, subprocess, sys, yaml
-    root = pathlib.Path(sys.argv[1]); lock = yaml.safe_load((root / "pnpm-lock.yaml").read_text())
-    result = subprocess.run(["pnpm", "--dir", str(root), "list", "--json", "--depth", "0"], capture_output=True, text=True)
-    try: installed = json.loads(result.stdout)[0].get("devDependencies", {})
-    except (ValueError, IndexError): installed = {}
-    bad = False
-    for name in lock["importers"]["."]["devDependencies"]:
-        want = str(lock["importers"]["."]["devDependencies"][name]["version"]).split("(", 1)[0]
-        got = installed.get(name, {}).get("version", "MISSING")
-        if got == want: print(f"{name} version {got} ok (pnpm-lock.yaml)")
-        else:
-            print(f"{name} WRONG VERSION {got}, want {want} (pnpm-lock.yaml); pnpm install --frozen-lockfile --dir {root}"); bad = True
-    sys.exit(int(bad))' "$root" || bad=1
     gh auth status >/dev/null 2>&1 && echo "gh     authenticated" || { echo "gh     NOT authenticated (gh auth login)"; bad=1; }
     # The target's tracker skill, resolved as pi-role resolves {tracker}; its optional scripts/install-check checks its CLI.
     skill="$(python3 -c 'import importlib.machinery as m, importlib.util as u, sys
