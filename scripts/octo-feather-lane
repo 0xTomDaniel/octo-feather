@@ -91,9 +91,10 @@ errors} from the Owner field (`:<line>` stripped from every path); "fields" {Nam
 other `Name: value` line in scope (Name: a capital, then letters or -, in words one space apart: `Prior art`). Exit 0; 1 on an unreadable report.
 The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
-`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and,
-when the PR head is not the judged head, the git repo of the current directory (the lane
-worktree, PR head and BASE fetched; BASE defaults to origin/main). The PR body carries the
+`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
+the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
+defaults to origin/main): the judged head's qc.toml for a lane with criterion rows, and the
+history when the PR head is not the judged head. The PR body carries the
 parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
 the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
 on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
@@ -122,7 +123,9 @@ Insufficient evidence (quality spec #qc-results) is never triaged: the check fai
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
-`class: proxy`). Pass: the section on stdout, then `Review check classes` listing the comment's
+`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: `demo checks`
+when qc.toml at H (this directory's repo) declares a demo for the criterion, else `agent fallback`, the
+rule just qc decides by (quality spec #qc-results); then `Review check classes` listing the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
@@ -1396,16 +1399,41 @@ def cmd_merge_ask(args: list[str]) -> int:
             if v == "fail" and cid in built:
                 miss.append(f"criterion row {cid}: fail but in Built; rerun just qc on it")
 
+    sources: list[str] = []
+    if rows and judged:
+        try:
+            demos = declared_demos(judged)
+            sources = [f"Decision sources (qc.toml at the judged head {judged[:12]}; quality spec #qc-results):",
+                       *(f"- {cid}: {'demo checks' if cid in demos else 'agent fallback'}" for cid in sorted(rows))]
+        except Refuse as e:
+            miss.append(f"Decision sources: {e}")
     if miss:
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    if sources:
+        print("\n" + "\n".join(sources))
     if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
         print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
         print("\n".join(judged_lines))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
     return 0
+
+
+def declared_demos(rev: str) -> set[str]:
+    """The criterion ids (<spec>#<anchor>) the app-driver contract, qc.toml at REV in this directory's repo, declares a demo
+    for (quality spec #qc-contract); none when REV has no qc.toml. just qc gives each other criterion the agent fallback."""
+    import tomllib
+    if git("cat-file", "-e", f"{rev}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"commit {rev[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
+    if git("cat-file", "-e", f"{rev}:qc.toml", ok=(0, 1, 128))[0]:
+        return set()
+    try:
+        demo = tomllib.loads(git("show", f"{rev}:qc.toml")[1]).get("demo", {})
+    except tomllib.TOMLDecodeError as e:
+        raise Refuse(f"qc.toml at {rev[:12]} is not TOML ({e}): just qc refuses it too; fix the contract, run just qc again")
+    return {str(k) for k in cast("dict[str, object]", demo)} if isinstance(demo, dict) else set()
 
 
 class Unchecked(Refuse):

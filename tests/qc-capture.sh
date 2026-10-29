@@ -4,8 +4,8 @@
 # declares a passing and a failing demo is judged twice at one head. Each run appends one evidence record per
 # demo at that head (command, exit status, output, criterion text hash, contract version) and names it; both
 # runs give pass and fail, evidence complete, decision source the demo's checks (#acceptance-qc-capture,
-# #acceptance-qc-same-verdict). A criterion with no declared demo still goes to the agent judge (a fake pi),
-# alone in its brief. An invalid demo declaration is refused before anything runs.
+# #acceptance-qc-same-verdict). A criterion with no declared demo goes to the agent fallback (a fake pi),
+# alone in its brief, its result labelled agent fallback with its own record (tests/qc-fallback.sh). An invalid demo declaration is refused before anything runs.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN   # a test harness, as tests/qc.sh: qc refuses only under the gate's marker
@@ -119,13 +119,13 @@ for x in recs.values():
     assert got == {"demo.cmd": cmd + "\n", "demo.exit": code + "\n", "demo.stdout": so, "demo.stderr": se}, got
 EOF
 
-# Undeclared criteria keep the agent judge: acceptance-b without a demo goes to the (fake) judge alone; acceptance-a is captured.
+# Only undeclared criteria get the agent fallback: acceptance-b without a demo goes to the (fake) judge alone; acceptance-a is captured.
 git reset -q --hard "$head"; contract "" "one demo"
 qcrun
 [[ "$rc" == 0 ]] || fail "mixed run: want exit 0, got $rc: $out $(tail -20 "$t/err")"
 grep -A2 '^PASS acceptance-a: ' <<< "$out" | grep -qE "^  evidence complete; decision demo checks; record $rid$" \
-  && grep -A2 '^PASS acceptance-b: \$ judge b$' <<< "$out" | grep -q '^  evidence none; decision agent judge; record none$' \
-  || fail "mixed run: want acceptance-a from its demo and acceptance-b from the agent judge: $out"
+  && grep -A2 '^PASS acceptance-b: \$ judge b$' <<< "$out" | grep -qE "^  evidence complete; decision agent fallback; record $rid$" \
+  || fail "mixed run: want acceptance-a from its demo and acceptance-b from the agent fallback: $out"
 ! grep -q 'BRIEF NAMES' "$(ls -t "$XDG_STATE_HOME"/octo-feather/qc/*.json | head -1)" || fail "mixed run: the judge's brief named the demo's criterion"
 
 # An invalid demo declaration: refused (exit 64) naming the problem, no demo run, no record appended.
@@ -136,4 +136,4 @@ qcrun
 [[ "$rc" != 0 ]] && grep -q 'qc.toml is not a valid contract' "$t/err" && grep -q 'demo.demo#acceptance-b: missing covers' "$t/err" \
   || fail "invalid contract: want refused naming the missing key, got exit $rc: $(cat "$t/err")"
 [[ "$("$ev" read --repo . --json | python3 -c 'import json,sys; print(len(json.load(sys.stdin)))')" == "$before" ]] || fail "invalid contract: a record was appended"
-echo "qc-capture: ok (two runs at one head: pass and fail from the demos' checks, evidence complete, four records at the head holding command, exit status, output, criterion text hash and contract version, each named in the report; an undeclared criterion still judged by the agent alone; an invalid demo refused before running)"
+echo "qc-capture: ok (two runs at one head: pass and fail from the demos' checks, evidence complete, four records at the head holding command, exit status, output, criterion text hash and contract version, each named in the report; an undeclared criterion alone to the agent fallback; an invalid demo refused before running)"

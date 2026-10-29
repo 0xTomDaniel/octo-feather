@@ -5,19 +5,24 @@ Run in a lane worktree at its integrated head. Capture first (quality spec #qc-c
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
 [demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
-(octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr). Its result is then read
+(octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr, and screenshots/<name> for each file
+the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
+headless Chromium shell at the contract's [browser] playwright pin where `just install-check` names it, bound
+read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
 status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v1.schema.json, demo
 command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
 missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
 until a rerun gives it pass or fail.
-The criteria with no declared demo go to the judge below; with none left, no judge and no model run.
-A fresh, read-only qc judge
-(agents/qc-judge.md, headless through pi-role) gets a QC brief: judge the
-whole head against each named criterion of STATUS's spec, run each criterion's
-demo path, and report one pass or fail per criterion with the command and its
-output. Then this script, not the judge, sets each passed criterion to built in
+The criteria with no declared demo go to the agent fallback below (quality spec #qc-fallback); with none left, no
+judge and no agent run. Each gets its own fresh, read-only qc judge (agents/qc-judge.md, headless through pi-role),
+one at a time, in its own sandbox, under a fixed time cap (FALLBACK_CAP_S, through coreutils timeout): its QC brief
+names that criterion alone (judge the whole head against it, run its demo path, report pass or fail with the command
+and its output). Its report is appended to the evidence store as that criterion's record (judge.exit, judge.stdout,
+judge.report.json; a judge stopped by the cap leaves no report, so its record's evidence is incomplete: insufficient evidence), and the result is read back from that record alone, decision source agent fallback.
+Each result with a record then gets the kit's judgment model's advisory answer (advise; no gate reads it).
+Then this script, not the judge, sets each passed criterion to built in
 PR and each failed one to planned, and commits only the status file. The judge
 model's family (the part before "/") must differ from the implementer's.
 
@@ -47,9 +52,10 @@ reads no Linear ticket; the sandbox proof fails if it is set.
   OCTO_FEATHER_QC_RO_BINDS, OCTO_FEATHER_QC_PATH  ":"-separated paths bound
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
-(judge's report, raw run, proof and cleanup; each demo's capture; `spec`, the status file's spec slug; `results`,
-one per criterion: verdict (pass, fail or insufficient evidence), evidence state (incomplete: `missing` names
-what), decision source, evidence record id, judged head). OCTO_FEATHER_QC_DIR: another folder for them.
+(`fallback`, by criterion: each judge's report, raw run, exit, proof and cleanup, record; `cap_s`; each demo's capture;
+`spec`, the status file's spec slug; `results`, one per criterion: verdict (pass, fail or insufficient evidence), evidence
+state (incomplete: `missing` names what), decision source, evidence record id, judged head, and with a record `advisory`:
+the model's answer and confidence, or unavailable with why). OCTO_FEATHER_QC_DIR: another folder for them.
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 2 none failed but some got insufficient evidence, 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
@@ -58,7 +64,7 @@ positive integer, an id not in the status file or spec) or same-family judge, 65
 run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import fcntl, hashlib, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib
+import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
@@ -70,6 +76,8 @@ STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
 EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
 CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
 DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
+FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
+CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
 
 
 def die(code: int, msg: str) -> NoReturn:
@@ -176,6 +184,9 @@ def pi_auth():
     return Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent") / "auth.json"
 
 
+WARNED: set[str] = set()   # the warnings this run has printed
+
+
 def oauth_warning():
     """The warning line if the box auth.json holds an OAuth entry (type oauth or a refresh token field), else None."""
     try:
@@ -189,10 +200,13 @@ def oauth_warning():
 
 
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
-              kit: Path | None = None) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
+              kit: Path | None = None, browser: str | None = None,
+              shots: bool = False) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
-    test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph)."""
+    test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
+    Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
+    the record's "shots" ([name, base64] pairs)."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
@@ -207,7 +221,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     got = {n: [] for n in names}
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
-    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else [])
+    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else []) + ([browser] if browser else [])
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
     worktree = git("rev-parse", "--show-toplevel")
     # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
@@ -220,9 +234,10 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
                QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_HISTORY="" if history else "none",
+               QC_HISTORY="" if history else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
-    if (w := oauth_warning()):
+    if (w := oauth_warning()) and w not in WARNED:   # once per qc run, whatever sandboxes it starts (ADR 0022)
+        WARNED.add(w)
         print(w, file=sys.stderr)
 
     def drain(n):
@@ -287,6 +302,26 @@ def worktree_writes(upper):
     return [f"{k} {p}" for k, p in rel if p in tracked or (k == "new" and p not in ignored)]
 
 
+def browsers(root: str, ids: list[str], stem: str) -> str | None:
+    """The box's Playwright browsers folder for the browser demos IDS (none: None), where `just install-check` names it
+    (remote spec #host-tools): ${XDG_DATA_HOME:-~/.local/share}/octo-feather/ms-playwright/<the contract's [browser]
+    playwright pin>. No pin, or no headless shell installed there, is refused before any demo runs."""
+    if not ids:
+        return None
+    pin = tomllib.loads((Path(root) / "qc.toml").read_text(encoding="utf-8")).get("browser", {}).get("playwright")
+    if not pin:
+        die(64, f"demo {' '.join(f'{stem}#{i}' for i in ids)}: browser = true but qc.toml has no [browser] playwright pin; nothing ran")
+    data = Path(os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share")
+    folder = data / "octo-feather" / "ms-playwright" / pin
+    cache = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    if folder.resolve().is_relative_to(cache.resolve()):
+        die(66, f"browser folder {folder} is under {cache}, which the qc sandbox masks; set XDG_DATA_HOME outside it (just install-check)")
+    if not list(folder.glob("chromium_headless_shell-*/INSTALLATION_COMPLETE")):
+        die(66, f"no Playwright {pin} headless Chromium shell in {folder}; nothing ran. Install it once per box (just install-check "
+                f"names it): PLAYWRIGHT_BROWSERS_PATH={folder} npx -y playwright@{pin} install --only-shell chromium")
+    return str(folder)
+
+
 def contract_demos(root: str) -> dict[str, dict[str, Any]]:
     """The demos the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec #qc-contract); none
     without a qc.toml. A qc.toml octo-feather-contract refuses is refused here, before anything runs."""
@@ -308,20 +343,25 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
     root = git("rev-parse", "--show-toplevel")
     done: dict[str, Result] = {}
     caps: list[dict[str, Any]] = []
+    folder = browsers(root, [i for i in ids if i in demos and demos[i].get("browser")], stem)
     for n, i in enumerate(i for i in ids if i in demos):
         cid, line = f"{stem}#{i}", str(demos[i]["command"])
-        cmd = ["env", f"QC_REPO={root}", "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
+        br = folder if demos[i].get("browser") else None   # never downloads one: the box's, read-only
+        cmd = ["env", f"QC_REPO={root}", *([f"PLAYWRIGHT_BROWSERS_PATH={br}", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"] if br else []),
+               "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
         print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
         run: subprocess.CompletedProcess[str] | None
         sandbox: dict[str, Any] | bool
         if nosb:
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
-            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"})
+            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
+                                     browser=br, shots=True)
             assert isinstance(sandbox, dict)
             sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
+        shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
-        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox})
+        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
         if run is None:
             report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
             die(66, f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})")
@@ -332,6 +372,9 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
             for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
                 Path(d, name).write_text(body)
+            for name, b64 in shots:
+                Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
+                Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
             p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
                                 "--outputs", d], capture_output=True, text=True)
         if p.returncode:
@@ -385,6 +428,72 @@ def last_words(outputs: Path) -> str:
         if lines:
             return lines[-1] if len(lines[-1]) <= 300 else lines[-1][:300] + "..."   # its head names the step
     return "no output"
+
+
+ADVICE = "criterion-evidence"   # the closed question each recorded result gets (judgment spec #question-criterion-evidence)
+
+
+def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str, runid: str) -> None:
+    """Each result with an evidence record gets the kit's one judgment model's answer to one closed question, whether this
+    evidence shows this criterion, given the criterion's text and the record's command and output (quality spec
+    #qc-judgment), asked through octo-feather-qa's classify path, the bench's and `octo-feather-lane judge`'s (one
+    mechanism). Advisory (judgment spec #rule-advisory): stored beside the result as `advisory`, never read to decide it;
+    any failure to get an answer shows as unavailable with its reason and changes nothing else."""
+    ids = [i for i, r in done.items() if r.get("record") and r.get("evidence") == "complete"]
+    if not ids:
+        return
+    loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
+    spec = importlib.util.spec_from_loader("octo_feather_qa", loader)
+    assert spec is not None
+    qa = importlib.util.module_from_spec(spec)
+    loader.exec_module(qa)
+    base: dict[str, Any] = {"judgment": qa.JUDGMENT, "question": ADVICE, "model": None}
+    try:   # every error here is the advice's, never the result's: shown as unavailable
+        got, why = ask(qa, base, ids, [f"Criterion {stem}#{i}: {text[i]}\nCommand: {done[i]['command']}\nOutput:\n{done[i]['output']}"
+                                       for i in ids], f"qc-{head[:12]}-{runid}-advice")
+    except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.SubprocessError) as e:
+        got, why = {}, f"{type(e).__name__}: {e}"
+    for i in ids:
+        done[i]["advisory"] = base | got.get(i, {"unavailable": why})
+
+
+def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list[str], session: str) -> tuple[dict[str, dict[str, Any]], str]:
+    """The kit's judgment model (into BASE) asked the ADVICE question on each state by qa's classify: ({id: answer and
+    confidence, or unavailable with the classifier's error}, why an id has no entry)."""
+    d = KIT / "evals" / f"judgment-{ADVICE}"
+    q, suite = (json.loads((d / f).read_text()) for f in ("question.json", "suite.json"))
+    labels: list[str] = q["labels"]
+    base.update(model=(model := qa.judgment_model(KIT / "evals")), calibration=suite.get("calibration"))
+    inp = {"question": q["question"], "labels": labels, "criteria": {lb: q["label_help"][lb] for lb in labels},
+           "cases": [{"id": i, "state": st} for i, st in zip(ids, states, strict=True)], "classifiers": [model]}
+    print(f"qc: advisory {ADVICE} question to {model} for {len(ids)} recorded criteria (no gate reads it)", file=sys.stderr)
+    bench, _, _, problem = qa.classify(sys.modules[__name__], inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), session, purpose="judge")
+    if problem:
+        return {}, str(problem)
+    if model not in (bench.get("benched") or []):
+        return {}, f"{model} not an available classifier (available: {', '.join(bench.get('available') or []) or 'none'})"
+    errors: list[str] = bench.get("errors") or []
+    rows: list[list[Any]] = bench.get("rows") or []   # each [model, case, choice, probabilities in label order, cost, error index]
+    got: dict[str, dict[str, Any]] = {}
+    for row in rows:
+        ci: int = row[1]
+        choice: Any = row[2]
+        ei: int | None = row[5]
+        probs: list[Any] = row[3] or [None] * len(labels)
+        got[ids[ci]] = ({"answer": choice, "confidence": probs[labels.index(choice)]} if choice in labels else
+                        {"unavailable": errors[ei] if ei is not None else f"answer {choice!r} is not one of {labels}"})
+    return got, "no answer"
+
+def advised(a: dict[str, Any]) -> str:
+    """The advisory line shown beside a result."""
+    by = f"{a['question']} by {a['model'] or 'the kit judgment model'}"
+    if "unavailable" in a:
+        return f"advisory model judgment unavailable ({by}): {a['unavailable']}; the result stands as decided"
+    c = a["confidence"]
+    cal = "uncalibrated" if not a.get("calibration") else ("threshold accepted" if a["calibration"]["threshold"]["accepted"] is True
+                                                       else "threshold proposed, not accepted")
+    return (f"advisory model judgment (no gate reads it): {a['answer']}, confidence "
+            f"{f'{c:.3f}' if isinstance(c, (int, float)) else 'unreported'} ({by}; {cal})")
 
 
 def tail(out: str, lines: int = 40) -> str:
@@ -453,48 +562,116 @@ def main(argv: list[str]) -> int:
 
 def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], spec: Path, text: dict[str, str], model: str,
           runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, *, nosb: bool) -> int:
-    rest = [i for i in ids if i not in demos]   # no declared demo: the agent judge's
-    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh),
-                         criteria="\n".join(f"- {i}: {text[i]}" for i in rest))
-    cmd = [str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+    rest = [i for i in ids if i not in demos]   # no declared demo: the agent fallback's
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
     if not rest:
+        advise(done, text, stem, head, runid)
         try:
             return settle(status, pr, ids, head, data, done, {"head": head, "ids": ids, "run_id": runid, "sandbox": not nosb,
                                                               "captures": caps}, report_path, 0, nosb=nosb)
         finally:
             restore(status)
-    t0 = time.time()
     if nosb:
         print("qc: UNSANDBOXED (--no-sandbox): the judge runs with this shell's access; the status file will not change", file=sys.stderr)
+    ghrec["misses"] = []
+    raw: dict[str, Any] = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "sandbox": not nosb,
+                           "cap_s": FALLBACK_CAP_S, "fallback": {}}
+    if caps:
+        raw["captures"] = caps
+    try:   # from here on a judge runs: never leave the status file modified and uncommitted
+        for n, i in enumerate(rest):   # one fresh judge per criterion, one after another (each a Pi run)
+            done[i] = fallback(i, n, head, spec, text, stem, model, runid, gh, raw, report_path, nosb=nosb)
+        nmiss = raw["gh_misses"] = len(ghrec["misses"])
+        for i in rest:   # a result, never a failure to triage (quality spec #qc-results), as capture() gives it
+            if done[i]["evidence"] == "incomplete":
+                done[i] |= {"verdict": "insufficient evidence", "command": "the qc judge (agent fallback)",
+                            "why": f"missing: {'; '.join(done[i]['missing'])}"}
+        advise(done, text, stem, head, runid)
+        return settle(status, pr, ids, head, data, done, raw, report_path, nmiss, nosb=nosb)
+    finally:
+        restore(status)
+
+
+def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: str, model: str, runid: str, gh: dict[str, Any],
+             raw: dict[str, Any], report_path: Path, *, nosb: bool) -> Result:
+    """The agent fallback for I, a criterion its contract declares no demo for (quality spec #qc-fallback): a fresh qc judge
+    from its own role, in its own qc sandbox, judging I alone under the fixed time cap; its report appended to the evidence
+    store as I's record, and I's result read back from that record alone (fell_back). --no-sandbox: stored nowhere."""
+    cid = f"{stem}#{i}"
+    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh), criteria=f"- {i}: {text[i]}")
+    cmd = ["timeout", "--foreground", "-k", "10", str(FALLBACK_CAP_S),   # --foreground: a killed qc's group signal reaches the judge
+           str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
+    print(f"qc: agent fallback {cid}: a fresh qc judge, time cap {FALLBACK_CAP_S} s", file=sys.stderr)
+    t0 = time.time()
+    if nosb:
         miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
         env = dict(os.environ, PATH=f"{KIT / '.agents' / 'skills' / 'github-pr' / 'scripts'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
                    OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
         env.pop("LINEAR_API_KEY", None)
         try:
             run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
-            ghrec["misses"] = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
+            misses = [json.loads(l) for l in miss.read_text().splitlines() if l.strip()]
         finally:
             miss.unlink(missing_ok=True)
     else:
-        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}", gh)
+        run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-j{n}", gh)
         if run is None:
-            report_path.write_text(json.dumps({"head": head, "model": model, "ids": ids, "github": ghrec, "sandbox": sandbox}, indent=2))
-            die(66, f"sandbox proof failed or sandbox unavailable; judge not started (report {report_path})")
-        ghrec["misses"] = sandbox.get("gh_miss_log", [])
-    nmiss = len(ghrec["misses"])
-    raw: dict[str, Any] = {"head": head, "model": model, "ids": ids, "run_id": runid, "github": ghrec, "gh_misses": nmiss, "sandbox": sandbox,
-           "exit": run.returncode, "seconds": round(time.time() - t0), "stdout": run.stdout, "stderr": run.stderr[-4000:]}
-    if caps:
-        raw["captures"] = caps
-    try:   # from here on the judge has run: never leave the status file modified and uncommitted
-        return verdict(status, pr, ids, head, data, run, raw, report_path, nmiss, done, nosb=nosb)
-    finally:
-        restore(status)
+            raw["fallback"][i] = {"sandbox": sandbox}
+            report_path.write_text(json.dumps(raw, indent=2))
+            die(66, f"sandbox proof failed or sandbox unavailable; judge of {cid} not started (report {report_path})")
+        misses = sandbox.get("gh_miss_log", [])
+    raw["github"]["misses"] += misses
+    rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode in CAPPED, "seconds": round(time.time() - t0),
+                                "gh_misses": len(misses), "sandbox": sandbox, "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    rep = verdict(i, head, run, rec, raw, report_path)
+    capped = f"the judge hit its {FALLBACK_CAP_S} s time cap before reporting"
+    if nosb:
+        res: Result = {"id": i, "decision": "agent fallback", "record": None, "head": head}
+        if rep is None:
+            return res | {"evidence": "incomplete", "missing": [capped]}
+        c = rep["criteria"][0]
+        return res | {k: c[k] for k in ("verdict", "command", "output")} | {"why": c.get("why", ""), "evidence": "unrecorded (--no-sandbox)"}
+    root = git("rev-parse", "--show-toplevel")
+    with tempfile.TemporaryDirectory(prefix=f"qc-judge-{runid}-") as d:
+        Path(d, "judge.exit").write_text(f"{run.returncode}\n")
+        Path(d, "judge.stdout").write_text(run.stdout)
+        if rep is not None:
+            Path(d, "judge.report.json").write_text(json.dumps(rep, indent=2) + "\n")
+        p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
+                            "--outputs", d], capture_output=True, text=True)
+    if p.returncode:
+        report_path.write_text(json.dumps(raw, indent=2))
+        die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
+    rec["record"] = rid = p.stdout.strip()
+    return fell_back(i, cid, rid, head, text[i], root, capped)
+
+
+def fell_back(i: str, cid: str, rid: str, head: str, text: str, root: str, capped: str) -> Result:
+    """An agent fallback result from its stored record alone, as judged() reads a demo's: evidence complete when the record
+    is at the head, clean, with the spec's criterion text hash and the judge's report; the verdict is that report's."""
+    p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", head, "--json"],
+                       capture_output=True, text=True)
+    found: list[Any] = [x for x in json.loads(p.stdout) if x["record"]["id"] == rid] if p.returncode == 0 else []
+    res: Result = {"id": i, "evidence": "incomplete", "decision": "agent fallback", "record": rid, "head": head}
+    if not found:
+        return res | {"missing": [f"record not in the store at {head[:12]} ({p.stderr.strip() or 'no match'})"]}
+    r: dict[str, Any] = found[0]["record"]
+    d = Path(found[0]["dir"]) / "outputs"
+    missing = [m for m, bad in (
+        (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
+        ("captured from a dirty worktree", r["dirty"]),
+        ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
+        (capped, "judge.exit" in r["outputs"] and (d / "judge.exit").read_text().strip() in {str(c) for c in CAPPED}),
+        ("outputs missing: judge.report.json", "judge.report.json" not in r["outputs"]),
+    ) if bad]
+    if missing:
+        return res | {"missing": missing}
+    c = next(c for c in json.loads((d / "judge.report.json").read_text())["criteria"] if c["id"] == i)
+    return res | {k: c[k] for k in ("verdict", "command", "output")} | {"why": c.get("why", ""), "evidence": "complete"}
 
 
 def restore(status: Path) -> None:
@@ -503,13 +680,15 @@ def restore(status: Path) -> None:
         print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
 
 
-def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], run: subprocess.CompletedProcess[str],
-            raw: dict[str, Any], report_path: Path, nmiss: int, done: dict[str, Result], *, nosb: bool) -> int:
-    sandbox = raw["sandbox"]
+def verdict(i: str, head: str, run: subprocess.CompletedProcess[str], rec: dict[str, Any], raw: dict[str, Any],
+            report_path: Path) -> dict[str, Any] | None:
+    """The judge's report on I, refused (exit 3) when the judge broke read-only or the report is unusable; None when the
+    time cap stopped the judge first. REC: this judge's run in the run report RAW."""
+    sandbox = rec["sandbox"]
     if sandbox:
         upper = sandbox.pop("upper", [])
-        raw["discarded_writes"] = len(upper)
-        raw["worktree_writes"] = wrote = worktree_writes(upper)
+        rec["discarded_writes"] = len(upper)
+        rec["worktree_writes"] = wrote = worktree_writes(upper)
         print(f"qc: worktree overlay: {len(upper)} judge writes discarded with the run, {len(wrote)} outside ignored paths", file=sys.stderr)
         if wrote:
             report_path.write_text(json.dumps(raw, indent=2))
@@ -517,6 +696,8 @@ def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, An
     if git("status", "--porcelain") or git("rev-parse", "HEAD") != head:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"the worktree or head changed during the run; read-only was broken (report {report_path})")
+    if rec["timed_out"]:
+        return None
     blocks = re.findall(r"```json\s*(\{.*?\})\s*```", run.stdout, re.S)
     try:
         rep = json.loads(blocks[-1])
@@ -525,18 +706,15 @@ def verdict(status: Path, pr: int, ids: list[str], head: str, data: dict[str, An
         twice = sorted({i for i in named if named.count(i) > 1})
         assert not twice, f"judged more than once: {' '.join(map(str, twice))}"
         verdicts = {c["id"]: c for c in rep["criteria"]}
-        rest = [i for i in ids if i not in done]
-        assert sorted(verdicts) == sorted(rest), f"ids {sorted(verdicts)} != {sorted(rest)}"
+        assert sorted(verdicts) == [i], f"ids {sorted(verdicts)} != {[i]}"
         for c in verdicts.values():
             assert c.get("verdict") in ("pass", "fail"), f"{c.get('id')}: verdict {c.get('verdict')!r}"
             assert c.get("command") and "output" in c, f"{c['id']}: needs command and output"
     except (IndexError, ValueError, KeyError, TypeError, AssertionError) as e:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"judge report unusable ({e}); raw run in {report_path}")
-    raw["report"] = rep
-    for c in verdicts.values():   # the agent judge's results: no evidence record yet (#407 stores its report as one)
-        c.update(evidence=None, decision="agent judge", record=None, head=head)
-    return settle(status, pr, ids, head, data, verdicts | done, raw, report_path, nmiss, nosb=nosb)
+    rec["report"] = rep
+    return rep
 
 
 def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], verdicts: dict[str, Result], raw: dict[str, Any],
@@ -581,7 +759,8 @@ def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any
 
 def decided(v: Result) -> str:
     """The result's evidence state, decision source and record, as the report line shows them."""
-    return f"evidence {v['evidence'] or 'none'}; decision {v['decision']}; record {v['record'] or 'none'}"
+    return f"evidence {v['evidence'] or 'none'}; decision {v['decision']}; record {v['record'] or 'none'}" + (
+        f"\n  {advised(v['advisory'])}" if v.get("advisory") else "")
 
 
 if __name__ == "__main__":

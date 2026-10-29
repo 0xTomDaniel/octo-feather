@@ -16,7 +16,7 @@ Drive criterion: `quality#acceptance-qc-same-verdict`
 
 ## How to get to it (user POV)
 
-- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. Each claimed criterion with a `[demo."<spec>#<id>"]` in the target's `qc.toml` (keys: `schemas/qc.v1.schema.json`) is captured and decided from its checks; the rest go to the agent judge. `octo-feather-qc` with no arguments prints its usage, which owns the rest.
+- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. Each claimed criterion with a `[demo."<spec>#<id>"]` in the target's `qc.toml` (keys: `schemas/qc.v1.schema.json`) is captured and decided from its checks; the rest go to the agent fallback ([qc-fallback](qc-fallback.md)). `octo-feather-qc` with no arguments prints its usage, which owns the rest.
 
 ## Driving it with verify-octo-feather
 
@@ -27,7 +27,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-capture`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-capture/`.
 
-The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, a `qc.toml` whose demos are `qc.toml` `values.qc_demo_pass` and `values.qc_demo_fail`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-capture/state`: qc's reports and the scratch target's evidence store).
+The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, a `qc.toml` whose demos are `qc.toml` `values.qc_demo_pass` and `values.qc_demo_fail`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-capture/state`: qc's reports and the scratch target's evidence store); the classifier faked (SKILL.md), so each result's advisory line says unavailable.
 
 - **First run** (`qc-1`). In the scratch target (`env -C <scratch>`), run `just --justfile <kit>/justfile qc docs/specs/demo.status.json 7 acceptance-a acceptance-b`. Observe exit 1, `PASS acceptance-a` and `FAIL acceptance-b`, each followed by `evidence complete; decision demo checks; record <id>`; each record at the head, clean, holding `demo.cmd`, `demo.exit`, `demo.stdout`, `demo.stderr` and the contract's format; the status commit makes `acceptance-a` built, `acceptance-b` planned.
 - **Same head again** (`qc-2`). Reset the scratch target to that head, run the same. Observe the same results with two new record ids.
