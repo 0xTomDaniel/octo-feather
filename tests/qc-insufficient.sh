@@ -5,7 +5,8 @@
 # GitHub (the sandbox's offline gh refuses, and the demo says so with exit 77). Each gets the result insufficient
 # evidence naming what is missing, never fail: exit 2, not 1; both stay planned and the head is unchanged (no status
 # commit when nothing flips). A rerun at the same head with the tool on the sandbox's PATH gives acceptance-a pass and
-# its status-only commit. A dirty worktree is still refused. The merge ask side: tests/lane-merge-ask.sh.
+# its status-only commit. A dirty worktree is still refused. A kit-style demo (verify-octo-feather run --unreachable-exit 77)
+# whose drive has an unreachable step is insufficient evidence too. The merge ask side: tests/lane-merge-ask.sh.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc-capture.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN   # a test harness, as tests/qc.sh: qc refuses only under the gate's marker
@@ -100,4 +101,15 @@ grep -A2 '^PASS acceptance-a: \$ qc-needs-tool --check$' <<< "$out" | grep -qE "
   && grep -q '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" || fail "run 2: want acceptance-a pass from the rerun, acceptance-b insufficient: $out"
 [[ "$(git log -1 --format=%s)" == "qc: built acceptance-a (judged ${head:0:12})" && "$(git diff --name-only "$head" HEAD)" == docs/specs/demo.status.json \
   && "$(status)" == "built planned" ]] || fail "run 2: status commit: $(git log -1 --format=%s) $(git diff --name-only "$head" HEAD) $(status)"
-echo "qc-insufficient: ok (a demo stopped by a missing tool (127) and by GitHub refused in the sandbox (77): insufficient evidence naming each, exit 2, never FAIL, both planned, no commit, the report's results; dirty worktree refused; a rerun with the tool gives pass and a status-only commit)"
+# A kit demo as the kit's qc.toml declares one: verify-octo-feather run --unreachable-exit 77, here the new-repo drive with
+# no Spec Chat installer (its spec-chat-link step unreachable): insufficient evidence naming that step, never a pass.
+git rm -q qc.toml; printf '%s\n' 'format = 1' '[entry]' 'command = "true"' '[services]' '[fixture]' '[values]' '[demo."demo#acceptance-b"]' \
+  "command = \"$kit/.agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 new-repo\"" \
+  'covers = ["src/b"]' 'tests = ["tests/b.sh"]' > qc.toml
+git add qc.toml; git commit -qm "kit-style demo"
+set +e; out="$(SPEC_CHAT_CLONE="$t/no-spec-chat" timeout -k 5 300 just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 acceptance-b 2>"$t/err")"; rc=$?; set -e
+[[ "$rc" == 2 ]] || fail "kit-style demo: want exit 2, got $rc: $out $(tail -30 "$t/err")"
+grep -A1 '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" \
+  | grep -q '^  missing: demo did not run to its end (exit 77, a step it needs could not run here): verify-octo-feather: UNREACHABLE spec-chat-link: ' \
+  || fail "kit-style demo: want insufficient evidence naming the unreachable step: $out"
+echo "qc-insufficient: ok (a verify-octo-feather drive with an unreachable step under --unreachable-exit 77 is insufficient evidence naming it; a demo stopped by a missing tool (127) and by GitHub refused in the sandbox (77): insufficient evidence naming each, exit 2, never FAIL, both planned, no commit, the report's results; dirty worktree refused; a rerun with the tool gives pass and a status-only commit)"

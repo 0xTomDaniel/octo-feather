@@ -32,17 +32,18 @@ qc_demo_fail = "echo demo checks fail >&2; exit 1"
 qc_demo_insufficient = 'gh api user >/dev/null || { echo "needs GitHub: gh api user, refused in the qc sandbox" >&2; exit 77; }; echo demo checks pass'
 
 # The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
+# --unreachable-exit 77: a drive with an unreachable step is a demo that did not run to its end (verify-octo-feather SKILL.md).
 [demo."quality#acceptance-qc-capture"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
 tests = ["tests/qc-capture.sh"]
 
 [demo."quality#acceptance-qc-insufficient"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-insufficient"
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
 tests = ["tests/qc-insufficient.sh", "tests/lane-merge-ask.sh"]
 
 [demo."quality#acceptance-qc-same-verdict"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-capture"
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
 tests = ["tests/qc-capture.sh"]

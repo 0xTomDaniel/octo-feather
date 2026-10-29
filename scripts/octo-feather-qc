@@ -383,7 +383,7 @@ def last_words(outputs: Path) -> str:
         p = outputs / name
         lines = [l.strip() for l in p.read_text(errors="replace").splitlines() if l.strip()] if p.is_file() else []
         if lines:
-            return lines[-1][-300:]
+            return lines[-1] if len(lines[-1]) <= 300 else lines[-1][:300] + "..."   # its head names the step
     return "no output"
 
 
