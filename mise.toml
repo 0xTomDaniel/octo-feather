@@ -1,0 +1,13 @@
+# Native tool pins (owner ruling, issue #261): mise owns these, installed with `mise install --locked` from
+# mise.lock, in CI by jdx/mise-action reading the same files; mise's own version: mise-version. uv owns Python
+# and Python packages (uv.lock); pnpm owns JavaScript packages (pnpm-lock.yaml, no package.json packageManager:
+# scripts/check-languages fails on both pins). [tools] only: no [env], [tasks] or hooks, so mise reads this file
+# without `mise trust`. One version on the box and in CI: change a pin here, then `mise lock`.
+[tools]
+node = "22.23.3"
+pnpm = "10.7.0"
+uv = "0.13.1"
+just = "1.21.0"
+shellcheck = "0.9.0"
+# scc is not in mise's short registry: its aqua package (release binaries, sha256 in mise.lock).
+"aqua:boyter/scc" = "4.1.0"

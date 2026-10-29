@@ -1,0 +1,12 @@
+# `shell`: ShellCheck's file list (ShellCheck has no config file list): `just shell-files` is
+# `git ls-files ':(attr:shell)'`. An extensionless shell script is named here; scripts/check-languages.ts fails,
+# naming the file, when scc finds shell this list misses.
+*.sh shell
+.githooks/pre-commit shell
+.agents/skills/verify-app/scripts/verify-app shell
+
+# `language-exempt`: paths scripts/check-languages.ts does not scan, each with its reason.
+# Spec Chat's vendored style.
+docs/specs/.style/** language-exempt
+# Tool-written lockfiles, never hand-edited (scc calls a .lock file Unknown).
+mise.lock language-exempt

@@ -4,20 +4,62 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
 set positional-arguments
 
+# This repo's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, the git
+# hook, CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read),
+# placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin
+# /bin; at the end when it has none): mise replaces only what would resolve from the system, and every dir the
+# caller put earlier still wins. A tool not installed is named on stderr with the fix.
+export PATH := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"`
+
 default:
     @just --list
 
-# Install dependencies and the git hook.
+# Install the pinned tools (mise.toml, mise.lock), dependencies and the git hook.
 setup:
+    mise install --locked
     pnpm install --frozen-lockfile
     git config core.hooksPath .githooks
 
-# Types, lint, architecture, dead code, integration and E2E tests.
-check:
+# Every tracked language gated, shell, types and lint, architecture, dead code, integration and E2E tests: each a
+# dependency of check, so what the gate runs is just's own answer (scripts/check-languages.ts reads it).
+check: check-languages check-scripts check-ts check-arch check-dead-code check-tests
+
+# Every language scc finds in the tracked files has its lint and type step in check; rules and what passes by
+# design: the head of scripts/check-languages.ts.
+check-languages:
+    node scripts/check-languages.ts
+
+# check-languages' data (the head of scripts/check-languages.ts): one LANGUAGE:TOOL:GATE_RECIPE:FILES_RECIPE entry
+# per language scc can name and gate tool that must cover its files; FILES_RECIPE prints that tool's own file list.
+check_languages := "TypeScript:tsc:check-ts:ts-files TypeScript:eslint:check-ts:eslint-files JavaScript:tsc:check-ts:ts-files JavaScript:eslint:check-ts:eslint-files Shell:shellcheck:check-scripts:shell-files BASH:shellcheck:check-scripts:shell-files"
+
+# tsc's own file list: add a path to tsconfig.json include (a dot path or dotfile by name)
+ts-files:
+    @pnpm exec tsc --showConfig | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const f of JSON.parse(s).files ?? []) console.log(f); })'
+
+# Its JSON report of `eslint .`, as check-ts runs it.
+# The files eslint lints: lint the file in eslint.config.js (out of its ignores)
+eslint-files:
+    @{ pnpm exec eslint --format json . || true; } | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const r of JSON.parse(s)) console.log(r.filePath); })'
+
+# ShellCheck's file list: give a file the `shell` attribute in .gitattributes
+shell-files:
+    @git ls-files ':(attr:shell)'
+
+check-scripts:
+    just shell-files | xargs -d '\n' shellcheck -S warning
+
+check-ts:
     pnpm exec tsc
     pnpm exec eslint --max-warnings 0 .
+
+check-arch:
     pnpm exec depcruise src tests
+
+check-dead-code:
     pnpm exec knip
+
+check-tests:
     pnpm exec vitest run
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
