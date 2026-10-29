@@ -14,9 +14,7 @@ Repo skills: python, verify-app
 - Infrastructure (a parser, test runner, protocol, file format, scheduler) comes from the standard library, a popular, well-maintained library pinned with `uv add`, or the real tool; the implementer's `Prior art:` line reports the choice. A broken library is patched in place (a committed patch file, or a pinned fork in `[tool.uv.sources]`), never replaced with a hand-written one. Hand-writing one needs its reason stated where it lives (a comment, the spec). Example: YAML input is read with PyYAML (`yaml.safe_load`), TOML with `tomllib`; a hand-written line splitter for either is the failure.
 - Integrate worker commits with `just integrate TICKET REF...` (the kit's `octo-feather-integrate`); keep the recipe.
 
-## Commands
+## Layout
 
-- `just setup` once: `uv sync` and the git hook.
-- `just check` the gate: each step and test a pytest item, run in parallel (`GATE_WORKERS` workers; default: justfile `check-tests`), each timed, failures listed at the end, one trend line per run in the octo-feather state dir.
-- `just test [PYTEST ARGS]` the same items, a subset: `just test -k check-types`, `just test --lf` reruns the last failures.
-- `uv run app hello Ada --json` the app.
+- `src/app/` the app package; CLI entry and dependency declarations: `pyproject.toml`. Dependency pins: `uv.lock`.
+- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `just check` is the gate.
