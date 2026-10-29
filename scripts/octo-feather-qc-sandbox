@@ -24,6 +24,8 @@
 #      (>= 6.6): a kernel without them fails closed (exit 66), never an overlay without userxattr
 #   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
 #      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
+#      MISE_STATE_DIR an empty per-run dir on the private /tmp, so `mise trust` (new-repo) writes and nothing it writes
+#      persists; empty, never a copy of the caller's: its trusted-configs name other repos on the box (step 3b) (#428);
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
 #      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's socket; git's only credential helper
 #      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
@@ -260,6 +262,9 @@ if [[ "$phase" == setup ]]; then
   unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE OCTO_FEATHER_SPEND_SPACE \
     HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
     GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
+  # mise's state dir (trusted-configs, tracked-configs): empty, per-run (header, step 6).
+  mkdir -p "$SCR/mise/state" || die "mise state dir"
+  export MISE_STATE_DIR="$SCR/mise/state"
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
     GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
   # The attempt record: kept by the recorder (below) in $OV/rec, on the hidden run tmpfs; the judge's view a read-only bind.
@@ -640,6 +645,10 @@ lin=$(env | grep -c '^LINEAR_API_KEY=')
 check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
 route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|OCTO_FEATHER_SPEND_SPACE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
 check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
+w=0; touch "$MISE_STATE_DIR/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$MISE_STATE_DIR/.qc-w-$S"; }
+me=$(find "$MISE_STATE_DIR" -mindepth 1 2>/dev/null | wc -l)
+check "$(t test "$MISE_STATE_DIR" = "$SCR/mise/state" -a "$w" = 1 -a "$me" = 0 -a "$(stat -f -c %T "$MISE_STATE_DIR")" = tmpfs)" \
+  "mise state dir per-run: $MISE_STATE_DIR (tmpfs on the private /tmp, started empty: $me entries; mise trust writes there and it dies with the run)"
 st=$("$(dirname "$0")/octo-feather-state")
 check "$(t test "$st" = "$SB")" "state dir is per-run scratch: $st"
 w=0
