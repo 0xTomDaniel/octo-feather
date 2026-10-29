@@ -461,8 +461,8 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
 
 
 def ran_setup(facts: list[dict[str, object]], head: str) -> tuple[list[dict[str, object]], str]:
-    """FACTS with each ran fact's _head (the case HEAD), and the sandbox's QC_RECORD: the programs those facts name, one
-    per line (which ones are shimmed: schema, Run record)."""
+    """FACTS with each ran fact's _head (the case HEAD), and the sandbox's QC_RECORD value, one program per line
+    (schema.md, Run record)."""
     ran = [f for f in facts if f.get("fact") == "ran"]
     return [dict(f, _head=head) if f.get("fact") == "ran" else f for f in facts], "\n".join(sorted({str(f["program"]) for f in ran}))
 
