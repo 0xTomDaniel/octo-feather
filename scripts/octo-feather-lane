@@ -290,11 +290,25 @@ step 4 tells no lane twice.
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
                    A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
                    after trying the rest. Its line: `told: ...; already told: ...; not woken: ...`
+  step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+                   moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
+                   close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
+                   record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
+                   else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
+                   closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
+                   list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
+                   git's words); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
+                   based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
+                   deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
+                   when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
 `post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`. Exit 0 when every step is ok, 1 when one
 stopped (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch
-that failed), 1 with usage on stderr for bad arguments.
+that failed, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+at the close report), 1 with usage on stderr for bad arguments.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
 """
@@ -2821,9 +2835,156 @@ def pm_tell(pm: PostMerge) -> str:
     return who
 
 
+# --- post-merge step 5: tear down the closed lane (issue 399) ---
+
+class Pending(Exception):
+    """A step not due yet: its message names when to rerun; exit 3."""
+
+
+def pm_herdr_gone(what: str, target: str, code: str) -> bool:
+    """Whether Herdr reports TARGET gone: `herdr WHAT get TARGET` fails with error CODE."""
+    try:
+        p = subprocess.run(["herdr", what, "get", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    try:
+        d: object = json.loads(p.stdout)
+    except ValueError:
+        d = None
+    err = cast("dict[str, object]", d).get("error") if isinstance(d, dict) else None
+    return bool(p.returncode) and isinstance(err, dict) and cast("dict[str, object]", err).get("code") == code
+
+
+def pm_close(target: str, space: str, shared: bool) -> str:
+    """`herdr-close TARGET` (the lane's own space, or its supervisor pane, which herdr-close maps to its tab). On a
+    failed close, Herdr is asked whether TARGET is gone: then it was closed already."""
+    what = f"tab of {target}" if shared else f"space {target}"
+    try:
+        p = subprocess.run(["herdr-close", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr-close not on PATH: put the kit's scripts on PATH (herdr-comms skill), then rerun")
+    if not p.returncode:
+        return f"{what} closed" + (f" in shared space {space}" if shared else "")
+    if pm_herdr_gone(*(("agent", target, "agent_not_found") if shared else ("workspace", target, "workspace_not_found"))):
+        return f"{what} already closed"
+    out = (p.stderr or p.stdout).strip().splitlines()
+    raise Refuse(f"herdr-close {target} failed (exit {p.returncode}: {out[-1][:200] if out else 'no output'}): "
+                 "close it by hand (herdr-comms skill), then rerun")
+
+
+def pm_review_roots() -> list[tuple[str, str, str]]:
+    """(real root, row slug, registry) of every Spec Chat review row, its registries read as octo-feather-accepted
+    reads them; an unreadable registry stops, as it may name the worktree as a preview."""
+    import tomllib
+    base = os.environ.get("XDG_STATE_HOME")
+    state = (Path(base) if base else Path.home() / ".local" / "state") / "spec-chat"
+    roots: list[tuple[str, str, str]] = []
+    for reg in sorted(state.glob("hosting/*/registry.toml")):
+        try:
+            data = tomllib.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read Spec Chat registry {reg} ({e}): fix it, then rerun (a review row's root stays)")
+        rows = [cast("dict[str, object]", r) for r in cast("list[object]", data.get("resource", [])) if isinstance(r, dict)]
+        roots.extend((os.path.realpath(str(r["root"])), str(r.get("slug", "?")), str(reg)) for r in rows if r.get("root"))
+    return roots
+
+
+def pm_git_ok(what: str, *args: str) -> str:
+    """git ARGS in the current repo; its stdout, or Refuse naming WHAT with git's own words."""
+    p = pm_git_here(*args)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"{what} ({err[-1][:200] if err else f'exit {p.returncode}'})")
+    return p.stdout
+
+
+def pm_worktree(branch: str) -> str:
+    """Remove the clean worktree on BRANCH; the kit install, the main worktree and a review row's root are kept."""
+    listing = pm_git_ok("git worktree list failed", "worktree", "list", "--porcelain").strip().split("\n\n")
+    entries = [{k: v for k, _, v in (x.partition(" ") for x in e.splitlines())} for e in listing]
+    hit = [i for i, e in enumerate(entries) if e.get("branch") == f"refs/heads/{branch}"]
+    if not hit:
+        return f"worktree of {branch} already removed"
+    path = entries[hit[0]]["worktree"]
+    real = os.path.realpath(path)
+    if real == os.path.realpath(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT):
+        raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
+    if hit[0] == 0:
+        raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")
+    for root, slug, reg in pm_review_roots():
+        if root == real:
+            raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
+                         "a preview stays, remove it by hand once its review ends")
+    pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
+    return f"worktree {path} removed"
+
+
+def pm_teardown(pm: PostMerge) -> str:
+    """Step 5: once the lane's record is archived for this PR (its close report), close its own space (or only its
+    supervisor tab in a shared one), remove its worktree, retarget PRs based on its branch, delete the branch locally
+    (merged only) and on origin. Any refusal stops the step, what ran before named."""
+    import tomllib
+    lanes = lanes_dir()
+    path = lanes / "archive" / f"{pm.lane}.toml"
+    if not path.exists():
+        raise Pending(f"lane {pm.lane} not archived; rerun on its close report")
+    try:
+        rec: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refuse(f"cannot read archived record {path} ({e}): fix it, then rerun; nothing torn down")
+    if rec.get("pr") != pm.pr:
+        raise Refuse(f"archived lane {pm.lane} names PR #{rec.get('pr')}, not #{pm.pr}: name the lane's own PR, then rerun; nothing torn down")
+    sup = rec.get("supervisor")
+    if not isinstance(sup, str) or ":" not in sup:
+        raise Refuse(f"archived lane {pm.lane}'s supervisor {sup!r} is no pane id: nothing torn down")
+    space = sup.split(":", 1)[0]
+    others: list[object] = []
+    for p in [*sorted(lanes.glob("*.toml")), lanes.parent / "director.toml"]:
+        try:
+            d = tomllib.loads(p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read {p} ({e}): fix it, then rerun (it may share space {space}); nothing torn down")
+        others.append(d.get("pane" if p.name == "director.toml" else "supervisor"))
+    shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
+    done: list[str] = []
+    try:
+        done.append(pm_close(sup if shared else space, space, shared))
+        branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
+        done.append(pm_worktree(branch))
+        out = gh(["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
+                 "check gh auth status, then rerun")
+        try:
+            based = [int(str(cast("dict[str, object]", x)["number"])) for x in cast("list[object]", json.loads(out))]
+        except (ValueError, TypeError, KeyError) as e:
+            raise Refuse(f"gh pr list --base {branch} printed no PR list ({out[:100]!r}, {e}): check the gh on PATH")
+        for n in based:
+            gh(["pr", "edit", str(n), "--base", pm.base, *pm.r()], f"retarget PR #{n} to {pm.base} by hand, then rerun")
+            done.append(f"PR #{n} retargeted from {branch} to {pm.base}")
+        if not based:
+            done.append(f"no open PR based on {branch}")
+        if pm_git_here("rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode:
+            done.append(f"local branch {branch} already deleted")
+        else:
+            if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+                pm_git_here("fetch", "--quiet", "origin", pm.merge)
+            if pm_git_here("merge-base", "--is-ancestor", f"refs/heads/{branch}", pm.merge).returncode:
+                raise Refuse(f"local branch {branch} kept: it is not an ancestor of merge commit {pm.merge[:12]} "
+                             f"(git log {pm.merge[:12]}..{branch} names what did not merge)")
+            pm_git_ok(f"local branch {branch} not deleted", "branch", "-D", branch)
+            done.append(f"local branch {branch} deleted")
+        if pm_git_ok(f"git ls-remote origin {branch} failed", "ls-remote", "--heads", "origin", branch).strip():
+            pm_git_ok(f"remote branch {branch} not deleted", "push", "--quiet", "origin", "--delete", branch)
+            done.append(f"remote branch {branch} deleted from origin")
+        else:
+            done.append(f"remote branch {branch} already deleted from origin")
+    except Refuse as e:
+        raise Refuse("; ".join([*done, f"{e}; nothing after it ran: fix it, then rerun"]))
+    return "; ".join(done)
+
+
 # The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
 POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
-                    ("tell supervisors", pm_tell))
+                    ("tell supervisors", pm_tell), ("teardown", pm_teardown))
 
 
 def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
@@ -2854,6 +3015,8 @@ def cmd_post_merge(args: list[str]) -> int:
                 line, outcome = f"ok: {step(pm)}", "ok"
             except Refuse as e:
                 line, outcome = f"stopped: {e}", "stopped"
+            except Pending as e:
+                line, outcome = f"pending: {e}", "pending"
             except (KeyError, TypeError, AttributeError, ValueError) as e:
                 line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
             print(f"step {n} {name}: {line}", flush=True)
@@ -2861,7 +3024,9 @@ def cmd_post_merge(args: list[str]) -> int:
         else:
             outcomes.append(f"step {n} {name} not run")
     print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}", flush=True)
-    return 0 if all(o.endswith(" ok") for o in outcomes) else 1
+    if all(o.endswith((" ok", " pending")) for o in outcomes):
+        return 0 if all(o.endswith(" ok") for o in outcomes) else 3
+    return 1
 
 
 COMMANDS = {

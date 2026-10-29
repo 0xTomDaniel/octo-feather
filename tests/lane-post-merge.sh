@@ -7,7 +7,8 @@
 # step's outcome, and only gh reads run (rerun safe). Step 3 (issue 397) refreshes a throwaway kit install clone
 # (OCTO_FEATHER_KIT_INSTALL, always set here: never the live kit), its origin a local bare repo behind a GitHub URL;
 # fake mise, just, uv and pnpm log each call. Step 4 (issue 398, tests/lane-post-merge-tell.sh) reads a throwaway
-# state dir (XDG_STATE_HOME) with no lane record here, so it tells no pane. Run by `just check`.
+# state dir (XDG_STATE_HOME) with no lane record here, so it tells no pane; step 5 (issue 399,
+# tests/lane-post-merge-teardown.sh) finds no archived record, so it is pending and a green run exits 3. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -89,40 +90,40 @@ red="$(run1 check completed failure 13)" busy="$(run1 check in_progress '' 11)"
 store OPEN "$H" "[[$green]]"
 run 1 post-merge 7 "${H:0:7}" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: PR #7 is OPEN, not merged"* ]] || fail "not merged: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run; step 3 kit refresh not run; step 4 tell supervisors not run" ]] || fail "not merged summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run; step 3 kit refresh not run; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "not merged summary: $last"
 ! grep -q '^run ' "$GH_LOG" || fail "not merged still listed runs: $(cat "$GH_LOG")"
 store MERGED "abcdef0$H" "[[$green]]"
 run 1 post-merge 7 "${H:0:12}" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: PR #7 merged at head abcdef012345, not at the pinned head ${H:0:12}"* ]] || fail "other head: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run; step 3 kit refresh not run; step 4 tell supervisors not run" ]] || fail "other head summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged stopped; step 2 main CI not run; step 3 kit refresh not run; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "other head summary: $last"
 run 1 post-merge 8 "$H" --lane gh7
 [[ "$out" == *"step 1 merged: stopped: gh pr view 8 failed"* && "$last" == *"step 1 merged stopped"* ]] || fail "gh failing: $out"
 
 # Step 2 green: a run in progress is watched to its end, a second workflow joins; every run success: exit 0.
 store MERGED "$H" "[[$busy], [$green, $lint]]"
-run 0 post-merge 7 "$H" --lane gh7 --repo o/r
+run 3 post-merge 7 "$H" --lane gh7 --repo o/r
 [[ "$(head -n1 <<<"$out")" == "step 1 merged: ok: PR #7 (gh7) merged into main at head ${H:0:12}, merge commit ${M:0:12}" ]] || fail "step 1 line: $out"
 [[ "$out" == *"step 2 main CI: ok: 2 push runs on ${M:0:12} concluded success: check https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12"* ]] || fail "green line: $out"
 [[ "$out" == *"step 3 kit refresh: ok: kit install unchanged: PR in o/r, install is o/kit"* ]] || fail "other repo: $out"
 [[ "$out" == *"step 4 tell supervisors: ok: no other open lane in $t/state/octo-feather/lanes to tell"* ]] || fail "step 4: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 tell supervisors ok" ]] || fail "green summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 tell supervisors ok; step 5 teardown pending" ]] || fail "green summary: $last"
 [[ "$(git -C "$t/kit" rev-parse HEAD)" == "$B" && ! -s "$TOOL_LOG" ]] || fail "other repo moved or refreshed the install"
 grep -qx "run watch 11 --exit-status -R o/r" "$GH_LOG" || fail "running run not watched with --exit-status in o/r: $(cat "$GH_LOG")"
 grep -qx "pr view 7 --json state,headRefOid,mergeCommit,baseRefName,headRefName -R o/r" "$GH_LOG" || fail "pr view: $(cat "$GH_LOG")"
-[[ "$(wc -l <<<"$out")" == 5 ]] || fail "green prints one line per step and the summary: $out"
-run 0 post-merge 7 "$H" --lane gh7 --repo o/r   # rerun: same result, still reads only
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 tell supervisors ok" ]] || fail "rerun: $out"
+[[ "$(wc -l <<<"$out")" == 6 ]] || fail "green prints one line per step and the summary: $out"
+run 3 post-merge 7 "$H" --lane gh7 --repo o/r   # rerun: same result, still reads only
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 tell supervisors ok; step 5 teardown pending" ]] || fail "rerun: $out"
 
 # A run that appears within the bound is waited for.
 store MERGED "$H" "[[], [$green]]"
-run 0 post-merge 7 "$H" --lane gh7 --wait 1
+run 3 post-merge 7 "$H" --lane gh7 --wait 1
 [[ "$out" == *"step 2 main CI: ok: 1 push run on ${M:0:12} concluded success"* ]] || fail "late run: $out"
 
 # Step 2 red: one run failed: stop naming its URL, never healthy.
 store MERGED "$H" "[[$red, $lint]]" '{"13": 1}'
 run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 2 main CI: stopped: main CI red on ${M:0:12}: check failure https://github.com/o/r/actions/runs/13"* ]] || fail "red: $out"
-[[ "$out" != *"concluded success"* && "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped; step 3 kit refresh not run; step 4 tell supervisors not run" ]] || fail "red summary: $out"
+[[ "$out" != *"concluded success"* && "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped; step 3 kit refresh not run; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "red summary: $out"
 # A watch that fails while its run reads unfinished: stop naming it, never healthy.
 store MERGED "$H" "[[$busy]]" '{"11": 1}'
 run 1 post-merge 7 "$H" --lane gh7
@@ -131,7 +132,7 @@ run 1 post-merge 7 "$H" --lane gh7
 store MERGED "$H" "[[]]"
 run 1 post-merge 7 "$H" --lane gh7 --wait 0
 [[ "$out" == *"step 2 main CI: stopped: no push run on merge commit ${M:0:12} within 0s"* ]] || fail "no run: $out"
-[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped; step 3 kit refresh not run; step 4 tell supervisors not run" ]] || fail "no run summary: $last"
+[[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped; step 3 kit refresh not run; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "no run summary: $last"
 
 # Step 3, the PR's repo is the install's (o/r). Behind: fetch, fast-forward to M, still detached; no mise.toml at M,
 # so no mise; each refresh command runs in the install, install-check for the target repo.
@@ -142,30 +143,30 @@ uv sync --locked @ $t/kit
 pnpm install --frozen-lockfile @ $t/kit
 just install-check $t/target @ $t/kit"
 store MERGED "$H" "[[$green]]"; install "$B"
-run 0 post-merge 7 "$H" --lane gh7
+run 3 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit fast-forwarded ${B:0:12}..${M:0:12}; just vendored-fetch ok; uv sync --locked ok; pnpm install --frozen-lockfile ok; just install-check $t/target ok (no mise.toml: mise install skipped)"* ]] || fail "behind: $out"
-[[ "$last" == "$s3 ok; step 4 tell supervisors ok" && "$(k rev-parse HEAD)" == "$M" ]] || fail "behind did not reach M: $out"
+[[ "$last" == "$s3 ok; step 4 tell supervisors ok; step 5 teardown pending" && "$(k rev-parse HEAD)" == "$M" ]] || fail "behind did not reach M: $out"
 ! k symbolic-ref -q HEAD >/dev/null || fail "behind install left detached HEAD: $(k symbolic-ref HEAD)"
 [[ "$(cat "$TOOL_LOG")" == "$refresh" ]] || fail "behind refresh calls: $(cat "$TOOL_LOG")"
 # Rerun: no move, the refresh commands run again.
-: > "$TOOL_LOG"; run 0 post-merge 7 "$H" --lane gh7
+: > "$TOOL_LOG"; run 3 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit at ${M:0:12}, at or past ${M:0:12}: no move; just vendored-fetch ok"* && "$(k rev-parse HEAD)" == "$M" ]] || fail "rerun: $out"
 [[ "$(cat "$TOOL_LOG")" == "$refresh" ]] || fail "rerun refresh calls: $(cat "$TOOL_LOG")"
 # Past M, with a mise.toml there: no move, mise install --locked first.
-install "$P"; run 0 post-merge 7 "$H" --lane gh7
+install "$P"; run 3 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit at ${P:0:12}, at or past ${M:0:12}: no move; mise install --locked ok; just vendored-fetch ok"* && "$(k rev-parse HEAD)" == "$P" ]] || fail "past: $out"
 [[ "$(cat "$TOOL_LOG")" == "mise install --locked @ $t/kit"$'\n'"$refresh" ]] || fail "past refresh calls: $(cat "$TOOL_LOG")"
 # A failing refresh command stops naming it; later ones do not run.
 install "$B"; TOOL_FAIL="uv sync" run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit fast-forwarded ${B:0:12}..${M:0:12}; just vendored-fetch ok; uv sync --locked failed (exit 3: boom: uv sync --locked)"* ]] || fail "failing tool: $out"
-[[ "$last" == "$s3 stopped; step 4 tell supervisors not run" && "$(cat "$TOOL_LOG")" != *pnpm* ]] || fail "failing tool ran on: $out $(cat "$TOOL_LOG")"
+[[ "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" && "$(cat "$TOOL_LOG")" != *pnpm* ]] || fail "failing tool ran on: $out $(cat "$TOOL_LOG")"
 # Dirty: stop naming it, nothing changed (HEAD, the file, no refresh).
 install "$B"; echo x > "$t/kit/stray"; run 1 post-merge 7 "$H" --lane gh7
-[[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit is dirty (?? stray)"* && "$last" == "$s3 stopped; step 4 tell supervisors not run" ]] || fail "dirty: $out"
+[[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit is dirty (?? stray)"* && "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "dirty: $out"
 [[ "$(k rev-parse HEAD)" == "$B" && -f "$t/kit/stray" && ! -s "$TOOL_LOG" ]] || fail "dirty install changed"
 # Diverged: a local commit off B; stop naming it, nothing changed.
 install "$B"; touch "$t/kit/d"; k add d; k commit -qm d; D="$(k rev-parse HEAD)"; run 1 post-merge 7 "$H" --lane gh7
-[[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit at ${D:0:12} has diverged from merge commit ${M:0:12}"* && "$last" == "$s3 stopped; step 4 tell supervisors not run" ]] || fail "diverged: $out"
+[[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit at ${D:0:12} has diverged from merge commit ${M:0:12}"* && "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "diverged: $out"
 [[ "$(k rev-parse HEAD)" == "$D" && ! -s "$TOOL_LOG" ]] || fail "diverged install changed"
 
 # Usage: missing --lane, a HEAD that is no sha.
