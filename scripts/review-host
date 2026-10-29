@@ -4,6 +4,11 @@
 Passes every argument, as data, to review-host.py in the machine-local Spec Chat
 clone ($SPEC_CHAT_CLONE, default ~/src/spec-chat), and returns its exit code.
 Before `register` it:
+- refuses a --slug that is a lane key for a spec row (remote spec #review-one-row: a spec's row is
+  under its own spec slug, never a lane key). A slug S is a lane key when the tracker skill of the
+  spec's target repo (resolved as scripts/pi-role resolves it) maps it to itself:
+  `lane-key "$(key-from-branch S)"` prints S (github-issues: gh230). Nothing is registered and no
+  server starts. Project slugs (octo-feather), spec slugs and scope rows pass.
 - refuses a spec that would render no Spec Chat UI: its page has no runtime
   <script>, or the runtime.js that script names is missing. It names what is
   missing and the fix; nothing is registered. Spec Chat's own preflight.py
@@ -17,7 +22,9 @@ Before `register` it:
   It stops only a process it proves is this registry's review-serve (see
   serve_pids); one that only looks like one is left running and reported.
 """
+import argparse
 import contextlib
+import importlib.machinery
 import importlib.util
 import io
 import os
@@ -27,6 +34,8 @@ import signal
 import subprocess
 import sys
 import time
+from types import ModuleType
+from typing import Any
 
 ME = "review-host"
 CLONE = Path(os.environ.get("SPEC_CHAT_CLONE") or Path.home() / "src/spec-chat").expanduser()
@@ -34,6 +43,8 @@ SCRIPTS = CLONE / "skill/review-spec/scripts"
 HOST = SCRIPTS / "review-host.py"
 PREFLIGHT = SCRIPTS / "preflight.py"
 SERVER = CLONE / "skill/review-spec/assets/review-serve.py"
+KIT = Path(__file__).resolve().parent.parent
+SKILLS = KIT / ".agents/skills"
 
 
 def load(name, path):
@@ -80,6 +91,31 @@ def missing_ui(host, preflight, args):
                 f"{spec}: Spec Chat runtime {runtime} is missing; run {fix} "
                 "(it copies Spec Chat's runtime into that .viz and commits it)")
     return problems
+
+
+def lane_key_slugs(host: ModuleType, args: argparse.Namespace) -> list[str]:
+    """The --slug values of spec rows that their target's tracker skill maps to themselves as a lane key."""
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            items: list[dict[str, Any]] = host.parse_resources(args)
+    except Exception:
+        return []  # review-host.py reports a bad resource itself
+    path = str(KIT / "scripts/pi-role")  # no .py suffix: name its loader, as the justfile's install-check does
+    pi_role = ModuleType("pi_role")
+    importlib.machinery.SourceFileLoader("pi_role", path).exec_module(pi_role)
+    found: list[str] = []
+    for item in items:
+        slug = str(item.get("slug") or "")
+        if not item.get("spec_file") or not slug or slug in found:
+            continue  # a scope row is not a spec's row
+        scripts = SKILLS / pi_role.tracker_skill(str(SKILLS), item["root"]) / "scripts"
+        key = subprocess.run([scripts / "key-from-branch", slug], capture_output=True, text=True, check=False)
+        if key.returncode != 0:
+            continue
+        lane = subprocess.run([scripts / "lane-key", key.stdout.strip()], capture_output=True, text=True, check=False)
+        if lane.returncode == 0 and lane.stdout.strip() == slug:
+            found.append(slug)
+    return found
 
 
 def is_python(path):
@@ -175,6 +211,13 @@ def main(argv):
     host = load("spec_chat_review_host", HOST)
     args = register_args(host, argv)
     if args is not None:
+        lanes = lane_key_slugs(host, args)
+        if lanes:
+            for slug in lanes:
+                print(f"{ME}: refused, --slug {slug} is a lane key (remote spec #review-one-row: a spec's row is "
+                      "under its own spec slug, never a lane key); register with the spec's slug", file=sys.stderr)
+            print(f"{ME}: nothing registered", file=sys.stderr)
+            return 2
         problems = missing_ui(host, load("spec_chat_preflight", PREFLIGHT), args)
         if problems:
             for line in problems:
