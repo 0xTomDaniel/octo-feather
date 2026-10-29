@@ -4,11 +4,12 @@ set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
 set positional-arguments
 
-# This repo's tools (mise.toml at mise.lock versions) first on PATH for every recipe, from any caller (a shell, the
-# git hook, CI, an agent pane): mise's own answer for this repo's config, the config its shims read. A tool not
-# installed is named on stderr with the fix.
-mise_bins := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; mise bin-paths 2>/dev/null | paste -sd : -`
-export PATH := if mise_bins == "" { env_var('PATH') } else { mise_bins + ":" + env_var('PATH') }
+# This repo's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, the git
+# hook, CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read),
+# placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin /usr/sbin /usr/bin /sbin
+# /bin; at the end when it has none): mise replaces only what would resolve from the system, and every dir the
+# caller put earlier still wins. A tool not installed is named on stderr with the fix.
+export PATH := `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"`
 
 default:
     @just --list
