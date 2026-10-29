@@ -38,6 +38,7 @@ from pathlib import Path
 from typing import Any, cast
 
 import tomllib  # stdlib since 3.11; ruff, at the 3.10 floor, sorts it as third-party
+from handoff_log import encode
 
 KIT = Path(__file__).resolve().parent.parent
 QUESTIONS = KIT / "reflection" / "questions.json"
@@ -447,7 +448,7 @@ def log_lines(found: list[Finding], ids: list[str], *, lane: bool = True) -> lis
         for f in found
     ]
     out.append({"at": at, "kind": "reflection", "findings": len(found), "questions": ids})
-    return [json.dumps(d, ensure_ascii=False) for d in out]
+    return [encode(d) for d in out]
 
 
 # Correction lanes (comms spec #reflection-correction; the rule: issue-lifecycle #lanes-correction).

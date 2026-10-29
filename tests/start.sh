@@ -42,12 +42,18 @@ grep -q '^HERDR_SESSION= workspace create' "$t/log" || fail "Linux start changed
 # herdr (tests/fixtures/herdr-say): --issue ENG-123 in a Linear target makes workspace eng-123 holding one tab,
 # supervisor; --issue 12 in a GitHub target still makes gh12; a ticket the target's tracker cannot key starts nothing.
 mkdir -p "$t/lbin"; cp "$kit/tests/fixtures/herdr-say/herdr" "$t/lbin/"; chmod +x "$t/lbin/herdr"
+# Startup owns only launch delivery; reflection behavior has its own integration tests.
+cp "$kit/tests/fixtures/start-nohup" "$t/lbin/nohup"; chmod +x "$t/lbin/nohup"
 g init -q "$t/lin"; echo 'tracker = "linear"' > "$t/lin/.octo-feather.toml"; g init -q "$t/ghr"
 lane() { # $1: case, $2: ticket, $3: target
-  c="$t/case-$1"; mkdir -p "$c"; set +e
+  c="$t/case-$1"; mkdir -p "$c"; mkfifo "$c/completion"; set +e
   out="$(env -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u OCTO_FEATHER_PARENT -u OCTO_FEATHER_ROLE \
-    PATH="$t/lbin:$PATH" FAKE_HERDR_DIR="$c" XDG_STATE_HOME="$c/state" XDG_CACHE_HOME="$t/cache" HERDR_SPAWN_READY_RETRIES=2 \
-    "$S" --issue "$2" --cwd "$3" 2>"$c/err")"; rc=$?; set -e; }
+    PATH="$t/lbin:$PATH" FAKE_HERDR_DIR="$c" START_COMPLETION="$c/completion" XDG_STATE_HOME="$c/state" XDG_CACHE_HOME="$t/cache" HERDR_SPAWN_READY_RETRIES=2 \
+    "$S" --issue "$2" --cwd "$3" 2>"$c/err")"; rc=$?; set -e
+  if [[ "$rc" == 0 ]]; then
+    python3 "$kit/tests/fixtures/start-nohup" "$c/completion" "$kit/scripts/octo-feather-lane"
+  fi
+}
 lane linear ENG-123 "$t/lin"
 [[ "$rc" == 0 && "$out" == *" name=eng-123 role=supervisor "* ]] || fail "Linear ENG-123: rc=$rc $out $(cat "$c/err")"
 [[ "$(grep -c '^workspace create' "$c/argv")" == 1 ]] && grep -q '^workspace create --label eng-123 ' "$c/argv" || fail "Linear: workspace not eng-123: $(cat "$c/argv")"

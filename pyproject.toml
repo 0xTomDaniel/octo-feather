@@ -163,7 +163,6 @@ typeCheckingMode = "strict"
   "PTH120",
   "PTH123",
   "S607",
-  "SIM102",
   "T201",
   "TRY003",
 ]
