@@ -95,16 +95,16 @@
       "pr": 181
     },
     "acceptance-qc-capture": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420
     },
     "acceptance-qc-capture-browser": {
       "status": "planned",
       "pr": null
     },
     "acceptance-qc-same-verdict": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420
     },
     "acceptance-qc-advisory": {
       "status": "planned",
