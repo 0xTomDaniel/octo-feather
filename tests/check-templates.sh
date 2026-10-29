@@ -45,7 +45,12 @@ expect "$tj" '    @node scripts/check-languages.ts run check-scripts' '    @echo
 expect "$pj" 'export GATE_RECIPES := "install-check check-languages check-scripts check-lint check-format check-types check-imports"' 'export GATE_RECIPES := "install-check check-scripts check-lint check-format check-types check-imports"' 'add check-languages to GATE_RECIPES'
 expect "$tj" 'export GATE_RECIPES := "install-check check-languages check-scripts check-ts check-arch check-dead-code"' 'export GATE_RECIPES := "install-check check-languages check-ts check-arch check-dead-code"' 'shellcheck: bind check-scripts in the reachable gate'
 expect templates/typescript/languages.json '        "shellcheck"' '' 'shell lists no tool'
-expect templates/python/scripts/language_support.py 'LAUNCHERS = (' 'LAUNCHERS = (  # drifted' 'templates/python/scripts/language_support.py differs from the kit'"'"'s scripts/language_support.py; fix: cp'
+# The template's checker copy drifts from the kit's: one appended line, nothing read from the source.
+copy=templates/python/scripts/language_support.py
+cp "$t/$copy" "$t/.copy-old"; printf '# copy drift\n' >> "$t/$copy"
+set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
+mv "$t/.copy-old" "$t/$copy"
+[[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's scripts/language_support.py; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
 # A tracked file of no declared language in a template.
 printf 'package main\n' > "$t/templates/typescript/main.go"; (cd "$t" && git add templates/typescript/main.go)
 set +e; out="$(cd "$t" && just check-templates 2>&1)"; rc=$?; set -e
