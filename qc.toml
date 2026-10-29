@@ -57,3 +57,13 @@ tests = ["tests/qc-browser.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-fallback"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
 tests = ["tests/qc-fallback.sh", "tests/lane-merge-ask.sh"]
+
+[demo."quality#acceptance-built-links"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
+tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
+
+[demo."quality#acceptance-evidence-stale"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
+covers = ["scripts/octo-feather-spec-status"]
+tests = ["tests/spec-status.sh"]

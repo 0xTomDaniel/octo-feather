@@ -83,7 +83,7 @@ for n in 1 2; do
   ids+=("$a" "$b")
   st="$(git show HEAD:docs/specs/demo.status.json)"
   [[ "$(git log -1 --format=%s)" == "qc: built acceptance-a (judged ${head:0:12})" ]] \
-    && python3 -c 'import json,sys; c=json.loads(sys.argv[1])["criteria"]; sys.exit(c["acceptance-a"] != {"status": "built", "pr": 9} or c["acceptance-b"]["status"] != "planned")' "$st" \
+    && python3 -c 'import json,sys; c=json.loads(sys.argv[1])["criteria"]; sys.exit(c["acceptance-a"] != {"status": "built", "pr": 9, "record": sys.argv[2], "commit": sys.argv[3], "tests": ["tests/a.sh"]} or c["acceptance-b"] != {"status": "planned", "pr": None})' "$st" "$a" "$head" \
     || fail "run $n: status commit: $(git log -1 --format=%s) $st"
   # The report's results: one per criterion, its evidence state, decision source, record and the judged head.
   rep="$(ls -t "$XDG_STATE_HOME"/octo-feather/qc/"$head"-*.json | head -1)"
@@ -126,6 +126,14 @@ qcrun
 grep -A2 '^PASS acceptance-a: ' <<< "$out" | grep -qE "^  evidence complete; decision demo checks; record $rid$" \
   && grep -A2 '^PASS acceptance-b: \$ judge b$' <<< "$out" | grep -qE "^  evidence complete; decision agent fallback; record $rid$" \
   || fail "mixed run: want acceptance-a from its demo and acceptance-b from the agent fallback: $out"
+# Each built entry names its record, the commit it was captured at and its demo's tests: none for the fallback's (#acceptance-built-links).
+python3 - "$(git show HEAD:docs/specs/demo.status.json)" "$out" "$(git rev-parse HEAD~1)" <<'EOF' || fail "mixed run: status links: $(git show HEAD:docs/specs/demo.status.json)"
+import json, re, sys
+c, out, h = json.loads(sys.argv[1])["criteria"], sys.argv[2], sys.argv[3]
+rec = dict(re.findall(r"(?m)^PASS (acceptance-[ab]): .*\n(?:  .*\n)*?  evidence complete; decision [a-z ]+; record (\S+)$", out))
+assert c["acceptance-a"] == {"status": "built", "pr": 9, "record": rec["acceptance-a"], "commit": h, "tests": ["tests/a.sh"]}, (c, rec)
+assert c["acceptance-b"] == {"status": "built", "pr": 9, "record": rec["acceptance-b"], "commit": h, "tests": []}, (c, rec)
+EOF
 ! grep -q 'BRIEF NAMES' "$(ls -t "$XDG_STATE_HOME"/octo-feather/qc/*.json | head -1)" || fail "mixed run: the judge's brief named the demo's criterion"
 
 # An invalid demo declaration: refused (exit 64) naming the problem, no demo run, no record appended.
