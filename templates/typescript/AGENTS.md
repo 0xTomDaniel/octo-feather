@@ -15,8 +15,7 @@ Repo skills: typescript, pnpm, nodejs, verify-app
 - Infrastructure (a parser, test runner, protocol, file format, scheduler) comes from Node's built-ins, a popular, well-maintained library pinned with `pnpm add`, or the real tool; the implementer's `Prior art:` line reports the choice. A broken library is patched in place (`pnpm patch`, its patch file committed), never replaced with a hand-written one. Hand-writing one needs its reason stated where it lives (a comment, the spec). Example: TOML is read with smol-toml (`parse`); a hand-written `toml.ts` is the failure.
 - Integrate worker commits with `just integrate TICKET REF...` (the kit's `octo-feather-integrate`); keep the recipe.
 
-## Commands
+## Layout
 
-- `just setup` once: `pnpm install` and the git hook.
-- `just check` the gate.
-- `node src/cli.ts hello Ada --json` the app.
+- `src/` the app; CLI entry, runtime requirements and dependency declarations: `package.json`. Dependency pins: `pnpm-lock.yaml`.
+- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `just check` is the gate.
