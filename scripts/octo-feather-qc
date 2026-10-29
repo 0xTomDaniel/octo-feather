@@ -70,7 +70,8 @@ STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
 EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
 CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
 DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
-FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback); timeout exits 124 on it
+FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
+CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
 
 
 def die(code: int, msg: str) -> NoReturn:
@@ -532,7 +533,7 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: 
             die(66, f"sandbox proof failed or sandbox unavailable; judge of {cid} not started (report {report_path})")
         misses = sandbox.get("gh_miss_log", [])
     raw["github"]["misses"] += misses
-    rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode == 124, "seconds": round(time.time() - t0),
+    rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode in CAPPED, "seconds": round(time.time() - t0),
                                 "gh_misses": len(misses), "sandbox": sandbox, "stdout": run.stdout, "stderr": run.stderr[-4000:]}
     rep = verdict(i, head, run, rec, raw, report_path)
     capped = f"the judge hit its {FALLBACK_CAP_S} s time cap before reporting"
@@ -572,7 +573,7 @@ def fell_back(i: str, cid: str, rid: str, head: str, text: str, root: str, cappe
         (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
         ("captured from a dirty worktree", r["dirty"]),
         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
-        (capped, "judge.exit" in r["outputs"] and (d / "judge.exit").read_text().strip() == "124"),
+        (capped, "judge.exit" in r["outputs"] and (d / "judge.exit").read_text().strip() in {str(c) for c in CAPPED}),
         ("outputs missing: judge.report.json", "judge.report.json" not in r["outputs"]),
     ) if bad]
     if missing:

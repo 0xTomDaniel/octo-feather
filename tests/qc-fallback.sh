@@ -100,16 +100,19 @@ assert open(os.path.join(out, "judge.exit")).read() == "0\n"
 EOF
 done
 
-# The cap stops a judge: its record holds no report, evidence incomplete, exit 3 naming it, status unchanged.
-git reset -q --hard "$head"
-SECONDS=0; FAKE_QC_JUDGE=cap qcrun acceptance-b
-[[ "$rc" == 3 && "$SECONDS" -lt 60 ]] || fail "capped judge: want exit 3 well before its 60 s sleep, got $rc after $SECONDS s: $(tail -20 "$t/err")"
-grep -qE "evidence incomplete, nothing judged: acceptance-b \(record $rid\): the judge hit its 900 s time cap before reporting; outputs missing: judge.report.json" "$t/err" \
-  || fail "capped judge not named: $(cat "$t/err")"
-[[ "$(git rev-parse HEAD)" == "$head" && -z "$(git status --porcelain)" ]] || fail "capped judge: status file changed"
-"$ev" read --repo . --criterion demo#acceptance-b --commit "$head" --json | python3 -c '
+# The cap stops a judge: its record holds no report, evidence incomplete, exit 3 naming it, status unchanged. A judge that
+# ignores TERM (stubborn) is stopped by timeout's KILL after -k, timeout exiting 137 instead of 124: the same result.
+for mode in "cap 124" "stubborn 137"; do set -- $mode
+  git reset -q --hard "$head"
+  SECONDS=0; FAKE_QC_JUDGE=$1 qcrun acceptance-b
+  [[ "$rc" == 3 && "$SECONDS" -lt 60 ]] || fail "$1 judge: want exit 3 well before its 60 s sleep, got $rc after $SECONDS s: $(tail -20 "$t/err")"
+  grep -qE "evidence incomplete, nothing judged: acceptance-b \(record $rid\): the judge hit its 900 s time cap before reporting; outputs missing: judge.report.json" "$t/err" \
+    || fail "$1 judge not named: $(cat "$t/err")"
+  [[ "$(git rev-parse HEAD)" == "$head" && -z "$(git status --porcelain)" ]] || fail "$1 judge: status file changed"
+  "$ev" read --repo . --criterion demo#acceptance-b --commit "$head" --json | python3 -c '
 import json, os, sys
 x = json.load(sys.stdin)[-1]
 assert sorted(x["record"]["outputs"]) == ["judge.exit", "judge.stdout"], x["record"]["outputs"]
-assert open(os.path.join(x["dir"], "outputs", "judge.exit")).read() == "124\n"' || fail "capped judge: its record"
-echo "qc-fallback: ok (two undeclared criteria: a fresh capped judge each, alone in its brief, own sandbox; results labelled agent fallback, each naming the record its report reads back from at the head; a judge stopped by the cap: record without a report, exit 3 naming it, status unchanged)"
+assert open(os.path.join(x["dir"], "outputs", "judge.exit")).read() == sys.argv[1] + "\n"' "$2" || fail "$1 judge: its record"
+done
+echo "qc-fallback: ok (two undeclared criteria: a fresh capped judge each, alone in its brief, own sandbox; results labelled agent fallback, each naming the record its report reads back from at the head; a judge stopped by the cap, by TERM or by the later KILL: record without a report, exit 3 naming it, status unchanged)"
