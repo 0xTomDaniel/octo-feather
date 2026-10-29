@@ -23,6 +23,7 @@ serve_pids() { ps -Aww -o pid=,args= | awk -v s="$server --registry $registry --
 cleanup() {
   local p
   for p in $(serve_pids); do kill "$p" 2>/dev/null || true; done
+  [[ ! -e "$t/lanes" ]] || "$kit/scripts/review-host" stop --state-dir "$t/lanes" >/dev/null 2>&1 || true
   for p in "$t"/pids/*; do [[ -f "$p" ]] && { kill -- "-$(cat "$p")" 2>/dev/null || true; }; done
   rm -rf "$t"
 }
@@ -86,6 +87,33 @@ check_link() { # $1: version
   [[ "$(serve_pids)" == "$(owned)" ]] || fail "review-serve pids [$(serve_pids | xargs)] != registry's [$(owned)]"
 }
 check_link v2
+
+# 3b. A lane key as --slug is refused (remote #review-one-row): exit 2, no row, no server started. The rule is the
+#     target's tracker skill: gh230 for this GitHub target, eng-12 for a Linear one; project and spec slugs pass.
+slug_reg() { # $1: slug, $2: state dir, $3: spec path
+  set +e; out="$("$kit/scripts/review-host" register --state-dir "$2" --test --slug "$1" --owner test/w65 "$3" 2>&1)"
+  rc=$?; set -e; }
+lanes="$t/lanes"; before="$(serve_pids)"
+slug_reg gh230 "$lanes" docs/specs/x.spec.html
+[[ "$rc" == 2 && "$out" == *"refused, --slug gh230 is a lane key (remote spec #review-one-row"*"register with the spec's slug"*"nothing registered"* ]] \
+  || fail "lane key gh230: rc=$rc $out"
+[[ ! -e "$lanes/registry.toml" ]] || fail "lane key gh230: registered anyway"
+slug_reg gh230 "$state" docs/specs/x.spec.html
+[[ "$rc" == 2 ]] && ! grep -q '"gh230"' "$registry" || fail "lane key gh230 on a live registry: rc=$rc $out"
+[[ "$(serve_pids)" == "$before" ]] || fail "lane key gh230: server set changed"
+g init -q "$t/linear"; mkdir -p "$t/linear/docs/specs"
+printf 'tracker = "linear"\n' > "$t/linear/.octo-feather.toml"; cp -r docs/specs/x.spec.html docs/specs/.viz "$t/linear/docs/specs/"
+(cd "$t/linear" && g add -A && g commit -qm l)
+slug_reg eng-12 "$lanes" "$t/linear/docs/specs/x.spec.html"
+[[ "$rc" == 2 && "$out" == *"--slug eng-12 is a lane key"* && ! -e "$lanes/registry.toml" ]] || fail "linear lane key: rc=$rc $out"
+for s in octo-feather x implementer-gh230; do
+  slug_reg "$s" "$lanes" docs/specs/x.spec.html
+  [[ "$rc" == 0 ]] && grep -q "slug = \"$s\"" "$lanes/registry.toml" || fail "slug $s: rc=$rc $out"
+done
+slug_reg gh230 "$lanes" "$t/linear/docs/specs/x.spec.html"  # gh230 is no Linear lane key
+[[ "$rc" == 0 ]] || fail "gh230 on a Linear target: rc=$rc $out"
+# Stop the lanes registry's server: steps below count only $registry's.
+"$kit/scripts/review-host" stop --state-dir "$lanes" >/dev/null 2>&1 || fail "stop lanes server"
 
 # 4. A process that only names this registry is never stopped, even by a register that then fails:
 #    the reviewed repro, one passing the real script path as a plain argument, one running another review-serve.py.
@@ -170,4 +198,4 @@ else
   [[ "$out" == *"left pid $prefixed running: it names"* ]] || fail "prefixed sleeper not reported: $out"
   kill -- "-$prefixed"; rm "$t/pids/prefixed"
 fi
-echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, re-register keeps link and only the owned server, lookalikes left running and reported, stray stopped, no-/proc link kept and prefixed lookalike left; state path with a space)"
+echo "review-host: ok (pane PATH, --help passes through, no <script> and no runtime.js refused, lane-key slugs refused (github, linear) and project/spec slugs pass, re-register keeps link and only the owned server, lookalikes left running and reported, stray stopped, no-/proc link kept and prefixed lookalike left; state path with a space)"
