@@ -14,6 +14,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"; eval "$(~/.local/bin/mise activate b
 . ~/.bashrc                    # mise's shims first on PATH, here and in every pane
 mise install --locked          # node, pnpm, uv, just, shellcheck, scc at mise.lock
 uv python install --no-bin     # the gate's Python at .python-version (--no-bin: nothing in ~/.local/bin)
+gh auth login && gh auth setup-git   # GitHub sign-in (interactive); git fetches private pins through gh
 just vendored-fetch            # offline caches the gate reads: vendored skills at their Skillfile pins,
 uv sync --locked               # the gate's Python packages
 just install-check             # run each fix it prints, then rerun, until it exits 0
