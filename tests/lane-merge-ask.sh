@@ -4,7 +4,8 @@
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
 # wrong head, a report with no verdict or no check classes (docs/adr/0008), a proxy check with a clear verdict
 # and a failed write, leaving no comment behind. `merge-ask`
-# passes a complete section and prints it (also through the qc judge's offline gh, github-pr/scripts/gh),
+# passes a complete section and prints it, then labels each row demo checks or agent fallback from qc.toml at the judged
+# head (quality#acceptance-qc-fallback) (also through the qc judge's offline gh, github-pr/scripts/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
 # (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
 # Tracks ENG-123 and no Closes line, and fails with one, spec #acceptance-pr-tracks), stale head,
@@ -20,6 +21,7 @@ L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-merge-ask test: $*" >&2; exit 1; }
 export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log"
+export OCTO_FEATHER_QC_DIR="$t/qc"   # the qc reports merge-ask reads (octo-feather-qc --help, Report)
 mkdir -p "$HOME" "$t/bin" "$FAKE_GH/pr"
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -65,6 +67,7 @@ status() { # A_B_STATUS A_B_PR
   printf '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {\n  "acceptance-a": {"status": "%s", "pr": %s}, "acceptance-b": {"status": "%s", "pr": %s},\n  "acceptance-c": {"status": "planned", "pr": null}, "acceptance-d": {"status": "built", "pr": 3}}}\n' "$1" "$2" "$1" "$2" > docs/specs/demo.status.json; }
 commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
 status planned null; seq 1 20 > app.py; echo notes > notes.txt
+printf '[demo."demo#acceptance-a"]\ncommand = "true"\n' > qc.toml   # the contract: a demo for acceptance-a only
 echo '{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}' > docs/specs/other.status.json
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
@@ -218,6 +221,10 @@ setpr; run 0 merge-ask 7 "${ST[@]}"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Failed: none" <<<"$out" || fail "pass did not print the section: $out"
 [[ "$(tail -2 <<<"$out")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
+# quality#acceptance-qc-fallback: each row labelled by the contract at the judged head, as just qc decides it.
+[[ "$(grep -xF -A2 "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):" <<<"$out")" == \
+   "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):"$'\n- demo#acceptance-a: demo checks\n- demo#acceptance-b: agent fallback' ]] \
+  || fail "pass did not label each row's decision source: $out"
 [[ "$(writes)" == "$n" ]] || fail "merge-ask wrote"
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
 snap="$t/snap"; mkdir -p "$snap/pr"; echo '{"repo": "o/r", "counts": {}, "capped": []}' > "$snap/meta.json"; echo x > "$snap/fetched_at"
@@ -230,6 +237,23 @@ set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/.agents/skills/
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \
   ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r, output x |' setpr
 run 0 merge-ask 7 "${ST[@]}"; grep -q "^- acceptance-c: outside" <<<"$out" || fail "triaged fail: $out"
+# insufficient evidence (quality spec #qc-results, #acceptance-qc-insufficient) is never triaged: merge-ask fails naming
+# it, from its row or from the latest qc report at the judged head, until a rerun gives it pass or fail
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | insufficient evidence | judged '"$JS"$' | r |' \
+  bad "criterion row demo#acceptance-b: insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail"
+qcrep() { # STAMP VERDICT_OF_B: a qc report at J as octo-feather-qc writes it (spec slug, one result per criterion)
+  mkdir -p "$t/qc"; python3 - "$t/qc/$J-$1-abc123.json" "$J" "$2" <<'EOF'
+import json, sys; p, head, vb = sys.argv[1:]
+short = {"missing": ["demo did not run to its end (exit 77, a step it needs could not run here): needs GitHub"]}
+res = lambda i, v: {"id": i, "verdict": v, "evidence": "incomplete" if v == "insufficient evidence" else "complete",
+                    "decision": "demo checks", "record": "r", "head": head} | (short if v == "insufficient evidence" else {})
+json.dump({"head": head, "spec": "demo", "results": [res("acceptance-a", "pass"), res("acceptance-b", vb)]}, open(p, "w"))
+EOF
+}
+qcrep 20261029T100000Z "insufficient evidence"
+bad "criterion demo#acceptance-b: insufficient evidence at the judged head ${J:0:12} (demo did not run to its end (exit 77, a step it needs could not run here): needs GitHub; qc report $J-20261029T100000Z-abc123.json): never triaged"
+qcrep 20261029T110000Z pass; setpr; run 0 merge-ask 7 "${ST[@]}"   # the rerun at that head gave it pass
+rm -r "$t/qc"
 
 # the parent line (spec #gates-pr-line): the tracker skill's pr-line for the key the PR branch names
 PARENTL="" bad "parent line: missing; add the line \`Closes #6\` (the tracker skill's pr-line 6)"
@@ -428,4 +452,4 @@ printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' >
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section, offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"

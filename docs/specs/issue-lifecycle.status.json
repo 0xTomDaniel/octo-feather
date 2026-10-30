@@ -52,7 +52,10 @@
     },
     "acceptance-qc-interim": {
       "status": "built",
-      "pr": 91
+      "pr": 420,
+      "record": "20261030T042422Z-ccff2e1d",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": []
     },
     "acceptance-parallel": {
       "status": "planned",

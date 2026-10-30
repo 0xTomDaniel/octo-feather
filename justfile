@@ -309,8 +309,9 @@ check-behavior-smoke:
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
-# each pinned tool's first hit on CALLER_PATH (default the caller's PATH, which panes and shells resolve) is the
-# pinned one, or that launcher is named with the fix;
+# each pinned tool's first hit on the PATH the kit runs it from (this recipe's own PATH, the justfile's caller_path
+# rule, and the PATH pi-role gives a pane started from CALLER_PATH, default the caller's) is the pinned one, or that
+# launcher is named with the fix; one only CALLER_PATH itself finds first is a NOTE line, never a failure;
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
 # (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
 # service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
@@ -357,9 +358,10 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     sys.exit(bad)' "$root" || bad=1
     # The box facts (#461): the kernel and user namespaces of spec remote#host-vm (uname and unshare -rm are the
     # probes); the session state folder octo-feather-state
-    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards (the kit dir, or
-    # OCTO_FEATHER_KIT_INSTALL) a clone with an origin on main, detached or not.
-    python3 -c 'import os, re, subprocess, sys
+    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards, the dir its
+    # kit_install() names (asked of it: OCTO_FEATHER_KIT_INSTALL, else the kit dir), a clone or a worktree of one with
+    # an origin, on main, detached or not (the box's install is a detached worktree beside the main checkout, #422).
+    python3 -c 'import importlib.machinery as im, importlib.util as iu, os, re, subprocess, sys
     root = sys.argv[1]
     def run(*a):
         try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
@@ -391,15 +393,14 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
     elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
     else: print(f"state  ok  {st} (octo-feather-state)")
-    env = os.environ.get("OCTO_FEATHER_KIT_INSTALL")
-    kit, src = (env, "OCTO_FEATHER_KIT_INSTALL") if env else (root, "the kit dir")
+    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (handoff_log), as when it runs
+    s = iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("octo_feather_lane", os.path.join(root, "scripts", "octo-feather-lane"))); lane = iu.module_from_spec(s); s.loader.exec_module(lane)
+    kit, src = str(lane.kit_install()), "OCTO_FEATHER_KIT_INSTALL" if os.environ.get("OCTO_FEATHER_KIT_INSTALL") else "the kit dir"
     def git(*a): return run("git", "-C", kit, *a)
     url = run("git", "-C", root, "config", "--get", "remote.origin.url")[1] or "<kit url>"
     why = f"({src}; octo-feather-lane post-merge step 3 fast-forwards it)"
     if not os.path.exists(os.path.join(kit, ".git")):
         print(f"kit    NOT A CLONE {kit} {why}; git clone {url} {kit}, or set OCTO_FEATHER_KIT_INSTALL to the install clone"); bad = 1
-    elif not os.path.isdir(os.path.join(kit, ".git")):
-        print(f"kit    A WORKTREE {kit}, not the install clone {why}; set OCTO_FEATHER_KIT_INSTALL to the install clone (git -C {kit} worktree list: its first line)"); bad = 1
     elif not git("config", "--get", "remote.origin.url")[1]:
         print(f"kit    NO ORIGIN {kit} {why}; git -C {kit} remote add origin {url}"); bad = 1
     else:
@@ -408,7 +409,8 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
         if on_main: print(f"kit    ok  {kit} on main ({src})")
         else:
             at = f"branch {branch}" if branch else "a detached HEAD off main"
-            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} switch main"); bad = 1
+            back = "switch main" if os.path.isdir(os.path.join(kit, ".git")) else "switch --detach origin/main"  # a worktree: main is checked out in the main checkout
+            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} {back}"); bad = 1
     sys.exit(bad)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
@@ -487,28 +489,43 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # ffmpeg (#422 item 9): only agent-browser's video recording needs it, so it never fails the check.
     if p="$(command -v ffmpeg)"; then printf 'ffmpeg ok  %s (optional: agent-browser video recording)\n' "$p"
     else echo "ffmpeg OPTIONAL not installed; only agent-browser video recording needs it, the check passes; to record video: sudo apt install ffmpeg"; fi
-    # The caller's PATH (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise, node, pnpm, uv):
-    # for each pinned tool, its first hit there is the pinned one (ok, its path), else that launcher is named with the
-    # pinned path and the fix. Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
+    # The PATHs the kit runs tools from (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise,
+    # node, pnpm, uv): this recipe's own PATH (the justfile's caller_path rule) and the PATH pi-role gives a pane
+    # started from the caller's PATH (its with_mise rule, asked of pi-role itself). For each pinned tool, its first hit
+    # on both is the pinned one (ok, its path), else that launcher is named with the pinned path and the fix. One only
+    # the caller's own PATH finds first (a shell started before mise's shims went first) is a NOTE: the kit is
+    # unaffected, the exit unchanged (the director's pane, #422). Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
     # first hit reporting the pin (none on PATH at the pin: the version lines above name the install); every executable
     # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one).
-    python3 -c 'import json, os, re, subprocess, sys
-    root, top, path = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
-    dirs = [d for d in path.split(":") if os.path.isabs(d)]
+    python3 -c 'import functools, importlib.machinery as im, importlib.util as iu, json, os, re, subprocess, sys
+    root, top, caller = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
+    recipe = os.environ["PATH"]
+    s = iu.spec_from_loader("pi_role", im.SourceFileLoader("pi_role", root + "/scripts/pi-role")); pr = iu.module_from_spec(s); s.loader.exec_module(pr)
+    os.chdir(top); os.environ["PATH"] = caller
+    pane = pr.mise_path() or caller  # what pi-role puts on a pane started from the caller here
+    os.environ["PATH"] = recipe
     def run(*a):
         try: return subprocess.run(a, capture_output=True, text=True, timeout=20, cwd=top, stdin=subprocess.DEVNULL).stdout
         except (OSError, subprocess.SubprocessError): return ""
-    def hits(name):
-        fs = [os.path.join(d, name) for d in dirs]
+    def hits(name, path=recipe):
+        fs = [os.path.join(d, name) for d in path.split(":") if os.path.isabs(d)]
         return list(dict.fromkeys(f for f in fs if os.path.isfile(f) and os.access(f, os.X_OK)))
+    @functools.cache
     def version(f):
         m = re.search(r"[0-9]+\.[0-9]+\.[0-9]+", run(f, "--version"))
         return m.group(0) if m else None
     bad = 0
-    def line(name, first, ok, pinned, why):
+    def line(name, judge, why):
+        # judge(path): (first hit, ok, pinned) on that PATH, or None when it decides nothing there
         global bad
-        if ok: print(f"path   {name} ok  {first} ({why})"); return
-        print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1
+        kit = [v for v in (judge(recipe), judge(pane)) if v]
+        if not kit: return
+        first, ok, pinned = next((v for v in kit if not v[1]), kit[0])
+        if not ok:
+            print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1; return
+        print(f"path   {name} ok  {first} ({why})")
+        c = judge(caller)
+        if c and not c[1]: print(f"path   {name} NOTE {c[0]} comes first on your shell PATH, before the pinned {c[2]} ({why}); the kit is unaffected: its recipes (justfile) and panes (pi-role) put mise first and run {first}; to run the pinned one in this shell too, put {os.path.dirname(c[2])} first on PATH")
     def js(*a):
         try: return json.loads(run(*a) or "{}")
         except ValueError: return {}
@@ -524,16 +541,23 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
                 if n not in pin and os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
     kit = js(mise, "-C", root, "ls", "--local", "--json")
     pins = [(n, pin[n], f"{n}-version") for n in pin] + [("just", (kit.get("just") or [{}])[0].get("version"), "kit mise.lock")]
-    for name, want, why in pins:
-        if name in bins or not (hs := hits(name)): continue
-        pinned = next((h for h in hs if version(h) == want), None)
-        if pinned: line(name, hs[0], hs[0] == pinned, pinned, why)
-    for name, f in sorted(bins.items()):
-        if not (hs := hits(name)): continue
+    def by_version(name, want):
+        def judge(path):
+            hs = hits(name, path)
+            pinned = next((h for h in hs if version(h) == want), None)
+            return (hs[0], hs[0] == pinned, pinned) if pinned else None
+        return judge
+    def by_bin(name, f):
         shim = os.path.join(shims, name) if shims else ""
         pinned = shim if shim and os.path.isfile(shim) else f
-        ok = os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned))
-        line(name, hs[0], ok, pinned, f"{top}/mise.lock")
+        def judge(path):
+            if not (hs := hits(name, path)): return None
+            return hs[0], os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned)), pinned
+        return judge
+    for name, want, why in pins:
+        if name not in bins: line(name, by_version(name, want), why)
+    for name, f in sorted(bins.items()):
+        line(name, by_bin(name, f), f"{top}/mise.lock")
     sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" || bad=1
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
@@ -700,7 +724,7 @@ start cwd=invocation_directory():
 supervise issue cwd=invocation_directory():
     octo-feather-start --issue "$1" --cwd "$2"
 
-# Product QC: a fresh cross-family judge runs each claimed criterion; passed ones become built (docs/adr/0022). Never inside `just check`.
+# Product QC (docs/adr/0022, octo-feather-qc): each claimed criterion its qc.toml declares a demo for is captured and decided by the demo's checks; the rest a fresh cross-family judge; passed ones become built. Never inside `just check`.
 # Arguments reach bash as "$@" and exported variables, never as interpolated source (#30, #61).
 [no-cd]
 qc $status $pr +$ids:

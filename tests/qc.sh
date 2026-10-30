@@ -106,7 +106,9 @@ ok='```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "
 case "$FAKE_QC" in
   dup) printf '```json\n{"head": "%s", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "a", "output": "ok"}, {"id": "acceptance-a", "verdict": "fail", "command": "a", "output": "no"}, {"id": "acceptance-b", "verdict": "pass", "command": "b", "output": "ok"}]}\n```\n' "$h" ;;
   head) printf "${ok//$h/0000000000000000000000000000000000000000}" ;;
-  mixed) printf 'done\n```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}, {"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n' ;;
+  mixed)   # one judge per criterion: answer the one the brief names
+    if grep -q -- '- acceptance-b:' <<< "$*"; then printf 'done\n```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-b", "verdict": "fail", "command": "app b --json", "output": "error", "why": "no b"}]}\n```\n'
+    else printf 'done\n```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "{\\"ok\\": true}", "why": "shown"}]}\n```\n'; fi ;;
   garbage) echo "I think it works." ;;
   argv) python3 -c 'import json, sys; print("ARGV", json.dumps(sys.argv[1:]))' "$@"; printf "$ok" ;;
   hang) exec sleep 3040@TOK@ ;;
@@ -240,6 +242,7 @@ run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" bounded "$Q" "${@:2}
   hung "$rc" "FAKE_QC=$1 '${*:2}'" "$out"
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
+jr() { report '["fallback"]["acceptance-a"]'"$1"; }   # acceptance-a's agent fallback run in that report
 OCTO_FEATHER_QC_MODEL=anthropic/claude-opus-5-5 run 64 mixed $st 5 acceptance-a acceptance-b   # judge of the implementer's family
 echo x > dirty; run 65 mixed $st 5 acceptance-a; rm dirty                                      # dirty worktree
 before="$(git rev-parse HEAD)"
@@ -268,7 +271,7 @@ run 1 mixed $st 5 acceptance-a acceptance-b --no-sandbox
 grep -q UNSANDBOXED <<< "$out" || fail "--no-sandbox not printed: $out"
 [[ "$(git rev-parse HEAD)" == "$before" && -z "$(git status --porcelain)" ]] || fail "--no-sandbox changed the status file"
 [[ "$(report '["sandbox"]')" == False ]] || fail "--no-sandbox report must record sandbox false"
-! report '["stdout"]' | grep -q "LINEAR KEY IN JUDGE ENV" || fail "--no-sandbox judge got LINEAR_API_KEY"
+! jr '["stdout"]' | grep -q "LINEAR KEY IN JUDGE ENV" || fail "--no-sandbox judge got LINEAR_API_KEY"
 # A run killed mid-judge (as a timeout kills it: SIGTERM to its process group) leaves no scratch behind.
 FAKE_QC=hang timeout -k 5 "$lim" "$Q" $st 5 acceptance-a --no-sandbox > /dev/null 2>&1 & hp=$!; echo "$hp" > "$t/pids/run"
 for _ in $(seq 100); do compgen -G "$TMPDIR/qc-ghmiss-*" > /dev/null && break; sleep 0.1; done
@@ -279,10 +282,12 @@ sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls 
 ! pgrep -fx "sleep 3040$tok" > /dev/null || fail "killed run's judge survived"
 
 run 1 mixed $st 5 acceptance-a acceptance-b                                                     # a passes, b fails
-python3 - "$st" <<'EOF'
-import json, sys
+python3 - "$st" "$before" <<'EOF'
+import json, re, sys
 c = json.load(open(sys.argv[1]))["criteria"]
-assert c["acceptance-a"] == {"status": "built", "pr": 5}, c
+a = c["acceptance-a"]   # built by the agent fallback: its record, captured at the judged head, no declared tests
+assert re.fullmatch(r"\d{8}T\d{6}Z-[0-9a-f]{8}", a.pop("record", "")), c
+assert a == {"status": "built", "pr": 5, "commit": sys.argv[2], "tests": []}, c
 assert c["acceptance-b"] == {"status": "planned", "pr": None}, c
 EOF
 [[ "$(git diff --name-only "$before" HEAD)" == "$st" && "$(git rev-list --count "$before"..HEAD)" == 1 ]] \
@@ -290,7 +295,7 @@ EOF
 
 # The judge launches from its own role file (agents/qc-judge.md), its model read from there: never code-reviewer.md.
 run 0 argv $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 python3 - "$kit/agents/qc-judge.md" "$judge" <<'EOF' || fail "judge not launched from agents/qc-judge.md: ${judge:0:600}"
 import json, os, re, sys
 fm, body = re.match(r"---\n(.*?)\n---\n?(.*)", open(sys.argv[1]).read(), re.S).groups()
@@ -305,35 +310,35 @@ EOF
 # A failed proof check aborts before the judge: here raw herdr still reaches a live session.
 FAKE_HERDR_LEAK=1 run 66 escape $st 5 acceptance-a
 grep -q "FAIL live Herdr unreachable" <<< "$out" || fail "leaking Herdr not caught by the proof: $out"
-[[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started after a failed proof"
+[[ "$(jr '.get("stdout", "none")')" == none ]] || fail "judge started after a failed proof"
 
 # remote#acceptance-linear-key-qc: a Linear key re-entering the judge's env (here a BASH_ENV that exports it
 # again after the scrub) fails the proof, so the judge never starts; the plain run below proves it absent.
 printf 'export LINEAR_API_KEY=SECRET-linear-leak\n' > "$t/bin/leak.env"
 BASH_ENV="$t/bin/leak.env" run 66 escape $st 5 acceptance-a
 grep -q "FAIL no tracker credential: LINEAR_API_KEY set 1 times" <<< "$out" || fail "leaking Linear key not caught by the proof: $out"
-[[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started with a Linear key in its env"
+[[ "$(jr '.get("stdout", "none")')" == none ]] || fail "judge started with a Linear key in its env"
 
 # A mask over another repo that cannot be set up (here a path to bind back on it is missing) aborts before the judge.
 OCTO_FEATHER_QC_RO_BINDS="$HOME/src/sib/missing" run 66 escape $st 5 acceptance-a
 grep -q "qc sandbox: FAIL bind back $HOME/src/sib/missing on the mask over $HOME/src/sib" <<< "$out" || fail "a failed repo mask not named: $out"
-[[ "$(report '.get("stdout", "none")')" == none ]] || fail "judge started after a failed repo mask"
+[[ "$(jr '.get("stdout", "none")')" == none ]] || fail "judge started after a failed repo mask"
 
 # Every escape fails; leftovers killed, agents counted, credential copies gone, live records untouched.
 run 0 escape $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING|LINEAR KEY' <<< "$judge" && fail "sandbox escape: $judge"
 grep -q "qc sandbox: ok   no tracker credential: LINEAR_API_KEY set 0 times" <<< "$out" || fail "no Linear key proof: $out"
 grep -q "qc sandbox: ok   parent route unset: 0 of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE," <<< "$out" || fail "no route proof naming the spend space: $out"
 grep -q "qc sandbox: ok   other repos hidden: 1 git repos under $HOME .*: src/sib; visible: kit under test $kit, worktree $PWD$" <<< "$out" \
   || fail "no other-repos proof naming the mask and what stays visible: $out"
-report '["sandbox"]["attempts"]' | grep -q "'kind': 'repo', 'attempt': True, 'refused': True, 'what': 'open $HOME/src/sib'" \
-  || fail "the listing of another repo not recorded and refused: $(report '["sandbox"]')"
+jr '["sandbox"]["attempts"]' | grep -q "'kind': 'repo', 'attempt': True, 'refused': True, 'what': 'open $HOME/src/sib'" \
+  || fail "the listing of another repo not recorded and refused: $(jr '["sandbox"]')"
 grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" || fail "no agent count: $out"
-[[ "$(report '["sandbox"]["left_after_kill"]')" == 0 && "$(report '["worktree_writes"]')" == "[]" ]] \
-  || fail "cleanup record: $(report '["sandbox"]')"
+[[ "$(jr '["sandbox"]["left_after_kill"]')" == 0 && "$(jr '["worktree_writes"]')" == "[]" ]] \
+  || fail "cleanup record: $(jr '["sandbox"]')"
 for p in "sleep 3012" "sleep 302921"; do
-  report '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(report '["sandbox"]')"
+  jr '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(jr '["sandbox"]')"
 done
 ! pgrep -fx "sleep (301[12]|302921)$tok" >/dev/null || fail "sandbox processes survived the run"
 [[ ! -e "$HOME/qc-saved" ]] || fail "judge wrote into HOME"
@@ -343,14 +348,14 @@ done
 copycase() { run 0 "$1" $st 5 acceptance-a; local f; for f in "${@:2}"; do [[ ! -e "$f" ]] || fail "$1: credential copy $f survived"; done
   [[ -z "$(git status --porcelain --ignored)" ]] || fail "$1: worktree not pristine: $(git status --porcelain --ignored)"
   ! grep -rqa 'SECRET-pi' . "$HOME" --exclude-dir=.pi || fail "$1: a Pi credential survived: $(grep -rla 'SECRET-pi' . "$HOME" --exclude-dir=.pi)"
-  echo "qc test: $1: ${*:2} discarded with the run ($(report '["discarded_writes"]') writes), exit 0" >&2; }
+  echo "qc test: $1: ${*:2} discarded with the run ($(jr '["discarded_writes"]') writes), exit 0" >&2; }
 copycase copycreds scratch/a .git/m
 copycase bigcopy scratch/big
 pa="$HOME/.pi/agent/auth.json"; pm="$HOME/.pi/agent/models.json"; cp -p "$pa" "$t/auth0"; cp -p "$pm" "$t/models0"
 piok() { [[ "$(ls -A "$HOME/.pi/agent" | tr '\n' ' ')" == "auth.json models.json " && "$(stat -c %a "$pa")" == 600 ]] \
   || fail "$1: Pi dir holds a stray file or auth.json mode changed: $(ls -lA "$HOME/.pi/agent")"
   cmp -s "$pa" "$t/auth0" && cmp -s "$pm" "$t/models0" || fail "$1: box auth.json or models.json changed (never written back)"
-  ! grep -q "auth_writeback" <<< "$out$(report '["sandbox"]')" || fail "$1: auth_writeback still reported"; }
+  ! grep -q "auth_writeback" <<< "$out$(jr '["sandbox"]')" || fail "$1: auth_writeback still reported"; }
 # The judge rewrites both Pi files: its per-run copies, discarded; the box files byte-identical; no OAuth warning.
 copycase rewrite; piok rewrite
 ! grep -q "OAuth" <<< "$out" || fail "rewrite: OAuth warning without OAuth credentials: $out"
@@ -373,11 +378,11 @@ cp -p "$t/auth-plain" "$pa"
 # overlay (userxattr: whiteouts and opaque dirs on the tmpfs upper), and recreating it works; all discarded.
 echo .venv/ >> .git/info/exclude; mkdir -p .venv/lib/x.dist-info; echo real > .venv/lib/x.dist-info/RECORD
 run 0 venv $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -q "VENV rm exit 0" <<< "$judge" && grep -q "VENV recreated" <<< "$judge" || fail "venv: removing an ignored lower dir failed in the sandbox: $judge"
-[[ "$(report '["worktree_writes"]')" == "[]" && "$(report '["discarded_writes"]')" -gt 0 ]] || fail "venv: want ignored writes discarded, none listed: $(report '["worktree_writes"]')"
+[[ "$(jr '["worktree_writes"]')" == "[]" && "$(jr '["discarded_writes"]')" -gt 0 ]] || fail "venv: want ignored writes discarded, none listed: $(jr '["worktree_writes"]')"
 [[ "$(cat .venv/lib/x.dist-info/RECORD)" == real && "$(find .venv | wc -l)" == 4 && -z "$(git status --porcelain)" ]] || fail "venv: real worktree changed"
-echo "qc test: venv: rm -rf of an ignored lower dir exits 0, recreated, $(report '["discarded_writes"]') writes discarded" >&2
+echo "qc test: venv: rm -rf of an ignored lower dir exits 0, recreated, $(jr '["discarded_writes"]') writes discarded" >&2
 rm -rf .venv; sed -i '/^\.venv\/$/d' .git/info/exclude
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
@@ -394,13 +399,13 @@ if [[ "$mode" == real ]]; then   # a real "live" Herdr session under the throwaw
   "$real" --session qclive workspace create --label QCLIVE --cwd "$t" --no-focus > /dev/null || fail "real herdr: live test session did not start"
 fi
 PATH="$pp" run 0 pane $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "sandbox pane escape ($mode herdr): $judge"
 grep -q "PANE done" <<< "$judge" || fail "pane never ran ($mode herdr): $judge"
 [[ "$(grep 'judge pidns' <<< "$judge" | cut -d' ' -f3)" == "$(grep 'pane pidns' <<< "$judge" | cut -d' ' -f3)" \
   && "$(grep 'pane pidns' <<< "$judge" | cut -d' ' -f3)" != "$(readlink /proc/self/ns/pid)" ]] \
   || fail "pane not in the judge's PID namespace ($mode herdr): $judge"
-[[ "$(report '["sandbox"]["herdr_panes"]')" == 1 ]] || fail "pane not counted ($mode herdr): $(report '["sandbox"]')"
+[[ "$(jr '["sandbox"]["herdr_panes"]')" == 1 ]] || fail "pane not counted ($mode herdr): $(jr '["sandbox"]')"
 sleep 0.3; ! pgrep -fx "sleep 303031$tok" > /dev/null || fail "judge's pane survived the run ($mode herdr)"
 if [[ "$mode" == real ]]; then
   "$real" --session qclive workspace list > /dev/null 2>&1 || fail "the run hurt the live Herdr session"
@@ -412,12 +417,12 @@ fi
 # first pi beating ~/.local/bin's; a tool not installed fails at its shim with no install; a caller whose HOME holds no
 # mise installs (its dirs not pinned) fails the proof naming `mise install --locked`, the judge never started.
 run 0 misepath $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -q "MISEPATH exit 0" <<< "$judge" && grep -q "MISEPATH stub first" <<< "$judge" || fail "mise's just shim in the sandbox: $judge"
 grep -q "qc sandbox: ok   mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR$" <<< "$out" \
   || fail "no mise proof: $out"
 run 0 misemissing $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "missing mise tool: $judge"
 grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ran through its shim: $judge"
 # XDG_DATA_HOME too: mise falls back to XDG_DATA_HOME/mise, so a caller exporting it kept its installs (env-coupled, as #422 item 10).
@@ -431,7 +436,7 @@ grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ra
 [[ -d "$vc0/git" && -d "$vc0/bin" ]] || fail "no warm check-vendored cache at $vc0: run just vendored-fetch"
 vc="$HOME/.cache/octo-feather/skillfile"; mkdir -p "${vc%/*}"; cp -a "$vc0" "$vc"; vsum() { find "$vc" -printf '%P %s %m\n' | sort | md5sum; }; v0="$(vsum)"
 run 0 vendored $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "vendored cache: $judge"
 grep -q "VENDORED green" <<< "$judge" || fail "check-vendored not green in the sandbox: $judge"
 grep -q "qc sandbox: ok   vendored-skill cache $vc bound read-only" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" \
@@ -444,7 +449,7 @@ rm -rf "$HOME/.cache"
 command -v mise > /dev/null || fail "no mise on PATH: the new-repo case proves its mise trust in the sandbox"
 ms="$HOME/.local/state/mise"; mkdir -p "$ms/trusted-configs"; ln -s "$HOME/src/sib" "$ms/trusted-configs/src-sib-0123456789abcdef"
 MISE_STATE_DIR="$ms" run 0 newrepo $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -q "NEWREPO exit 0" <<< "$judge" && grep -q "mise.toml trusted (that file only)" <<< "$judge" || fail "new-repo in the sandbox: $judge"
 grep -q "qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entries" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" \
   || fail "no per-run mise state proof: $out"
@@ -452,7 +457,7 @@ grep -q "qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entri
 rm -rf "$HOME/.local/state/mise"
 # A qc sandbox nested in the judge's (outer /proc submounts covered by its own /proc) passes its proof.
 run 0 nested $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "nested qc: $judge"
 grep -q "NESTED exit 3" <<< "$judge" || fail "nested qc: want the inner judge to run (exit 3, unusable report): $judge"
 

@@ -95,36 +95,79 @@
       "pr": 181
     },
     "acceptance-qc-capture": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041857Z-a1efc236",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-capture.sh"
+      ]
     },
     "acceptance-qc-capture-browser": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041904Z-bca991b3",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-browser.sh"
+      ]
     },
     "acceptance-qc-same-verdict": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041919Z-375241da",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-capture.sh"
+      ]
     },
     "acceptance-qc-advisory": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041926Z-d341cbd7",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-advisory.sh"
+      ]
     },
     "acceptance-qc-insufficient": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041931Z-2034dc1b",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-insufficient.sh",
+        "tests/lane-merge-ask.sh"
+      ]
     },
     "acceptance-qc-fallback": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041940Z-172a1f47",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-fallback.sh",
+        "tests/lane-merge-ask.sh"
+      ]
     },
     "acceptance-built-links": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041949Z-00421f09",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/qc-capture.sh",
+        "tests/spec-status.sh"
+      ]
     },
     "acceptance-evidence-stale": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 420,
+      "record": "20261030T041958Z-29c3a469",
+      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
+      "tests": [
+        "tests/spec-status.sh"
+      ]
     }
   }
 }

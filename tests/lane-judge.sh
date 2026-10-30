@@ -147,7 +147,7 @@ printf 'Checks: none\nVerdict: clear\n' > "$t/report"
 run 0 verdict 7 "${J:0:7}" "$t/report"; url="$out"
 n="$(writes)"
 run 1 judge 7 vibes --state "$t/state"
-grep -q "no judgment question 'vibes': name one of call-evidence, exact-or-proxy, test-quality, ticket-slice (evals/judgment-<question>/)" <<<"$err" || fail "unknown question: $err"
+grep -q "no judgment question 'vibes': name one of call-evidence, criterion-evidence, exact-or-proxy, test-quality, ticket-slice (evals/judgment-<question>/)" <<<"$err" || fail "unknown question: $err"
 run 1 judge 7 test-quality --state "$t/nope"; grep -q "cannot read state $t/nope" <<<"$err" || fail "missing state: $err"
 : > "$t/empty"; run 1 judge 7 test-quality --state "$t/empty"; grep -q "state $t/empty is empty" <<<"$err" || fail "empty state: $err"
 run 1 judge 7 test-quality; grep -q "usage: octo-feather-lane judge PR QUESTION --state FILE" <<<"$err" || fail "usage: $err"
@@ -208,7 +208,7 @@ line="$(grep -xE -- "- test-quality: tautological, confidence 0\.870 \(model jud
 python3 - "$with" "$without" "$line" <<'EOF' || fail "judgment not beside the review, or more changed: $with"
 import sys; w, wo, line = sys.argv[1:]; ls = w.split("\n"); r = ls.index(line) - 1
 assert ls[r] == "Model judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):", ls[r]
-assert ls[r - 1] == "" and ls[r - 2].startswith("Failed:") and ls[r + 2] == "" and ls[r + 3].startswith("Review check classes"), ls
+assert ls[r - 1] == "" and ls[r - 2].endswith(": agent fallback") and ls[r + 2] == "" and ls[r + 3].startswith("Review check classes"), ls
 assert "\n".join(ls[:r - 1] + ls[r + 2:]) == wo, (w, wo)
 EOF
 

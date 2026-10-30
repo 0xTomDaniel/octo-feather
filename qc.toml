@@ -25,3 +25,58 @@ scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evi
 # The role-launch drive's expected web roles and the servers of the kit's web list (roles spec #acceptance-web-roles).
 web_roles = "director implementer corrector code-reviewer"
 web_servers = "parallel exa"
+# The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail (the pass one also the qc-fallback
+# drive's declared demo).
+qc_demo_pass = "echo demo checks pass"
+qc_demo_fail = "echo demo checks fail >&2; exit 1"
+# The qc-insufficient drive's scratch demo: it needs GitHub, which the qc sandbox's offline gh refuses, and says so (exit 77).
+qc_demo_insufficient = 'gh api user >/dev/null || { echo "needs GitHub: gh api user, refused in the qc sandbox" >&2; exit 77; }; echo demo checks pass'
+# The qc-browser drive's scratch browser demo: the [browser] pin's headless shell screenshots the scratch target's page.
+qc_demo_browser = 'shell=$(ls -d "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell | head -1) && "$shell" --no-sandbox --user-data-dir="$TMPDIR/profile" --window-size=640,400 --screenshot="$QC_SCREENSHOTS/page.png" "file://$QC_REPO/page.html"'
+
+# The verify skill's qc-browser drive runs a headless browser: Playwright's headless Chromium shell at this release.
+[browser]
+playwright = "1.64.1"
+
+# The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
+# --unreachable-exit 77: a drive with an unreachable step is a demo that did not run to its end (verify-octo-feather SKILL.md).
+[demo."quality#acceptance-qc-capture"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+tests = ["tests/qc-capture.sh"]
+
+[demo."quality#acceptance-qc-insufficient"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+tests = ["tests/qc-insufficient.sh", "tests/lane-merge-ask.sh"]
+
+[demo."quality#acceptance-qc-same-verdict"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
+tests = ["tests/qc-capture.sh"]
+
+[demo."quality#acceptance-qc-capture-browser"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-browser"
+browser = true
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+tests = ["tests/qc-browser.sh"]
+
+[demo."quality#acceptance-qc-advisory"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]
+tests = ["tests/qc-advisory.sh"]
+
+[demo."quality#acceptance-qc-fallback"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
+tests = ["tests/qc-fallback.sh", "tests/lane-merge-ask.sh"]
+
+[demo."quality#acceptance-built-links"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
+tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
+
+[demo."quality#acceptance-evidence-stale"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
+covers = ["scripts/octo-feather-spec-status"]
+tests = ["tests/spec-status.sh"]
