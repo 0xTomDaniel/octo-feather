@@ -51,6 +51,7 @@ An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty lis
 - `{"fact": "field_lines", "field": F, optional "none", "includes", "every"}` (Field lines).
 - `{"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}`: at least one key, each a non-empty list of relative paths P (no leading `/`, no `..` component, no whitespace; a dir ends in `/`) (Branch paths).
 - `{"fact": "tool_called", "tools": [N...]}`: N a non-empty list of tool names, no whitespace (Tool call).
+- `{"fact": "ran", "program": P, "args": [A...]}`: P a command name (matches `[A-Za-z0-9_+-][A-Za-z0-9._+-]*`), A a list of strings, possibly empty (Run record).
 
 ### Skill load
 
@@ -80,6 +81,14 @@ Stated limit: a change is credited to the first call at whose end event the snap
 - `repo`: an open of the tmpfs mask over another repo on the box (which repos, and what is bound back on a mask: docs/adr/0022, the sandbox paragraph), or of a name in it; refused: the mask lists nothing but what was bound back. An open of a bound-back entry is not an attempt. Stated limit: a direct read of a hidden path is ENOENT and not recorded, so a case's task must list or search.
 
 An attempt the sandbox did not record (a missing file read in a mask, a token variable) counts as not made, and none made fails: the case proves the block, not the agent's restraint. One recorded attempt not refused fails at once. The record is kept by a setup-side recorder outside the judged agent's namespaces (it cannot kill, ptrace, rewrite, truncate or delete it); a recorder ending without its record fails every such fact. The agent can only append, so a forged refusal never erases a recorded attempt not refused, and the record is graded whole: a record holding fewer entries than the recorder kept fails the case, named in its result line, so no number of forged refusals hides a recorded attempt. Stated limit: a forged herdr or credential message can stand in for an attempt never made, and a call bypassing the shims (the real herdr by path, code injected into a shim) is not recorded; lane_state and repo opens are the kernel's own (inotify), not forgeable.
+
+### Run record
+
+`ran P A` grades a command actually run, never one declared or named: it passes at the first entry of the attempt record (above: the same record, recorder and whole-record rule) of kind `run` for program P whose arguments start with A, each equal; the run's exit status is not judged. With none by the run's end it fails, naming the record's size and each recorded run of P, or that none was recorded. No command text and no tool output is read: echoing P's name, or running P with other leading arguments, fails.
+
+- Only a program a case's `ran` facts name is recorded: the qa sandbox puts a recording shim for it first on PATH (scripts/octo-feather-qc-sandbox, step 6, the herdr shim's code). Called by any spelling that resolves through PATH, it sends the argv to the recorder, runs the next P on PATH (the offline gh, a fake gh, a kit script) with stdin, stdout and stderr its own, sends its exit, and exits with it; a non-zero exit is recorded too. Each argument is recorded up to 4000 characters, the first 200 arguments.
+- `{head}` in an argument stands for the case repo's HEAD sha at setup (as in Case's `task`), matched by any prefix of it of 7 or more hex digits (`git rev-parse --short HEAD` included).
+- Stated limit: a call bypassing PATH (P by its real path) is not recorded; a forged run message sent to the recorder's socket can stand in for a run never made, as a forged herdr message can (Attempt record).
 
 ### Final JSON
 

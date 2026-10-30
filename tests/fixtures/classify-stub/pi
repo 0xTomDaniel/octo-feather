@@ -1,0 +1,30 @@
+#!/usr/bin/env python3
+"""Stub `pi` at the classifier boundary, first on PATH for a test or a verify drive.
+
+`pi --version` exits 0. An extension command (`pi ... -e EXT -p "/cmd args"`, the kit's one
+classify path) runs for real under node with harness.mjs here: a stub model registry listing one
+classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json). Every answer
+is STUB_ANSWER at confidence STUB_CONFIDENCE (default 0.91), the rest spread over the other
+labels; STUB_ANSWER unset: each call fails with a provider error. STUB_WANT: a state not
+containing it is refused with an error naming it (the caller's proof of what the classifier was
+shown). Anything else exits 2. As pi's print mode, an extension's stdout goes to stderr.
+"""
+
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+here = Path(__file__).resolve().parent
+a = sys.argv[1:]
+if a == ["--version"]:
+    sys.exit(0)
+if "-p" not in a or "-e" not in a or not a[a.index("-p") + 1].startswith("/"):
+    sys.exit(f"stub pi: only an extension command, got {a}")
+model_file = here.parents[2] / "evals" / "judgment-model.json"
+kit_model = os.environ.get("STUB_KIT") or json.loads(model_file.read_text())["model"]
+name, _, args = a[a.index("-p") + 1][1:].partition(" ")
+ext = a[a.index("-e") + 1]
+run = ["node", str(here / "harness.mjs"), ext, name, args, kit_model]
+sys.exit(subprocess.run(run, check=False).returncode)

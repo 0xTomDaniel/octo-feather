@@ -21,6 +21,7 @@ L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-merge-ask test: $*" >&2; exit 1; }
 export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log"
+export OCTO_FEATHER_QC_DIR="$t/qc"   # the qc reports merge-ask reads (octo-feather-qc --help, Report)
 mkdir -p "$HOME" "$t/bin" "$FAKE_GH/pr"
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -236,6 +237,23 @@ set +e; err="$(cd "$R" && OCTO_FEATHER_GHSNAP="$snap" PATH="$kit/.agents/skills/
 FAILED=$'Failed:\n- acceptance-c: outside the lane, the spec behaviour is untouched (reason)' \
   ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r, output x |' setpr
 run 0 merge-ask 7 "${ST[@]}"; grep -q "^- acceptance-c: outside" <<<"$out" || fail "triaged fail: $out"
+# insufficient evidence (quality spec #qc-results, #acceptance-qc-insufficient) is never triaged: merge-ask fails naming
+# it, from its row or from the latest qc report at the judged head, until a rerun gives it pass or fail
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | insufficient evidence | judged '"$JS"$' | r |' \
+  bad "criterion row demo#acceptance-b: insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail"
+qcrep() { # STAMP VERDICT_OF_B: a qc report at J as octo-feather-qc writes it (spec slug, one result per criterion)
+  mkdir -p "$t/qc"; python3 - "$t/qc/$J-$1-abc123.json" "$J" "$2" <<'EOF'
+import json, sys; p, head, vb = sys.argv[1:]
+short = {"missing": ["demo did not run to its end (exit 77, a step it needs could not run here): needs GitHub"]}
+res = lambda i, v: {"id": i, "verdict": v, "evidence": "incomplete" if v == "insufficient evidence" else "complete",
+                    "decision": "demo checks", "record": "r", "head": head} | (short if v == "insufficient evidence" else {})
+json.dump({"head": head, "spec": "demo", "results": [res("acceptance-a", "pass"), res("acceptance-b", vb)]}, open(p, "w"))
+EOF
+}
+qcrep 20261029T100000Z "insufficient evidence"
+bad "criterion demo#acceptance-b: insufficient evidence at the judged head ${J:0:12} (demo did not run to its end (exit 77, a step it needs could not run here): needs GitHub; qc report $J-20261029T100000Z-abc123.json): never triaged"
+qcrep 20261029T110000Z pass; setpr; run 0 merge-ask 7 "${ST[@]}"   # the rerun at that head gave it pass
+rm -r "$t/qc"
 
 # the parent line (spec #gates-pr-line): the tracker skill's pr-line for the key the PR branch names
 PARENTL="" bad "parent line: missing; add the line \`Closes #6\` (the tracker skill's pr-line 6)"
