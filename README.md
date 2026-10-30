@@ -16,7 +16,9 @@ mise install --locked          # node, pnpm, uv, just, shellcheck, scc at mise.l
 uv python install --no-bin     # the gate's Python at .python-version (--no-bin: nothing in ~/.local/bin)
 gh auth login && gh auth setup-git   # GitHub sign-in (interactive); git fetches private pins through gh
 just vendored-fetch            # offline caches the gate reads: vendored skills at their Skillfile pins,
-uv sync --locked               # the gate's Python packages
+uv sync --locked               # the gate's Python packages, then each eval fixture's and the Python template's:
+v="$(mktemp -d)"; for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$v" uv sync --locked --quiet --project "${l%/uv.lock}"; done; rm -rf "$v"
+pnpm fetch --frozen-lockfile --dir templates/typescript   # the TypeScript template's packages (CI fetches the same: .github/workflows/check.yml)
 just install-check             # run each fix it prints, then rerun, until it exits 0
 just install-check-models      # one short call per role model through Pi (the model key is Pi's config)
 GATE_WORKERS=1 just check      # one full gate run, green
