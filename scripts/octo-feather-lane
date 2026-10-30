@@ -281,8 +281,10 @@ step 4 tells no lane twice.
                    --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
                    fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
                    not move. Then in the install, each failure stopping named: `mise install --locked` (only with
-                   a mise.toml there), `just vendored-fetch`, `uv sync --locked`, `pnpm install --frozen-lockfile`,
-                   `just install-check <the current repo's top>`. No service restart; a rerun reruns these
+                   a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
+                   pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
+                   `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
+                   restart; a rerun reruns these
   step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
                    install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
                    gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
@@ -2703,6 +2705,11 @@ PM_REFRESH = (("mise", "install", "--locked"), ("just", "vendored-fetch"), ("uv"
               ("pnpm", "install", "--frozen-lockfile"))
 
 
+def kit_install() -> Path:
+    """The live kit install, the one rule for which dir it is: just install-check asks this too (#422)."""
+    return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+
+
 def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
     p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode not in ok:
@@ -2724,7 +2731,7 @@ def pm_repo(target: str | None, what: str) -> str:
 
 def pm_kit(pm: PostMerge) -> str:
     """Step 3: fast-forward the live kit install to the merge commit, then refresh its tools; any failure stops."""
-    kit = Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+    kit = kit_install()
     if not (kit / ".git").exists():
         raise Refuse(f"kit install {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the install clone, then rerun")
     origin = pm_git(kit, "config", "--get", "remote.origin.url", ok=(0, 1))[1]
@@ -2758,15 +2765,31 @@ def pm_kit(pm: PostMerge) -> str:
     for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
         shown = " ".join(cmd)
         try:
-            p = subprocess.run(list(cmd), cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            p = subprocess.run(list(cmd), cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                               env={**os.environ, "UV_PYTHON_DOWNLOADS": "never"} if cmd[0] == "uv" else None)
             rc, err = p.returncode, (p.stderr.strip() or p.stdout).strip().splitlines()
         except FileNotFoundError:
             rc, err = 127, [f"{cmd[0]} not on PATH"]
+        if rc and cmd[0] == "uv" and (pin := pm_python_missing(kit)):
+            raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
+                         f"the kit's pinned Python {pin} (.python-version) is not installed and post-merge never downloads one: "
+                         f"run `uv python install --no-bin {pin}` in {kit}, then rerun")
         if rc:
             raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
                          f"fix it in {kit}, then rerun")
         done.append(f"{shown} ok")
     return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "mise" else " (no mise.toml: mise install skipped)")
+
+
+def pm_python_missing(kit: Path) -> str | None:
+    """The kit's .python-version pin when uv finds no such Python installed (uv sync ran with UV_PYTHON_DOWNLOADS=never)."""
+    try:
+        pin = (kit / ".python-version").read_text().strip()
+    except OSError:
+        return None
+    p = subprocess.run(["uv", "python", "find", pin], cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={**os.environ, "UV_PYTHON_DOWNLOADS": "never"})
+    return pin if pin and p.returncode else None
 
 
 # --- post-merge step 4: tell running supervisors main moved (issue 398) ---
@@ -2797,7 +2820,7 @@ def pm_rule_files(pm: PostMerge) -> list[str]:
 
 def pm_kit_repo() -> str | None:
     """OWNER/NAME of the kit install's origin (step 3's install: OCTO_FEATHER_KIT_INSTALL or KIT), None when not on GitHub."""
-    p = pm_git_here("-C", os.environ.get("OCTO_FEATHER_KIT_INSTALL") or str(KIT), "config", "--get", "remote.origin.url")
+    p = pm_git_here("-C", str(kit_install()), "config", "--get", "remote.origin.url")
     m = GH_REPO_URL.fullmatch(p.stdout.strip()) if not p.returncode else None
     return m.group(1).lower() if m else None
 
@@ -2978,7 +3001,7 @@ def pm_worktree(branch: str) -> str:
         return f"worktree of {branch} already removed"
     path = entries[hit[0]]["worktree"]
     real = os.path.realpath(path)
-    if real == os.path.realpath(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT):
+    if real == os.path.realpath(kit_install()):
         raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
     if hit[0] == 0:
         raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")

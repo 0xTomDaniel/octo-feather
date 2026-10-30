@@ -14,7 +14,7 @@
 <header data-anchor="header">
 <h1 data-anchor="title">Remote host and review hosting</h1>
 <nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / remote.spec.html</nav>
-<p class="lede" data-anchor="context">The factory runs on one dedicated VM, and the owner reviews specs in a browser through that VM's private HTTPS proxy. Box setup is done once by the box's owner, outside any lane.</p>
+<p class="lede" data-anchor="context">Where the factory runs: ADR 0005. The owner reviews specs in a browser through Spec Chat's review service, kept private by exe.dev's HTTPS proxy where that proxy is used. Box setup is done once by the box's owner, outside any lane.</p>
 </header>
 
 <section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
@@ -26,7 +26,6 @@
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-tracker-tools">As the box's owner, the install check tells me when a target's tracker needs a tool the box lacks.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-browser-tools">As the box's owner, the install check tells me when a target's verify skill needs a headless browser the box lacks, and one install serves every agent and the product judge.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-agent-browser-tools">As the box's owner, the install check tells me when the box lacks agent-browser, the browser CLI the implementer and corrector drive.</p>
-<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-dedicated">As the owner, agents never run on my laptop, so the factory cannot touch my personal files.</p>
 </section>
 
 <section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
@@ -36,7 +35,6 @@
 <p data-acceptance-criterion data-anchor="acceptance-stays-private" data-story="story-private" data-project-rule="Review stays private"><span data-acceptance-scenario>Given the box's owner, When any change to box setup or the review service is applied,</span> <span data-acceptance-observable>Then exe.dev still reports the VM's sharing mode as Private and no share link or added user exists.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-after-logout" data-story="story-survives"><span data-acceptance-scenario>Given an owner chat that registered a spec for review, When every SSH session to the VM ends, then the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-after-reboot" data-story="story-survives"><span data-acceptance-scenario>Given a registered spec, needs an induced failure: the VM restarts, When the VM is back up and the owner opens the review link,</span> <span data-acceptance-observable>Then the spec loads with no one having started the review service by hand.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-vm-only" data-story="story-dedicated"><span data-acceptance-scenario>Given the owner with a lane in progress, When the owner opens the factory's Herdr session on the VM over SSH,</span> <span data-acceptance-observable>Then it shows the director and the lane's supervisor, and the owner's laptop runs no agent of the factory.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-linear-key-panes" data-story="story-tracker-key"><span data-acceptance-scenario>Given the owner of a Linear target who started the factory with a Linear key in the environment, When a lane's supervisor files the lane's tickets,</span> <span data-acceptance-observable>Then Linear shows the tickets under the lane's parent ticket, and no file in the repository or the factory's state holds the key.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-linear-key-qc" data-story="story-tracker-key"><span data-acceptance-scenario>Given a supervisor of a Linear target started with a Linear key in the environment, When it runs <code>just qc</code> on its lane,</span> <span data-acceptance-observable>Then the product judge's run holds no Linear key and reads no Linear ticket.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-install-linear" data-story="story-tracker-tools"><span data-acceptance-scenario>Given the box's owner with a target that selects Linear on a box without the <code>linear</code> CLI, When the owner runs the install check for that target,</span> <span data-acceptance-observable>Then it lists the <code>linear</code> CLI as missing, naming the pinned version and how to install it.</span></p>
@@ -48,22 +46,21 @@
 
 <section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
 <h2>Modular boundaries</h2>
-<p data-modular-boundary data-anchor="boundary-vm"><span data-boundary-responsibility>The VM owns running every agent, Herdr session, toolchain and the review service.</span> <span data-boundary-seam>Caller-facing seam: SSH to <code>&lt;vm&gt;.exe.xyz</code> and exe.dev's admin commands.</span> <span data-boundary-dependency>Dependency direction: external-provider; it depends on exe.dev.</span> <span data-boundary-scope>Observable scope: the VM's services and sharing mode.</span></p>
+<p data-modular-boundary data-anchor="boundary-vm"><span data-boundary-responsibility>The host owns running every agent, Herdr session, toolchain and the review service.</span> <span data-boundary-seam>Caller-facing seam: a shell on the host; on an exe.dev VM, SSH to <code>&lt;vm&gt;.exe.xyz</code> and exe.dev's admin commands.</span> <span data-boundary-dependency>Dependency direction: on an exe.dev VM, external-provider; it then depends on exe.dev.</span> <span data-boundary-scope>Observable scope: the host's services and, on exe.dev, its sharing mode.</span></p>
 <p data-modular-boundary data-anchor="boundary-review"><span data-boundary-responsibility>Spec Chat's review service owns serving specs, review spools and acceptance.</span> <span data-boundary-seam>Caller-facing seam: the lane registration command and the review URL.</span> <span data-boundary-dependency>Dependency direction: external-provider; the kit depends on Spec Chat, which names no kit path.</span> <span data-boundary-scope>Observable scope: the review page and its hand-offs.</span></p>
 <p data-modular-boundary data-anchor="boundary-proxy"><span data-boundary-responsibility>exe.dev's HTTPS proxy owns TLS and the login gate.</span> <span data-boundary-seam>Caller-facing seam: <code>https://&lt;vm&gt;.exe.xyz:&lt;port&gt;/</code> and the VM's sharing mode.</span> <span data-boundary-dependency>Dependency direction: external-provider.</span> <span data-boundary-scope>Observable scope: the login redirect and the served page.</span></p>
 </section>
 
 <section data-anchor="host" id="host">
-<h2>The VM</h2>
+<h2>The host</h2>
 <div class="table-scroll" data-anchor="host-table-wrap">
-<table data-anchor="host-table"><caption>The remote</caption>
+<table data-anchor="host-table"><caption>The host</caption>
 <thead><tr><th>Item</th><th>Contract</th></tr></thead>
 <tbody>
-<tr data-anchor="host-vm"><td>Host</td><td>One exe.dev VM, <code>&lt;vm&gt;.exe.xyz</code>, 4 vCPU and 8 GB, Ubuntu (ADR 0005). Not a shared home server, not the assistant's own host</td></tr>
-<tr data-anchor="host-never-laptop"><td>Never</td><td>The owner's laptop runs no agent, Herdr session or toolchain; a laptop clone is for reading and editing docs only</td></tr>
-<tr data-anchor="host-tools"><td>Toolchain</td><td>git, gh, jq, just, python3, uv, node, pnpm, Herdr and Pi, and the <code>linear</code> CLI for a target that selects Linear: schpet/linear-cli at the release the vendored <code>linear-cli</code> skill is pinned to (v3.1.0), from its release binary or run as <code>npx @schpet/linear-cli</code>, authenticated by <code>LINEAR_API_KEY</code> (below); agent-browser at the release the vendored <code>agent-browser</code> skill is pinned to, with a browser it can start; <code>just install-check</code> lists what is missing, agent-browser and its version included, and run for a Linear target also checks <code>linear</code> and its version; for a target whose verify skill drives a browser, Playwright's headless Chromium shell at the version the target pins, installed once per box in a folder the qc sandbox can read, never under the cache folder it masks, which <code>just install-check</code> run for that target checks</td></tr>
+<tr data-anchor="host-vm"><td>Host</td><td>Where the factory runs, whether a dedicated machine, and what needs exe.dev: ADR 0005. Host requirement: Linux with a kernel of 6.6 or later and unprivileged user namespaces, which the qc sandbox needs</td></tr>
+<tr data-anchor="host-tools"><td>Toolchain</td><td>git, gh, jq, just, python3, uv, node, pnpm, Herdr and Pi, and the <code>linear</code> CLI for a target that selects Linear: schpet/linear-cli at the release the vendored <code>linear-cli</code> skill is pinned to (v3.1.0), from its release binary or run as <code>npx @schpet/linear-cli</code>, authenticated by <code>LINEAR_API_KEY</code> (below); agent-browser at the release the vendored <code>agent-browser</code> skill is pinned to, with a browser it can start; <code>just install-check</code> lists what is missing, agent-browser and its version included, and run for a Linear target also checks <code>linear</code> and its version; for a target whose verify skill drives a browser, Playwright's headless Chromium shell at the version the target pins, installed once per box in a folder the qc sandbox can read, never under the cache folder it masks, which <code>just install-check</code> run for that target checks; agent-browser's own browser also outside that cache folder; the gate's Python at the release the kit pins, owned by uv and installed without links in the home folder's <code>.local/bin</code>, and the box <code>python3</code> at 3.11 or later for the kit's scripts; one pnpm store serving the kit and every copy of a repository a test makes on another filesystem. <code>just install-check</code> checks everything a fresh box needs (this toolchain, the kernel and user namespaces of the host row, the kit install on main, the session state folder, the review service) and prints, for each gap, the exact command that fixes it, naming any launcher earlier on <code>PATH</code> that shadows the pinned tool, or, where it cannot check from inside the box (exe.dev's Private sharing), the one manual step. The README is a short bootstrap that ends in that check and one full <code>just check</code>, and points here for the why</td></tr>
 <tr data-anchor="host-tracker-key"><td>Tracker key</td><td><code>LINEAR_API_KEY</code> comes only from the environment that starts the factory; <code>herdr-spawn</code> passes it into every pane it starts. No kit file, lane record, log, brief, message or pull request holds it, and the <code>just qc</code> judge runs without it</td></tr>
-<tr data-anchor="host-models"><td>Models</td><td>Every model call goes through the deployment's model proxy, keyed on the VM; no provider sign-in on the VM</td></tr>
+<tr data-anchor="host-models"><td>Models</td><td>Every model call goes through the provider configuration Pi has on the host; on an exe.dev VM, the deployment's model proxy keyed on the VM, with no provider sign-in there. A setup check the runbook names, separate from <code>just install-check</code> so routine runs make no model call, makes one short call to each model a role names and reports a rejected or unreachable key plainly, never printing the key</td></tr>
 </tbody>
 </table>
 </div>
@@ -71,7 +68,7 @@
 <section data-anchor="review-hosting" id="review-hosting">
 <h2>Review hosting</h2>
 <div class="table-scroll" data-anchor="review-table-wrap">
-<table data-anchor="review-table"><caption>Spec review hosting on the VM</caption>
+<table data-anchor="review-table"><caption>Spec review hosting on an exe.dev VM, when its HTTPS proxy is used</caption>
 <thead><tr><th>Item</th><th>Contract</th></tr></thead>
 <tbody>
 <tr data-anchor="review-service"><td>Service</td><td>Spec Chat's review server, from a clone on the VM, runs as a systemd user service and restarts after a crash and at boot</td></tr>

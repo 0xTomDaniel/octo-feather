@@ -8,6 +8,8 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
+# One pnpm store for the kit and its test copies (owner ruling #422; why: tests/check-ts.sh).
+npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "contract test: $*" >&2; exit 1; }
 cmd="$kit/scripts/octo-feather-contract"
 

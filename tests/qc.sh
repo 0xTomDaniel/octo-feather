@@ -425,7 +425,8 @@ run 0 misemissing $st 5 acceptance-a
 judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "missing mise tool: $judge"
 grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ran through its shim: $judge"
-(unset MISE_DATA_DIR MISE_CACHE_DIR MISE_CONFIG_DIR; run 66 mixed $st 5 acceptance-a
+# XDG_DATA_HOME too: mise falls back to XDG_DATA_HOME/mise, so a caller exporting it kept its installs (env-coupled, as #422 item 10).
+(unset MISE_DATA_DIR MISE_CACHE_DIR MISE_CONFIG_DIR XDG_DATA_HOME; run 66 mixed $st 5 acceptance-a
   grep -q "qc sandbox: FAIL mise offline, auto-install off; tools of the worktree and the kit installed in $HOME/.local/share/mise (NOT installed: $kit: .*just@.*; the sandbox installs nothing: run outside it, in each: mise install --locked)" <<< "$out" \
     || fail "no mise installs: the proof did not fail naming mise install --locked: $out"
   [[ ! -e "$HOME/.local/share/mise/installs" && ! -e "$HOME/.cache/mise" ]] || fail "the run wrote mise installs or cache: $(find "$HOME/.local/share/mise" "$HOME/.cache/mise" 2>&1 | head)")

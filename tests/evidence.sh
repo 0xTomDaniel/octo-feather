@@ -12,6 +12,8 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
+# One pnpm store for the kit and its test copies (owner ruling #422; why: tests/check-ts.sh).
+npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "evidence test: $*" >&2; exit 1; }
 export XDG_STATE_HOME="$t/state" PATH="$kit/scripts:$PATH"
 ev="$kit/scripts/octo-feather-evidence"

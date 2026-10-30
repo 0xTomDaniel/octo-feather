@@ -10,6 +10,8 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
+# One pnpm store for the kit and its test copies (owner ruling #422; why: tests/check-ts.sh).
+npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "template-languages test: $1" >&2; echo "${out:-}" >&2; exit 1; }
 g() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
 # new-repo trusts each created mise.toml: in this test's trust store, never the box's.

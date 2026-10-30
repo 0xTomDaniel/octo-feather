@@ -250,6 +250,10 @@ check-tests *args:
     set -euo pipefail
     cd "$root"
     if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    # The gate's Python: .python-version's release, owned by uv (owner ruling #422, #261), found as uv sync finds it
+    # (a venv skipped); without it uv sync --offline only says no interpreter. The fix's --no-bin: its message.
+    err="$(uv python find --system 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-tests: the gate's Python $(<.python-version) (.python-version) is not installed; install it once, with network: uv python install --no-bin $(<.python-version) (--no-bin: no python3.X link in ~/.local/bin, which would change the interpreter uv finds for every other repo on the box)" >&2; exit 1; }
     err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
     # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
@@ -305,15 +309,109 @@ check-behavior-smoke:
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
-# a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin.
-install-check target=invocation_directory():
+# each pinned tool's first hit on the PATH the kit runs it from (this recipe's own PATH, the justfile's caller_path
+# rule, and the PATH pi-role gives a pane started from CALLER_PATH, default the caller's) is the pinned one, or that
+# launcher is named with the fix; one only CALLER_PATH itself finds first is a NOTE line, never a failure;
+# a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
+# (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
+# service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
+# Every gap line names its fix (#461).
+install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
+    # Each missing tool names its official install (#461): Herdr's installer, Pi at pi-version through npm (docs/adr/0023),
+    # GitHub CLI's apt repository (not Debian's gh: broken at 2.45 and 2.46), Debian and Ubuntu packages, the kit's mise tools.
+    declare -A fix=([herdr]="curl -fsSL https://herdr.dev/install.sh | sh"
+      [pi]="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$(tr -d '[:space:]' <"$root/pi-version") (pi-version)"
+      [gh]='(Debian, Ubuntu: GitHub CLI'"'"'s apt repository) (type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) && sudo mkdir -p -m 755 /etc/apt/keyrings && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && sudo mkdir -p -m 755 /etc/apt/sources.list.d && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y'
+      [jq]="sudo apt install jq (Debian, Ubuntu)" [git]="sudo apt install git (Debian, Ubuntu)"
+      [python3]="install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH")
     for t in herdr pi gh jq git just python3 node pnpm; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
-      else printf '%-6s MISSING\n' "$t"; bad=1; fi
+      else printf '%-6s MISSING; %s\n' "$t" "${fix[$t]:-mise -C $root install --locked (kit mise.toml), then put the mise shims folder first on PATH}"; bad=1; fi
     done
+    # The gate's Python (owner ruling #422, #261): the release the kit's .python-version pins, owned by uv
+    # (python-build-standalone), found as check-tests finds it, with venv and ensurepip (tests make venvs) and
+    # os.pidfd_open (tests/fixtures/start-nohup); and the box python3, which runs the kit's stdlib scripts outside the
+    # gate, at 3.11 or later (tomllib). The fix's --no-bin: its message.
+    python3 -c 'import os, re, shutil, subprocess, sys
+    root = sys.argv[1]
+    pin = open(os.path.join(root, ".python-version")).read().strip()
+    fix = f"uv python install --no-bin {pin} (--no-bin: no python3.X link in ~/.local/bin, which would change the interpreter uv finds for every other repo on the box)"
+    def run(*a):
+        try: r = subprocess.run(a, capture_output=True, text=True, timeout=60, cwd=root, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError): return 1, ""
+        return r.returncode, r.stdout.strip()
+    bad = 0
+    rc, exe = run("uv", "python", "find", "--system")
+    probe = "import importlib.util as u, os, platform; print(platform.python_version(), *[n for n in (\"venv\", \"ensurepip\") if u.find_spec(n) is None], *([] if hasattr(os, \"pidfd_open\") else [\"os.pidfd_open\"]))"
+    got = run(exe, "-c", probe)[1].split() if not rc and exe else []
+    if not got: print(f"python gate {pin} MISSING (.python-version); {fix}"); bad = 1
+    elif got[0] != pin or got[1:]: lacks = " ".join(got[1:]) or "nothing"; print(f"python gate {pin} UNUSABLE {exe} reports {got[0]}, lacks {lacks} (.python-version: {pin}, venv, ensurepip, os.pidfd_open); {fix}"); bad = 1
+    else: print(f"python gate {pin} ok  {exe} (venv, pidfd_open; .python-version)")
+    box = shutil.which("python3")
+    m = re.search(r"([0-9]+)\.([0-9]+)\.[0-9]+", run(box, "--version")[1]) if box else None
+    how = "install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH"
+    if m and (int(m[1]), int(m[2])) >= (3, 11): print(f"python3 version {m[0]} ok  {box} (3.11 or later, the kit scripts)")
+    else: has, name = (m[0] if m else "no version"), box or "python3"; print(f"python3 WRONG VERSION {name} reports {has}, want 3.11 or later (the kit scripts read TOML with tomllib); {how}"); bad = 1
+    sys.exit(bad)' "$root" || bad=1
+    # The box facts (#461): the kernel and user namespaces of spec remote#host-vm (uname and unshare -rm are the
+    # probes); the session state folder octo-feather-state
+    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards, the dir its
+    # kit_install() names (asked of it: OCTO_FEATHER_KIT_INSTALL, else the kit dir), a clone or a worktree of one with
+    # an origin, on main, detached or not (the box's install is a detached worktree beside the main checkout, #422).
+    python3 -c 'import importlib.machinery as im, importlib.util as iu, os, re, subprocess, sys
+    root = sys.argv[1]
+    def run(*a):
+        try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError) as e: return 127, "", str(e)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    bad = 0
+    rel = run("uname", "-r")[1] or "unknown"
+    m = re.match(r"([0-9]+)\.([0-9]+)", rel)
+    if m and (int(m[1]), int(m[2])) >= (6, 6): print(f"kernel {rel} ok (6.6 or later, the qc sandbox)")
+    else:
+        bp = "echo \"deb http://deb.debian.org/debian bookworm-backports main\" | sudo tee /etc/apt/sources.list.d/backports.list && sudo apt update && sudo apt install -t bookworm-backports linux-image-$(dpkg --print-architecture)"
+        print(f"kernel {rel} TOO OLD, want 6.6 or later (the qc sandbox overlay needs tmpfs user xattrs: scripts/octo-feather-qc-sandbox); boot a 6.6 or later kernel, then reboot (Debian 12: {bp}; Ubuntu 22.04: sudo apt install linux-generic-hwe-22.04)"); bad = 1
+    rc, _, err = run("unshare", "-rm", "true")
+    if not rc: print("userns ok (unshare -rm true, the qc sandbox)")
+    else:
+        def val(k):
+            try: return open("/proc/sys/" + k).read().strip()
+            except OSError: return None
+        knobs = (("kernel/apparmor_restrict_unprivileged_userns", "1", "0"), ("kernel/unprivileged_userns_clone", "0", "1"), ("user/max_user_namespaces", "0", "10000"))
+        sets = [k.replace("/", ".") + "=" + good for k, off, good in knobs if val(k) == off]
+        if rc == 127: how = "install unshare: sudo apt install util-linux"
+        elif sets: how = "allow them: printf \"" + "\\n".join(sets) + "\\n\" | sudo tee /etc/sysctl.d/60-octo-feather-userns.conf && sudo sysctl --system"
+        else: how = "no sysctl here turns them off (kernel.apparmor_restrict_unprivileged_userns, kernel.unprivileged_userns_clone, user.max_user_namespaces): a container or seccomp policy does; run the kit on a VM or a bare-metal box"
+        last = (err.splitlines() or ["exit " + str(rc)])[-1]
+        print(f"userns FAILED unshare -rm true: {last} (the qc sandbox runs its judge in unprivileged user namespaces, #404); {how}"); bad = 1
+    rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
+    lanes = os.path.join(st, "lanes")
+    if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
+    elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
+    elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
+    else: print(f"state  ok  {st} (octo-feather-state)")
+    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (handoff_log), as when it runs
+    s = iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("octo_feather_lane", os.path.join(root, "scripts", "octo-feather-lane"))); lane = iu.module_from_spec(s); s.loader.exec_module(lane)
+    kit, src = str(lane.kit_install()), "OCTO_FEATHER_KIT_INSTALL" if os.environ.get("OCTO_FEATHER_KIT_INSTALL") else "the kit dir"
+    def git(*a): return run("git", "-C", kit, *a)
+    url = run("git", "-C", root, "config", "--get", "remote.origin.url")[1] or "<kit url>"
+    why = f"({src}; octo-feather-lane post-merge step 3 fast-forwards it)"
+    if not os.path.exists(os.path.join(kit, ".git")):
+        print(f"kit    NOT A CLONE {kit} {why}; git clone {url} {kit}, or set OCTO_FEATHER_KIT_INSTALL to the install clone"); bad = 1
+    elif not git("config", "--get", "remote.origin.url")[1]:
+        print(f"kit    NO ORIGIN {kit} {why}; git -C {kit} remote add origin {url}"); bad = 1
+    else:
+        branch = git("symbolic-ref", "-q", "--short", "HEAD")[1]
+        on_main = branch == "main" or (not branch and any(not git("merge-base", "--is-ancestor", "HEAD", r)[0] for r in ("refs/remotes/origin/main", "refs/heads/main")))
+        if on_main: print(f"kit    ok  {kit} on main ({src})")
+        else:
+            at = f"branch {branch}" if branch else "a detached HEAD off main"
+            back = "switch main" if os.path.isdir(os.path.join(kit, ".git")) else "switch --detach origin/main"  # a worktree: main is checked out in the main checkout
+            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} {back}"); bad = 1
+    sys.exit(bad)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
@@ -324,7 +422,7 @@ install-check target=invocation_directory():
     # Native tools (owner ruling #261): mise at mise-version, then each mise.toml tool at its mise.lock version in the
     # target (the kit itself when run there) when it has its own mise.toml; a repo without one (a repo the kit did not
     # create) keeps its own pins: no tool line, its panes get no mise shims (scripts/pi-role). Each repo's justfile
-    # puts its own mise tools on PATH for its recipes, so where the caller's PATH resolves them is not checked here.
+    # puts its own mise tools on PATH for its recipes; where the caller's PATH resolves them: the PATH check below.
     # A mise.toml with only [tools] needs no trust; a "not trusted" answer means it gained [env], [tasks] or hooks.
     python3 -c 'import json, os, shutil, subprocess, sys
     root, top = sys.argv[1], sys.argv[2]
@@ -371,6 +469,96 @@ install-check target=invocation_directory():
       if [[ "$v" == "$pin" ]]; then printf 'agent-browser version %s ok (agent-browser-version)\n' "$v"
       else printf 'agent-browser WRONG VERSION %s reports %s, want %s (agent-browser-version); %s\n' "$p" "${v:-no version}" "$pin" "$how"; bad=1; fi
     fi
+    # The cache folder the qc sandbox masks (a tmpfs over it): a browser under it is unreadable there. One rule for both
+    # browsers (spec remote#host-tools): agent-browser's own, here, and the qc one below.
+    cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+    under_cache() { [[ "$1/" == "$cache/"* ]]; }
+    # agent-browser's own browser (#422 item 7), the Chrome `agent-browser doctor --offline` names. `agent-browser install`
+    # puts Chrome for Testing in ~/.agent-browser/browsers, which it searches before Playwright's cache in ~/.cache.
+    if command -v agent-browser >/dev/null; then
+      chrome="$(agent-browser doctor --offline --quick --json 2>/dev/null | python3 -c 'import json, re, sys
+    try: c = next(c for c in json.load(sys.stdin)["checks"] if c.get("id") == "chrome.installed")
+    except (ValueError, KeyError, TypeError, StopIteration): sys.exit(0)
+    m = re.search(r" at (/.*)$", c.get("message", ""))
+    print(m[1] if c.get("status") == "pass" and m else "")')"
+      how="agent-browser install (Chrome for Testing into $HOME/.agent-browser/browsers, which agent-browser searches first; drop any AGENT_BROWSER_EXECUTABLE_PATH, or executablePath in ~/.agent-browser/config.json, naming another)"
+      if [[ -z "$chrome" ]]; then printf 'agent-browser browser MISSING (agent-browser doctor --offline names no Chrome); %s\n' "$how"; bad=1
+      elif under_cache "$chrome"; then printf 'agent-browser browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; %s\n' "$chrome" "$cache" "$how"; bad=1
+      else printf 'agent-browser browser ok  %s (outside %s)\n' "$chrome" "$cache"; fi
+    fi
+    # ffmpeg (#422 item 9): only agent-browser's video recording needs it, so it never fails the check.
+    if p="$(command -v ffmpeg)"; then printf 'ffmpeg ok  %s (optional: agent-browser video recording)\n' "$p"
+    else echo "ffmpeg OPTIONAL not installed; only agent-browser video recording needs it, the check passes; to record video: sudo apt install ffmpeg"; fi
+    # The PATHs the kit runs tools from (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise,
+    # node, pnpm, uv): this recipe's own PATH (the justfile's caller_path rule) and the PATH pi-role gives a pane
+    # started from the caller's PATH (its with_mise rule, asked of pi-role itself). For each pinned tool, its first hit
+    # on both is the pinned one (ok, its path), else that launcher is named with the pinned path and the fix. One only
+    # the caller's own PATH finds first (a shell started before mise's shims went first) is a NOTE: the kit is
+    # unaffected, the exit unchanged (the director's pane, #422). Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
+    # first hit reporting the pin (none on PATH at the pin: the version lines above name the install); every executable
+    # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one).
+    python3 -c 'import functools, importlib.machinery as im, importlib.util as iu, json, os, re, subprocess, sys
+    root, top, caller = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
+    recipe = os.environ["PATH"]
+    s = iu.spec_from_loader("pi_role", im.SourceFileLoader("pi_role", root + "/scripts/pi-role")); pr = iu.module_from_spec(s); s.loader.exec_module(pr)
+    os.chdir(top); os.environ["PATH"] = caller
+    pane = pr.mise_path() or caller  # what pi-role puts on a pane started from the caller here
+    os.environ["PATH"] = recipe
+    def run(*a):
+        try: return subprocess.run(a, capture_output=True, text=True, timeout=20, cwd=top, stdin=subprocess.DEVNULL).stdout
+        except (OSError, subprocess.SubprocessError): return ""
+    def hits(name, path=recipe):
+        fs = [os.path.join(d, name) for d in path.split(":") if os.path.isabs(d)]
+        return list(dict.fromkeys(f for f in fs if os.path.isfile(f) and os.access(f, os.X_OK)))
+    @functools.cache
+    def version(f):
+        m = re.search(r"[0-9]+\.[0-9]+\.[0-9]+", run(f, "--version"))
+        return m.group(0) if m else None
+    bad = 0
+    def line(name, judge, why):
+        # judge(path): (first hit, ok, pinned) on that PATH, or None when it decides nothing there
+        global bad
+        kit = [v for v in (judge(recipe), judge(pane)) if v]
+        if not kit: return
+        first, ok, pinned = next((v for v in kit if not v[1]), kit[0])
+        if not ok:
+            print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1; return
+        print(f"path   {name} ok  {first} ({why})")
+        c = judge(caller)
+        if c and not c[1]: print(f"path   {name} NOTE {c[0]} comes first on your shell PATH, before the pinned {c[2]} ({why}); the kit is unaffected: its recipes (justfile) and panes (pi-role) put mise first and run {first}; to run the pinned one in this shell too, put {os.path.dirname(c[2])} first on PATH")
+    def js(*a):
+        try: return json.loads(run(*a) or "{}")
+        except ValueError: return {}
+    pin = {n: open(os.path.join(root, n + "-version")).read().strip() for n in ("mise", "pi", "agent-browser")}
+    mise = next((h for h in hits("mise") if version(h) == pin["mise"]), "mise")  # a stale mise first answers nothing useful
+    shims = js(mise, "doctor", "--json").get("dirs", {}).get("shims", "")
+    bins = {}  # executable name: its pinned path, for the target mise.toml tools; pi and agent-browser that npm put in
+    # the node bin dir of mise (their fix lines, #463) keep their own version pins
+    if os.path.isfile(os.path.join(top, "mise.toml")):
+        for b in run(mise, "-C", top, "bin-paths").split("\n"):
+            for n in sorted(os.listdir(b)) if b and os.path.isdir(b) else []:
+                f = os.path.join(b, n)
+                if n not in pin and os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
+    kit = js(mise, "-C", root, "ls", "--local", "--json")
+    pins = [(n, pin[n], f"{n}-version") for n in pin] + [("just", (kit.get("just") or [{}])[0].get("version"), "kit mise.lock")]
+    def by_version(name, want):
+        def judge(path):
+            hs = hits(name, path)
+            pinned = next((h for h in hs if version(h) == want), None)
+            return (hs[0], hs[0] == pinned, pinned) if pinned else None
+        return judge
+    def by_bin(name, f):
+        shim = os.path.join(shims, name) if shims else ""
+        pinned = shim if shim and os.path.isfile(shim) else f
+        def judge(path):
+            if not (hs := hits(name, path)): return None
+            return hs[0], os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned)), pinned
+        return judge
+    for name, want, why in pins:
+        if name not in bins: line(name, by_version(name, want), why)
+    for name, f in sorted(bins.items()):
+        line(name, by_bin(name, f), f"{top}/mise.lock")
+    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" || bad=1
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
     # pnpm under another HOME (corepack's shim) would download itself.
@@ -399,14 +587,134 @@ install-check target=invocation_directory():
     if not isinstance(v, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v): sys.exit(f"browser {p}: [browser] playwright must be a release like 1.64.1 (octo-feather-contract)")
     print(v)' "$top")" || bad=1
     if [[ -n "$bpin" ]]; then
-      folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"; cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+      folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"
       shell="$(ls -d "$folder"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)"
-      if [[ "$folder/" == "$cache/"* ]]; then
+      if under_cache "$folder"; then
         printf 'browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; set XDG_DATA_HOME outside it\n' "$folder" "$cache"; bad=1
       elif [[ -n "$shell" ]]; then printf 'browser ok  %s (Playwright %s; PLAYWRIGHT_BROWSERS_PATH=%s)\n' "${shell%/INSTALLATION_COMPLETE}" "$bpin" "$folder"
       else printf 'browser MISSING (want Playwright %s headless Chromium shell in %s); install: PLAYWRIGHT_BROWSERS_PATH=%s npx -y playwright@%s install --only-shell chromium\n' "$bpin" "$folder" "$folder" "$bpin"; bad=1; fi
     fi
+    # exe.dev Private sharing, the one step no command inside the box can check (spec remote#review-proxy,
+    # #review-never-public): the VM name is this box's on exe.dev (<vm>.exe.xyz), else <vm>.
+    vm="$(timeout 5 hostname -f 2>/dev/null)"; [[ "$vm" == *.exe.xyz ]] && vm="${vm%.exe.xyz}" || vm="<vm>"
+    # Spec Chat's review service (spec remote#review-service, #review-setup): the systemd user unit its installer writes,
+    # running and enabled (up at boot); else the installer run box setup makes, from the clone new-repo links.
+    unit=spec-chat-review.service
+    how="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat --review $root/docs/specs/index.spec.html --public $vm.exe.xyz --service (remote#review-setup)"
+    python3 -c 'import shutil, subprocess, sys
+    unit, how = sys.argv[1], sys.argv[2]
+    if not shutil.which("systemctl"): print(f"review MISSING no systemctl: the review service runs as a systemd user service ({unit}); on a systemd box: {how}"); sys.exit(1)
+    try: out = subprocess.run(["systemctl", "--user", "show", "-p", "ActiveState", "-p", "UnitFileState", unit], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL).stdout
+    except (OSError, subprocess.SubprocessError): out = ""
+    st = dict(line.partition("=")[::2] for line in out.splitlines())
+    active, file = st.get("ActiveState") or "unknown", st.get("UnitFileState") or "not installed"
+    if (active, file) == ("active", "enabled"): print(f"review ok  {unit} active, enabled (Spec Chat\x27s review service, systemd --user)")
+    else: print(f"review NOT RUNNING {unit} is {active}, {file} (want active, enabled: the systemd user service box setup installs); {how}"); sys.exit(1)' "$unit" "$how" || bad=1
+    # The model check makes a model call per role model, so it is a setup step of its own (spec remote#host-models).
+    echo "models MANUAL not checked here (no model call); at box setup and after a model key change: just install-check-models"
+    echo "sharing MANUAL exe.dev Private sharing cannot be checked from inside the box; on the exe.dev VM that hosts reviews, from your own machine: ssh exe.dev share set-private $vm (never share set-public: a public share has no login)"
     exit "$bad"
+
+# Box setup, never in install-check or the gate (spec remote#host-models): one short call through Pi to each model a
+# role file names (pi-role --json reads the frontmatter), no tools, no skills, no session, and one classify call to the
+# kit's judgment model (octo-feather-qa reads evals/judgment-model.json; its bench extension makes the call, outside
+# the qc sandbox); each model ok, its key REJECTED or the proxy UNREACHABLE, with its users and the fix. Pi reads the
+# key from its own provider config or environment: the key never goes on a command line and no line prints it (an
+# error body that may echo it is dropped).
+install-check-models:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    python3 -c 'import concurrent.futures as cf, glob, importlib.machinery as im, importlib.util as iu, json, os, re, shutil, subprocess, sys, tempfile
+    root = sys.argv[1]
+    limit = 120  # seconds per call: Pi retries a connection error 3 times (2, 4, 8 s) before it gives up
+    pi = shutil.which("pi")
+    if not pi: sys.exit("models MISSING pi on PATH; just install-check names its install, then rerun just install-check-models")
+    bad, roles = 0, {}
+    for f in sorted(glob.glob(os.path.join(root, "agents", "*.md"))):
+        role = os.path.basename(f)[:-3]
+        r = subprocess.run([os.path.join(root, "scripts", "pi-role"), "--json", f], capture_output=True, text=True, cwd=root, stdin=subprocess.DEVNULL)
+        try: args = json.loads(r.stdout)["args"]
+        except (ValueError, KeyError, TypeError):
+            print(f"model  {role} UNREADABLE pi-role --json {f} failed: {(r.stderr.strip().splitlines() or ["no output"])[-1]}; fix the role file (scripts/check-roles names the problem)"); bad = 1; continue
+        if "--model" in args: roles.setdefault(args[args.index("--model") + 1], []).append(role)
+    s = iu.spec_from_loader("qa", im.SourceFileLoader("qa", os.path.join(root, "scripts", "octo-feather-qa"))); qa = iu.module_from_spec(s); s.loader.exec_module(qa)
+    judge = None
+    try: judge = qa.judgment_model(os.path.join(root, "evals"))
+    except (OSError, ValueError, KeyError, TypeError) as e: print(f"model  judgment UNREADABLE evals/judgment-model.json ({e}); record the kit judgment model there (shape: scripts/check-evals --help)"); bad = 1
+    agent = os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent")
+    cfg, auth = os.path.join(agent, "models.json"), os.path.join(agent, "auth.json")
+    def load(f, k=None):
+        try: d = json.load(open(f)); d = d.get(k, {}) if k else d
+        except (OSError, ValueError, AttributeError): return {}
+        return d if isinstance(d, dict) else {}
+    providers, stored = load(cfg, "providers"), load(auth)
+    print(f"models pi {pi} (one short call per role model and the judgment model, no tools; Pi reads each key from {cfg}, {auth} or its environment)")
+    def plain(s): return re.sub(r"[A-Za-z0-9_.~+/=-]{20,}", "<redacted>", s.split("{")[0]).strip(" :")[:160] or "no message"
+    def run(cmd, cwd):
+        try: return subprocess.run(cmd, capture_output=True, text=True, timeout=limit, cwd=cwd, stdin=subprocess.DEVNULL, env=dict(os.environ, PI_OFFLINE="1")), None
+        except subprocess.TimeoutExpired: return None, ("UNREACHABLE", f"no answer in {limit} s", 0.0)
+        except OSError as e: return None, ("FAILED", plain(str(e)), 0.0)
+    def failed(r): return "FAILED", plain((r.stderr.strip().splitlines() or [f"pi exit {r.returncode}, no answer"])[-1]), 0.0
+    def verdict(err, cost):
+        head = plain(str(err or ""))
+        code = (re.search(r"\b([45][0-9][0-9])\b", head) or [None, ""])[1]
+        if code in ("401", "403") or re.search(r"(?i)unauthori[sz]ed|forbidden|authenticat|invalid.{0,20}(api.?key|token)", head): return "REJECTED", head, cost
+        if code in ("502", "503", "504") or re.search(r"(?i)connect|timed? ?out|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|getaddrinfo|terminated", head): return "UNREACHABLE", head, cost
+        return "FAILED", head, cost
+    def probe(model):
+        cmd = [pi, "-p", "--mode", "json", "--no-session", "--no-tools", "--no-skills", "--no-context-files", "--no-prompt-templates", "--no-mcp", "--thinking", "off", "--model", model, "Reply with the one word ok."]
+        with tempfile.TemporaryDirectory() as cwd: r, done = run(cmd, cwd)
+        if done: return done
+        last = None
+        for line in r.stdout.splitlines():
+            try: ev = json.loads(line)
+            except ValueError: continue
+            msg = ev.get("message") if isinstance(ev, dict) and ev.get("type") == "message_end" else None
+            if isinstance(msg, dict) and msg.get("role") == "assistant": last = msg
+        if r.returncode or last is None: return failed(r)
+        cost = float(((last.get("usage") or {}).get("cost") or {}).get("total") or 0)
+        return ("ok", "answered", cost) if last.get("stopReason") != "error" else verdict(last.get("errorMessage"), cost)
+    def classify(model):
+        # One case, one yes/no question: the bench extension octo-feather-qa runs, its flags, its output reader.
+        inp = {"question": "Is this text a greeting?", "labels": ["yes", "no"], "criteria": {"yes": "a greeting", "no": "anything else"}, "cases": [{"id": "probe", "state": "hello"}], "classifiers": [model]}
+        with tempfile.TemporaryDirectory() as cwd:
+            open(os.path.join(cwd, qa.BENCH_INPUT), "w").write(json.dumps(inp))
+            open(os.path.join(cwd, qa.BENCH_EXT), "w").write(qa.BENCH_SOURCE % {"command": qa.BENCH_COMMAND})
+            r, done = run([pi, "--no-session", "--no-skills", "--no-mcp", "--no-context-files", "--no-prompt-templates", "--no-extensions", "--no-tools", "-e", os.path.join(cwd, qa.BENCH_EXT), "-p", f"/{qa.BENCH_COMMAND} {os.path.join(cwd, qa.BENCH_INPUT)}"], cwd)
+        if done: return done
+        bench, _ = qa.bench_output(r.stdout)
+        if bench is None: return failed(r)
+        cost = sum(float(c.get("cost_usd") or 0) for c in bench.get("calls") or [])
+        if model not in (bench.get("benched") or []): return "FAILED", f"Pi lists no classifier {model}: no key for its provider, or not in Pi catalog", cost
+        rows = bench.get("rows") or [[None] * 6]
+        ei = rows[0][5]
+        return ("ok", "answered", cost) if ei is None and rows[0][2] else verdict((bench.get("errors") or ["no answer"])[ei or 0], cost)
+    users = {m: "roles " + ", ".join(rs) for m, rs in roles.items()}
+    jobs = [(m, probe) for m in roles]
+    if judge:
+        users[judge] = ("roles " + ", ".join(roles[judge]) + "; " if judge in roles else "") + "judgment model (evals/judgment-model.json): the advisory judge, judgment benches"
+        jobs.append((judge, classify))
+    with cf.ThreadPoolExecutor(max_workers=4) as ex: results = list(zip([m for m, _ in jobs], ex.map(lambda j: j[1](j[0]), jobs)))
+    spend = 0.0
+    for model, (got, why, cost) in results:
+        spend += cost
+        who = users[model]
+        prov = model.split("/")[0]
+        p = providers.get(prov) if isinstance(providers.get(prov), dict) else {}
+        a = stored.get(prov) if isinstance(stored.get(prov), dict) else {}
+        key, where = (p["apiKey"], f"{cfg} (providers.{prov}.apiKey)") if "apiKey" in p else (a.get("key"), f"{auth} ({prov}.key)") if a.get("type") == "api_key" else (None, f"{cfg} (providers.{prov}.apiKey), {auth}")
+        if got == "ok": print(f"model  {model} ok ({who})"); continue
+        bad = 1
+        if got == "REJECTED":
+            junk = " (the key there ends in or holds whitespace or terminal characters)" if isinstance(key, str) and re.search(r"\s|[\x00-\x1f\x7f]|\[20[01]~", key) else ""
+            print(f"model  {model} REJECTED key ({why}) for {who}{junk}; put the key the model proxy issued for provider {prov} in {where} or its environment, exactly, no trailing characters, then rerun just install-check-models")
+        elif got == "UNREACHABLE":
+            url = p.get("baseUrl")
+            base = f"{url} ({cfg}, providers.{prov}.baseUrl)" if url else f"the endpoint Pi has built in for {prov}"
+            print(f"model  {model} UNREACHABLE ({why}) for {who}; the model proxy for provider {prov} did not answer: check this box reaches {base} and the proxy is up, then rerun just install-check-models")
+        else: print(f"model  {model} FAILED ({why}) for {who}; run pi --model {model} -p ok by hand for the full error Pi gives, then rerun just install-check-models")
+    print(f"models spend {spend:.4f} USD ({len(results)} calls, Pi usage cost)")
+    sys.exit(bad)' "$root"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():
