@@ -469,12 +469,25 @@ def drive_install_check(f: Feature) -> None:
             and all(re.search(r"(?m)^" + b, c.out) for b in (
                 r"kernel \S+ (ok \(6\.6 or later|TOO OLD, .*; boot a 6\.6)", r"userns (ok |FAILED .*; \S)", r"state  (ok  /|[A-Z ]+ .*; \S)",
                 r"kit    (ok  /|[A-Z ]+ .*; \S)", r"ffmpeg (ok  /|OPTIONAL .*; to record video: )",
-                r"sharing MANUAL .*: ssh exe\.dev share set-private \S+"))
+                r"sharing MANUAL .*: ssh exe\.dev share set-private \S+",
+                r"review (ok  spec-chat-review\.service active, enabled|(NOT RUNNING|MISSING) .*install-spec-chat --review \S+ --public \S+\.exe\.xyz --service)",
+                r"models MANUAL not checked here \(no model call\); .*: just install-check-models$"))
             and re.search(r"(?m)^agent-browser (browser (ok  /|(MISSING|UNREADABLE IN THE QC SANDBOX) .*; agent-browser install)|MISSING)", c.out)
             and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", c.out)
             and re.search(r"(?m)^agent-browser (version \S+ ok|WRONG VERSION|MISSING)", c.out)
             and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", c.out)
             and re.search(r"(?m)^tracker \S+ \(target " + re.escape(c.kit) + r"\)$", c.out))
+    # The model check, its own recipe (spec remote#host-models), offline: each role model's call cannot reach the
+    # proxy, so no model is called and each is UNREACHABLE with its roles and the fix; the key never printed.
+    f.pre = NETNS
+    f.run("models-offline", "just", "--justfile", f"{f.s.repo}/justfile", "install-check-models")
+    f.pre = []
+    f.check("models-offline", lambda c: c.code == 1
+            and re.search(r"(?m)^models pi /\S+ \(one short call per role model", c.out)
+            and re.search(r"(?m)^model  \S+/\S+ UNREACHABLE \(.*\) for roles \S.*; the model proxy for provider \S+ did not answer: .*just install-check-models$", c.out)
+            and re.search(r"(?m)^model  \S+/\S+ UNREACHABLE \(.*\) for judgment model \(evals/judgment-model\.json\): .*just install-check-models$", c.out)
+            and not re.search(r"(?m)^model  .* (ok|REJECTED|FAILED) ", c.out)
+            and re.search(r"(?m)^models spend 0\.0000 USD \([1-9][0-9]* calls", c.out))
     say(f"install-check evidence: {f.d}")
 
 

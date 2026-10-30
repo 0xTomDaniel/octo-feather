@@ -59,6 +59,7 @@ extend-include = [
   "scripts/octo-feather-spec-status",
   "scripts/pi-role",
   "scripts/review-host",
+  "tests/fixtures/install-check/pi",
   "tests/fixtures/lane-report/gh",
   "tests/fixtures/lane-report/herdr",
   "tests/fixtures/lane-spend/curl",
