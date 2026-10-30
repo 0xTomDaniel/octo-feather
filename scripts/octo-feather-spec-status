@@ -4,6 +4,9 @@
   octo-feather-spec-status check [DIR...]          check every DIR/*.status.json (default docs/specs)
   octo-feather-spec-status init SPEC COMMIT        write SPEC's status file, every criterion planned
   octo-feather-spec-status built STATUS PR ID...   flip the named criteria to built in PR
+  octo-feather-spec-status built STATUS PR ID --record RECORD --commit SHA [--test TEST]...
+                                                   flip ID to built in PR with its evidence link
+  octo-feather-spec-status show [DIR|STATUS...]    each criterion's status, each built one current or stale
   octo-feather-spec-status calls [--since REF] [DIR...]
                                                    list the calls added since REF (default: the merge
                                                    base with origin/main), for the merge ask and PR body
@@ -11,10 +14,26 @@
 A status file `<slug>.status.json` sits beside `<slug>.spec.html`:
   {"spec": "<slug>.spec.html", "accepted_commit": "<sha>",
    "criteria": {"<id>": {"status": "planned" | "built", "pr": <N or null>}}}
+A built criterion `just qc` passed also names its evidence link (quality #qc-results):
+  "record": "<evidence record id>", "commit": "<sha it was captured at>",
+  "tests": ["<each test its demo declares>"...]   (empty for an agent fallback result)
 A criterion id is the `data-anchor` of each `data-acceptance-criterion` element
 (Spec Chat's shaped-sections-v1 contract). `check` fails on a missing spec, a
 missing, extra or duplicate id, a status other than planned/built, a planned
-criterion with a PR, or a built one without. The spec HTML is never edited.
+criterion with a PR or an evidence link, a built one without a PR, or a partial or
+malformed link; a built row with no link (built before qc linked one) passes.
+The spec HTML is never edited.
+
+`show` is read-only and git-only, never part of `check` (a stale criterion stays
+built until a lane's just qc judges it again, quality #qc-stale). Per status file
+(default docs/specs/*.status.json) it prints each criterion: planned; built with no
+evidence link; or built current or STALE, naming the record and the commit it was
+captured at. Stale: the criterion's element differs from the spec at that commit;
+a path its demo covers (qc.toml at the repo root, at that commit) differs at HEAD,
+named with the commits that changed it; or the file of a test it names (a test
+id `path::name` by its path) differs at HEAD, edited or gone, named likewise, or is
+not at HEAD. A criterion with no demo at that commit was
+judged by the agent fallback: no covers or tests, so only its text makes it stale.
 
 A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
 append-only, one judgement call per line:
@@ -43,9 +62,10 @@ group by time. Each call shows its spec, lane, role, anchors, criteria, what, wh
 and evidence, and DENIED when the owner denied it. It ends with the count, and a
 line per lane with more than three calls.
 """
-import importlib.machinery, importlib.util, json, re, subprocess, sys
+import argparse, importlib.machinery, importlib.util, json, re, subprocess, sys, tomllib
 from html.parser import HTMLParser
 from pathlib import Path
+from typing import Any, cast
 
 STATUSES = ("planned", "built")
 
@@ -109,7 +129,44 @@ def check_file(status: Path) -> list[str]:
             errs.append(f"{rel}: {k}: a planned criterion has pr null")
         elif st == "built" and not (isinstance(pr, int) and not isinstance(pr, bool) and pr > 0):
             errs.append(f"{rel}: {k}: a built criterion names the PR that built it")
+    return cast("list[str]", errs) + link_errors(rel, cast("dict[str, object]", got))
+
+
+LINK = ("record", "commit", "tests")   # a built criterion's evidence link (quality #qc-results)
+RECORD = r"\d{8}T\d{6}Z-[0-9a-f]{8}"   # an evidence record id, as octo-feather-evidence append names it
+
+
+Entry = dict[str, Any]   # one criterion's status entry
+
+
+def link_errors(rel: str, got: dict[str, object]) -> list[str]:
+    """Each entry's evidence link problem: a planned one names none, a built one none or a whole one."""
+    errs: list[str] = []
+    for k, v in sorted(got.items()):
+        e = cast("Entry", v) if isinstance(v, dict) else {}
+        if e.get("status") == "planned" and any(f in e for f in LINK):
+            errs.append(f"{rel}: {k}: a planned criterion names no evidence ({', '.join(LINK)})")
+        elif e.get("status") == "built" and (bad := link_error(e)):
+            errs.append(f"{rel}: {k}: {bad}")
     return errs
+
+
+def link_error(v: Entry) -> str | None:
+    """What is wrong with a built entry's evidence link: none at all is a row built before qc linked one."""
+    have = [f for f in LINK if f in v]
+    if not have:
+        return None
+    if len(have) < len(LINK):
+        return (f"names {', '.join(have)} without {', '.join(f for f in LINK if f not in have)}: an evidence link "
+                f"is record, commit and tests together, written by just qc")
+    if not (isinstance(v["record"], str) and re.fullmatch(RECORD, v["record"])):
+        return "record must be an evidence record id (<UTC stamp>-<hex>, as octo-feather-evidence append prints it)"
+    if not (isinstance(v["commit"], str) and re.fullmatch(r"[0-9a-f]{7,40}", v["commit"])):
+        return "commit must be a commit sha, the one its record was captured at"
+    tests: object = v["tests"]
+    if not (isinstance(tests, list) and all(isinstance(t, str) and t.strip() for t in cast("list[object]", tests))):
+        return "tests must be a list of test names, the tests its demo declares"
+    return None
 
 
 VOID = {"area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta",
@@ -429,6 +486,122 @@ def calls_cmd(args: list[str]) -> int:
     print(list_calls(found, since or "the merge base with origin/main")); return 0
 
 
+def _run(top: Path, *args: str) -> tuple[int, str]:
+    """git ARGS in TOP: (exit status, stdout)."""
+    p = cast("subprocess.CompletedProcess[str]", _git(top, *args))
+    return p.returncode, p.stdout
+
+
+def _changes(top: Path, commit: str, paths: list[str]) -> tuple[list[str], list[str]]:
+    """Of PATHS, those that differ between COMMIT and HEAD, and the commits after COMMIT that changed them."""
+    files = [f for f in _run(top, "diff", "--name-only", "-z", commit, "HEAD", "--", *paths)[1].split("\0") if f]
+    log = _run(top, "log", "--format=%h %s", "--abbrev=12", f"{commit}..HEAD", "--", *files)[1] if files else ""
+    return files, [ln for ln in log.splitlines() if ln]
+
+
+def _demo(top: Path, commit: str, cid: str) -> Entry | None:
+    """The demo qc.toml at the repo root declared for criterion id CID at COMMIT, or None (the agent fallback's)."""
+    rc, shown = _run(top, "show", f"{commit}:qc.toml")
+    try:
+        demos: dict[str, Any] = tomllib.loads(shown).get("demo", {}) if not rc else {}
+    except tomllib.TOMLDecodeError:
+        return None
+    return demos.get(cid)
+
+
+def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple[str, str]:
+    """(kind, line) for built criterion K with an evidence link: kind current, stale or unknown (quality #qc-stale)."""
+    c: str = v["commit"]
+    c12, tests = c[:12], cast("list[str]", v["tests"])
+    head = f"record {v['record']} captured at {c12}"
+    if _run(top, "cat-file", "-e", f"{c}^{{commit}}")[0]:
+        return "unknown", f"UNKNOWN: {head}, which is not in this repo; fix: fetch full history (git fetch --unshallow)"
+    why: list[str] = []
+    old, err = accepted_html(spec, c)
+    if err or old is None or anchors(old).get(k) != now.get(k):
+        _, by = _changes(top, c, [spec.resolve().relative_to(top).as_posix()])
+        why.append(f"criterion text changed since {c12}" + (f" by {'; '.join(by)}" if by else " (uncommitted)"))
+    demo = _demo(top, c, f"{spec.name.removesuffix('.spec.html')}#{k}")
+    covers = [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
+    for f in _changes(top, c, covers)[0] if covers else []:
+        why.append(f"covered path {f} changed since {c12} by {'; '.join(_changes(top, c, [f])[1])}")
+    for p in dict.fromkeys(t.split("::", 1)[0] for t in tests):   # each named test's file, a selector by its file
+        named = ", ".join(t for t in tests if t != p and t.split("::", 1)[0] == p)
+        what = f"test file {p}" + (f" ({named})" if named else "")
+        gone = bool(_run(top, "cat-file", "-e", f"HEAD:{p}")[0])
+        changed, by = _changes(top, c, [p])
+        if changed:
+            why.append(f"{what} {'gone' if gone else 'changed'} since {c12} by {'; '.join(by)}")
+        elif gone:
+            why.append(f"{what} gone (not at HEAD)")
+    if why:
+        return "stale", f"STALE: {head}; {'; '.join(why)}"
+    if demo is None:
+        return "current", (f"current: {head} by the agent fallback (no declared demo: no covers or tests, so only "
+                           f"a change to its text makes it stale)")
+    return "current", f"current: {head}, tests {', '.join(tests) or 'none'}, covers {', '.join(covers)}"
+
+
+def show(status: Path) -> tuple[list[str], list[str]]:
+    """(lines, errors) for one status file's criteria, ending with the counts."""
+    errs = check_file(status)
+    if errs:
+        return [], errs
+    rc, top = _run(status.parent, "rev-parse", "--show-toplevel")
+    if rc:
+        return [], [f"{status}: not in a git repo, so staleness cannot be read"]
+    data: Entry = json.loads(status.read_text(encoding="utf-8"))
+    spec = status.with_name(str(data["spec"]))
+    now = anchors(spec.read_text(encoding="utf-8"))
+    lines, n = [f"{status} ({spec.name}):"], dict[str, int]()
+    for k, v in cast("dict[str, Entry]", data["criteria"]).items():
+        if v["status"] != "built":
+            kind, line = "planned", "planned"
+        elif "record" not in v:
+            kind, line = "no evidence link", f"built (PR #{v['pr']}), no evidence link (built before just qc linked records)"
+        else:
+            kind, line = stale(spec, k, v, Path(top.strip()).resolve(), now)
+            line = f"built (PR #{v['pr']}), {line}"
+        n[kind] = n.get(kind, 0) + 1
+        lines.append(f"  {k}: {line}")
+    built = sum(x for kind, x in n.items() if kind != "planned")
+    lines.append(f"  {built} built: {n.get('current', 0)} current, {n.get('stale', 0)} stale, "
+                 f"{n.get('no evidence link', 0)} no evidence link" + (f", {n['unknown']} unknown" if n.get("unknown") else ""))
+    return lines, []
+
+
+def show_cmd(args: list[str]) -> int:
+    files = [f for a in (args or ["docs/specs"])
+             for f in (sorted(Path(a).glob("*.status.json")) if Path(a).is_dir() else [Path(a)])]
+    out: list[str] = []
+    errs: list[str] = []
+    for f in files:
+        lines, e = show(f) if f.is_file() else ([], [f"{f}: no status file"])
+        out += lines; errs += e
+    print("\n".join(out) if out else "spec-status: no status files")
+    if errs:
+        print("\n".join(errs), file=sys.stderr); return 1
+    return 0
+
+
+def built_link(args: list[str]) -> tuple[list[str], Entry | None, str | None]:
+    """(the other args, the evidence link of --record, --commit and each --test or None without them, error)."""
+    ap = argparse.ArgumentParser(add_help=False, exit_on_error=False)
+    ap.add_argument("--record"); ap.add_argument("--commit"); ap.add_argument("--test", action="append", default=[])
+    try:
+        ns, rest = ap.parse_known_args(args)
+    except argparse.ArgumentError as e:
+        return args, None, f"built: {e}"
+    record, commit, tests = cast("str | None", ns.record), cast("str | None", ns.commit), cast("list[str]", ns.test)
+    if record is None and commit is None and not tests:
+        return rest, None, None
+    if record is None or commit is None or len(rest) != 3:
+        return rest, None, "built: an evidence link is --record and --commit (and each --test) for exactly one criterion"
+    link: Entry = {"record": record, "commit": commit, "tests": tests}
+    bad = link_error(link)
+    return rest, link, f"built: {bad}" if bad else None
+
+
 def write(path: Path, data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
 
@@ -443,6 +616,13 @@ def main(argv: list[str]) -> int:
         print(f"spec-status: ok ({len(files)} status files)"); return 0
     if cmd == "calls":
         return calls_cmd(args)
+    if cmd == "show":
+        return show_cmd(args)
+    link: Entry | None = None
+    if cmd == "built":
+        args, link, bad = built_link(args)
+        if bad:
+            print(bad, file=sys.stderr); return 64
     if cmd == "init" and len(args) == 2:
         spec = Path(args[0]); slug = spec.name.removesuffix(".spec.html")
         ids = criteria(spec)
@@ -458,7 +638,7 @@ def main(argv: list[str]) -> int:
         for i in args[2:]:
             if i not in data["criteria"]:
                 print(f"no criterion {i} in {status}", file=sys.stderr); return 1
-            data["criteria"][i] = {"status": "built", "pr": int(args[1])}
+            data["criteria"][i] = {"status": "built", "pr": int(args[1])} | (link or {})
         write(status, data); return 0
     print(__doc__.strip(), file=sys.stderr); return 64
 

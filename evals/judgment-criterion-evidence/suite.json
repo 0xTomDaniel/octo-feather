@@ -1,0 +1,5 @@
+{
+  "suite": "judgment-criterion-evidence",
+  "kind": "judgment",
+  "description": "Judgment question (e) criterion evidence (spec judgment#question-criterion-evidence, quality#qc-judgment): does an evidence record's command and output show its acceptance criterion met? Asked by just qc (scripts/octo-feather-qc) per criterion with a record, beside its result. The labelled set (question.json, cases.json, hidden reference/expectations.json; drafted by the lane, director-checked, never tuned) from past qc reports. Every answer is a model judgment: advisory, no gate reads it."
+}

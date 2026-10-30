@@ -1,0 +1,16 @@
+#!/usr/bin/env bash
+# A stub qc judge as `pi` (no model), for the agent fallback (quality spec #qc-fallback): tests/qc-fallback.sh and the
+# verify-octo-feather qc-fallback drive put this folder first on PATH. It prints its parent's argv (the time cap qc runs
+# it under) and its brief's criterion lines, then reports on the brief's one criterion as the brief asks: fail when its
+# id is in FAKE_QC_FAIL (space-separated), else pass. FAKE_QC_JUDGE=cap fires the alarm of its parent timeout, as the
+# cap expiring does, and waits to be stopped; =stubborn does so ignoring TERM, so only timeout's later KILL stops it.
+[[ "${1:-}" == --version ]] && exit 0
+echo "PARENT $(tr '\0' ' ' < "/proc/$PPID/cmdline")"
+[[ "${FAKE_QC_JUDGE:-}" == stubborn ]] && trap '' TERM
+[[ "${FAKE_QC_JUDGE:-}" == cap || "${FAKE_QC_JUDGE:-}" == stubborn ]] && { kill -ALRM "$PPID"; exec sleep 60; }
+b="${*: -1}"; h="$(grep -o 'head [0-9a-f]\{40\}' <<< "$b" | head -1 | cut -d' ' -f2)"
+c="$(sed -n '/^Criteria:$/,/^Your final message/p' <<< "$b" | grep '^- ')"   # the brief's criterion lines
+sed 's/^/BRIEF /' <<< "$c"
+id="$(sed -nE '1s/^- ([^:]+): .*/\1/p' <<< "$c")"
+v=pass; [[ " ${FAKE_QC_FAIL:-} " == *" $id "* ]] && v=fail
+printf '```json\n{"head": "%s", "criteria": [{"id": "%s", "verdict": "%s", "command": "judge %s", "output": "out %s", "why": "why %s"}]}\n```\n' "$h" "$id" "$v" "$id" "$id" "$id"

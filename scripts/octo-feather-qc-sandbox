@@ -15,7 +15,7 @@
 #   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
 #      authenticated against each pin, bound back read-only), /dev/shm and the Pi agent dir (its entries
 #      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
-#      never written back); then every other
+#      never written back; with QC_PI=none, a run with no Pi such as a declared demo, neither one at all); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
 #      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge. It mounts with userxattr
 #      (#395): in a user namespace overlayfs cannot write trusted.overlay.* on the tmpfs upper, so removing a
@@ -51,6 +51,10 @@
 #   11. the run's model spend: the lines the spend ledger's writer appended to the scratch state dir's
 #      spend.jsonl (no lane: the route is unset), one JSON line {"spend": [line...]} on QC_FD_POST;
 #      octo-feather-qc records them (its record_spend).
+#   12. QC_SHOTS=1 (a captured demo): the files the run wrote to $QC_SCREENSHOTS (on the private /tmp, dying with
+#      the run), regular files only, one JSON line {"shots": [[name, base64]...]} on QC_FD_POST; octo-feather-qc
+#      stores them in the demo's evidence record. QC_BROWSER (a browser demo): the box's Playwright browsers folder,
+#      also in QC_RO_BINDS (step 4: read-only); the proof checks it holds a headless shell and is not writable.
 #   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
 #      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
 #      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs
@@ -70,7 +74,7 @@
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
 # QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_RECORD program names to record runs of (step 6), QC_GHSNAP snapshot dir and
 # QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_HISTORY=none to bind
-# no history (step 3), QC_FD_PROOF /
+# no history (step 3), QC_PI=none to give no Pi model credentials (step 5), QC_FD_PROOF /
 # QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
 # Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
 set -uo pipefail
@@ -223,10 +227,12 @@ if [[ "$phase" == setup ]]; then
     echo "$VC" > "$SCR/vcache"; exec 10<&-
   fi
   mount -t tmpfs tmpfs /dev/shm 2>/dev/null
+  nopi=0; [[ "${QC_PI:-}" == none ]] && nopi=1
+  printf '%s\n' "$PI" "$( ((nopi)) && echo none)" > "$SCR/pi"   # the proof's credential line (step 7)
   if [[ -d "$PI" ]]; then
     exec 7<"$PI"
     for n in auth.json models.json; do
-      [[ -f "$PI/$n" ]] || continue
+      [[ -f "$PI/$n" ]] && ((!nopi)) || continue
       (umask 077; cat "$PI/$n" > "$OV/pi/$n" && chmod --reference="$PI/$n" "$OV/pi/$n") || die "copy Pi $n"
     done
     mount -t tmpfs tmpfs "$PI" || die "tmpfs $PI"; rw+=("$PI")
@@ -241,6 +247,7 @@ if [[ "$phase" == setup ]]; then
   if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json and models.json the per-run copies
     for e in /proc/self/fd/7/* /proc/self/fd/7/.[!.]*; do
       [[ -e "$e" ]] || continue; n="${e##*/}"; [[ "$n" == sessions ]] && continue
+      ((nopi)) && [[ "$n" == auth.json || "$n" == models.json ]] && continue   # QC_PI=none: no credentials
       if [[ -d "$e" ]]; then mkdir -p "$PI/$n"; else touch "$PI/$n"; fi
       if [[ -f "$OV/pi/$n" ]]; then
         mount --bind "$OV/pi/$n" "$PI/$n" || die "bind $n copy"
@@ -365,6 +372,7 @@ EOF
     recshim "$SCR/rbin/$p" run "$p" "" '[]' '()' '()'; recs+=("$p")
   done <<< "${QC_RECORD:-}"
   chmod +x "$SCR"/bin/*; ((${#recs[@]})) && chmod +x "$SCR"/rbin/*
+  if [[ -n "${QC_SHOTS:-}" ]]; then mkdir -p "$SCR/shots" && export QC_SCREENSHOTS="$SCR/shots" || die "screenshots dir"; fi
   mount --bind "$SCR/bin" "$SCR/bin" && remount ro "$SCR/bin" || die "shims read-only"
   mount --bind "$SCR/rbin" "$SCR/rbin" && remount ro "$SCR/rbin" || die "run shims read-only"
   PATH="$SCR/bin:$PATH"
@@ -577,12 +585,26 @@ for root, dirs, files in os.walk(up):
             out.append(["changed", rel])
 print(json.dumps({"upper": sorted(out, key=lambda e: e[1])}))
 EOF
+  # 12. the demo's screenshots, from the run's /tmp (the namespace is gone: nothing writes there now).
+  if [[ -n "${QC_SHOTS:-}" ]]; then python3 - "$SCR/shots" >&5 <<'EOF'
+import base64, json, os, stat, sys
+d = sys.argv[1]; out = []
+for root, dirs, files in os.walk(d):
+    dirs.sort()
+    for f in sorted(files):
+        p = os.path.join(root, f)
+        if stat.S_ISREG(os.lstat(p).st_mode):
+            out.append([os.path.relpath(p, d), base64.b64encode(open(p, "rb").read()).decode()])
+print(json.dumps({"shots": out}))
+EOF
+  fi
   exit "$rc"
 fi
 
 # Inner: PID 1 of the judge's namespace, the caller's uid, no capabilities.
 GH="$QC_GH"; GC="$GH_CONFIG_DIR"; GHLINE="${QC_GHSNAP_LINE:-}"; WT="$QC_WORKTREE"
-unset QC_RECORD QC_KIT QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
+BR="${QC_BROWSER:-}"
+unset QC_PI QC_BROWSER QC_SHOTS QC_RECORD QC_KIT QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
   QC_GHSNAP QC_GHSNAP_OFF QC_GHSNAP_LINE
 nsprocs() {   # every live process in this PID namespace but PID 1 and the caller
   local p s; for p in /proc/[0-9]*; do p=${p#/proc/}
@@ -656,6 +678,15 @@ check "$(t test "$tok" = 0 -a "$ghls" = 0 -a "$cred" = 0 -a "$r" != 0)" "no gh o
 # The judge reads no tracker ticket: no tracker credential (issue-lifecycle spec #qc-interim).
 lin=$(env | grep -c '^LINEAR_API_KEY=')
 check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
+# Pi's model credentials (step 5): per-run copies where a Pi runs; none at all with QC_PI=none (a declared demo).
+{ read -r pid; read -r pin; } < "$SCR/pi"; pis=()
+for n in auth.json models.json; do [[ -e "$pid/$n" ]] && pis+=("$n"); done
+if [[ "$pin" == none ]]; then
+  rd=0; for n in auth.json models.json; do cat "$pid/$n" >/dev/null 2>&1 && rd=1; done
+  check "$(t test "${#pis[@]}" = 0 -a "$rd" = 0)" "no Pi model credentials (no Pi runs here): auth.json and models.json absent from $pid${pis:+ (NOT: ${pis[*]} present)}"
+else
+  say "ok   Pi model credentials: ${pis[*]:-none on the box}${pis:+ per-run copies on the hidden run tmpfs, never written back}"
+fi
 route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|OCTO_FEATHER_SPEND_SPACE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
 check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
 w=0; touch "$MISE_STATE_DIR/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$MISE_STATE_DIR/.qc-w-$S"; }
@@ -704,6 +735,11 @@ if [[ -n "$OCTO_FEATHER_GHSNAP" ]]; then
 else
   r=$(t gh issue list)
   check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
+fi
+if [[ -n "$BR" ]]; then   # a browser demo: the box's headless shell, read-only; the cache dir stays masked
+  w=0; touch "$BR/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$BR/.qc-ro-$S"; }
+  sh=$(ls -d "$BR"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)
+  check "$(t test "$w" = 0 -a -n "$sh")" "browser: PLAYWRIGHT_BROWSERS_PATH=$BR read-only, headless shell ${sh%/INSTALLATION_COMPLETE}"
 fi
 if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's mise tools installed
   # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
@@ -764,7 +800,7 @@ for _ in range(100):
 EOF
 panes=0
 [[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
-headless=$(( $(wc -l < "$SCR/agents.log" 2>/dev/null || echo 0) ))
+headless=$(( $(cat "$SCR/agents.log" 2>/dev/null | wc -l) ))   # no log: no pi started (a declared demo)
 ((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
 reap
 left=$(nsprocs); left=$(wc -w <<< "$left")
