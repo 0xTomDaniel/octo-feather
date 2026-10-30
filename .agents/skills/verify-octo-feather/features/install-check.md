@@ -11,12 +11,12 @@ Drive criterion: `remote#acceptance-install-agent-browser`
 ## Sub-features
 
 - `offline` the install check run for the kit as target with no network.
-- `models-offline` the model check (`just install-check-models`, box setup, spec remote#host-models) with no network.
+- `models-offline` the model check (`just install-check-models`) with no network.
 
 ## How to get to it (user POV)
 
 - In the kit checkout: `just install-check` (target: the invocation directory), or in a target repo `just -f <kit>/justfile install-check`.
-- At box setup and after a model key change: `just install-check-models` (one short Pi call per role model; never part of `just install-check` or the gate).
+- At box setup and after a model key change: `just install-check-models` (what it checks and when: spec remote#host-models).
 
 ## Driving it with verify-octo-feather
 
