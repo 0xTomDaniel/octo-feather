@@ -24,7 +24,7 @@ Preconditions:
 
 Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive install-check`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/install-check/`.
 
-- **Offline** (`offline`). Run `unshare -Un --map-current-user just --justfile <kit>/justfile install-check <kit>` from an empty cwd. Observe exit 1; one line per tool (`herdr pi gh jq git just python3 node`), each `ok  <path>` or `MISSING`; a Pi version line (ok or WRONG VERSION); an agent-browser line (version ok, WRONG VERSION or MISSING); `gh NOT authenticated (gh auth login)`; `tracker <skill> (target <kit>)`.
+- **Offline** (`offline`). Run `unshare -Un --map-current-user just --justfile <kit>/justfile install-check <kit>` from an empty cwd. Observe exit 1; one line per tool (`herdr pi gh jq git just python3 node`), each `ok  <path>` or `MISSING; <install command>`; the box fact lines (#461), each ok or its gap with the fix: `kernel` (6.6 or later), `userns` (`unshare -rm true`), `state` (the session state folder's `lanes/`), `kit` (the live kit install a clone on main), `agent-browser browser` (its Chrome outside the cache folder the qc sandbox masks), `ffmpeg` (ok or OPTIONAL, never a failure); the one manual step `sharing MANUAL ... ssh exe.dev share set-private <vm>`; a Pi version line (ok or WRONG VERSION); an agent-browser line (version ok, WRONG VERSION or MISSING); `gh NOT authenticated (gh auth login)`; `tracker <skill> (target <kit>)`.
 - **Side effects.** The cwd stays empty and the kit's `git status` unchanged.
 
 ## Gotchas
@@ -33,3 +33,4 @@ Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive insta
 - The kit drives no browser (its `qc.toml` has no `[browser]`), so this case prints no browser line and a PASS proves the tool listing only, not the criterion's browser line. The browser line (MISSING naming the Playwright pin, the box folder and the install command; ok when the headless shell is in the folder) is proven by `tests/install-check.sh` on a fixture target whose `qc.toml` declares `[browser] playwright = "<pin>"`.
 - The agent-browser line shows this box's state only; the other states are proven by `tests/install-check.sh` (a stub, and a PATH without agent-browser).
 - Tool lines depend on the box: the case checks each tool has a line, not that it is installed.
+- The box fact lines show this box's state only (the `kit` line is a gap in a worktree or copy: not the install clone); each ok and gap state is proven by `tests/install-check.sh` with stub probes (`uname -r`, `unshare`, `agent-browser doctor`, `ffmpeg`) and scratch folders (`XDG_STATE_HOME`, `OCTO_FEATHER_KIT_INSTALL`).

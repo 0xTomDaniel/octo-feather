@@ -28,6 +28,13 @@
 #     pidfd_open; none installed: MISSING naming `uv python install --no-bin`, exit 1, and `just check` in a copy of the
 #     kit refuses, naming it. The box python3 at 3.11 or later ok; a python3 reporting 3.10: WRONG VERSION, exit 1.
 #     Uses the box's uv Python installs (UV_PYTHON_INSTALL_DIR kept while HOME is a fresh dir); installs nothing.
+#   Box facts (#461), each probe a stub on PATH (uname -r, unshare, agent-browser doctor, ffmpeg) or a folder the test
+#     makes (XDG_STATE_HOME, OCTO_FEATHER_KIT_INSTALL), never this box's values: kernel 6.12 ok, 6.1 TOO OLD naming the
+#     upgrade; unshare -rm ok, refused FAILED naming its error; the state folder's lanes/ ok, absent MISSING naming
+#     mkdir -p; the kit install clone on main ok (detached on main too), on another branch NOT ON MAIN naming git switch
+#     main, a worktree or no clone named with the fix; agent-browser's Chrome outside the cache folder ok, under it
+#     UNREADABLE IN THE QC SANDBOX, none MISSING, both naming agent-browser install; ffmpeg ok, absent OPTIONAL with
+#     exit 0; the sharing MANUAL step always. herdr, gh, jq and git absent: MISSING with each install command, exit 1.
 # herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
 # the exit. Run by `just check`.
 set -euo pipefail
@@ -38,7 +45,24 @@ mkdir -p "$t/bin" "$t/home" "$t/old"
 pin="$(tr -d '[:space:]' <"$kit/pi-version")"
 for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
 printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
-printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"   # at the pin; the cases below swap or drop it
+ab() { printf '#!/bin/sh\n[ "$1" = doctor ] && exec cat "%s/doctor.json"\necho "agent-browser %s"\n' "$t" "$1" >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"; }
+ab 0.40.0   # at the pin; the cases below swap or drop it
+# chrome PATH: agent-browser doctor --offline --quick --json names Chrome at PATH (pass); no PATH: none found (fail).
+chrome() { if [[ -n "${1:-}" ]]; then printf '{"checks":[{"category":"Chrome","id":"chrome.installed","message":"Google Chrome for Testing 156.0.8078.4 at %s","status":"pass"}]}\n' "$1"
+  else printf '{"checks":[{"category":"Chrome","id":"chrome.installed","message":"Chrome not found","status":"fail"}]}\n'; fi >"$t/doctor.json"; }
+okchrome="$t/home/.agent-browser/browsers/chrome-156/chrome-linux64/chrome"; chrome "$okchrome"
+# The kernel and user namespace probes: uname -r answers $t/kver (the rest goes to the real uname); unshare succeeds
+# unless $t/userns-off exists. ffmpeg present; one case below drops it.
+echo 6.12.0 >"$t/kver"
+printf '#!/bin/sh\n[ "$1" = -r ] && exec cat "%s/kver"\nexec "%s" "$@"\n' "$t" "$(command -v uname)" >"$t/bin/uname"
+printf '#!/bin/sh\n[ -e "%s/userns-off" ] && { echo "unshare: write failed /proc/self/uid_map: Operation not permitted" >&2; exit 1; }\nexit 0\n' "$t" >"$t/bin/unshare"
+printf '#!/bin/sh\nexit 0\n' >"$t/bin/ffmpeg"
+# The session state folder (XDG_STATE_HOME) with its lanes/, and the live kit install: a clone of a bare origin, on main.
+mkdir -p "$t/state/octo-feather/lanes"
+g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
+g init -q --bare "$t/kit-origin.git"; g clone -q "$t/kit-origin.git" "$t/kitinst" 2>/dev/null
+g -C "$t/kitinst" commit -q --allow-empty -m one; g -C "$t/kitinst" push -q origin main
+kitinst="$t/kitinst"
 printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* "$t/old/linear"
 # mise's own just, linked: its dir goes on the recipe's PATH (the test's, never one holding a linear), and the link
 # resolves to mise's install, so install-check's PATH rule holds.
@@ -48,14 +72,15 @@ UV_PYTHON_INSTALL_DIR="$(uv python dir)"; export UV_PYTHON_INSTALL_DIR
 ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 mpin="$(tr -d '[:space:]' <"$kit/mise-version")"
-# hide NAME PATHLIST: PATHLIST with only NAME gone: each dir holding it is mirrored minus that one file (links to
-# the rest), never dropped, so the tools sharing its dir stay (#422 item 10). Prints ":dir:dir...".
+# hide NAMES PATHLIST: PATHLIST with only NAMES (space-separated) gone: each dir holding one is mirrored minus those
+# files (links to the rest), never dropped, so the tools sharing its dir stay (#422 item 10). Prints ":dir:dir...".
 hide() {
-  local out="" d f m; local -a ds; IFS=: read -ra ds <<<"$2"
+  local out="" d f m n has; local -a ds; IFS=: read -ra ds <<<"$2"
   for d in "${ds[@]}"; do
     [[ -n "$d" ]] || continue
-    if [[ -e "$d/$1" || -L "$d/$1" ]]; then m="$(mktemp -d "$t/mirror.XXXXXX")"
-      for f in "$d"/* "$d"/.[!.]*; do [[ ( -e "$f" || -L "$f" ) && "${f##*/}" != "$1" ]] && ln -s "$f" "$m/"; done; out+=":$m"
+    has=""; for n in $1; do [[ -e "$d/$n" || -L "$d/$n" ]] && has=1; done
+    if [[ -n "$has" ]]; then m="$(mktemp -d "$t/mirror.XXXXXX")"
+      for f in "$d"/* "$d"/.[!.]*; do [[ ( -e "$f" || -L "$f" ) && " $1 " != *" ${f##*/} "* ]] && ln -s "$f" "$m/"; done; out+=":$m"
     else out+=":$d"; fi
   done; printf '%s' "$out"
 }
@@ -69,7 +94,7 @@ lin_target="$t/linear"; gh_target="$t/github"
 git init -q "$lin_target"; git init -q "$gh_target"; mkdir -p "$lin_target/sub"
 cp "$kit/tests/fixtures/install-check/linear/.octo-feather.toml" "$lin_target/"
 check() { # WANT DIR EXTRA_PATH [TARGET]: run in DIR (with $pre first on the caller's PATH); output in $out
-  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME HOME="$t/home" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="${pre:+$pre:}$t/bin${3:+:$3}:$shims$clean" \
+  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME -u AGENT_BROWSER_EXECUTABLE_PATH HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$kitinst" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="${pre:+$pre:}$t/bin${3:+:$3}:$shims$clean" \
     just -f "$kit/justfile" install-check ${4:+"$4"} 2>&1)" || rc=$?
   [[ "$rc" == "$1" ]] || fail "in $2 (PATH extra '${3:-}'): want exit $1, got $rc: $out"
 }
@@ -169,7 +194,7 @@ grep -q "^browser UNREADABLE IN THE QC SANDBOX $t/home/.cache/d/octo-feather/ms-
 # agent-browser (spec remote#acceptance-install-agent-browser): the stub at 0.40.0 ok; another release WRONG VERSION; on a
 # box without it, MISSING naming 0.40.0 and the npm install. Without it: each PATH dir holding one is mirrored minus it.
 grep -qx 'agent-browser version 0.40.0 ok (agent-browser-version)' <<<"$out" || fail "agent-browser at the pin: no ok line: $out"
-printf '#!/bin/sh\necho "agent-browser 0.39.4"\n' >"$t/bin/agent-browser"
+ab 0.39.4
 check 1 "$gh_target" ""
 grep -qx "agent-browser WRONG VERSION $t/bin/agent-browser reports 0.39.4, want 0.40.0 (agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)" <<<"$out" \
   || fail "agent-browser 0.39.4: no WRONG VERSION line naming 0.40.0 and the install: $out"
@@ -177,5 +202,60 @@ rm "$t/bin/agent-browser"; saved="$clean"; clean="$(hide agent-browser "$saved")
 check 1 "$gh_target" ""; clean="$saved"
 grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
   || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
-printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"
-echo "install-check: ok (gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
+ab 0.40.0
+# Box facts (#461): every probe at a good value, each line ok and the manual sharing step printed, exit 0.
+check 0 "$gh_target" ""
+grep -qx 'kernel 6.12.0 ok (6.6 or later, the qc sandbox)' <<<"$out" && grep -qx 'userns ok (unshare -rm true, the qc sandbox)' <<<"$out" \
+  && grep -qx "state  ok  $t/state/octo-feather (octo-feather-state)" <<<"$out" && grep -qx "kit    ok  $kitinst on main (OCTO_FEATHER_KIT_INSTALL)" <<<"$out" \
+  && grep -qx "agent-browser browser ok  $okchrome (outside $t/home/.cache)" <<<"$out" && grep -qx "ffmpeg ok  $t/bin/ffmpeg (optional: agent-browser video recording)" <<<"$out" \
+  || fail "box facts at good values: not every ok line: $out"
+grep -qE '^sharing MANUAL exe\.dev Private sharing cannot be checked from inside the box; on the exe\.dev VM that hosts reviews, from your own machine: ssh exe\.dev share set-private \S+ \(never share set-public: a public share has no login\)$' <<<"$out" \
+  || fail "no manual sharing step: $out"
+# A kernel older than 6.6: TOO OLD naming the upgrade, exit 1.
+echo 6.1.0 >"$t/kver"; check 1 "$gh_target" ""; echo 6.12.0 >"$t/kver"
+grep -qE '^kernel 6\.1\.0 TOO OLD, want 6\.6 or later \(the qc sandbox overlay needs tmpfs user xattrs: scripts/octo-feather-qc-sandbox\); boot a 6\.6 or later kernel, then reboot \(Debian 12: .*sudo apt install -t bookworm-backports linux-image-\$\(dpkg --print-architecture\); Ubuntu 22\.04: sudo apt install linux-generic-hwe-22\.04\)$' <<<"$out" \
+  || fail "kernel 6.1.0: no TOO OLD line naming the upgrade: $out"
+# unshare -rm refused: FAILED naming its error and a fix (the sysctl that turns them off here, or the container), exit 1.
+touch "$t/userns-off"; check 1 "$gh_target" ""; rm "$t/userns-off"
+grep -qE '^userns FAILED unshare -rm true: unshare: write failed /proc/self/uid_map: Operation not permitted \(the qc sandbox runs its judge in unprivileged user namespaces, #404\); (allow them: printf ".*" \| sudo tee /etc/sysctl\.d/60-octo-feather-userns\.conf && sudo sysctl --system|no sysctl here turns them off .*)$' <<<"$out" \
+  || fail "user namespaces refused: no FAILED line naming the error and the fix: $out"
+# The state folder without lanes/: MISSING naming mkdir -p, exit 1.
+rmdir "$t/state/octo-feather/lanes"; check 1 "$gh_target" ""; mkdir "$t/state/octo-feather/lanes"
+grep -qx "state  MISSING $t/state/octo-feather/lanes (the session state folder, octo-feather-state); mkdir -p $t/state/octo-feather/lanes" <<<"$out" \
+  || fail "state folder without lanes/: no MISSING line naming mkdir -p: $out"
+# The kit install: detached on main ok; on another branch NOT ON MAIN naming git switch main; a worktree, and a folder
+# that is no clone, each named with the fix; exit 1.
+g -C "$kitinst" checkout -q --detach; check 0 "$gh_target" ""
+grep -qx "kit    ok  $kitinst on main (OCTO_FEATHER_KIT_INSTALL)" <<<"$out" || fail "kit install detached on main: not ok: $out"
+g -C "$kitinst" checkout -q -b feat; check 1 "$gh_target" ""
+grep -qx "kit    NOT ON MAIN $kitinst is on branch feat (OCTO_FEATHER_KIT_INSTALL; octo-feather-lane post-merge step 3 fast-forwards it); live install clones stay on main (work in a git worktree): git -C $kitinst switch main" <<<"$out" \
+  || fail "kit install on a branch: no NOT ON MAIN line naming git switch main: $out"
+g -C "$kitinst" checkout -q main; g -C "$kitinst" worktree add -q "$t/kitwt" -b wt 2>/dev/null
+kitinst="$t/kitwt" check 1 "$gh_target" ""
+grep -qx "kit    A WORKTREE $t/kitwt, not the install clone (OCTO_FEATHER_KIT_INSTALL; octo-feather-lane post-merge step 3 fast-forwards it); set OCTO_FEATHER_KIT_INSTALL to the install clone (git -C $t/kitwt worktree list: its first line)" <<<"$out" \
+  || fail "kit install a worktree: not named: $out"
+mkdir -p "$t/noclone"; kitinst="$t/noclone" check 1 "$gh_target" ""
+grep -qE "^kit    NOT A CLONE $t/noclone \(OCTO_FEATHER_KIT_INSTALL; octo-feather-lane post-merge step 3 fast-forwards it\); git clone \S+ $t/noclone, or set OCTO_FEATHER_KIT_INSTALL to the install clone$" <<<"$out" \
+  || fail "kit install not a clone: no NOT A CLONE line naming git clone: $out"
+# agent-browser's own Chrome under the cache folder the qc sandbox masks, and none found: each named with
+# agent-browser install, exit 1.
+abfix="agent-browser install (Chrome for Testing into $t/home/.agent-browser/browsers, which agent-browser searches first; drop any AGENT_BROWSER_EXECUTABLE_PATH, or executablePath in ~/.agent-browser/config.json, naming another)"
+chrome "$t/home/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome"; check 1 "$gh_target" ""
+grep -qxF "agent-browser browser UNREADABLE IN THE QC SANDBOX $t/home/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome is under $t/home/.cache, which the sandbox masks; $abfix" <<<"$out" \
+  || fail "agent-browser Chrome under the cache folder: not refused with the fix: $out"
+chrome ""; check 1 "$gh_target" ""; chrome "$okchrome"
+grep -qxF "agent-browser browser MISSING (agent-browser doctor --offline names no Chrome); $abfix" <<<"$out" \
+  || fail "agent-browser without Chrome: no MISSING line with the fix: $out"
+# ffmpeg absent: an OPTIONAL line naming the install, and the check still passes.
+mv "$t/bin/ffmpeg" "$t/ffmpeg"; saved="$clean"; clean="$(hide ffmpeg "$saved")"
+check 0 "$gh_target" ""; clean="$saved"; mv "$t/ffmpeg" "$t/bin/ffmpeg"
+grep -qx 'ffmpeg OPTIONAL not installed; only agent-browser video recording needs it, the check passes; to record video: sudo apt install ffmpeg' <<<"$out" \
+  || fail "no ffmpeg: no OPTIONAL line naming the install, or the check failed: $out"
+# herdr, gh, jq and git absent: each MISSING with its official install command, exit 1.
+mkdir -p "$t/aside"; mv "$t/bin/herdr" "$t/bin/gh" "$t/aside/"; saved="$clean"; clean="$(hide "herdr gh jq git" "$saved")"
+check 1 "$gh_target" ""; clean="$saved"; mv "$t/aside/"* "$t/bin/"
+grep -qxF 'herdr  MISSING; curl -fsSL https://herdr.dev/install.sh | sh' <<<"$out" \
+  && grep -qxF 'jq     MISSING; sudo apt install jq (Debian, Ubuntu)' <<<"$out" && grep -qxF 'git    MISSING; sudo apt install git (Debian, Ubuntu)' <<<"$out" \
+  && grep -qE "^gh     MISSING; \(Debian, Ubuntu: GitHub CLI's apt repository\) .*https://cli\.github\.com/packages stable main.* && sudo apt install gh -y$" <<<"$out" \
+  || fail "herdr, gh, jq, git absent: not each MISSING with its install command: $out"
+echo "install-check: ok (box facts: kernel, userns, state, kit install, agent-browser Chrome, ffmpeg each ok and each gap named with its fix, the sharing step printed; herdr, gh, jq, git MISSING with their install; gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
