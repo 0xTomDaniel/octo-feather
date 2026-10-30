@@ -515,12 +515,13 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     pin = {n: open(os.path.join(root, n + "-version")).read().strip() for n in ("mise", "pi", "agent-browser")}
     mise = next((h for h in hits("mise") if version(h) == pin["mise"]), "mise")  # a stale mise first answers nothing useful
     shims = js(mise, "doctor", "--json").get("dirs", {}).get("shims", "")
-    bins = {}  # executable name: its pinned path, for the target mise.toml tools
+    bins = {}  # executable name: its pinned path, for the target mise.toml tools; pi and agent-browser that npm put in
+    # the node bin dir of mise (their fix lines, #463) keep their own version pins
     if os.path.isfile(os.path.join(top, "mise.toml")):
         for b in run(mise, "-C", top, "bin-paths").split("\n"):
             for n in sorted(os.listdir(b)) if b and os.path.isdir(b) else []:
                 f = os.path.join(b, n)
-                if os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
+                if n not in pin and os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
     kit = js(mise, "-C", root, "ls", "--local", "--json")
     pins = [(n, pin[n], f"{n}-version") for n in pin] + [("just", (kit.get("just") or [{}])[0].get("version"), "kit mise.lock")]
     for name, want, why in pins:

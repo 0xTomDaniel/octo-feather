@@ -15,6 +15,7 @@ Drive criterion: `remote#acceptance-install-agent-browser`
 
 ## How to get to it (user POV)
 
+- On a fresh box: the README's bootstrap, which runs it and each fix it prints until it exits 0 (#463).
 - In the kit checkout: `just install-check` (target: the invocation directory), or in a target repo `just -f <kit>/justfile install-check`.
 - At box setup and after a model key change: `just install-check-models` (what it checks and when: spec remote#host-models).
 
@@ -37,4 +38,5 @@ Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive insta
 - The agent-browser line shows this box's state only; the other states are proven by `tests/install-check.sh` (a stub, and a PATH without agent-browser).
 - The drive never proves a key: ok and REJECTED (a key with trailing terminal characters) are proven by `tests/install-check.sh` with the stub `tests/fixtures/install-check/pi` first on PATH; a real ok run costs a few tiny model calls, so it is run by hand only.
 - Tool lines depend on the box: the case checks each tool has a line, not that it is installed.
+- pi and agent-browser installed by their npm fix lines land in mise's node bin dir; how their `path` lines judge them: the justfile's install-check (#463). The drive shows this box's layout only; `tests/install-check.sh` proves that case with a `path:` node version.
 - The box fact lines show this box's state only (the `kit` line is a gap in a worktree or copy: not the install clone); each ok and gap state is proven by `tests/install-check.sh` with stub probes (`uname -r`, `unshare`, `agent-browser doctor`, `ffmpeg`) and scratch folders (`XDG_STATE_HOME`, `OCTO_FEATHER_KIT_INSTALL`).

@@ -23,7 +23,8 @@
 #     Uses the box's mise installs (MISE_DATA_DIR kept while HOME is a fresh dir); installs nothing.
 #   PATH (#422 items 2, 10): linear is hidden alone (its dir mirrored minus it), so a mise sharing its dir stays ok;
 #     each pinned tool's first hit on the caller's PATH is printed ok; a stale node or mise first on PATH: SHADOWED
-#     naming it, the pinned path and the fix, exit 1.
+#     naming it, the pinned path and the fix, exit 1. pi and agent-browser installed into the target's mise node (their
+#     npm fix lines, #463) stay pinned by their version files: another copy at the pin first on PATH is ok.
 #   Python (owner ruling #422, #261): the gate's Python at the kit's .python-version, found through uv: ok with venv and
 #     pidfd_open; none installed: MISSING naming `uv python install --no-bin`, exit 1, and `just check` in a copy of the
 #     kit refuses, naming it. The box python3 at 3.11 or later ok; a python3 reporting 3.10: WRONG VERSION, exit 1.
@@ -157,6 +158,14 @@ o="$t/stale"; mkdir -p "$o"; printf '#!/bin/sh\necho v18.0.0\n' >"$o/node"; chmo
 pre="$o" check 1 "$mise_target" ""; rm -rf "$o"
 grep -qx "path   node SHADOWED $o/node comes first on PATH, before the pinned $shims/node ($mise_target/mise.lock); remove or rename $o/node, or put $shims first on PATH" <<<"$out" \
   || fail "stale node first on PATH: no SHADOWED line naming it, the pinned shim and the fix: $out"
+# pi and agent-browser that `npm install -g` put in the target's mise node bin dir (a path: version stands in for it,
+# trusted through the environment only): pinned by pi-version and agent-browser-version, not mise.lock, so the stubs
+# at those pins first on PATH are ok (#463: the scratch-HOME proof's npm-installed pi made this SHADOWED).
+npm_target="$t/npmglobal"; git init -q "$npm_target"; mkdir -p "$t/node/bin"
+cp "$t/bin/pi" "$t/bin/agent-browser" "$t/node/bin/"; printf '[tools]\nnode = "path:%s/node"\n' "$t" >"$npm_target/mise.toml"
+MISE_TRUSTED_CONFIG_PATHS="$npm_target" check 0 "$npm_target" ""
+grep -qx "path   pi ok  $t/bin/pi (pi-version)" <<<"$out" && grep -qx "path   agent-browser ok  $t/bin/agent-browser (agent-browser-version)" <<<"$out" \
+  || fail "pi and agent-browser in the target's mise node bin dir: not checked by their version pins: $out"
 check 0 "$gh_target" ""
 grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" && ! grep -qE '^mise   [^v]' <<<"$out" || fail "a repo the kit did not create got mise tool lines: $out"
 o="$t/first"; mkdir -p "$o"   # first on the caller's PATH, which the justfile keeps ahead of its tools
@@ -207,8 +216,9 @@ ab 0.39.4
 check 1 "$gh_target" ""
 grep -qx "agent-browser WRONG VERSION $t/bin/agent-browser reports 0.39.4, want 0.40.0 (agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)" <<<"$out" \
   || fail "agent-browser 0.39.4: no WRONG VERSION line naming 0.40.0 and the install: $out"
-rm "$t/bin/agent-browser"; saved="$clean"; clean="$(hide agent-browser "$saved")"
-check 1 "$gh_target" ""; clean="$saved"
+# mise's shims too: an agent-browser npm put in mise's node has a shim there (#463).
+rm "$t/bin/agent-browser"; saved="$clean"; clean="$(hide agent-browser "$saved")"; sshims="$shims"; shims="$(hide agent-browser "$shims")"; shims="${shims#:}"
+check 1 "$gh_target" ""; clean="$saved"; shims="$sshims"
 grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
   || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
 ab 0.40.0
