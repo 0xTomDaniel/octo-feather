@@ -408,7 +408,7 @@ rm -rf "$HOME/.cache"
 command -v mise > /dev/null || fail "no mise on PATH: the new-repo case proves its mise trust in the sandbox"
 ms="$HOME/.local/state/mise"; mkdir -p "$ms/trusted-configs"; ln -s "$HOME/src/sib" "$ms/trusted-configs/src-sib-0123456789abcdef"
 MISE_STATE_DIR="$ms" run 0 newrepo $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -q "NEWREPO exit 0" <<< "$judge" && grep -q "mise.toml trusted (that file only)" <<< "$judge" || fail "new-repo in the sandbox: $judge"
 grep -q "qc sandbox: ok   mise state dir per-run: /tmp/.* started empty: 0 entries" <<< "$out" && grep -q "qc sandbox: ok   writable persistent paths: none$" <<< "$out" \
   || fail "no per-run mise state proof: $out"
