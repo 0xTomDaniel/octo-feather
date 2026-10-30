@@ -1223,7 +1223,7 @@ def drive_qc_stale(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract: a demo each, covering its own code path")
     head = git("rev-parse", "HEAD")
-    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports, the scratch target's evidence store
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}   # qc's reports, the scratch target's evidence store; no real classifier
     f.pre = ["env", "-C", str(r)]   # just qc and the status view run where the owner or supervisor stands: the target
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
     f.obs("qc", "status", git("show", "HEAD:docs/specs/demo.status.json"))

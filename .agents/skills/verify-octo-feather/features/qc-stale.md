@@ -27,7 +27,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-stale`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-stale/`.
 
-The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, `src/a`, `src/b`, `tests/a.sh`, `tests/b.sh`, a `qc.toml` whose two demos are `qc.toml` `values.qc_demo_pass`, covering `src/a` and `src/b`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-stale/state`).
+The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/demo.spec.html`, its status file, `src/a`, `src/b`, `tests/a.sh`, `tests/b.sh`, a `qc.toml` whose two demos are `qc.toml` `values.qc_demo_pass`, covering `src/a` and `src/b`) and scratch box state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-stale/state`); the classifier faked (SKILL.md), so each result's advisory line says unavailable.
 
 - **Build both** (`qc`). In the scratch target (`env -C <scratch>`), run `just --justfile <kit>/justfile qc docs/specs/demo.status.json 7 acceptance-a acceptance-b`. Observe exit 0, `PASS` for both with their record ids; the status file at the head qc left holds each as `{"status": "built", "pr": 7, "record": <its id>, "commit": <judged head>, "tests": ["tests/<a|b>.sh"]}`.
 - **Show** (`show`). The drive commits a change to `README`, then one to `src/a`; in the scratch target run `octo-feather-spec-status show`. Observe `acceptance-a: built (PR #7), STALE: record <id> captured at <head>; covered path src/a changed since <head> by <commit> change a's code`, `acceptance-b: built (PR #7), current: ...` and `2 built: 1 current, 1 stale, 0 no evidence link`.
