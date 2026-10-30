@@ -216,8 +216,9 @@ ab 0.39.4
 check 1 "$gh_target" ""
 grep -qx "agent-browser WRONG VERSION $t/bin/agent-browser reports 0.39.4, want 0.40.0 (agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)" <<<"$out" \
   || fail "agent-browser 0.39.4: no WRONG VERSION line naming 0.40.0 and the install: $out"
-rm "$t/bin/agent-browser"; saved="$clean"; clean="$(hide agent-browser "$saved")"
-check 1 "$gh_target" ""; clean="$saved"
+# mise's shims too: an agent-browser npm put in mise's node has a shim there (#463).
+rm "$t/bin/agent-browser"; saved="$clean"; clean="$(hide agent-browser "$saved")"; sshims="$shims"; shims="$(hide agent-browser "$shims")"; shims="${shims#:}"
+check 1 "$gh_target" ""; clean="$saved"; shims="$sshims"
 grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
   || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
 ab 0.40.0
