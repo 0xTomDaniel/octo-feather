@@ -24,7 +24,9 @@
 #   PATH (#422 items 2, 10): linear is hidden alone (its dir mirrored minus it), so a mise sharing its dir stays ok;
 #     each pinned tool's first hit on the caller's PATH is printed ok; a stale node or mise first on PATH: SHADOWED
 #     naming it, the pinned path and the fix, exit 1. pi and agent-browser installed into the target's mise node (their
-#     npm fix lines, #463) stay pinned by their version files: another copy at the pin first on PATH is ok.
+#     npm fix lines, #463) stay pinned by their version files: another copy at the pin first on PATH is ok. In the kit,
+#     judged on the PATHs the kit runs from (its recipes', a pane's): a stale node in a system dir before mise's shims
+#     only a NOTE, exit 0; one in a dir ahead of mise's SHADOWED, exit 1; shims first ok, no NOTE.
 #   Python (owner ruling #422, #261): the gate's Python at the kit's .python-version, found through uv: ok with venv and
 #     pidfd_open; none installed: MISSING naming `uv python install --no-bin`, exit 1, and `just check` in a copy of the
 #     kit refuses, naming it. The box python3 at 3.11 or later ok; a python3 reporting 3.10: WRONG VERSION, exit 1.
@@ -79,7 +81,7 @@ printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* 
 ln -s "$(mise which just)" "$t/bin/just"
 export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
 UV_PYTHON_INSTALL_DIR="$(uv python dir)"; export UV_PYTHON_INSTALL_DIR
-ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"
+ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"; real_unshare="$(command -v unshare)"
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 mpin="$(tr -d '[:space:]' <"$kit/mise-version")"
 # hide NAMES PATHLIST: PATHLIST with only NAMES (space-separated) gone: each dir holding one is mirrored minus those
@@ -207,6 +209,30 @@ mkdir -p "$folder/chromium_headless_shell-1248"; touch "$folder/chromium_headles
 check 0 "$br_target" ""
 grep -qx "browser ok  $folder/chromium_headless_shell-1248 (Playwright 1.64.1; PLAYWRIGHT_BROWSERS_PATH=$folder)" <<<"$out" \
   || fail "browser target, fake headless shell at the pin: not ok: $out"
+# The PATHs the kit runs its tools from, in the kit itself (post-merge step 3 runs install-check there from the
+# director's pane, #422): its recipes' PATH (the justfile puts mise's dirs before the first system dir) and a pane's
+# (pi-role's with_mise). (a) A caller PATH with a system dir holding stale launchers before mise's shims (a shell
+# started before the shims went first): ok and a NOTE line naming the launcher, the kit unaffected, exit 0. (b) A stale
+# launcher in a dir the caller puts ahead (the justfile and pi-role keep such dirs first): SHADOWED, exit 1. (c) mise's
+# shims first: ok, no NOTE. The stale /usr/local/bin is a scratch dir bound over it in a user namespace (unshare -rm,
+# as tests/qc.sh needs), so no box dir is touched; the kit's [browser] pin is the fake shell above.
+sysd="$t/sysbin"; mkdir -p "$sysd"; printf '#!/bin/sh\necho v18.0.0\n' >"$sysd/node"; chmod +x "$sysd/node"
+[[ -d /usr/local/bin ]] || fail "no /usr/local/bin to bind the stale launchers over"
+inkit() { # WANT CALLER_PATH: install-check in the kit, /usr/local/bin holding only a stale node; output in $out
+  local rc=0; out="$(cd "$kit" && env -u XDG_CACHE_HOME -u AGENT_BROWSER_EXECUTABLE_PATH -u SPEC_CHAT_CLONE HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$kitinst" XDG_DATA_HOME="$t/home/.local/share" PATH="$2" \
+    "$real_unshare" -rm sh -c 'mount --bind "$1" /usr/local/bin && shift && exec "$@"' sh "$sysd" just install-check 2>&1)" || rc=$?
+  [[ "$rc" == "$1" ]] || fail "in the kit (PATH $2): want exit $1, got $rc: $out"
+}
+inkit 0 "$t/bin:/usr/local/bin:$shims$clean"
+grep -qE "^path   node ok  /\S+/node \($kit/mise\.lock\)$" <<<"$out" && ! grep -q SHADOWED <<<"$out" \
+  && grep -qE "^path   node NOTE /usr/local/bin/node comes first on your shell PATH, before the pinned $shims/node \($kit/mise\.lock\); the kit is unaffected: its recipes \(justfile\) and panes \(pi-role\) put mise first and run /\S+/node; to run the pinned one in this shell too, put $shims first on PATH$" <<<"$out" \
+  || fail "stale node in a system dir before mise's shims: want node ok and a NOTE line only: $out"
+o="$t/ahead"; mkdir -p "$o"; cp "$sysd/node" "$o/node"
+inkit 1 "$o:$t/bin:/usr/local/bin:$shims$clean"
+grep -qx "path   node SHADOWED $o/node comes first on PATH, before the pinned $shims/node ($kit/mise.lock); remove or rename $o/node, or put $shims first on PATH" <<<"$out" \
+  || fail "stale node ahead of mise's dirs on the kit's PATHs: no SHADOWED line: $out"
+rm -rf "$o"; inkit 0 "$t/bin:$shims:/usr/local/bin$clean"
+grep -qE "^path   node ok  " <<<"$out" && ! grep -qE "^path   \S+ (NOTE|SHADOWED) " <<<"$out" || fail "mise's shims first: want ok, no NOTE: $out"
 mkdir -p "$t/home/.cache/d"; cp -r "$t/home/.local/share/octo-feather" "$t/home/.cache/d/"
 data="$t/home/.cache/d" check 1 "$br_target" ""
 grep -q "^browser UNREADABLE IN THE QC SANDBOX $t/home/.cache/d/octo-feather/ms-playwright/1.64.1 is under $t/home/.cache" <<<"$out" \
@@ -345,4 +371,4 @@ keys "$issued" "https://proxy.example/v1" "$issued"; avail="" models 1
 grep -qxF "model  $judge FAILED (Pi lists no classifier $judge: no key for its provider, or not in Pi catalog) for $jwho; run pi --model $judge -p ok by hand for the full error Pi gives, then rerun just install-check-models" <<<"$out" \
   || fail "judgment model Pi does not list: no FAILED line: $out"
 echo "install-check: ok (review service ok, NOT RUNNING and no systemctl MISSING naming the installer; models MANUAL naming just install-check-models, no model call; install-check-models with a stub pi first on PATH: role models and the judgment model ok, trailing-junk keys REJECTED (models.json, auth.json), proxy UNREACHABLE, judgment model not listed FAILED, key never printed)"
-echo "install-check: ok (box facts: kernel, userns, state, kit install, agent-browser Chrome, ffmpeg each ok and each gap named with its fix, the sharing step printed; herdr, gh, jq, git MISSING with their install; gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
+echo "install-check: ok (box facts: kernel, userns, state, kit install, agent-browser Chrome, ffmpeg each ok and each gap named with its fix, the sharing step printed; herdr, gh, jq, git MISSING with their install; gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; in the kit a stale node in a system dir before mise's shims a NOTE only, exit 0, one ahead of mise's dirs SHADOWED, shims first ok; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"

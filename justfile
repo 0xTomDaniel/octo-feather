@@ -309,8 +309,9 @@ check-behavior-smoke:
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
-# each pinned tool's first hit on CALLER_PATH (default the caller's PATH, which panes and shells resolve) is the
-# pinned one, or that launcher is named with the fix;
+# each pinned tool's first hit on the PATH the kit runs it from (this recipe's own PATH, the justfile's caller_path
+# rule, and the PATH pi-role gives a pane started from CALLER_PATH, default the caller's) is the pinned one, or that
+# launcher is named with the fix; one only CALLER_PATH itself finds first is a NOTE line, never a failure;
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
 # (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
 # service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
@@ -487,28 +488,43 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # ffmpeg (#422 item 9): only agent-browser's video recording needs it, so it never fails the check.
     if p="$(command -v ffmpeg)"; then printf 'ffmpeg ok  %s (optional: agent-browser video recording)\n' "$p"
     else echo "ffmpeg OPTIONAL not installed; only agent-browser video recording needs it, the check passes; to record video: sudo apt install ffmpeg"; fi
-    # The caller's PATH (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise, node, pnpm, uv):
-    # for each pinned tool, its first hit there is the pinned one (ok, its path), else that launcher is named with the
-    # pinned path and the fix. Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
+    # The PATHs the kit runs tools from (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise,
+    # node, pnpm, uv): this recipe's own PATH (the justfile's caller_path rule) and the PATH pi-role gives a pane
+    # started from the caller's PATH (its with_mise rule, asked of pi-role itself). For each pinned tool, its first hit
+    # on both is the pinned one (ok, its path), else that launcher is named with the pinned path and the fix. One only
+    # the caller's own PATH finds first (a shell started before mise's shims went first) is a NOTE: the kit is
+    # unaffected, the exit unchanged (the director's pane, #422). Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
     # first hit reporting the pin (none on PATH at the pin: the version lines above name the install); every executable
     # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one).
-    python3 -c 'import json, os, re, subprocess, sys
-    root, top, path = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
-    dirs = [d for d in path.split(":") if os.path.isabs(d)]
+    python3 -c 'import functools, importlib.machinery as im, importlib.util as iu, json, os, re, subprocess, sys
+    root, top, caller = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
+    recipe = os.environ["PATH"]
+    s = iu.spec_from_loader("pi_role", im.SourceFileLoader("pi_role", root + "/scripts/pi-role")); pr = iu.module_from_spec(s); s.loader.exec_module(pr)
+    os.chdir(top); os.environ["PATH"] = caller
+    pane = pr.mise_path() or caller  # what pi-role puts on a pane started from the caller here
+    os.environ["PATH"] = recipe
     def run(*a):
         try: return subprocess.run(a, capture_output=True, text=True, timeout=20, cwd=top, stdin=subprocess.DEVNULL).stdout
         except (OSError, subprocess.SubprocessError): return ""
-    def hits(name):
-        fs = [os.path.join(d, name) for d in dirs]
+    def hits(name, path=recipe):
+        fs = [os.path.join(d, name) for d in path.split(":") if os.path.isabs(d)]
         return list(dict.fromkeys(f for f in fs if os.path.isfile(f) and os.access(f, os.X_OK)))
+    @functools.cache
     def version(f):
         m = re.search(r"[0-9]+\.[0-9]+\.[0-9]+", run(f, "--version"))
         return m.group(0) if m else None
     bad = 0
-    def line(name, first, ok, pinned, why):
+    def line(name, judge, why):
+        # judge(path): (first hit, ok, pinned) on that PATH, or None when it decides nothing there
         global bad
-        if ok: print(f"path   {name} ok  {first} ({why})"); return
-        print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1
+        kit = [v for v in (judge(recipe), judge(pane)) if v]
+        if not kit: return
+        first, ok, pinned = next((v for v in kit if not v[1]), kit[0])
+        if not ok:
+            print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1; return
+        print(f"path   {name} ok  {first} ({why})")
+        c = judge(caller)
+        if c and not c[1]: print(f"path   {name} NOTE {c[0]} comes first on your shell PATH, before the pinned {c[2]} ({why}); the kit is unaffected: its recipes (justfile) and panes (pi-role) put mise first and run {first}; to run the pinned one in this shell too, put {os.path.dirname(c[2])} first on PATH")
     def js(*a):
         try: return json.loads(run(*a) or "{}")
         except ValueError: return {}
@@ -524,16 +540,23 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
                 if n not in pin and os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
     kit = js(mise, "-C", root, "ls", "--local", "--json")
     pins = [(n, pin[n], f"{n}-version") for n in pin] + [("just", (kit.get("just") or [{}])[0].get("version"), "kit mise.lock")]
-    for name, want, why in pins:
-        if name in bins or not (hs := hits(name)): continue
-        pinned = next((h for h in hs if version(h) == want), None)
-        if pinned: line(name, hs[0], hs[0] == pinned, pinned, why)
-    for name, f in sorted(bins.items()):
-        if not (hs := hits(name)): continue
+    def by_version(name, want):
+        def judge(path):
+            hs = hits(name, path)
+            pinned = next((h for h in hs if version(h) == want), None)
+            return (hs[0], hs[0] == pinned, pinned) if pinned else None
+        return judge
+    def by_bin(name, f):
         shim = os.path.join(shims, name) if shims else ""
         pinned = shim if shim and os.path.isfile(shim) else f
-        ok = os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned))
-        line(name, hs[0], ok, pinned, f"{top}/mise.lock")
+        def judge(path):
+            if not (hs := hits(name, path)): return None
+            return hs[0], os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned)), pinned
+        return judge
+    for name, want, why in pins:
+        if name not in bins: line(name, by_version(name, want), why)
+    for name, f in sorted(bins.items()):
+        line(name, by_bin(name, f), f"{top}/mise.lock")
     sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" || bad=1
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
