@@ -179,8 +179,12 @@ show; want 0 "covered path changed" \
   "acceptance-a: built (PR #7), STALE: record 20261029T100000Z-0a0a0a0a captured at ${cap:0:12}; covered path src/a changed since ${cap:0:12} by $ch change a's code"
 crit_line acceptance-b | grep -qF ", current: " || fail "an unrelated change made acceptance-b stale: $out"
 grep -qF "2 built: 1 current, 1 stale, 0 no evidence link" <<<"$out" || fail "show summary: $out"
-git -C "$e" rm -q tests/b.py; git -C "$e" commit -qm "drop b's test"
-show; crit_line acceptance-b | grep -qF "STALE: record 20261029T100000Z-0b0b0b0b captured at ${cap:0:12}; test tests/b.py::test_b gone (no tests/b.py at HEAD)" \
+# A named test file edited or gone since capture makes it stale (owner ruling #409: the selector maps to its file).
+echo v2 >"$e/tests/a.sh"; git -C "$e" commit -qam "edit a's test"; ta="$(git -C "$e" rev-parse --short=12 HEAD)"
+show; crit_line acceptance-a | grep -qF "; test file tests/a.sh changed since ${cap:0:12} by $ta edit a's test" \
+  || fail "edited test file not stale: $out"
+git -C "$e" rm -q tests/b.py; git -C "$e" commit -qm "drop b's test"; tb="$(git -C "$e" rev-parse --short=12 HEAD)"
+show; crit_line acceptance-b | grep -qF "STALE: record 20261029T100000Z-0b0b0b0b captured at ${cap:0:12}; test file tests/b.py (tests/b.py::test_b) gone since ${cap:0:12} by $tb drop b's test" \
   || fail "gone test not stale: $out"
 git -C "$e" checkout -q "$cap" -- tests/b.py; git -C "$e" commit -qm "b's test back"
 perl -pi -e 's/then it prints ok\./then it prints done./ if /acceptance-b/' "$es/demo.spec.html"

@@ -30,8 +30,9 @@ built until a lane's just qc judges it again, quality #qc-stale). Per status fil
 evidence link; or built current or STALE, naming the record and the commit it was
 captured at. Stale: the criterion's element differs from the spec at that commit;
 a path its demo covers (qc.toml at the repo root, at that commit) differs at HEAD,
-named with the commits that changed it; or a test it names is gone at HEAD (a
-test id `path::name` by its path). A criterion with no demo at that commit was
+named with the commits that changed it; or the file of a test it names (a test
+id `path::name` by its path) differs at HEAD, edited or gone, named likewise, or is
+not at HEAD. A criterion with no demo at that commit was
 judged by the agent fallback: no covers or tests, so only its text makes it stale.
 
 A call log `<slug>.calls.jsonl` sits beside them (issue-lifecycle #gates-spec-calls),
@@ -524,10 +525,15 @@ def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple
     covers = [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
     for f in _changes(top, c, covers)[0] if covers else []:
         why.append(f"covered path {f} changed since {c12} by {'; '.join(_changes(top, c, [f])[1])}")
-    for t in tests:
-        p = t.split("::", 1)[0]
-        if _run(top, "cat-file", "-e", f"HEAD:{p}")[0]:
-            why.append(f"test {t} gone (no {p} at HEAD)")
+    for p in dict.fromkeys(t.split("::", 1)[0] for t in tests):   # each named test's file, a selector by its file
+        named = ", ".join(t for t in tests if t != p and t.split("::", 1)[0] == p)
+        what = f"test file {p}" + (f" ({named})" if named else "")
+        gone = bool(_run(top, "cat-file", "-e", f"HEAD:{p}")[0])
+        changed, by = _changes(top, c, [p])
+        if changed:
+            why.append(f"{what} {'gone' if gone else 'changed'} since {c12} by {'; '.join(by)}")
+        elif gone:
+            why.append(f"{what} gone (not at HEAD)")
     if why:
         return "stale", f"STALE: {head}; {'; '.join(why)}"
     if demo is None:

@@ -289,13 +289,17 @@ step 4 tells no lane twice.
                    none>; re-read the changed ones before your next step." Rule files: what the merge commit
                    changed against its first parent (git in the current repo, fetched from origin when missing)
                    under agents/*.md, .agents/skills/, .skillfile/patches/, AGENTS.md, docs/adr/, docs/specs/.
-                   A pane Herdr does not find is never sent to (why: herdr-comms SKILL.md, herdr-say): it is listed
-                   `not woken: <lane> <pane>` for the director. Each lane told gets one line in
+                   A pane Herdr does not find (agent_not_found, read from stderr or stdout) is never sent to (why:
+                   herdr-comms SKILL.md, herdr-say) and never stops the step: listed `not woken: <lane> <pane>`
+                   (parked) when the lane's latest parked line in <lane>.handoffs.jsonl beside its record names
+                   that pane, else `gone: director to resume or archive: <lane> <pane>`; any other herdr failure
+                   stops the step, named. Each lane told gets one line in
                    $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
                    "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
                    A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
-                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...`
+                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...; gone: director to resume or
+                   archive: ...`
   step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
                    close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
@@ -2798,21 +2802,30 @@ def pm_kit_repo() -> str | None:
     return m.group(1).lower() if m else None
 
 
-def pm_live(pane: str) -> bool:
-    """Whether Herdr finds PANE (`herdr agent get`); agent_not_found is a parked or gone pane. Refuse otherwise."""
+def pm_herdr_get(what: str, target: str) -> tuple[subprocess.CompletedProcess[str], dict[str, object], str | None]:
+    """`herdr WHAT get TARGET`: the run, its stdout JSON object ({} when none), and the code of the error JSON it
+    printed; real Herdr (0.9.5) prints a not-found error on stderr with empty stdout, exit 1, so both are read."""
     try:
-        p = subprocess.run(["herdr", "agent", "get", pane], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        p = subprocess.run(["herdr", what, "get", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     except FileNotFoundError:
         raise Refuse("herdr not on PATH")
-    try:
-        d: object = json.loads(p.stdout)
-    except ValueError:
-        d = None
-    d = cast("dict[str, object]", d) if isinstance(d, dict) else {}
+    found: list[dict[str, object]] = []
+    for text in (p.stdout, p.stderr):
+        try:
+            d: object = json.loads(text)
+        except ValueError:
+            d = None
+        found.append(cast("dict[str, object]", d) if isinstance(d, dict) else {})
+    errs = [cast("dict[str, object]", e).get("code") for e in (x.get("error") for x in reversed(found)) if isinstance(e, dict)]
+    return p, found[0], str(errs[0]) if p.returncode and errs else None
+
+
+def pm_live(pane: str) -> bool:
+    """Whether Herdr finds PANE (`herdr agent get`); agent_not_found is a parked or gone pane. Refuse otherwise."""
+    p, d, code = pm_herdr_get("agent", pane)
     if not p.returncode and isinstance(d.get("result"), dict):
         return True
-    err = d.get("error")
-    if p.returncode and isinstance(err, dict) and cast("dict[str, object]", err).get("code") == "agent_not_found":
+    if code == "agent_not_found":
         return False
     out = (p.stderr or p.stdout).strip().splitlines()
     raise Refuse(f"herdr agent get {pane} failed ({out[-1][:200] if out else f'exit {p.returncode}'})")
@@ -2842,6 +2855,7 @@ def pm_tell(pm: PostMerge) -> str:
     told: list[str] = []
     already: list[str] = []
     parked: list[str] = []
+    gone: list[str] = []
     failed: list[str] = []
     due: list[tuple[str, str, object]] = []
     for rec_path in recs:
@@ -2869,7 +2883,15 @@ def pm_tell(pm: PostMerge) -> str:
         except Refuse as e:
             failed.append(f"{name} {sup}: {e}"); continue
         if not live:
-            parked.append(f"{name} {sup}"); continue
+            # Parked when the lane's latest parked line (its hand-off log, read as octo-feather-handoff parked
+            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 4).
+            log = lanes / f"{name}.handoffs.jsonl"
+            try:
+                marks = [x for x in (read_log(log)[0] if log.exists() else []) if x.get("kind") == "parked"]
+            except OSError as e:
+                failed.append(f"{name} {sup}: hand-off log {log} unread ({e})"); continue
+            marks.sort(key=lambda x: str(x.get("at") or ""))
+            (parked if marks and marks[-1].get("pane") == sup else gone).append(f"{name} {sup}"); continue
         try:
             p = subprocess.run(["herdr-say", sup, msg], capture_output=True, text=True, stdin=subprocess.DEVNULL)
         except FileNotFoundError:
@@ -2886,7 +2908,8 @@ def pm_tell(pm: PostMerge) -> str:
             failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})"); continue
         told.append(f"{name} {sup}")
     who = (f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; told: {', '.join(told) or 'none'}; "
-           f"already told: {', '.join(already) or 'none'}; not woken: {', '.join(parked) or 'none'}")
+           f"already told: {', '.join(already) or 'none'}; not woken: {', '.join(parked) or 'none'}; "
+           f"gone: director to resume or archive: {', '.join(gone) or 'none'}")
     if failed:
         raise Refuse(f"{'; '.join(failed)}; no prod line for these: fix each, then rerun (a rerun skips lanes told); {who}")
     return who
@@ -2899,17 +2922,8 @@ class Pending(Exception):
 
 
 def pm_herdr_gone(what: str, target: str, code: str) -> bool:
-    """Whether Herdr reports TARGET gone: `herdr WHAT get TARGET` fails with error CODE."""
-    try:
-        p = subprocess.run(["herdr", what, "get", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
-    except FileNotFoundError:
-        raise Refuse("herdr not on PATH")
-    try:
-        d: object = json.loads(p.stdout)
-    except ValueError:
-        d = None
-    err = cast("dict[str, object]", d).get("error") if isinstance(d, dict) else None
-    return bool(p.returncode) and isinstance(err, dict) and cast("dict[str, object]", err).get("code") == code
+    """Whether Herdr reports TARGET gone: `herdr WHAT get TARGET` fails with error CODE (pm_herdr_get)."""
+    return pm_herdr_get(what, target)[2] == code
 
 
 def pm_close(target: str, space: str, shared: bool) -> str:
