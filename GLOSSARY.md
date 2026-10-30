@@ -66,6 +66,10 @@ _Avoid_: Spec delivery, intake
 `docs/specs/<slug>.status.json`, beside an accepted spec: each acceptance criterion's id (its `data-anchor`) with its status and the PR that built it. It merges with the spec, before any lane code; the spec itself never changes for status.
 _Avoid_: Receipt, tracker
 
+**Acceptance criterion**:
+One Given / When / Then scenario in an accepted spec, keyed by its `data-anchor`, that a lane builds. Form: docs/adr/0006; its status: docs/specs/issue-lifecycle.spec.html#spec-status-file.
+_Avoid_: Requirement, story (a user story is its own element)
+
 **Planned criterion**:
 An acceptance criterion of an accepted spec that no merged lane has built yet. Every criterion starts planned.
 _Avoid_: Open, todo
@@ -73,6 +77,18 @@ _Avoid_: Open, todo
 **Built criterion**:
 An acceptance criterion a merged lane PR delivers, which `just qc` passed on stored evidence, decided by its demo or the labelled agent fallback (docs/specs/quality.spec.html#qc-results, #qc-fallback), and flipped in the same merge as its code.
 _Avoid_: Done, verified, accepted
+
+**Acceptance test**:
+The command that drives the app through one criterion's scenario, which `just qc` runs at the lane head; `qc.toml` calls it the criterion's demo today (a rename is a later spec change, #478). Owner: docs/specs/quality.spec.html#qc-contract, #qc-capture.
+_Avoid_: Demo path, smoke test
+
+**Acceptance testing**:
+What `just qc` does: run each claimed criterion's acceptance test, store the evidence, and judge each criterion from it. Owner: docs/specs/quality.spec.html#qc-run.
+_Avoid_: Fresh judge run, agentic qc
+
+**Evidence record**:
+One append-only entry in a target's evidence store, holding what was captured for one criterion at one code revision, read through `octo-feather-evidence`. Owner: docs/specs/quality.spec.html#evidence-store.
+_Avoid_: Receipt, log, screenshot (alone)
 
 **Kickoff**:
 The owner telling the director to build one or more accepted specs. The director checks each is accepted at an exact commit, refuses any that is not, then cuts lanes.
@@ -93,6 +109,14 @@ _Avoid_: Test (for a scan), guard, lint (for anything that is not a linter)
 **Gate**:
 A point where work stops until the owner decides, such as accepting a spec or a merge.
 _Avoid_: Checkpoint, approval step
+
+**QC**:
+Quality control of the product a work item delivers: `just check`, `just qc` and code review. Owner: docs/specs/quality.spec.html#split.
+_Avoid_: QA, testing (alone)
+
+**QA**:
+Quality assurance of the factory itself: eval cases of the kit's agents and loop, run by `just qa`. Owner: docs/specs/quality.spec.html#split.
+_Avoid_: QC, product testing
 
 ## Workspace
 
