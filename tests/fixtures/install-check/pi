@@ -1,0 +1,38 @@
+#!/usr/bin/env python3
+"""Stub pi for tests/install-check.sh: no model, no network. Logs each argv as one JSON line to $PI_STUB_LOG.
+--version prints $PI_STUB_VERSION. A print-mode call (-p --mode json --model PROVIDER/ID) plays the model proxy,
+in the event shapes real Pi prints: providers.PROVIDER in $PI_CODING_AGENT_DIR/models.json with a baseUrl holding
+"unreachable" fails as Pi does after its retries ("Connection error."); an apiKey equal to the contents of
+$PI_STUB_ISSUED answers ok; any other key gets the 401 a proxy sends, its body echoing the key."""
+import json
+import os
+import sys
+
+argv = sys.argv[1:]
+with open(os.environ["PI_STUB_LOG"], "a") as log:
+    log.write(json.dumps(argv) + "\n")
+if argv[:1] == ["--version"]:
+    print(os.environ.get("PI_STUB_VERSION", "0.0.0"))
+    sys.exit(0)
+if "-p" not in argv:
+    sys.exit(0)
+model = argv[argv.index("--model") + 1]
+prov = model.split("/")[0]
+cfg = json.load(open(os.path.join(os.environ["PI_CODING_AGENT_DIR"], "models.json")))["providers"][prov]
+issued = open(os.environ["PI_STUB_ISSUED"]).read()
+
+
+def end(**msg):
+    msg = {"role": "assistant", "content": [], "usage": {"cost": {"total": 0.0001}}, **msg}
+    for ev in ({"type": "session", "version": 3}, {"type": "agent_start"}, {"type": "message_end", "message": msg},
+               {"type": "agent_settled", "aborted": False}):
+        print(json.dumps(ev))
+
+
+if "unreachable" in cfg["baseUrl"]:
+    end(stopReason="error", errorMessage="Connection error.", usage={})
+elif cfg["apiKey"] == issued:
+    end(stopReason="stop", content=[{"type": "text", "text": "ok"}])
+else:
+    body = json.dumps({"error": {"message": f"Incorrect API key provided: {cfg['apiKey']}"}})
+    end(stopReason="error", errorMessage=f"401 {body}")

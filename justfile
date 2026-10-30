@@ -312,7 +312,8 @@ check-behavior-smoke:
 # each pinned tool's first hit on CALLER_PATH (default the caller's PATH, which panes and shells resolve) is the
 # pinned one, or that launcher is named with the fix;
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
-# (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg) and the one manual step.
+# (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
+# service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
 # Every gap line names its fix (#461).
 install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     #!/usr/bin/env bash
@@ -571,8 +572,86 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # exe.dev Private sharing, the one step no command inside the box can check (spec remote#review-proxy,
     # #review-never-public): the VM name is this box's on exe.dev (<vm>.exe.xyz), else <vm>.
     vm="$(timeout 5 hostname -f 2>/dev/null)"; [[ "$vm" == *.exe.xyz ]] && vm="${vm%.exe.xyz}" || vm="<vm>"
+    # Spec Chat's review service (spec remote#review-service, #review-setup): the systemd user unit its installer writes,
+    # running and enabled (up at boot); else the installer run box setup makes, from the clone new-repo links.
+    unit=spec-chat-review.service
+    how="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat --review $root/docs/specs/index.spec.html --public $vm.exe.xyz --service (remote#review-setup)"
+    if ! command -v systemctl >/dev/null; then echo "review MISSING no systemctl: the review service runs as a systemd user service ($unit); on a systemd box: $how"; bad=1
+    else
+      st="$(systemctl --user show -p ActiveState -p UnitFileState "$unit" 2>/dev/null)"
+      active="$(sed -n 's/^ActiveState=//p' <<<"$st")"; file="$(sed -n 's/^UnitFileState=//p' <<<"$st")"
+      if [[ "$active" == active && "$file" == enabled ]]; then echo "review ok  $unit active, enabled (Spec Chat's review service, systemd --user)"
+      else echo "review NOT RUNNING $unit is ${active:-unknown}, ${file:-not installed} (want active, enabled: the systemd user service box setup installs); $how"; bad=1; fi
+    fi
+    # The model check makes a model call per role model, so it is a setup step of its own (spec remote#host-models).
+    echo "models MANUAL not checked here (no model call); at box setup and after a model key change: just install-check-models"
     echo "sharing MANUAL exe.dev Private sharing cannot be checked from inside the box; on the exe.dev VM that hosts reviews, from your own machine: ssh exe.dev share set-private $vm (never share set-public: a public share has no login)"
     exit "$bad"
+
+# Box setup, never in install-check or the gate (spec remote#host-models): one short call through Pi to each model a
+# role file names (pi-role --json reads the frontmatter), no tools, no skills, no session; each model ok, its key
+# REJECTED or the proxy UNREACHABLE, with its roles and the fix. Pi reads the key from its own provider config or
+# environment: the key never goes on a command line and no line prints it (an error body that may echo it is dropped).
+install-check-models:
+    #!/usr/bin/env bash
+    set -uo pipefail
+    python3 -c 'import concurrent.futures as cf, glob, json, os, re, shutil, subprocess, sys, tempfile
+    root = sys.argv[1]
+    limit = 120  # seconds per call: Pi retries a connection error 3 times (2, 4, 8 s) before it gives up
+    pi = shutil.which("pi")
+    if not pi: sys.exit("models MISSING pi on PATH; just install-check names its install, then rerun just install-check-models")
+    bad, roles = 0, {}
+    for f in sorted(glob.glob(os.path.join(root, "agents", "*.md"))):
+        role = os.path.basename(f)[:-3]
+        r = subprocess.run([os.path.join(root, "scripts", "pi-role"), "--json", f], capture_output=True, text=True, cwd=root, stdin=subprocess.DEVNULL)
+        try: args = json.loads(r.stdout)["args"]
+        except (ValueError, KeyError, TypeError):
+            print(f"model  {role} UNREADABLE pi-role --json {f} failed: {(r.stderr.strip().splitlines() or ["no output"])[-1]}; fix the role file (scripts/check-roles names the problem)"); bad = 1; continue
+        if "--model" in args: roles.setdefault(args[args.index("--model") + 1], []).append(role)
+    cfg = os.path.join(os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent"), "models.json")
+    try: providers = json.load(open(cfg)).get("providers", {})
+    except (OSError, ValueError, AttributeError): providers = {}
+    print(f"models pi {pi} (one short call per role model, no tools; Pi reads each key from {cfg} or its environment)")
+    def plain(s): return re.sub(r"[A-Za-z0-9_.~+/=-]{20,}", "<redacted>", s.split("{")[0]).strip(" :")[:160] or "no message"
+    def probe(model):
+        cmd = [pi, "-p", "--mode", "json", "--no-session", "--no-tools", "--no-skills", "--no-context-files", "--no-prompt-templates", "--no-mcp", "--thinking", "off", "--model", model, "Reply with the one word ok."]
+        with tempfile.TemporaryDirectory() as cwd:
+            try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=limit, cwd=cwd, stdin=subprocess.DEVNULL, env=dict(os.environ, PI_OFFLINE="1"))
+            except subprocess.TimeoutExpired: return "UNREACHABLE", f"no answer in {limit} s", 0.0
+            except OSError as e: return "FAILED", plain(str(e)), 0.0
+        last = None
+        for line in r.stdout.splitlines():
+            try: ev = json.loads(line)
+            except ValueError: continue
+            msg = ev.get("message") if isinstance(ev, dict) and ev.get("type") == "message_end" else None
+            if isinstance(msg, dict) and msg.get("role") == "assistant": last = msg
+        if r.returncode or last is None: return "FAILED", plain((r.stderr.strip().splitlines() or [f"pi exit {r.returncode}, no answer"])[-1]), 0.0
+        cost = float(((last.get("usage") or {}).get("cost") or {}).get("total") or 0)
+        if last.get("stopReason") != "error": return "ok", "answered", cost
+        head = plain(str(last.get("errorMessage") or ""))
+        code = (re.search(r"\b([45][0-9][0-9])\b", head) or [None, ""])[1]
+        if code in ("401", "403") or re.search(r"(?i)unauthori[sz]ed|forbidden|authenticat|invalid.{0,20}(api.?key|token)", head): return "REJECTED", head, cost
+        if code in ("502", "503", "504") or re.search(r"(?i)connect|timed? ?out|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|getaddrinfo|terminated", head): return "UNREACHABLE", head, cost
+        return "FAILED", head, cost
+    with cf.ThreadPoolExecutor(max_workers=4) as ex: results = dict(zip(roles, ex.map(probe, roles)))
+    spend = 0.0
+    for model, (verdict, why, cost) in results.items():
+        spend += cost
+        who = ", ".join(roles[model])
+        prov = model.split("/")[0]
+        p = providers.get(prov) if isinstance(providers.get(prov), dict) else {}
+        key = p.get("apiKey")
+        if verdict == "ok": print(f"model  {model} ok (roles {who})"); continue
+        bad = 1
+        if verdict == "REJECTED":
+            junk = " (the key there ends in or holds whitespace or terminal characters)" if isinstance(key, str) and re.search(r"\s|[\x00-\x1f\x7f]|\[20[01]~", key) else ""
+            print(f"model  {model} REJECTED key ({why}) for roles {who}{junk}; put the key the model proxy issued for provider {prov} in {cfg} (providers.{prov}.apiKey) or its environment, exactly, no trailing characters, then rerun just install-check-models")
+        elif verdict == "UNREACHABLE":
+            base = p.get("baseUrl") or "its baseUrl"
+            print(f"model  {model} UNREACHABLE ({why}) for roles {who}; the model proxy for provider {prov} did not answer: check this box reaches {base} ({cfg}, providers.{prov}.baseUrl) and the proxy is up, then rerun just install-check-models")
+        else: print(f"model  {model} FAILED ({why}) for roles {who}; run pi --model {model} -p ok by hand for the full error Pi gives, then rerun just install-check-models")
+    print(f"models spend {spend:.4f} USD ({len(results)} calls, Pi usage cost)")
+    sys.exit(bad)' "$root"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
 start cwd=invocation_directory():

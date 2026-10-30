@@ -35,6 +35,11 @@
 #     main, a worktree or no clone named with the fix; agent-browser's Chrome outside the cache folder ok, under it
 #     UNREADABLE IN THE QC SANDBOX, none MISSING, both naming agent-browser install; ffmpeg ok, absent OPTIONAL with
 #     exit 0; the sharing MANUAL step always. herdr, gh, jq and git absent: MISSING with each install command, exit 1.
+#   Review service (#462): systemctl a stub: active and enabled ok; inactive, failed or no systemctl named with Spec
+#     Chat's installer --public <vm>.exe.xyz --service, exit 1; a models MANUAL line names just install-check-models
+#     and no install-check run calls pi -p. just install-check-models: the stub tests/fixtures/install-check/pi, asserted
+#     first on PATH, plays the proxy: right keys ok per role model with its roles; a key with trailing terminal characters
+#     REJECTED; a proxy not answering UNREACHABLE; the key never printed nor on pi's command line.
 # herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
 # the exit. Run by `just check`.
 set -euo pipefail
@@ -44,7 +49,10 @@ fail() { echo "install-check test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$t/home" "$t/old"
 pin="$(tr -d '[:space:]' <"$kit/pi-version")"
 for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
-printf '#!/bin/sh\necho %s\n' "$pin" >"$t/bin/pi"
+printf '#!/bin/sh\necho "$*" >>%s/pi-calls\necho %s\n' "$t" "$pin" >"$t/bin/pi"
+# The review service: systemctl --user show answers $t/unit (active, enabled unless a case rewrites it).
+printf 'ActiveState=active\nUnitFileState=enabled\n' >"$t/unit"
+printf '#!/bin/sh\n[ "$1 $2" = "--user show" ] && exec cat "%s/unit"\nexit 1\n' "$t" >"$t/bin/systemctl"
 ab() { printf '#!/bin/sh\n[ "$1" = doctor ] && exec cat "%s/doctor.json"\necho "agent-browser %s"\n' "$t" "$1" >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"; }
 ab 0.40.0   # at the pin; the cases below swap or drop it
 # chrome PATH: agent-browser doctor --offline --quick --json names Chrome at PATH (pass); no PATH: none found (fail).
@@ -94,7 +102,7 @@ lin_target="$t/linear"; gh_target="$t/github"
 git init -q "$lin_target"; git init -q "$gh_target"; mkdir -p "$lin_target/sub"
 cp "$kit/tests/fixtures/install-check/linear/.octo-feather.toml" "$lin_target/"
 check() { # WANT DIR EXTRA_PATH [TARGET]: run in DIR (with $pre first on the caller's PATH); output in $out
-  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME -u AGENT_BROWSER_EXECUTABLE_PATH HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$kitinst" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="${pre:+$pre:}$t/bin${3:+:$3}:$shims$clean" \
+  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME -u AGENT_BROWSER_EXECUTABLE_PATH -u SPEC_CHAT_CLONE HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$kitinst" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="${pre:+$pre:}$t/bin${3:+:$3}:$shims$clean" \
     just -f "$kit/justfile" install-check ${4:+"$4"} 2>&1)" || rc=$?
   [[ "$rc" == "$1" ]] || fail "in $2 (PATH extra '${3:-}'): want exit $1, got $rc: $out"
 }
@@ -258,4 +266,55 @@ grep -qxF 'herdr  MISSING; curl -fsSL https://herdr.dev/install.sh | sh' <<<"$ou
   && grep -qxF 'jq     MISSING; sudo apt install jq (Debian, Ubuntu)' <<<"$out" && grep -qxF 'git    MISSING; sudo apt install git (Debian, Ubuntu)' <<<"$out" \
   && grep -qE "^gh     MISSING; \(Debian, Ubuntu: GitHub CLI's apt repository\) .*https://cli\.github\.com/packages stable main.* && sudo apt install gh -y$" <<<"$out" \
   || fail "herdr, gh, jq, git absent: not each MISSING with its install command: $out"
+# The review service (spec remote#review-service, #review-setup): active and enabled ok; inactive or not installed
+# NOT RUNNING, no systemctl MISSING, each naming Spec Chat's installer with --public <vm>.exe.xyz --service, exit 1.
+review_fix="$t/home/src/spec-chat/scripts/install-spec-chat --review $kit/docs/specs/index.spec.html --public \S+\.exe\.xyz --service \(remote#review-setup\)"
+check 0 "$gh_target" ""
+grep -qx "review ok  spec-chat-review.service active, enabled (Spec Chat's review service, systemd --user)" <<<"$out" || fail "review service up: no ok line: $out"
+# The model check is its own recipe (spec remote#host-models): one line names it, and no run above called a model.
+grep -qx 'models MANUAL not checked here (no model call); at box setup and after a model key change: just install-check-models' <<<"$out" \
+  || fail "no line naming just install-check-models: $out"
+! grep -qE '(^| )(-p|--print)( |$)' "$t/pi-calls" || fail "install-check called a model: $(cat "$t/pi-calls")"
+printf 'ActiveState=inactive\nUnitFileState=\n' >"$t/unit"; check 1 "$gh_target" ""
+grep -qxE "review NOT RUNNING spec-chat-review\.service is inactive, not installed \(want active, enabled: the systemd user service box setup installs\); $review_fix" <<<"$out" \
+  || fail "review service not installed: no NOT RUNNING line naming the installer: $out"
+printf 'ActiveState=failed\nUnitFileState=enabled\n' >"$t/unit"; check 1 "$gh_target" ""
+grep -qxE "review NOT RUNNING spec-chat-review\.service is failed, enabled .*; $review_fix" <<<"$out" || fail "review service failed: not named: $out"
+printf 'ActiveState=active\nUnitFileState=enabled\n' >"$t/unit"
+mv "$t/bin/systemctl" "$t/systemctl"; saved="$clean"; clean="$(hide systemctl "$saved")"
+check 1 "$gh_target" ""; clean="$saved"; mv "$t/systemctl" "$t/bin/systemctl"
+grep -qxE "review MISSING no systemctl: the review service runs as a systemd user service \(spec-chat-review\.service\); on a systemd box: $review_fix" <<<"$out" \
+  || fail "no systemctl: no MISSING line naming the installer: $out"
+# just install-check-models (spec remote#host-models): the stub pi (tests/fixtures/install-check/pi) plays the model
+# proxy; it is first on PATH, which the recipe's own pi line proves before any probe case. Each model a role file names
+# answers one print-mode call: right keys ok; a key with trailing terminal characters REJECTED; a proxy that does not
+# answer UNREACHABLE; each with its roles and the fix, the key never printed nor on a command line.
+mkdir -p "$t/mbin" "$t/pi-agent"; cp "$kit/tests/fixtures/install-check/pi" "$t/mbin/pi"
+issued="sk-proxy-0123456789abcdefghijklmnopqrstuv"; printf '%s' "$issued" >"$t/issued"
+keys() { # ANTHROPIC_KEY OPENAI_BASE: Pi's provider config
+  python3 -c 'import json, sys; json.dump({"providers": {"anthropic": {"baseUrl": "https://proxy.example/", "apiKey": sys.argv[1]}, "openai": {"baseUrl": sys.argv[3], "apiKey": sys.argv[2]}}}, open(sys.argv[4], "w"))' "$1" "$issued" "$2" "$t/pi-agent/models.json"; }
+models() { # WANT: run the recipe from $t with the stub first on PATH; output in $out
+  local rc=0; : >"$t/pi-calls"
+  out="$(cd "$t" && PI_CODING_AGENT_DIR="$t/pi-agent" PI_STUB_LOG="$t/pi-calls" PI_STUB_ISSUED="$t/issued" HOME="$t/home" PATH="$t/mbin:$PATH" \
+    just -f "$kit/justfile" install-check-models 2>&1)" || rc=$?
+  [[ "$rc" == "$1" ]] || fail "install-check-models: want exit $1, got $rc: $out"
+  ! grep -qF "$issued" <<<"$out" && ! grep -qF "$issued" "$t/pi-calls" || fail "a key was printed or passed on a command line: $out $(cat "$t/pi-calls")"
+}
+[[ "$(PATH="$t/mbin:$PATH" command -v pi)" == "$t/mbin/pi" ]] || fail "stub pi is not first on PATH"
+roles() { grep -lx "model: $1" "$kit"/agents/*.md | xargs -n1 basename | sed 's/\.md$//' | paste -sd, - | sed 's/,/, /g'; }
+ra="$(roles anthropic/claude-opus-5-5)"; ro="$(roles openai/gpt-6.1-sol)"
+[[ -n "$ra" && -n "$ro" ]] || fail "the role files no longer name anthropic/claude-opus-5-5 and openai/gpt-6.1-sol: update this test"
+keys "$issued" "https://proxy.example/v1"; models 0
+grep -qx "models pi $t/mbin/pi (one short call per role model, no tools; Pi reads each key from $t/pi-agent/models.json or its environment)" <<<"$out" \
+  || fail "install-check-models did not resolve the stub pi first: $out"
+grep -qx "model  anthropic/claude-opus-5-5 ok (roles $ra)" <<<"$out" && grep -qx "model  openai/gpt-6.1-sol ok (roles $ro)" <<<"$out" \
+  && [[ "$(grep -c '^-p ' <(python3 -c 'import json, sys; [print(" ".join(json.loads(l))) for l in open(sys.argv[1])]' "$t/pi-calls"))" == 2 ]] \
+  || fail "right keys: not one ok line and one call per role model: $out $(cat "$t/pi-calls")"
+keys "$issued"$'\e[201~' "https://proxy.example/v1"; models 1
+grep -qx "model  anthropic/claude-opus-5-5 REJECTED key (401) for roles $ra (the key there ends in or holds whitespace or terminal characters); put the key the model proxy issued for provider anthropic in $t/pi-agent/models.json (providers.anthropic.apiKey) or its environment, exactly, no trailing characters, then rerun just install-check-models" <<<"$out" \
+  && grep -qx "model  openai/gpt-6.1-sol ok (roles $ro)" <<<"$out" || fail "key with trailing junk: no REJECTED line with roles and fix: $out"
+keys "$issued" "https://unreachable.example/v1"; models 1
+grep -qx "model  openai/gpt-6.1-sol UNREACHABLE (Connection error.) for roles $ro; the model proxy for provider openai did not answer: check this box reaches https://unreachable.example/v1 ($t/pi-agent/models.json, providers.openai.baseUrl) and the proxy is up, then rerun just install-check-models" <<<"$out" \
+  || fail "proxy not answering: no UNREACHABLE line with roles and fix: $out"
+echo "install-check: ok (review service ok, NOT RUNNING and no systemctl MISSING naming the installer; models MANUAL naming just install-check-models, no model call; install-check-models with a stub pi first on PATH: ok, trailing-junk key REJECTED, proxy UNREACHABLE, key never printed)"
 echo "install-check: ok (box facts: kernel, userns, state, kit install, agent-browser Chrome, ffmpeg each ok and each gap named with its fix, the sharing step printed; herdr, gh, jq, git MISSING with their install; gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
