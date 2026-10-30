@@ -66,7 +66,7 @@ echo "$*" >> "$HERDR_LOG"
 ! grep -qxF "$3" "$HERDR_BROKEN" 2>/dev/null || { echo "herdr: server not reachable" >&2; exit 1; }
 grep -qxF "$3" "$HERDR_LIVE" 2>/dev/null \
   || { echo '{"error":{"code":"agent_not_found","message":"agent target '"$3"' not found"},"id":"cli:agent:get"}' >&2; exit 1; }
-printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"idle","pane_id":"%s","workspace_id":"%s"},"type":"agent_info"}}\n' "$3" "${3%%:*}"
+printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"working","cwd":"/tmp/fixture","focused":false,"foreground_cwd":"/tmp/fixture","interactive_ready":true,"name":"fixture","pane_id":"%s","revision":2,"state_change_seq":7969,"tab_id":"%s:t1","terminal_id":"term_fixture","terminal_title":"π - fixture","terminal_title_stripped":"π - fixture","workspace_id":"%s"},"type":"agent_info"}}\n' "$3" "${3%%:*}" "${3%%:*}"
 EOF
 # Fake herdr-close (step 5): its target is gone already, as herdr-close reports a space it cannot close.
 printf '#!/bin/sh\necho "space=$1 space_close_rc=1 killed=0"; exit 1\n' > "$t/bin/herdr-close"

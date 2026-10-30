@@ -57,7 +57,7 @@ cat > "$t/bin/herdr" <<'EOF'
 case "$1 $2" in
   "agent get") tab="$(awk -v p="$3" '$1 == p {print $2}' "$HERDR_PANES")"
     [[ -n "$tab" ]] || { echo '{"error":{"code":"agent_not_found","message":"agent target '"$3"' not found"},"id":"cli:agent:get"}' >&2; exit 1; }
-    printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"idle","pane_id":"%s","tab_id":"%s","workspace_id":"%s"},"type":"agent_info"}}\n' "$3" "$tab" "${3%%:*}";;
+    printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"working","cwd":"/tmp/fixture","focused":false,"foreground_cwd":"/tmp/fixture","interactive_ready":true,"name":"fixture","pane_id":"%s","revision":2,"state_change_seq":7969,"tab_id":"%s","terminal_id":"term_fixture","terminal_title":"π - fixture","terminal_title_stripped":"π - fixture","workspace_id":"%s"},"type":"agent_info"}}\n' "$3" "$tab" "${3%%:*}";;
   "workspace get") grep -qxF "$3" "$HERDR_SPACES" \
     || { echo '{"error":{"code":"workspace_not_found","message":"workspace '"$3"' not found"},"id":"cli:workspace:get"}' >&2; exit 1; }
     printf '{"id":"cli:workspace:get","result":{"type":"workspace_info","workspace":{"workspace_id":"%s"}}}\n' "$3";;
