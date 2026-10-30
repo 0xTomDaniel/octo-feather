@@ -2,13 +2,18 @@
 # Integration test for `just check-ts` (#245), in a throwaway copy of the kit's tracked files:
 #   empty pnpm store (a fresh store dir): fails naming the fetch command, never the network (--offline);
 #   clean copy: passes;
+#   one pnpm store (owner ruling #422): the kit's package.json and lockfile in a dir on another filesystem than the kit
+#   (/dev/shm, a tmpfs, where the box has one; else TMPDIR) install offline from the kit's store;
 #   a type error and a lint violation added to the extension: fails naming each file and line;
 #   eslint's baseline only shrinks: one more `any` in extensions/spend-ledger.ts fails naming its line; alone, a fixed
 #   violation leaves an unused suppression that fails naming --prune-suppressions.
 # Offline: the copy installs from the box's pnpm store (CI's pnpm step fills it). Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"; x=""; trap 'rm -rf "$t" ${x:+"$x"}' EXIT
+# One pnpm store for the kit and its test copies (owner ruling #422): pnpm keeps a store per filesystem, so a copy
+# under a /tmp on another one (a tmpfs) would install from an empty store; the kit's store, named, serves it offline.
+npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "check-ts test: $1" >&2; [[ -z "${out:-}" ]] || echo "$out" >&2; exit 1; }
 (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 # run [ENV...]: just check-ts in the copy into $out and $rc.
@@ -22,6 +27,10 @@ has "fetch them once, with network: pnpm install --frozen-lockfile --dir $t"
 
 run; [[ "$rc" == 0 ]] || fail "clean copy is not green"
 has "ts: ok ("
+
+fs="${TMPDIR:-/tmp}"; [[ ! -d /dev/shm || "$(stat -c %d /dev/shm)" == "$(stat -c %d "$kit")" ]] || fs=/dev/shm
+x="$(mktemp -d "$fs/check-ts.XXXXXX")"; cp "$t/package.json" "$t/pnpm-lock.yaml" "$x/"
+out="$(cd "$x" && pnpm install --offline --frozen-lockfile 2>&1)" || fail "a copy on $fs (another filesystem than the kit's) did not install offline from the kit's store $npm_config_store_dir"
 
 # A type error and a lint violation in the extension, and one more `any` in baselined spend-ledger.ts: one run.
 ext=extensions/resume-on-error.ts; n="$(wc -l <"$t/$ext")"

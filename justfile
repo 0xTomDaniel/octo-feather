@@ -250,6 +250,10 @@ check-tests *args:
     set -euo pipefail
     cd "$root"
     if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    # The gate's Python: .python-version's release, owned by uv (owner ruling #422, #261), found as uv sync finds it
+    # (a venv skipped); without it uv sync --offline only says no interpreter. The fix's --no-bin: its message.
+    err="$(uv python find --system 2>&1)" || { printf '%s\n' "$err" >&2
+      echo "check-tests: the gate's Python $(<.python-version) (.python-version) is not installed; install it once, with network: uv python install --no-bin $(<.python-version) (--no-bin: no python3.X link in ~/.local/bin, which would change the interpreter uv finds for every other repo on the box)" >&2; exit 1; }
     err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
     # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
@@ -316,6 +320,31 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
       else printf '%-6s MISSING\n' "$t"; bad=1; fi
     done
+    # The gate's Python (owner ruling #422, #261): the release the kit's .python-version pins, owned by uv
+    # (python-build-standalone), found as check-tests finds it, with venv and ensurepip (tests make venvs) and
+    # os.pidfd_open (tests/fixtures/start-nohup); and the box python3, which runs the kit's stdlib scripts outside the
+    # gate, at 3.11 or later (tomllib). The fix's --no-bin: its message.
+    python3 -c 'import os, re, shutil, subprocess, sys
+    root = sys.argv[1]
+    pin = open(os.path.join(root, ".python-version")).read().strip()
+    fix = f"uv python install --no-bin {pin} (--no-bin: no python3.X link in ~/.local/bin, which would change the interpreter uv finds for every other repo on the box)"
+    def run(*a):
+        try: r = subprocess.run(a, capture_output=True, text=True, timeout=60, cwd=root, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError): return 1, ""
+        return r.returncode, r.stdout.strip()
+    bad = 0
+    rc, exe = run("uv", "python", "find", "--system")
+    probe = "import importlib.util as u, os, platform; print(platform.python_version(), *[n for n in (\"venv\", \"ensurepip\") if u.find_spec(n) is None], *([] if hasattr(os, \"pidfd_open\") else [\"os.pidfd_open\"]))"
+    got = run(exe, "-c", probe)[1].split() if not rc and exe else []
+    if not got: print(f"python gate {pin} MISSING (.python-version); {fix}"); bad = 1
+    elif got[0] != pin or got[1:]: lacks = " ".join(got[1:]) or "nothing"; print(f"python gate {pin} UNUSABLE {exe} reports {got[0]}, lacks {lacks} (.python-version: {pin}, venv, ensurepip, os.pidfd_open); {fix}"); bad = 1
+    else: print(f"python gate {pin} ok  {exe} (venv, pidfd_open; .python-version)")
+    box = shutil.which("python3")
+    m = re.search(r"([0-9]+)\.([0-9]+)\.[0-9]+", run(box, "--version")[1]) if box else None
+    how = "install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH"
+    if m and (int(m[1]), int(m[2])) >= (3, 11): print(f"python3 version {m[0]} ok  {box} (3.11 or later, the kit scripts)")
+    else: has, name = (m[0] if m else "no version"), box or "python3"; print(f"python3 WRONG VERSION {name} reports {has}, want 3.11 or later (the kit scripts read TOML with tomllib); {how}"); bad = 1
+    sys.exit(bad)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
