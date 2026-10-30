@@ -311,14 +311,23 @@ check-behavior-smoke:
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
 # each pinned tool's first hit on CALLER_PATH (default the caller's PATH, which panes and shells resolve) is the
 # pinned one, or that launcher is named with the fix;
-# a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin.
+# a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
+# (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg) and the one manual step.
+# Every gap line names its fix (#461).
 install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
+    # Each missing tool names its official install (#461): Herdr's installer, Pi at pi-version through npm (docs/adr/0023),
+    # GitHub CLI's apt repository (not Debian's gh: broken at 2.45 and 2.46), Debian and Ubuntu packages, the kit's mise tools.
+    declare -A fix=([herdr]="curl -fsSL https://herdr.dev/install.sh | sh"
+      [pi]="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$(tr -d '[:space:]' <"$root/pi-version") (pi-version)"
+      [gh]='(Debian, Ubuntu: GitHub CLI'"'"'s apt repository) (type -p wget >/dev/null || (sudo apt update && sudo apt install wget -y)) && sudo mkdir -p -m 755 /etc/apt/keyrings && out=$(mktemp) && wget -nv -O$out https://cli.github.com/packages/githubcli-archive-keyring.gpg && cat $out | sudo tee /etc/apt/keyrings/githubcli-archive-keyring.gpg > /dev/null && sudo chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg && sudo mkdir -p -m 755 /etc/apt/sources.list.d && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" | sudo tee /etc/apt/sources.list.d/github-cli.list > /dev/null && sudo apt update && sudo apt install gh -y'
+      [jq]="sudo apt install jq (Debian, Ubuntu)" [git]="sudo apt install git (Debian, Ubuntu)"
+      [python3]="install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH")
     for t in herdr pi gh jq git just python3 node pnpm; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
-      else printf '%-6s MISSING\n' "$t"; bad=1; fi
+      else printf '%-6s MISSING; %s\n' "$t" "${fix[$t]:-mise -C $root install --locked (kit mise.toml), then put the mise shims folder first on PATH}"; bad=1; fi
     done
     # The gate's Python (owner ruling #422, #261): the release the kit's .python-version pins, owned by uv
     # (python-build-standalone), found as check-tests finds it, with venv and ensurepip (tests make venvs) and
@@ -344,6 +353,61 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     how = "install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH"
     if m and (int(m[1]), int(m[2])) >= (3, 11): print(f"python3 version {m[0]} ok  {box} (3.11 or later, the kit scripts)")
     else: has, name = (m[0] if m else "no version"), box or "python3"; print(f"python3 WRONG VERSION {name} reports {has}, want 3.11 or later (the kit scripts read TOML with tomllib); {how}"); bad = 1
+    sys.exit(bad)' "$root" || bad=1
+    # The box facts (#461; spec remote#host-vm): kernel 6.6 or later and unprivileged user namespaces, which the qc
+    # sandbox needs (`unshare -rm`, #404; uname and unshare are the probes); the session state folder octo-feather-state
+    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards (the kit dir, or
+    # OCTO_FEATHER_KIT_INSTALL) a clone with an origin on main, detached or not.
+    python3 -c 'import os, re, subprocess, sys
+    root = sys.argv[1]
+    def run(*a):
+        try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
+        except (OSError, subprocess.SubprocessError) as e: return 127, "", str(e)
+        return r.returncode, r.stdout.strip(), r.stderr.strip()
+    bad = 0
+    rel = run("uname", "-r")[1] or "unknown"
+    m = re.match(r"([0-9]+)\.([0-9]+)", rel)
+    if m and (int(m[1]), int(m[2])) >= (6, 6): print(f"kernel {rel} ok (6.6 or later, the qc sandbox)")
+    else:
+        bp = "echo \"deb http://deb.debian.org/debian bookworm-backports main\" | sudo tee /etc/apt/sources.list.d/backports.list && sudo apt update && sudo apt install -t bookworm-backports linux-image-$(dpkg --print-architecture)"
+        print(f"kernel {rel} TOO OLD, want 6.6 or later (the qc sandbox overlay needs tmpfs user xattrs: scripts/octo-feather-qc-sandbox); boot a 6.6 or later kernel, then reboot (Debian 12: {bp}; Ubuntu 22.04: sudo apt install linux-generic-hwe-22.04)"); bad = 1
+    rc, _, err = run("unshare", "-rm", "true")
+    if not rc: print("userns ok (unshare -rm true, the qc sandbox)")
+    else:
+        def val(k):
+            try: return open("/proc/sys/" + k).read().strip()
+            except OSError: return None
+        knobs = (("kernel/apparmor_restrict_unprivileged_userns", "1", "0"), ("kernel/unprivileged_userns_clone", "0", "1"), ("user/max_user_namespaces", "0", "10000"))
+        sets = [k.replace("/", ".") + "=" + good for k, off, good in knobs if val(k) == off]
+        if rc == 127: how = "install unshare: sudo apt install util-linux"
+        elif sets: how = "allow them: printf \"" + "\\n".join(sets) + "\\n\" | sudo tee /etc/sysctl.d/60-octo-feather-userns.conf && sudo sysctl --system"
+        else: how = "no sysctl here turns them off (kernel.apparmor_restrict_unprivileged_userns, kernel.unprivileged_userns_clone, user.max_user_namespaces): a container or seccomp policy does; run the kit on a VM or a bare-metal box"
+        last = (err.splitlines() or ["exit " + str(rc)])[-1]
+        print(f"userns FAILED unshare -rm true: {last} (the qc sandbox runs its judge in unprivileged user namespaces, #404); {how}"); bad = 1
+    rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
+    lanes = os.path.join(st, "lanes")
+    if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
+    elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
+    elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
+    else: print(f"state  ok  {st} (octo-feather-state)")
+    env = os.environ.get("OCTO_FEATHER_KIT_INSTALL")
+    kit, src = (env, "OCTO_FEATHER_KIT_INSTALL") if env else (root, "the kit dir")
+    def git(*a): return run("git", "-C", kit, *a)
+    url = run("git", "-C", root, "config", "--get", "remote.origin.url")[1] or "<kit url>"
+    why = f"({src}; octo-feather-lane post-merge step 3 fast-forwards it)"
+    if not os.path.exists(os.path.join(kit, ".git")):
+        print(f"kit    NOT A CLONE {kit} {why}; git clone {url} {kit}, or set OCTO_FEATHER_KIT_INSTALL to the install clone"); bad = 1
+    elif not os.path.isdir(os.path.join(kit, ".git")):
+        print(f"kit    A WORKTREE {kit}, not the install clone {why}; set OCTO_FEATHER_KIT_INSTALL to the install clone (git -C {kit} worktree list: its first line)"); bad = 1
+    elif not git("config", "--get", "remote.origin.url")[1]:
+        print(f"kit    NO ORIGIN {kit} {why}; git -C {kit} remote add origin {url}"); bad = 1
+    else:
+        branch = git("symbolic-ref", "-q", "--short", "HEAD")[1]
+        on_main = branch == "main" or (not branch and any(not git("merge-base", "--is-ancestor", "HEAD", r)[0] for r in ("refs/remotes/origin/main", "refs/heads/main")))
+        if on_main: print(f"kit    ok  {kit} on main ({src})")
+        else:
+            at = f"branch {branch}" if branch else "a detached HEAD off main"
+            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} switch main"); bad = 1
     sys.exit(bad)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
@@ -402,6 +466,26 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
       if [[ "$v" == "$pin" ]]; then printf 'agent-browser version %s ok (agent-browser-version)\n' "$v"
       else printf 'agent-browser WRONG VERSION %s reports %s, want %s (agent-browser-version); %s\n' "$p" "${v:-no version}" "$pin" "$how"; bad=1; fi
     fi
+    # The cache folder the qc sandbox masks (a tmpfs over it): a browser under it is unreadable there. One rule for both
+    # browsers (spec remote#host-tools): agent-browser's own, here, and the qc one below.
+    cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+    under_cache() { [[ "$1/" == "$cache/"* ]]; }
+    # agent-browser's own browser (#422 item 7), the Chrome `agent-browser doctor --offline` names. `agent-browser install`
+    # puts Chrome for Testing in ~/.agent-browser/browsers, which it searches before Playwright's cache in ~/.cache.
+    if command -v agent-browser >/dev/null; then
+      chrome="$(agent-browser doctor --offline --quick --json 2>/dev/null | python3 -c 'import json, re, sys
+    try: c = next(c for c in json.load(sys.stdin)["checks"] if c.get("id") == "chrome.installed")
+    except (ValueError, KeyError, TypeError, StopIteration): sys.exit(0)
+    m = re.search(r" at (/.*)$", c.get("message", ""))
+    print(m[1] if c.get("status") == "pass" and m else "")')"
+      how="agent-browser install (Chrome for Testing into $HOME/.agent-browser/browsers, which agent-browser searches first; drop any AGENT_BROWSER_EXECUTABLE_PATH, or executablePath in ~/.agent-browser/config.json, naming another)"
+      if [[ -z "$chrome" ]]; then printf 'agent-browser browser MISSING (agent-browser doctor --offline names no Chrome); %s\n' "$how"; bad=1
+      elif under_cache "$chrome"; then printf 'agent-browser browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; %s\n' "$chrome" "$cache" "$how"; bad=1
+      else printf 'agent-browser browser ok  %s (outside %s)\n' "$chrome" "$cache"; fi
+    fi
+    # ffmpeg (#422 item 9): only agent-browser's video recording needs it, so it never fails the check.
+    if p="$(command -v ffmpeg)"; then printf 'ffmpeg ok  %s (optional: agent-browser video recording)\n' "$p"
+    else echo "ffmpeg OPTIONAL not installed; only agent-browser video recording needs it, the check passes; to record video: sudo apt install ffmpeg"; fi
     # The caller's PATH (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise, node, pnpm, uv):
     # for each pinned tool, its first hit there is the pinned one (ok, its path), else that launcher is named with the
     # pinned path and the fix. Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
@@ -477,13 +561,17 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     if not isinstance(v, str) or not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", v): sys.exit(f"browser {p}: [browser] playwright must be a release like 1.64.1 (octo-feather-contract)")
     print(v)' "$top")" || bad=1
     if [[ -n "$bpin" ]]; then
-      folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"; cache="${XDG_CACHE_HOME:-$HOME/.cache}"
+      folder="${XDG_DATA_HOME:-$HOME/.local/share}/octo-feather/ms-playwright/$bpin"
       shell="$(ls -d "$folder"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)"
-      if [[ "$folder/" == "$cache/"* ]]; then
+      if under_cache "$folder"; then
         printf 'browser UNREADABLE IN THE QC SANDBOX %s is under %s, which the sandbox masks; set XDG_DATA_HOME outside it\n' "$folder" "$cache"; bad=1
       elif [[ -n "$shell" ]]; then printf 'browser ok  %s (Playwright %s; PLAYWRIGHT_BROWSERS_PATH=%s)\n' "${shell%/INSTALLATION_COMPLETE}" "$bpin" "$folder"
       else printf 'browser MISSING (want Playwright %s headless Chromium shell in %s); install: PLAYWRIGHT_BROWSERS_PATH=%s npx -y playwright@%s install --only-shell chromium\n' "$bpin" "$folder" "$folder" "$bpin"; bad=1; fi
     fi
+    # exe.dev Private sharing, the one step no command inside the box can check (spec remote#review-proxy,
+    # #review-never-public): the VM name is this box's on exe.dev (<vm>.exe.xyz), else <vm>.
+    vm="$(timeout 5 hostname -f 2>/dev/null)"; [[ "$vm" == *.exe.xyz ]] && vm="${vm%.exe.xyz}" || vm="<vm>"
+    echo "sharing MANUAL exe.dev Private sharing cannot be checked from inside the box; on the exe.dev VM that hosts reviews, from your own machine: ssh exe.dev share set-private $vm (never share set-public: a public share has no login)"
     exit "$bad"
 
 # Start the director in Herdr workspace `director` (docs/adr/0011).
