@@ -22,10 +22,6 @@
       "status": "planned",
       "pr": null
     },
-    "acceptance-vm-only": {
-      "status": "planned",
-      "pr": null
-    },
     "acceptance-no-url-in-records": {
       "status": "planned",
       "pr": null
