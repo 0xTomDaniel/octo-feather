@@ -35,9 +35,9 @@ killed and the agents it started are counted; its agents' model spend is recorde
 writable path: the worktree is an overlay whose upper dir lives on the run's
 tmpfs, so every write (credential copies included) dies with the run; a write
 to a tracked file or an untracked non-ignored file is reported and fails it.
-Pi's auth.json and models.json: the judge gets per-run copies, discarded with the
-run and never written back. If the box auth.json holds OAuth credentials, a warning
-says a token refresh during the run is discarded.
+Pi's auth.json and models.json: each sandbox a Pi runs in (a judge, the advisory) gets per-run copies, discarded with the
+run and never written back; a declared demo's sandbox (no Pi runs there) gets neither. If the box auth.json
+holds OAuth credentials and a sandbox with copies starts, a warning says a token refresh during the run is discarded.
 GitHub evidence: when origin is a GitHub repo, octo-feather-qc-ghsnap fetches a
 fresh snapshot with this shell's gh auth into per-run scratch before every run;
 the sandbox binds it read-only and the offline gh (.agents/skills/github-pr/scripts/gh) serves it,
@@ -202,12 +202,13 @@ def oauth_warning():
 
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
               kit: Path | None = None, browser: str | None = None,
-              shots: bool = False) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
+              shots: bool = False, pi: bool = True) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
     """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
     Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
-    the record's "shots" ([name, base64] pairs)."""
+    the record's "shots" ([name, base64] pairs); pi False: no Pi runs (a declared demo), so no copy of Pi's auth.json or
+    models.json at all."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
         die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
@@ -235,9 +236,9 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
                QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_HISTORY="" if history else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
+               QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
-    if (w := oauth_warning()) and w not in WARNED:   # once per qc run, whatever sandboxes it starts (ADR 0022)
+    if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
         WARNED.add(w)
         print(w, file=sys.stderr)
 
@@ -357,7 +358,7 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
             run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
-                                     browser=br, shots=True)
+                                     browser=br, shots=True, pi=False)
             assert isinstance(sandbox, dict)
             sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
         shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
