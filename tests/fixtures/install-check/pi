@@ -7,8 +7,8 @@ $PI_CODING_AGENT_DIR/models.json, else the key in auth.json's PROVIDER entry. A 
 "unreachable" fails as Pi does after its retries ("Connection error."); a key equal to the
 contents of $PI_STUB_ISSUED answers; any other key gets the 401 a proxy sends, its body echoing
 the key. Two calls, in the shapes real Pi prints: a chat call (-p --mode json --model P/ID), its
-JSON event stream; a classify call (-e EXT -p "/octo-feather-bench INPUT", EXT octo-feather-qa's
-bench extension), its one {"bench": ...} line, the classifier asked listed in
+JSON event stream; a classify call (-e EXT -p "/octo-feather-bench INPUT", no --model), its one
+{"bench": ...} line, the classifier asked listed in
 $PI_STUB_CLASSIFIERS (space-separated) or not available.
 """
 
@@ -61,9 +61,8 @@ def proxy(model: str) -> str | None:
 
 prompt = argv[argv.index("-p") + 1]
 if prompt.startswith("/octo-feather-bench "):
-    ext = Path(argv[argv.index("-e") + 1]).read_text()
-    if "reg.classify(" not in ext or "--model" in argv:
-        sys.exit("stub pi: not octo-feather-qa's bench extension")
+    if "-e" not in argv or "--model" in argv:
+        sys.exit("stub pi: a classify call takes -e EXT and no --model")
     model: str = read(Path(prompt.split(" ", 1)[1]))["classifiers"][0]
     available = os.environ.get("PI_STUB_CLASSIFIERS", "").split()
     benched = [model] if model in available else []

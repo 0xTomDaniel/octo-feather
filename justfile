@@ -355,8 +355,8 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     if m and (int(m[1]), int(m[2])) >= (3, 11): print(f"python3 version {m[0]} ok  {box} (3.11 or later, the kit scripts)")
     else: has, name = (m[0] if m else "no version"), box or "python3"; print(f"python3 WRONG VERSION {name} reports {has}, want 3.11 or later (the kit scripts read TOML with tomllib); {how}"); bad = 1
     sys.exit(bad)' "$root" || bad=1
-    # The box facts (#461; spec remote#host-vm): kernel 6.6 or later and unprivileged user namespaces, which the qc
-    # sandbox needs (`unshare -rm`, #404; uname and unshare are the probes); the session state folder octo-feather-state
+    # The box facts (#461): the kernel and user namespaces of spec remote#host-vm (uname and unshare -rm are the
+    # probes); the session state folder octo-feather-state
     # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards (the kit dir, or
     # OCTO_FEATHER_KIT_INSTALL) a clone with an origin on main, detached or not.
     python3 -c 'import os, re, subprocess, sys
@@ -577,13 +577,15 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # running and enabled (up at boot); else the installer run box setup makes, from the clone new-repo links.
     unit=spec-chat-review.service
     how="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat --review $root/docs/specs/index.spec.html --public $vm.exe.xyz --service (remote#review-setup)"
-    if ! command -v systemctl >/dev/null; then echo "review MISSING no systemctl: the review service runs as a systemd user service ($unit); on a systemd box: $how"; bad=1
-    else
-      st="$(systemctl --user show -p ActiveState -p UnitFileState "$unit" 2>/dev/null)"
-      active="$(sed -n 's/^ActiveState=//p' <<<"$st")"; file="$(sed -n 's/^UnitFileState=//p' <<<"$st")"
-      if [[ "$active" == active && "$file" == enabled ]]; then echo "review ok  $unit active, enabled (Spec Chat's review service, systemd --user)"
-      else echo "review NOT RUNNING $unit is ${active:-unknown}, ${file:-not installed} (want active, enabled: the systemd user service box setup installs); $how"; bad=1; fi
-    fi
+    python3 -c 'import shutil, subprocess, sys
+    unit, how = sys.argv[1], sys.argv[2]
+    if not shutil.which("systemctl"): print(f"review MISSING no systemctl: the review service runs as a systemd user service ({unit}); on a systemd box: {how}"); sys.exit(1)
+    try: out = subprocess.run(["systemctl", "--user", "show", "-p", "ActiveState", "-p", "UnitFileState", unit], capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL).stdout
+    except (OSError, subprocess.SubprocessError): out = ""
+    st = dict(line.partition("=")[::2] for line in out.splitlines())
+    active, file = st.get("ActiveState") or "unknown", st.get("UnitFileState") or "not installed"
+    if (active, file) == ("active", "enabled"): print(f"review ok  {unit} active, enabled (Spec Chat\x27s review service, systemd --user)")
+    else: print(f"review NOT RUNNING {unit} is {active}, {file} (want active, enabled: the systemd user service box setup installs); {how}"); sys.exit(1)' "$unit" "$how" || bad=1
     # The model check makes a model call per role model, so it is a setup step of its own (spec remote#host-models).
     echo "models MANUAL not checked here (no model call); at box setup and after a model key change: just install-check-models"
     echo "sharing MANUAL exe.dev Private sharing cannot be checked from inside the box; on the exe.dev VM that hosts reviews, from your own machine: ssh exe.dev share set-private $vm (never share set-public: a public share has no login)"

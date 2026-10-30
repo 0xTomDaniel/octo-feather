@@ -85,14 +85,16 @@ mpin="$(tr -d '[:space:]' <"$kit/mise-version")"
 # hide NAMES PATHLIST: PATHLIST with only NAMES (space-separated) gone: each dir holding one is mirrored minus those
 # files (links to the rest), never dropped, so the tools sharing its dir stay (#422 item 10). Prints ":dir:dir...".
 hide() {
-  local out="" d f m n has; local -a ds; IFS=: read -ra ds <<<"$2"
-  for d in "${ds[@]}"; do
-    [[ -n "$d" ]] || continue
-    has=""; for n in $1; do [[ -e "$d/$n" || -L "$d/$n" ]] && has=1; done
-    if [[ -n "$has" ]]; then m="$(mktemp -d "$t/mirror.XXXXXX")"
-      for f in "$d"/* "$d"/.[!.]*; do [[ ( -e "$f" || -L "$f" ) && " $1 " != *" ${f##*/} "* ]] && ln -s "$f" "$m/"; done; out+=":$m"
-    else out+=":$d"; fi
-  done; printf '%s' "$out"
+  python3 -c 'import os, sys, tempfile
+names, scratch = set(sys.argv[1].split()), sys.argv[3]
+out = ""
+for d in filter(None, sys.argv[2].split(":")):
+    if not any(os.path.lexists(os.path.join(d, n)) for n in names): out += ":" + d; continue
+    m = tempfile.mkdtemp(prefix="mirror.", dir=scratch)
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if f not in names: os.symlink(os.path.join(d, f), os.path.join(m, f))
+    out += ":" + m
+print(out, end="")' "$1" "$2" "$t"
 }
 # PATH without any linear (the recipe adds HOME/.local/bin: HOME is a fresh dir). The owner's Debian layout: linear
 # and mise in one dir ($t/shared, the only mise on it), so hiding linear must keep that mise (first case below).
