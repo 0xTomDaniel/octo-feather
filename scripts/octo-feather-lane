@@ -2703,6 +2703,11 @@ PM_REFRESH = (("mise", "install", "--locked"), ("just", "vendored-fetch"), ("uv"
               ("pnpm", "install", "--frozen-lockfile"))
 
 
+def kit_install() -> Path:
+    """The live kit install, the one rule for which dir it is: just install-check asks this too (#422)."""
+    return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+
+
 def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
     p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
     if p.returncode not in ok:
@@ -2724,7 +2729,7 @@ def pm_repo(target: str | None, what: str) -> str:
 
 def pm_kit(pm: PostMerge) -> str:
     """Step 3: fast-forward the live kit install to the merge commit, then refresh its tools; any failure stops."""
-    kit = Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+    kit = kit_install()
     if not (kit / ".git").exists():
         raise Refuse(f"kit install {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the install clone, then rerun")
     origin = pm_git(kit, "config", "--get", "remote.origin.url", ok=(0, 1))[1]
@@ -2797,7 +2802,7 @@ def pm_rule_files(pm: PostMerge) -> list[str]:
 
 def pm_kit_repo() -> str | None:
     """OWNER/NAME of the kit install's origin (step 3's install: OCTO_FEATHER_KIT_INSTALL or KIT), None when not on GitHub."""
-    p = pm_git_here("-C", os.environ.get("OCTO_FEATHER_KIT_INSTALL") or str(KIT), "config", "--get", "remote.origin.url")
+    p = pm_git_here("-C", str(kit_install()), "config", "--get", "remote.origin.url")
     m = GH_REPO_URL.fullmatch(p.stdout.strip()) if not p.returncode else None
     return m.group(1).lower() if m else None
 
@@ -2978,7 +2983,7 @@ def pm_worktree(branch: str) -> str:
         return f"worktree of {branch} already removed"
     path = entries[hit[0]]["worktree"]
     real = os.path.realpath(path)
-    if real == os.path.realpath(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT):
+    if real == os.path.realpath(kit_install()):
         raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
     if hit[0] == 0:
         raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")

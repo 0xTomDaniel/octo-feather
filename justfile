@@ -358,9 +358,10 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     sys.exit(bad)' "$root" || bad=1
     # The box facts (#461): the kernel and user namespaces of spec remote#host-vm (uname and unshare -rm are the
     # probes); the session state folder octo-feather-state
-    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards (the kit dir, or
-    # OCTO_FEATHER_KIT_INSTALL) a clone with an origin on main, detached or not.
-    python3 -c 'import os, re, subprocess, sys
+    # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards, the dir its
+    # kit_install() names (asked of it: OCTO_FEATHER_KIT_INSTALL, else the kit dir), a clone or a worktree of one with
+    # an origin, on main, detached or not (the box's install is a detached worktree beside the main checkout, #422).
+    python3 -c 'import importlib.machinery as im, importlib.util as iu, os, re, subprocess, sys
     root = sys.argv[1]
     def run(*a):
         try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
@@ -392,15 +393,14 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     elif not os.path.isdir(lanes): print(f"state  MISSING {lanes} (the session state folder, octo-feather-state); mkdir -p {lanes}"); bad = 1
     elif not os.access(lanes, os.W_OK): print(f"state  NOT WRITABLE {lanes} (the session state folder, octo-feather-state); sudo chown -R $(id -un) {st}"); bad = 1
     else: print(f"state  ok  {st} (octo-feather-state)")
-    env = os.environ.get("OCTO_FEATHER_KIT_INSTALL")
-    kit, src = (env, "OCTO_FEATHER_KIT_INSTALL") if env else (root, "the kit dir")
+    sys.path.insert(0, os.path.join(root, "scripts"))  # its own imports (handoff_log), as when it runs
+    s = iu.spec_from_loader("octo_feather_lane", im.SourceFileLoader("octo_feather_lane", os.path.join(root, "scripts", "octo-feather-lane"))); lane = iu.module_from_spec(s); s.loader.exec_module(lane)
+    kit, src = str(lane.kit_install()), "OCTO_FEATHER_KIT_INSTALL" if os.environ.get("OCTO_FEATHER_KIT_INSTALL") else "the kit dir"
     def git(*a): return run("git", "-C", kit, *a)
     url = run("git", "-C", root, "config", "--get", "remote.origin.url")[1] or "<kit url>"
     why = f"({src}; octo-feather-lane post-merge step 3 fast-forwards it)"
     if not os.path.exists(os.path.join(kit, ".git")):
         print(f"kit    NOT A CLONE {kit} {why}; git clone {url} {kit}, or set OCTO_FEATHER_KIT_INSTALL to the install clone"); bad = 1
-    elif not os.path.isdir(os.path.join(kit, ".git")):
-        print(f"kit    A WORKTREE {kit}, not the install clone {why}; set OCTO_FEATHER_KIT_INSTALL to the install clone (git -C {kit} worktree list: its first line)"); bad = 1
     elif not git("config", "--get", "remote.origin.url")[1]:
         print(f"kit    NO ORIGIN {kit} {why}; git -C {kit} remote add origin {url}"); bad = 1
     else:
@@ -409,7 +409,8 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
         if on_main: print(f"kit    ok  {kit} on main ({src})")
         else:
             at = f"branch {branch}" if branch else "a detached HEAD off main"
-            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} switch main"); bad = 1
+            back = "switch main" if os.path.isdir(os.path.join(kit, ".git")) else "switch --detach origin/main"  # a worktree: main is checked out in the main checkout
+            print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} {back}"); bad = 1
     sys.exit(bad)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
