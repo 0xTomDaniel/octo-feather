@@ -1,9 +1,11 @@
-# The kit runs on a dedicated remote box
+# The factory runs on any machine that meets its host requirements
 
-Agents, Herdr and toolchains run on a dedicated remote box, never on the owner's Mac, whose clone is for editing docs only. Tom: "we're not setting any of this up on this box. we'll make a dedicated remote", 2026-10-18. The exe.dev VM `<vm>.exe.xyz` (Personal plan, 4 vCPU / 8 GB) is the reference box, and exe.dev is needed only for review hosting (its HTTPS proxy, login and Private sharing) and the model proxy; the rest runs on any dedicated Linux box that meets remote spec `#host-vm`. Corrected in place, 2026-10-30, by the owner's approval of a Debian second box (issue #422, comment 2: "second box (Debian, not an exe.dev VM; owner approved)"), where the full gate ran green (comment 4).
+The factory (agents, Herdr, toolchains) runs on any machine that meets its host requirements: remote spec `#host-vm`. exe.dev is needed only when you use its review proxy (HTTPS proxy, login and Private sharing for review hosting) and its model proxy. The owner, 2026-10-30, at the #480 merge ask (issue #422): "no the factory can run anywhere, it's just that we decided to use a remote box for this exact session". Evidence: a Debian second box, not an exe.dev VM, ran the factory with the full gate green (issue #422, comment 2: "second box (Debian, not an exe.dev VM; owner approved)"; comment 4).
+
+This deployment chose a dedicated remote exe.dev box; the owner's Mac clone is for editing docs only. Tom, 2026-10-18: "we're not setting any of this up on this box. we'll make a dedicated remote".
 
 ## Considered options
 
-- A shared home server. Rejected: third parties hold admin access.
-- exo. Rejected: it is Exo's own host.
-- Only an exe.dev VM. Rejected: only review hosting and the model proxy need exe.dev; a Debian box ran the factory with a green gate (issue #422).
+- Require a dedicated remote box for every deployment. Rejected by the owner's 2026-10-30 ruling: the remote box is this deployment's choice, not the kit's.
+- For this deployment, a shared home server. Rejected: third parties hold admin access.
+- For this deployment, exo. Rejected: it is Exo's own host.

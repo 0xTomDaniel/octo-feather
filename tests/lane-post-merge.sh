@@ -45,16 +45,24 @@ if a[:2] == ["run", "watch"] and "--exit-status" in a:
 print(f"fake gh: refused {' '.join(a)}", file=sys.stderr); sys.exit(1)
 EOF
 chmod +x "$t/bin/gh"
-# Fake refresh tools: log `<tool> <args> @ <cwd>`; the one TOOL_FAIL names (`uv sync`) fails, exit 3.
+# Fake refresh tools: log `<tool> <args> @ <cwd>`; the one TOOL_FAIL names (`uv sync`) fails, exit 3. With PY_MISSING
+# set, the install's pinned Python is absent, as uv 0.13 answers it: uv sync downloads it (logged `download <pin>`)
+# unless UV_PYTHON_DOWNLOADS=never, then fails in uv's words, exit 2; uv python find fails likewise.
 cat > "$t/bin/tool" <<'EOF'
 #!/usr/bin/env bash
 c="$(basename "$0") $*"; echo "$c @ $PWD" >> "$TOOL_LOG"
 if [[ -n "${TOOL_FAIL:-}" && "$c" == "$TOOL_FAIL"* ]]; then echo "progress" ; echo "boom: $c" >&2; exit 3; fi
+if [[ -n "${PY_MISSING:-}" && ( "$c" == "uv sync"* || "$c" == "uv python find"* ) ]]; then
+  pin="$(cat .python-version)"
+  if [[ "$c" == "uv sync"* && "${UV_PYTHON_DOWNLOADS:-}" != never ]]; then echo "download $pin" >> "$TOOL_LOG"
+  else echo "error: No interpreter found for Python $pin in managed installations or search path" >&2; exit 2; fi
+fi
 echo "$c done"
 EOF
 chmod +x "$t/bin/tool"; for x in mise just uv pnpm; do ln -s tool "$t/bin/$x"; done
 # The kit's origin: B, then M (the merge commit), then P past it with a mise.toml.
 git init -q --bare -b main "$t/origin.git"; git clone -q "$t/origin.git" "$t/seed" 2>/dev/null
+echo 3.11.7 > "$t/seed/.python-version"; git -C "$t/seed" add .python-version   # the pin, not the box's
 for f in a m mise.toml; do touch "$t/seed/$f"; git -C "$t/seed" add "$f"; git -C "$t/seed" commit -qm "$f"; done
 git -C "$t/seed" push -q origin HEAD:main
 B="$(git -C "$t/seed" rev-parse HEAD~2)" M="$(git -C "$t/seed" rev-parse HEAD~1)" P="$(git -C "$t/seed" rev-parse HEAD)"
@@ -160,6 +168,11 @@ install "$P"; run 3 post-merge 7 "$H" --lane gh7
 install "$B"; TOOL_FAIL="uv sync" run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit fast-forwarded ${B:0:12}..${M:0:12}; just vendored-fetch ok; uv sync --locked failed (exit 3: boom: uv sync --locked)"* ]] || fail "failing tool: $out"
 [[ "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" && "$(cat "$TOOL_LOG")" != *pnpm* ]] || fail "failing tool ran on: $out $(cat "$TOOL_LOG")"
+# The pinned Python absent: uv sync never downloads it, and the stop names the install command for the pin.
+install "$B"; PY_MISSING=1 run 1 post-merge 7 "$H" --lane gh7
+[[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit fast-forwarded ${B:0:12}..${M:0:12}; just vendored-fetch ok; uv sync --locked failed (exit 2: error: No interpreter found for Python 3.11.7 in managed installations or search path): the kit's pinned Python 3.11.7 (.python-version) is not installed and post-merge never downloads one: run \`uv python install --no-bin 3.11.7\` in $t/kit, then rerun"* ]] || fail "missing pin: $out"
+[[ "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "missing pin summary: $last"
+! grep -q -e '^download' -e '^pnpm' "$TOOL_LOG" || fail "missing pin downloaded or ran on: $(cat "$TOOL_LOG")"
 # Dirty: stop naming it, nothing changed (HEAD, the file, no refresh).
 install "$B"; echo x > "$t/kit/stray"; run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit is dirty (?? stray)"* && "$last" == "$s3 stopped; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "dirty: $out"
@@ -174,4 +187,5 @@ run 1 post-merge 7 "$H"; [[ "$err" == *"usage: octo-feather-lane post-merge PR H
 run 1 post-merge 7 nothex --lane gh7; [[ "$err" == *"HEAD must be"* ]] || fail "bad head: $err"
 echo "lane-post-merge: ok (step 1 stops on not merged, other head, gh failure; step 2 watches to the end, green passes," \
   "red names the run URL, failed watch and no run in bound stop; step 3 fast-forwards a behind install, no move at or" \
-  "past, mise only with mise.toml, stops on dirty, diverged, a failing refresh; other repo unchanged; summary last)"
+  "past, mise only with mise.toml, stops on dirty, diverged, a failing refresh, a missing pinned Python (no download," \
+  "names uv python install --no-bin <pin>); other repo unchanged; summary last)"
