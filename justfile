@@ -589,13 +589,15 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     exit "$bad"
 
 # Box setup, never in install-check or the gate (spec remote#host-models): one short call through Pi to each model a
-# role file names (pi-role --json reads the frontmatter), no tools, no skills, no session; each model ok, its key
-# REJECTED or the proxy UNREACHABLE, with its roles and the fix. Pi reads the key from its own provider config or
-# environment: the key never goes on a command line and no line prints it (an error body that may echo it is dropped).
+# role file names (pi-role --json reads the frontmatter), no tools, no skills, no session, and one classify call to the
+# kit's judgment model (octo-feather-qa reads evals/judgment-model.json; its bench extension makes the call, outside
+# the qc sandbox); each model ok, its key REJECTED or the proxy UNREACHABLE, with its users and the fix. Pi reads the
+# key from its own provider config or environment: the key never goes on a command line and no line prints it (an
+# error body that may echo it is dropped).
 install-check-models:
     #!/usr/bin/env bash
     set -uo pipefail
-    python3 -c 'import concurrent.futures as cf, glob, json, os, re, shutil, subprocess, sys, tempfile
+    python3 -c 'import concurrent.futures as cf, glob, importlib.machinery as im, importlib.util as iu, json, os, re, shutil, subprocess, sys, tempfile
     root = sys.argv[1]
     limit = 120  # seconds per call: Pi retries a connection error 3 times (2, 4, 8 s) before it gives up
     pi = shutil.which("pi")
@@ -608,48 +610,82 @@ install-check-models:
         except (ValueError, KeyError, TypeError):
             print(f"model  {role} UNREADABLE pi-role --json {f} failed: {(r.stderr.strip().splitlines() or ["no output"])[-1]}; fix the role file (scripts/check-roles names the problem)"); bad = 1; continue
         if "--model" in args: roles.setdefault(args[args.index("--model") + 1], []).append(role)
-    cfg = os.path.join(os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent"), "models.json")
-    try: providers = json.load(open(cfg)).get("providers", {})
-    except (OSError, ValueError, AttributeError): providers = {}
-    print(f"models pi {pi} (one short call per role model, no tools; Pi reads each key from {cfg} or its environment)")
+    s = iu.spec_from_loader("qa", im.SourceFileLoader("qa", os.path.join(root, "scripts", "octo-feather-qa"))); qa = iu.module_from_spec(s); s.loader.exec_module(qa)
+    judge = None
+    try: judge = qa.judgment_model(os.path.join(root, "evals"))
+    except (OSError, ValueError, KeyError, TypeError) as e: print(f"model  judgment UNREADABLE evals/judgment-model.json ({e}); record the kit judgment model there (shape: scripts/check-evals --help)"); bad = 1
+    agent = os.environ.get("PI_CODING_AGENT_DIR") or os.path.expanduser("~/.pi/agent")
+    cfg, auth = os.path.join(agent, "models.json"), os.path.join(agent, "auth.json")
+    def load(f, k=None):
+        try: d = json.load(open(f)); d = d.get(k, {}) if k else d
+        except (OSError, ValueError, AttributeError): return {}
+        return d if isinstance(d, dict) else {}
+    providers, stored = load(cfg, "providers"), load(auth)
+    print(f"models pi {pi} (one short call per role model and the judgment model, no tools; Pi reads each key from {cfg}, {auth} or its environment)")
     def plain(s): return re.sub(r"[A-Za-z0-9_.~+/=-]{20,}", "<redacted>", s.split("{")[0]).strip(" :")[:160] or "no message"
+    def run(cmd, cwd):
+        try: return subprocess.run(cmd, capture_output=True, text=True, timeout=limit, cwd=cwd, stdin=subprocess.DEVNULL, env=dict(os.environ, PI_OFFLINE="1")), None
+        except subprocess.TimeoutExpired: return None, ("UNREACHABLE", f"no answer in {limit} s", 0.0)
+        except OSError as e: return None, ("FAILED", plain(str(e)), 0.0)
+    def failed(r): return "FAILED", plain((r.stderr.strip().splitlines() or [f"pi exit {r.returncode}, no answer"])[-1]), 0.0
+    def verdict(err, cost):
+        head = plain(str(err or ""))
+        code = (re.search(r"\b([45][0-9][0-9])\b", head) or [None, ""])[1]
+        if code in ("401", "403") or re.search(r"(?i)unauthori[sz]ed|forbidden|authenticat|invalid.{0,20}(api.?key|token)", head): return "REJECTED", head, cost
+        if code in ("502", "503", "504") or re.search(r"(?i)connect|timed? ?out|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|getaddrinfo|terminated", head): return "UNREACHABLE", head, cost
+        return "FAILED", head, cost
     def probe(model):
         cmd = [pi, "-p", "--mode", "json", "--no-session", "--no-tools", "--no-skills", "--no-context-files", "--no-prompt-templates", "--no-mcp", "--thinking", "off", "--model", model, "Reply with the one word ok."]
-        with tempfile.TemporaryDirectory() as cwd:
-            try: r = subprocess.run(cmd, capture_output=True, text=True, timeout=limit, cwd=cwd, stdin=subprocess.DEVNULL, env=dict(os.environ, PI_OFFLINE="1"))
-            except subprocess.TimeoutExpired: return "UNREACHABLE", f"no answer in {limit} s", 0.0
-            except OSError as e: return "FAILED", plain(str(e)), 0.0
+        with tempfile.TemporaryDirectory() as cwd: r, done = run(cmd, cwd)
+        if done: return done
         last = None
         for line in r.stdout.splitlines():
             try: ev = json.loads(line)
             except ValueError: continue
             msg = ev.get("message") if isinstance(ev, dict) and ev.get("type") == "message_end" else None
             if isinstance(msg, dict) and msg.get("role") == "assistant": last = msg
-        if r.returncode or last is None: return "FAILED", plain((r.stderr.strip().splitlines() or [f"pi exit {r.returncode}, no answer"])[-1]), 0.0
+        if r.returncode or last is None: return failed(r)
         cost = float(((last.get("usage") or {}).get("cost") or {}).get("total") or 0)
-        if last.get("stopReason") != "error": return "ok", "answered", cost
-        head = plain(str(last.get("errorMessage") or ""))
-        code = (re.search(r"\b([45][0-9][0-9])\b", head) or [None, ""])[1]
-        if code in ("401", "403") or re.search(r"(?i)unauthori[sz]ed|forbidden|authenticat|invalid.{0,20}(api.?key|token)", head): return "REJECTED", head, cost
-        if code in ("502", "503", "504") or re.search(r"(?i)connect|timed? ?out|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|getaddrinfo|terminated", head): return "UNREACHABLE", head, cost
-        return "FAILED", head, cost
-    with cf.ThreadPoolExecutor(max_workers=4) as ex: results = dict(zip(roles, ex.map(probe, roles)))
+        return ("ok", "answered", cost) if last.get("stopReason") != "error" else verdict(last.get("errorMessage"), cost)
+    def classify(model):
+        # One case, one yes/no question: the bench extension octo-feather-qa runs, its flags, its output reader.
+        inp = {"question": "Is this text a greeting?", "labels": ["yes", "no"], "criteria": {"yes": "a greeting", "no": "anything else"}, "cases": [{"id": "probe", "state": "hello"}], "classifiers": [model]}
+        with tempfile.TemporaryDirectory() as cwd:
+            open(os.path.join(cwd, qa.BENCH_INPUT), "w").write(json.dumps(inp))
+            open(os.path.join(cwd, qa.BENCH_EXT), "w").write(qa.BENCH_SOURCE % {"command": qa.BENCH_COMMAND})
+            r, done = run([pi, "--no-session", "--no-skills", "--no-mcp", "--no-context-files", "--no-prompt-templates", "--no-extensions", "--no-tools", "-e", os.path.join(cwd, qa.BENCH_EXT), "-p", f"/{qa.BENCH_COMMAND} {os.path.join(cwd, qa.BENCH_INPUT)}"], cwd)
+        if done: return done
+        bench, _ = qa.bench_output(r.stdout)
+        if bench is None: return failed(r)
+        cost = sum(float(c.get("cost_usd") or 0) for c in bench.get("calls") or [])
+        if model not in (bench.get("benched") or []): return "FAILED", f"Pi lists no classifier {model}: no key for its provider, or not in Pi catalog", cost
+        rows = bench.get("rows") or [[None] * 6]
+        ei = rows[0][5]
+        return ("ok", "answered", cost) if ei is None and rows[0][2] else verdict((bench.get("errors") or ["no answer"])[ei or 0], cost)
+    users = {m: "roles " + ", ".join(rs) for m, rs in roles.items()}
+    jobs = [(m, probe) for m in roles]
+    if judge:
+        users[judge] = ("roles " + ", ".join(roles[judge]) + "; " if judge in roles else "") + "judgment model (evals/judgment-model.json): the advisory judge, judgment benches"
+        jobs.append((judge, classify))
+    with cf.ThreadPoolExecutor(max_workers=4) as ex: results = list(zip([m for m, _ in jobs], ex.map(lambda j: j[1](j[0]), jobs)))
     spend = 0.0
-    for model, (verdict, why, cost) in results.items():
+    for model, (got, why, cost) in results:
         spend += cost
-        who = ", ".join(roles[model])
+        who = users[model]
         prov = model.split("/")[0]
         p = providers.get(prov) if isinstance(providers.get(prov), dict) else {}
-        key = p.get("apiKey")
-        if verdict == "ok": print(f"model  {model} ok (roles {who})"); continue
+        a = stored.get(prov) if isinstance(stored.get(prov), dict) else {}
+        key, where = (p["apiKey"], f"{cfg} (providers.{prov}.apiKey)") if "apiKey" in p else (a.get("key"), f"{auth} ({prov}.key)") if a.get("type") == "api_key" else (None, f"{cfg} (providers.{prov}.apiKey), {auth}")
+        if got == "ok": print(f"model  {model} ok ({who})"); continue
         bad = 1
-        if verdict == "REJECTED":
+        if got == "REJECTED":
             junk = " (the key there ends in or holds whitespace or terminal characters)" if isinstance(key, str) and re.search(r"\s|[\x00-\x1f\x7f]|\[20[01]~", key) else ""
-            print(f"model  {model} REJECTED key ({why}) for roles {who}{junk}; put the key the model proxy issued for provider {prov} in {cfg} (providers.{prov}.apiKey) or its environment, exactly, no trailing characters, then rerun just install-check-models")
-        elif verdict == "UNREACHABLE":
-            base = p.get("baseUrl") or "its baseUrl"
-            print(f"model  {model} UNREACHABLE ({why}) for roles {who}; the model proxy for provider {prov} did not answer: check this box reaches {base} ({cfg}, providers.{prov}.baseUrl) and the proxy is up, then rerun just install-check-models")
-        else: print(f"model  {model} FAILED ({why}) for roles {who}; run pi --model {model} -p ok by hand for the full error Pi gives, then rerun just install-check-models")
+            print(f"model  {model} REJECTED key ({why}) for {who}{junk}; put the key the model proxy issued for provider {prov} in {where} or its environment, exactly, no trailing characters, then rerun just install-check-models")
+        elif got == "UNREACHABLE":
+            url = p.get("baseUrl")
+            base = f"{url} ({cfg}, providers.{prov}.baseUrl)" if url else f"the endpoint Pi has built in for {prov}"
+            print(f"model  {model} UNREACHABLE ({why}) for {who}; the model proxy for provider {prov} did not answer: check this box reaches {base} and the proxy is up, then rerun just install-check-models")
+        else: print(f"model  {model} FAILED ({why}) for {who}; run pi --model {model} -p ok by hand for the full error Pi gives, then rerun just install-check-models")
     print(f"models spend {spend:.4f} USD ({len(results)} calls, Pi usage cost)")
     sys.exit(bad)' "$root"
 
