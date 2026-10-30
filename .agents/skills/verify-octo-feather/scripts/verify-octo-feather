@@ -465,7 +465,12 @@ def drive_install_check(f: Feature) -> None:
     f.pre = []
     tools = ("herdr", "pi", "gh", "jq", "git", "just", "python3", "node")
     f.check("offline", lambda c: c.code == 1
-            and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING$)", c.out) for t in tools)
+            and all(re.search(r"(?m)^" + t + r" +(ok  /|MISSING; \S)", c.out) for t in tools)
+            and all(re.search(r"(?m)^" + b, c.out) for b in (
+                r"kernel \S+ (ok \(6\.6 or later|TOO OLD, .*; boot a 6\.6)", r"userns (ok |FAILED .*; \S)", r"state  (ok  /|[A-Z ]+ .*; \S)",
+                r"kit    (ok  /|[A-Z ]+ .*; \S)", r"ffmpeg (ok  /|OPTIONAL .*; to record video: )",
+                r"sharing MANUAL .*: ssh exe\.dev share set-private \S+"))
+            and re.search(r"(?m)^agent-browser (browser (ok  /|(MISSING|UNREADABLE IN THE QC SANDBOX) .*; agent-browser install)|MISSING)", c.out)
             and re.search(r"(?m)^pi +(version \S+ ok|WRONG VERSION)", c.out)
             and re.search(r"(?m)^agent-browser (version \S+ ok|WRONG VERSION|MISSING)", c.out)
             and re.search(r"(?m)^gh +NOT authenticated \(gh auth login\)$", c.out)
