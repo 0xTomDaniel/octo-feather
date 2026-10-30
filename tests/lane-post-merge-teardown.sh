@@ -49,16 +49,18 @@ if a[:2] == ["pr", "edit"] and opt("--base"):
 print(f"fake gh: refused {' '.join(a)}", file=sys.stderr); sys.exit(1)
 EOF
 # Fake herdr: `agent get PANE` finds the panes in $HERDR_PANES ("PANE TAB"), `workspace get SPACE` the spaces in
-# $HERDR_SPACES; others are not found, as Herdr prints it.
+# $HERDR_SPACES; others are not found. Each prints exactly as real herdr 0.9.5 `agent get` / `workspace get`
+# (captured 2026-10-30, ticket #458 comment): found, the result JSON on stdout, exit 0; not found, the error JSON
+# on stderr, empty stdout, exit 1.
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
 case "$1 $2" in
   "agent get") tab="$(awk -v p="$3" '$1 == p {print $2}' "$HERDR_PANES")"
-    [[ -n "$tab" ]] || { echo '{"error":{"code":"agent_not_found","message":"agent target '"$3"' not found"}}'; exit 1; }
-    printf '{"result":{"agent":{"pane_id":"%s","tab_id":"%s","agent_status":"idle"},"type":"agent_info"}}\n' "$3" "$tab";;
+    [[ -n "$tab" ]] || { echo '{"error":{"code":"agent_not_found","message":"agent target '"$3"' not found"},"id":"cli:agent:get"}' >&2; exit 1; }
+    printf '{"id":"cli:agent:get","result":{"agent":{"agent":"pi","agent_status":"idle","pane_id":"%s","tab_id":"%s","workspace_id":"%s"},"type":"agent_info"}}\n' "$3" "$tab" "${3%%:*}";;
   "workspace get") grep -qxF "$3" "$HERDR_SPACES" \
-    || { echo '{"error":{"code":"workspace_not_found","message":"workspace '"$3"' not found"}}'; exit 1; }
-    printf '{"result":{"workspace":{"workspace_id":"%s"}}}\n' "$3";;
+    || { echo '{"error":{"code":"workspace_not_found","message":"workspace '"$3"' not found"},"id":"cli:workspace:get"}' >&2; exit 1; }
+    printf '{"id":"cli:workspace:get","result":{"type":"workspace_info","workspace":{"workspace_id":"%s"}}}\n' "$3";;
   *) echo "fake herdr: refused $*" >&2; exit 1;;
 esac
 EOF
