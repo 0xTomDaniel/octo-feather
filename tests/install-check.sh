@@ -24,6 +24,10 @@
 #   PATH (#422 items 2, 10): linear is hidden alone (its dir mirrored minus it), so a mise sharing its dir stays ok;
 #     each pinned tool's first hit on the caller's PATH is printed ok; a stale node or mise first on PATH: SHADOWED
 #     naming it, the pinned path and the fix, exit 1.
+#   Python (owner ruling #422, #261): the gate's Python at the kit's .python-version, found through uv: ok with venv and
+#     pidfd_open; none installed: MISSING naming `uv python install --no-bin`, exit 1, and `just check` in a copy of the
+#     kit refuses, naming it. The box python3 at 3.11 or later ok; a python3 reporting 3.10: WRONG VERSION, exit 1.
+#     Uses the box's uv Python installs (UV_PYTHON_INSTALL_DIR kept while HOME is a fresh dir); installs nothing.
 # herdr, pi and gh are stubs (gh signed in, pi at the pin unless swapped), so only the tracker or pi line decides
 # the exit. Run by `just check`.
 set -euo pipefail
@@ -40,6 +44,8 @@ printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* 
 # resolves to mise's install, so install-check's PATH rule holds.
 ln -s "$(mise which just)" "$t/bin/just"
 export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
+UV_PYTHON_INSTALL_DIR="$(uv python dir)"; export UV_PYTHON_INSTALL_DIR
+ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 mpin="$(tr -d '[:space:]' <"$kit/mise-version")"
 # hide NAME PATHLIST: PATHLIST with only NAME gone: each dir holding it is mirrored minus that one file (links to
@@ -80,6 +86,23 @@ grep -qE '^linear WRONG VERSION .* reports 3\.0\.0, want v3\.1\.0; .*npx @schpet
 check 0 "$gh_target" ""
 grep -q '^tracker github-issues ' <<<"$out" && ! grep -qi linear <<<"$out" || fail "GitHub target checked linear: $out"
 grep -qx "pi     version $pin ok (pi-version)" <<<"$out" || fail "pi at the pin: no ok version line: $out"
+grep -qE "^python gate $ppin ok  /.* \(venv, pidfd_open; \.python-version\)$" <<<"$out" \
+  && grep -qE '^python3 version 3\.[0-9]+\.[0-9]+ ok  /.*/python3 \(3\.11 or later, the kit scripts\)$' <<<"$out" \
+  || fail "gate Python at the pin and box python3: no ok lines: $out"
+# The gate's Python not installed (no managed install, the box's own Pythons not taken): named with the fix, exit 1;
+# `just check` in a copy of the kit refuses before any item, naming it.
+fix="uv python install --no-bin $ppin (--no-bin: no python3.X link in ~/.local/bin, which would change"
+UV_PYTHON_INSTALL_DIR="$t/nopy" UV_PYTHON_PREFERENCE=only-managed check 1 "$gh_target" ""
+grep -qF "python gate $ppin MISSING (.python-version); $fix" <<<"$out" || fail "gate Python not installed: no MISSING line naming the fix: $out"
+mkdir -p "$t/kit"; (cd "$kit" && git ls-files -z | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t/kit"
+rc=0; gout="$(cd "$t/kit" && UV_PYTHON_INSTALL_DIR="$t/nopy" UV_PYTHON_PREFERENCE=only-managed just check 2>&1)" || rc=$?
+[[ "$rc" != 0 ]] && grep -qF "check-tests: the gate's Python $ppin (.python-version) is not installed; install it once, with network: $fix" <<<"$gout" \
+  || fail "just check without the gate's Python: not refused naming the fix (exit $rc): $gout"
+# A box python3 older than 3.11 first on PATH (it answers --version; the recipe's other python3 calls run the real one).
+o="$t/py310"; mkdir -p "$o"; printf '#!/bin/sh\n[ "$1" = --version ] && { echo "Python 3.10.12"; exit 0; }\nexec "%s" "$@"\n' "$real_py3" >"$o/python3"; chmod +x "$o/python3"
+pre="$o" check 1 "$gh_target" ""; rm -rf "$o"
+grep -qx "python3 WRONG VERSION $o/python3 reports 3.10.12, want 3.11 or later (the kit scripts read TOML with tomllib); install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH" <<<"$out" \
+  || fail "box python3 3.10: no WRONG VERSION line naming 3.11 and the fix: $out"
 printf '#!/bin/sh\necho 0.0.1\n' >"$t/bin/pi"
 check 1 "$gh_target" ""
 grep -qx "pi     WRONG VERSION $t/bin/pi reports 0.0.1, want $pin (pi-version); npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin" <<<"$out" \
@@ -155,4 +178,4 @@ check 1 "$gh_target" ""; clean="$saved"
 grep -qx 'agent-browser MISSING (want 0.40.0, agent-browser-version); npm install -g agent-browser@0.40.0 (then agent-browser doctor --offline; no Chrome found: agent-browser install)' <<<"$out" \
   || fail "no agent-browser on PATH: not listed MISSING with 0.40.0 and the install: $out"
 printf '#!/bin/sh\necho "agent-browser 0.40.0"\n' >"$t/bin/agent-browser"; chmod +x "$t/bin/agent-browser"
-echo "install-check: ok (linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"
+echo "install-check: ok (gate Python $ppin ok, not installed MISSING naming uv python install --no-bin and just check refusing, exit 1; box python3 ok, 3.10 WRONG VERSION, exit 1; linear hidden alone, mise in its dir ok; a stale node or mise first on PATH SHADOWED naming the pinned path and the fix, exit 1; agent-browser 0.40.0 ok, 0.39.4 WRONG VERSION, none MISSING naming 0.40.0 and npm install, exit 1; pi $pin (pi-version) ok, pi 0.0.1 WRONG VERSION naming the pin and npm install, exit 1; mise at its pin ok, 2000.1.1 named, exit 1; a created repo's mise.toml tools ok, MISSING named, exit 1; a repo the kit did not create gets no tool line; just checked at the kit lock in every target (ok, 0.0.1 WRONG VERSION); Linear target: linear missing names v3.1.0 and the install path, exit 1; at the pin ok; another release named; GitHub target never checks linear nor a browser; browser target: MISSING names Playwright 1.64.1, the folder and the install command, exit 1; fake shell at the pin ok; folder under ~/.cache refused)"

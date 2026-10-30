@@ -53,6 +53,10 @@ jobs:
       # Into ~/.local (bin on the justfile's PATH), where the box has Pi, never mise's node prefix: a global there joins
       # mise's tool dirs and its shims (#261: on eaeaf95a it shadowed the tests' stub pi).
       - run: npm install -g --ignore-scripts --prefix "$HOME/.local" "@earendil-works/pi-coding-agent@$(tr -d '[:space:]' < pi-version)"
+      # The gate's Python, the kit's .python-version release through uv (python-build-standalone; owner ruling #422,
+      # #261), as the box installs it (why --no-bin: the justfile's check-tests message). The eval fixtures and
+      # templates/python below keep their own resolution: uv reads .python-version only inside each project. Network.
+      - run: uv python install --no-bin
       # The kit's test deps (pytest, pytest-xdist: uv.lock), each eval fixture's and templates/python's locked deps
       # (tests/template-languages.sh) into uv's cache, with
       # mise's uv: the third network step. The gate runs pytest with --offline, and tests/qa.sh syncs python-app copies
