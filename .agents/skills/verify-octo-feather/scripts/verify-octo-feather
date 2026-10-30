@@ -368,6 +368,15 @@ class Feature:
             fh.write(line + "\n")
 
 
+def qc_report(f: Feature, name: str) -> dict[str, Any]:
+    """The report of case NAME's `just qc` run, from the path qc itself printed (`report <path>`, its last), {} when
+    it printed none. Never a glob of a state dir: qc's state dir follows the caller's Herdr session (octo-feather-state),
+    a scratch session's inside the qc sandbox."""
+    text = (f.d / f"{name}.stdout").read_text() + (f.d / f"{name}.stderr").read_text()
+    paths = [p for p in re.findall(r"\breport (/\S+?\.json)\b", text) if Path(p).is_file()]
+    return json.loads(Path(paths[-1]).read_text()) if paths else {}
+
+
 def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
     """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
     store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
@@ -1092,15 +1101,13 @@ def drive_qc_advisory(f: Feature) -> None:
                                f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(v["qc_demo_pass"])}\ncovers = ["docs/specs"]\ntests = ["none"]\n')
     git("add", "-A")
     git("commit", "-q", "-m", "contract with a passing demo")
-    head = git("rev-parse", "HEAD")
     # Scratch box state; the stub classifier induced to answer does-not-show at 0.91.
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc),
              "STUB_ANSWER": "does-not-show", "STUB_CONFIDENCE": "0.91"}
     f.pre = ["env", "-C", str(r)]
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     f.pre = []
-    reports = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{head}-*.json"))
-    f.obs("qc", "results", json.dumps(json.loads(reports[-1].read_text()).get("results") if reports else None, indent=1) + "\n")
+    f.obs("qc", "results", json.dumps(qc_report(f, "qc").get("results"), indent=1) + "\n")
     st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
     f.obs("qc", "built", f"{st['acceptance-a']['status']}\n")
     line = (r"(?m)^PASS acceptance-a: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record [0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}\n"
@@ -1155,8 +1162,7 @@ def drive_qc_fallback(f: Feature) -> None:
     f.pre = ["env", "-C", str(r)]   # just qc runs where the supervisor stands: the target's worktree
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
     f.pre = []
-    reports = sorted((sc / "state" / "octo-feather" / "qc").glob(f"{head}-*.json"))
-    f.obs("qc", "report", reports[-1].read_text() if reports else "{}")
+    f.obs("qc", "report", json.dumps(qc_report(f, "qc")))
     f.obs("qc", "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--criterion", "demo#acceptance-b", "--commit", head, "--json"],
                                 env={**os.environ, **f.env})[1])
     st = json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]
