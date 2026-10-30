@@ -55,8 +55,11 @@
 #      the run), regular files only, one JSON line {"shots": [[name, base64]...]} on QC_FD_POST; octo-feather-qc
 #      stores them in the demo's evidence record. QC_BROWSER (a browser demo): the box's Playwright browsers folder,
 #      also in QC_RO_BINDS (step 4: read-only); the proof checks it holds a headless shell and is not writable.
+#   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
+#      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
+#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs
 # Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66; then go to the recorder
+#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b); then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
@@ -274,6 +277,16 @@ if [[ "$phase" == setup ]]; then
   # The attempt record: kept by the recorder (below) in $OV/rec, on the hidden run tmpfs; the judge's view a read-only bind.
   mkdir -p "$SCR/rec" && mount --no-canonicalize --bind /proc/self/fd/8/rec "$SCR/rec" && remount ro "$SCR/rec" || die "attempt record view"
   REC="$SCR/rec/attempts.jsonl" RSOCK="$SCR/rec/sock" PY=$(command -v python3 || echo python3)
+  # 6b. mise (rule: header).
+  if command -v mise > /dev/null; then
+    # Its own state dir a throwaway (removed): the judge's per-run MISE_STATE_DIR starts empty (step 6).
+    ms=$(mktemp -d) && md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null) || die "mise doctor --json failed: mise's dirs unknown"
+    rm -rf "$ms"
+    for d in data cache config; do
+      v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(jq -r --arg d "$d" '.dirs[$d]' <<< "$md")"
+    done
+  fi
+  export MISE_OFFLINE=1 MISE_AUTO_INSTALL=0 MISE_NOT_FOUND_AUTO_INSTALL=0 MISE_NOT_FOUND_SYSTEM_FALLBACK=0
   realpi=$(command -v pi || echo pi)
   { echo '#!/usr/bin/env bash'
     echo '# qc sandbox pi shim: log each start, one line (agents count), then run the real pi.'
@@ -715,6 +728,37 @@ if [[ -n "$BR" ]]; then   # a browser demo: the box's headless shell, read-only;
   w=0; touch "$BR/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$BR/.qc-ro-$S"; }
   sh=$(ls -d "$BR"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)
   check "$(t test "$w" = 0 -a -n "$sh")" "browser: PLAYWRIGHT_BROWSERS_PATH=$BR read-only, headless shell ${sh%/INSTALLATION_COMPLETE}"
+fi
+if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's mise tools installed
+  # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
+  ms=$(mktemp -d); ml=()
+  for d in "$WT" "$kit"; do
+    f="$ms/ls-${#ml[@]}.json"; MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing --json > "$f" 2> /dev/null; ml+=("$d" "$f" "$?")
+  done
+  mline=$(python3 - "$MISE_DATA_DIR" "${ml[@]}" <<'EOF'
+# DATA_DIR then DIR FILE EXIT per dir: FILE is `mise ls --local --missing --json` ({tool: [{version, installed}]}).
+import json, sys
+data, a = sys.argv[1], sys.argv[2:]
+miss = []
+for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
+    try:
+        tools = json.load(open(f)) if rc == "0" else None
+    except (OSError, ValueError):
+        tools = None
+    if not isinstance(tools, dict):
+        m = ["mise ls --missing failed"]
+    else:
+        m = [f"{t}@{v.get('version')}" for t, vs in tools.items() for v in vs if not v.get("installed")]
+    if m:
+        miss.append(f"{d}: {' '.join(m)}")
+line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
+if miss:
+    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it, in each: mise install --locked)"
+print(line)
+sys.exit(1 if miss else 0)
+EOF
+  ); mrc=$?; rm -rf "$ms"
+  check "$mrc" "$mline"
 fi
 # Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
 go=$(python3 -c 'import socket, sys

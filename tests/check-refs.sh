@@ -70,12 +70,12 @@ expect tests/accepted.sh "SPOOL_SIDE=$hu # SPOOL_SIDE: the $hu approves" "$words
 expect scripts/octo-feather-accepted "SPOOL_SIDE = \"$hu\"  # the $hu approves" "$words"
 expect scripts/octo-feather-accepted "# SPOOL_SIDE ... the $hu approves" "$words"
 # A broken retired-words scanner fails closed, never refs: ok (match, no match and error are distinct).
-# broken TOOL: a TOOL executable that fails (a stub first on the justfile's PATH, $HOME/.local/bin,
-# via a throwaway HOME) makes `just check-refs` fail naming a scanner error.
+# broken TOOL: a TOOL executable that fails (a stub first on the caller's PATH, which the justfile keeps ahead of
+# its tools) makes `just check-refs` fail naming a scanner error.
 broken() {
-  local h="$t.home"; mkdir -p "$h/.local/bin"
-  printf '#!/bin/sh\necho "%s: broken (check-refs test stub)" >&2\nexit 2\n' "$1" > "$h/.local/bin/$1"; chmod +x "$h/.local/bin/$1"
-  set +e; out="$(cd "$t" && HOME="$h" just check-refs 2>&1)"; rc=$?; set -e
+  local h="$t.bin"; mkdir -p "$h"
+  printf '#!/bin/sh\necho "%s: broken (check-refs test stub)" >&2\nexit 2\n' "$1" > "$h/$1"; chmod +x "$h/$1"
+  set +e; out="$(cd "$t" && PATH="$h:$PATH" just check-refs 2>&1)"; rc=$?; set -e
   rm -rf "$h"
   [[ "$rc" != 0 ]] || { echo "check-refs test: broken $1 passed just check-refs" >&2; exit 1; }
   grep -qF "retired-words scanner error: $1 exited" <<<"$out" || { echo "check-refs test: broken $1 not reported as a scanner error" >&2; echo "$out" >&2; exit 1; }
