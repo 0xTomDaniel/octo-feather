@@ -305,8 +305,10 @@ check-behavior-smoke:
 
 # Verify the runtime tools on this box (octo-lite's install --check equivalent), agent-browser at its pin included, and the tracker CLI of the target
 # (the invocation directory, or TARGET: `just -f KIT/justfile install-check` in it); a Linear target checks linear,
+# each pinned tool's first hit on CALLER_PATH (default the caller's PATH, which panes and shells resolve) is the
+# pinned one, or that launcher is named with the fix;
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin.
-install-check target=invocation_directory():
+install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -324,7 +326,7 @@ install-check target=invocation_directory():
     # Native tools (owner ruling #261): mise at mise-version, then each mise.toml tool at its mise.lock version in the
     # target (the kit itself when run there) when it has its own mise.toml; a repo without one (a repo the kit did not
     # create) keeps its own pins: no tool line, its panes get no mise shims (scripts/pi-role). Each repo's justfile
-    # puts its own mise tools on PATH for its recipes, so where the caller's PATH resolves them is not checked here.
+    # puts its own mise tools on PATH for its recipes; where the caller's PATH resolves them: the PATH check below.
     # A mise.toml with only [tools] needs no trust; a "not trusted" answer means it gained [env], [tasks] or hooks.
     python3 -c 'import json, os, shutil, subprocess, sys
     root, top = sys.argv[1], sys.argv[2]
@@ -371,6 +373,53 @@ install-check target=invocation_directory():
       if [[ "$v" == "$pin" ]]; then printf 'agent-browser version %s ok (agent-browser-version)\n' "$v"
       else printf 'agent-browser WRONG VERSION %s reports %s, want %s (agent-browser-version); %s\n' "$p" "${v:-no version}" "$pin" "$how"; bad=1; fi
     fi
+    # The caller's PATH (#422 item 2: older launchers earlier on PATH ran instead of the pinned mise, node, pnpm, uv):
+    # for each pinned tool, its first hit there is the pinned one (ok, its path), else that launcher is named with the
+    # pinned path and the fix. Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
+    # first hit reporting the pin (none on PATH at the pin: the version lines above name the install); every executable
+    # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one).
+    python3 -c 'import json, os, re, subprocess, sys
+    root, top, path = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
+    dirs = [d for d in path.split(":") if os.path.isabs(d)]
+    def run(*a):
+        try: return subprocess.run(a, capture_output=True, text=True, timeout=20, cwd=top, stdin=subprocess.DEVNULL).stdout
+        except (OSError, subprocess.SubprocessError): return ""
+    def hits(name):
+        fs = [os.path.join(d, name) for d in dirs]
+        return list(dict.fromkeys(f for f in fs if os.path.isfile(f) and os.access(f, os.X_OK)))
+    def version(f):
+        m = re.search(r"[0-9]+\.[0-9]+\.[0-9]+", run(f, "--version"))
+        return m.group(0) if m else None
+    bad = 0
+    def line(name, first, ok, pinned, why):
+        global bad
+        if ok: print(f"path   {name} ok  {first} ({why})"); return
+        print(f"path   {name} SHADOWED {first} comes first on PATH, before the pinned {pinned} ({why}); remove or rename {first}, or put {os.path.dirname(pinned)} first on PATH"); bad = 1
+    def js(*a):
+        try: return json.loads(run(*a) or "{}")
+        except ValueError: return {}
+    pin = {n: open(os.path.join(root, n + "-version")).read().strip() for n in ("mise", "pi", "agent-browser")}
+    mise = next((h for h in hits("mise") if version(h) == pin["mise"]), "mise")  # a stale mise first answers nothing useful
+    shims = js(mise, "doctor", "--json").get("dirs", {}).get("shims", "")
+    bins = {}  # executable name: its pinned path, for the target mise.toml tools
+    if os.path.isfile(os.path.join(top, "mise.toml")):
+        for b in run(mise, "-C", top, "bin-paths").split("\n"):
+            for n in sorted(os.listdir(b)) if b and os.path.isdir(b) else []:
+                f = os.path.join(b, n)
+                if os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
+    kit = js(mise, "-C", root, "ls", "--local", "--json")
+    pins = [(n, pin[n], f"{n}-version") for n in pin] + [("just", (kit.get("just") or [{}])[0].get("version"), "kit mise.lock")]
+    for name, want, why in pins:
+        if name in bins or not (hs := hits(name)): continue
+        pinned = next((h for h in hs if version(h) == want), None)
+        if pinned: line(name, hs[0], hs[0] == pinned, pinned, why)
+    for name, f in sorted(bins.items()):
+        if not (hs := hits(name)): continue
+        shim = os.path.join(shims, name) if shims else ""
+        pinned = shim if shim and os.path.isfile(shim) else f
+        ok = os.path.dirname(hs[0]) == shims or os.path.realpath(hs[0]) in (os.path.realpath(f), os.path.realpath(pinned))
+        line(name, hs[0], ok, pinned, f"{top}/mise.lock")
+    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" || bad=1
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
     # pnpm under another HOME (corepack's shim) would download itself.
