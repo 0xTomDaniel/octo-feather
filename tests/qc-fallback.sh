@@ -6,7 +6,7 @@
 # is coreutils timeout at that cap); each result is labelled agent fallback and names the evidence record the judge's report was
 # stored as, which reads back at the head (a declared one beside them: tests/qc-capture.sh). A judge the cap stops
 # (the stub fires its timeout's alarm) leaves a record with no report: evidence incomplete, the run exits 3
-# naming it (until #406 makes that insufficient evidence) and the status file is unchanged.
+# naming it as insufficient evidence (exit 2) and the status file is unchanged.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN   # a test harness, as tests/qc.sh: qc refuses only under the gate's marker
@@ -100,14 +100,14 @@ assert open(os.path.join(out, "judge.exit")).read() == "0\n"
 EOF
 done
 
-# The cap stops a judge: its record holds no report, evidence incomplete, exit 3 naming it, status unchanged. A judge that
+# The cap stops a judge: its record holds no report, insufficient evidence naming it (exit 2), status unchanged. A judge that
 # ignores TERM (stubborn) is stopped by timeout's KILL after -k, timeout exiting 137 instead of 124: the same result.
 for mode in "cap 124" "stubborn 137"; do set -- $mode
   git reset -q --hard "$head"
   SECONDS=0; FAKE_QC_JUDGE=$1 qcrun acceptance-b
-  [[ "$rc" == 3 && "$SECONDS" -lt 60 ]] || fail "$1 judge: want exit 3 well before its 60 s sleep, got $rc after $SECONDS s: $(tail -20 "$t/err")"
-  grep -qE "evidence incomplete, nothing judged: acceptance-b \(record $rid\): the judge hit its 900 s time cap before reporting; outputs missing: judge.report.json" "$t/err" \
-    || fail "$1 judge not named: $(cat "$t/err")"
+  [[ "$rc" == 2 && "$SECONDS" -lt 60 ]] || fail "$1 judge: want exit 2 well before its 60 s sleep, got $rc after $SECONDS s: $(tail -20 "$t/err")"
+  grep -A2 '^INSUFFICIENT EVIDENCE acceptance-b: ' <<< "$out" | grep -A1 '^  missing: the judge hit its 900 s time cap before reporting; outputs missing: judge.report.json$' \
+    | grep -qE "^  evidence incomplete; decision agent fallback; record $rid$" || fail "$1 judge not named: $out $(tail -20 "$t/err")"
   [[ "$(git rev-parse HEAD)" == "$head" && -z "$(git status --porcelain)" ]] || fail "$1 judge: status file changed"
   "$ev" read --repo . --criterion demo#acceptance-b --commit "$head" --json | python3 -c '
 import json, os, sys
@@ -115,4 +115,4 @@ x = json.load(sys.stdin)[-1]
 assert sorted(x["record"]["outputs"]) == ["judge.exit", "judge.stdout"], x["record"]["outputs"]
 assert open(os.path.join(x["dir"], "outputs", "judge.exit")).read() == sys.argv[1] + "\n"' "$2" || fail "$1 judge: its record"
 done
-echo "qc-fallback: ok (two undeclared criteria: a fresh capped judge each, alone in its brief, own sandbox; results labelled agent fallback, each naming the record its report reads back from at the head; a judge stopped by the cap, by TERM or by the later KILL: record without a report, exit 3 naming it, status unchanged)"
+echo "qc-fallback: ok (two undeclared criteria: a fresh capped judge each, alone in its brief, own sandbox; results labelled agent fallback, each naming the record its report reads back from at the head; a judge stopped by the cap, by TERM or by the later KILL: record without a report, insufficient evidence naming it (exit 2), status unchanged)"

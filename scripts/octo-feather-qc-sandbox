@@ -24,6 +24,8 @@
 #      (>= 6.6): a kernel without them fails closed (exit 66), never an overlay without userxattr
 #   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
 #      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
+#      MISE_STATE_DIR an empty per-run dir on the private /tmp, so `mise trust` (new-repo) writes and nothing it writes
+#      persists; empty, never a copy of the caller's: its trusted-configs name other repos on the box (step 3b) (#428);
 #      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
 #      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's socket; git's only credential helper
 #      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
@@ -31,7 +33,9 @@
 #      setup-side process outside the judge's namespaces (its PID namespace cannot name it: no kill, no ptrace),
 #      on the hidden run tmpfs; the judge sees it only through a read-only bind ($SCR/rec: the live
 #      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket, write-only, mode 0200, not removable; each sender returns only once the recorder has written its entry).
-#      Senders: the herdr shim (a start message with the argv before the call, its exit after), the git helper,
+#      Senders: the herdr shim (a start message with the argv before the call, its exit after), each run shim (the same
+#      shim, one per program QC_RECORD names, kind run: .agents/skills/eval-cases/references/schema.md, Run record),
+#      the git helper,
 #      the offline gh's refusals, and the recorder's own inotify watch on the tmpfs masks (gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state,
 #      other repos as repo;
 #      /dev/null-bound files are not watchable exactly and are not recorded). Only what arrives after the
@@ -51,8 +55,11 @@
 #      the run), regular files only, one JSON line {"shots": [[name, base64]...]} on QC_FD_POST; octo-feather-qc
 #      stores them in the demo's evidence record. QC_BROWSER (a browser demo): the box's Playwright browsers folder,
 #      also in QC_RO_BINDS (step 4: read-only); the proof checks it holds a headless shell and is not writable.
+#   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
+#      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
+#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs
 # Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66; then go to the recorder
+#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b); then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
@@ -65,7 +72,7 @@
 # Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
 # state dir, QC_WORKTREE, QC_KIT the kit under test (step 3b), QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
 # not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
-# QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_GHSNAP snapshot dir and
+# QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_RECORD program names to record runs of (step 6), QC_GHSNAP snapshot dir and
 # QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_HISTORY=none to bind
 # no history (step 3), QC_FD_PROOF /
 # QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
@@ -262,37 +269,60 @@ if [[ "$phase" == setup ]]; then
   unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE OCTO_FEATHER_SPEND_SPACE \
     HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
     GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
+  # mise's state dir (trusted-configs, tracked-configs): empty, per-run (header, step 6).
+  mkdir -p "$SCR/mise/state" || die "mise state dir"
+  export MISE_STATE_DIR="$SCR/mise/state"
   export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
     GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
   # The attempt record: kept by the recorder (below) in $OV/rec, on the hidden run tmpfs; the judge's view a read-only bind.
   mkdir -p "$SCR/rec" && mount --no-canonicalize --bind /proc/self/fd/8/rec "$SCR/rec" && remount ro "$SCR/rec" || die "attempt record view"
   REC="$SCR/rec/attempts.jsonl" RSOCK="$SCR/rec/sock" PY=$(command -v python3 || echo python3)
+  # 6b. mise (rule: header).
+  if command -v mise > /dev/null; then
+    # Its own state dir a throwaway (removed): the judge's per-run MISE_STATE_DIR starts empty (step 6).
+    ms=$(mktemp -d) && md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null) || die "mise doctor --json failed: mise's dirs unknown"
+    rm -rf "$ms"
+    for d in data cache config; do
+      v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(jq -r --arg d "$d" '.dirs[$d]' <<< "$md")"
+    done
+  fi
+  export MISE_OFFLINE=1 MISE_AUTO_INSTALL=0 MISE_NOT_FOUND_AUTO_INSTALL=0 MISE_NOT_FOUND_SYSTEM_FALLBACK=0
   realpi=$(command -v pi || echo pi)
   { echo '#!/usr/bin/env bash'
     echo '# qc sandbox pi shim: log each start, one line (agents count), then run the real pi.'
     printf 'echo "$$" >> %q\n' "$SCR/agents.log"
     printf 'exec %q "$@"\n' "$realpi"
   } > "$SCR/bin/pi"
-  if [[ -n "$HERDR" ]]; then
+  # recshim FILE KIND NAME REAL PRE DROP ENVDROP: write to FILE the one recording shim, herdr's and each run program's:
+  # DROP options dropped (each with its value), REAL run (empty: the next NAME on PATH past the shim's own dir) with PRE
+  # before the argv. What it records and passes through: .agents/skills/eval-cases/references/schema.md, Attempt
+  # record, Run record.
+  recshim() {
     { echo "#!$PY"
-      echo '# qc sandbox herdr shim: pin the sandbox session; drop any --session/--remote/--machine; record the call:'
-      echo '# its argv to the recorder before it runs (unreachable: not run), its exit after, then returns once the recorder has written the entry'
-    echo '# (.agents/skills/eval-cases/references/schema.md, Attempt record).'
-      echo 'import json, os, socket, subprocess, sys'
-      printf 'S, HERDR, SOCK = %s, %s, %s\n' "$(jq -n --arg x "$S" '$x')" "$(jq -n --arg x "$HERDR" '$x')" "$(jq -n --arg x "$RSOCK" '$x')"
+      echo "# qc sandbox $2 shim for $3: record the call (argv before, exit after), run the real program unchanged."
+      echo 'import json, os, shutil, socket, subprocess, sys'
+      printf 'KIND, NAME, REAL, SOCK = %s, %s, %s, %s\n' "$(jq -n --arg x "$2" '$x')" "$(jq -n --arg x "$3" '$x')" \
+        "$(jq -n --arg x "$4" '$x')" "$(jq -n --arg x "$RSOCK" '$x')"
+      printf 'PRE, DROP, ENVDROP = %s, %s, %s\n' "$5" "$6" "$7"
       cat <<'EOF'
 a, args, i = sys.argv[1:], [], 0
 while i < len(a):
-    if a[i] in ("--session", "--remote", "--machine"): i += 2; continue
-    if a[i].split("=", 1)[0] in ("--session", "--remote", "--machine") and "=" in a[i]: i += 1; continue
+    if a[i] in DROP: i += 2; continue
+    if a[i].split("=", 1)[0] in DROP and "=" in a[i]: i += 1; continue
     args.append(a[i]); i += 1
+if not REAL:   # the real program: the next NAME on PATH past this shim's own dir
+    own = os.path.dirname(os.path.realpath(__file__))
+    REAL = shutil.which(NAME, path=os.pathsep.join(d for d in os.environ.get("PATH", "").split(os.pathsep)
+                                                 if d and os.path.realpath(d) != own))
+    if not REAL:
+        sys.exit(print(f"{NAME}: command not found", file=sys.stderr) or 127)
 c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
 try:
-    c.connect(SOCK); c.send(json.dumps({"t": "herdr", "argv": [x[:4000] for x in args][:200]}).encode())
+    c.connect(SOCK); c.send(json.dumps({"t": KIND, "program": NAME, "argv": [x[:4000] for x in args][:200]}).encode())
 except OSError as e:
-    sys.exit(print(f"qc sandbox herdr shim: attempt record unreachable ({e}); call not made", file=sys.stderr) or 70)
-env = {k: v for k, v in os.environ.items() if k != "HERDR_PANE_ID"}
-rc = subprocess.run([HERDR, "--session", S, *args], env=env, close_fds=False).returncode
+    sys.exit(print(f"qc sandbox {NAME} shim: attempt record unreachable ({e}); call not made", file=sys.stderr) or 70)
+env = {k: v for k, v in os.environ.items() if k not in ENVDROP}
+rc = subprocess.run([REAL, *PRE, *args], env=env, close_fds=False).returncode
 rc = 128 - rc if rc < 0 else rc
 try:   # then wait for the recorder's close: it has written this call's entry (a recorder gone ends the wait too)
     c.send(json.dumps({"t": "exit", "exit": rc}).encode()); c.shutdown(socket.SHUT_WR)
@@ -301,7 +331,11 @@ except OSError:
     pass
 sys.exit(rc)
 EOF
-    } > "$SCR/bin/herdr"
+    } > "$1"; }
+  if [[ -n "$HERDR" ]]; then
+    # herdr's: pin the sandbox session; drop any --session/--remote/--machine.
+    recshim "$SCR/bin/herdr" herdr herdr "$HERDR" "$(jq -cn --arg s "$S" '["--session", $s]')" \
+      '("--session", "--remote", "--machine")' '("HERDR_PANE_ID",)'
     # OCTO_FEATHER_QC_HERDR: the real binary the shim wraps; a qc started in this sandbox wraps it, not the shim.
     export HERDR_BIN_PATH="$SCR/bin/herdr" HERDR_SOCKET_PATH="$HC/sessions/$S/herdr.sock" OCTO_FEATHER_QC_HERDR="$HERDR"
   fi
@@ -327,12 +361,22 @@ EOF
   n=${GIT_CONFIG_COUNT:-0}
   export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=credential.helper" "GIT_CONFIG_VALUE_$n=" \
     "GIT_CONFIG_KEY_$((n + 1))=credential.helper" "GIT_CONFIG_VALUE_$((n + 1))=$SCR/bin/git-credential-qc"
-  chmod +x "$SCR"/bin/*
+  # QC_RECORD: program names, one per line, each a run shim in $SCR/rbin (which, and what it does: schema.md, Run record).
+  mkdir -p "$SCR/rbin"; recs=()
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    [[ "$p" =~ ^[A-Za-z0-9_+-][A-Za-z0-9._+-]*$ ]] || die "run record: program name $p"
+    recshim "$SCR/rbin/$p" run "$p" "" '[]' '()' '()'; recs+=("$p")
+  done <<< "${QC_RECORD:-}"
+  chmod +x "$SCR"/bin/*; ((${#recs[@]})) && chmod +x "$SCR"/rbin/*
   if [[ -n "${QC_SHOTS:-}" ]]; then mkdir -p "$SCR/shots" && export QC_SCREENSHOTS="$SCR/shots" || die "screenshots dir"; fi
   mount --bind "$SCR/bin" "$SCR/bin" && remount ro "$SCR/bin" || die "shims read-only"
+  mount --bind "$SCR/rbin" "$SCR/rbin" && remount ro "$SCR/rbin" || die "run shims read-only"
   PATH="$SCR/bin:$PATH"
   [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
   PATH="$(cd "$(dirname "$0")/.." && pwd -P)/.agents/skills/github-pr/scripts:$PATH"   # the offline gh shadows every other gh
+  # a run shim wraps whichever one of its name comes next, the offline gh too; OCTO_FEATHER_QC_RUN_SHIMS names their dir
+  ((${#recs[@]})) && PATH="$SCR/rbin:$PATH" && export OCTO_FEATHER_QC_RUN_SHIMS="$SCR/rbin"
   export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$RSOCK" \
     OCTO_FEATHER_QC_ATTEMPTS="$REC"
   # The recorder: setup-side (outside the judge's namespaces), so the judge can neither kill nor ptrace it; it alone
@@ -366,6 +410,10 @@ def herdr_end(st):   # one shim call, recorded at its close (no exit reported: .
     if not isinstance(a, list):
         return
     a = [str(x) for x in a]; known = isinstance(rc, int)
+    if st.get("t") == "run":   # a run shim's call, never an attempt (schema.md, Run record)
+        p = str(st.get("program"))
+        return emit({"kind": "run", "attempt": False, "refused": False, "program": p, "argv": a, "exit": rc if known else None,
+                     "what": " ".join([p, *a]), "result": f"exit {rc}" if known else "the shim never reported an exit"}, st["live"])
     emit({"kind": "herdr", "attempt": tuple(a[:2]) in AT, "refused": known and rc != 0, "argv": a, "session": S,
           "exit": rc if known else None, "what": " ".join(["herdr", *a]),
           "result": f"session {S}, exit {rc}" if known else f"session {S}, the shim never reported an exit: counted as delivered"},
@@ -380,8 +428,8 @@ def message(c, m):
     t = m.get("t") if isinstance(m, dict) else None
     if t == "go" and not live and go is None:
         go = c   # answered from the main loop, once the proof's own calls and reads (all sent before go) are dropped
-    elif t == "herdr" and "argv" not in st:
-        st.update(argv=m.get("argv"), live=live)
+    elif t in ("herdr", "run") and "argv" not in st:
+        st.update(t=t, program=m.get("program"), argv=m.get("argv"), live=live)
     elif t == "exit" and "argv" in st and "exit" not in st:
         st["exit"] = m.get("exit")
     elif t == "miss" and live:   # an offline gh refusal
@@ -470,6 +518,7 @@ EOF
   read -r -u "$rr" ready || ready=
   [[ "$ready" == "ready "[0-9]* ]] || die "attempt recorder did not start (${ready:-no line})"
   say "ok   attempt record: kept setup-side, outside the judge's namespaces (the judge sees $SCR/rec read-only); herdr shim, git credential helper, offline gh refusals, inotify on ${ready#ready } masks"
+  ((${#recs[@]})) && say "ok   run record: shims first on PATH for $(IFS=,; echo "${recs[*]}" | sed 's/,/, /g') (each runs the next one of its name unchanged)"
   unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --ipc --fork --kill-child --mount-proc \
     -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&- {rr}<&-; rc=$?
   # The recorder's line: only after the judge's namespace is gone (every sender dead), the record as it holds it.
@@ -552,7 +601,7 @@ fi
 # Inner: PID 1 of the judge's namespace, the caller's uid, no capabilities.
 GH="$QC_GH"; GC="$GH_CONFIG_DIR"; GHLINE="${QC_GHSNAP_LINE:-}"; WT="$QC_WORKTREE"
 BR="${QC_BROWSER:-}"
-unset QC_BROWSER QC_SHOTS QC_KIT QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
+unset QC_BROWSER QC_SHOTS QC_RECORD QC_KIT QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
   QC_GHSNAP QC_GHSNAP_OFF QC_GHSNAP_LINE
 nsprocs() {   # every live process in this PID namespace but PID 1 and the caller
   local p s; for p in /proc/[0-9]*; do p=${p#/proc/}
@@ -628,6 +677,10 @@ lin=$(env | grep -c '^LINEAR_API_KEY=')
 check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
 route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|OCTO_FEATHER_SPEND_SPACE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
 check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
+w=0; touch "$MISE_STATE_DIR/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$MISE_STATE_DIR/.qc-w-$S"; }
+me=$(find "$MISE_STATE_DIR" -mindepth 1 2>/dev/null | wc -l)
+check "$(t test "$MISE_STATE_DIR" = "$SCR/mise/state" -a "$w" = 1 -a "$me" = 0 -a "$(stat -f -c %T "$MISE_STATE_DIR")" = tmpfs)" \
+  "mise state dir per-run: $MISE_STATE_DIR (tmpfs on the private /tmp, started empty: $me entries; mise trust writes there and it dies with the run)"
 st=$("$(dirname "$0")/octo-feather-state")
 check "$(t test "$st" = "$SB")" "state dir is per-run scratch: $st"
 w=0
@@ -675,6 +728,37 @@ if [[ -n "$BR" ]]; then   # a browser demo: the box's headless shell, read-only;
   w=0; touch "$BR/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$BR/.qc-ro-$S"; }
   sh=$(ls -d "$BR"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)
   check "$(t test "$w" = 0 -a -n "$sh")" "browser: PLAYWRIGHT_BROWSERS_PATH=$BR read-only, headless shell ${sh%/INSTALLATION_COMPLETE}"
+fi
+if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's mise tools installed
+  # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
+  ms=$(mktemp -d); ml=()
+  for d in "$WT" "$kit"; do
+    f="$ms/ls-${#ml[@]}.json"; MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing --json > "$f" 2> /dev/null; ml+=("$d" "$f" "$?")
+  done
+  mline=$(python3 - "$MISE_DATA_DIR" "${ml[@]}" <<'EOF'
+# DATA_DIR then DIR FILE EXIT per dir: FILE is `mise ls --local --missing --json` ({tool: [{version, installed}]}).
+import json, sys
+data, a = sys.argv[1], sys.argv[2:]
+miss = []
+for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
+    try:
+        tools = json.load(open(f)) if rc == "0" else None
+    except (OSError, ValueError):
+        tools = None
+    if not isinstance(tools, dict):
+        m = ["mise ls --missing failed"]
+    else:
+        m = [f"{t}@{v.get('version')}" for t, vs in tools.items() for v in vs if not v.get("installed")]
+    if m:
+        miss.append(f"{d}: {' '.join(m)}")
+line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
+if miss:
+    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it, in each: mise install --locked)"
+print(line)
+sys.exit(1 if miss else 0)
+EOF
+  ); mrc=$?; rm -rf "$ms"
+  check "$mrc" "$mline"
 fi
 # Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
 go=$(python3 -c 'import socket, sys

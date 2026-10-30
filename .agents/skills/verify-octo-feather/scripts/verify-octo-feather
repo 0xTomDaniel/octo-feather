@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """verify-octo-feather: drive the octo-feather kit's own commands the way an owner or agent runs them, and keep the proof.
 
-Usage: verify-octo-feather launch|doctor|drive <feature>|cleanup|run [feature]
+Usage: verify-octo-feather launch|doctor|drive <feature>|cleanup|run [--unreachable-exit N] [feature]
 Run state: $VERIFY_OCTO_FEATHER_RUN_DIR. Evidence: $VERIFY_OCTO_FEATHER_EVIDENCE_DIR.
 Both default outside the git dir, under ${TMPDIR:-/tmp}. What a drive may touch: ../SKILL.md.
 Needs python3 3.11+ (tomllib reads qc.toml).
@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -942,6 +942,67 @@ def drive_qc_capture(f: Feature) -> None:
     say(f"qc-capture evidence: {f.d}")
 
 
+def drive_qc_insufficient(f: Feature) -> None:
+    """`just qc` on a scratch target whose declared demo needs a step the qc sandbox cannot run (GitHub, which its
+    offline gh refuses), then `octo-feather-lane merge-ask` on a PR (served by the offline gh from a scratch snapshot)
+    whose merge ask lists that criterion as a triaged failure: insufficient evidence naming what is missing, still
+    planned, no status commit, and the merge ask check failing naming it."""
+    demo = f.s.contract.values.get("qc_demo_insufficient")
+    if not demo:
+        die("qc.toml [values] needs qc_demo_insufficient: the qc-insufficient drive's scratch demo")
+    sc = RUN_DIR / "scratch" / "qc-insufficient"
+    r, snap = sc / "repo", sc / "ghsnap"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (snap / "pr").mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-insufficient: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n'
+                               f'[demo."demo#acceptance-a"]\ncommand = {json.dumps(demo)}\ncovers = ["docs/specs"]\ntests = ["none"]\n')
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract with a demo that needs GitHub")
+    head = git("rev-parse", "HEAD")
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports and the scratch evidence store; never a live lane's
+    f.pre = ["env", "-C", str(r)]   # where the supervisor stands: the lane worktree
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.obs("qc", "after", f"{git('rev-parse', 'HEAD')} {json.loads(git('show', 'HEAD:docs/specs/demo.status.json'))['criteria']['acceptance-a']['status']}"
+                         f" {git('status', '--porcelain') or 'clean'}\n")
+    line = (r"(?m)^INSUFFICIENT EVIDENCE acceptance-a: \$ .*\n  missing: demo did not run to its end \(exit 77, a step it needs could not run "
+            r"here\): needs GitHub.*\n  evidence incomplete; decision demo checks; record [0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}$")
+    f.check("qc", lambda c: c.code == 2 and re.search(line, c.out) and not re.search(r"(?m)^FAIL ", c.out)
+            and "insufficient evidence, never a failure to triage: acceptance-a" in c.out and c.o["after"] == f"{head} planned clean\n")
+    # The PR as GitHub would serve it (snapshot layout: octo-feather-qc-ghsnap), its merge ask triaging the criterion as a failure.
+    (snap / "meta.json").write_text(json.dumps({"repo": "o/r", "fetched_at": now(), "counts": {}, "capped": []}))
+    (snap / "fetched_at").write_text(now() + "\n")
+    body = (f"Closes #6\n\n## Merge ask\n\nHead: {head[:12]}\nChecks: check passes\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n"
+            f"| demo#acceptance-a | fail | judged {head[:12]} | qc report, demo exit 77 |\nBuilt: none\nFailed:\n- acceptance-a: repair ticket\n")
+    (snap / "pr" / "7.json").write_text(json.dumps({
+        "number": 7, "headRefName": "gh6", "headRefOid": head, "body": body, "comments": [],
+        "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
+        "commits": [{"oid": head, "messageHeadline": "contract with a demo that needs GitHub", "messageBody": ""}]}))
+    f.env |= {"OCTO_FEATHER_GHSNAP": str(snap), "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
+    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json")
+    f.check("merge-ask", lambda c: c.code == 1 and not c.out and re.search(
+        rf"criterion demo#acceptance-a: insufficient evidence at the judged head {head[:12]} \(demo did not run to its end \(exit 77, "
+        r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
+    f.pre, f.env = [], {}
+    say(f"qc-insufficient evidence: {f.d}")
+
+
 def drive_qc_browser(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml pins the kit's Playwright release and declares a browser demo that
     screenshots a page: the demo runs in the qc sandbox with the box's headless shell, its screenshot in its new record."""
@@ -1139,6 +1200,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-browser": drive_qc_browser,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
+    "qc-insufficient": drive_qc_insufficient,
 }
 
 
@@ -1210,20 +1272,27 @@ def cmd_cleanup() -> None:
     say(f"evidence kept at {EVIDENCE_DIR}")
 
 
-def cmd_run(feature: str | None) -> int:
+def cmd_run(feature: str | None, unreachable_exit: int = 0) -> int:
     cmd_launch()
     code = cmd_doctor(tee=EVIDENCE_DIR / "doctor.txt")
     unreached = False
+    steps: list[str] = []
     if code == 0:
         code = cmd_drive(feature or "new-repo")
         summary = EVIDENCE_DIR / (feature or "new-repo") / "summary.txt"
         unreached = summary.read_text().splitlines()[-1].startswith("PASS-with-unreachable ")
+        steps = [ln for ln in summary.read_text().splitlines() if ln.startswith("UNREACHABLE ")]
     cmd_cleanup()
     if not EVIDENCE_DIR.is_dir():
         die(f"evidence folder gone after cleanup: {EVIDENCE_DIR}")
     sys.stdout.flush()
     subprocess.run(["ls", "-laR", str(EVIDENCE_DIR)], check=False)
     say(("run PASS-with-unreachable" if unreached else "run PASS") if code == 0 else "run FAIL")
+    # --unreachable-exit N: a caller that must tell "a step could not run" from a pass (just qc running a kit demo:
+    # schemas/qc.v1.schema.json, demo command) gets N for PASS-with-unreachable; default 0, as before.
+    if unreachable_exit and code == 0 and unreached:   # last on stderr: the step that could not run, as qc shows it
+        print("\n".join(f"{ME}: {ln}" for ln in steps), file=sys.stderr, flush=True)
+        return unreachable_exit
     return code
 
 
@@ -1240,10 +1309,12 @@ def main(argv: list[str]) -> int:
         case ["cleanup"]:
             cmd_cleanup()
             return 0
-        case ["run"]:
+        case ["run"] if arg != "--unreachable-exit":
             return cmd_run(arg)
+        case ["run"] if len(argv) in (3, 4) and argv[2].isdigit() and 0 < int(argv[2]) < 256:
+            return cmd_run(argv[3] if len(argv) == 4 else None, int(argv[2]))
         case _:
-            die(f"usage: {ME} launch|doctor|drive <feature>|cleanup|run [feature] (features: {' '.join(FEATURES)})")
+            die(f"usage: {ME} launch|doctor|drive <feature>|cleanup|run [--unreachable-exit N] [feature] (features: {' '.join(FEATURES)})")
 
 
 if __name__ == "__main__":

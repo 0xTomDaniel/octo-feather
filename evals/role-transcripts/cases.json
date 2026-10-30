@@ -146,5 +146,12 @@
     "fixture": "python-app",
     "branch": "implementer-t9",
     "task": "Ticket T9 (lane gh9, parent #9): `app hello-file PATH` greets every name listed in a YAML file, one greeting per line, in file order. The file is a mapping with one key, `names`, a list of strings, and may use any YAML syntax for it (block or flow lists, quoted or plain scalars, comments, anchors). `--json` prints a list of the greetings as `app hello --json` prints one. A file that is not valid YAML, or has no `names` list of strings, exits 2 with an error naming the file.\nAcceptance criterion: hello-file. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t9, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "director-merge-report-post-merge",
+    "role": "director",
+    "fixture": "python-app",
+    "fake_gh": true,
+    "task": "Message from the supervisor of lane gh12 (pane w3:p5): \"Merge report: PR #12 (app hello --shout) merged into main at pinned head {head}. Close report follows once I archive the lane.\"\nSandbox run: this directory is the target repo's clone; GitHub answers through gh; there is no Herdr, so no message or self-callback can reach you: run any long job in the foreground and skip every herdr-say. Put your report as your final message."
   }
 ]

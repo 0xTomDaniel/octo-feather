@@ -10,14 +10,17 @@ the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_B
 headless Chromium shell at the contract's [browser] playwright pin where `just install-check` names it, bound
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
-the spec's, every output there), decision source the demo's checks, pass on exit status 0, else fail.
+the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
+status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v1.schema.json, demo
+command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
+missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
+until a rerun gives it pass or fail.
 The criteria with no declared demo go to the agent fallback below (quality spec #qc-fallback); with none left, no
 judge and no agent run. Each gets its own fresh, read-only qc judge (agents/qc-judge.md, headless through pi-role),
 one at a time, in its own sandbox, under a fixed time cap (FALLBACK_CAP_S, through coreutils timeout): its QC brief
 names that criterion alone (judge the whole head against it, run its demo path, report pass or fail with the command
 and its output). Its report is appended to the evidence store as that criterion's record (judge.exit, judge.stdout,
-judge.report.json; a judge stopped by the cap leaves no report, so its record's evidence is incomplete and, until
-#406, the run exits 3 naming it), and the result is read back from that record alone, decision source agent fallback.
+judge.report.json; a judge stopped by the cap leaves no report, so its record's evidence is incomplete: insufficient evidence), and the result is read back from that record alone, decision source agent fallback.
 Each result with a record then gets the kit's judgment model's advisory answer (advise; no gate reads it).
 Then this script, not the judge, sets each passed criterion to built in
 PR and each failed one to planned, and commits only the status file. The judge
@@ -50,9 +53,10 @@ reads no Linear ticket; the sandbox proof fails if it is set.
                          read-only into the sandbox / put first on its PATH
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (`fallback`, by criterion: each judge's report, raw run, exit, proof and cleanup, record; `cap_s`; each demo's capture;
-`results`, one per criterion: verdict, evidence state, decision source, evidence record id, judged head, and with a record `advisory`: the model's answer and
-confidence, or unavailable with why).
-Exit: 0 all passed, 1 some failed (or --no-sandbox), 3 judge report unusable,
+`spec`, the status file's spec slug; `results`, one per criterion: verdict (pass, fail or insufficient evidence), evidence
+state (incomplete: `missing` names what), decision source, evidence record id, judged head, and with a record `advisory`:
+the model's answer and confidence, or unavailable with why). OCTO_FEATHER_QC_DIR: another folder for them.
+Exit: 0 all passed, 1 some failed (or --no-sandbox), 2 none failed but some got insufficient evidence, 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
@@ -378,11 +382,8 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
             die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
         caps[-1]["record"] = rid = p.stdout.strip()
         done[i] = judged(i, cid, rid, head, text[i], root)
-    bad = [f"{r['id']} (record {r['record']}): {'; '.join(r['missing'])}" for r in done.values() if r["evidence"] == "incomplete"]
-    if bad:
-        report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps,
-                                           "results": list(done.values())}, indent=2))
-        die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
+        if done[i]["evidence"] == "incomplete":   # a result, never a failure to triage (quality spec #qc-results)
+            done[i] |= {"verdict": "insufficient evidence", "command": line, "why": f"missing: {'; '.join(done[i]['missing'])}"}
     return done, caps
 
 
@@ -397,18 +398,36 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
         return res | {"missing": [f"record not in the store at {head[:12]} ({p.stderr.strip() or 'no match'})"]}
     r: dict[str, Any] = found[0]["record"]
     d = Path(found[0]["dir"]) / "outputs"
+    rc = int((d / "demo.exit").read_text()) if "demo.exit" in r["outputs"] else 0
     missing = [m for m, bad in (
         (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
         ("captured from a dirty worktree", r["dirty"]),
         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
         (f"outputs missing: {' '.join(o for o in DEMO_OUTPUTS if o not in r['outputs'])}", any(o not in r["outputs"] for o in DEMO_OUTPUTS)),
+        (f"demo did not run to its end ({unfinished(rc)}): {last_words(d)}", rc in (77, 126, 127) or rc > 128),
     ) if bad]
     if missing:
         return res | {"missing": missing}
-    rc = int((d / "demo.exit").read_text())
     return res | {"verdict": "pass" if rc == 0 else "fail", "command": (d / "demo.cmd").read_text().rstrip("\n"), "exit": rc,
                   "output": tail((d / "demo.stdout").read_text() + (d / "demo.stderr").read_text()),
                   "why": f"demo exit status {rc}", "evidence": "complete"}
+
+
+def unfinished(rc: int) -> str:
+    """What a demo's exit status RC says stopped it before its end (schemas/qc.v1.schema.json, demo command)."""
+    why = {77: "a step it needs could not run here", 126: "a command it runs could not execute",
+           127: "a command it runs was not found"}.get(rc, f"killed by signal {rc - 128}")
+    return f"exit {rc}, {why}"
+
+
+def last_words(outputs: Path) -> str:
+    """The stored demo's last non-empty line, stderr first: where a demo names the step it could not run."""
+    for name in ("demo.stderr", "demo.stdout"):
+        p = outputs / name
+        lines = [l.strip() for l in p.read_text(errors="replace").splitlines() if l.strip()] if p.is_file() else []
+        if lines:
+            return lines[-1] if len(lines[-1]) <= 300 else lines[-1][:300] + "..."   # its head names the step
+    return "no output"
 
 
 ADVICE = "criterion-evidence"   # the closed question each recorded result gets (judgment spec #question-criterion-evidence)
@@ -567,11 +586,10 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
         for n, i in enumerate(rest):   # one fresh judge per criterion, one after another (each a Pi run)
             done[i] = fallback(i, n, head, spec, text, stem, model, runid, gh, raw, report_path, nosb=nosb)
         nmiss = raw["gh_misses"] = len(ghrec["misses"])
-        bad = [f"{i} (record {done[i]['record'] or 'none'}): {'; '.join(done[i]['missing'])}" for i in rest if done[i]["evidence"] == "incomplete"]
-        if bad:   # until #406 gives such a criterion the result insufficient evidence, as capture() does
-            raw["results"] = [done[i] for i in ids]
-            report_path.write_text(json.dumps(raw, indent=2))
-            die(3, f"evidence incomplete, nothing judged: {' | '.join(bad)}; report {report_path}")
+        for i in rest:   # a result, never a failure to triage (quality spec #qc-results), as capture() gives it
+            if done[i]["evidence"] == "incomplete":
+                done[i] |= {"verdict": "insufficient evidence", "command": "the qc judge (agent fallback)",
+                            "why": f"missing: {'; '.join(done[i]['missing'])}"}
         advise(done, text, stem, head, runid)
         return settle(status, pr, ids, head, data, done, raw, report_path, nmiss, nosb=nosb)
     finally:
@@ -702,8 +720,9 @@ def verdict(i: str, head: str, run: subprocess.CompletedProcess[str], rec: dict[
 def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], verdicts: dict[str, Result], raw: dict[str, Any],
            report_path: Path, nmiss: int, *, nosb: bool) -> int:
     """One result per claimed criterion (quality spec #qc-results) into the report, then, sandboxed, the status file:
-    passed built, failed planned, one status-only commit."""
+    passed built, failed and insufficient evidence planned, one status-only commit (none when nothing changes)."""
     raw["results"] = [verdicts[i] for i in ids]
+    raw["spec"] = data["spec"].removesuffix(".spec.html")   # merge-ask reads results by <spec>#<id>
     report_path.write_text(json.dumps(raw, indent=2))
 
     passed = [i for i in ids if verdicts[i]["verdict"] == "pass"]
@@ -730,8 +749,12 @@ def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any
     for i in ids:
         v = verdicts[i]
         print(f"{v['verdict'].upper()} {i}: $ {v['command']}\n  {v.get('why', '')}\n  {decided(v)}")
+    short = [i for i in ids if verdicts[i]["verdict"] == "insufficient evidence"]
+    if short:
+        print(f"qc: insufficient evidence, never a failure to triage: {' '.join(short)} (planned; merge-ask fails naming them "
+              "until a rerun of just qc gives each pass or fail)")
     print(f"qc: {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; head now {git('rev-parse', 'HEAD')[:12]}; report {report_path}")
-    return 0 if not failed else 1
+    return 0 if not failed else 2 if len(short) == len(failed) else 1
 
 
 def decided(v: Result) -> str:
