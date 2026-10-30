@@ -415,12 +415,12 @@ fi
 # first pi beating ~/.local/bin's; a tool not installed fails at its shim with no install; a caller whose HOME holds no
 # mise installs (its dirs not pinned) fails the proof naming `mise install --locked`, the judge never started.
 run 0 misepath $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -q "MISEPATH exit 0" <<< "$judge" && grep -q "MISEPATH stub first" <<< "$judge" || fail "mise's just shim in the sandbox: $judge"
 grep -q "qc sandbox: ok   mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR$" <<< "$out" \
   || fail "no mise proof: $out"
 run 0 misemissing $st 5 acceptance-a
-judge="$(report '["stdout"]')"
+judge="$(jr '["stdout"]')"
 grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "missing mise tool: $judge"
 grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ran through its shim: $judge"
 (unset MISE_DATA_DIR MISE_CACHE_DIR MISE_CONFIG_DIR; run 66 mixed $st 5 acceptance-a
