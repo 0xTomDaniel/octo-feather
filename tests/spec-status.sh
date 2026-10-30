@@ -150,4 +150,63 @@ list; want 1 "no origin/main" "no merge base with origin/main" "--since REF"
 git -C "$c" update-ref refs/remotes/origin/main "$base"
 list; want 0 "default base" "4 calls"
 
-echo "spec-status: ok (good, bad, init, built; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, blank fields, move, reorder, missing commit; calls: grouped, denied, base, more than three)"
+# Evidence links (quality #qc-results, #acceptance-built-links): built names its record, the commit it was captured at
+# and its demo's tests; check accepts that shape and a legacy built row, and refuses a partial or malformed link.
+# Staleness (#qc-stale, #acceptance-evidence-stale): `show` names each built criterion current or stale.
+e="$t/stale"; mkdir -p "$e/docs/specs" "$e/src" "$e/tests"; es="$e/docs/specs"; ES="$es/demo.status.json"
+cp "$F/good/demo.spec.html" "$es/"
+printf 'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\ncommand = "true"\ncovers = ["src/a"]\ntests = ["tests/a.sh"]\n[demo."demo#acceptance-b"]\ncommand = "true"\ncovers = ["src/b"]\ntests = ["tests/b.py::test_b"]\n' >"$e/qc.toml"
+for f in src/a src/b tests/a.sh tests/b.py README; do echo "$f v1" >"$e/$f"; done
+git init -q "$e"; git -C "$e" add -A; git -C "$e" commit -qm accepted
+cap="$(git -C "$e" rev-parse HEAD)"
+"$S" init "$es/demo.spec.html" "$cap" >/dev/null
+"$S" built "$ES" 7 acceptance-a --record 20261029T100000Z-0a0a0a0a --commit "$cap" --test tests/a.sh
+"$S" built "$ES" 7 acceptance-b --record 20261029T100000Z-0b0b0b0b --commit "$cap" --test tests/b.py::test_b
+git -C "$e" add -A; git -C "$e" commit -qm "qc: built acceptance-a acceptance-b (judged ${cap:0:12})"
+python3 - "$ES" "$cap" <<'EOF' || fail "built did not write the evidence link: $(cat "$ES")"
+import json, sys
+c = json.load(open(sys.argv[1]))["criteria"]
+assert c["acceptance-a"] == {"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a", "commit": sys.argv[2], "tests": ["tests/a.sh"]}, c
+EOF
+run "$e"; want 0 "built with an evidence link"
+show() { set +e; out="$(cd "$e" && "$S" show 2>&1)"; rc=$?; set -e; }
+crit_line() { grep -F -- "  $1: " <<<"$out" || fail "show: no line for $1: $out"; }
+show; want 0 "show, nothing changed" "acceptance-a: built (PR #7), current: record 20261029T100000Z-0a0a0a0a captured at ${cap:0:12}"
+crit_line acceptance-b | grep -qF "current" || fail "acceptance-b not current: $out"
+echo v2 >"$e/README"; git -C "$e" commit -qam "unrelated change"
+echo v2 >"$e/src/a"; git -C "$e" commit -qam "change a's code"; ch="$(git -C "$e" rev-parse --short=12 HEAD)"
+show; want 0 "covered path changed" \
+  "acceptance-a: built (PR #7), STALE: record 20261029T100000Z-0a0a0a0a captured at ${cap:0:12}; covered path src/a changed since ${cap:0:12} by $ch change a's code"
+crit_line acceptance-b | grep -qF ", current: " || fail "an unrelated change made acceptance-b stale: $out"
+grep -qF "2 built: 1 current, 1 stale, 0 no evidence link" <<<"$out" || fail "show summary: $out"
+# A named test file edited or gone since capture makes it stale (owner ruling #409: the selector maps to its file).
+echo v2 >"$e/tests/a.sh"; git -C "$e" commit -qam "edit a's test"; ta="$(git -C "$e" rev-parse --short=12 HEAD)"
+show; crit_line acceptance-a | grep -qF "; test file tests/a.sh changed since ${cap:0:12} by $ta edit a's test" \
+  || fail "edited test file not stale: $out"
+git -C "$e" rm -q tests/b.py; git -C "$e" commit -qm "drop b's test"; tb="$(git -C "$e" rev-parse --short=12 HEAD)"
+show; crit_line acceptance-b | grep -qF "STALE: record 20261029T100000Z-0b0b0b0b captured at ${cap:0:12}; test file tests/b.py (tests/b.py::test_b) gone since ${cap:0:12} by $tb drop b's test" \
+  || fail "gone test not stale: $out"
+git -C "$e" checkout -q "$cap" -- tests/b.py; git -C "$e" commit -qm "b's test back"
+perl -pi -e 's/then it prints ok\./then it prints done./ if /acceptance-b/' "$es/demo.spec.html"
+show; crit_line acceptance-b | grep -qF "STALE: record 20261029T100000Z-0b0b0b0b captured at ${cap:0:12}; criterion text changed since ${cap:0:12}" \
+  || fail "changed text not stale: $out"
+git -C "$e" checkout -q -- docs/specs
+# A fallback-built criterion (record, no declared demo): no covers or tests, so only its text makes it stale.
+perl -0pi -e 's/\[demo."demo#acceptance-b"\].*//s' "$e/qc.toml"; git -C "$e" commit -qam "no demo for b"; fb="$(git -C "$e" rev-parse HEAD)"
+"$S" built "$ES" 7 acceptance-b --record 20261029T100000Z-0c0c0c0c --commit "$fb"; git -C "$e" commit -qam "qc: built acceptance-b (judged ${fb:0:12})"
+echo v3 >"$e/src/b"; git -C "$e" commit -qam "change b's code"
+show; crit_line acceptance-b | grep -qF "current: record 20261029T100000Z-0c0c0c0c captured at ${fb:0:12} by the agent fallback" \
+  || fail "fallback-built not current: $out"
+# A legacy built row (status and PR only) passes check and shows as no evidence link, never stale.
+"$S" built "$ES" 7 acceptance-b; run "$e"; want 0 "legacy built row"
+show; crit_line acceptance-b | grep -qF "acceptance-b: built (PR #7), no evidence link" || fail "legacy row: $out"
+grep -qF "2 built: 0 current, 1 stale, 1 no evidence link" <<<"$out" || fail "show summary: $out"
+# check refuses a partial or malformed link, and a planned criterion with one.
+link() { perl -0pi -e "s/\"acceptance-b\": \\{[^}]*\\}/\"acceptance-b\": $1/" "$ES"; run "$e"; want 1 "$2" "demo.status.json: acceptance-b: $3"; git -C "$e" checkout -q -- docs/specs; }
+link '{"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a"}' "partial link" "names record without commit, tests"
+link "{\"status\": \"built\", \"pr\": 7, \"record\": \"r1\", \"commit\": \"$cap\", \"tests\": []}" "bad record" "record must be an evidence record id"
+link '{"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a", "commit": "HEAD", "tests": []}' "bad commit" "commit must be a commit sha"
+link "{\"status\": \"built\", \"pr\": 7, \"record\": \"20261029T100000Z-0a0a0a0a\", \"commit\": \"$cap\", \"tests\": \"t\"}" "bad tests" "tests must be a list"
+link "{\"status\": \"planned\", \"pr\": null, \"record\": \"20261029T100000Z-0a0a0a0a\", \"commit\": \"$cap\", \"tests\": []}" "planned with a link" "a planned criterion names no evidence"
+
+echo "spec-status: ok (good, bad, init, built, evidence links, show current and stale; guard: unlogged, logged, denied, weakens, adds, log rules, evidence, blank fields, move, reorder, missing commit; calls: grouped, denied, base, more than three)"

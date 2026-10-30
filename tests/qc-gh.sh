@@ -130,7 +130,7 @@ run() { local want="$1"; shift; set +e; out="$(bounded "$Q" "$@" 2>&1)"; rc=$?; 
   [[ "$rc" != 124 && "$rc" != 137 ]] || fail "'$*' hung: no exit after ${lim} s (QC_TEST_RUN_TIMEOUT), killed: $out"
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
-judged() { report '["stdout"]'; }
+judged() { report '["fallback"]["acceptance-a"]["stdout"]'; }   # acceptance-a's agent fallback judge
 reset() { git reset -q --hard "$base"; }
 base="$(git rev-parse HEAD)"
 
