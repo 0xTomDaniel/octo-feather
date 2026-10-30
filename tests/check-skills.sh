@@ -94,11 +94,11 @@ mkdir -p "$t/${sk%/*}"; ln -s missing "$t/$sk"
 set +e; out="$(cd "$t" && just check-skills 2>&1)"; rc=$?; set -e
 unplant
 [[ "$rc" != 0 ]] && grep -qF "check-skills: $sk: cannot read" <<<"$out" && ! grep -qF 'skills: ok' <<<"$out" || { echo "check-skills test: unreadable SKILL.md not reported" >&2; echo "$out" >&2; exit 1; }
-# Fails closed: a broken python3 (a stub first on the justfile's PATH, $HOME/.local/bin,
-# via a throwaway HOME) fails the gate, never skills: ok.
-h="$t.home"; mkdir -p "$h/.local/bin"
-printf '#!/bin/sh\necho "python3: broken (check-skills test stub)" >&2\nexit 2\n' > "$h/.local/bin/python3"; chmod +x "$h/.local/bin/python3"
-set +e; out="$(cd "$t" && HOME="$h" just check-skills 2>&1)"; rc=$?; set -e
+# Fails closed: a broken python3 (a stub first on the caller's PATH, which the justfile keeps ahead of its tools)
+# fails the gate, never skills: ok.
+h="$t.bin"; mkdir -p "$h"
+printf '#!/bin/sh\necho "python3: broken (check-skills test stub)" >&2\nexit 2\n' > "$h/python3"; chmod +x "$h/python3"
+set +e; out="$(cd "$t" && PATH="$h:$PATH" just check-skills 2>&1)"; rc=$?; set -e
 rm -rf "$h"
 [[ "$rc" != 0 ]] && ! grep -qF 'skills: ok' <<<"$out" || { echo "check-skills test: broken python3 passed check-skills" >&2; echo "$out" >&2; exit 1; }
 [[ -z "$(g status --porcelain)" ]] || { echo "check-skills test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }

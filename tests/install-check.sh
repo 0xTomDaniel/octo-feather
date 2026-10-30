@@ -43,8 +43,8 @@ clean=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -x "$d/linear
 lin_target="$t/linear"; gh_target="$t/github"
 git init -q "$lin_target"; git init -q "$gh_target"; mkdir -p "$lin_target/sub"
 cp "$kit/tests/fixtures/install-check/linear/.octo-feather.toml" "$lin_target/"
-check() { # WANT DIR EXTRA_PATH [TARGET]: run in DIR; output in $out
-  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME HOME="$t/home" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="$t/bin${3:+:$3}:$shims$clean" \
+check() { # WANT DIR EXTRA_PATH [TARGET]: run in DIR (with $pre first on the caller's PATH); output in $out
+  local rc=0; out="$(cd "$2" && env -u XDG_CACHE_HOME HOME="$t/home" XDG_DATA_HOME="${data:-$t/home/.local/share}" PATH="${pre:+$pre:}$t/bin${3:+:$3}:$shims$clean" \
     just -f "$kit/justfile" install-check ${4:+"$4"} 2>&1)" || rc=$?
   [[ "$rc" == "$1" ]] || fail "in $2 (PATH extra '${3:-}'): want exit $1, got $rc: $out"
 }
@@ -75,9 +75,9 @@ grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" && grep -qE "^mise  
   || fail "created repo at the pins: no ok lines: $out"
 check 0 "$gh_target" ""
 grep -qx "mise   version $mpin ok (mise-version)" <<<"$out" && ! grep -qE '^mise   [^v]' <<<"$out" || fail "a repo the kit did not create got mise tool lines: $out"
-o="$t/home/.local/bin"; mkdir -p "$o"   # first on the recipe's PATH (the justfile's export)
+o="$t/first"; mkdir -p "$o"   # first on the caller's PATH, which the justfile keeps ahead of its tools
 printf '#!/bin/sh\n[ "$1" = --version ] && { echo "2000.1.1 linux-x64"; exit 0; }\nexec "%s" "$@"\n' "$(command -v mise)" >"$o/mise"; chmod +x "$o/mise"
-check 1 "$gh_target" ""; rm -rf "$t/home/.local"
+pre="$o" check 1 "$gh_target" ""; rm -rf "$o"
 grep -qE "^mise   WRONG VERSION $o/mise reports 2000\.1\.1, want $mpin \(mise-version\); install mise $mpin: " <<<"$out" \
   || fail "mise 2000.1.1: no WRONG VERSION line naming mise-version: $out"
 # just, which the kit runs in every target, at the kit mise.lock version even in a repo the kit did not create:
@@ -87,9 +87,9 @@ jv="$(mise -C "$kit" ls --local --json | python3 -c 'import json, sys; print(jso
 check 0 "$gh_target" ""
 grep -qx "just   version $jv ok (kit mise.lock)" <<<"$out" && ! grep -qE 'MISSING' <<<"$out" \
   || fail "foreign target, just at the kit version: no ok line, or a mise demand: $out"
-o="$t/home/.local/bin"; mkdir -p "$o"
+o="$t/first"; mkdir -p "$o"
 printf '#!/bin/sh\n[ "$1" = --version ] && { echo "just 0.0.1"; exit 0; }\nexec "%s" "$@"\n' "$t/bin/just" >"$o/just"; chmod +x "$o/just"
-check 1 "$gh_target" ""; rm -rf "$t/home/.local"
+pre="$o" check 1 "$gh_target" ""; rm -rf "$o"
 grep -qx "just   WRONG VERSION $o/just reports 0.0.1, want $jv (kit mise.lock); the kit runs it in every target: .*" <<<"$out" \
   || fail "foreign target, just 0.0.1: no WRONG VERSION line naming the kit lock: $out"
 printf '[tools]\njust = "%s"\n' "$jv" >"$mise_target/mise.toml"

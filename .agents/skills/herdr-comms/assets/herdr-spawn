@@ -91,10 +91,11 @@ launch_argv+=(--session-id "$session")
 # forwarded so the agent and every descendant keep the caller's git identity
 # and sessions; PATH gains the kit commands (herdr-say, octo-feather-state). The rest is the caller's PATH, or
 # pi-role's "path" when given: that PATH with mise's shims before its system dirs (a repo with mise.toml; agent
-# shells run no mise activate hook, #261).
+# shells run no mise activate hook, #261). $HOME/.local/bin comes last, a fallback for tools the caller's PATH lacks
+# (where the Pi and Herdr installers put them): a stub the caller put first still wins (owner ruling #261, #437).
 rest="$(jq -r '.path // empty' <<<"$role_json")"
 tab_env=(--env "HOME=$HOME"
-  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:$HOME/.local/bin:${rest:-$PATH}"
+  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:${rest:-$PATH}:$HOME/.local/bin"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")

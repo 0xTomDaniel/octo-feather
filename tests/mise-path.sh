@@ -31,6 +31,10 @@ PATH="$node_dir/bin:/usr/bin:/bin" npm install -g --force --offline --ignore-scr
 PATH="$t/mbin:/usr/bin:/bin" mise reshim
 [[ -e "$t/mise/shims/pi" ]] || fail "mise reshim made no pi shim"
 printf '#!/bin/sh\necho "stub pi"\n' >"$t/stub/pi"; chmod +x "$t/stub/pi"
+# The box's real Pi lives in ~/.local/bin: here a fake one (and a fake herdr, a user-local tool the caller's PATH
+# below lacks), never run, only resolved (`command -v`).
+mkdir -p "$t/home/.local/bin"
+for b in pi herdr; do printf '#!/bin/sh\necho "home %s"\n' "$b" >"$t/home/.local/bin/$b"; chmod +x "$t/home/.local/bin/$b"; done
 caller="$t/stub:$t/mbin:/usr/local/bin:/usr/bin:/bin"; plain="$t/mbin:/usr/local/bin:/usr/bin:/bin"
 
 # The kit (a copy of its tracked files) and a repo made from the TypeScript template.
@@ -45,6 +49,17 @@ for repo in "$t/kit" "$t/ts"; do
   [[ "$out" == "global pi in mise node" ]] || fail "$repo: without a stub, pi is not mise node's global (layout check)"
   out="$(cd "$repo" && PATH="$caller" "$just" --command sh -c 'command -v node')"
   [[ "$out" == "$node_dir/bin/node" ]] || fail "$repo: the justfile's node is $out, not mise's $node_dir/bin/node"
+  # Every just route a caller takes (the real just, mise's just shim; inside the repo and with --justfile from
+  # outside it): the stub first on the caller's PATH beats the pi in ~/.local/bin (owner ruling #261), and in the
+  # kit a tool only ~/.local/bin holds is still found (the kit justfile's fallback; a template's keeps the caller's).
+  want="$t/stub/pi"; [[ "$repo" != "$t/kit" ]] || want+=$'\n'"$t/home/.local/bin/herdr"
+  for route in "$just" "$t/mise/shims/just"; do
+    for at in "$repo" "$t/work"; do
+      out="$(cd "$at" && PATH="$t/stub:$t/mise/shims:$t/mbin:/usr/local/bin:/usr/bin:/bin" "$route" --justfile "$repo/justfile" \
+        --command sh -c 'command -v pi; command -v herdr || true' 2>&1)" || fail "$repo: $route --command from $at failed"
+      [[ "$out" == "$want" ]] || fail "$repo: $route from $at resolves pi (and the kit's herdr) to $out, want $want"
+    done
+  done
 done
 # A pane: herdr-spawn's tab PATH is pi-role's "path" (shims placed before the system dirs).
 for repo in "$t/kit" "$t/ts"; do
@@ -53,4 +68,4 @@ for repo in "$t/kit" "$t/ts"; do
   out="$(PATH="$p" command -v pi)"; [[ "$out" == "$t/stub/pi" ]] || fail "$repo: pane PATH finds pi at $out, not the stub"
   out="$(PATH="$p" command -v node)"; [[ "$out" == "$t/mise/shims/node" ]] || fail "$repo: pane PATH finds node at $out, not mise's shim"
 done
-echo "mise-path: ok (kit and template justfiles, pane PATH: the caller's stub pi beats a pi npm-installed under mise's node; mise's node beats the system's)"
+echo "mise-path: ok (kit and template justfiles, pane PATH: the caller's stub pi beats a pi npm-installed under mise's node and the one in ~/.local/bin, through the real just and mise's just shim, in the repo and with --justfile from outside; ~/.local/bin a fallback in the kit; mise's node beats the system's)"

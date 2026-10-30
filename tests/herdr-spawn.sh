@@ -83,18 +83,33 @@ unset LINEAR_API_KEY; spawn nokey
 #     shims dir (as pi-role reports it, "path") just before its first system dir; in a repo without one (the cases
 #     above: a repo the kit did not create) or with no mise on PATH, the caller's PATH as it was.
 shims="$(mise doctor --json | jq -r .dirs.shims)"
-kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts:$HOME/.local/bin"
-grep -qxF "PATH=$kitpath:$t/bin:$PATH" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
+kitpath="$kit/.agents/skills/herdr-comms/assets:$kit/scripts"; ub="$HOME/.local/bin"   # ub: the fallback, last
+grep -qxF "PATH=$kitpath:$t/bin:$PATH:$ub" "$t/ok/tab-env" || fail "tab PATH in a repo without mise.toml changed: $(grep ^PATH= "$t/ok/tab-env")"
 mkdir -p "$t/mbin"; ln -sf "$(command -v mise)" "$t/mbin/mise"; ln -sf "$(command -v jq)" "$t/mbin/jq"
 printf '[tools]\n' >"$t/cwd/mise.toml"
 spawn made PATH="$t/bin:$t/mbin:/usr/local/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn in a mise.toml repo: exit $rc: $(cat "$t/made/err")"
-grep -qxF "PATH=$kitpath:$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin" "$t/made/tab-env" \
+grep -qxF "PATH=$kitpath:$t/bin:$t/mbin:$shims:/usr/local/bin:/usr/bin:/bin:$ub" "$t/made/tab-env" \
   || fail "tab PATH in a mise.toml repo lacks mise's shims $shims before the system dirs, after the caller's: $(grep ^PATH= "$t/made/tab-env")"
 spawn nomise PATH="$t/bin:/usr/bin:/bin"
 [[ "$rc" == 0 ]] || fail "spawn without mise: exit $rc: $(cat "$t/nomise/err")"
-grep -qxF "PATH=$kitpath:$t/bin:/usr/bin:/bin" "$t/nomise/tab-env" || fail "tab PATH without mise changed: $(grep ^PATH= "$t/nomise/tab-env")"
+grep -qxF "PATH=$kitpath:$t/bin:/usr/bin:/bin:$ub" "$t/nomise/tab-env" || fail "tab PATH without mise changed: $(grep ^PATH= "$t/nomise/tab-env")"
 rm "$t/cwd/mise.toml"
+# 1e. Owner ruling #261 (#437): a stub pi first on the caller's PATH beats the box's pi in ~/.local/bin in the tab's
+#     PATH (a fake one under a throwaway HOME); a tool only ~/.local/bin holds is still found there (its fallback).
+#     Resolved only (`command -v`), never run.
+uh="$t/uh"; mkdir -p "$uh/.local/bin" "$t/stub"
+for b in pi only-home; do printf '#!/bin/sh\necho "home %s"\n' "$b" >"$uh/.local/bin/$b"; chmod +x "$uh/.local/bin/$b"; done
+printf '#!/bin/sh\necho "stub pi"\n' >"$t/stub/pi"; chmod +x "$t/stub/pi"
+for mt in "" mise; do   # without and with a mise.toml (pi-role's "path")
+  [[ -z "$mt" ]] || printf '[tools]\n' >"$t/cwd/mise.toml"
+  spawn "stub$mt" HOME="$uh" PATH="$t/bin:$t/stub:$t/mbin:/usr/bin:/bin"
+  [[ "$rc" == 0 ]] || fail "spawn with a stub pi${mt:+ in a mise.toml repo}: exit $rc: $(cat "$t/stub$mt/err")"
+  tp="$(sed -n 's/^PATH=//p' "$t/stub$mt/tab-env")"
+  [[ "$(PATH="$tp" command -v pi)" == "$t/stub/pi" ]] || fail "tab PATH${mt:+ (mise.toml)} finds pi at $(PATH="$tp" command -v pi), not the caller's stub: $tp"
+  [[ "$(PATH="$tp" command -v only-home)" == "$uh/.local/bin/only-home" ]] || fail "tab PATH${mt:+ (mise.toml)} lost the ~/.local/bin fallback: $tp"
+  rm -f "$t/cwd/mise.toml"
+done
 
 # 2. A trust dialog that opens anyway is never answered: exit 69, zero keys,
 #    tab closed, pane text on stderr.
@@ -207,4 +222,4 @@ run "$kit/scripts/octo-feather-start" --issue 2 --cwd "$t/cwd"
 [[ "$rc" == 73 ]] || fail "resume: fresh start on existing gh2: exit $rc, want 73: $(cat "$c/err")"
 grep -qE '^(tab|workspace) create' "$c/argv" && fail "resume: fresh start on existing gh2: created a tab or workspace"
 
-echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"
+echo "herdr-spawn: ok (pane and headless launch carry --approve; pi-role runs in --cwd (its tracker, not the caller's); LINEAR_API_KEY reaches the tab only from the caller's env, mise's shims before the system dirs on the tab's PATH in a mise.toml repo (none elsewhere or without mise), the caller's stub pi before ~/.local/bin's (its fallback, last), in no written file, files a ticket in the fake linear; Pi trust dialog fails closed, exit 69, no key, also on a failed read; did-not-clear closes on a failed read; live-space resume: parked supervisor resumes in a new tab of its live lane workspace, no exit 73; space gone opens a new lane workspace; resumed supervisor and worker told resumed with their new pane; fresh start on an existing workspace exits 73)"

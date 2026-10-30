@@ -58,11 +58,17 @@ hung() { [[ "$1" != 124 && "$1" != 137 ]] || fail "$2 hung: no exit after ${lim}
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 vc0="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"   # the caller's warm check-vendored cache (#69)
 # A throwaway HOME holding a "live" box: a live Herdr session, gh and git creds, live and archived lanes.
+# mise's dirs, as mise reports them before HOME moves (the kit justfile pins them the same way): the sandbox finds
+# the box's installs whether this test runs bare or through just.
+for d in data cache config; do v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(mise doctor --json | jq -r --arg d "$d" '.dirs[$d]')"; done
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV
 export LINEAR_API_KEY=SECRET-linear-key GH_TOKEN=SECRET-token OCTO_FEATHER_PARENT=wX:p9 HERDR_PANE_ID=p9 HERDR_TAB_ID=t9 HERDR_WORKSPACE_ID=w9 OCTO_FEATHER_SPEND_SPACE=w9
 live="$HOME/.local/state/octo-feather"
 mkdir -p "$HOME/.config/herdr" "$HOME/.config/gh" "$live/lanes/archive" "$t/bin" "$t/fakeherdr" "$t/pids" "$t/repo/docs/specs"
+# The kit's just (its mise.lock pin) on PATH, as the kit justfile puts it for `just test`: run bare, a caller may reach
+# just only through mise's shim, which resolves no version in the judged test repo (no mise.toml) and fails closed.
+ln -s "$(mise -C "$kit" which just)" "$t/bin/just"
 echo default > "$HOME/.config/herdr/herdr.sock"
 echo 'oauth_token: SECRET-gh' > "$HOME/.config/gh/hosts.yml"; echo 'https://x:SECRET-git@github.com' > "$HOME/.git-credentials"
 echo LIVE > "$live/lanes/gh9.toml"; echo ARCHIVED > "$live/lanes/archive/gh1.toml"; echo '{"director":1}' > "$live/director.handoffs.jsonl"
@@ -165,6 +171,21 @@ P
     grep -q 'qc sandbox: ok   live Herdr unreachable: raw herdr --session default workspace list exits 1$' <<< "$o" \
       && grep -q 'qc sandbox: ok   herdr shim pins sandbox session' <<< "$o" && grep -q 'qc sandbox: ok   Herdr config shows only the sandbox session' <<< "$o" \
       || echo "MISSING nested Herdr proof (real binary, not the outer shim): $o"
+    printf "$ok" ;;
+  misepath)   # a bare just call as tests/qc.sh makes one (HOME moved to a fresh dir) through mise's just shim, in the kit
+    kit="$(dirname "$(command -v octo-feather-state)")/.."; want="$(command -v pi)"; h="$(mktemp -d)"
+    mkdir -p "$h/.local/bin" "$h/shim"; printf '#!/bin/sh\necho "home pi"\n' > "$h/.local/bin/pi"; chmod +x "$h/.local/bin/pi"
+    ln -s "$(command -v mise)" "$h/shim/just"   # mise's shim: a link to mise named for the tool
+    got="$(cd "$kit" && HOME="$h" PATH="$h/shim:$PATH" just --command sh -c 'command -v pi' 2>&1)"; echo "MISEPATH exit $?"
+    [[ "$got" == "$want" ]] && echo "MISEPATH stub first" || echo "MISSING the caller's first pi through mise's just shim: got $got, want $want"
+    printf "$ok" ;;
+  misemissing)   # a tool not installed, through its mise shim: fails, never downloads, writes nothing to mise's dirs
+    d="$(mktemp -d)"; mkdir "$d/shim"; ln -s "$(command -v mise)" "$d/shim/just"; printf '[tools]\njust = "0.0.1"\n' > "$d/mise.toml"
+    ls0="$(find "$MISE_DATA_DIR" "$MISE_CACHE_DIR" 2>/dev/null | sort | md5sum)"
+    o="$(cd "$d" && "$d/shim/just" --version 2>&1)"; echo "NOTINSTALLED exit $?"
+    grep -qiE 'installing|failed to install' <<< "$o" && echo "ESCAPE mise tried to install: $o"
+    grep -q 'Tool not installed for shim: just' <<< "$o" && echo "NOTINSTALLED named" || echo "MISSING mise's reason: $o"
+    [[ "$(find "$MISE_DATA_DIR" "$MISE_CACHE_DIR" 2>/dev/null | sort | md5sum)" == "$ls0" ]] || echo "ESCAPE mise wrote to its data or cache dir"
     printf "$ok" ;;
   escape)
     for h in herdr $(type -ap herdr); do
@@ -386,6 +407,23 @@ if [[ "$mode" == real ]]; then
   [[ "$(ls "$HOME/.config/herdr/sessions")" == qclive ]] || fail "sandbox session left: $(ls "$HOME/.config/herdr/sessions")"
 fi
 [[ ! -e scratch ]] || fail "pane run's scratch survived"
+
+# mise in the sandbox (#437, docs/adr/0022): a bare just call through mise's shim with HOME moved runs, the caller's
+# first pi beating ~/.local/bin's; a tool not installed fails at its shim with no install; a caller whose HOME holds no
+# mise installs (its dirs not pinned) fails the proof naming `mise install --locked`, the judge never started.
+run 0 misepath $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -q "MISEPATH exit 0" <<< "$judge" && grep -q "MISEPATH stub first" <<< "$judge" || fail "mise's just shim in the sandbox: $judge"
+grep -q "qc sandbox: ok   mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR$" <<< "$out" \
+  || fail "no mise proof: $out"
+run 0 misemissing $st 5 acceptance-a
+judge="$(report '["stdout"]')"
+grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "missing mise tool: $judge"
+grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ran through its shim: $judge"
+(unset MISE_DATA_DIR MISE_CACHE_DIR MISE_CONFIG_DIR; run 66 mixed $st 5 acceptance-a
+  grep -q "qc sandbox: FAIL mise offline, auto-install off; tools of the worktree and the kit installed in $HOME/.local/share/mise (NOT installed: $kit: .*just@.*; the sandbox installs nothing: run outside it, in each: mise install --locked)" <<< "$out" \
+    || fail "no mise installs: the proof did not fail naming mise install --locked: $out"
+  [[ ! -e "$HOME/.local/share/mise/installs" && ! -e "$HOME/.cache/mise" ]] || fail "the run wrote mise installs or cache: $(find "$HOME/.local/share/mise" "$HOME/.cache/mise" 2>&1 | head)")
 
 # A warm vendored-skill cache (#69): bound back read-only after the cache tmpfs, so `just check` in the sandbox
 # reaches check-vendored green; the proof names the bind; the judge cannot write it.

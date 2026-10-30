@@ -173,12 +173,12 @@ schema_bad '{"type": "object", "required": ["why"], "properties": {"why": {"type
 ln -s missing "$t/$L"; g add -f "$L"; run check-decision-log; unplant "$L"
 [[ "$rc" != 0 ]] && grep -qF "check-decision-log: $L: cannot read" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" \
   || { echo "check-decision-log test: unreadable log not reported" >&2; echo "$out" >&2; exit 1; }
-# Fails closed: a broken python3 or git (a stub first on the justfile's PATH, $HOME/.local/bin,
-# via a throwaway HOME) fails the gate, never decision-log: ok.
+# Fails closed: a broken python3 or git (a stub first on the caller's PATH, which the justfile keeps ahead of its
+# tools) fails the gate, never decision-log: ok.
 broken() {
-  local h="$t.home"; mkdir -p "$h/.local/bin"
-  printf '#!/bin/sh\necho "%s: broken (check-decision-log test stub)" >&2\nexit 2\n' "$1" > "$h/.local/bin/$1"; chmod +x "$h/.local/bin/$1"
-  set +e; out="$(cd "$t" && HOME="$h" just check-decision-log 2>&1)"; rc=$?; set -e
+  local h="$t.bin"; mkdir -p "$h"
+  printf '#!/bin/sh\necho "%s: broken (check-decision-log test stub)" >&2\nexit 2\n' "$1" > "$h/$1"; chmod +x "$h/$1"
+  set +e; out="$(cd "$t" && PATH="$h:$PATH" just check-decision-log 2>&1)"; rc=$?; set -e
   rm -rf "$h"
   [[ "$rc" != 0 ]] && grep -qF "$1: broken" <<<"$out" && ! grep -qF 'decision-log: ok' <<<"$out" || { echo "check-decision-log test: broken $1 passed check-decision-log" >&2; echo "$out" >&2; exit 1; }
 }
