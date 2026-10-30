@@ -1,67 +1,95 @@
 #!/usr/bin/env python3
-"""Stub pi for tests/install-check.sh: no model, no network. Logs each argv as one JSON line to $PI_STUB_LOG.
---version prints $PI_STUB_VERSION. It plays the model proxy for the provider of the model asked: its key and baseUrl
-from providers.PROVIDER in $PI_CODING_AGENT_DIR/models.json, else the key in auth.json's PROVIDER entry. A baseUrl
-holding "unreachable" fails as Pi does after its retries ("Connection error."); a key equal to the contents of
-$PI_STUB_ISSUED answers; any other key gets the 401 a proxy sends, its body echoing the key.
-Two calls, in the shapes real Pi prints: a chat call (-p --mode json --model PROVIDER/ID), its JSON event stream; a
-classify call (-e EXT -p "/octo-feather-bench INPUT", EXT octo-feather-qa's bench extension), its one {"bench": ...}
-line, the classifier asked listed in $PI_STUB_CLASSIFIERS (space-separated) or not available."""
+"""Stub pi for tests/install-check.sh: no model, no network.
+
+Logs each argv as one JSON line to $PI_STUB_LOG. --version prints $PI_STUB_VERSION. It plays the
+model proxy for the provider of the model asked: its key and baseUrl from providers.PROVIDER in
+$PI_CODING_AGENT_DIR/models.json, else the key in auth.json's PROVIDER entry. A baseUrl holding
+"unreachable" fails as Pi does after its retries ("Connection error."); a key equal to the
+contents of $PI_STUB_ISSUED answers; any other key gets the 401 a proxy sends, its body echoing
+the key. Two calls, in the shapes real Pi prints: a chat call (-p --mode json --model P/ID), its
+JSON event stream; a classify call (-e EXT -p "/octo-feather-bench INPUT", EXT octo-feather-qa's
+bench extension), its one {"bench": ...} line, the classifier asked listed in
+$PI_STUB_CLASSIFIERS (space-separated) or not available.
+"""
+
+from __future__ import annotations
+
 import json
 import os
 import sys
+from pathlib import Path
+from typing import Any
 
 argv = sys.argv[1:]
-with open(os.environ["PI_STUB_LOG"], "a") as log:
+with Path(os.environ["PI_STUB_LOG"]).open("a") as log:
     log.write(json.dumps(argv) + "\n")
+
+
+def say(obj: object) -> None:
+    sys.stdout.write(json.dumps(obj) + "\n")
+
+
+def read(path: Path) -> dict[str, Any]:
+    data: dict[str, Any] = json.loads(path.read_text())
+    return data
+
+
 if argv[:1] == ["--version"]:
-    print(os.environ.get("PI_STUB_VERSION", "0.0.0"))
+    sys.stdout.write(os.environ.get("PI_STUB_VERSION", "0.0.0") + "\n")
     sys.exit(0)
 if "-p" not in argv:
     sys.exit(0)
-agent = os.environ["PI_CODING_AGENT_DIR"]
-issued = open(os.environ["PI_STUB_ISSUED"]).read()
+agent = Path(os.environ["PI_CODING_AGENT_DIR"])
+issued = Path(os.environ["PI_STUB_ISSUED"]).read_text()
 
 
-def proxy(model):
-    """(error message or None) for one call to MODEL."""
-    prov = model.split("/")[0]
-    cfg = json.load(open(os.path.join(agent, "models.json")))["providers"].get(prov)
+def proxy(model: str) -> str | None:
+    """The error message one call to MODEL gets, or None when it answers."""
+    prov = model.split("/", maxsplit=1)[0]
+    providers: dict[str, dict[str, str]] = read(agent / "models.json")["providers"]
+    cfg = providers.get(prov)
     if cfg is None:
-        cfg = {"baseUrl": "", "apiKey": json.load(open(os.path.join(agent, "auth.json")))[prov]["key"]}
+        stored: dict[str, dict[str, str]] = read(agent / "auth.json")
+        cfg = {"baseUrl": "", "apiKey": stored[prov]["key"]}
     if "unreachable" in cfg["baseUrl"]:
         return "Connection error."
     if cfg["apiKey"] != issued:
-        return "401 " + json.dumps({"error": {"message": f"Incorrect API key provided: {cfg['apiKey']}"}})
+        body = {"error": {"message": f"Incorrect API key provided: {cfg['apiKey']}"}}
+        return "401 " + json.dumps(body)
     return None
 
 
 prompt = argv[argv.index("-p") + 1]
 if prompt.startswith("/octo-feather-bench "):
-    ext = open(argv[argv.index("-e") + 1]).read()
-    assert "reg.classify(" in ext and "--model" not in argv, "not octo-feather-qa's bench extension"
-    inp = json.load(open(prompt.split(" ", 1)[1]))
-    model = inp["classifiers"][0]
+    ext = Path(argv[argv.index("-e") + 1]).read_text()
+    if "reg.classify(" not in ext or "--model" in argv:
+        sys.exit("stub pi: not octo-feather-qa's bench extension")
+    model: str = read(Path(prompt.split(" ", 1)[1]))["classifiers"][0]
     available = os.environ.get("PI_STUB_CLASSIFIERS", "").split()
     benched = [model] if model in available else []
     err = proxy(model) if benched else None
-    row = [0, 0, None if err else "yes", None if err else [0.99, 0.01], 0.0001, 0 if err else None]
-    print(json.dumps({"bench": {"available": available, "benched": benched, "skipped": [], "errors": [err] if err else [],
-                                "rows": [row] if benched else [], "calls": [{"model": model, "cost_usd": 0.0001}] if benched else []}}))
+    row = [0, 0, None, None, 0.0001, 0] if err else [0, 0, "yes", [0.99, 0.01], 0.0001, None]
+    bench = {
+        "available": available,
+        "benched": benched,
+        "skipped": [],
+        "errors": [err] if err else [],
+        "rows": [row] if benched else [],
+        "calls": [{"model": model, "cost_usd": 0.0001}] if benched else [],
+    }
+    say({"bench": bench})
     sys.exit(0)
 
-model = argv[argv.index("--model") + 1]
-err = proxy(model)
-
-
-def end(**msg):
-    msg = {"role": "assistant", "content": [], "usage": {"cost": {"total": 0.0001}}, **msg}
-    for ev in ({"type": "session", "version": 3}, {"type": "agent_start"}, {"type": "message_end", "message": msg},
-               {"type": "agent_settled", "aborted": False}):
-        print(json.dumps(ev))
-
-
+err = proxy(argv[argv.index("--model") + 1])
 if err is None:
-    end(stopReason="stop", content=[{"type": "text", "text": "ok"}])
+    msg: dict[str, object] = {"stopReason": "stop", "content": [{"type": "text", "text": "ok"}]}
 else:
-    end(stopReason="error", errorMessage=err)
+    msg = {"stopReason": "error", "content": [], "errorMessage": err}
+msg |= {"role": "assistant", "usage": {"cost": {"total": 0.0001}}}
+for ev in (
+    {"type": "session", "version": 3},
+    {"type": "agent_start"},
+    {"type": "message_end", "message": msg},
+    {"type": "agent_settled", "aborted": False},
+):
+    say(ev)
