@@ -11,7 +11,8 @@
 #   file) fails naming the skill; a missing cache fails naming `just vendored-fetch`;
 # - --extract spec-chat DEST writes the fetch-only Spec Chat pin offline, exec bits kept;
 #   uncached, it fails naming `just vendored-fetch` (#96);
-# - a fetch through a stalled proxy times out within its bound, naming the fix.
+# - a fetch through a stalled proxy times out within its bound, naming the fix;
+# - a fetch GitHub refuses for credentials (a private pin) names gh auth login && gh auth setup-git (#463).
 # Needs the warm cache `just vendored-fetch` makes (CI runs it before `just check`).
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -108,6 +109,15 @@ rm -rf "$t/c/octo-feather/skillfile/git"
 run 1 ${ns[@]+"${ns[@]}"}; has "is not cached at"; has "run \`just vendored-fetch\`"
 sc "$t/sc2"; [[ "$rc" == 1 ]] || { echo "check-vendored test: uncached --extract want exit 1, got $rc: $out" >&2; exit 1; }
 has "extract: spec-chat: 0xTomDaniel/spec-chat@"; has "run \`just vendored-fetch\`"
+# GitHub asks for credentials (a private pin, git not signed in; #463): a stub git answers the fetch as git does with
+# prompts off. Named with the sign-in fix, never "check network".
+mkdir -p "$t/authbin"
+printf '#!/bin/sh\nfor a; do [ "$a" = fetch ] && { echo "fatal: could not read Username for '"'"'https://github.com'"'"': terminal prompts disabled" >&2; exit 128; }; done\nexec "%s" "$@"\n' "$(command -v git)" >"$t/authbin/git"; chmod +x "$t/authbin/git"
+rm -rf "$t/c/octo-feather/skillfile/git"
+set +e; out="$(PATH="$t/authbin:$PATH" just -f "$r/justfile" vendored-fetch 2>&1)"; rc=$?; set -e
+[[ $rc == 1 ]] || { echo "check-vendored test: fetch refused for credentials: want exit 1, got $rc: $out" >&2; exit 1; }
+has "could not read Username"; has "GitHub wants credentials (a private pin): sign in and let git use gh: gh auth login && gh auth setup-git, then rerun \`just vendored-fetch\`"
+! grep -qF "check network" <<<"$out" || { echo "check-vendored test: credential refusal blamed on the network: $out" >&2; exit 1; }
 if [[ $stallok == 1 ]]; then
 # Stalled network, two ways: a proxy that accepts and never answers (silent), and one that
 # drips CONNECT response headers every 0.2 s forever (slow progress). Either way the fetch
@@ -141,7 +151,7 @@ rm -rf "$t/c/octo-feather/skillfile/bin"
 for mode in silent drip; do stall "$mode"; has "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/"; has "timed out after 2s"; done
 fi
 for x in ${skipped[@]+"${skipped[@]}"}; do echo "check-vendored test: skipped, Linux-only proof: $x"; done
-ran="pinned Spec Chat written and uncached, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
+ran="pinned Spec Chat written and uncached, credentials refused named with gh auth setup-git, drift, committed modes, untracked strays, symlinks, special files and empty folders not committed, poisoned and missing cache"
 [[ ${#ns[@]} -gt 0 ]] && ran="offline-namespace gate, $ran"
 [[ $stallok == 1 ]] && ran="$ran, silent and dripping proxy"
 echo "check-vendored test: ok ($ran)"
