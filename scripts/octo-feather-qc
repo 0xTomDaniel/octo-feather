@@ -23,7 +23,8 @@ and its output). Its report is appended to the evidence store as that criterion'
 judge.report.json; a judge stopped by the cap leaves no report, so its record's evidence is incomplete: insufficient evidence), and the result is read back from that record alone, decision source agent fallback.
 Each result with a record then gets the kit's judgment model's advisory answer (advise; no gate reads it).
 Then this script, not the judge, sets each passed criterion to built in
-PR and each failed one to planned, and commits only the status file. The judge
+PR (through octo-feather-spec-status built: its record, the commit that record was captured at, and the tests its
+demo declares, none for an agent fallback result) and each failed one to planned, and commits only the status file. The judge
 model's family (the part before "/") must differ from the implementer's.
 
 The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
@@ -573,7 +574,7 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
         advise(done, text, stem, head, runid)
         try:
             return settle(status, pr, ids, head, data, done, {"head": head, "ids": ids, "run_id": runid, "sandbox": not nosb,
-                                                              "captures": caps}, report_path, 0, nosb=nosb)
+                                                              "captures": caps}, report_path, 0, nosb=nosb, demos=demos)
         finally:
             restore(status)
     if nosb:
@@ -592,7 +593,7 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
                 done[i] |= {"verdict": "insufficient evidence", "command": "the qc judge (agent fallback)",
                             "why": f"missing: {'; '.join(done[i]['missing'])}"}
         advise(done, text, stem, head, runid)
-        return settle(status, pr, ids, head, data, done, raw, report_path, nmiss, nosb=nosb)
+        return settle(status, pr, ids, head, data, done, raw, report_path, nmiss, nosb=nosb, demos=demos)
     finally:
         restore(status)
 
@@ -719,7 +720,7 @@ def verdict(i: str, head: str, run: subprocess.CompletedProcess[str], rec: dict[
 
 
 def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], verdicts: dict[str, Result], raw: dict[str, Any],
-           report_path: Path, nmiss: int, *, nosb: bool) -> int:
+           report_path: Path, nmiss: int, *, nosb: bool, demos: dict[str, dict[str, Any]]) -> int:
     """One result per claimed criterion (quality spec #qc-results) into the report, then, sandboxed, the status file:
     passed built, failed and insufficient evidence planned, one status-only commit (none when nothing changes)."""
     raw["results"] = [verdicts[i] for i in ids]
@@ -733,11 +734,15 @@ def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any
             print(f"{verdicts[i]['verdict'].upper()} {i}: $ {verdicts[i]['command']}\n  {decided(verdicts[i])}")
         print(f"qc: UNSANDBOXED, {len(passed)}/{len(ids)} passed at {head[:12]}; offline gh refusals {nmiss}; status file not changed; report {report_path}")
         return 1
-    for i in passed:
-        data["criteria"][i] = {"status": "built", "pr": pr}
     for i in failed:
         data["criteria"][i] = {"status": "planned", "pr": None}
     status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
+    for i in passed:   # built with its evidence link (quality spec #qc-results): complete evidence was captured at the head
+        tests = [a for t in demos.get(i, {}).get("tests", []) for a in ("--test", str(t))]
+        b = subprocess.run([str(STATUS_TOOL), "built", str(status), str(pr), i, "--record", verdicts[i]["record"],
+                            "--commit", verdicts[i]["head"], *tests], capture_output=True, text=True)
+        if b.returncode:
+            die(3, f"status entry for {i} not written: {b.stderr.strip()}; report {report_path}")
     chk = subprocess.run([str(STATUS_TOOL), "check", str(status.parent)], capture_output=True, text=True)
     if chk.returncode:
         die(3, chk.stderr.strip())

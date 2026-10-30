@@ -282,10 +282,12 @@ sleep 0.2; [[ -z "$(ls -A "$TMPDIR")" ]] || fail "killed run left scratch: $(ls 
 ! pgrep -fx "sleep 3040$tok" > /dev/null || fail "killed run's judge survived"
 
 run 1 mixed $st 5 acceptance-a acceptance-b                                                     # a passes, b fails
-python3 - "$st" <<'EOF'
-import json, sys
+python3 - "$st" "$before" <<'EOF'
+import json, re, sys
 c = json.load(open(sys.argv[1]))["criteria"]
-assert c["acceptance-a"] == {"status": "built", "pr": 5}, c
+a = c["acceptance-a"]   # built by the agent fallback: its record, captured at the judged head, no declared tests
+assert re.fullmatch(r"\d{8}T\d{6}Z-[0-9a-f]{8}", a.pop("record", "")), c
+assert a == {"status": "built", "pr": 5, "commit": sys.argv[2], "tests": []}, c
 assert c["acceptance-b"] == {"status": "planned", "pr": None}, c
 EOF
 [[ "$(git diff --name-only "$before" HEAD)" == "$st" && "$(git rev-list --count "$before"..HEAD)" == 1 ]] \

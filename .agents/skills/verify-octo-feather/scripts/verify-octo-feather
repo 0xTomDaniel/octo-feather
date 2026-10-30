@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1186,6 +1186,72 @@ def drive_qc_fallback(f: Feature) -> None:
     say(f"qc-fallback evidence: {f.d}")
 
 
+def drive_qc_stale(f: Feature) -> None:
+    """`just qc` builds two criteria of a scratch target whose qc.toml declares a passing demo for each, covering its own
+    code path and naming its own test: each built entry names its record, the commit it was captured at and its tests.
+    A later commit changes acceptance-a's covered path, another an unrelated file; `octo-feather-spec-status show` then
+    shows acceptance-a stale, naming its capture commit and that commit, and acceptance-b current."""
+    v = f.s.contract.values
+    if "qc_demo_pass" not in v:
+        die("qc.toml [values] needs qc_demo_pass: the qc-stale drive's scratch demos")
+    sc = RUN_DIR / "scratch" / "qc-stale"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    for d in ("docs/specs", "src", "tests"):
+        (r / d).mkdir(parents=True)
+    (sc / "state").mkdir()
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)   # qc commits the status file in this repo; the drive commits the later changes
+    git("commit", "-q", "--allow-empty", "-m", "accepted")
+    shutil.copy(f"{f.s.repo}/tests/fixtures/spec-status/good/demo.spec.html", r / "docs" / "specs")
+    for p in ("src/a", "src/b", "tests/a.sh", "tests/b.sh", "README"):
+        (r / p).write_text(f"{p} v1\n")
+    git("add", "-A")
+    git("commit", "-q", "-m", "spec and code")
+    init = subprocess.run([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "demo.spec.html"), git("rev-parse", "--short", "HEAD")],
+                          capture_output=True, text=True, check=False)
+    if init.returncode:
+        die(f"qc-stale: scratch status file not made: {init.stderr.strip()}")
+    (r / "qc.toml").write_text('format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n' + "".join(
+        f'[demo."demo#acceptance-{x}"]\ncommand = {json.dumps(v["qc_demo_pass"])}\ncovers = ["src/{x}"]\ntests = ["tests/{x}.sh"]\n'
+        for x in ("a", "b")))
+    git("add", "-A")
+    git("commit", "-q", "-m", "contract: a demo each, covering its own code path")
+    head = git("rev-parse", "HEAD")
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}   # qc's reports, the scratch target's evidence store; no real classifier
+    f.pre = ["env", "-C", str(r)]   # just qc and the status view run where the owner or supervisor stands: the target
+    f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a", "acceptance-b")
+    f.obs("qc", "status", git("show", "HEAD:docs/specs/demo.status.json"))
+    rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
+
+    def linked(c: Case) -> bool:
+        recs = {a: m.group(1) for a in ("acceptance-a", "acceptance-b") if (m := re.search(
+            rf"(?m)^PASS {a}: \$ .*\n  demo exit status 0\n  evidence complete; decision demo checks; record {rid}$", c.out))}
+        st = json.loads(c.o["status"])["criteria"]
+        return c.code == 0 and len(recs) == 2 and all(
+            st[a] == {"status": "built", "pr": 7, "record": recs[a], "commit": head, "tests": [f"tests/{a[-1]}.sh"]} for a in recs)
+    f.check("qc", linked)
+    (r / "README").write_text("README v2\n")
+    git("commit", "-q", "-am", "unrelated change")
+    (r / "src" / "a").write_text("src/a v2\n")
+    git("commit", "-q", "-am", "change a's code")
+    change = git("rev-parse", "--short=12", "HEAD")
+    f.run("show", "octo-feather-spec-status", "show")
+    f.pre = []
+    f.check("show", lambda c: c.code == 0 and re.search(
+        rf"(?m)^  acceptance-a: built \(PR #7\), STALE: record {rid} captured at {head[:12]}; covered path src/a changed "
+        rf"since {head[:12]} by {change} change a's code$", c.out) is not None and re.search(
+        rf"(?m)^  acceptance-b: built \(PR #7\), current: record {rid} captured at {head[:12]}, tests tests/b.sh, covers src/b$",
+        c.out) is not None and "2 built: 1 current, 1 stale, 0 no evidence link" in c.out)
+    f.env = {}
+    say(f"qc-stale evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -1200,6 +1266,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-browser": drive_qc_browser,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
+    "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
 }
 
