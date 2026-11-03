@@ -119,11 +119,10 @@ done
 mkdir "$t/shim"; ln -s "$(command -v mise)" "$t/shim/node"
 PATH="$t/shim:$PATH" STUB_ANSWER=does-not-show qcrun
 adv acceptance-a "  advisory model judgment (no gate reads it): does-not-show, confidence 0.910 (criterion-evidence by $M; uncalibrated)"
-# No pi on the box (#493 AC1): the sandbox's pi shim finds no real pi and refuses (exit 127), so the advice shows
-# unavailable naming pi's exit and the run ends in seconds, never re-running the shim. A pi on PATH that only leads back to
-# the shim (one that runs the bare name pi): refused the same way. PATH with every pi gone: each dir holding one is
-# mirrored minus it (the stub's dir first loses the stub: a mirror's links into /tmp would not survive the sandbox's
-# private /tmp).
+# No pi on the box, and a pi on PATH that only leads back to the sandbox's pi shim (one running the bare name pi), #493
+# AC1: the shim refuses both (scripts/octo-feather-qc-sandbox, its pi shim); tests/fixtures/qc-advisory/check.py accepts
+# the run. PATH with every pi gone: each dir holding one is mirrored minus it (the stub's dir first loses the stub: a
+# mirror's links into /tmp would not survive the sandbox's private /tmp).
 rm "$t/bin/pi"
 nopi="$(python3 -c 'import os, sys, tempfile
 out = []
@@ -136,13 +135,7 @@ for d in filter(None, sys.argv[2].split(":")):
 print(":".join(out), end="")' "$t" "$PATH")"
 rp="$(cd "$t" && PATH="$nopi" && PATH="$(just --justfile "$kit/justfile" --evaluate PATH)" && command -v pi)" && fail "pi hidden, yet a recipe resolves $rp"
 mkdir "$t/loop"; printf '#!/bin/sh\nexec pi "$@"\n' > "$t/loop/pi"; chmod +x "$t/loop/pi"
-for c in "nopi:$nopi:pi exit 127" "loop:$t/loop:$nopi:pi exit 127"; do   # the shim refused: 127, not a hang
-  name="${c%%:*}"; why="${c##*:}"; p="${c#*:}"; p="${p%:*}"; SECONDS=0
-  PATH="$p" qcrun
-  ((SECONDS < 90)) || fail "$name: qc took $SECONDS s"
-  for i in acceptance-a acceptance-b; do
-    grep -A4 "^[A-Z]* $i: " <<< "$out" | grep -qE "^  advisory model judgment unavailable \(criterion-evidence by $M\): .*$why.*; the result stands as decided$" \
-      || fail "$name: $i: want the advisory unavailable naming '$why': $out $(tail -20 "$t/err")"
-  done
-done
+refused() { python3 "$kit/tests/fixtures/qc-advisory/check.py" "$1" "$SECONDS" "$M" <<< "$out" || fail "$1: $(tail -20 "$t/err")"; }
+SECONDS=0; PATH="$nopi" qcrun; refused nopi
+SECONDS=0; PATH="$t/loop:$nopi" qcrun; refused loop
 echo "qc-advisory: ok (no pi, or a pi leading back to the sandbox shim: advisory unavailable, no loop; each recorded criterion asked criterion-evidence of the kit's judgment model on its criterion text, command and output; answer and confidence beside the result and in the report, labelled an advisory model judgment; a pass the model says does-not-show still passes, a fail it says shows still fails, a classifier error shows unavailable, node a mise shim first on PATH too; verdicts, exit and status commit unchanged)"
