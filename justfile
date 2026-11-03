@@ -272,8 +272,8 @@ test *args:
     @just check-tests "$@"
 
 # #493 AC1 on this box: the gate, or the items pytest args choose (`just check-user-mise -k qc`), run as tests/user-mise.sh's
-# fixture user (global mise tools absent from the kit lock, python3 a mise shim, stale shims, a named Herdr session's
-# pane), GATE_WORKERS=1; not a gate item (the gate runs tests/user-mise.sh's own assertions), never in CI.
+# fixture user (global mise tools absent from the kit lock, python3 a mise shim, stale shims), in a named Herdr
+# session's pane, or outside Herdr with USER_MISE_HERDR=none; the caller's GATE_WORKERS (default 1); not a gate item (the gate runs tests/user-mise.sh's own assertions), never in CI.
 # The gate, or chosen items, inside tests/user-mise.sh's fixture HOME (#493 AC1); extra arguments go to pytest.
 check-user-mise *args:
     @"$root/tests/user-mise.sh" --gate "$@"

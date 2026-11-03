@@ -24,7 +24,9 @@
 # fix makes it red and that ticket turns it into a pass. Each carries one greppable marker, the ticket that flips it
 # after the word EXPECTED, a dash and FAIL (grep -rn for it in tests/ lists them all); the lane's last head has none.
 # `tests/user-mise.sh --gate [pytest args]` (just check-user-mise, #493 AC1): the whole gate, or the items pytest args
-# choose, run inside the same fixture instead of the assertions. Run by `just check`; Linux only (unshare).
+# choose, run inside the same fixture instead of the assertions, with the caller's GATE_WORKERS (default 1), in the
+# named session's pane, or with USER_MISE_HERDR=none outside Herdr (no HERDR_* variable at all); the assertions always
+# run in the pane. Run by `just check`; Linux only (unshare).
 set -euo pipefail
 [[ "$(uname -s)" != Darwin ]] || { echo "user-mise: skipped, not on macOS (unshare; CI runs it)"; exit 0; }
 [[ -z "${USER_MISE_FIXTURE:-}" ]] || { echo "user-mise: skipped inside its own fixture"; exit 0; }
@@ -83,9 +85,9 @@ esac
 t="$USER_MISE_T"; H="$USER_MISE_HOME"; D="$H/.local/share/mise"; K="$H/src/octo-feather"
 UP="$D/shims:$H/.local/bin:/usr/local/bin:/usr/bin:/bin"
 # user CMD...: CMD with the user's environment only, in a pane of the named Herdr session.
+pane=(HERDR_ENV=1 HERDR_SESSION=fixture HERDR_PANE_ID=wF:p1 HERDR_TAB_ID=wF:t1 HERDR_WORKSPACE_ID=wF HERDR_SOCKET_PATH="$H/.config/herdr/sessions/fixture/herdr.sock")
 user() { env -i HOME="$H" USER="$USER_MISE_NAME" LOGNAME="$USER_MISE_NAME" LANG="${LANG:-C.UTF-8}" TERM=dumb PATH="$UP" TMPDIR="$t/tmp" \
-  HERDR_ENV=1 HERDR_SESSION=fixture HERDR_PANE_ID=wF:p1 HERDR_TAB_ID=wF:t1 HERDR_WORKSPACE_ID=wF HERDR_SOCKET_PATH="$H/.config/herdr/sessions/fixture/herdr.sock" \
-  USER_MISE_FIXTURE=1 "$@"; }
+  "${pane[@]}" USER_MISE_FIXTURE=1 "$@"; }
 pin="$(tr -d '[:space:]' <"$K/.python-version")"; minor="${pin#3.}"; minor="${minor%%.*}"
 pyv="3.$(( minor == 11 ? 13 : 11 )).9"
 mkdir -p "$D/installs/python/$pyv/bin" "$D/installs/erlang/27.3/bin" "$D/installs/rust/1.80.0" "$H/.cargo/bin" "$H/.rustup"
@@ -102,9 +104,15 @@ g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 g -C "$K" init -q; g -C "$K" add -A; g -C "$K" commit -q -m kit
 (cd "$t" && user mise reshim) || fail "mise reshim in the user's HOME"
 
-if [[ "${1:-}" == --gate ]]; then shift   # #493 AC1: the gate, or chosen items, as this user in a named session's pane
-  echo "user-mise: gate in the fixture HOME $H (kit copy $K, HERDR_SESSION=fixture): just check-tests $*" >&2
-  cd "$K"; set +e; user env GATE_WORKERS=1 just check-tests "$@"; exit $?
+if [[ "${1:-}" == --gate ]]; then shift   # #493 AC1: the gate, or chosen items, as this user, in a pane or outside Herdr
+  case "${USER_MISE_HERDR:-fixture}" in
+    fixture) mode="in a pane of the named Herdr session fixture" ;;
+    none) mode="outside Herdr"; pane=() ;;
+    *) fail "USER_MISE_HERDR must be fixture (a named session's pane, the default) or none (outside Herdr), got '$USER_MISE_HERDR'" ;;
+  esac
+  w="${GATE_WORKERS:-1}"; n="$(user env | grep -c '^HERDR_' || true)"
+  echo "user-mise: gate in the fixture HOME $H (kit copy $K), $mode ($n HERDR_* variables), GATE_WORKERS=$w: just check-tests $*" >&2
+  cd "$K"; set +e; user env GATE_WORKERS="$w" just check-tests "$@"; exit $?
 fi
 
 # Each assertion below is a condition, then want or staged reading its $?: errexit off, the assertions all run.
