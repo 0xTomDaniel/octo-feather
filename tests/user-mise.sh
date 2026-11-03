@@ -204,7 +204,7 @@ qc "$H/src/target" "$t/nojson:" "${pinned[@]}"
 qc "$H/src/target" "$t/nodirs:" "${pinned[@]}"
 [[ "$rc" == 66 ]] && grep -q 'qc sandbox: FAIL .*mise doctor' <<<"$out"; want "(2) doctor JSON without dirs: exit 66 naming mise doctor (exit $rc)" $? "$out"
 qc "$H/src/pinned" "" "${pinned[@]}"
-[[ "$rc" == 66 ]] && grep -qF "run outside it: octo-feather-mise-install $H/src/pinned)" <<<"$out" \
+[[ "$rc" == 66 ]] && grep -qF "run outside it: $K/scripts/octo-feather-mise-install $H/src/pinned)" <<<"$out" \
   && grep -qE 'qc sandbox: FAIL mise .*NOT installed: .*just@0\.0\.1' <<<"$out"
 want "(2) a pinned tool not installed: exit 66 naming it and mise install (exit $rc)" $? "$out"
 

@@ -435,7 +435,7 @@ b="$(grep -E '^PASS rep/repos: ' <<< "$out")" || fail "repos: want PASS: $out"
 grep -q "open $HOME/src/sib (tmpfs mask over $HOME/src/sib, 0 entries)" <<< "$b" || fail "repos: the sibling repo's listing not recorded and refused: $b"
 grep -q "open $HOME/src/kit (tmpfs mask over $HOME/src/kit, 2 entries (bound back: .agents, scripts))" <<< "$b" \
   || fail "repos: the head kit's listing in a --kit-ref run not recorded and refused: $b"
-grep -q "qc sandbox: ok   other repos hidden: 2 git repos under $HOME .*: src/kit \[.agents scripts\], src/sib; visible: kit under test $TMPDIR/qa-kit-.*, worktree .*; bound back read-only: $HOME/src/kit/scripts/octo-feather-qc-sandbox, $HOME/src/kit/scripts/octo-feather-state, $HOME/src/kit/.agents/skills/github-pr/scripts, $HOME/src/kit/scripts/octo-feather-qa$" <<< "$out" \
+grep -q "qc sandbox: ok   other repos hidden: 2 git repos under $HOME .*: src/kit \[.agents scripts\], src/sib; visible: kit under test $TMPDIR/qa-kit-.*, worktree .*; bound back read-only: $HOME/src/kit/scripts/octo-feather-qc-sandbox, $HOME/src/kit/scripts/octo-feather-state, $HOME/src/kit/scripts/octo-feather-mise-install, $HOME/src/kit/.agents/skills/github-pr/scripts, $HOME/src/kit/scripts/octo-feather-qa$" <<< "$out" \
   || fail "repos: no proof line naming the masks and what stays visible: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 ! grep -q "SIBSECRET\|$HOME/src/kit/agents/implementer.md" "$d/rep/repos/transcript.jsonl" || fail "repos: another repo's file or the head kit's role reached the case"

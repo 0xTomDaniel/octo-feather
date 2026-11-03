@@ -61,7 +61,7 @@
 #      read from `mise doctor --json` whatever its exit, none there fails closed (exit 66)
 # Inner (PID 1 of that namespace):
 #   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b; the tools
-#      judged are those of the worktree's and the kit's own mise config, never the user's global one); then go to the recorder
+#      judged are those of the worktree's and the kit's own mise config, as scripts/octo-feather-mise-install --list names them); then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
@@ -169,7 +169,7 @@ if [[ "$phase" == setup ]]; then
   done
   while IFS= read -r p; do [[ -n "$p" ]] && back+=("$(realpath -m -- "$p")"); done <<< "${QC_RO_BINDS:-}"
   j=$(command -v -- "${1:-}" 2>/dev/null) || j=
-  for m in "$0" "$sk/scripts/octo-feather-state" "$sk/.agents/skills/github-pr/scripts" ${j:+"$j"}; do
+  for m in "$0" "$sk/scripts/octo-feather-state" "$sk/scripts/octo-feather-mise-install" "$sk/.agents/skills/github-pr/scripts" ${j:+"$j"}; do
     [[ -e "$m" ]] && back+=("$(realpath -- "$m")")
   done
   canon() { local p; IFS=: read -ra ps <<< "$1"; for p in "${ps[@]}"; do [[ -n "$p" ]] && realpath -m -- "$p"; done | paste -sd:; }
@@ -753,14 +753,15 @@ if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's m
   # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
   ms=$(mktemp -d); ml=()
   for d in "$WT" "$kit"; do
-    f="$ms/ls-${#ml[@]}.json"; MISE_STATE_DIR="$ms" mise -C "$d" ls --local --json > "$f" 2> /dev/null; ml+=("$(cd "$d" && pwd -P)" "$f" "$?")
+    f="$ms/ls-${#ml[@]}.json"
+    MISE_STATE_DIR="$ms" "$kit/scripts/octo-feather-mise-install" --list --json "$d" > "$f" 2> "$f.err"; ml+=("$(cd "$d" && pwd -P)" "$f" "$?")
   done
-  mline=$(python3 - "$MISE_DATA_DIR" "${ml[@]}" <<'EOF'
-# DATA_DIR then DIR FILE EXIT per dir: FILE is `mise ls --local --json` ({tool: [{version, installed, source: {path}}]}).
-# Only the tools of DIR's own config files count (source inside DIR): never a config the parent walk found above it,
-# such as the user's global config once HOME moves while the kit sits under the real HOME (#493).
-import json, os, shlex, sys
-data, a = sys.argv[1], sys.argv[2:]
+  mline=$(python3 - "$MISE_DATA_DIR" "$kit/scripts/octo-feather-mise-install" "${ml[@]}" <<'EOF'
+# DATA_DIR HELPER then DIR FILE EXIT per dir: FILE is `octo-feather-mise-install --list --json DIR`, the tools of DIR's own
+# config files only (that script owns the rule: never the user's global config, the moved-HOME parent walk's included)
+# as mise's ls rows ({tool: [{version, installed}]}).
+import json, shlex, sys
+data, helper, a = sys.argv[1], sys.argv[2], sys.argv[3:]
 miss, judged, fix = [], [], []
 for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
     try:
@@ -768,14 +769,14 @@ for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
     except (OSError, ValueError):
         tools = None
     if not isinstance(tools, dict):
-        m, own = ["mise ls failed"], []
+        err = " ".join(open(f + ".err", errors="replace").read().split())[:300]
+        m, own = [f"{helper} --list --json failed: {err or 'no output'}"], []
     else:
-        own = [(t, v) for t, vs in tools.items() for v in vs
-               if os.path.realpath(str((v.get("source") or {}).get("path", ""))).startswith(d + os.sep)]
+        own = [(t, v) for t, vs in tools.items() for v in vs]
         m = [f"{t}@{v.get('version')}" for t, v in own if not v.get("installed")]
     if m:
         miss.append(f"{d}: {' '.join(m)}")
-        fix.append(f"octo-feather-mise-install {shlex.quote(d)}")   # the kit's one install command: that dir's own locked tools
+        fix.append(f"{shlex.quote(helper)} {shlex.quote(d)}")   # the kit's one install command: that dir's own locked tools
     names = " ".join(f"{t}@{v.get('version')}" for t, v in own)
     judged.append(f"{d}: {names or 'none'}")
 line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
