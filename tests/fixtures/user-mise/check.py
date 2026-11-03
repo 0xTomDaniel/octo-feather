@@ -395,8 +395,10 @@ def template_setup(lang: str) -> None:
     offline = ("UV_OFFLINE=1", "npm_config_offline=true")
     kp = (f"PATH={K}/scripts:{UP}", *offline)
     r = H / f"src/tpl-{lang}"
-    new = ["just", "--justfile", f"{K}/justfile", "new-repo", lang, str(r), "--no-spec-chat"]
-    rc, out, _ = user(new, cwd=H / "src", env=(*kp, *COMMITTER))
+    # In the kit checkout, as its feature map says a user runs it: just there is the kit's pin
+    # (mise's shim), where a dir pinning no just needs a system just (the box has one, CI none).
+    new = ["just", "new-repo", lang, str(r), "--no-spec-chat"]
+    rc, out, _ = user(new, cwd=K, env=(*kp, *COMMITTER))
     if rc:
         die(f"just new-repo {lang}: {out}")
     tpl = f"a repo from templates/{lang}"

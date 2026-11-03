@@ -24,7 +24,10 @@ export TMPDIR="$t/tmp"; mkdir "$TMPDIR"
 real_uv="$( { command -v mise > /dev/null && mise -C "$kit" which uv; } 2> /dev/null || command -v uv)" || fail "uv not found on PATH: the python-app fixture setup (uv sync --locked) needs it; install uv (CI: astral-sh/setup-uv)"
 # uv's package cache stays the box's (a pytest fixture's runner installs from it, as `just setup` would), read
 # offline: the gate calls no network service (quality #boundary-gate); CI fills the cache in a step before the gate.
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_OFFLINE=1
+# Its managed Pythons too, asked before HOME moves: else a fixture copy (no .python-version) syncs with the first
+# python3 on PATH, whose wheels the cache lacks when its minor differs (CI's ubuntu-26.04: cp314; install-check.sh
+# keeps the dir the same way).
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" python dir)}" UV_OFFLINE=1
 # mise's dirs, as mise reports them before HOME moves (as tests/qc.sh, the kit justfile the same way): the sandbox's
 # proof finds the box's installs whether this test runs bare or through just.
 if command -v mise > /dev/null; then
