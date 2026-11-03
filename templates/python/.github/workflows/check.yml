@@ -10,9 +10,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)
-      # Native tools from mise.toml and mise.lock, the pins `just setup` installs: mise at mise-version (the action
-      # verifies its signed checksums), then `mise install --locked`. Cached: mise's downloads, which it verifies
-      # again on use, never installed tool trees; the key is mise.lock.
+      # Native tools from mise.toml and mise.lock, the pins `just setup` installs (octo-feather-mise-install, the
+      # octo-feather kit's): mise at mise-version (the action verifies its signed checksums), then it installs them (a
+      # runner has no global mise tools, so the action's install takes the same ones). Cached: mise's downloads, which
+      # it verifies again on use, never installed tool trees; the key is mise.lock.
       - id: pins
         run: echo "mise=$(tr -d '[:space:]' < mise-version)" >> "$GITHUB_OUTPUT"
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0 (no moving tag)
