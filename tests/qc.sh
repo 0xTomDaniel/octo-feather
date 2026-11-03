@@ -419,7 +419,8 @@ fi
 run 0 misepath $st 5 acceptance-a
 judge="$(jr '["stdout"]')"
 grep -q "MISEPATH exit 0" <<< "$judge" && grep -q "MISEPATH stub first" <<< "$judge" || fail "mise's just shim in the sandbox: $judge"
-grep -q "qc sandbox: ok   mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR$" <<< "$out" \
+# The tools judged, each dir's own config only: the test repo pins none, the kit its mise.toml's (#493 AC3).
+grep -qE "^qc sandbox: ok   mise offline, auto-install off; tools of the worktree and the kit installed in $MISE_DATA_DIR; judged, each from its own mise config only: [^;]+: none; $kit: ([^ ;]+@[^ ;]+ )*just@[0-9.]+( [^ ;]+@[^ ;]+)*$" <<< "$out" \
   || fail "no mise proof: $out"
 run 0 misemissing $st 5 acceptance-a
 judge="$(jr '["stdout"]')"
@@ -427,7 +428,7 @@ grep -E 'ESCAPE|MISSING' <<< "$judge" && fail "missing mise tool: $judge"
 grep -qE "NOTINSTALLED exit [1-9]" <<< "$judge" || fail "a tool not installed ran through its shim: $judge"
 # XDG_DATA_HOME too: mise falls back to XDG_DATA_HOME/mise, so a caller exporting it kept its installs (env-coupled, as #422 item 10).
 (unset MISE_DATA_DIR MISE_CACHE_DIR MISE_CONFIG_DIR XDG_DATA_HOME; run 66 mixed $st 5 acceptance-a
-  grep -q "qc sandbox: FAIL mise offline, auto-install off; tools of the worktree and the kit installed in $HOME/.local/share/mise (NOT installed: $kit: .*just@.*; the sandbox installs nothing: run outside it, in each: mise install --locked)" <<< "$out" \
+  grep -q "qc sandbox: FAIL mise offline, auto-install off; tools of the worktree and the kit installed in $HOME/.local/share/mise (NOT installed: $kit: .*just@.*; the sandbox installs nothing: run outside it: .*octo-feather-mise-install $kit)" <<< "$out" \
     || fail "no mise installs: the proof did not fail naming mise install --locked: $out"
   [[ ! -e "$HOME/.local/share/mise/installs" && ! -e "$HOME/.cache/mise" ]] || fail "the run wrote mise installs or cache: $(find "$HOME/.local/share/mise" "$HOME/.cache/mise" 2>&1 | head)")
 

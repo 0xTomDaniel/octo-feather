@@ -8,10 +8,15 @@ is STUB_ANSWER at confidence STUB_CONFIDENCE (default 0.91), the rest spread ove
 labels; STUB_ANSWER unset: each call fails with a provider error. STUB_WANT: a state not
 containing it is refused with an error naming it (the caller's proof of what the classifier was
 shown). Anything else exits 2. As pi's print mode, an extension's stdout goes to stderr.
+node is the kit's pin (its mise.toml, asked of mise for the kit's dir), else the first on
+PATH: from a bare pane, the node on PATH is mise's shim, which in a dir pinning no node (a
+scratch target, qc's advice run) resolves no version and, the qc sandbox turning the shims'
+system fallback off (docs/adr/0022), fails (#465).
 """
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -26,5 +31,15 @@ model_file = here.parents[2] / "evals" / "judgment-model.json"
 kit_model = os.environ.get("STUB_KIT") or json.loads(model_file.read_text())["model"]
 name, _, args = a[a.index("-p") + 1][1:].partition(" ")
 ext = a[a.index("-e") + 1]
-run = ["node", str(here / "harness.mjs"), ext, name, args, kit_model]
+mise = shutil.which("mise")
+node = "node"
+if mise:
+    w = subprocess.run(
+        [mise, "-C", str(here.parents[2]), "which", "node"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    node = w.stdout.strip() if w.returncode == 0 and w.stdout.strip() else node
+run = [node, str(here / "harness.mjs"), ext, name, args, kit_model]
 sys.exit(subprocess.run(run, check=False).returncode)

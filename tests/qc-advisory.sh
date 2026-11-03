@@ -113,4 +113,10 @@ for i in acceptance-a acceptance-b; do
   adv "$i" "  advisory model judgment unavailable (criterion-evidence by $M): stub: provider error; the result stands as decided"
   results "$i" unavailable "stub: provider error"
 done
-echo "qc-advisory: ok (each recorded criterion asked criterion-evidence of the kit's judgment model on its criterion text, command and output; answer and confidence beside the result and in the report, labelled an advisory model judgment; a pass the model says does-not-show still passes, a fail it says shows still fails, a classifier error shows unavailable; verdicts, exit and status commit unchanged)"
+
+# From a bare pane (#465): the node first on PATH is mise's shim (a link to mise named node). In qc's advice run (a
+# scratch dir pinning no node; the sandbox turns the shims' system fallback off) it resolves no version; the answer still comes.
+mkdir "$t/shim"; ln -s "$(command -v mise)" "$t/shim/node"
+PATH="$t/shim:$PATH" STUB_ANSWER=does-not-show qcrun
+adv acceptance-a "  advisory model judgment (no gate reads it): does-not-show, confidence 0.910 (criterion-evidence by $M; uncalibrated)"
+echo "qc-advisory: ok (each recorded criterion asked criterion-evidence of the kit's judgment model on its criterion text, command and output; answer and confidence beside the result and in the report, labelled an advisory model judgment; a pass the model says does-not-show still passes, a fail it says shows still fails, a classifier error shows unavailable, node a mise shim first on PATH too; verdicts, exit and status commit unchanged)"
