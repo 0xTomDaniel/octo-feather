@@ -184,11 +184,17 @@ qc() { # DIR PATH_FIRST ENV...: octo-feather-qc on the target in DIR; exit in $r
   out="$(cd "$dir" && user env HOME="$t/qchome" PATH="$first$t/fake:$K/scripts:$UP" OCTO_FEATHER_QC_PATH="$t/judge" OCTO_FEATHER_QC_DIR="$t/reports" \
     GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t "$@" timeout -k 5 180 octo-feather-qc docs/specs/demo.status.json 5 acceptance-a --no-github 2>&1)" || rc=$?; }
 qc "$H/src/target" "" "${pinned[@]}"
-staged 'EXPECTED-FAIL #496' "(1) the qc sandbox proof passes with doctor exiting 1 under the moved HOME, the stub judge runs (exit $rc)" \
-  "qc sandbox: FAIL mise doctor --json failed: mise's dirs unknown" "$rc" "$out"
+# The proof's mise line names the tools it judged per dir: the kit's own, never the global ones the parent walk finds (#493 AC3).
+ml="$(grep '^qc sandbox: ok   mise offline' <<<"$out")"
+[[ "$rc" == 0 && -n "$ml" && "$ml" == *"$K: "*node@* ]] && ! grep -qE '(erlang|python|rust)@' <<<"$ml"
+want "(1) the qc sandbox proof passes with doctor exiting 1 under the moved HOME, judging only the kit's and worktree's own tools (no global erlang, python, rust), the stub judge runs (exit $rc)" $? "$out"
+# mise's config dir not pinned: the moved HOME's parent walk from the kit finds the user's global config as a local one.
+qc "$H/src/target" "" MISE_DATA_DIR="$D" MISE_CACHE_DIR="$H/.cache/mise"
+ml="$(grep '^qc sandbox: ok   mise offline' <<<"$out")"
+[[ "$rc" == 0 && -n "$ml" && "$ml" == *"$K: "*node@* ]] && ! grep -qE '(erlang|python|rust)@' <<<"$ml"
+want "(1) the same, mise's config dir not pinned (the parent walk finds the global config): still no global tool judged (exit $rc)" $? "$out"
 judge="$(python3 -c 'import json, sys, glob, os; f = max(glob.glob(sys.argv[1] + "/*.json"), key=os.path.getmtime); print(json.load(open(f))["fallback"]["acceptance-a"].get("stdout", "no judge stdout"))' "$t/reports" 2>&1)" || judge="no report"
-grep -q '^PROBE ok ' <<<"$judge"; staged 'EXPECTED-FAIL #496' "(2) a shim of a tool not installed, in the sandbox: fails, installs and writes nothing" \
-  "qc sandbox: FAIL mise doctor --json failed: mise's dirs unknown" $? "$judge"$'\n'"$out"
+grep -q '^PROBE ok ' <<<"$judge"; want "(2) a shim of a tool not installed, in the sandbox: fails, installs and writes nothing" $? "$judge"$'\n'"$out"
 mkdir -p "$t/nojson" "$t/nodirs"
 printf '#!/bin/sh\n[ "$1" = doctor ] && exit 1\nexec %q "$@"\n' "$H/.local/bin/mise" >"$t/nojson/mise"
 printf '#!/bin/sh\n[ "$1" = doctor ] && { echo "{\\"errors\\": []}"; exit 1; }\nexec %q "$@"\n' "$H/.local/bin/mise" >"$t/nodirs/mise"; chmod +x "$t/nojson/mise" "$t/nodirs/mise"
@@ -197,8 +203,9 @@ qc "$H/src/target" "$t/nojson:" "${pinned[@]}"
 qc "$H/src/target" "$t/nodirs:" "${pinned[@]}"
 [[ "$rc" == 66 ]] && grep -q 'qc sandbox: FAIL .*mise doctor' <<<"$out"; want "(2) doctor JSON without dirs: exit 66 naming mise doctor (exit $rc)" $? "$out"
 qc "$H/src/pinned" "" "${pinned[@]}"
-[[ "$rc" == 66 ]] && grep -qE 'qc sandbox: FAIL mise .*NOT installed: .*just@0\.0\.1.*mise install' <<<"$out"
-staged 'EXPECTED-FAIL #496' "(2) a pinned tool not installed: exit 66 naming it and mise install (exit $rc)" "qc sandbox: FAIL mise doctor --json failed: mise's dirs unknown" $? "$out"
+[[ "$rc" == 66 ]] && grep -qF "run outside it: octo-feather-mise-install $H/src/pinned)" <<<"$out" \
+  && grep -qE 'qc sandbox: FAIL mise .*NOT installed: .*just@0\.0\.1' <<<"$out"
+want "(2) a pinned tool not installed: exit 66 naming it and mise install (exit $rc)" $? "$out"
 
 # (1), (3): the install-check gate item in the kit copy, from the named session's pane; the user's mise state dir
 # entries counted around it (#493 AC7).
