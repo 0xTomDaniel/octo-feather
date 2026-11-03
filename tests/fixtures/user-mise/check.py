@@ -2,7 +2,8 @@
 
 `check.py setup`: the fixture user's files: fake global installs (a python of another minor than
 .python-version, erlang, rust with its cargo and some-cli in ~/.cargo/bin), their version links,
-the global ~/.config/mise/config.toml, the kit copy committed, mise's shims.
+the global ~/.config/mise/config.toml, pnpm's store named, the kit clone's uncommitted
+files committed, mise's shims.
 `check.py assert`: #493's fixture assertions (1)-(5), one ok or FAIL line each; exit 1 on any FAIL.
 
 Every command runs as the fixture user through tests/user-mise.sh's wrapper $USER_MISE_T/user, the
@@ -103,9 +104,15 @@ def setup() -> None:
     (H / ".config/mise/config.toml").write_text(
         f'[tools]\npython = "{v}"\nerlang = "27.3"\nrust = "1.80.0"\n'
     )
-    git("-C", str(K), "init", "-q")
+    # pnpm's store, the box's (bound in), named: a project on another mount than the store (the
+    # fixture's TMPDIR, its HOME being binds) would otherwise get a store of its own at that mount's
+    # root, empty offline (on the box, HOME and /tmp share one mount).
+    (H / ".config/pnpm").mkdir(parents=True, exist_ok=True)
+    (H / ".config/pnpm/rc").write_text(f"store-dir={H}/.local/share/pnpm/store\n")
+    # The kit clone with this checkout's files over it: one commit for what is not committed yet.
     git("-C", str(K), "add", "-A")
-    git("-C", str(K), "commit", "-q", "-m", "kit")
+    if subprocess.run([*GIT, "-C", str(K), "diff", "--cached", "--quiet"], check=False).returncode:
+        git("-C", str(K), "commit", "-q", "-m", "the checkout's uncommitted files")
     if user(["mise", "reshim"])[0]:
         die("mise reshim in the user's HOME failed")
 

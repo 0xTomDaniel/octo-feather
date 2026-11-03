@@ -42,10 +42,10 @@ case "${USER_MISE_STAGE:-0}" in
     [[ -d "$USER_MISE_RDATA/installs" ]] || fail "mise's data dir has no installs ($USER_MISE_RDATA): run mise install --locked in the kit"
     USER_MISE_MISE="$(realpath "$(command -v mise)")"; USER_MISE_UVPY="$(uv python dir)"; USER_MISE_UVCACHE="$(uv cache dir)"
     USER_MISE_PY="$(cd "$kit" && uv python find --system)"; USER_MISE_PNPM="$(cd "$kit" && pnpm store path)"
-    USER_MISE_VC="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"
+    USER_MISE_VC="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"; USER_MISE_PI="$(command -v pi || true)"
     USER_MISE_UID="$(id -u)"; USER_MISE_GID="$(id -g)"; USER_MISE_NAME="$(id -un)"; USER_MISE_HOME="$(cd "$HOME" && pwd -P)";
     export USER_MISE_HOME USER_MISE_RDATA USER_MISE_RCACHE USER_MISE_RCONFIG USER_MISE_RSTATE USER_MISE_MISE USER_MISE_UVPY USER_MISE_UVCACHE USER_MISE_PY \
-      USER_MISE_PNPM USER_MISE_VC USER_MISE_UID USER_MISE_GID USER_MISE_NAME
+      USER_MISE_PNPM USER_MISE_VC USER_MISE_PI USER_MISE_UID USER_MISE_GID USER_MISE_NAME
     unshare -rmn true 2>/dev/null || fail "unshare -rmn failed: the fixture runs in a user+mount+network namespace (enable unprivileged user namespaces)"
     set +e; USER_MISE_STAGE=1 timeout -k 10 "${USER_MISE_TIMEOUT:-1200}" unshare -rmn "$0" "$@"; rc=$?; set -e
     [[ "$rc" != 124 && "$rc" != 137 ]] || echo "user-mise: timed out after ${USER_MISE_TIMEOUT:-1200} s (USER_MISE_TIMEOUT), killed" >&2
@@ -53,6 +53,7 @@ case "${USER_MISE_STAGE:-0}" in
 1)  # Root of the namespace: the user's HOME built in $t/home, mounted over the caller's HOME, then the rest as the
     # caller's uid (a nested user namespace mapping it back).
     t="$(mktemp -d)"; t="$(cd "$t" && pwd -P)"; F="$t/home"; D="$F/.local/share/mise"; RH="$USER_MISE_HOME"
+    ip link set lo up || fail "loopback up in the network namespace (offline, but local servers answer, as on the box)"
     [[ "$t/" != "$RH/"* ]] || fail "TMPDIR $t is under HOME $RH: the fixture's HOME is mounted over HOME"
     # $F a mount of its own, so one recursive unmount takes every bind under it before the removal: the uv cache and
     # pnpm store binds are the box's own, never removed through the fixture (--one-file-system stops at any left).
@@ -72,7 +73,15 @@ case "${USER_MISE_STAGE:-0}" in
     ro "$USER_MISE_UVPY" "$F/.local/share/uv/python" && mount --bind "$USER_MISE_UVCACHE" "$F/.cache/uv" \
       && mount --bind "$(dirname "$USER_MISE_PNPM")" "$F/.local/share/pnpm/store" || fail "bind uv's and pnpm's dirs"
     if [[ -d "$USER_MISE_VC" ]]; then mkdir -p "$F/.cache/octo-feather/skillfile"; ro "$USER_MISE_VC" "$F/.cache/octo-feather/skillfile"; fi
-    # The kit under the user's HOME: this checkout's files (uncommitted ones too), committed in a fresh repo (stage 2).
+    # The box's pi, read-only where it sits under HOME: the command on PATH, what it resolves to, Pi's install dir.
+    for p in "$USER_MISE_PI" "$(realpath -m -- "${USER_MISE_PI:-/}")" "$RH/.local/pi"; do
+      [[ -e "$p" && "$p/" == "$RH/"* && ! -e "$F/${p#"$RH"/}" ]] || continue
+      if [[ -d "$p" ]]; then mkdir -p "$F/${p#"$RH"/}"; else mkdir -p "$(dirname "$F/${p#"$RH"/}")"; touch "$F/${p#"$RH"/}"; fi
+      ro "$p" "$F/${p#"$RH"/}" || fail "bind $p read-only"
+    done
+    # The kit under the user's HOME: a clone of this checkout (its history, as a user's checkout has), with this
+    # checkout's files over it (uncommitted ones too), committed in stage 2.
+    git clone -q --no-hardlinks "$kit" "$F/src/octo-feather" || fail "clone the kit"
     (cd "$kit" && git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do [[ -e "$f" || -L "$f" ]] && printf '%s\0' "$f"; done \
       | tar --null -T - -cf -) | tar -xf - -C "$F/src/octo-feather" || fail "copy the kit"
     cd / && mount --rbind "$F" "$RH" || fail "mount the user's HOME over $RH"
