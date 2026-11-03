@@ -17,7 +17,8 @@
 #   mise (owner ruling #261): at mise-version ok; a mise reporting another release: WRONG VERSION naming
 #     mise-version, exit 1; a target with its own mise.toml (a repo the kit created): its tools ok at their lock with
 #     mise's shims first, a pin not installed
-#     MISSING naming `mise -C TARGET install --locked`, exit 1; a target without one: no tool line.
+#     MISSING naming the install of the target's own locked tools (`octo-feather-mise-install TARGET`), exit 1; a
+#     target without one: no tool line.
 #   just, which the kit runs in every target, at the kit mise.lock version, also in a target without mise.toml:
 #     ok; a just reporting 0.0.1: WRONG VERSION naming the kit lock and the fix, exit 1.
 #     Uses the box's mise installs (MISE_DATA_DIR kept while HOME is a fresh dir); installs nothing.
@@ -197,7 +198,7 @@ check 0 "$mise_target" ""
 grep -qx "mise   just $jv ok ($mise_target/mise.lock)" <<<"$out" || fail "created repo, just at an installed pin: no ok line: $out"
 printf '[tools]\njust = "0.0.1"\n' >"$mise_target/mise.toml"
 check 1 "$mise_target" ""
-grep -qx "mise   just 0.0.1 MISSING ($mise_target/mise.lock); mise -C $mise_target install --locked" <<<"$out" \
+grep -qxF "mise   just 0.0.1 MISSING ($mise_target/mise.lock); $kit/scripts/octo-feather-mise-install $mise_target" <<<"$out" \
   || fail "created repo, just at a pin not installed: no MISSING line naming the install: $out"
 # Browser target: qc.toml declares the headless browser at a Playwright pin.
 br_target="$t/browser"; git init -q "$br_target"
@@ -303,7 +304,8 @@ g -C "$t/kitlive" commit -q --allow-empty -m off; live 1
 grep -qx "kit    NOT ON MAIN $t/kitlive is on a detached HEAD off main (the kit dir; octo-feather-lane post-merge step 3 fast-forwards it); live install clones stay on main (work in a git worktree): git -C $t/kitlive switch --detach origin/main" <<<"$out" \
   || fail "the box's layout, a commit off main: no NOT ON MAIN line: $out"
 mkdir -p "$t/noclone"; kitinst="$t/noclone" check 1 "$gh_target" ""
-grep -qE "^kit    NOT A CLONE $t/noclone \(OCTO_FEATHER_KIT_INSTALL; octo-feather-lane post-merge step 3 fast-forwards it\); git clone \S+ $t/noclone, or set OCTO_FEATHER_KIT_INSTALL to the install clone$" <<<"$out" \
+url="$(git -C "$kit" config --get remote.origin.url || echo '<kit url>')"   # a kit copy with no origin (tests/user-mise.sh): the placeholder
+grep -qxF "kit    NOT A CLONE $t/noclone (OCTO_FEATHER_KIT_INSTALL; octo-feather-lane post-merge step 3 fast-forwards it); git clone $url $t/noclone, or set OCTO_FEATHER_KIT_INSTALL to the install clone" <<<"$out" \
   || fail "kit install not a clone: no NOT A CLONE line naming git clone: $out"
 # agent-browser's own Chrome under the cache folder the qc sandbox masks, and none found: each named with
 # agent-browser install, exit 1.
