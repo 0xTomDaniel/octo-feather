@@ -57,9 +57,11 @@
 #      also in QC_RO_BINDS (step 4: read-only); the proof checks it holds a headless shell and is not writable.
 #   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
 #      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
-#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs
+#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs;
+#      read from `mise doctor --json` whatever its exit, none there fails closed (exit 66)
 # Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b); then go to the recorder
+#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b; the tools
+#      judged are those of the worktree's and the kit's own mise config, as scripts/octo-feather-mise-install --list names them); then go to the recorder
 #      (what the proof's own calls and reads sent before it is dropped)
 #   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
 #   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
@@ -167,7 +169,7 @@ if [[ "$phase" == setup ]]; then
   done
   while IFS= read -r p; do [[ -n "$p" ]] && back+=("$(realpath -m -- "$p")"); done <<< "${QC_RO_BINDS:-}"
   j=$(command -v -- "${1:-}" 2>/dev/null) || j=
-  for m in "$0" "$sk/scripts/octo-feather-state" "$sk/.agents/skills/github-pr/scripts" ${j:+"$j"}; do
+  for m in "$0" "$sk/scripts/octo-feather-state" "$sk/scripts/octo-feather-mise-install" "$sk/.agents/skills/github-pr/scripts" ${j:+"$j"}; do
     [[ -e "$m" ]] && back+=("$(realpath -- "$m")")
   done
   canon() { local p; IFS=: read -ra ps <<< "$1"; for p in "${ps[@]}"; do [[ -n "$p" ]] && realpath -m -- "$p"; done | paste -sd:; }
@@ -283,10 +285,16 @@ if [[ "$phase" == setup ]]; then
   # 6b. mise (rule: header).
   if command -v mise > /dev/null; then
     # Its own state dir a throwaway (removed): the judge's per-run MISE_STATE_DIR starts empty (step 6).
-    ms=$(mktemp -d) && md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null) || die "mise doctor --json failed: mise's dirs unknown"
+    # The dirs come from doctor's JSON whatever its exit: doctor exits 1 on the user's own unrelated problems (stale
+    # shims, a global tool not installed under a moved HOME) and still prints them (#493); no JSON, or a dir missing
+    # from it, fails closed.
+    ms=$(mktemp -d) || die "mise doctor --json: no scratch state dir"
+    md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null); mdrc=$?
     rm -rf "$ms"
     for d in data cache config; do
-      v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(jq -r --arg d "$d" '.dirs[$d]' <<< "$md")"
+      x=$(jq -er --arg d "$d" '.dirs[$d] | select(type == "string" and . != "")' <<< "$md" 2> /dev/null) \
+        || die "mise doctor --json (exit $mdrc) printed no dirs.$d: mise's dirs unknown"
+      v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$x"
     done
   fi
   export MISE_OFFLINE=1 MISE_AUTO_INSTALL=0 MISE_NOT_FOUND_AUTO_INSTALL=0 MISE_NOT_FOUND_SYSTEM_FALLBACK=0
@@ -745,28 +753,36 @@ if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's m
   # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
   ms=$(mktemp -d); ml=()
   for d in "$WT" "$kit"; do
-    f="$ms/ls-${#ml[@]}.json"; MISE_STATE_DIR="$ms" mise -C "$d" ls --local --missing --json > "$f" 2> /dev/null; ml+=("$d" "$f" "$?")
+    f="$ms/ls-${#ml[@]}.json"
+    MISE_STATE_DIR="$ms" "$kit/scripts/octo-feather-mise-install" --list --json "$d" > "$f" 2> "$f.err"; ml+=("$(cd "$d" && pwd -P)" "$f" "$?")
   done
-  mline=$(python3 - "$MISE_DATA_DIR" "${ml[@]}" <<'EOF'
-# DATA_DIR then DIR FILE EXIT per dir: FILE is `mise ls --local --missing --json` ({tool: [{version, installed}]}).
-import json, sys
-data, a = sys.argv[1], sys.argv[2:]
-miss = []
+  mline=$(python3 - "$MISE_DATA_DIR" "$kit/scripts/octo-feather-mise-install" "${ml[@]}" <<'EOF'
+# DATA_DIR HELPER then DIR FILE EXIT per dir: FILE is `octo-feather-mise-install --list --json DIR`, the tools of DIR's own
+# config files only (that script owns the rule: never the user's global config, the moved-HOME parent walk's included)
+# as mise's ls rows ({tool: [{version, installed}]}).
+import json, shlex, sys
+data, helper, a = sys.argv[1], sys.argv[2], sys.argv[3:]
+miss, judged, fix = [], [], []
 for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
     try:
         tools = json.load(open(f)) if rc == "0" else None
     except (OSError, ValueError):
         tools = None
     if not isinstance(tools, dict):
-        m = ["mise ls --missing failed"]
+        err = " ".join(open(f + ".err", errors="replace").read().split())[:300]
+        m, own = [f"{helper} --list --json failed: {err or 'no output'}"], []
     else:
-        m = [f"{t}@{v.get('version')}" for t, vs in tools.items() for v in vs if not v.get("installed")]
+        own = [(t, v) for t, vs in tools.items() for v in vs]
+        m = [f"{t}@{v.get('version')}" for t, v in own if not v.get("installed")]
     if m:
         miss.append(f"{d}: {' '.join(m)}")
+        fix.append(f"{shlex.quote(helper)} {shlex.quote(d)}")   # the kit's one install command: that dir's own locked tools
+    names = " ".join(f"{t}@{v.get('version')}" for t, v in own)
+    judged.append(f"{d}: {names or 'none'}")
 line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
 if miss:
-    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it, in each: mise install --locked)"
-print(line)
+    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it: {'; '.join(dict.fromkeys(fix))})"
+print(f"{line}; judged, each from its own mise config only: {'; '.join(judged)}")
 sys.exit(1 if miss else 0)
 EOF
   ); mrc=$?; rm -rf "$ms"
