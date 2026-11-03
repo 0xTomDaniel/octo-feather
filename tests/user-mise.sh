@@ -19,7 +19,7 @@
 # (naming mise install), and a shim of an uninstalled tool installs and writes nothing; (3) no SHADOWED line for a
 # global-only tool in `just install-check`; (4) the shared install command exits 0; (5) the user's mise config,
 # installs and shims byte-identical before and after, doctor's answer under the user's HOME unchanged; the entries of
-# the user's mise state dir counted around the gate item and reported.
+# the user's mise state dir counted around the gate item, unchanged.
 # A symptom a fix ticket has not landed yet is a strict expected fail: it must still fail with its #493 symptom, so the
 # fix makes it red and that ticket turns it into a pass. Each carries one greppable marker, the ticket that flips it
 # after the word EXPECTED, a dash and FAIL (grep -rn for it in tests/ lists them all); the lane's last head has none.
@@ -208,8 +208,7 @@ rc=0; out="$(cd "$K" && user env GATE_WORKERS=1 just test -k install-check 2>&1)
 n1="$(find "$H/.local/state/mise" -mindepth 2 -maxdepth 2 2>/dev/null | wc -l)"
 want "(1) HERDR_SESSION=fixture just test -k install-check passes in the kit under the user's HOME (exit $rc)" "$rc" "$out"
 echo "user-mise: the fixture user's mise state dir ($H/.local/state/mise, inside the fixture HOME mounted over $H) entries: $n0 before the install-check item, $n1 after"
-[[ "$n1" == "$n0" ]]; staged 'EXPECTED-FAIL #498' "(5) the install-check item leaves the user's mise state dir entries as they were ($n0, then $n1)" \
-  'grew' $? "$( ((n1 > n0)) && echo grew || echo shrank)"
+[[ "$n1" == "$n0" ]]; want "(5) the install-check item leaves the user's mise state dir entries as they were ($n0, then $n1)" $? "$n0 entries before, $n1 after"
 (cd "$t" && user python3 -m venv "$t/venv") || fail "python3 -m venv through the user's python3"
 rc=0; out="$(cd "$K" && user env PATH="$t/venv/bin:$UP" just install-check 2>&1)" || rc=$?
 globals="$(find "$D/installs/python/$pyv/bin" "$D/installs/erlang/27.3/bin" "$H/.cargo/bin" -mindepth 1 -printf '%f\n' | sort -u | paste -sd '|')"
