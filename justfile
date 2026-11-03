@@ -30,7 +30,7 @@ export MISE_OFFLINE := "1"
 # put it first since 2ad258f with no stated reason, so the box's real Pi beat a stub the caller put first (#437).
 # Which version it finds is install-check's to guard.
 mac_path := if os() == "macos" { "/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin" } else { "" }
-caller_path := if replace(invocation_directory() + "/", root + "/", "") == invocation_directory() + "/" { env_var('PATH') } else { `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: mise install --locked" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; [[ "$(uname -s)" != Darwin ]] || add="${add:+$add:}/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"` }
+caller_path := if replace(invocation_directory() + "/", root + "/", "") == invocation_directory() + "/" { env_var('PATH') } else { `command -v mise >/dev/null || { echo "just: mise is not on PATH, so this repo's tools (mise.toml) are not resolved; install mise $(cat mise-version) (mise-version)" >&2; printf '%s' "$PATH"; exit 0; }; m="$(mise ls --local --missing 2>/dev/null | awk '{print $1 "@" $2}' | paste -sd ' ' -)"; [[ -z "$m" ]] || echo "just: not installed: $m (mise.toml, mise.lock); run: $PWD/scripts/octo-feather-mise-install $PWD" >&2; add="$(mise bin-paths 2>/dev/null | paste -sd : -)"; [[ "$(uname -s)" != Darwin ]] || add="${add:+$add:}/opt/homebrew/opt/coreutils/libexec/gnubin:/usr/local/opt/coreutils/libexec/gnubin:/opt/homebrew/opt/util-linux/bin:/usr/local/opt/util-linux/bin:/opt/homebrew/bin"; out=""; put=""; IFS=: read -ra ds <<<"$PATH"; for d in "${ds[@]}"; do [[ -n "$d" ]] || continue; case "${d%/}" in /usr/local/sbin|/usr/local/bin|/usr/sbin|/usr/bin|/sbin|/bin) [[ -n "$put" ]] || { out+="${add:+$add:}"; put=1; } ;; esac; out+="$d:"; done; [[ -n "$put" ]] || out+="${add:+$add:}"; printf '%s' "${out%:}"` }
 export PATH := root + "/scripts:" + root + "/.agents/skills/herdr-comms/assets:" + (if caller_path == env_var('PATH') { if mac_path == "" { "" } else { mac_path + ":" } } else { "" }) + caller_path + ":" + env_var('HOME') + "/.local/bin:" + parent_directory(just_executable())
 # The gate never reaches the product judge or factory evals (quality #acceptance-gate-no-model). just evaluates
 # this before any recipe runs, so a check or check-* recipe depending on the qa or qc recipe, directly or transitively, fails
@@ -327,6 +327,9 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
+    # The install of a repo's own locked mise tools, every fix line below: scripts/octo-feather-mise-install owns it
+    # (#493 AC5). locked DIR prints it for DIR.
+    locked() { printf '%s' "$root/scripts/octo-feather-mise-install $1"; }
     # Each missing tool names its official install (#461): Herdr's installer, Pi at pi-version through npm (docs/adr/0023),
     # GitHub CLI's apt repository (not Debian's gh: broken at 2.45 and 2.46), Debian and Ubuntu packages, the kit's mise tools.
     declare -A fix=([herdr]="curl -fsSL https://herdr.dev/install.sh | sh"
@@ -336,7 +339,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
       [python3]="install Python 3.11 or later as the box python3 (Debian 12, Ubuntu 24.04: apt install python3), first on PATH")
     for t in herdr pi gh jq git just python3 node pnpm; do
       if p="$(command -v "$t")"; then printf '%-6s ok  %s\n' "$t" "$p"
-      else printf '%-6s MISSING; %s\n' "$t" "${fix[$t]:-mise -C $root install --locked (kit mise.toml), then put the mise shims folder first on PATH}"; bad=1; fi
+      else printf '%-6s MISSING; %s\n' "$t" "${fix[$t]:-$(locked "$root") (kit mise.toml), then put the mise shims folder first on PATH}"; bad=1; fi
     done
     # The gate's Python (owner ruling #422, #261): the release the kit's .python-version pins, owned by uv
     # (python-build-standalone), found as check-tests finds it, with venv and ensurepip (tests make venvs) and
@@ -431,8 +434,9 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # create) keeps its own pins: no tool line, its panes get no mise shims (scripts/pi-role). Each repo's justfile
     # puts its own mise tools on PATH for its recipes; where the caller's PATH resolves them: the PATH check below.
     # A mise.toml with only [tools] needs no trust; a "not trusted" answer means it gained [env], [tasks] or hooks.
+    # Only the target's own tools count (octo-feather-mise-install --list, #493 AC3): the user's are never MISSING here.
     python3 -c 'import json, os, shutil, subprocess, sys
-    root, top = sys.argv[1], sys.argv[2]
+    root, top, locked = sys.argv[1], sys.argv[2], sys.argv[3]
     pin = open(os.path.join(root, "mise-version")).read().strip()
     how = f"install mise {pin}: https://github.com/jdx/mise/releases/tag/v{pin} (sha256 from its SHASUMS256.txt)"
     exe = shutil.which("mise")
@@ -452,19 +456,21 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
         path = shutil.which(tool)
         got = (subprocess.run([tool, "--version"], capture_output=True, text=True).stdout.split() + ["", ""])[1] if path else "nothing"
         if got == want: print(f"{tool:<6} version {got} ok (kit mise.lock)")
-        else: print(f"{tool:<6} WRONG VERSION {path or tool} reports {got}, want {want} (kit mise.lock); the kit runs it in every target: put {tool} {want} first on PATH (the kit mise install: cd {root} and mise install --locked, then {shims} first), or install {tool} {want}"); bad = 1
+        else: print(f"{tool:<6} WRONG VERSION {path or tool} reports {got}, want {want} (kit mise.lock); the kit runs it in every target: put {tool} {want} first on PATH (the kit mise install: {locked.replace("DIR", root)}, then {shims} first), or install {tool} {want}"); bad = 1
     for d in [os.path.realpath(top)]:
         if not os.path.isfile(os.path.join(d, "mise.toml")): continue
-        fix = f"mise -C {d} install --locked"
+        fix = locked.replace("DIR", d)
         r = subprocess.run(["mise", "-C", d, "ls", "--local", "--json"], capture_output=True, text=True)
         if r.returncode:
             print(f"mise   {d}/mise.toml UNREADABLE: {r.stderr.strip()} (a [tools]-only mise.toml needs no trust; review it, then mise trust {d}/mise.toml)"); bad = 1; continue
+        own = subprocess.run([os.path.join(root, "scripts", "octo-feather-mise-install"), "--list", d], capture_output=True, text=True).stdout.split()
         for tool, rows in json.loads(r.stdout or "{}").items():
             row = rows[0] if rows else {}
+            if tool not in own: continue
             have, want = row.get("version"), row.get("requested_version")
             if row.get("installed"): print(f"mise   {tool} {have} ok ({d}/mise.lock)")
             else: print(f"mise   {tool} {want} MISSING ({d}/mise.lock); {fix}"); bad = 1
-    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" || bad=1
+    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$(locked DIR)" || bad=1
     # agent-browser at the pin in agent-browser-version, the vendored agent-browser skill's release (spec remote#host-tools).
     # Its postinstall marks the native binary executable, so no --ignore-scripts. It starts a Chrome it finds (Playwright's
     # included); `agent-browser doctor` names it, `agent-browser install` downloads one where none is found.
@@ -503,10 +509,12 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     # the caller's own PATH finds first (a shell started before mise's shims went first) is a NOTE: the kit is
     # unaffected, the exit unchanged (the director's pane, #422). Pinned: mise, pi, agent-browser and just (when the target pins no just) by version, the
     # first hit reporting the pin (none on PATH at the pin: the version lines above name the install); every executable
-    # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one).
+    # of the target mise.toml tools by path, mise's shim or `mise bin-paths` install (a shim when there is one); the
+    # target's own tools only (octo-feather-mise-install --list), never the user's global ones (#493 AC4). The recipe PATH comes as an
+    # argument: a python3 that is a mise shim runs this with the whole mise toolset put first on its own PATH.
     python3 -c 'import functools, importlib.machinery as im, importlib.util as iu, json, os, re, subprocess, sys
     root, top, caller = sys.argv[1], os.path.realpath(sys.argv[2]), sys.argv[3]
-    recipe = os.environ["PATH"]
+    recipe = sys.argv[4]
     s = iu.spec_from_loader("pi_role", im.SourceFileLoader("pi_role", root + "/scripts/pi-role")); pr = iu.module_from_spec(s); s.loader.exec_module(pr)
     os.chdir(top); os.environ["PATH"] = caller
     pane = pr.mise_path() or caller  # what pi-role puts on a pane started from the caller here
@@ -541,8 +549,9 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     shims = js(mise, "doctor", "--json").get("dirs", {}).get("shims", "")
     bins = {}  # executable name: its pinned path, for the target mise.toml tools; pi and agent-browser that npm put in
     # the node bin dir of mise (their fix lines, #463) keep their own version pins
-    if os.path.isfile(os.path.join(top, "mise.toml")):
-        for b in run(mise, "-C", top, "bin-paths").split("\n"):
+    own = run(os.path.join(root, "scripts", "octo-feather-mise-install"), "--list", top).split()
+    if os.path.isfile(os.path.join(top, "mise.toml")) and own:
+        for b in run(mise, "-C", top, "bin-paths", *own).split("\n"):
             for n in sorted(os.listdir(b)) if b and os.path.isdir(b) else []:
                 f = os.path.join(b, n)
                 if n not in pin and os.path.isfile(f) and os.access(f, os.X_OK): bins.setdefault(n, f)
@@ -565,7 +574,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
         if name not in bins: line(name, by_version(name, want), why)
     for name, f in sorted(bins.items()):
         line(name, by_bin(name, f), f"{top}/mise.lock")
-    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" || bad=1
+    sys.exit(bad)' "$root" "$(git -C "$1" rev-parse --show-toplevel 2>/dev/null || echo "$1")" "$2" "$PATH" || bad=1
     # The kit's TypeScript tools (check-ts, #245): pnpm's copy of the lockfile in node_modules equals pnpm-lock.yaml once
     # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
     # pnpm under another HOME (corepack's shim) would download itself.

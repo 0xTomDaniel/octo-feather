@@ -280,8 +280,8 @@ step 4 tells no lane twice.
                    PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
                    --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
                    fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
-                   not move. Then in the install, each failure stopping named: `mise install --locked` (only with
-                   a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
+                   not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
+                   kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
                    pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
                    `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
                    restart; a rerun reruns these
@@ -2701,7 +2701,8 @@ def pm_ci(pm: PostMerge) -> str:
 
 # Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos
 # name a throwaway clone). Never a branch checkout there: live install clones stay on main, detached or not.
-PM_REFRESH = (("mise", "install", "--locked"), ("just", "vendored-fetch"), ("uv", "sync", "--locked"),
+# The kit's own locked mise tools only (octo-feather-mise-install, beside this script, run on the install: #493 AC5).
+PM_REFRESH = (("octo-feather-mise-install", "."), ("just", "vendored-fetch"), ("uv", "sync", "--locked"),
               ("pnpm", "install", "--frozen-lockfile"))
 
 
@@ -2761,11 +2762,11 @@ def pm_kit(pm: PostMerge) -> str:
         raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
                      f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
     done: list[str] = []
-    cmds = [c for c in PM_REFRESH if c[0] != "mise" or (kit / "mise.toml").exists()]
+    cmds = [c for c in PM_REFRESH if c[0] != "octo-feather-mise-install" or (kit / "mise.toml").exists()]
     for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
         shown = " ".join(cmd)
         try:
-            p = subprocess.run(list(cmd), cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+            p = subprocess.run([str(Path(__file__).resolve().parent / cmd[0]) if cmd[0] == "octo-feather-mise-install" else cmd[0], *cmd[1:]], cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
                                env={**os.environ, "UV_PYTHON_DOWNLOADS": "never"} if cmd[0] == "uv" else None)
             rc, err = p.returncode, (p.stderr.strip() or p.stdout).strip().splitlines()
         except FileNotFoundError:
@@ -2778,7 +2779,7 @@ def pm_kit(pm: PostMerge) -> str:
             raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
                          f"fix it in {kit}, then rerun")
         done.append(f"{shown} ok")
-    return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "mise" else " (no mise.toml: mise install skipped)")
+    return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "octo-feather-mise-install" else " (no mise.toml: mise install skipped)")
 
 
 def pm_python_missing(kit: Path) -> str | None:

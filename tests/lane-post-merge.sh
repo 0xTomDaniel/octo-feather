@@ -51,6 +51,7 @@ chmod +x "$t/bin/gh"
 cat > "$t/bin/tool" <<'EOF'
 #!/usr/bin/env bash
 c="$(basename "$0") $*"; echo "$c @ $PWD" >> "$TOOL_LOG"
+[[ "$c" != "mise -C "*" ls --local --json" ]] || { printf '{"just": [{"source": {"path": "%s/mise.toml"}}]}\n' "$2"; exit 0; }   # the install's own tools
 if [[ -n "${TOOL_FAIL:-}" && "$c" == "$TOOL_FAIL"* ]]; then echo "progress" ; echo "boom: $c" >&2; exit 3; fi
 if [[ -n "${PY_MISSING:-}" && ( "$c" == "uv sync"* || "$c" == "uv python find"* ) ]]; then
   pin="$(cat .python-version)"
@@ -160,10 +161,11 @@ run 3 post-merge 7 "$H" --lane gh7
 : > "$TOOL_LOG"; run 3 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit at ${M:0:12}, at or past ${M:0:12}: no move; just vendored-fetch ok"* && "$(k rev-parse HEAD)" == "$M" ]] || fail "rerun: $out"
 [[ "$(cat "$TOOL_LOG")" == "$refresh" ]] || fail "rerun refresh calls: $(cat "$TOOL_LOG")"
-# Past M, with a mise.toml there: no move, mise install --locked first.
+# Past M, with a mise.toml there: no move, the install of the kit's own locked tools first (only the tools its
+# mise.toml requests, #493 AC5).
 install "$P"; run 3 post-merge 7 "$H" --lane gh7
-[[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit at ${P:0:12}, at or past ${M:0:12}: no move; mise install --locked ok; just vendored-fetch ok"* && "$(k rev-parse HEAD)" == "$P" ]] || fail "past: $out"
-[[ "$(cat "$TOOL_LOG")" == "mise install --locked @ $t/kit"$'\n'"$refresh" ]] || fail "past refresh calls: $(cat "$TOOL_LOG")"
+[[ "$out" == *"step 3 kit refresh: ok: kit install $t/kit at ${P:0:12}, at or past ${M:0:12}: no move; octo-feather-mise-install . ok; just vendored-fetch ok"* && "$(k rev-parse HEAD)" == "$P" ]] || fail "past: $out"
+[[ "$(cat "$TOOL_LOG")" == "mise -C $t/kit ls --local --json @ $t/kit"$'\n'"mise -C $t/kit install --locked just @ $t/kit"$'\n'"$refresh" ]] || fail "past refresh calls: $(cat "$TOOL_LOG")"
 # A failing refresh command stops naming it; later ones do not run.
 install "$B"; TOOL_FAIL="uv sync" run 1 post-merge 7 "$H" --lane gh7
 [[ "$out" == *"step 3 kit refresh: stopped: kit install $t/kit fast-forwarded ${B:0:12}..${M:0:12}; just vendored-fetch ok; uv sync --locked failed (exit 3: boom: uv sync --locked)"* ]] || fail "failing tool: $out"
