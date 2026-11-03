@@ -16,10 +16,10 @@ default:
     @just --list
 
 # Install the pinned tools (mise.toml, mise.lock), dependencies and the git hook. The tools: octo-feather-mise-install,
-# the octo-feather kit's one install of a repo's own locked mise tools (why not a bare mise install: its --help).
+# the octo-feather kit's one install of a repo's own locked mise tools (why not a bare mise install: its --help), when
+# on PATH (an agent pane's); else mise's own `mise install --locked`, and on its failure the kit command is named.
 setup:
-    @command -v octo-feather-mise-install >/dev/null || { echo "just setup: octo-feather-mise-install, the octo-feather kit's install of this repo's own locked mise tools, is not on PATH: put the kit's scripts dir on PATH (an agent pane has it; e.g. ~/src/octo-feather/scripts), then run just setup again" >&2; exit 1; }
-    octo-feather-mise-install
+    @if command -v octo-feather-mise-install >/dev/null; then octo-feather-mise-install; else mise install --locked || { rc=$?; echo "just setup: mise install --locked failed (exit $rc); if it names tools of your global mise config, install only this repo's: octo-feather-mise-install, in the octo-feather kit's scripts dir (e.g. ~/src/octo-feather/scripts/octo-feather-mise-install)" >&2; exit "$rc"; }; fi
     pnpm install --frozen-lockfile
     git config core.hooksPath .githooks
 

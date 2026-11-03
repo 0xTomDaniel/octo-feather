@@ -223,16 +223,22 @@ rc=0; out="$( [[ -n "$cmd" ]] && cd "$K" && user sh -c "$cmd" 2>&1)" || rc=$?
 want "(4) README's install step ($cmd) in the kit exits 0 with the user's global tools installed (exit $rc)" "$rc" "$out"
 
 # (4) in a target (#500): a repo created from each kit template (just new-repo) under the user's HOME. `just setup`
-# from a pane PATH holding the kit's scripts (pi-role's) exits 0; from a PATH without them it fails naming the kit's
-# install command; the PATH its justfile gives recipes adds no dir of a global-only tool (just run as itself: through
+# from a pane PATH holding the kit's scripts (pi-role's) exits 0; from a PATH without them (a standalone repo) it runs
+# mise install --locked: with the user's global tools it fails with mise's exit, naming the kit's install command, and
+# with no global config (moved aside, then back) it exits 0; the PATH its justfile gives recipes adds no dir of a global-only tool (just run as itself: through
 # its mise shim, mise puts its whole toolset, global tools too, on just's own PATH). Offline: uv's cache, pnpm's store.
 for lang in python typescript; do
   r="$H/src/tpl-$lang"; kp=(PATH="$K/scripts:$UP" UV_OFFLINE=1 npm_config_offline=true)
   out="$(cd "$H/src" && user env "${kp[@]}" GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t \
     just --justfile "$K/justfile" new-repo "$lang" "$r" --no-spec-chat 2>&1)" || fail "just new-repo $lang: $out"
+  mrc=0; (cd "$r" && user mise install --locked >/dev/null 2>&1) || mrc=$?
   rc=0; out="$(cd "$r" && user env "${kp[@]:1}" just setup 2>&1)" || rc=$?
-  [[ "$rc" != 0 ]] && grep -q 'octo-feather-mise-install' <<<"$out"
-  want "(4) just setup in a repo from templates/$lang, the kit's scripts not on PATH: fails naming octo-feather-mise-install (exit $rc)" $? "$out"
+  [[ "$rc" != 0 && "$rc" == "$mrc" ]] && grep -qE 'is not in the lockfile' <<<"$out" && grep -q 'octo-feather-mise-install' <<<"$out"
+  want "(4) just setup in a repo from templates/$lang, the kit's scripts not on PATH, global tools: fails with mise's exit ($mrc) naming octo-feather-mise-install (exit $rc)" $? "$out"
+  mv "$H/.config/mise/config.toml" "$t/global-config.toml"
+  rc=0; out="$(cd "$r" && user env "${kp[@]:1}" just setup 2>&1)" || rc=$?
+  mv "$t/global-config.toml" "$H/.config/mise/config.toml"
+  want "(4) just setup in a repo from templates/$lang, the kit's scripts not on PATH, no global mise config: exits 0 (exit $rc)" "$rc" "$out"
   rc=0; out="$(cd "$r" && user env "${kp[@]}" just setup 2>&1)" || rc=$?
   want "(4) just setup in a repo from templates/$lang exits 0 with the user's global tools installed (exit $rc)" "$rc" "$out"
   rc=0; out="$(cd "$r" && user env "${kp[@]}" sh -c '"$(mise which just)" --evaluate PATH' 2>&1)" || rc=$?
