@@ -119,7 +119,8 @@ staged() {
   else no "$2 fails, but not with its #493 symptom /$3/ ($1)" "$5"; fi; }
 # want WHAT RC OUT: a pass.
 want() { if [[ "$2" == 0 ]]; then ok "$1"; else no "$1" "$3"; fi; }
-snap() { find "$H/.config/mise" "$D/installs" "$D/shims" "$H/.cargo" -printf '%p %y %s %m %T@ %l\n' | sort
+# A dir's own mtime is left out: mise's reshim on every install bumps the shims dir's with every shim unchanged.
+snap() { find "$H/.config/mise" "$D/installs" "$D/shims" "$H/.cargo" \( -type d -printf '%p %y %s %m %l\n' \) -o -printf '%p %y %s %m %T@ %l\n' | sort
   find "$H/.config/mise" "$D/shims" "$D/installs/python" "$D/installs/erlang" "$D/installs/rust" "$H/.cargo" -type f -exec sha256sum {} + | sort; }
 doc() { (cd "$t" && user env "$@" mise doctor --json 2>/dev/null); }
 
@@ -212,8 +213,7 @@ want "(2) a pinned tool not installed: exit 66 naming it and mise install (exit 
 n0="$(find "$H/.local/state/mise" -mindepth 2 -maxdepth 2 2>/dev/null | wc -l)"
 rc=0; out="$(cd "$K" && user env GATE_WORKERS=1 just test -k install-check 2>&1)" || rc=$?
 n1="$(find "$H/.local/state/mise" -mindepth 2 -maxdepth 2 2>/dev/null | wc -l)"
-staged 'EXPECTED-FAIL #497' "(1) HERDR_SESSION=fixture just test -k install-check passes in the kit under the user's HOME (exit $rc)" \
-  "path   python3? SHADOWED $K/\.venv/bin/python" "$rc" "$out"
+want "(1) HERDR_SESSION=fixture just test -k install-check passes in the kit under the user's HOME (exit $rc)" "$rc" "$out"
 echo "user-mise: the fixture user's mise state dir ($H/.local/state/mise, inside the fixture HOME mounted over $H) entries: $n0 before the install-check item, $n1 after"
 [[ "$n1" == "$n0" ]]; staged 'EXPECTED-FAIL #498' "(5) the install-check item leaves the user's mise state dir entries as they were ($n0, then $n1)" \
   'grew' $? "$( ((n1 > n0)) && echo grew || echo shrank)"
@@ -221,11 +221,13 @@ echo "user-mise: the fixture user's mise state dir ($H/.local/state/mise, inside
 rc=0; out="$(cd "$K" && user env PATH="$t/venv/bin:$UP" just install-check 2>&1)" || rc=$?
 globals="$(find "$D/installs/python/$pyv/bin" "$D/installs/erlang/27.3/bin" "$H/.cargo/bin" -mindepth 1 -printf '%f\n' | sort -u | paste -sd '|')"
 ! grep -qE "^path   ($globals|pip[0-9.]*) SHADOWED" <<<"$out"
-staged 'EXPECTED-FAIL #497' "(3) just install-check, a venv first on the pane PATH: no SHADOWED line for a global-only tool" "path   python3? SHADOWED $t/venv/bin/python" $? "$out"
+want "(3) just install-check, a venv first on the pane PATH: no SHADOWED line for a global-only tool" $? "$out"
 
 # (4) the shared install command (README, install-check's fix lines) in the kit.
-rc=0; out="$(cd "$K" && user mise install --locked 2>&1)" || rc=$?
-staged 'EXPECTED-FAIL #497' "(4) mise install --locked in the kit exits 0 with the user's global tools installed (exit $rc)" "(erlang|python|rust)@[0-9.]+ is not in the lockfile" "$rc" "$out"
+# README's install step, the command as it stands there (install-check's fix lines print the same: tests/install-check.sh).
+cmd="$(grep -m1 '^scripts/octo-feather-mise-install' "$K/README.md" | sed 's/   #.*//')"
+rc=0; out="$( [[ -n "$cmd" ]] && cd "$K" && user sh -c "$cmd" 2>&1)" || rc=$?
+want "(4) README's install step ($cmd) in the kit exits 0 with the user's global tools installed (exit $rc)" "$rc" "$out"
 
 # (5) the user's mise setup untouched.
 [[ "$(snap)" == "$s0" ]]; want "(5) the user's mise config, installs and shims byte-identical before and after" $? "$(diff <(echo "$s0") <(snap) | head -20)"

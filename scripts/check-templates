@@ -113,7 +113,9 @@ def check_hook(template: Path) -> None:
 def dump(template: Path) -> dict[str, object]:
     just = shutil.which("just")
     if just is None:
-        msg = "just: missing executable; install the kit's tools: mise install --locked"
+        k = Path(__file__).resolve().parents[1]  # the kit that owns this script
+        fix = f"{k}/scripts/octo-feather-mise-install {k}"
+        msg = f"just: missing executable; install the kit's tools: {fix}"
         raise TemplateError(msg)
     result = subprocess.run(
         [just, "--dump", "--dump-format", "json"],

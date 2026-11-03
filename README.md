@@ -12,7 +12,7 @@ cd ~/src/octo-feather
 curl -fsSL https://mise.run | MISE_VERSION="v$(cat mise-version)" sh   # mise at its pin, checksum verified, into ~/.local/bin
 echo 'export PATH="$HOME/.local/bin:$PATH"; eval "$(~/.local/bin/mise activate bash --shims)"' >> ~/.bashrc
 . ~/.bashrc                    # mise's shims first on PATH, here and in every pane
-mise install --locked          # node, pnpm, uv, just, shellcheck, scc at mise.lock
+scripts/octo-feather-mise-install   # node, pnpm, uv, just, shellcheck, scc at mise.lock: only the kit's tools, never your global mise tools
 uv python install --no-bin     # the gate's Python at .python-version (--no-bin: nothing in ~/.local/bin)
 gh auth login && gh auth setup-git   # GitHub sign-in (interactive); git fetches private pins through gh
 just vendored-fetch            # offline caches the gate reads: vendored skills at their Skillfile pins,
