@@ -1,0 +1,36 @@
+#!/usr/bin/env python3
+"""This repo's own mise tools' bin dirs, colon-joined, for the justfile's PATH (octo-feather #500).
+
+`mise bin-paths` alone also names the tools of the user's global mise config; this repo's own are
+the ones its mise.toml files pin, which `mise ls --local --json` names. Prints nothing when mise is
+not on PATH or answers nothing.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from typing import cast
+
+
+def ask(*args: str) -> str:
+    try:
+        r = subprocess.run(["mise", *args], capture_output=True, text=True, check=False)  # noqa: S607
+    except OSError:
+        return ""
+    return r.stdout if r.returncode == 0 else ""
+
+
+def main() -> None:
+    try:
+        tools: object = json.loads(ask("ls", "--local", "--json") or "{}")
+    except ValueError:
+        tools = {}
+    names = sorted(cast("dict[str, object]", tools)) if isinstance(tools, dict) else []
+    paths = ask("bin-paths", *names).splitlines() if names else []
+    sys.stdout.write(":".join(p for p in paths if p))
+
+
+if __name__ == "__main__":
+    main()
