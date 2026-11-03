@@ -43,11 +43,11 @@ class UnansweredError(Exception):
 def missing_tool(tool: str) -> str:
     mise = shutil.which("mise")
     if mise is None:
-        return "mise is not on PATH: install mise at mise-version, then: mise install --locked"
+        return "mise is not on PATH: install mise at mise-version, then: octo-feather-mise-install"
     r = subprocess.run([mise, "which", tool], capture_output=True, text=True, check=False)
     if r.returncode == 0:
         return f"{tool} is installed ({r.stdout.strip()}) but not on PATH: run this through just"
-    return f"{tool} is not installed: mise install --locked (mise.toml, mise.lock)"
+    return f"{tool} is not installed: octo-feather-mise-install (mise.toml, mise.lock)"
 
 
 def ask(*cmd: str) -> str:
