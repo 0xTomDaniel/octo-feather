@@ -260,7 +260,12 @@ check-tests *args:
     # runs, and two installs at once would race (check-ts's own install is then a no-op).
     err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
-    GATE_NESTED=1 exec uv run --locked --offline --no-sync pytest "$@"
+    # mise's state dir one empty dir per gate run, removed after it, inherited by every item and nested run: each
+    # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
+    # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
+    # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
+    if [[ -z "${GATE_NESTED:-}" ]]; then MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR"' EXIT; fi
+    GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
 test *args:
