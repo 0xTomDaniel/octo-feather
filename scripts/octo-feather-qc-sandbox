@@ -298,9 +298,16 @@ if [[ "$phase" == setup ]]; then
     done
   fi
   export MISE_OFFLINE=1 MISE_AUTO_INSTALL=0 MISE_NOT_FOUND_AUTO_INSTALL=0 MISE_NOT_FOUND_SYSTEM_FALLBACK=0
-  realpi=$(command -v pi || echo pi)
+  # The real pi, resolved with the shim dir off PATH: none, or one under the shim dir, and the shim refuses (exit 127)
+  # rather than exec the bare name pi, which PATH resolves to the shim again, forever (#493 AC1, a box without pi). A
+  # pi that leads back to this shim in the same process (one running the bare name) is refused the same way.
+  realpi=$(PATH=$(tr : '\n' <<< "$PATH" | grep -vxF "$SCR/bin" | paste -sd :) command -v pi) && rp=$(realpath -- "$realpi") \
+    && [[ "$rp" != "$SCR/bin/"* ]] || realpi=
   { echo '#!/usr/bin/env bash'
-    echo '# qc sandbox pi shim: log each start, one line (agents count), then run the real pi.'
+    echo '# qc sandbox pi shim: run only a real pi; log each start, one line (agents count), then run it.'
+    if [[ -z "$realpi" ]]; then echo 'echo "qc sandbox: pi not on PATH (the pi shim runs only a real pi)" >&2; exit 127'; fi
+    printf '[[ "${QC_PI_SHIM:-}" != "$$ "%q ]] || { echo "qc sandbox: pi leads back to the qc sandbox pi shim (%s ran it again); refused" >&2; exit 127; }\n' "$SCR" "$realpi"
+    printf 'export QC_PI_SHIM="$$ "%q\n' "$SCR"
     printf 'echo "$$" >> %q\n' "$SCR/agents.log"
     printf 'exec %q "$@"\n' "$realpi"
   } > "$SCR/bin/pi"
