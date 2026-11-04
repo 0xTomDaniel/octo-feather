@@ -732,9 +732,12 @@ if any("split" in c for c, _ in results):
     for sp in ("train", "held-out"):
         print(f"qa: {sp} score {sum(ok for c, ok in results if c.get('split') == sp)}/{sum(c.get('split') == sp for c, _ in results)} passed")
 passed = sum(ok for _, ok in results)
-art.mkdir(parents=True, exist_ok=True)
-(art / "summary.json").write_text(json.dumps({"run_id": rid, "kit_sha": kit, "passed": passed, "total": len(results), "runs": runs,
-                                              **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base}} if base else {}), "cases": cases_out}, indent=2) + "\n")
+try:   # where the state dir is read-only (the qa sandbox), no summary.json, as no run dir
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "summary.json").write_text(json.dumps({"run_id": rid, "kit_sha": kit, "passed": passed, "total": len(results), "runs": runs,
+                                                  **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base}} if base else {}), "cases": cases_out}, indent=2) + "\n")
+except OSError:
+    pass
 print(f"qa: {passed}/{len(results)} passed (run {rid}); artifacts {art}")
 sys.exit(0 if passed == len(results) else 1)
 '''
