@@ -86,3 +86,11 @@ Findings:
 | held-out | dir-lever-near-verify-sha (should-not) | PASS | PASS | 20261104T204029Z-82ee45 |
 
 dir-lever-event-lines is a held-out rerun after a train-driven change; it was never tuned on. The over-trigger on dir-lever-near-one-ruling is gone (FAIL at 04ae8f9, PASS at 784aef0).
+
+## New supervisor held-out case at 5ea1c44 (director ruling b)
+
+| split | case | origin/main | 5ea1c44 | run |
+|---|---|---|---|---|
+| held-out (written after the change) | sup-lever-prior-art-again | 0/3 | 0/3 | 20261104T204310Z-6d751d |
+
+Reached the moment in all 6 runs: on both kits the supervisor read the three reports, generated review/prior-art.md with a shell loop over notes/reports/ (no hand copying) and committed, in 5 calls, but never loaded principle-build-the-lever. A held-out trigger miss, non-discriminating, not a fixture defect; not tuned on. Supervisor held-out should-trigger evidence for this change is therefore: none passing (sup-lever-handoff-stamp pre-existing, not rerun; sup-lever-prior-art-again 0/3 -> 0/3).
