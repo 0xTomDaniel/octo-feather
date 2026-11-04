@@ -3,5 +3,5 @@
   "entry": [".agents/skills/verify-app/scripts/verify-app.ts", "scripts/check-languages.ts", "scripts/own-tool-paths.ts"],
   "project": ["src/**/*.ts", "tests/**/*.ts", ".agents/skills/verify-app/scripts/*.ts", "scripts/*.ts"],
   "ignoreDependencies": ["dependency-cruiser"],
-  "ignoreBinaries": ["octo-feather-evidence", "mise"]
+  "ignoreBinaries": ["octo-feather-evidence", "mise", "just"]
 }

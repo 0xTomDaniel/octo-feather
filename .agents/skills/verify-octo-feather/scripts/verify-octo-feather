@@ -1603,6 +1603,7 @@ def drive_template_tiers(f: Feature) -> None:
         f.run(f"{lang}-check", "env", "-C", str(r), "just", "check")
         f.check(f"{lang}-check", lambda c, k=k: c.code == 0 and all(s in c.out for s in (k.other, k.cli, k.e2e))
                 and c.out.count("shared fixture greetings.json: prepared once for this run") == 1)
+        checked = git("rev-parse", "HEAD").strip()
 
         # One source file changed: the static checks, then only the integration test the stack's tool picks for it.
         (r / other).write_text(other_src.replace("n * 2", "n + n"))
@@ -1635,6 +1636,40 @@ def drive_template_tiers(f: Feature) -> None:
         f.check(f"{lang}-fast-residual", lambda c, k=k: c.code == 0
                 and "fast: every integration test: justfile changed since main, on shared-machinery.txt" in c.out
                 and k.other in c.out and k.cli in c.out and k.e2e not in c.out)
+
+        # The runs' trend lines (the runner's own hook: tests/conftest.py, tests/trend-reporter.ts): just check's one
+        # line full, timing every GATE_RECIPES recipe; every just fast line after it subset. Then the factory report
+        # over that state, one lane on o/<lang> and the kit's fake gh (tests/fixtures/lane-report/gh) over a scratch
+        # store: the repo's commits as o/<lang>'s default branch, its gate-budget.toml (none in a repo without one).
+        trend = sc / "state" / "octo-feather" / "check-runs.jsonl"
+        top = str(r.resolve())
+        f.obs(f"{lang}-trend", "lines", "".join(ln + "\n" for ln in trend.read_text().splitlines() if json.loads(ln).get("repo") == top))
+        f.obs(f"{lang}-trend", "recipes", output(["just", "--evaluate", "GATE_RECIPES"], cwd=r, env=env)[1])
+        store = sc / "gh" / f"o__{lang}"
+        store.mkdir(parents=True)
+        (store / "commits.json").write_text(json.dumps([{"sha": s} for s in git("rev-list", "HEAD").split()]))
+        if (r / "gate-budget.toml").exists():
+            shutil.copy(r / "gate-budget.toml", store / "gate-budget.toml")
+        (sc / "state" / "octo-feather" / "lanes").mkdir(exist_ok=True)
+        (sc / "state" / "octo-feather" / "lanes" / f"{lang}.toml").write_text(
+            f'supervisor = "w1:p1"\nrepository = "o/{lang}"\nissue = "gh1"\ngoal = "Template gate"\n'
+            'started_at = "2026-11-04T08:00:00Z"\nlast_handoff_at = "2026-11-04T08:00:00Z"\nwaiting_on = ""\n')
+        (sc / "bin").mkdir(exist_ok=True)
+        (sc / "bin" / "gh").write_text(f'#!/bin/sh\nexec python3 {shlex.quote(f.s.repo)}/tests/fixtures/lane-report/gh "$@"\n')
+        (sc / "bin" / "gh").chmod(0o755)
+        f.env = {**f.env, "FAKE_GH_PRS": str(sc / "gh"), "PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}"}
+        f.run(f"{lang}-trend", "octo-feather-lane", "report")
+        f.env = {k: v for k, v in f.env.items() if k not in ("FAKE_GH_PRS", "PATH")}
+
+        def trend_holds(c: Case, lang: str = lang, head: str = checked) -> bool:
+            runs = [json.loads(ln) for ln in c.o["lines"].splitlines()]
+            steps = " ".join(s["name"] for s in runs[0]["steps"]) if runs else ""
+            block = re.search(rf"(?m)^gate budget o/{lang}: the latest passed full gate run .*\n  full gate: [\d.]+s, head {head[:12]}, "
+                              r"started \S+ \(.*\): (within budget|OVER BUDGET|no budget).*\n(  .*\n)*  slowest: (.*)$", c.out)
+            return (c.code == 0 and len(runs) > 1 and runs[0]["tier"] == "full" and runs[0]["exit"] == 0 and runs[0]["head"] == head
+                    and all(x in steps for x in c.o["recipes"].split()) and all(x["tier"] == "subset" for x in runs[1:])
+                    and block is not None and any(x in block.group(3) for x in c.o["recipes"].split()))
+        f.check(f"{lang}-trend", trend_holds)
     f.env = {}
     say(f"template-tiers evidence: {f.d}")
 

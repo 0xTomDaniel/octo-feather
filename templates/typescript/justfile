@@ -25,12 +25,17 @@ setup:
     pnpm install --frozen-lockfile
     git config core.hooksPath .githooks
 
-# Every tracked language gated, shell, types and lint, architecture, dead code, integration and E2E tests: each a
-# dependency of check, so what the gate runs is just's own answer (scripts/check-languages.ts reads it).
-check: check-static check-tests
+# The gate's static steps: every tracked language gated, shell, types and lint, architecture, dead code. In just check
+# each is one Vitest item (tests/gate.test.ts) beside the integration and E2E tests; scripts/check-languages.ts reads it.
+export GATE_RECIPES := "check-languages check-scripts check-ts check-arch check-dead-code"
 
-# The static checks both tiers run first.
-check-static: check-languages check-scripts check-ts check-arch check-dead-code
+# The full tier: one Vitest run, every GATE_RECIPES recipe and every test, timed, one trend line
+# (tests/trend-reporter.ts). Timing never decides pass or fail.
+check: check-tests
+
+# The static checks just fast runs first, each GATE_RECIPES recipe in order.
+check-static:
+    for r in $GATE_RECIPES; do just "$r"; done
 
 # The fast tier (octo-feather quality spec #recipe-fast): the static checks, then the integration test files Vitest
 # picks by their imports of the files changed since the branch left main (vitest --changed), each test named; no
@@ -49,7 +54,7 @@ fast: check-static
         echo "fast: every integration test: $hit changed since main, on shared-machinery.txt (the import graph cannot see it)"
       else echo "fast: the integration test files Vitest picks by their imports of the files changed since main"; sel=(--changed "$base"); fi
     fi
-    pnpm exec vitest run --project integration --reporter=verbose "${sel[@]}"
+    pnpm exec vitest run --project integration "${sel[@]}"
 
 # Every language scc finds in the tracked files has its lint and type step in check; rules and what passes by
 # design: the head of scripts/check-languages.ts.
@@ -86,9 +91,9 @@ check-arch:
 check-dead-code:
     pnpm exec knip
 
-# Every test, each named with its kind (its Vitest project: vitest.config.ts).
-check-tests:
-    pnpm exec vitest run --reporter=verbose
+# Every gate step and test, each named with its kind (its Vitest project: vitest.config.ts); extra arguments go to Vitest.
+check-tests *args:
+    pnpm exec vitest run "$@"
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:
