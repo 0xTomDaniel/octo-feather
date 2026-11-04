@@ -1,6 +1,6 @@
 ---
 name: codebase-design
-description: Designing a module's interface and where its tests cross it: deep modules, seams, and testing a module by its dependencies (in-process, local stand-in, port with an in-memory adapter, mock only true externals). Use before designing or changing a module's interface, before deciding where a test seam goes or how tests reach a dependency the code does not own, when judging a test seam a diff adds or moves, or when another skill needs the deep-module vocabulary; not for tests through a seam already in place.
+description: Designing a module's interface and where its tests cross it: deep modules and seams. Use before designing or changing a module's interface, before deciding where a test seam goes or how tests reach a dependency the code does not own, when judging a test seam a diff adds or moves, or when another skill needs the deep-module vocabulary; not for tests through a seam already in place.
 ---
 
 # Codebase Design
