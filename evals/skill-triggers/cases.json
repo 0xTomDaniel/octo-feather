@@ -1414,5 +1414,197 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Do not reflect or judge. Quote the class and the summary of the one finding line in this log, nothing else: {\"kind\":\"spawn\",\"name\":\"implementer-gh5\",\"pane\":\"w5:p3\"} {\"kind\":\"finding\",\"source\":\"code-review\",\"class\":\"duplicated-rule\",\"blocking\":true,\"summary\":\"AGENTS.md rule restated in a test comment\"} {\"kind\":\"integration\",\"commit\":\"abc1234\"}"
+  },
+  {
+    "id": "shaper-sharpen-languages",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "I want app to greet people in their own language. Not sure yet how it picks the language. Let's get this into a spec. I won't be around to answer questions today, so wherever you'd ask me, pick what you'd recommend and keep going."
+  },
+  {
+    "id": "shaper-sharpen-shout-code",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "just add a --shout flag to `app hello` that upper-cases the greeting, should be a two-line change in src/app/cli.py. I'm offline after this, use your best judgment on anything open."
+  },
+  {
+    "id": "shaper-sharpen-near-question",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Quick one about docs/specs/app.spec.html: with --json, what exactly does a script get back when the name is blank, and which anchor says so?"
+  },
+  {
+    "id": "shaper-sharpen-near-typo",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Small fix in the app spec: the story-greet paragraph says \"I never parse text\", it should read \"I never parse the text output\". Correct that wording and commit it."
+  },
+  {
+    "id": "shaper-grill-docs-history",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner here. I'd like app to remember who it greeted, so `app hello` can say \"welcome back\" the second time. Shape this with me into a spec. I'm unreachable for the rest of the day: where you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "shaper-grill-docs-farewell",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "New command idea: `app bye NAME`, the counterpart of hello. Can you turn it into a proper spec? I can't answer follow-ups right now, decide with your best recommendation and note the open ones."
+  },
+  {
+    "id": "shaper-grill-docs-near-question",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Does the app spec say anything about trimming the name before greeting it? Point me at the anchor, nothing else."
+  },
+  {
+    "id": "shaper-grill-docs-near-correction",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "The acceptance criterion acceptance-hello-json in docs/specs/app.spec.html is missing the closing period after its Then clause. Fix just that and commit."
+  },
+  {
+    "id": "shaper-grilling-rate-limit",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "We should cap how many greetings app prints per minute, people are scripting it in loops. Help me pin down what that means and shape it as a spec. I'm away after this message; choose your recommended answer at each open question."
+  },
+  {
+    "id": "shaper-grilling-config",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "thinking app should read a config file for its default greeting text. spec it out with me? not around for questions today, go with your recommendations."
+  },
+  {
+    "id": "shaper-grilling-near-question",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Stress-test question for my own notes, no spec work: according to ADR 0001, what exit code does app use for an error with --json? Just answer."
+  },
+  {
+    "id": "shaper-grilling-near-anchor",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "In the app spec the paragraph about blank names has anchor hello-empty but the criterion text calls it the empty-name case. Rename nothing; just tell me which anchor a link to the blank-name rule should use."
+  },
+  {
+    "id": "shaper-domain-guest",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "I want app to support guests and members: members get greeted by their nickname. Shape that into a spec with me. I can't reply today; take your recommended call wherever you'd ask."
+  },
+  {
+    "id": "shaper-domain-team",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Feature: greet a whole team at once, `app hello --team core`, where a team is a named list of people. Let's shape it. Offline after this, so decide open points yourself and flag them."
+  },
+  {
+    "id": "shaper-domain-near-define",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "What does GLOSSARY.md currently say a Name is? Quote it, I'm only checking."
+  },
+  {
+    "id": "shaper-domain-near-glossary-typo",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Typo in the app spec: hello-text says \"the name trimmed\" and should say \"with the name trimmed\". Correct that one phrase and commit."
+  },
+  {
+    "id": "shaper-design-clock-seam",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "I want `app hello` to say good morning or good evening by time of day, and the tests must not depend on the real clock. Shape the spec, including where the time comes from in the code. I'm away; take your recommended answers."
+  },
+  {
+    "id": "shaper-design-greeter-module",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Before we add more commands I want greeting logic split from the CLI properly, so a web front end could reuse it later. Spec the module boundary and what it exposes. Not around for questions, use your judgment."
+  },
+  {
+    "id": "shaper-design-near-wording",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Let's spec a change to what app prints: the plain greeting should end with an exclamation mark, `Hello, Ada!`, JSON included. Only the user-visible text changes. I'm offline after this, decide anything open."
+  },
+  {
+    "id": "shaper-design-near-error-text",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "The blank-name error message should say \"a name is required\" instead of \"name must not be empty\". Shape the spec change; it's wording only. I can't answer questions today."
+  },
+  {
+    "id": "shaper-arch-tangled",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "The app code feels tangled to me and I'd like it cleaned up before it grows. Look over it, find where it could be made deeper and simpler, and shape the refactor worth doing as a spec. I'm away today; pick for me."
+  },
+  {
+    "id": "shaper-arch-review",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Can you go through src/app and tell me which parts would most benefit from restructuring, then spec the best candidate? No answers from me today, go with your recommendation."
+  },
+  {
+    "id": "shaper-arch-near-new-module",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Spec a brand-new piece: an `app.store` module that keeps greeting history in a JSON file, with a narrow interface the CLI calls. Nothing existing needs restructuring. I'm offline, decide open points."
+  },
+  {
+    "id": "shaper-arch-near-flag",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Spec a `--lower` flag for `app hello` that prints the greeting lower-cased, CLI and JSON. Small feature, no restructuring. Unreachable after this, choose for me."
   }
 ]
