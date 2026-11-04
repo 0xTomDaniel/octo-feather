@@ -1264,14 +1264,6 @@
     "task": "implementer-13 just reported commit 9a8b7c6 for #13, the reviewer's round 2 came back clear on it, and you sent the owner the merge ask for PR 31. Bring the lane notes up to date as after every hand-off: an event line for each of the three in notes/handoffs.jsonl, and the matching waiting_on and last_handoff_at in notes/lane.toml."
   },
   {
-    "id": "sup-lever-status-rows",
-    "role": "supervisor",
-    "fixture": "lane-mini",
-    "should_trigger": true,
-    "split": "held-out",
-    "task": "The amended greet spec adds eight criteria: greet-upper, greet-lower, greet-repeat-zero, greet-repeat-negative, greet-json-error, greet-empty-name, greet-unicode, greet-long-name. Enter each in docs/specs/greet.status.json as planned without touching the built rows or accepted_commit (the status command has no add, and its init resets built rows), then commit."
-  },
-  {
     "id": "sup-lever-near-set-waiting",
     "role": "supervisor",
     "fixture": "lane-mini",

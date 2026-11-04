@@ -1,6 +1,6 @@
 # gh530: principle-build-the-lever read at the moment it applies
 
-Change: the skill's description (via `.skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch`) names the repeat moment; the skill-load step line of agents/director.md, agents/supervisor.md and agents/corrector.md names that role's repeat moment. No skill text inlined (owner ruling 2026-11-04, #520).
+Change: the skill's description (via `.skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch`) names the repeat moment; the skill-load step line of agents/director.md and agents/supervisor.md names that role's repeat moment. The corrector step line was changed at 04ae8f9 and reverted (supervisor ruling: no case separates it). No skill text inlined (owner ruling 2026-11-04, #520).
 
 Smoke: .agents/skills/principle-build-the-lever/SKILL.md .skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch agents/director.md agents/supervisor.md agents/corrector.md, skill-triggers lever cases at kit 04ae8f9 (the skill materialized from the patch by --kit-ref) beside baseline origin/main ea7d779: runs 20261104T195144Z-b00744 (should-trigger, --runs 3) and 20261104T202158Z-aa9926 (should-not, once). Pre-change smoke: 20261104T194613Z-140cfb (dir-lever-teardown-again FAIL at ea7d779 and 780ea97).
 
@@ -10,7 +10,7 @@ Removed: nothing.
 
 - dir-lever-event-lines
 - dir-lever-near-verify-sha
-- sup-lever-status-rows
+- sup-lever-status-rows (removed, see Removed cases)
 - sup-lever-near-finding-logged
 - cor-lever-restated-comments
 - cor-lever-near-owner
@@ -64,3 +64,12 @@ Findings:
 - cor-lever-restated-comments (held-out): non-discriminating; the corrector on main already loads the lever with encode-lessons on a third-round class finding.
 - cor-lever-restated-sites (train): weak separation, 2/3 on main.
 - dir-lever-near-one-ruling (train): over-trigger at 04ae8f9; the director's thinking cites the step line's "an event line" for one append (the director logs every action as an event line).
+
+## Rulings after the batch (supervisor, #530)
+
+- Director step line tuned on the train over-trigger only (dir-lever-near-one-ruling): "an event line" became "several event lines", plus "one line or one edit is no repeat". dir-lever-event-lines (held-out) is rerun after this train-driven change and was never tuned on.
+- Corrector step line reverted to origin/main's: no case separates it. On main the corrector already loads the lever with encode-lessons on these fix rounds. cor-lever-restated-comments (held-out) is non-discriminating (3/3 -> 3/3); cor-lever-restated-sites (train) is weak (2/3 -> 3/3). Both cases stay.
+
+## Removed cases
+
+- sup-lever-status-rows (held-out should-trigger), removed from the suite after its result was seen (run 20261104T195144Z-b00744: origin/main 0/3, 04ae8f9 0/3). Reason: defective, not a lever result: the lane-mini spec lacks the eight criteria the task names, so on both kits the supervisor refuses after reading (spec-status check would fail on the extra ids) and never reaches the moment. Not edited and no replacement written. Supervisor held-out should-trigger coverage is the pre-existing sup-lever-handoff-stamp only: the supervisor's held-out evidence for this change is that one pre-existing case, which was not rerun here.
