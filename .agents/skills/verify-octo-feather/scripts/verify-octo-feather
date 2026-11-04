@@ -876,6 +876,14 @@ def drive_factory_report(f: Feature) -> None:
     f.check("reflection-two-days", lambda c: c.code == 0 and c.o["director-log"] == c.o["before"]
             and len(re.findall(r"(?m)^director reflection: ", c.out)) == 1
             and re.search(rf"(?m)^director reflection: last ran {re.escape(c.o['at'])} \(2d0h\d+m ago\)$", c.out) is not None)
+    # The headline: owner-caught findings two days and nine days ago (comms #report-owner-caught).
+    nine_days = datetime.fromtimestamp(datetime.now(UTC).timestamp() - 9 * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with dlog.open("a") as fh:
+        for at, cls in ((two_days, "owner-caught-x"), (two_days, "owner-caught-y"), (nine_days, "owner-caught-x")):
+            fh.write(json.dumps({"at": at, "kind": "finding", "class": cls, "summary": "seeded"}) + "\n")
+    f.run("owner-caught-headline", "octo-feather-lane", "report")
+    f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
+            == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
