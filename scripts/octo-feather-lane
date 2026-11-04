@@ -951,18 +951,19 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
     for c in [head] + [r for r in revs if r.lower() != head.lower()]:
         rc, out = gate("passed", c)
         try:
-            rec = json.loads(out) if rc == 0 else None
+            raw = json.loads(out) if rc == 0 else None
         except ValueError:
-            rec = None
-        if not isinstance(rec, dict) or rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+            raw = None
+        rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
+        if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
             continue
         try:
             _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
         except Refuse as e:
             no = [str(e)]
         if not no and rec.get("gate_config") != config.strip():
-            no = [f"its gate_config {str(rec.get('gate_config'))[:12]} is not the head's current {config.strip()[:12]} "
-                  f"(octo-feather-gate config {h}): stale; {fix}"]
+            no = [(f"its gate_config {str(rec.get('gate_config'))[:12]} is not the head's current {config.strip()[:12]} "
+                   f"(octo-feather-gate config {h}): stale; {fix}")]
         if not no:
             return []
         why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
@@ -1415,7 +1416,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
-    miss += [f"Full pass: {w}" for w in full_pass(head, files, base)]   # every lane, one building no criterion too
+    miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
 
     review_checks: list[str] = []
     rv = field(lines, "Review verdict")

@@ -386,7 +386,9 @@ def main() -> int:
     elif a.cmd == "passed":
         return passed(a.rev)
     elif a.cmd == "config":
-        sys.stdout.write(gate_config(git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()) + "\n")
+        sys.stdout.write(
+            gate_config(git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()) + "\n"
+        )
     elif a.cmd == "select":
         select()
     else:
