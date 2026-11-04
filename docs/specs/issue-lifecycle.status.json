@@ -154,16 +154,34 @@
       "pr": 279
     },
     "acceptance-integrate-fast": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T173335Z-8fcc56ce",
+      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "tests": [
+        "tests/fast.sh",
+        "tests/integrate.sh"
+      ]
     },
     "acceptance-integrate-checkpoint": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T173346Z-c722bd22",
+      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "tests": [
+        "tests/fast.sh",
+        "tests/integrate.sh"
+      ]
     },
     "acceptance-pilot-full": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T173357Z-0157d62c",
+      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "tests": [
+        "tests/fast.sh",
+        "tests/integrate.sh"
+      ]
     },
     "acceptance-brownfield-full": {
       "status": "planned",
