@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The #493 regression fixture's templates section (#508; the fixture, its namespace and the other sections:
 # tests/user-mise.sh): (3) `just install-check` with a venv first on the pane PATH prints no SHADOWED line for a
 # global-only tool; (4) README's install step exits 0 in the kit; in repos from templates/python and

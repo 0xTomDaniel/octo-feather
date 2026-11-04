@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
-# octo-feather-integrate TICKET REF...   (also: just integrate TICKET REF...)
+# octo-feather-integrate [--full] TICKET REF...   (also: just integrate TICKET REF...)
 #
 # Integrate named worker commits onto the lane's integration branch, then run
-# that worktree's `just check` (docs/adr/0017). Run from anywhere in the target
-# repo. A branch REF is merged (--no-ff); any other REF is a commit and is
-# cherry-picked (-x), in the order given.
+# that worktree's gate on the candidate head (docs/adr/0017): `just fast`, or
+# `just check` at a checkpoint, which octo-feather-gate checkpoint names with why
+# (--full forces it); each full pass recorded (octo-feather-gate record, passed).
+# A head only the fast tier passed is provisional.
+# Run from anywhere in the target repo. A branch REF is merged (--no-ff); any
+# other REF is a commit and is cherry-picked (-x), in the order given.
 #
 # All or nothing: on a conflict or a red gate the lane branch is reset to where
 # it started, and the supervisor hands the problem to an implementer.
@@ -19,13 +22,16 @@
 # TICKET is the lane's parent ticket as the target's tracker writes it (12, ENG-123);
 # the lane key is that tracker skill's lane-key of it (gh12, eng-123; roles spec #lane-key).
 #
-# Exit: 0 integrated and green; 1 conflict; 2 `just check` red; 3 adds review
+# Exit: 0 integrated and green; 1 conflict; 2 the gate (either tier) red; 3 adds review
 #       state or factory recipes, or a justfile just cannot read; 64 usage, or TICKET has no lane key;
 #       65 lane worktree not clean; 66 no single lane worktree for the lane key.
 # Does not push.
 set -euo pipefail
 
-(($# >= 2)) || { echo "usage: octo-feather-integrate TICKET REF..." >&2; exit 64; }
+opts=(); args=()
+for a in "$@"; do if [[ "$a" == --full ]]; then opts+=(--full); else args+=("$a"); fi; done
+set -- "${args[@]}"
+(($# >= 2)) || { echo "usage: octo-feather-integrate [--full] TICKET REF..." >&2; exit 64; }
 root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
 # The target's tracker, from pi-role's own resolution (one mechanism: its tracker_skill), names the
 # lane-key script.
@@ -95,9 +101,18 @@ if [[ -n "$review" || -n "$recipes" ]]; then
   exit 3
 fi
 
-if ! just check; then
+grep -qx fast <<<"$after_names" || opts+=(--no-fast)
+tier="$(python3 "$root/scripts/octo-feather-gate" checkpoint "$start" "${opts[@]}")" || { rollback; exit 64; }
+why="${tier#*$'\n'}"; tier="${tier%%$'\n'*}"
+gate=fast; [[ "$tier" == fast ]] || gate=check
+echo "tier: $tier ($why)"
+SECONDS=0
+if ! just "$gate"; then
   rollback
-  echo "red: just check failed after integrating $*" >&2
+  echo "red: just $gate, the $tier tier ($why), failed after integrating $*" >&2
   exit 2
 fi
-echo "integrated=$# branch=$branch head=$(git rev-parse --short=12 HEAD)"
+[[ "$tier" == fast ]] || python3 "$root/scripts/octo-feather-gate" record --reason "$why" --seconds "$SECONDS" >&2 \
+  || echo "octo-feather-integrate: warning: the full pass is not recorded (above); the next integration runs the full gate again" >&2
+echo "integrated=$# branch=$branch head=$(git rev-parse --short=12 HEAD) tier=$tier"
+[[ "$tier" == full ]] || echo "provisional: head $(git rev-parse --short=12 HEAD) passed only the fast tier, just fast; the full gate runs at the next checkpoint"

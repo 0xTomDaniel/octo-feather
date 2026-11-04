@@ -31,6 +31,9 @@ mkdir -p "$HOME" "$t/bin" "$t/sys" "$t/repo/docs/specs"
 for c in bash python3 git env sha256sum find sort xargs grep sed cut tr cat chmod rm mkdir cp ls id dirname jq head just; do
   p="$(command -v "$c")" || fail "tool $c not found on the host"; ln -s "$p" "$t/sys/$c"
 done
+# python3 runs through its path, not a link: a venv's python3 reached by a link runs as the base
+# interpreter, outside the venv and the coverage map just fast-map records (#533).
+rm "$t/sys/python3"; printf '#!/bin/sh\nexec %q "$@"\n' "$(command -v python3)" > "$t/sys/python3"; chmod +x "$t/sys/python3"
 export PATH="$t/sys"
 
 # The target repo: the kit's real specs (for #10's ids) plus a demo spec with acceptance-a, -b.

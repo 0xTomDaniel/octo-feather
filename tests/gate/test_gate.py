@@ -9,6 +9,8 @@ route pi-role and herdr-spawn export to a pane, so a gate run in a pane of any s
 one outside Herdr does. Items share one dir per gate run, GATE_RUN_DIR, where tests/lib/prepared.py prepares the
 template installs several items repeat, once per run (pytest-xdist's documented "session fixture once" pattern: the
 xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps).
+Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path), unless a gate this item runs
+inside already set it: the coverage map of `just fast-map` files each process under the outermost item.
 """
 import os, pathlib, subprocess
 
@@ -29,9 +31,10 @@ def run_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFac
     return str(base.parent if hasattr(request.config, "workerinput") else base)   # an xdist worker: the run's shared dir
 
 
-def run(cmd, run_dir: str):
+def run(cmd, run_dir: str, item: str):
     env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_") and k not in PANE}
     env["GATE_RUN_DIR"] = run_dir
+    env.setdefault("GATE_ITEM", item)
     env["TMPDIR"] = os.path.realpath(os.environ.get("TMPDIR") or "/tmp")
     rc = subprocess.run(cmd, cwd=ROOT, env=env).returncode
     if rc != 0:
@@ -40,9 +43,9 @@ def run(cmd, run_dir: str):
 
 @pytest.mark.parametrize("recipe", RECIPES)
 def test_recipe(recipe, run_dir: str):
-    run(["just", recipe], run_dir)
+    run(["just", recipe], run_dir, f"{recipe}")
 
 
 @pytest.mark.parametrize("script", SCRIPTS)
 def test_script(script, run_dir: str):
-    run([str(ROOT / script)], run_dir)
+    run([str(ROOT / script)], run_dir, f"{script}")
