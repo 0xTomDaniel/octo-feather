@@ -121,9 +121,13 @@ expect "$cx" "" "$pi"
 # The gate includes check-refs: `just check` in the copy fails on a planted retired word, naming the message and
 # the file. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
 # above stops this one if the planted word ever got past check-refs.
+# It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
 find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-refs.sh -delete; g add -A
 printf '%s\n' "Ask the $hu before merging." > "$t/docs/x.md"; g add -f docs/x.md
-set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 XDG_STATE_HOME="$t.home" just check 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && env -u CI CHECK_REFS_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="-k 'test_recipe and check-refs'" just check 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] || { echo "check-refs test: docs/x.md with a retired word passed just check" >&2; exit 1; }
 grep -qF "$words" <<<"$out" && grep -qF docs/x.md <<<"$out" || { echo "check-refs test: just check did not report docs/x.md: $words" >&2; echo "$out" >&2; exit 1; }
+# Only its own item ran (#507): pytest's own selection, through the real `just check`.
+grep -qF "FAILED tests/gate/test_gate.py::test_recipe[check-refs]" <<<"$out" && grep -qE '^=+ 1 failed(, [0-9]+ deselected)? in ' <<<"$out" \
+  || { echo "check-refs test: just check ran more than its own item" >&2; echo "$out" >&2; exit 1; }
 echo "check-refs: ok (retired words in docs/ and root; exemptions per file and exact quote; root and nested projection files name Pi; a broken scanner fails closed; judgment label data exempt, the rest of the suite scanned)"
