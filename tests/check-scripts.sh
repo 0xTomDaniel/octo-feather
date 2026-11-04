@@ -7,7 +7,7 @@
 # check-languages' rule (tests/languages.sh). Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
-t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+t="$(mktemp -d)"; trap 'rm -rf "$t" "$t.venv"' EXIT
 (cd "$kit" && tar -cf - justfile .gitattributes pyproject.toml uv.lock .python-version mise.toml mise.lock mise-version \
   scripts/check-gate-free scripts/octo-feather-lint tests/check-scripts.sh) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
@@ -47,6 +47,12 @@ run; [[ "$rc" == 0 ]] || { echo "check-scripts test: a sourced file's variable n
 plant tests/lib/x-planted-lib5.sh $'# shellcheck shell=bash\nif then fi' 644
 plant tests/x-planted-c.sh $'#!/usr/bin/env bash\n# shellcheck source=tests/lib/x-planted-lib5.sh\nsource "$(dirname "$0")/lib/x-planted-lib5.sh"'
 expect tests/lib/x-planted-lib5.sh
+# Fails closed (#507): ruff's file list crashing (an environment without the lister's tomlkit, as an unsynced kit
+# venv) fails the recipe naming the fix, never python: ok (0 files compile).
+uv venv --offline --quiet "$t.venv"
+set +e; out="$(cd "$t" && UV_PROJECT_ENVIRONMENT="$t.venv" just check-scripts 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] && grep -qF 'check-scripts: the Python file list (octo-feather-lint files) failed' <<<"$out" && grep -qF 'uv sync --locked' <<<"$out" \
+  && ! grep -qF 'python: ok' <<<"$out" || { echo "check-scripts test: a crashing Python file list did not fail the recipe naming the fix" >&2; echo "$out" >&2; exit 1; }
 # A script in scripts/ that is not executable.
 plant scripts/x-planted.sh $'#!/usr/bin/env bash\necho ok' 644; expect scripts/x-planted.sh
 echo "check-scripts: ok (#121 D1 compile cases; shellcheck over the shell attribute; executables)"

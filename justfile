@@ -115,7 +115,9 @@ check-scripts:
                 sys.stdout.write(r.stdout); sys.stderr.write(r.stderr); rc = rc or r.returncode
     except FileNotFoundError: print("check-scripts: shellcheck not found on PATH (mise.toml pins it)", file=sys.stderr); rc = 127
     sys.exit(rc)' "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
-    mapfile -t py < <(uv run --locked --offline --no-sync octo-feather-lint files)
+    # Fails closed (#507): a lister that fails is never an empty list.
+    list="$(uv run --locked --offline --no-sync octo-feather-lint files)" || { echo "check-scripts: the Python file list (octo-feather-lint files) failed (error above), so no Python file was compiled; fix that error (a module not found: the kit's environment is not synced: uv sync --locked --project $root)" >&2; exit 1; }
+    py=(); [[ -z "$list" ]] || mapfile -t py <<<"$list"
     python3 -c 'import sys
     bad = 0
     for f in sys.argv[1:]:
