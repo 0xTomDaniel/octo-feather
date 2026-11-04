@@ -41,6 +41,10 @@
     "acceptance-shared-fixture": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-starter-acceptance-test": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -178,6 +178,18 @@
         "tests/fast.sh",
         "tests/integrate.sh"
       ]
+    },
+    "acceptance-one-execution": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-one-execution-incomplete": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-review-test-adequacy": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
