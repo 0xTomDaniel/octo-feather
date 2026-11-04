@@ -86,3 +86,13 @@ tests = ["tests/spec-status.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
 covers = ["scripts/octo-feather-qa"]
 tests = ["tests/qa-runs.sh"]
+
+[demo."quality#acceptance-qa-cost"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-baseline"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
