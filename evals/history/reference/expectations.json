@@ -1,14 +1,11 @@
 {
- "reviewer-toml-parser-at-scale": {
+ "implementer-ts-toml-at-scale": {
   "facts": [
    {
-    "fact": "declared_includes",
-    "field": "blocking",
-    "items": [
-     {
-      "path": "templates/typescript/.agents/skills/verify-app/scripts/toml.ts",
-      "class": "reinvented-library"
-     }
+    "fact": "tool_called",
+    "tools": [
+     "mcp__exa__web_search_exa",
+     "mcp__parallel__web_search"
     ]
    }
   ]
