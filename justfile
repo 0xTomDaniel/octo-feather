@@ -300,9 +300,8 @@ check-tests *args:
     if [[ -z "${GATE_NESTED:-}" ]]; then MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR"' EXIT; fi
     GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
 
-# The fast tier (quality #recipe-fast): every GATE_RECIPES recipe, then only the tests/*.sh items the change since
-# the coverage map's head can affect, each named with why (scripts/octo-feather-gate select); no map from HEAD or an
-# ancestor, or a changed shared-machinery.txt path no coverage reaches: every item. A head only it passed is provisional.
+# The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
+# scripts/octo-feather-gate select chooses, each named with why, through check-tests.
 fast:
     #!/usr/bin/env bash
     set -euo pipefail

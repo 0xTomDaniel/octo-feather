@@ -1,38 +1,31 @@
 #!/usr/bin/env python3
 """octo-feather-gate: the gate's two tiers.
 
-issue-lifecycle #lanes-checkpoints, quality #recipe-fast.
+Which tier runs and when (checkpoints, provisional heads, the shared-machinery list):
+issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fast.
 
   octo-feather-gate checkpoint START [--full] [--no-fast]
-      In a lane worktree whose HEAD is the candidate head integrated onto START: the tier
-      octo-feather-integrate runs, `full` or `fast` on line 1, why on line 2. Full when forced
-      (--full), when the repo has no fast recipe (--no-fast: its one gate is the full tier), at
-      the pilot (no full pass recorded on this branch at START or an ancestor), when the
-      shared-machinery list changed, or when the diff START..HEAD touches a listed path (an add,
-      a delete, either side of a rename), judged against the list at START plus the entries the
-      list at HEAD adds.
+      In a lane worktree whose HEAD is the candidate head integrated onto START: the tier, `full` or
+      `fast`, on line 1, why on line 2. --no-fast: the repo has no fast recipe. Paths are matched by
+      git (rename detection for the reason shown).
   octo-feather-gate record --reason R --seconds S
-      Records the full pass of HEAD: a git note on HEAD under refs/notes/octo-feather-gate, JSON:
-      tier, head, branch, clean (the tree after the gate), gate_config (sha256 of the blob ids of
-      the justfile and the lock and pin files), list (the list file's blob id, or none), reason,
-      seconds, at. A git note, not a state dir file: it sits on the commit it proves, every
+      Records HEAD's full pass as a git note under refs/notes/octo-feather-gate, JSON: tier, head,
+      branch, clean (the tree after the gate), gate_config (sha256 over each configuration file's
+      verified blob id, `absent` for a missing one), list (the list file's blob id, or `absent`),
+      reason, seconds, at. A git note, not a state dir file: it sits on the commit it proves, every
       worktree of the repo reads it, and it does not depend on the Herdr session that ran the gate.
   octo-feather-gate passed [REV]
-      Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1: the reader for the
-      merge ask check.
+      Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1.
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
-      one per line; each item with why it runs, or why not, on stderr. Every GATE_RECIPES recipe
-      (static), then each tests/*.sh item changed since the coverage map's head, or whose recorded
-      coverage holds a changed file, or, with no recorded coverage, whose text names a changed
-      path (a development-only proxy). A changed file no item's coverage reaches and the list
-      names runs every test item; so do no map, or one from a head that is not an ancestor. An
-      item with the header line `# gate: e2e` (its one owner) never runs here: just check runs it.
+      one per line; each item with why it runs, or why not, on stderr. The selection reads the
+      coverage map (below) and the list; an item without recorded coverage always runs; an item
+      whose own header has the line `# gate: e2e` is end-to-end.
   octo-feather-gate map DATA_DIR
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
       /tmp copies of the kit map back to tracked files by their longest shared path suffix. An item
-      with no data (not run, or no Python measured) is left out: select always runs it.
+      with no data (not run, or no Python measured) is left out of the map.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -127,9 +120,7 @@ def checkpoint(start: str, *, full: bool, fast: bool) -> tuple[str, str]:
     if passed is None:
         why.append(f"pilot: no full pass recorded on {branch}")
     old, new = entries(start), entries("HEAD")
-    if git("rev-parse", f"{start}:{LIST}", check=False) != git(
-        "rev-parse", f"HEAD:{LIST}", check=False
-    ):
+    if tree_id(start, LIST) != tree_id("HEAD", LIST):
         why.append(f"{LIST} changed")
     pats = old + [p for p in new if p not in old]
     hit = (
@@ -155,7 +146,8 @@ def checkpoint(start: str, *, full: bool, fast: bool) -> tuple[str, str]:
 
 
 def tree_id(rev: str, path: str) -> str:
-    return git("rev-parse", f"{rev}:{path}", check=False).strip() or "none"
+    """PATH's blob id at REV, verified, or `absent`: one id for an unchanged file on any commit."""
+    return git("rev-parse", "--verify", "-q", f"{rev}:{path}", check=False).strip() or "absent"
 
 
 def record(reason: str, seconds: float) -> None:
@@ -291,18 +283,14 @@ def choose(root: Path, items: list[str]) -> set[str]:
             if not hit:
                 continue
             say(i, f"recorded coverage reaches {', '.join(hit)}")
-        else:  # no recorded coverage: a development-only proxy, the paths its own text names
-            text = (root / i).read_text(errors="replace")
-            named = sorted(f for f in changed if f in text)
-            if not named:
-                continue
-            say(i, f"no recorded coverage; it names {', '.join(named)}")
+        else:
+            say(i, f"no recorded coverage in the map at {at[:12]}: always selected")
         chosen.add(i)
     for f in unreached:
         say(f, f"changed; no test item's recorded coverage reaches it and {LIST} does not name it")
     say(
         f"{len(items) - len(chosen)} non-e2e test items skipped",
-        f"no changed file in their coverage, or their text when unmapped (map at {at[:12]})",
+        f"no changed file in their recorded coverage (map at {at[:12]})",
     )
     return chosen
 

@@ -1339,47 +1339,47 @@ def drive_gate_tiers(f: Feature) -> None:
             and "gate=fast" in c.out and "gate=full" not in c.out and "provisional: head" in c.out
             and c.o["passed"].startswith("exit 1\n"))
 
-    # just fast in a scratch copy of the kit's tracked files: one static recipe, items a and b each run their own
-    # Python script, c (`# gate: e2e`) runs a's. The kit's synced venv serves the copy (the uv cache may be masked, as
-    # in the qc sandbox); each item appends its name to FAST_RAN, the record of what ran.
+    # just fast in a scratch copy of the kit's tracked files without its tests/*.sh, holding four items: a and b each
+    # run their own Python script, c (`# gate: e2e`) runs a's, d runs a bash script coverage cannot see. The static
+    # checks cut to one with just's own override (--set GATE_RECIPES), the map built from the test items (-k
+    # test_script). The kit's synced venv serves the copy (the uv cache may be masked, as in the qc sandbox); each
+    # item appends its name to FAST_RAN, the record of what ran.
     k = sc / "kit"
     k.mkdir()
     files = subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], check=True, capture_output=True).stdout
     for rel in filter(None, files.decode().split("\0")):
         src = Path(f.s.repo) / rel
-        if src.is_file():
+        if src.is_file() and not re.fullmatch(r"tests/[^/]*\.sh", rel):
             (k / rel).parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(src, k / rel)
     (k / ".venv").symlink_to(Path(f.s.repo) / ".venv")
-    for t in (k / "tests").glob("*.sh"):
-        t.unlink()
-    jf = k / "justfile"
-    jf.write_text(re.sub(r"(?m)^export GATE_RECIPES := .*$", 'export GATE_RECIPES := "check-dashes"', jf.read_text()))
     for n in ("a", "b"):
         (k / "scripts" / f"fixture-{n}").write_text(f'#!/usr/bin/env python3\nprint("{n} ran")\n')
-        (k / "scripts" / f"fixture-{n}").chmod(0o755)
-    for n, script, tag in (("a", "a", ""), ("b", "b", ""), ("c", "a", "# gate: e2e\n")):
+    (k / "scripts" / "fixture-d").write_text("#!/usr/bin/env bash\necho d ran\n")
+    for n, script, tag in (("a", "a", ""), ("b", "b", ""), ("c", "a", "# gate: e2e\n"), ("d", "d", "")):
         (k / "tests" / f"{n}.sh").write_text(f'#!/usr/bin/env bash\n{tag}set -euo pipefail\necho {n} >> "$FAST_RAN"\n'
                                               f'"$(dirname "$0")/../scripts/fixture-{script}"\n')
-        (k / "tests" / f"{n}.sh").chmod(0o755)
+    for x in [*(k / "scripts").glob("fixture-*"), *(k / "tests").glob("*.sh")]:
+        x.chmod(0o755)
     git(k, "init", "-q", "-b", "main")
     (k / ".git" / "info" / "exclude").write_text("/.venv\n")   # the link to the kit's venv stays untracked
     git(k, "add", "-A")
     git(k, "commit", "-q", "-m", "kit copy")
     ran = sc / "ran"
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "FAST_RAN": str(ran)}
-    f.run("fast-map", "env", "-C", str(k), "just", "fast-map")
+    f.run("fast-map", "env", "-C", str(k), "just", "fast-map", "-k", "test_script")
     f.check("fast-map", lambda c: c.code == 0 and "fast-map: 3 test items mapped at " in c.out)
     with (k / "scripts" / "fixture-a").open("a") as fh:
         fh.write("# one-script change\n")
     ran.write_text("")
-    f.run("fast-one-script", "env", "-C", str(k), "just", "fast")
-    f.obs("fast-one-script", "ran", ran.read_text())
-    f.check("fast-one-script", lambda c: c.code == 0 and c.o["ran"] == "a\n"
+    f.run("fast-one-script", "env", "-C", str(k), "just", "--set", "GATE_RECIPES", "check-dashes", "fast")
+    f.obs("fast-one-script", "ran", "".join(sorted(ran.read_text().splitlines(keepends=True))))
+    f.check("fast-one-script", lambda c: c.code == 0 and c.o["ran"] == "a\nd\n"
             and "fast: check-dashes: static check" in c.err
             and "fast: tests/a.sh: recorded coverage reaches scripts/fixture-a" in c.err
+            and "fast: tests/d.sh: no recorded coverage in the map at " in c.err
             and "fast: tests/c.sh: e2e (# gate: e2e): skipped" in c.err
-            and "fast: 1 non-e2e test items skipped" in c.err and re.search(r"=+ 2 passed in ", c.out) is not None)
+            and "fast: 1 non-e2e test items skipped" in c.err and re.search(r"=+ 3 passed in ", c.out) is not None)
     f.env = {}
     say(f"gate-tiers evidence: {f.d}")
 
