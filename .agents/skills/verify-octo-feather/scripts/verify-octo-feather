@@ -1524,6 +1524,30 @@ def drive_gate_tiers(f: Feature) -> None:
             and "fast: tests/d.sh: no recorded coverage in the map at " in c.err
             and "fast: tests/c.sh: e2e (# gate: e2e): skipped" in c.err
             and "fast: 1 non-e2e test items skipped" in c.err and re.search(r"=+ 3 passed in ", c.out) is not None)
+    # The dry run after that change: the same selection named and counted, nothing run.
+    ran.write_text("")
+    f.run("fast-list", "env", "-C", str(k), "just", "--set", "GATE_RECIPES", "check-dashes", "fast-list")
+    f.obs("fast-list", "ran", ran.read_text())
+    f.check("fast-list", lambda c: c.code == 0 and c.o["ran"] == ""
+            and "fast: tests/a.sh: recorded coverage reaches scripts/fixture-a" in c.out
+            and "fast: tests/d.sh: no recorded coverage in the map at " in c.out
+            and "fast: selected 3 of 5 gate items (1 static, 2 of 4 test items)" in c.out)
+    # A mapping run with a red item, e (runs b's script, then fails): the map is written from the items that passed,
+    # e left out; the dry run on the unchanged tree then names e always selected.
+    git(k, "checkout", "-q", "scripts/fixture-a")
+    (k / "tests" / "e.sh").write_text('#!/usr/bin/env bash\nset -euo pipefail\necho e >> "$FAST_RAN"\n'
+                                      '"$(dirname "$0")/../scripts/fixture-b"\nexit 1\n')
+    (k / "tests" / "e.sh").chmod(0o755)
+    git(k, "add", "-A")
+    git(k, "commit", "-q", "-m", "a red item")
+    f.run("fast-map-red", "env", "-C", str(k), "just", "fast-map", "-k", "test_script")
+    f.check("fast-map-red", lambda c: c.code != 0 and "fast-map: 3 test items mapped at " in c.out
+            and "fast-map: tests/e.sh did not pass: left out of the map, always selected" in c.out)
+    f.run("fast-list-red", "env", "-C", str(k), "just", "--set", "GATE_RECIPES", "check-dashes", "fast-list")
+    f.check("fast-list-red", lambda c: c.code == 0
+            and "fast: tests/e.sh: did not pass the mapping run at " in c.out
+            and "fast: tests/d.sh: no recorded coverage in the map at " in c.out
+            and "fast: selected 3 of 6 gate items (1 static, 2 of 5 test items)" in c.out)
     f.env = {}
     say(f"gate-tiers evidence: {f.d}")
 
