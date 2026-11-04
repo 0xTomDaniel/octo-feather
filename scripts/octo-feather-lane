@@ -225,7 +225,14 @@ cannot read, or a ledger it cannot write, prints one stderr line naming the unre
   octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
 
 What `report` reads and shows, that it writes nothing, and how it treats a source it cannot read:
-docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then per lane:
+docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then the headline (spec comms
+#report-owner-caught):
+
+  owner-caught (headline, director.handoffs.jsonl): <N> in the last 7 days, <M> in the 7 days before
+                                                 by each finding's at; `; <K> with no readable at, not counted`
+                                                 when some have none; `log none` with no log, `unread` when unreadable
+
+then per lane:
 
   lane <record name>: issue <issue> <repository> "<goal>"
     started: <started_at>                        its age is the lane's wall time
@@ -2371,17 +2378,22 @@ def check_results(rollup: list[dict]) -> str:
     return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
 
 
-def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
-    """The director log's owner-caught finding classes (spec comms #report-owner-caught)."""
+def owner_caught(state: Path, now, unread: list[str]) -> tuple[str, list[str]]:
+    """The director log's owner-caught findings (spec comms #report-owner-caught): the headline, the count for the
+    last seven days beside the seven before, and the block by class."""
+    import datetime
     log = state / "director.handoffs.jsonl"
+    head = f"owner-caught (headline, {log.name}):"
     if not log.exists():
-        return [f"owner-caught: log {log.name}: none"]
+        return f"{head} log none", [f"owner-caught: log {log.name}: none"]
     try:
         lines, bad = read_log(log)
     except (OSError, UnicodeDecodeError) as e:
         unread.append(f"log {log.name}")
-        return [f"owner-caught: unread: log {log.name}: {e}"]
+        return f"{head} unread", [f"owner-caught: unread: log {log.name}: {e}"]
     seen: dict[str, list] = {}
+    week = datetime.timedelta(days=7)
+    weeks, undated = [0, 0], 0
     for d in lines:
         c = d.get("class")
         if d.get("kind") == "finding" and isinstance(c, str) and c.startswith("owner-caught-"):
@@ -2390,11 +2402,19 @@ def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
             t = utc(d.get("at"))
             if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
                 s[1] = d.get("at")
+            if t is None:
+                undated += 1
+            elif t > now - week:
+                weeks[0] += 1
+            elif t > now - 2 * week:
+                weeks[1] += 1
+    head += f" {weeks[0]} in the last 7 days, {weeks[1]} in the 7 days before" + (
+        f"; {undated} with no readable at, not counted" if undated else "")
     out = [f"owner-caught ({log.name}):" if seen else f"owner-caught ({log.name}): none"]
     out += [f"  class {c}: count {n}, last seen {stamp(at, now)}" for c, (n, at) in sorted(seen.items())]
     if bad:
         out.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
-    return out
+    return head, out
 
 
 def director_reflection(state: Path, now: object, unread: list[str]) -> str:
@@ -2589,6 +2609,8 @@ def cmd_report(args: list[str]) -> int:
     lanes = lanes_dir()
     print(f"report at {now:%Y-%m-%dT%H:%M:%SZ} ({lanes})")
     unread: list[str] = []
+    headline, caught = owner_caught(lanes.parent, now, unread)
+    print(headline)
     try:
         agents, herdr_why = herdr_agents(), None
     except Refuse as e:
@@ -2610,7 +2632,7 @@ def cmd_report(args: list[str]) -> int:
     print("owner queue:" if queue else "owner queue: none")
     for name, g, at in queue:
         print(f"  lane {name} gate {g} asked {stamp(at, now)}")
-    print("\n".join(owner_caught(lanes.parent, now, unread)))
+    print("\n".join(caught))
     print(director_reflection(lanes.parent, now, unread))
     for n in src.notes():
         print(n)

@@ -4,7 +4,8 @@
 # Proves comms#acceptance-report-lanes, #acceptance-report-any-target, #acceptance-report-unreadable,
 # #acceptance-report-owner-queue, #acceptance-report-owner-caught, #acceptance-report-lane-numbers (lane-a: started
 # line's age is its wall time, 2 review rounds, $1.7500 and 2 calls of unknown cost), #acceptance-report-gate-time
-# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago).
+# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago), #acceptance-report-owner-caught-headline (both
+# weeks' counts on the line after the first, before any lane).
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -18,11 +19,11 @@ mkdir -p "$HOME" "$t/bin" "$S"; cp -r "$fx/state/." "$S/"
 cp "$fx/gh" "$fx/herdr" "$t/bin/"; chmod +x "$t/bin/"*; export PATH="$t/bin:$PATH"
 snap() { (cd "$S" && find . -printf '%p %y %s %T@ %m\n' | sort && find . -type f -exec sha256sum {} + | sort); }
 before="$(snap)"
-run() { # expected-file; runs the report, normalizes now, state dir and ages, diffs
+run() { # expected-file; runs the report, normalizes now, state dir, ages and the headline's counts (they move with the date), diffs
   local rc=0
   "$kit/scripts/octo-feather-lane" report >"$t/out" 2>"$t/err" || rc=$?
   [[ $rc == 0 ]] || fail "exit $rc: $(cat "$t/err" "$t/out")"
-  sed -E "1s/^report at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z/report at NOW/; s#$S#STATE#; s/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/g" "$t/out" >"$t/norm"
+  sed -E "1s/^report at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z/report at NOW/; s#$S#STATE#; s/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/g; 2s/: [0-9]+ in the last 7 days, [0-9]+ in the 7 days before$/: COUNTS/" "$t/out" >"$t/norm"
   diff -u "$1" "$t/norm" || fail "report differs from $(basename "$1")"
   [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 }
@@ -44,6 +45,18 @@ printf '{"at": "2026-10-01T09:00:00Z", "kind": "reflection", "findings": 0, "que
 "$kit/scripts/octo-feather-lane" report >"$t/out" || fail "director reflection: exit non-zero"
 grep -qx "director reflection: last ran $two (2d0h[0-9]m ago)" "$t/out" && [[ "$(grep -c '^director reflection' "$t/out")" == 1 ]] \
   || fail "director reflection two days ago: $(grep '^director reflection' "$t/out")"
+[[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
+
+# the headline (comms #report-owner-caught): a director log of owner-caught findings 2 days and 9 days ago, one with no
+# readable at; the
+# report's line after its first, before any lane, counts each week
+nine="$(date -u -d '9 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+printf '{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "a"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-y", "summary": "b"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "c"}\n{"at": "soon", "kind": "finding", "class": "owner-caught-x", "summary": "d"}\n' \
+  "$two" "$two" "$nine" >"$S/director.handoffs.jsonl"; before="$(snap)"
+"$kit/scripts/octo-feather-lane" report >"$t/out" || fail "headline: exit non-zero"
+[[ "$(sed -n 2p "$t/out")" == "owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before; 1 with no readable at, not counted" ]] \
+  || fail "headline: want it second, before any lane: $(head -3 "$t/out")"
+grep -qx '  class owner-caught-x: count 3, last seen .*' "$t/out" || fail "headline: the per-class block changed: $(cat "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
 # no spend ledger and no gate run trend: said per lane, nothing else changes
