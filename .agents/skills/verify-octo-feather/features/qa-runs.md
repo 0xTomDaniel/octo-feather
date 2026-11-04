@@ -35,4 +35,4 @@ The drive writes a scratch eval suite `vq` under `$VERIFY_OCTO_FEATHER_RUN_DIR/s
 ## Gotchas
 
 - The stub proves the counting and the verdict rule, not a role's real variance: a real pass rate comes from `just qa --runs N` against the real model, never from this drive.
-- What the spread is: `octo-feather-qa --help` (result.json fields). One run shows 0.
+- What the spread is: `octo-feather-qa --help` (result.json fields).

@@ -48,9 +48,9 @@ summary.json `runs` is the runs per case.
                             cases), printed before the run
   --runs N                  run each selected fact case N times (default 1), one run at a time, each in its own
                             sandbox and scratch copy (scratch dir qa-<id>-<n>r<k>-*, k the run); its artifacts in
-                            <case>/run-<k>/, an indented `run k/N` line each, then the case line: PASS only when
-                            every run passed, its runs passed out of N, pass rate and stddev, and each failed
-                            run's deciding facts. A judgment bench runs once. Without it: one run, artifacts in
+                            <case>/run-<k>/, an indented `run k/N` line each, then the case line (its verdict:
+                            spec quality#acceptance-qa-repeats): its runs passed out of N, pass rate and stddev,
+                            and each failed run's deciding facts. A judgment bench runs once. Without it: one run, artifacts in
                             <case>/, no run lines
   --model MODEL             pi --model override (default: the role's frontmatter model; a bench runs no chat model)
   --classifier P/ID         a judgment bench benches only this classifier (repeatable; default every available one)
@@ -841,9 +841,7 @@ Result = dict[str, object]
 
 def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[Result], model: str | None, runid: str, n: int,
              out: Path, runs: int, kit: Path, kit_ref: str | None, kit_sha: str | None) -> Result:
-    """A case run RUNS times, one run at a time (--runs, rules: --help): its result, with runs, runs_passed, pass_rate
-    and stddev; one run keeps today's layout and line, several each its run-<k>/ dir and an indented line, then the
-    case's line and result.json."""
+    """A case run RUNS times and its result (--runs and the result fields: --help)."""
     one = cast("Callable[..., Result]", run_case)
     if runs == 1:
         rs, dirs = [one(qc, evals, suite, case, facts, model, runid, n, out, kit, kit_ref, kit_sha)], ["."]
