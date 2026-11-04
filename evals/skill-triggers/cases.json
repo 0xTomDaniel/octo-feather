@@ -1606,5 +1606,69 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Spec a `--lower` flag for `app hello` that prints the greeting lower-cased, CLI and JSON. Small feature, no restructuring. Unreachable after this, choose for me."
+  },
+  {
+    "id": "impl-design-seam",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Ticket 21: `app hello` says 'Good morning, Ada' before noon and 'Good evening, Ada' from noon on, in plain and --json output. The tests must pass at any hour of the day without touching the real clock. Build it and commit."
+  },
+  {
+    "id": "impl-design-phrasebook",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "new ticket: `app hello --lang fr` greets in that language. the greeting word comes from our phrasebook service over HTTP (GET https://phrases.example/v1/hello?lang=fr answers {\"word\": \"Bonjour\"}). CI has no network and the suite has to stay fast. work out how core gets at the phrasebook, then build it. no commit needed."
+  },
+  {
+    "id": "impl-design-near-bugfix",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Bug: `app hello 'Ada  Lovelace' --json` keeps the double space in both name and text; inner whitespace should collapse to one space. Fix it with a regression test beside the existing in-process CLI tests, and commit."
+  },
+  {
+    "id": "impl-design-near-rename",
+    "role": "implementer",
+    "fixture": "py-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Rename the Greeting dataclass in src/app/core.py to Salutation everywhere it is used, tests included. Behaviour stays the same and the suite stays green. Commit it."
+  },
+  {
+    "id": "rev-design-seam",
+    "role": "code-reviewer",
+    "fixture": "py-review-seams",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh21: review/clock.diff makes the greeting depend on the time of day, and its tests pin the hour by patching what app.core imports. Is it fit to merge as it stands? Give your verdict, and if you block, what the tests should do instead."
+  },
+  {
+    "id": "rev-design-phrasebook",
+    "role": "code-reviewer",
+    "fixture": "py-review-seams",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "lane gh7 wants review/phrasebook.diff merged: `--lang` fetches the greeting word from a remote phrasebook over HTTP, and the new test fakes that call. Would you let it in? Verdict with reasons."
+  },
+  {
+    "id": "rev-design-near-bugfix",
+    "role": "code-reviewer",
+    "fixture": "py-review-seams",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Code review, lane gh9: review/collapse-space.diff fixes inner whitespace in names and adds one regression test beside the existing in-process CLI tests. Verdict, with reasons."
+  },
+  {
+    "id": "rev-design-near-rename",
+    "role": "code-reviewer",
+    "fixture": "py-review-seams",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Is review/rename.diff ok to merge? It renames the Greeting dataclass to Salutation and shortens two test names; nothing else changes. Short verdict."
   }
 ]
