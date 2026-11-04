@@ -12,16 +12,13 @@ else `subset`), steps (name, seconds, result: ok, FAIL, ERROR or skipped), one p
 testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
 
-Also copyable unchanged: the qc capture's side of the gate (quality spec #qc-capture). A test proving a criterion
-carries pytest's `criterion` marker, `@pytest.mark.criterion("<spec>#<anchor>", ..., source=PATH)` (many-to-many:
-several ids per test, several tests per id; each parameterized case its own). Inert unless the run is given the
-lane's claimed criteria, OCTO_FEATHER_QC_CLAIMS (space-separated <spec>#<anchor>): then, before any test runs,
-each claim is checked against its spec, and every collecting process writes the plan (each case and the claimed
-criteria it is tagged with) into a capture dir; a case tagged with a claim runs its command through the qc
-capture's sandbox (fixture qc_command: `octo-feather-qc --capture-case`), which notes that it ran there; after the
-run, the controller hands the plan, each case's pytest report (outcome, duration, output) and those notes to
-`octo-feather-qc --capture-store`, which appends one evidence record per claimed criterion with a tagged case. A
-store that fails fails the run. Untagged cases, and every case without claims, run as before.
+Also copyable unchanged: the qc capture's side of the gate (what it must capture: quality spec #qc-capture). A test
+carries pytest's `criterion` marker, `@pytest.mark.criterion("<spec>#<anchor>", ..., source=PATH)`. Inert unless
+OCTO_FEATHER_QC_CLAIMS (space-separated <spec>#<anchor>) is set: then, before any test runs, a narrowed invocation
+(_tier) is refused and each claim checked against its spec; every collecting process writes the plan into a capture
+dir; a claimed tagged case runs through `octo-feather-qc --capture-case` (fixture qc_command); after the run the
+controller hands plan, pytest reports and capture notes to `octo-feather-qc --capture-store`. A store that fails
+fails the run.
 OCTO_FEATHER_QC_TAGS=FILE (octo-feather-qc, with --collect-only): the collecting process writes every tagged
 case and its criteria there as JSON, so qc knows exactly which criteria a test carries; such a run adds no trend line.
 """
@@ -103,6 +100,10 @@ def pytest_configure(config: pytest.Config) -> None:
         return
     # Arranged before execution: every claim names a criterion of its spec, else nothing runs.
     root = Path(_git("rev-parse", "--show-toplevel") or Path.cwd())
+    if _tier(config) != "full":   # a narrowed run would record only part of a criterion's cases: refused, nothing runs
+        msg = (f"{CLAIMS} needs the full gate: this invocation narrows it (paths or node ids, -k, -m, --lf, --sw, "
+               "--deselect, --ignore); run the full gate with the claims, or unset them; nothing ran")
+        raise pytest.UsageError(msg)
     bad = [c for c in _claims() if not _names_criterion(root, c)]
     if bad:
         msg = (f"{CLAIMS}: {' '.join(bad)} names no criterion: want <spec>#<anchor> with that anchor in "
@@ -187,7 +188,8 @@ class _Capture:
             session_file.write_text(json.dumps({
                 "claims": _claims(), "plan": plan, "reports": self.reports,
                 "notes": {n: v for n, v in notes.items() if v is not None}, "head_at_start": self.head,
-                "clean_at_start": self.clean, "argv": sys.argv[1:], "exit": int(exitstatus)}))
+                "clean_at_start": self.clean, "argv": sys.argv[1:], "tier": _tier(session.config),
+                "exit": int(exitstatus)}))
             p = subprocess.run(["octo-feather-qc", "--capture-store", str(session_file)],  # noqa: S607
                                capture_output=True, text=True, check=False)
             sys.stdout.write("\n" + p.stdout)   # after the progress line

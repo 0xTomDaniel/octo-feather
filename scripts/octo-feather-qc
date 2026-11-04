@@ -4,12 +4,9 @@
   octo-feather-qc --capture-case NOTE -- CMD...   (a capturing gate's tagged case; tests/gate/conftest.py)
   octo-feather-qc --capture-store SESSION         (that gate's records, after its run)
 
-Run in a lane worktree at its integrated head. A named criterion a tagged test proves is judged from the record the
-head's full gate captured of it (quality spec #qc-capture; capture_store and tested below: the gate given the lane's
-claims in OCTO_FEATHER_QC_CLAIMS ran each tagged case once in the qc sandbox), never rerun: decision source the
-tagged test assertions, pass when every case passed, fail when one failed, insufficient evidence naming each case
-skipped, missing, errored or not captured, and never the demo or the fallback; a criterion a test carries (tagged_cases:
-the gate's own collector) with no such record at the head is insufficient evidence too, never the demo or the fallback. Capture first, no model: each other
+Run in a lane worktree at its integrated head. A named criterion a tagged test proves is judged from the record its
+head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
+#qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
 [demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
@@ -585,6 +582,9 @@ def capture_store(path: Path) -> int:
     s: dict[str, Any] = json.loads(path.read_text())
     plan: dict[str, dict[str, Any]] = s["plan"]
     root, head = git("rev-parse", "--show-toplevel"), git("rev-parse", "HEAD")
+    if s.get("tier") != "full":
+        die(3, f"the gate run was not the full gate (tier {s.get('tier')!r}): a record of part of a criterion's cases is no "
+               "evidence; no record written")
     if head != s["head_at_start"]:
         die(3, f"HEAD moved during the gate ({str(s['head_at_start'])[:12]} to {head[:12]}); no record written")
     ident = json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head], capture_output=True,
@@ -625,11 +625,12 @@ def capture_store(path: Path) -> int:
     return 0
 
 
-def tested(i: str, cid: str, head: str, text: str, root: str) -> Result | None:
+def tested(i: str, cid: str, head: str, text: str, root: str, tagged: list[str]) -> Result | None:
     """I's result from the newest record a capturing gate wrote for it at HEAD (capture_store), never rerunning it; None
     with no such record. Complete when the record is at the head from a clean worktree, the gate started clean on it
     with the head's gate configuration, the criterion text hash is the spec's, and every case ran to its end; then pass
-    when every case passed, else fail (a completed assertion failure)."""
+    when every case passed, else fail (a completed assertion failure). Every case TAGGED with it at the head (the gate's
+    collector, tagged_cases) must be in the record: one missing is a partial capture, named."""
     p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", head, "--json"],
                        capture_output=True, text=True)
     found = [x for x in json.loads(p.stdout) if TESTED in x["record"]["outputs"]] if p.returncode == 0 else []
@@ -649,7 +650,8 @@ def tested(i: str, cid: str, head: str, text: str, root: str) -> Result | None:
         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
         ("gate configuration differs from the head's", any(cap["gate"].get(k) != v for k, v in cfg.items())),
         ("no tagged case", not cases),
-    ) if bad] + [f"case {c['test']} ({c['case']}) {c['outcome']}: {c['why']}" for c in cases if c["outcome"] not in COMPLETED]
+    ) if bad] + [f"case {c['test']} ({c['case']}) {c['outcome']}: {c['why']}" for c in cases if c["outcome"] not in COMPLETED] + [
+        f"case {n} tagged at {head[:12]}, not in the record (a partial capture)" for n in tagged if n not in {c["case"] for c in cases}]
     if missing:
         return res | {"missing": missing}
     failed = [c["test"] for c in cases if c["outcome"] == "failed"]
@@ -743,10 +745,10 @@ def main(argv: list[str]) -> int:
     stem = spec.name.removesuffix(".spec.html")
     root = git("rev-parse", "--show-toplevel")
     declared = contract_demos(root)
-    found = {i: tested(i, f"{stem}#{i}", head, text[i], root) for i in ids}
+    tags = tagged_cases(root)   # the head's tagged cases, from the gate's own collector
+    found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids}
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
-    if len(tests) < len(ids):
-        tests |= unrecorded([i for i in ids if i not in tests], tagged_cases(root), stem, head)
+    tests |= unrecorded([i for i in ids if i not in tests], tags, stem, head)
     demos = {i: declared[f"{stem}#{i}"] for i in ids if f"{stem}#{i}" in declared and i not in tests}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
