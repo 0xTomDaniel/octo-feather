@@ -156,8 +156,8 @@
     "acceptance-integrate-fast": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T173335Z-8fcc56ce",
-      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "record": "20261104T183348Z-3570d118",
+      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
       "tests": [
         "tests/fast.sh",
         "tests/integrate.sh"
@@ -166,8 +166,8 @@
     "acceptance-integrate-checkpoint": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T173346Z-c722bd22",
-      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "record": "20261104T183417Z-8b2565dc",
+      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
       "tests": [
         "tests/fast.sh",
         "tests/integrate.sh"
@@ -176,8 +176,8 @@
     "acceptance-pilot-full": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T173357Z-0157d62c",
-      "commit": "ecfd4d57eaa858376fdbe073c6b5be67b85f7bdc",
+      "record": "20261104T183506Z-37573375",
+      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
       "tests": [
         "tests/fast.sh",
         "tests/integrate.sh"
