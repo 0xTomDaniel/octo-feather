@@ -107,8 +107,14 @@
       "pr": 279
     },
     "acceptance-report-gate-budget": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T213029Z-2b39a4bf",
+      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "tests": [
+        "tests/lane-report.sh",
+        "tests/gate-trend-tier.sh"
+      ]
     }
   }
 }
