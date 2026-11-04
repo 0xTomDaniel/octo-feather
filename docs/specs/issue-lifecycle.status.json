@@ -152,6 +152,30 @@
     "acceptance-writer-route-lane": {
       "status": "built",
       "pr": 279
+    },
+    "acceptance-integrate-fast": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-integrate-checkpoint": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-pilot-full": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-brownfield-full": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-ask-full-proof": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-merge-ask-gate-budget": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

@@ -29,6 +29,18 @@
     "acceptance-starter-verify": {
       "status": "built",
       "pr": 181
+    },
+    "acceptance-fresh-fast": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-test-kinds": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-shared-fixture": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

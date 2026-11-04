@@ -105,6 +105,10 @@
     "acceptance-reflect-files-correction": {
       "status": "built",
       "pr": 279
+    },
+    "acceptance-report-gate-budget": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

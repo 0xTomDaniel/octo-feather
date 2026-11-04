@@ -168,6 +168,10 @@
       "tests": [
         "tests/spec-status.sh"
       ]
+    },
+    "acceptance-fast-affected": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
