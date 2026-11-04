@@ -111,6 +111,7 @@ def tool(i, name, args):   # as pi: the assistant message holding the call ends,
 tool("c1", "bash", {"command": "ls"})
 out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "bash", "isError": False,
      "result": {"content": [{"type": "text", "text": "README.md\n"}], "structuredContent": {"output": "README.md\n", "exit_code": 0}}})
+time.sleep(0.5)   # the model's next turn: the watcher snapshots this call's end before the next call runs
 def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an error
     try:
         return False, open(path).read()
