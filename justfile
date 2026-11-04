@@ -84,7 +84,37 @@ check-scripts:
     set -euo pipefail
     cd "$root"
     mapfile -t sh < <(just --justfile "$root/justfile" shell-files)
-    shellcheck -S warning "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
+    # ShellCheck fanned out over the CPUs (#507): the same files and flags in batches run at once, each batch holding
+    # every file one of its files sources (a `# shellcheck source=` directive or a literal path: ShellCheck follows a
+    # sourced file only when it is an input of the same run), each batch's output printed whole in turn, and the run
+    # exiting with the first failing batch's status. No files: one plain run, which refuses that itself.
+    python3 -c 'import concurrent.futures as cf, os, re, subprocess, sys
+    files = sys.argv[1:]; up = {f: f for f in files}
+    def top(f):
+        while up[f] != f: f = up[f]
+        return f
+    src = re.compile(r"shellcheck\b[^\n]*?\bsource=(\S+)|^[ \t]*(?:source|\.)[ \t]+[\x22\x27]?([^\s\x22\x27;&|$`]+)", re.M)
+    for f in files:
+        try: text = open(f, encoding="utf-8", errors="replace").read()
+        except OSError: continue
+        for m in src.finditer(text):
+            p = m[1] or m[2]
+            hit = next((c for c in (os.path.normpath(p), os.path.normpath(os.path.join(os.path.dirname(f), p))) if c in up), None)
+            if hit and top(hit) != top(f): up[top(hit)] = top(f)
+    groups = {}
+    for f in files: groups.setdefault(top(f), []).append(f)
+    size = lambda g: sum(os.path.getsize(f) if os.path.isfile(f) else 0 for f in g)
+    bins = [[] for _ in range(os.cpu_count() or 1)]
+    for g in sorted(groups.values(), key=size, reverse=True): min(bins, key=size).extend(g)
+    bins = [b for b in bins if b] or [[]]
+    run = lambda b: subprocess.run(["shellcheck", "-S", "warning", *b], capture_output=True, text=True)
+    rc = 0
+    try:
+        with cf.ThreadPoolExecutor(len(bins)) as pool:
+            for r in pool.map(run, bins):
+                sys.stdout.write(r.stdout); sys.stderr.write(r.stderr); rc = rc or r.returncode
+    except FileNotFoundError: print("check-scripts: shellcheck not found on PATH (mise.toml pins it)", file=sys.stderr); rc = 127
+    sys.exit(rc)' "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
     mapfile -t py < <(uv run --locked --offline --no-sync octo-feather-lint files)
     python3 -c 'import sys
     bad = 0
