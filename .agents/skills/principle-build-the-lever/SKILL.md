@@ -1,6 +1,6 @@
 ---
 name: principle-build-the-lever
-description: "Apply to any non-trivial work, not just bulk work: edits, migrations, analyses, checks. Build the tool that does it or proves it (codemod, script, generator, or a skill your subagents follow) instead of working by hand. The tool is the artifact a reviewer can rerun."
+description: "Repeating a step by hand? Load it before a step that recurs across sites (one change in many files) or across time (each hand-off, teardown, log line, status row), or whose result a reviewer must confirm: build the tool that does or proves it (script, codemod, generator, or a skill your subagents follow). Not for one edit you can see at a glance."
 ---
 # Build the Lever
 
