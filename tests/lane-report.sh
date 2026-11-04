@@ -47,16 +47,17 @@ grep -qx "director reflection: last ran $two (2d0h[0-9]m ago)" "$t/out" && [[ "$
   || fail "director reflection two days ago: $(grep '^director reflection' "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
-# the headline (comms #report-owner-caught): a director log of owner-caught findings 2 days and 9 days ago, one with no
-# readable at; the
+# the headline (comms #report-owner-caught): a director log of owner-caught findings 2, 3 (fractional seconds, an
+# offset) and 9 days ago, one with no readable at; the
 # report's line after its first, before any lane, counts each week
 nine="$(date -u -d '9 days ago' +%Y-%m-%dT%H:%M:%SZ)"
-printf '{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "a"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-y", "summary": "b"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "c"}\n{"at": "soon", "kind": "finding", "class": "owner-caught-x", "summary": "d"}\n' \
-  "$two" "$two" "$nine" >"$S/director.handoffs.jsonl"; before="$(snap)"
+three="$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S.123456+00:00)"   # ISO 8601 with fractional seconds and an offset
+printf '{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "a"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-y", "summary": "b"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "c"}\n{"at": "soon", "kind": "finding", "class": "owner-caught-x", "summary": "d"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-z", "summary": "e"}\n' \
+  "$two" "$two" "$nine" "$three" >"$S/director.handoffs.jsonl"; before="$(snap)"
 "$kit/scripts/octo-feather-lane" report >"$t/out" || fail "headline: exit non-zero"
-[[ "$(sed -n 2p "$t/out")" == "owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before; 1 with no readable at, not counted" ]] \
+[[ "$(sed -n 2p "$t/out")" == "owner-caught (headline, director.handoffs.jsonl): 3 in the last 7 days, 1 in the 7 days before; 1 with no readable at, not counted" ]] \
   || fail "headline: want it second, before any lane: $(head -3 "$t/out")"
-grep -qx '  class owner-caught-x: count 3, last seen .*' "$t/out" || fail "headline: the per-class block changed: $(cat "$t/out")"
+grep -qx '  class owner-caught-x: count 3, last seen .*' "$t/out" && grep -qx "  class owner-caught-z: count 1, last seen ${three%.*}Z (.* ago)" "$t/out" || fail "headline: the per-class block changed: $(cat "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
 # no spend ledger and no gate run trend: said per lane, nothing else changes

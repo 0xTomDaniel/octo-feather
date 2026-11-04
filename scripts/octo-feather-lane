@@ -2321,11 +2321,16 @@ RUNNING = "working"   # the Herdr agent_status of an agent at work
 
 
 def utc(s: object) -> "datetime.datetime | None":
+    """S as a UTC instant: an ISO 8601 date and time with Z or an offset, fractional seconds allowed
+    (2026-10-29T14:06:08Z, 2026-10-29T14:06:08.770516+00:00); None for anything else, a time with no zone included."""
     import datetime
+    if not isinstance(s, str) or "T" not in s:
+        return None
     try:
-        return datetime.datetime.strptime(str(s), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+        t = datetime.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
     except ValueError:
         return None
+    return None if t.tzinfo is None else t.astimezone(datetime.timezone.utc)
 
 
 def stamp(s: object, now) -> str:
