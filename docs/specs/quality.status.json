@@ -168,6 +168,34 @@
       "tests": [
         "tests/spec-status.sh"
       ]
+    },
+    "acceptance-qa-repeats": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-cost": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-baseline": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-analyst": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-review": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-history": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qa-tuning-method": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
