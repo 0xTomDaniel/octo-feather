@@ -16,7 +16,7 @@ env, an offline gh refusing every call, the copy an overlay whose writes die wit
 sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox cannot start, is a
 FAIL, never an unsandboxed run. Pi's session goes to --session-dir on the sandbox's private /tmp,
 never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH, behind any ran shim (logs argv,
-answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
+answers repo view, issue and pr create, lists); a `fake_qa` case a fake octo-feather-qa there too (schema, Case); an `origin` case gets a bare origin holding main, in the
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
 qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
 is credited to: schema, Before targets). For a case graded on test_write only, the collection runs after each
@@ -611,6 +611,136 @@ case "$1 $2" in
   *) echo "fake gh: $*" >&2;;
 esac
 '''
+# A case's fake_qa (schema, Case): octo-feather-qa answering in this script's own output form (its --help, header,
+# run, case, compare and summary lines), canned and plausible, with no case, sandbox or model run. @DOC@: this
+# script's docstring.
+FAKE_QA = r'''#!/usr/bin/env python3
+# octo-feather-qa for this case repo: answers in octo-feather-qa's own output form; no case, sandbox or model runs.
+import hashlib, json, os, secrets, subprocess, sys, time
+from pathlib import Path
+
+DOC = @DOC@
+a = sys.argv[1:]
+if not a or a[0] in ("-h", "--help"):
+    print(DOC.strip()); sys.exit(0)
+o = {"case": [], "suite": []}
+it = iter(a)
+for x in it:
+    k = x[2:]
+    if k not in ("suite", "case", "classifier", "model", "evals", "sample", "runs", "kit-ref", "baseline"):
+        print(f"octo-feather-qa: unknown argument {x!r} (see --help)", file=sys.stderr); sys.exit(64)
+    v = next(it, None)
+    if v is None:
+        print(f"octo-feather-qa: {x} needs a value", file=sys.stderr); sys.exit(64)
+    o.setdefault(k, []).append(v) if k in ("case", "suite") else o.__setitem__(k, v)
+runs = o.get("runs", "1")
+if not (runs.isdigit() and int(runs) > 0):
+    print(f"octo-feather-qa: --runs needs a positive integer, got {runs!r}", file=sys.stderr); sys.exit(64)
+runs = int(runs)
+git = lambda *g: subprocess.run(["git", *g], capture_output=True, text=True).stdout.strip()
+def sha(ref, opt):
+    s = git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}")
+    if not s:
+        print(f"octo-feather-qa: {opt} {ref}: no such commit in the kit repo {os.getcwd()}", file=sys.stderr); sys.exit(64)
+    return s
+kit = sha(o["kit-ref"], "--kit-ref") if "kit-ref" in o else git("rev-parse", "HEAD")
+base = sha(o["baseline"], "--baseline") if "baseline" in o else None
+ev = Path(o.get("evals", "evals"))
+suites = {}
+for d in sorted(p for p in ev.iterdir() if p.is_dir() and p.name != "fixtures") if ev.is_dir() else []:
+    try:
+        suites[d.name] = (json.loads((d / "cases.json").read_text()), json.loads((d / "reference" / "expectations.json").read_text()))
+    except (OSError, ValueError):
+        pass
+print(f"evals: ok ({len(suites)} suites, {sum(len(c) for c, _ in suites.values())} cases)")
+bad = [s for s in o["suite"] if s not in suites]
+if bad:
+    print(f"octo-feather-qa: no suite {' '.join(bad)} in {ev.resolve()} (have: {' '.join(suites) or 'none'})", file=sys.stderr); sys.exit(64)
+picked = [(s, c, e.get(c["id"], {}).get("facts", [])) for s, (cs, e) in suites.items() if not o["suite"] or s in o["suite"]
+          for c in cs if not o["case"] or c["id"] in o["case"]]
+bad = [c for c in o["case"] if c not in {c["id"] for _, c, _ in picked}]
+if bad:
+    print(f"octo-feather-qa: no case {' '.join(bad)} in the selected suites", file=sys.stderr); sys.exit(64)
+if not picked:
+    print("octo-feather-qa: no cases selected", file=sys.stderr); sys.exit(64)
+rid = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{secrets.token_hex(3)}"
+art = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path.home() / ".local" / "state" / "octo-feather" / "qa") / rid
+print(f"qa: run {rid}: {len(picked)} case(s)" + (f", {runs} runs each" if runs > 1 else "") + f"; kit {kit}"
+      + (f" (--kit-ref {o['kit-ref']})" if "kit-ref" in o else "") + (f"; baseline kit {base} (--baseline {o['baseline']}), runs interleaved" if base else "")
+      + f"; artifacts {art}", flush=True)
+def num(*k):
+    return int(hashlib.sha256("/".join(map(str, k)).encode()).hexdigest()[:8], 16)
+def said(case, facts, ok, k):
+    f = facts[0] if facts else {"fact": "skill_read", "skill": "?"}
+    s, n = f.get("skill", "?"), 3 + num(case, k) % 3
+    path = f"{os.getcwd()}/.agents/skills/{s}/SKILL.md"
+    loaded, none = f"loaded at tool call 2 of {n} (read {path})", f"no load of {s}/SKILL.md (its full content in a tool result) in {n} tool calls"
+    if f.get("fact") == "skill_not_read":
+        return f"skill_not_read {s}: {none if ok else loaded}", n
+    return f"skill_read {s}: {loaded if ok else none}", n
+results, cases_out = [], []
+for suite, c, facts in picked:
+    name = f"{suite}/{c['id']}"
+    sides = [("baseline", base, False), ("current", kit, True)] if base else [("", kit, True)]
+    got = {side: [] for side, _, _ in sides}
+    for k in range(1, runs + 1):
+        for side, s_, ok in sides:
+            text, n = said(c["id"], facts, ok, k)
+            secs = round(20 + num(c["id"], side, k) % 900 / 10, 1)
+            got[side].append((ok, text, n, secs))
+            if runs > 1 or base:
+                at = f"  {side} " if side else "  "
+                print(f"{at}run {k}/{runs}: {'PASS' if ok else 'FAIL'} {name}: {text} [stop: {'decided' if ok else 'exit'}, {n} tool calls, {secs} s] [kit {s_}]", flush=True)
+    def line(side, s_, lead=""):
+        rs = got[side]; okn = sum(r[0] for r in rs); rate = okn / len(rs)
+        sd = 0.0 if len(rs) == 1 or okn in (0, len(rs)) else (sum((float(r[0]) - rate) ** 2 for r in rs) / (len(rs) - 1)) ** 0.5
+        if runs == 1 and not base:
+            ok, text, n, secs = rs[0]
+            return f"{'PASS' if ok else 'FAIL'} {name}: {text} [stop: {'decided' if ok else 'exit'}, {n} tool calls, {secs} s] [kit {s_}]", rate, sd
+        why = [f"run {k}: {r[1]}" for k, r in enumerate(rs, 1) if not r[0]] or [f"run 1: {rs[0][1]}"]
+        v = "PASS" if okn == len(rs) else "FAIL"
+        return (f"{lead}{v} {name}: {okn}/{len(rs)} runs passed (pass rate {rate:.2f}, stddev {sd:.2f}); {'; '.join(why)} "
+                f"[{round(sum(r[3] for r in rs), 1)} s] [kit {s_}]"), rate, sd
+    cur = "current" if base else ""
+    text, rate, sd = line(cur, kit)
+    print(text, flush=True)
+    toks = [80000 + num(c["id"], cur, k) % 90000 for k in range(runs)]
+    tm = [r[3] for r in got[cur]]
+    mean = lambda v: sum(v) / len(v)
+    sdv = lambda v: 0.0 if len(v) < 2 else (sum((x - mean(v)) ** 2 for x in v) / (len(v) - 1)) ** 0.5
+    if runs > 1 and not base:
+        print(f"  cost {name}: time s {mean(tm):.1f} +/- {sdv(tm):.1f}; tokens {mean(toks):.0f} +/- {sdv(toks):.0f}", flush=True)
+    if base:
+        btext, brate, bsd = line("baseline", base, "  baseline ")
+        print(btext)
+        btm = [r[3] for r in got["baseline"]]; btoks = [100000 + num(c["id"], "b", k) % 250000 for k in range(runs)]
+        cost = lambda t: [round(x * 0.0000012 + 0.05, 4) for x in t]
+        rows = [("pass rate", (brate, bsd), (rate, sd), "{:.2f}"), ("time s", (mean(btm), sdv(btm)), (mean(tm), sdv(tm)), "{:.1f}"),
+                ("tokens", (mean(btoks), sdv(btoks)), (mean(toks), sdv(toks)), "{:.0f}"),
+                ("cost usd", (mean(cost(btoks)), sdv(cost(btoks))), (mean(cost(toks)), sdv(cost(toks))), "{:.4f}")]
+        print(f"  compare {name}: baseline kit {base[:12]} beside current kit {kit[:12]}")
+        print(f"    {'':<10} {'baseline':<20} {'current':<20} difference")
+        for lb, (bm, bs), (cm, cs), fmt in rows:
+            d = cm - bm
+            print(f"    {lb:<10} {fmt.format(bm) + ' +/- ' + fmt.format(bs):<20} {fmt.format(cm) + ' +/- ' + fmt.format(cs):<20} "
+                  + ("+" if d >= 0 else "") + fmt.format(d))
+    results.append((c, rate == 1.0))
+    cases_out.append({"suite": suite, "id": c["id"], "verdict": "PASS" if rate == 1.0 else "FAIL", "pass_rate": rate, "stddev": sd})
+if base or runs > 1:
+    print("qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):\n  no flags")
+if any("split" in c for c, _ in results):
+    for sp in ("train", "held-out"):
+        print(f"qa: {sp} score {sum(ok for c, ok in results if c.get('split') == sp)}/{sum(c.get('split') == sp for c, _ in results)} passed")
+passed = sum(ok for _, ok in results)
+try:   # where the state dir is read-only (the qa sandbox), no summary.json, as no run dir
+    art.mkdir(parents=True, exist_ok=True)
+    (art / "summary.json").write_text(json.dumps({"run_id": rid, "kit_sha": kit, "passed": passed, "total": len(results), "runs": runs,
+                                                  **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base}} if base else {}), "cases": cases_out}, indent=2) + "\n")
+except OSError:
+    pass
+print(f"qa: {passed}/{len(results)} passed (run {rid}); artifacts {art}")
+sys.exit(0 if passed == len(results) else 1)
+'''
 QA_TMP = "/tmp/qa-case"   # inside the sandbox: its private /tmp
 
 
@@ -622,14 +752,21 @@ def prep(setup):
     """In the sandbox, after its proof: the case's fake gh (first on PATH, logging argv) and bare origin.
     Returns (env for the role, origin dir or None, gh log or None)."""
     env, origin, log = dict(os.environ), None, None
+    on = cast("dict[str, object]", setup)
+    fakes = bool(on.get("fake_gh") or on.get("fake_qa"))   # fakes behind the run shims (schema, Case)
     if setup.get("fake_gh") or setup.get("origin"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
     if setup.get("fake_gh"):
         log = f"{QA_TMP}/gh.log"; open(log, "w").close()
         Path(f"{QA_TMP}/bin/gh").write_text(FAKE_GH); os.chmod(f"{QA_TMP}/bin/gh", 0o755)
+        env["FAKE_GH_LOG"] = log
+    if on.get("fake_qa"):
+        os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
+        Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
+    if fakes:
         ps = env.get("PATH", "").split(":")
-        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran gh records it
-        env.update(PATH=":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]]), FAKE_GH_LOG=log)
+        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it
+        env["PATH"] = ":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]])
     if setup.get("origin"):
         origin = f"{QA_TMP}/origin.git"
         for a in (["init", "-q", "--bare", "-b", "main", origin], ["push", "-q", origin, "main"], ["remote", "add", "origin", origin]):
@@ -936,7 +1073,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin")}
+        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
         cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]

@@ -1,0 +1,18 @@
+[
+ {
+  "id": "changelog-new-flag",
+  "role": "implementer",
+  "fixture": "app",
+  "should_trigger": true,
+  "split": "train",
+  "task": "Ticket T9: `app hello` gains --shout, printing the greeting upper-cased."
+ },
+ {
+  "id": "changelog-refactor",
+  "role": "implementer",
+  "fixture": "app",
+  "should_trigger": false,
+  "split": "train",
+  "task": "Ticket T10: rename the internal helper core.greet to core.make_greeting; app's output does not change."
+ }
+]

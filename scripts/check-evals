@@ -7,7 +7,7 @@ Deterministic and free: reads JSON only, never starts an agent or a model. Run b
 EVALS_DIR: default the kit's evals/.
 Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
 refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
-role-transcript setup branch/head/origin/fake_gh, review, history fixture), Facts (reference/expectations.json: the closed fact
+role-transcript setup branch/head/origin/fake_gh/fake_qa, review, history fixture), Facts (reference/expectations.json: the closed fact
 list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
 suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
 classifiers.json).
@@ -31,7 +31,7 @@ FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
 NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
-SETUP = {"branch", "head", "origin", "fake_gh"}   # schema.md, Case
+SETUP = {"branch", "head", "origin", "fake_gh", "fake_qa"}   # schema.md, Case
 BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential", "repo"}
 KINDS = {"skill-trigger", "role-transcript", "judgment"}
@@ -423,7 +423,7 @@ def check_setup(at, c, evals, errs):
         errs.append(f"{at}: field branch: must be a branch name ({BRANCH.pattern}, no '..'), got {c['branch']!r}")
     if "branch" in c and c["branch"] == "main":
         errs.append(f"{at}: field branch: main exists already; name the branch to cut from it")
-    for k in ("origin", "fake_gh"):
+    for k in ("origin", "fake_gh", "fake_qa"):
         if k in c and c[k] is not True:
             errs.append(f"{at}: field {k}: must be true (leave it out for false)")
     if "head" not in c:

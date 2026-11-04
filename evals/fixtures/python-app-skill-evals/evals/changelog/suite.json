@@ -1,0 +1,5 @@
+{
+ "suite": "changelog",
+ "kind": "skill-trigger",
+ "description": "the implementer loads the changelog skill when, and only when, a ticket changes what app does"
+}
