@@ -106,7 +106,11 @@ def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an 
         return False, open(path).read()
     except OSError as e:
         return True, f"ENOENT: {e}"
-if "STUB-READ-TDD" in prompt and tdd:
+import os, re
+# STUB-ALTERNATE: run k of a --runs case (its scratch copy qa-<id>-<n>r<k>-*: octo-feather-qa --help) skips the read on
+# an even k, so runs 1, 3... pass skill_read and runs 2, 4... fail it.
+run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
+if "STUB-READ-TDD" in prompt and tdd and not ("STUB-ALTERNATE" in prompt and run_k % 2 == 0):
     tool("c2", "read", {"path": tdd})
     err, txt = pi_read(tdd)
     out({"type": "tool_execution_end", "toolCallId": "c2", "toolName": "read", "isError": err, "result": {"content": [{"type": "text", "text": txt}]}})
