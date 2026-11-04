@@ -7,7 +7,7 @@ Deterministic and free: reads JSON only, never starts an agent or a model. Run b
 EVALS_DIR: default the kit's evals/.
 Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
 refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
-role-transcript setup branch/head/origin/fake_gh, review), Facts (reference/expectations.json: the closed fact
+role-transcript setup branch/head/origin/fake_gh, review, history fixture), Facts (reference/expectations.json: the closed fact
 list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
 suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
 classifiers.json).
@@ -15,14 +15,15 @@ Each problem prints `check-evals: <file>[ case <id>][ fact #<n>]: field <name>: 
 Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
 EVALS_DIR is not a dir.
 """
-import importlib.machinery, importlib.util, json, re, sys, tomllib
+import importlib.machinery, importlib.util, json, re, shutil, subprocess, sys, tomllib
 from typing import cast
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
          "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
-         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"}}
+         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"},
+         "tool_called_before": {"tools", "before"}}
 PROGRAM = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*")   # a ran fact's program: a command name (schema.md, Facts)
 OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
 FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
@@ -147,8 +148,10 @@ def check_suite(d, evals, errs):
                 errs.append(f"{at}: field id: duplicate")
             else:
                 ids.append(c["id"])
+        if "fixture" in c and isinstance(cast("object", c["fixture"]), dict):   # a history fixture (schema.md, Case)
+            check_history(str(at), cast("object", c["fixture"]), cast("list[str]", errs))
         for k in ("role", "fixture", "task"):
-            if k in c and not (isinstance(c[k], str) and c[k].strip()):
+            if k in c and not (isinstance(c[k], str) and c[k].strip()) and not (k == "fixture" and isinstance(c[k], dict)):
                 errs.append(f"{at}: field {k}: must be a non-empty string")
         if isinstance(c.get("role"), str) and c["role"].strip() and not (
                 re.fullmatch(r"[a-z0-9-]+", c["role"]) and (KIT / "agents" / f"{c['role']}.md").is_file()):
@@ -432,8 +435,11 @@ def check_setup(at, c, evals, errs):
         errs.append(f"{at}: field head.{k}: missing")
     for k in sorted(set(h) - {"fixture", "branch", "message"}):
         errs.append(f"{at}: field head.{k}: unknown field")
+    hist = "fixture" in h and isinstance(cast("object", h["fixture"]), dict)
+    if hist:
+        check_history(cast("str", at), cast("object", h["fixture"]), cast("list[str]", errs), "head.fixture")
     if "fixture" in h and not (isinstance(h["fixture"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", h["fixture"])
-                               and (evals / "fixtures" / h["fixture"]).is_dir()):
+                               and (evals / "fixtures" / h["fixture"]).is_dir()) and not hist:
         errs.append(f"{at}: field head.fixture: no fixture dir {evals / 'fixtures' / str(h['fixture'])}")
     if "branch" in h and (not ref(h["branch"]) or h["branch"] in ("main", c.get("branch"))):
         errs.append(f"{at}: field head.branch: must be a new branch name (not main, not the case's branch), got {h['branch']!r}")
@@ -554,7 +560,7 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
         if t == "field_lines":
             check_fields(fa, f, errs)
-        if t == "tool_called" and "tools" in f:
+        if t in ("tool_called", "tool_called_before") and "tools" in f:
             check_tools(fa, cast("object", f["tools"]), cast("list[str]", errs))
         if t == "ran" and "program" in f and not (isinstance(f["program"], str) and PROGRAM.fullmatch(f["program"])):
             cast("list[str]", errs).append(f"{fa}: field program: must be a command name ({PROGRAM.pattern}), got {f['program']!r}")
@@ -566,8 +572,38 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             for k in sorted(set(f) & OPTIONAL[t]):
                 if not (isinstance(f[k], list) and f[k] and all(isinstance(p, str) and PATH.fullmatch(p) for p in f[k])):
                     errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
-        if "before" in f and f["before"] not in BEFORE:
+        if "before" in f and isinstance(cast("object", f["before"]), dict):
+            check_under(fa, cast("object", f["before"]), cast("list[str]", errs))
+        elif "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def history_repo(name: object) -> Path | None:
+    """A history fixture's repo (schema.md, Case): the kit, or a local clone ~/src/<name>; None when unknown."""
+    if name == "kit":
+        return KIT
+    if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9._-]+", name) and (Path.home() / "src" / name / ".git").exists():
+        return Path.home() / "src" / name
+    return None
+
+
+def check_history(at: str, fx: object, errs: list[str], field: str = "fixture") -> None:
+    """A history fixture {repo, commit} at FIELD (schema.md, Case): repo known, commit a full sha the repo holds."""
+    f = cast("dict[str, object]", fx)
+    errs.extend(f"{at}: field {field}.{k}: missing" for k in sorted({"repo", "commit"} - set(f)))
+    errs.extend(f"{at}: field {field}.{k}: unknown field" for k in sorted(set(f) - {"repo", "commit"}))
+    repo = history_repo(f.get("repo"))
+    if "repo" in f and repo is None:
+        errs.append(f"{at}: field {field}.repo: {f['repo']!r} is not kit or a git clone at ~/src/<name>")
+    c = f.get("commit")
+    if "commit" in f and not (isinstance(c, str) and SHA.fullmatch(c)):
+        errs.append(f"{at}: field {field}.commit: must be a full 40 character sha, got {c!r}")
+    elif repo is not None and (repo / ".git").exists() and isinstance(c, str) and subprocess.run(
+            [shutil.which("git") or "/usr/bin/git", "-C", str(repo), "cat-file", "-e", f"{c}^{{commit}}"], capture_output=True, check=False).returncode:
+        errs.append(f"{at}: field {field}.commit: no commit {c} in {repo}")
 
 
 def check_review(at: str, rv: object, errs: list[str]) -> None:
@@ -579,6 +615,17 @@ def check_review(at: str, rv: object, errs: list[str]) -> None:
     errs.extend(f"{at}: field review.{k}: unknown field" for k in sorted(set(r) - {"question"}))
     if not isinstance(rv, dict):
         errs.append(f"{at}: field review: must be an object {{\"question\"}}")
+
+
+def check_under(fa: str, before: object, errs: list[str]) -> None:
+    """A before target {"edit_under": [P...]} (schema.md, Before targets)."""
+    b = cast("dict[str, object]", before)
+    if set(b) != {"edit_under"}:
+        errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)} or {{\"edit_under\": [P...]}}, got {json.dumps(b)}")
+        return
+    ps = cast("list[object]", b["edit_under"]) if isinstance(b["edit_under"], list) else []
+    if not ps or not all(isinstance(p, str) and PATH.fullmatch(p) for p in ps):
+        errs.append(f"{fa}: field before: edit_under must be a non-empty list of relative paths (a dir ends in /)")
 
 
 def check_tools(fa: str, tools: object, errs: list[str]) -> None:

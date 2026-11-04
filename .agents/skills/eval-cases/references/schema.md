@@ -28,12 +28,12 @@ A skill-trigger or role-transcript case, an object:
 
 - `id`: matches `[a-z0-9][a-z0-9-]*`, unique in the suite, and has an expectations entry; an expectations id with no case is refused too.
 - `role`: a string matching `[a-z0-9-]+` with a kit `agents/<role>.md`.
-- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`.
+- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`; or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds (checked where it is a git checkout of its own; a copy of the kit's files without its `.git` has no history to check it against). Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
 - `task`: a non-blank string, what the agent sees; `{repo}` and `{head}` in it become the copy's path and HEAD sha. It must not leak its grade (Leaks).
 - skill-trigger only: `should_trigger` (true or false) and `split` (`train` or `held-out`). A true case needs a `skill_read` or `skill_read_before` fact, a false one a `skill_not_read` fact.
 - role-transcript only, optional, the repo setup:
   - `branch`: a branch cut from main and checked out: matches `[A-Za-z0-9][A-Za-z0-9._/-]*`, no `..`, not ending `/` or `.lock`, not `main`.
-  - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
+  - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir or a history fixture as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
   - `origin`: `true` (leave it out for false): a bare origin holding main, for `git push`.
   - `fake_gh`: `true`: a fake gh first on PATH, logging each call.
 - role-transcript only, optional: `review`: `{"question"}`, exactly that key, `question` a non-blank string: a review case, for an outcome no fact can grade. Its expectations entry is `{"facts": []}`, no fact; a maintainer's recorded verdict decides it (what the run keeps, where the verdict is stored, how the case counts: `scripts/octo-feather-qa --help`, Review).
@@ -52,6 +52,7 @@ An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty lis
 - `{"fact": "field_lines", "field": F, optional "none", "includes", "every"}` (Field lines).
 - `{"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}`: at least one key, each a non-empty list of relative paths P (no leading `/`, no `..` component, no whitespace; a dir ends in `/`) (Branch paths).
 - `{"fact": "tool_called", "tools": [N...]}`: N a non-empty list of tool names, no whitespace (Tool call).
+- `{"fact": "tool_called_before", "tools": [N...], "before": T}`: N as tool_called's; a call to one of N started before the first tool call that reached T (Before targets), decided as skill_read_before is: once T is reached, a call before it passes, none before it fails; T never reached fails. Only the call's start is read, not its result.
 - `{"fact": "ran", "program": P, "args": [A...]}`: P a command name (matches `[A-Za-z0-9_+-][A-Za-z0-9._+-]*`), A a list of strings, possibly empty (Run record).
 
 ### Skill load
@@ -60,7 +61,7 @@ S's SKILL.md entered the agent's context: a tool result (any tool: a Pi read, a 
 
 ### Before targets
 
-`before` is one of the targets below, decided from filesystem snapshots the watcher takes of the case repo after each tool call (content hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log), never from command text:
+`before` is one of the targets below, or `{"edit_under": [P...]}`, P a non-empty list of relative paths as branch_paths takes them (a dir ends in `/`): a file under one of P created or changed, decided from filesystem snapshots the watcher takes of the case repo after each tool call (content hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log), never from command text:
 
 - `test_write`: the files the case repo's declared runner collects, or one's content, changed. The runner is pytest from the repo's own config (`testpaths`, `python_files`...), any name it collects, never a path shape. The fixture, or head's fixture when the case has `head`, must declare its tests: a `pyproject.toml` `[tool.pytest.ini_options]` `testpaths`, a non-empty list of non-empty strings, and a `uv.lock` (setup installs the runner); else refused, naming the fixture. Each snapshot's collection runs on that snapshot's own bytes, so a later call's write never reaches it; pytest giving no list stops the run, naming why.
 - `edit`: any file git does not ignore changed.

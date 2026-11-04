@@ -1,0 +1,18 @@
+{
+ "implementer-ts-toml-at-scale": {
+  "facts": [
+   {
+    "fact": "tool_called_before",
+    "tools": [
+     "mcp__exa__web_search_exa",
+     "mcp__parallel__web_search"
+    ],
+    "before": {
+     "edit_under": [
+      "templates/typescript/.agents/skills/verify-app/scripts/"
+     ]
+    }
+   }
+  ]
+ }
+}
