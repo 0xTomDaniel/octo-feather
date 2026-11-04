@@ -80,3 +80,9 @@ tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-spec-status"]
 tests = ["tests/spec-status.sh"]
+
+# The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
+[demo."quality#acceptance-qa-repeats"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-runs.sh"]

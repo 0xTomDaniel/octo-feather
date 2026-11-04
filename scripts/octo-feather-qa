@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT]   factory evals (`just qa`)
+"""octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--runs N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT]   factory evals (`just qa`)
 
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
 Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
@@ -38,10 +38,20 @@ Prints one PASS or FAIL line per case with the facts that decided it, then, when
 then a summary line with the artifacts dir: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa, then <run-id>/<suite>/<case>/
 holding prompt.md, input.json, transcript.jsonl, stderr.txt, sandbox.json, grading.json,
 result.json, and <run-id>/summary.json.
+Each case's result.json (and its entry in summary.json `cases`) also holds `runs` (one entry per run: run, dir,
+verdict, deciding, model, seconds, stop, tool_calls), `runs_passed`, `pass_rate` (runs passed over runs) and
+`stddev` (the sample standard deviation of the runs' results, 1 a pass and 0 a fail; 0 for one run);
+summary.json `runs` is the runs per case.
   --suite NAME, --case ID   select cases (repeatable; default every case); unknown names exit 64
   --sample N                of the selected cases run only N, stratified by should_trigger and split
                             (a seeded shuffle per stratum, taken in turn; the same N picks the same
                             cases), printed before the run
+  --runs N                  run each selected fact case N times (default 1), one run at a time, each in its own
+                            sandbox and scratch copy (scratch dir qa-<id>-<n>r<k>-*, k the run); its artifacts in
+                            <case>/run-<k>/, an indented `run k/N` line each, then the case line: PASS only when
+                            every run passed, its runs passed out of N, pass rate and stddev, and each failed
+                            run's deciding facts. A judgment bench runs once. Without it: one run, artifacts in
+                            <case>/, no run lines
   --model MODEL             pi --model override (default: the role's frontmatter model; a bench runs no chat model)
   --classifier P/ID         a judgment bench benches only this classifier (repeatable; default every available one)
   --evals DIR               eval suites dir (default: the kit's evals/)
@@ -75,9 +85,12 @@ Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape chec
 Internal, the in-sandbox stop rule (not for callers):
   octo-feather-qa --watch FACTS_JSON MAX_CALLS TIMEOUT_S SETUP_JSON -- CMD...
 """
-from typing import cast
-import hashlib, importlib.machinery, importlib.util, json, os, queue, random, re, secrets, shutil, signal, subprocess, sys, tempfile, threading, time
+from typing import TYPE_CHECKING, cast
+import hashlib, importlib.machinery, importlib.util, json, os, queue, random, re, secrets, shutil, signal, statistics, subprocess, sys, tempfile, threading, time
 from pathlib import Path
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 KIT = Path(__file__).resolve().parent.parent
 SELF = KIT / "scripts" / "octo-feather-qa"
@@ -714,9 +727,10 @@ def kit_at(ref):
     return d, sha
 
 
-def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_ref=None, kit_sha=None):
+def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_ref=None, kit_sha=None, rep: tuple[int, int] | None = None):
+    """One run of a case; rep: (k, N), run k of N (--runs), recorded in its input.json and result.json."""
     out.mkdir(parents=True, exist_ok=True)
-    kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": kit_sha}
+    kits = {"kit_ref": kit_ref or "HEAD", "kit_sha": kit_sha, **({"run": rep[0], "of": rep[1]} if rep else {})}
     missing = [p for p in (f"agents/{case['role']}.md", "scripts/pi-role") if not (kit / p).is_file()]
     if missing:
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
@@ -815,7 +829,47 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
            **({k: case[k] for k in ("role", "should_trigger", "split") if k in case}), **kits}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]") + f" [kit {kits['kit_sha']}]"
+    if "run" in kits:   # run k of N (--runs): its line indented, under its case
+        print(f"  run {kits['run']}/{kits['of']}: ", end="")
     print(f"{verdict} {suite['suite']}/{case['id']}: {'; '.join(deciding)}{stop}", flush=True)
+    return res
+
+
+RUN_KEYS = ("verdict", "deciding", "model", "seconds", "stop", "tool_calls")
+Result = dict[str, object]
+
+
+def run_runs(qc: object, evals: Path, suite: Result, case: Result, facts: list[Result], model: str | None, runid: str, n: int,
+             out: Path, runs: int, kit: Path, kit_ref: str | None, kit_sha: str | None) -> Result:
+    """A case run RUNS times, one run at a time (--runs, rules: --help): its result, with runs, runs_passed, pass_rate
+    and stddev; one run keeps today's layout and line, several each its run-<k>/ dir and an indented line, then the
+    case's line and result.json."""
+    one = cast("Callable[..., Result]", run_case)
+    if runs == 1:
+        rs, dirs = [one(qc, evals, suite, case, facts, model, runid, n, out, kit, kit_ref, kit_sha)], ["."]
+    else:
+        dirs = [f"run-{k}" for k in range(1, runs + 1)]
+        rs = [one(qc, evals, suite, case, facts, model, runid, f"{n}r{k}", out / d, kit, kit_ref, kit_sha, rep=(k, runs))
+              for k, d in enumerate(dirs, 1)]
+    ok = [float(r["verdict"] == "PASS") for r in rs]
+    agg: Result = {"runs": [{"run": k, "dir": d, **{x: r.get(x) for x in RUN_KEYS}} for k, (d, r) in enumerate(zip(dirs, rs), 1)],
+                   "runs_passed": int(sum(ok)), "pass_rate": round(statistics.fmean(ok), 4),
+                   "stddev": round(statistics.stdev(ok), 4) if len(ok) > 1 else 0.0}
+
+    def said(r: Result) -> str:
+        return "; ".join(cast("list[str]", r["deciding"]))
+
+    if runs == 1:
+        res = {**rs[0], **agg}
+    else:
+        lead = next((r for r in rs if r["verdict"] != "PASS"), rs[0])   # the first failed run, else run 1
+        head = f"{agg['runs_passed']}/{runs} runs passed (pass rate {agg['pass_rate']:.2f}, stddev {agg['stddev']:.2f})"
+        why = [f"run {k}: {said(r)}" for k, r in enumerate(rs, 1) if r["verdict"] != "PASS"] or [f"run 1: {said(rs[0])}"]
+        secs = round(sum(cast("float", r["seconds"]) for r in rs), 1)
+        res = {**{k: v for k, v in lead.items() if k not in ("run", "of")}, "verdict": "PASS" if all(ok) else "FAIL",
+               "deciding": [head, *why], "seconds": secs, **agg}
+        print(f"{res['verdict']} {suite['suite']}/{case['id']}: {said(res)} [{secs} s] [kit {kit_sha}]", flush=True)
+    (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     return res
 
 
@@ -1182,12 +1236,12 @@ def gate_free():
 
 
 def parse(argv):
-    opts = {"suite": [], "case": [], "classifier": [], "model": None, "evals": None, "sample": None, "kit-ref": None}
+    opts = {"suite": [], "case": [], "classifier": [], "model": None, "evals": None, "sample": None, "runs": None, "kit-ref": None}
     it = iter(argv)
     for a in it:
         if a in ("-h", "--help"):
             print(__doc__.strip()); sys.exit(0)
-        k = a[2:] if a in ("--suite", "--case", "--classifier", "--model", "--evals", "--sample", "--kit-ref") else None
+        k = a[2:] if a in ("--suite", "--case", "--classifier", "--model", "--evals", "--sample", "--runs", "--kit-ref") else None
         if k is None:
             die(64, f"unknown argument {a!r} (see --help)")
         v = next(it, None)
@@ -1199,6 +1253,9 @@ def parse(argv):
             opts[k] = v
     if opts["sample"] is not None and not (opts["sample"].isdigit() and int(opts["sample"]) > 0):
         die(64, f"--sample needs a positive integer, got {opts['sample']!r}")
+    r = cast("str | None", opts["runs"])
+    if isinstance(r, str) and not (r.isdigit() and int(r) > 0):
+        die(64, f"--runs needs a positive integer, got {r!r}")
     return opts
 
 
@@ -1277,11 +1334,12 @@ def run_all(o, evals, picked, kit, sha):
     root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
         [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
     run_dir = root / runid; run_dir.mkdir(parents=True)
-    print(f"qa: run {runid}: {len(picked)} case(s); kit {sha}" + (f" (--kit-ref {o['kit-ref']})" if o["kit-ref"] else "")
+    runs = int(cast("str | None", o["runs"]) or "1")
+    print(f"qa: run {runid}: {len(picked)} case(s)" + (f", {runs} runs each" if runs > 1 else "") + f"; kit {sha}" + (f" (--kit-ref {o['kit-ref']})" if o["kit-ref"] else "")
           + f"; artifacts {run_dir}", flush=True)
     qc = qc_sandbox()
     t0 = time.time()
-    results = [run_case(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"],
+    results = [run_runs(qc, evals, s, c, f, o["model"], runid.split("-")[-1], n, run_dir / s["suite"] / c["id"], runs,
                         kit, o["kit-ref"], sha)
                for n, (s, c, f) in enumerate(picked, 1) if s["kind"] != "judgment"]
     benches = []
@@ -1294,7 +1352,7 @@ def run_all(o, evals, picked, kit, sha):
     for sp, v in sc.items():
         print(f"qa: {sp} score {v['passed']}/{v['total']} passed")
     (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha,
-                                                      "passed": passed, "total": len(results), "scores": sc,
+                                                      "passed": passed, "total": len(results), "scores": sc, "runs": runs,
                                                       "seconds": round(time.time() - t0, 1), "cases": results,
                                                       **({"benches": benches} if benches else {})}, indent=2) + "\n")
     if results:

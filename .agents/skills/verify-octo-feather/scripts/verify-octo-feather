@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1142,6 +1142,84 @@ def drive_qc_advisory(f: Feature) -> None:
     say(f"qc-advisory evidence: {f.d}")
 
 
+# The qa-runs drive's stub `pi` (no model): emits the Pi JSON events of one turn; with ALTERNATE in the prompt it reads the
+# role's tdd SKILL.md on odd runs only (run k from its scratch copy qa-<id>-<n>r<k>-*: octo-feather-qa --help), else
+# on every run; then a final message.
+QA_STUB_PI = r"""#!/usr/bin/env python3
+import json, os, re, sys
+a = sys.argv[1:]
+prompt = a[a.index("-p") + 1]
+out = lambda e: print(json.dumps(e), flush=True)
+out({"type": "stub_argv", "argv": a})
+out({"type": "agent_start"})
+k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
+tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)
+if tdd and not ("ALTERNATE" in prompt and k % 2 == 0):
+    out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "toolUse",
+                                           "content": [{"type": "toolCall", "id": "c1", "name": "read", "arguments": {"path": tdd}}]}})
+    out({"type": "tool_execution_start", "toolCallId": "c1", "toolName": "read", "args": {"path": tdd}})
+    out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "read", "isError": False,
+         "result": {"content": [{"type": "text", "text": open(tdd).read()}]}})
+out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
+                                       "content": [{"type": "text", "text": "done"}]}})
+"""
+
+
+def drive_qa_runs(f: Feature) -> None:
+    """octo-feather-qa --runs on a scratch eval suite (role implementer, graded skill_read tdd), the role's model a stub
+    `pi` first on the qa sandbox's PATH, never a real model: a case whose stub alternates fails with 2/4 runs passed, its
+    pass rate and spread; one passing every run passes 2/2; each run's artifacts in run-<k>/; a bad --runs exits 64."""
+    sc = RUN_DIR / "scratch" / "qa-runs"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vq" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    (sc / "bin").mkdir()
+    (sc / "state").mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-runs drive fixture\n")
+    (ev / "vq" / "suite.json").write_text(json.dumps({"suite": "vq", "kind": "role-transcript", "description": "qa-runs drive",
+                                                     "max_tool_calls": 5, "timeout_s": 60}))
+    (ev / "vq" / "cases.json").write_text(json.dumps([{"id": i, "role": "implementer", "fixture": "fx", "task": t} for i, t in
+                                                      (("alt", "Build it. ALTERNATE"), ("steady", "Build it."))]))
+    (ev / "vq" / "reference" / "expectations.json").write_text(json.dumps(
+        {i: {"facts": [{"fact": "skill_read", "skill": "tdd"}]} for i in ("alt", "steady")}))
+    # The stub first on PATH and on the qa sandbox's PATH; qa's artifacts and state in scratch.
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    qa = ("octo-feather-qa", "--evals", str(ev))
+
+    def last_run(name: str, case: str) -> None:
+        runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+        c = runs[-1] / "vq" / case if runs else sc / "none"
+        f.obs(name, "result", (c / "result.json").read_text() if (c / "result.json").is_file() else "{}\n")
+        f.obs(name, "dirs", "".join(f"{p.name}\n" for p in sorted(c.glob("run-*")) if (p / "transcript.jsonl").is_file()))
+        f.obs(name, "stub", "".join(f"{p.parent.name} {json.loads(p.read_text().splitlines()[0])['type']}\n"
+                                    for p in sorted(c.glob("run-*/transcript.jsonl"))))
+
+    f.run("alternating", *qa, "--case", "alt", "--runs", "4")
+    last_run("alternating", "alt")
+
+    def alternating(c: Case) -> bool:
+        r = json.loads(c.o["result"])
+        return (c.code == 1 and re.search(r"(?m)^FAIL vq/alt: 2/4 runs passed \(pass rate 0\.50, stddev 0\.58\); run 2: skill_read tdd: no load"
+                                          r".*; run 4: skill_read tdd: no load.*\[kit [0-9a-f]{40}\]$", c.out) is not None
+                and all(f"  run {k}/4: {v} vq/alt: " in c.out for k, v in ((1, "PASS"), (2, "FAIL"), (3, "PASS"), (4, "FAIL")))
+                and (r.get("verdict"), r.get("runs_passed"), r.get("pass_rate"), r.get("stddev")) == ("FAIL", 2, 0.5, 0.5774)
+                and c.o["dirs"] == "run-1\nrun-2\nrun-3\nrun-4\n" and c.o["stub"].count(" stub_argv\n") == 4)
+    f.check("alternating", alternating)
+    f.run("every-run", *qa, "--case", "steady", "--runs", "2")
+    last_run("every-run", "steady")
+    f.check("every-run", lambda c: c.code == 0 and re.search(r"(?m)^PASS vq/steady: 2/2 runs passed \(pass rate 1\.00, stddev 0\.00\); run 1: "
+                                                         r"skill_read tdd: loaded at", c.out) is not None
+            and json.loads(c.o["result"]).get("pass_rate") == 1.0 and c.o["stub"].count(" stub_argv\n") == 2)
+    f.run("bad-runs", *qa, "--runs", "0")
+    f.check("bad-runs", lambda c: c.code == 64 and "--runs needs a positive integer" in c.err and "qa: run " not in c.out)
+    f.env = {}
+    say(f"qa-runs evidence: {f.d}")
+
+
 def drive_qc_fallback(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b: acceptance-a
     decided by its demo's checks, acceptance-b by the agent fallback, a fresh qc judge (the kit's stub judge,
@@ -1292,6 +1370,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-fallback": drive_qc_fallback,
     "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
+    "qa-runs": drive_qa_runs,
 }
 
 

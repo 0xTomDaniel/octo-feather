@@ -46,3 +46,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qc-advisory](./qc-advisory.md) covers `just qc` showing the judgment model's advisory answer beside each recorded result, the result unchanged by it.
 - [qc-fallback](./qc-fallback.md) covers `just qc` sending a criterion with no declared demo to the agent fallback: a fresh, time-capped qc judge whose report becomes that criterion's record.
 - [qc-stale](./qc-stale.md) covers `just qc` linking each built criterion to its evidence record, capture commit and tests, and `octo-feather-spec-status show` naming a built criterion current or stale.
+- [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`): runs passed out of N, pass rate and spread per case, a pass only when every run passed.
