@@ -2,10 +2,9 @@
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/lib/qa.sh).
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
-# Proves (spec quality#acceptance-qa-repeats): --runs N runs a case N times; a case whose stub role passes on some
-# runs and fails on others shows its runs passed out of N with pass rate and stddev and FAILS (exit 1), one passing
-# every run PASSES (exit 0); each run's artifacts in <case>/run-<k>/; result.json and summary.json carry runs, pass rate
-# and spread beside their old keys; one run (the default) prints no run lines; a bad --runs exits 64; --help names it.
+# Proves spec quality#acceptance-qa-repeats through --runs (what it does: octo-feather-qa --help): an alternating stub
+# case, an every-run-passes case, run-<k> artifacts, result.json and summary.json fields, the default one run, a bad
+# value, --help.
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
 # shellcheck source=tests/lib/qa.sh
 source "$(dirname "$0")/lib/qa.sh"

@@ -1167,8 +1167,7 @@ out({"type": "message_end", "message": {"role": "assistant", "provider": "stub",
 
 def drive_qa_runs(f: Feature) -> None:
     """octo-feather-qa --runs on a scratch eval suite (role implementer, graded skill_read tdd), the role's model a stub
-    `pi` first on the qa sandbox's PATH, never a real model: a case whose stub alternates fails with 2/4 runs passed, its
-    pass rate and spread; one passing every run passes 2/2; each run's artifacts in run-<k>/; a bad --runs exits 64."""
+    `pi` first on the qa sandbox's PATH, never a real model; cases and what each observes: features/qa-runs.md."""
     sc = RUN_DIR / "scratch" / "qa-runs"
     ev = sc / "evals"
     shutil.rmtree(sc, ignore_errors=True)
