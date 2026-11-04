@@ -100,3 +100,13 @@ tests = ["tests/fast.sh", "tests/integrate.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
 tests = ["tests/fast.sh", "tests/integrate.sh"]
+
+[demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
+tests = ["tests/lane-merge-ask.sh"]
+
+[demo."issue-lifecycle#acceptance-brownfield-full"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
+covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
+tests = ["tests/integrate.sh"]
