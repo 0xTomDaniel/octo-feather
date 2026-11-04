@@ -3,8 +3,12 @@
 `check.py setup`: the fixture user's files: fake global installs (a python of another minor than
 .python-version, erlang, rust with its cargo and some-cli in ~/.cargo/bin), their version links,
 the global ~/.config/mise/config.toml, pnpm's store named, the kit clone's uncommitted
-files committed, mise's shims.
-`check.py assert`: #493's fixture assertions (1)-(5), one ok or FAIL line each; exit 1 on any FAIL.
+files committed, mise's shims, the kit's mise config tracked (the user has run mise there).
+`check.py assert SECTION`: one section of #493's fixture assertions (1)-(5), one ok or FAIL line
+each, exit 1 on any FAIL (one gate item per section, #508): `sandbox` the fixture's preconditions
+and the qc sandbox proof; `install-check:EXPR` the install-check gate items pytest's -k EXPR picks;
+`templates` install-check from a venv PATH, README's install step and the template repos. Each
+ends with (5).
 
 Every command runs as the fixture user through tests/user-mise.sh's wrapper $USER_MISE_T/user, the
 one place the user's environment is set. Inputs (env): USER_MISE_T (the scratch dir), USER_MISE_HOME
@@ -115,6 +119,10 @@ def setup() -> None:
         git("-C", str(K), "commit", "-q", "-m", "the checkout's uncommitted files")
     if user(["mise", "reshim"])[0]:
         die("mise reshim in the user's HOME failed")
+    # The user has run mise in the kit checkout (as its README install step does): mise tracks
+    # its config.
+    if user(["mise", "ls"], cwd=K)[0]:
+        die("mise ls in the user's kit checkout failed")
 
 
 def want(what: str, ok: object, detail: str = "") -> None:
@@ -333,14 +341,14 @@ def sandbox() -> None:
     )
 
 
-def install_check() -> None:
-    """(1), (3), (5): the install-check gate item in the kit copy, the state dir counted around it
-    (#493 AC7); install-check from a pane PATH with a venv first."""
+def install_check(expr: str) -> None:
+    """(1), (5): the install-check gate items -k EXPR picks in the kit copy, the state dir
+    counted around them (#493 AC7)."""
     n0 = state_entries()
-    rc, out, _ = user(["just", "test", "-k", "install-check"], cwd=K, env=("GATE_WORKERS=1",))
+    rc, out, _ = user(["just", "test", "-k", expr], cwd=K, env=("GATE_WORKERS=1",))
     n1 = state_entries()
     want(
-        "(1) HERDR_SESSION=fixture just test -k install-check passes in the kit under the user's"
+        f"(1) HERDR_SESSION=fixture just test -k '{expr}' passes in the kit under the user's"
         f" HOME (exit {rc})",
         rc == 0,
         out,
@@ -355,9 +363,13 @@ def install_check() -> None:
         n1 == n0,
         f"{n0} entries before, {n1} after",
     )
+
+
+def install_check_venv() -> None:
+    """(3): install-check from a pane PATH with a venv first."""
     if user(["python3", "-m", "venv", f"{T}/venv"])[0]:
         die("python3 -m venv through the user's python3")
-    rc, out, _ = user(["just", "install-check"], cwd=K, env=(f"PATH={T}/venv/bin:{UP}",))
+    _, out, _ = user(["just", "install-check"], cwd=K, env=(f"PATH={T}/venv/bin:{UP}",))
     bins = (D / "installs/python" / pyv() / "bin", D / "installs/erlang/27.3/bin", H / ".cargo/bin")
     names = "|".join(sorted({re.escape(p.name) for d in bins for p in d.iterdir()}))
     shadowed = re.search(rf"^path   ({names}|pip[0-9.]*) SHADOWED", out, re.MULTILINE)
@@ -371,7 +383,7 @@ def install_check() -> None:
 
 def readme_install() -> None:
     """(4): README's install step, the command as it stands there (install-check's fix lines
-    print the same: tests/install-check.sh), in the kit."""
+    print the same: tests/install-check-mise.sh), in the kit."""
     lines = (K / "README.md").read_text().splitlines()
     step = "scripts/octo-feather-mise-install"
     cmd = next((re.sub(r"   #.*", "", ln) for ln in lines if ln.startswith(step)), "")
@@ -446,15 +458,21 @@ def main() -> None:
     if sys.argv[1:] == ["setup"]:
         setup()
         return
-    if sys.argv[1:] != ["assert"]:
-        die("usage: check.py setup|assert")
-    d0 = preconditions()
+    section = sys.argv[2] if len(sys.argv) == 3 and sys.argv[1] == "assert" else ""
+    expr = section.removeprefix("install-check:")
+    if section not in ("sandbox", "templates") and not (expr != section and expr):
+        die("usage: check.py setup|assert sandbox|templates|install-check:EXPR (pytest -k EXPR)")
+    d0 = preconditions() if section == "sandbox" else doctor()[1]
     s0 = snap()
-    sandbox()
-    install_check()
-    readme_install()
-    for lang in ("python", "typescript"):
-        template_setup(lang)
+    if section == "sandbox":
+        sandbox()
+    elif section == "templates":
+        install_check_venv()
+        readme_install()
+        for lang in ("python", "typescript"):
+            template_setup(lang)
+    else:
+        install_check(expr)
     s1 = snap()
     diff = "\n".join(list(difflib.unified_diff(s0, s1, lineterm=""))[:20])
     want(
@@ -472,7 +490,8 @@ def main() -> None:
         die("failed (lines above)")
     say(
         "user-mise: ok (fixture HOME: kit installs bound read-only, global tools absent from the"
-        " kit lock, python3 a mise shim, stale shims; every #493 assertion passes)"
+        f" kit lock, python3 a mise shim, stale shims; every #493 assertion of section {section}"
+        " passes)"
     )
 
 
