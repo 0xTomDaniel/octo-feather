@@ -4,8 +4,10 @@ Copyable unchanged into any repo whose pytest writes junit xml (--junitxml): it 
 repo path. After the run, it appends one line to check-runs.jsonl in the state dir: the
 output of `octo-feather-state` when that command is on PATH, else
 ${XDG_STATE_HOME:-~/.local/state}/octo-feather. Fields: start (UTC), repo (git top level
-of the working dir), head, total_s, exit, steps (name, seconds, result: ok, FAIL, ERROR or
-skipped), one per junit testcase. A missing junit file or an unwritable state dir is a
+of the working dir), head, total_s (the run's elapsed wall seconds: the junit testsuite time,
+which pytest's junitxml measures on the controller from session start; never a sum of item
+times), exit, steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
+testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
 """
 import datetime, json, os, shutil, subprocess, sys

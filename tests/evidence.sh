@@ -12,8 +12,6 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
-# One pnpm store for the kit and its test copies (owner ruling #422; why: tests/check-ts.sh).
-npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "evidence test: $*" >&2; exit 1; }
 export XDG_STATE_HOME="$t/state" PATH="$kit/scripts:$PATH"
 ev="$kit/scripts/octo-feather-evidence"
@@ -26,11 +24,12 @@ gitc() { git -C "$repo" -c user.name=t -c user.email=t@t "$@"; }
 for lang in python typescript; do
   repo="$t/$lang-app"; mkdir -p "$repo"
   (cd "$kit/templates/$lang" && git ls-files -z | xargs -0 cp --parents -t "$repo")
-  # Offline: typescript's packages installed from the pnpm store first (its helper reads qc.toml with smol-toml), its setup
+  # Offline: typescript's packages copied first from the run's one offline install of the template from the pnpm
+  # store (tests/lib/prepared.py) (its helper reads qc.toml with smol-toml), its setup
   # then a no-op; python's setup a bare venv (the helper's python), the entry the source on PYTHONPATH.
   sed -i -e 's/^setup = .*/setup = "true"/' "$repo/qc.toml"
   if [[ "$lang" == typescript ]]; then
-    (cd "$repo" && pnpm install --offline --frozen-lockfile --silent) \
+    p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && cp -a "$p/node_modules" "$repo/" \
       || fail "typescript: pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
   fi
   if [[ "$lang" == python ]]; then

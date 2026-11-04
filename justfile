@@ -84,8 +84,40 @@ check-scripts:
     set -euo pipefail
     cd "$root"
     mapfile -t sh < <(just --justfile "$root/justfile" shell-files)
-    shellcheck -S warning "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
-    mapfile -t py < <(uv run --locked --offline --no-sync octo-feather-lint files)
+    # ShellCheck fanned out over the CPUs (#507): the same files and flags in batches run at once, each batch holding
+    # every file one of its files sources (a `# shellcheck source=` directive or a literal path: ShellCheck follows a
+    # sourced file only when it is an input of the same run), each batch's output printed whole in turn, and the run
+    # exiting with the first failing batch's status. No files: one plain run, which refuses that itself.
+    python3 -c 'import concurrent.futures as cf, os, re, subprocess, sys
+    files = sys.argv[1:]; up = {f: f for f in files}
+    def top(f):
+        while up[f] != f: f = up[f]
+        return f
+    src = re.compile(r"shellcheck\b[^\n]*?\bsource=(\S+)|^[ \t]*(?:source|\.)[ \t]+[\x22\x27]?([^\s\x22\x27;&|$`]+)", re.M)
+    for f in files:
+        try: text = open(f, encoding="utf-8", errors="replace").read()
+        except OSError: continue
+        for m in src.finditer(text):
+            p = m[1] or m[2]
+            hit = next((c for c in (os.path.normpath(p), os.path.normpath(os.path.join(os.path.dirname(f), p))) if c in up), None)
+            if hit and top(hit) != top(f): up[top(hit)] = top(f)
+    groups = {}
+    for f in files: groups.setdefault(top(f), []).append(f)
+    size = lambda g: sum(os.path.getsize(f) if os.path.isfile(f) else 0 for f in g)
+    bins = [[] for _ in range(os.cpu_count() or 1)]
+    for g in sorted(groups.values(), key=size, reverse=True): min(bins, key=size).extend(g)
+    bins = [b for b in bins if b] or [[]]
+    run = lambda b: subprocess.run(["shellcheck", "-S", "warning", *b], capture_output=True, text=True)
+    rc = 0
+    try:
+        with cf.ThreadPoolExecutor(len(bins)) as pool:
+            for r in pool.map(run, bins):
+                sys.stdout.write(r.stdout); sys.stderr.write(r.stderr); rc = rc or r.returncode
+    except FileNotFoundError: print("check-scripts: shellcheck not found on PATH (mise.toml pins it)", file=sys.stderr); rc = 127
+    sys.exit(rc)' "${sh[@]}"; echo "scripts: shellcheck ok (${#sh[@]} files)"
+    # Fails closed (#507): a lister that fails is never an empty list.
+    list="$(uv run --locked --offline --no-sync octo-feather-lint files)" || { echo "check-scripts: the Python file list (octo-feather-lint files) failed (error above), so no Python file was compiled; fix that error (a module not found: the kit's environment is not synced: uv sync --locked --project $root)" >&2; exit 1; }
+    py=(); [[ -z "$list" ]] || mapfile -t py <<<"$list"
     python3 -c 'import sys
     bad = 0
     for f in sys.argv[1:]:
@@ -240,8 +272,9 @@ check-templates:
 # pytest + pytest-xdist (tests/gate/): each GATE_RECIPES recipe, then each tests/*.sh, one item run as a command
 # (TMPDIR its real path: tests/gate/test_gate.py); every item's duration, failures with their output, one trend line
 # per run in the state dir (tests/gate/conftest.py). Timing never decides pass or fail. Offline: pytest from the
-# uv cache, filled by `uv sync --locked` in the kit (CI's uv step). Workers: GATE_WORKERS, default 2: half the 4 CPUs,
-# since the box runs at most 2 heavy commands at once across lanes (CI sets 4). A gate run inside an item (a test's
+# uv cache, filled by `uv sync --locked` in the kit (CI's uv step). Workers: GATE_WORKERS, default 8: the fastest wall
+# measured on the 4-vCPU box, quiet, 105 items (#510): 2 workers 410 s, 4 269 s, 6 225-238 s, 8 213-231 s, ~730-800
+# CPU s each (the CPU floor ~190 s); no item over 60 s at 6 or 8 (CI sets 4). A gate run inside an item (a test's
 # throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
 # copy fails on its recipe, never fans out a nested gate (#208).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
@@ -249,7 +282,7 @@ check-tests *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
-    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-8}" "$@"; fi
     # The gate's Python: .python-version's release, owned by uv (owner ruling #422, #261), found as uv sync finds it
     # (a venv skipped); without it uv sync --offline only says no interpreter. The fix's --no-bin: its message.
     err="$(uv python find --system 2>&1)" || { printf '%s\n' "$err" >&2
