@@ -62,4 +62,18 @@ d="$(ls -dt "$t"/out/*/ | head -1)"
 fo="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/fq/fq/transcript.jsonl")"
 grep -qx 'qa (fake, factory eval: no case runs): octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba' <<< "$fo" && grep -qx 'rc=0' <<< "$fo" \
   && ! grep -q 'POISON-REAL-QA-REACHED\|qc sandbox' <<< "$fo" || fail "fake_qa: the fake did not answer, or something real ran: $fo"
+# A run count and a bare flag together (schema.md, Run record): ran octo-feather-qa [--runs, 3, --baseline] holds for
+# `--runs 3 --baseline main`, not for the smoke `--runs 1 --baseline main`.
+python3 - "$t/fq/fq" <<'PY'
+import json, sys
+d = sys.argv[1]
+st = lambda n: "Prove it. STUB-STEPS:" + json.dumps([["bash", f"octo-feather-qa --case c1 --runs {n} --baseline main < /dev/null; echo rc=$?"]])
+json.dump([{"id": f"fq{n}", "role": "implementer", "fixture": "fx", "fake_qa": True, "task": st(n)} for n in (1, 3)], open(f"{d}/cases.json", "w"))
+json.dump({f"fq{n}": {"facts": [{"fact": "ran", "program": "octo-feather-qa", "args": ["--runs", "3", "--baseline"]}]} for n in (1, 3)},
+          open(f"{d}/reference/expectations.json", "w"))
+PY
+run 1 "$Q" --evals "$t/fq"
+grep -q '^FAIL fq/fq1: ran octo-feather-qa --runs 3 --baseline: no run of octo-feather-qa with these arguments' <<< "$out" \
+  && grep -q '^PASS fq/fq3: ran octo-feather-qa --runs 3 --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline main (exit 0)' <<< "$out" \
+  || fail "fake_qa runs 3: want fq1 FAIL (the smoke) and fq3 PASS: $out"
 echo "qa-ran: ok (ran (a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, stdin/stdout/exit passed through, an echo or other arguments fail naming the record, a shim only for a named program))"

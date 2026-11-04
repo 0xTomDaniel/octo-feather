@@ -52,6 +52,7 @@ A fact or target the closed list lacks is added to the schema, refused in `scrip
 
 Prove the case catches the change with repeated runs on the kit before it beside your head, in one evaluation:
 
-`scripts/octo-feather-qa --case ID --runs N --baseline BASE` (BASE: the commit before your change).
+1. Smoke: `scripts/octo-feather-qa --case ID --runs 1 --baseline BASE` (BASE: the commit before your change), to see the case run on both kits.
+2. Proof: `scripts/octo-feather-qa --case ID --runs 3 --baseline BASE`, 3 runs per kit.
 
-Read each case's pass rate on both kits, its spread and the analysis under them (`--help`, `--baseline` and Analysis): the change is proven when the case fails on BASE and passes at your head over the runs, not on one lucky run. Smoke one run before a batch. Paste the case and compare lines with the run id into `evidence/<date>-<lane>-<topic>.md`, with its `Smoke:` and `Removed:` lines (`scripts/check-behavior-smoke`).
+Read each case's pass rate on both kits, its spread and the analysis under them (`--help`, `--baseline` and Analysis): the change is proven when the case fails on BASE and passes at your head over the 3 runs, not on one lucky run. Paste the case and compare lines with the run id into `evidence/<date>-<lane>-<topic>.md`, with its `Smoke:` and `Removed:` lines (`scripts/check-behavior-smoke`).
