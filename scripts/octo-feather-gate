@@ -29,7 +29,8 @@ issue-lifecycle #lanes-checkpoints, quality #recipe-fast.
   octo-feather-gate map DATA_DIR
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
-      /tmp copies of the kit map back to tracked files by their longest shared path suffix.
+      /tmp copies of the kit map back to tracked files by their longest shared path suffix. An item
+      with no data (not run, or no Python measured) is left out: select always runs it.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -275,7 +276,7 @@ def choose(items: list[str]) -> set[str]:
         if i in changed:
             say(i, f"changed since the map at {at[:12]}")
         elif i not in cover:
-            say(i, f"no recorded coverage (new since the map at {at[:12]})")
+            say(i, f"no recorded coverage in the map at {at[:12]}")
         elif hit:
             say(i, f"recorded coverage reaches {', '.join(hit)}")
         else:
@@ -328,8 +329,11 @@ def build_map(data: Path) -> None:
         for t in tracked.files
         if t.startswith("tests/") and t.count("/") == 1 and t.endswith(".sh")
     ):
+        runs = list((data / i).glob("cov*"))
+        if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
+            continue
         files: set[str] = set()
-        for f in (data / i).glob("cov*"):
+        for f in runs:
             cd = coverage.CoverageData(basename=str(f))
             cd.read()
             for m in cd.measured_files():
