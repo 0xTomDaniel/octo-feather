@@ -165,5 +165,11 @@
     "role": "director",
     "fixture": "shape-mini",
     "task": "Owner here. I want to shape a new feature for this repo before anything gets built: `app hello Ada --lang fr` greeting in French, with English staying the default. Let's get that going.\nSandbox run: this directory is the target repo's clone; there is no live Herdr and no GitHub, so a Herdr command you run fails: run each step's command once anyway, do not retry it, and put your report to me as your final message."
+  },
+  {
+    "id": "shaper-library-ask-web",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "task": "Owner here. I'd like `app hello` to work with no NAME: it should then take the name from an optional `app.yaml` in the current directory (a mapping with a `name` key, any YAML syntax people write by hand: comments, quoted or plain strings). No file or no `name` key keeps today's error. Shape this into the spec; the spec should say what reads the YAML.\nI'm away for the rest of the day and can't answer anything: wherever you would ask me, take your recommended answer, note it, and carry on to the end."
   }
 ]
