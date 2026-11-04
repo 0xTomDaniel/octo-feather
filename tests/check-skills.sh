@@ -16,10 +16,13 @@ g init -q; g add -A; g commit -qm base
 sk=.agents/skills/qc-bad/SKILL.md
 plant() { mkdir -p "$t/${sk%/*}"; printf '%b' "$1" > "$t/$sk"; g add -f "$sk"; }
 unplant() { g rm -qf --cached "$sk" >/dev/null 2>&1 || true; rm -rf "${t:?}/${sk%/*}"; }
+# Each case runs the command `just RECIPE` runs (the justfile's check-skills: python3 "$root/scripts/check-skills"), the
+# copy's scripts/RECIPE: one just evaluation per answer, not one per case (#507); the clean copy, the broken python3 and
+# the gate case run `just check-skills` itself.
 # expect RECIPE CONTENT: a skill with SKILL.md CONTENT makes `just RECIPE` fail naming its path.
 expect() {
   plant "$2"
-  set +e; out="$(cd "$t" && just "$1" 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && "$t/scripts/$1" 2>&1)"; rc=$?; set -e
   unplant
   [[ "$rc" != 0 ]] || { echo "check-skills test: SKILL.md '$2' passed just $1" >&2; exit 1; }
   grep -qF "check-skills: $sk" <<<"$out" || { echo "check-skills test: '$2' not reported naming $sk" >&2; echo "$out" >&2; exit 1; }
@@ -28,7 +31,7 @@ expect() {
 # allow CONTENT: a skill with SKILL.md CONTENT keeps `just check-skills` green.
 allow() {
   plant "$1"
-  set +e; out="$(cd "$t" && just check-skills 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && "$t/scripts/check-skills" 2>&1)"; rc=$?; set -e
   unplant
   [[ "$rc" == 0 ]] || { echo "check-skills test: good SKILL.md '$1' failed check-skills" >&2; echo "$out" >&2; exit 1; }
 }
@@ -86,12 +89,12 @@ expect check-skills ""
 # One bad skill among good ones fails, naming only the bad one.
 plant "---\nname: qc-bad\ndescription:\n---\n$body"
 mkdir -p "$t/.agents/skills/qc-good"; printf -- '---\nname: qc-good\ndescription: Fine.\n---\n' > "$t/.agents/skills/qc-good/SKILL.md"
-set +e; out="$(cd "$t" && just check-skills 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && "$t/scripts/check-skills" 2>&1)"; rc=$?; set -e
 unplant; rm -rf "$t/.agents/skills/qc-good"
 [[ "$rc" != 0 ]] && grep -qF "check-skills: $sk: empty description" <<<"$out" && ! grep -qF 'qc-good' <<<"$out" || { echo "check-skills test: mixed good and bad skills not reported as the bad one" >&2; echo "$out" >&2; exit 1; }
 # Fails closed: an unreadable SKILL.md (a dangling link) fails naming it, never skills: ok.
 mkdir -p "$t/${sk%/*}"; ln -s missing "$t/$sk"
-set +e; out="$(cd "$t" && just check-skills 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && "$t/scripts/check-skills" 2>&1)"; rc=$?; set -e
 unplant
 [[ "$rc" != 0 ]] && grep -qF "check-skills: $sk: cannot read" <<<"$out" && ! grep -qF 'skills: ok' <<<"$out" || { echo "check-skills test: unreadable SKILL.md not reported" >&2; echo "$out" >&2; exit 1; }
 # Fails closed: a broken python3 (a stub first on the caller's PATH, which the justfile keeps ahead of its tools)
@@ -105,9 +108,13 @@ rm -rf "$h"
 # The gate includes check-skills: `just check` in the copy fails on a skill with no name, naming its SKILL.md.
 # The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard above
 # stops this one if the planted skill ever got past check-skills.
+# It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
 find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-skills.sh -delete; g add -A
 plant "---\ndescription: Does a thing.\n---\n$body"
-set +e; out="$(cd "$t" && env -u CI CHECK_SKILLS_TEST_COPY=1 XDG_STATE_HOME="$t.home" just check 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && env -u CI CHECK_SKILLS_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="-k 'test_recipe and check-skills'" just check 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] || { echo "check-skills test: a skill with no name passed just check" >&2; exit 1; }
 grep -qF "check-skills: $sk" <<<"$out" || { echo "check-skills test: just check did not report $sk" >&2; echo "$out" >&2; exit 1; }
+# Only its own item ran (#507): pytest's own selection, through the real `just check`.
+grep -qF "FAILED tests/gate/test_gate.py::test_recipe[check-skills]" <<<"$out" && grep -qE '^=+ 1 failed(, [0-9]+ deselected)? in ' <<<"$out" \
+  || { echo "check-skills test: just check ran more than its own item" >&2; echo "$out" >&2; exit 1; }
 echo "check-skills: ok (missing, body-only and empty name or description fail naming the SKILL.md; quoted and folded values pass; adversarial forms and a broken checker fail closed)"

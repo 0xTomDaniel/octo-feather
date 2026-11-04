@@ -21,8 +21,10 @@ set +e; out="$(cd "$t" && just check-decision-log 2>&1)"; rc=$?; set -e
 # Planted logs: tracked unless the third argument is "untracked".
 plant() { mkdir -p "$t/$(dirname "$1")"; printf '%b' "$2" > "$t/$1"; [[ "${3:-}" == untracked ]] || g add -f "$1"; }
 unplant() { g rm -qf --cached "$1" >/dev/null 2>&1 || true; rm -f "$t/$1"; [[ "$1" != */* ]] || rmdir -p "$t/$(dirname "$1")" 2>/dev/null || true; }
-# run RECIPE: `just RECIPE` in the copy into $out and $rc.
-run() { set +e; out="$(cd "$t" && just "$1" 2>&1)"; rc=$?; set -e; }
+# run RECIPE: the command `just RECIPE` runs (the justfile's check-decision-log: python3 "$root/scripts/check-decision-log"),
+# the copy's scripts/RECIPE, in the copy into $out and $rc: one just evaluation per answer, not one per case (#507);
+# the clean copy, the broken tools and the gate case run `just check-decision-log` itself.
+run() { set +e; out="$(cd "$t" && "$t/scripts/$1" 2>&1)"; rc=$?; set -e; }
 # expect RECIPE FILE CONTENT REPORT...: a tracked FILE holding CONTENT makes `just RECIPE` fail
 # with each REPORT line ("FILE:LINE: problem") printed after "check-decision-log: ".
 expect() {
@@ -199,9 +201,13 @@ rm -f "$t.schema"
 # The gate includes check-decision-log: `just check` in the copy fails on a nested log line missing why, naming
 # FILE:LINE. The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard
 # above stops this one if the planted log ever got past check-decision-log.
+# It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
 find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-decision-log.sh -delete; g add -A
 plant "$N" "$ok\n{$head,$tail}\n"
-set +e; out="$(cd "$t" && env -u CI CHECK_DECISION_LOG_TEST_COPY=1 XDG_STATE_HOME="$t.home" just check 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && env -u CI CHECK_DECISION_LOG_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="-k 'test_recipe and check-decision-log'" just check 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] || { echo "check-decision-log test: $N missing why passed just check" >&2; exit 1; }
 grep -qF "check-decision-log: $N:2: missing why" <<<"$out" || { echo "check-decision-log test: just check did not report $N:2: missing why" >&2; echo "$out" >&2; exit 1; }
+# Only its own item ran (#507): pytest's own selection, through the real `just check`.
+grep -qF "FAILED tests/gate/test_gate.py::test_recipe[check-decision-log]" <<<"$out" && grep -qE '^=+ 1 failed(, [0-9]+ deselected)? in ' <<<"$out" \
+  || { echo "check-decision-log test: just check ran more than its own item" >&2; echo "$out" >&2; exit 1; }
 echo "check-decision-log: ok (missing why, invalid JSON and non-object lines fail naming FILE:LINE and the field, nested included; valid, untracked and no logs pass; the schema drives fields and extras; adversarial forms and a broken checker fail closed)"
