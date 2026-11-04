@@ -1384,6 +1384,19 @@ def drive_gate_tiers(f: Feature) -> None:
     say(f"gate-tiers evidence: {f.d}")
 
 
+@dataclass(frozen=True)
+class Shows:
+    """What a template repo's runner prints: a test of each kind (the second module's, the CLI's, the e2e one), the
+    static checks on stdout (static[0] first), their commands echoed on stderr, and the fast tier's choice line."""
+
+    other: str
+    cli: str
+    e2e: str
+    static: tuple[str, ...]
+    echoed: tuple[str, ...]
+    picks: str
+
+
 def drive_template_tiers(f: Feature) -> None:
     """A template-born repo's two gate tiers, per template: `just new-repo`, its packages from the box's caches
     offline, a second module and its integration test committed (so a one-file change has a test to pick); then
@@ -1413,19 +1426,20 @@ def drive_template_tiers(f: Feature) -> None:
     # What each runner prints for a test of each kind, the static checks (on stdout; echoed: their commands on stderr)
     # and the fast tier's choice.
     shows = {
-        "python": {"other": "PASSED tests/integration/test_other.py::test_double",
-                   "cli": "PASSED tests/integration/test_cli.py::test_hello_json_in_process",
-                   "e2e": "tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end",
-                   "static": ("PASSED tests/test_gate.py::test_recipe[check-lint]", "PASSED tests/test_gate.py::test_recipe[check-types]",
-                              "PASSED tests/test_gate.py::test_recipe[check-imports]"), "echoed": (),
-                   "picks": "fast: the integration tests pytest-testmon picks from its recorded coverage"},
-        "typescript": {"other": "\u2713 |integration| tests/other.test.ts > doubles",
-                       "cli": "\u2713 |integration| tests/cli.test.ts > app hello > prints JSON in process",
-                       "e2e": "|e2e| tests/cli.e2e.test.ts",
-                       # tsc and eslint print nothing when clean: their commands, which just echoes on stderr.
-                       "static": ("languages: ok (", "no dependency violations found"),
-                       "echoed": ("pnpm exec tsc", "pnpm exec eslint --max-warnings 0 .", "pnpm exec depcruise src tests"),
-                       "picks": "fast: the integration test files Vitest picks by their imports of the files changed since main"},
+        "python": Shows(other="PASSED tests/integration/test_other.py::test_double",
+                        cli="PASSED tests/integration/test_cli.py::test_hello_json_in_process",
+                        e2e="tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end",
+                        static=("PASSED tests/test_gate.py::test_recipe[check-lint]",
+                                "PASSED tests/test_gate.py::test_recipe[check-types]",
+                                "PASSED tests/test_gate.py::test_recipe[check-imports]"), echoed=(),
+                        picks="fast: the integration tests pytest-testmon picks from its recorded coverage"),
+        # tsc and eslint print nothing when clean: their commands, which just echoes on stderr.
+        "typescript": Shows(other="\u2713 |integration| tests/other.test.ts > doubles",
+                            cli="\u2713 |integration| tests/cli.test.ts > app hello > prints JSON in process",
+                            e2e="|e2e| tests/cli.e2e.test.ts",
+                            static=("languages: ok (", "no dependency violations found"),
+                            echoed=("pnpm exec tsc", "pnpm exec eslint --max-warnings 0 .", "pnpm exec depcruise src tests"),
+                            picks="fast: the integration test files Vitest picks by their imports of the files changed since main"),
     }
     for lang in ("python", "typescript"):
         r = sc / lang
@@ -1447,16 +1461,16 @@ def drive_template_tiers(f: Feature) -> None:
 
         # The full tier: every test shown by kind, the shared fixture prepared once for the run's two workers.
         f.run(f"{lang}-check", "env", "-C", str(r), "just", "check")
-        f.check(f"{lang}-check", lambda c, k=k: c.code == 0 and all(s in c.out for s in (k["other"], k["cli"], k["e2e"]))
+        f.check(f"{lang}-check", lambda c, k=k: c.code == 0 and all(s in c.out for s in (k.other, k.cli, k.e2e))
                 and c.out.count("shared fixture greetings.json: prepared once for this run") == 1)
 
         # One source file changed: the static checks, then only the integration test the stack's tool picks for it.
         (r / other).write_text(other_src.replace("n * 2", "n + n"))
         f.run(f"{lang}-fast-one-file", "env", "-C", str(r), "just", "fast")
-        f.check(f"{lang}-fast-one-file", lambda c, k=k: c.code == 0 and all(s in c.out for s in k["static"])
-                and all(s in c.err for s in k["echoed"])
-                and k["picks"] in c.out and c.out.index(k["static"][0]) < c.out.index(k["picks"]) < c.out.index(k["other"])
-                and k["cli"] not in c.out and k["e2e"] not in c.out)
+        f.check(f"{lang}-fast-one-file", lambda c, k=k: c.code == 0 and all(s in c.out for s in k.static)
+                and all(s in c.err for s in k.echoed)
+                and k.picks in c.out and c.out.index(k.static[0]) < c.out.index(k.picks) < c.out.index(k.other)
+                and k.cli not in c.out and k.e2e not in c.out)
         # Kept and committed: a revert is itself a change to pytest-testmon, which compares with its last run.
         git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-am", "other: n + n")
 
@@ -1471,8 +1485,8 @@ def drive_template_tiers(f: Feature) -> None:
         f.obs(f"{lang}-hook-core", "log", git("log", "-1", "--format=%s"))
         f.check(f"{lang}-hook-core", lambda c, k=k: c.code == 0 and c.o["log"] == "core: collapse inner spaces\n"
                 and "exec just fast" in c.o["hook"] and "- run: just check\n" in c.o["ci"]
-                and k["picks"] in c.out + c.err and k["cli"] in c.out + c.err
-                and k["other"] not in c.out + c.err and k["e2e"] not in c.out + c.err)
+                and k.picks in c.out + c.err and k.cli in c.out + c.err
+                and k.other not in c.out + c.err and k.e2e not in c.out + c.err)
 
         # A path on the repo's shared-machinery.txt changed (its justfile): every integration test, still no e2e test.
         with (r / "justfile").open("a") as fh:
@@ -1480,7 +1494,7 @@ def drive_template_tiers(f: Feature) -> None:
         f.run(f"{lang}-fast-residual", "env", "-C", str(r), "just", "fast")
         f.check(f"{lang}-fast-residual", lambda c, k=k: c.code == 0
                 and "fast: every integration test: justfile changed since main, on shared-machinery.txt" in c.out
-                and k["other"] in c.out and k["cli"] in c.out and k["e2e"] not in c.out)
+                and k.other in c.out and k.cli in c.out and k.e2e not in c.out)
     f.env = {}
     say(f"template-tiers evidence: {f.d}")
 
