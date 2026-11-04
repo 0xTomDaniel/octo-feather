@@ -61,6 +61,10 @@
     "acceptance-reflector-tools": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-shaper-launch": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
