@@ -100,3 +100,23 @@ tests = ["tests/fast.sh", "tests/integrate.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
 tests = ["tests/fast.sh", "tests/integrate.sh"]
+
+[demo."templates#acceptance-fresh-fast"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
+covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/shared-machinery.txt", "templates/typescript/shared-machinery.txt"]
+tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
+
+[demo."templates#acceptance-test-kinds"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
+covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/pyproject.toml", "templates/typescript/vitest.config.ts"]
+tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
+
+[demo."templates#acceptance-shared-fixture"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
+covers = ["templates/python/tests/integration/conftest.py", "templates/typescript/tests/shared-fixture.ts", "templates/typescript/vitest.config.ts"]
+tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
+
+[demo."templates#acceptance-same-gate"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
+covers = ["templates/python/.githooks/pre-commit", "templates/typescript/.githooks/pre-commit", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml", "scripts/check-templates"]
+tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh", "tests/check-templates.sh"]

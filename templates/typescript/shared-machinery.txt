@@ -1,0 +1,20 @@
+# The shared-machinery list: what it is and what it schedules, octo-feather issue-lifecycle spec #lanes-checkpoints;
+# here also the paths whose change makes `just fast` run every integration test (justfile, fast).
+#
+# One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
+# covers everything under it). `#` starts a comment line. Only what Vitest's import graph
+# cannot see: configuration, pins, workflows, the shared fixture's setup.
+shared-machinery.txt
+justfile
+package.json
+pnpm-lock.yaml
+tsconfig.json
+vitest.config.ts
+tests/shared-fixture.ts
+eslint.config.js
+.dependency-cruiser.cjs
+knip.json
+mise.toml
+mise.lock
+mise-version
+.github/workflows

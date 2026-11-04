@@ -4,10 +4,11 @@
   check-templates [KIT_ROOT]
 
 Per template: AGENTS.md has a `Repo skills:` line; its justfile (just's own JSON dump) has check,
-integrate and qc recipes, and its gate reaches check-languages (GATE_RECIPES, or a dependency of
-check); .githooks/pre-commit, run in a throwaway copy with a recording `just` first on PATH, calls
-exactly `just check` once and exits 0 when just does and non-zero when just fails (the rule run,
-not its text; whether CI runs the gate is review's and the repo's real CI's call); it
+fast, integrate and qc recipes (the gate's two tiers: templates spec #tpl-gate), and its gate
+reaches check-languages (GATE_RECIPES, or a dependency of check, at any depth);
+.githooks/pre-commit, run in a throwaway copy with a recording `just` first on PATH, calls exactly
+`just fast` once and exits 0 when just does and non-zero when just fails (the rule run, not its
+text; whether CI runs `just check` is review's and the repo's real CI's call); it
 pins its native tools with mise (mise.toml, mise.lock, mise-version), mise-version is the kit's,
 and each tool it shares with the kit's mise.toml has the kit's version (one version on the box:
 the kit runs just in every repo it created). templates/python's tests/conftest.py and
@@ -93,16 +94,16 @@ def run_hook(template: Path, tmp: Path, just_exit: int) -> tuple[int, list[list[
 
 
 def check_hook(template: Path) -> None:
-    """The hook runs the gate: exactly one call, `just check`, and the hook's exit follows it."""
+    """The hook runs the fast tier: exactly one call, `just fast`, and the hook's exit follows it."""
     hook = template / ".githooks/pre-commit"
-    fix = f"{hook} must run `just check` and exit with its status (e.g. `exec just check`)"
+    fix = f"{hook} must run `just fast` and exit with its status (e.g. `exec just fast`)"
     if not os.access(hook, os.X_OK):
         msg = f"{hook} is not executable; {fix}"
         raise TemplateError(msg)
     with tempfile.TemporaryDirectory() as tmp:
         ok_exit, ok_calls = run_hook(template, Path(tmp), 0)
         bad_exit, bad_calls = run_hook(template, Path(tmp), 1)
-    if ok_calls != [["check"]] or bad_calls != [["check"]]:
+    if ok_calls != [["fast"]] or bad_calls != [["fast"]]:
         msg = f"{fix}; it called just {ok_calls or 'never'}"
         raise TemplateError(msg)
     if ok_exit != 0 or bad_exit == 0:
@@ -138,16 +139,21 @@ def check_wiring(template: Path) -> None:
         raise TemplateError(msg)
     data = dump(template)
     recipes = cast("dict[str, dict[str, object]]", data["recipes"])
-    if not {"check", "integrate", "qc"} <= recipes.keys():
+    if not {"check", "fast", "integrate", "qc"} <= recipes.keys():
         msg = (
-            f"{template}/justfile needs check, integrate and product-judge recipes (docs/adr/0022)"
+            f"{template}/justfile needs check, fast, integrate and product-judge recipes"
+            " (templates spec #tpl-gate, docs/adr/0022)"
         )
         raise TemplateError(msg)
     check_hook(template)
     assignments = cast("dict[str, dict[str, object]]", data["assignments"])
     gate = set(str(assignments.get("GATE_RECIPES", {}).get("value", "")).split())
-    deps = cast("list[dict[str, object]]", recipes["check"].get("dependencies") or [])
-    gate |= {str(d["recipe"]) for d in deps}
+    todo = ["check"]
+    while todo:
+        deps = cast("list[dict[str, object]]", recipes.get(todo.pop(), {}).get("dependencies") or [])
+        new = {str(d["recipe"]) for d in deps} - gate
+        gate |= new
+        todo += new
     if "check-languages" not in gate:
         msg = (
             f"{template}/justfile: the gate never runs check-languages; add it to GATE_RECIPES"

@@ -5,3 +5,6 @@ __pycache__/
 *.egg-info/
 dist/
 .import_linter_cache/
+# pytest-testmon's recorded coverage, per worktree (just fast); never committed: a reverted copy selects wrongly.
+.testmondata*
+.tmontmp/

@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "template-tiers")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1384,6 +1384,107 @@ def drive_gate_tiers(f: Feature) -> None:
     say(f"gate-tiers evidence: {f.d}")
 
 
+def drive_template_tiers(f: Feature) -> None:
+    """A template-born repo's two gate tiers, per template: `just new-repo`, its packages from the box's caches
+    offline, a second module and its integration test committed (so a one-file change has a test to pick); then
+    `just check` (both test kinds, the shared fixture prepared once with two workers), `just fast` after a one-file
+    change (static checks, then only that module's test), a commit through the repo's git hook after a core change
+    (the hook's `just fast`: the core's tests, no e2e test), and `just fast` after a justfile change (every
+    integration test). CI's command is observed in its workflow."""
+    sc = RUN_DIR / "scratch" / "template-tiers"
+    shutil.rmtree(sc, ignore_errors=True)
+    sc.mkdir(parents=True)
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+    # Trend lines and mise's trust of each created mise.toml in the scratch, never the box's.
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "MISE_STATE_DIR": str(sc / "mise-state"), "GATE_WORKERS": "2"}
+    env = {**os.environ, **f.env}
+    second = {
+        "python": ("src/app/other.py", "def double(n: int) -> int:\n    return n * 2\n",
+                   "tests/integration/test_other.py",
+                   "from app.other import double\n\n\ndef test_double() -> None:\n    assert double(2) == 4\n",
+                   "src/app/core.py", ("clean = name.strip()", 'clean = " ".join(name.split())')),
+        "typescript": ("src/other.ts", "export function double(n: number): number {\n  return n * 2;\n}\n",
+                       "tests/other.test.ts",
+                       ('import { expect, it } from "vitest";\nimport { double } from "../src/other.ts";\n\n'
+                        'it("doubles", () => {\n  expect(double(2)).toBe(4);\n});\n'),
+                       "src/core.ts", ('clean === ""', "clean.length === 0")),
+    }
+    # What each runner prints for a test of each kind, the static checks (on stdout; echoed: their commands on stderr)
+    # and the fast tier's choice.
+    shows = {
+        "python": {"other": "PASSED tests/integration/test_other.py::test_double",
+                   "cli": "PASSED tests/integration/test_cli.py::test_hello_json_in_process",
+                   "e2e": "tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end",
+                   "static": ("PASSED tests/test_gate.py::test_recipe[check-lint]", "PASSED tests/test_gate.py::test_recipe[check-types]",
+                              "PASSED tests/test_gate.py::test_recipe[check-imports]"), "echoed": (),
+                   "picks": "fast: the integration tests pytest-testmon picks from its recorded coverage"},
+        "typescript": {"other": "\u2713 |integration| tests/other.test.ts > doubles",
+                       "cli": "\u2713 |integration| tests/cli.test.ts > app hello > prints JSON in process",
+                       "e2e": "|e2e| tests/cli.e2e.test.ts",
+                       # tsc and eslint print nothing when clean: their commands, which just echoes on stderr.
+                       "static": ("languages: ok (", "no dependency violations found"),
+                       "echoed": ("pnpm exec tsc", "pnpm exec eslint --max-warnings 0 .", "pnpm exec depcruise src tests"),
+                       "picks": "fast: the integration test files Vitest picks by their imports of the files changed since main"},
+    }
+    for lang in ("python", "typescript"):
+        r = sc / lang
+        other, other_src, test, test_src, core, (old, new) = second[lang]
+        k = shows[lang]
+
+        def git(*args: str, at: Path = r) -> str:
+            return subprocess.run(["git", "-C", str(at), *args], check=True, capture_output=True, text=True, env=env).stdout
+
+        f.run(f"{lang}-new-repo", "just", "--justfile", f"{f.s.repo}/justfile", "new-repo", lang, str(r), "--no-spec-chat")
+        install = ["uv", "sync", "--locked", "--offline", "--quiet"] if lang == "python" else ["pnpm", "install", "--offline", "--frozen-lockfile"]
+        code, text = output(install, cwd=r, env=env)
+        f.obs(f"{lang}-new-repo", "install", f"{shlex.join(install)}: exit {code}\n{text}")
+        f.check(f"{lang}-new-repo", lambda c: c.code == 0 and c.o["install"].split("\n", 1)[0].endswith(": exit 0"))
+        (r / other).write_text(other_src)
+        (r / test).write_text(test_src)
+        git("add", "-A")
+        git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "a second module and its integration test")
+
+        # The full tier: every test shown by kind, the shared fixture prepared once for the run's two workers.
+        f.run(f"{lang}-check", "env", "-C", str(r), "just", "check")
+        f.check(f"{lang}-check", lambda c, k=k: c.code == 0 and all(s in c.out for s in (k["other"], k["cli"], k["e2e"]))
+                and c.out.count("shared fixture greetings.json: prepared once for this run") == 1)
+
+        # One source file changed: the static checks, then only the integration test the stack's tool picks for it.
+        (r / other).write_text(other_src.replace("n * 2", "n + n"))
+        f.run(f"{lang}-fast-one-file", "env", "-C", str(r), "just", "fast")
+        f.check(f"{lang}-fast-one-file", lambda c, k=k: c.code == 0 and all(s in c.out for s in k["static"])
+                and all(s in c.err for s in k["echoed"])
+                and k["picks"] in c.out and c.out.index(k["static"][0]) < c.out.index(k["picks"]) < c.out.index(k["other"])
+                and k["cli"] not in c.out and k["e2e"] not in c.out)
+        # Kept and committed: a revert is itself a change to pytest-testmon, which compares with its last run.
+        git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-am", "other: n + n")
+
+        # The core changed and committed through the repo's own git hook: the hook's just fast picks the core's
+        # tests and runs no e2e test; the commit lands. CI's command, from its workflow.
+        (r / core).write_text((r / core).read_text().replace(old, new, 1))
+        git("add", core)
+        f.run(f"{lang}-hook-core", "git", "-C", str(r), "-c", "core.hooksPath=.githooks", "commit", "-m", "core: collapse inner spaces")
+        f.obs(f"{lang}-hook-core", "hook", (r / ".githooks" / "pre-commit").read_text())
+        f.obs(f"{lang}-hook-core", "ci", "".join(ln.strip() + "\n" for ln in (r / ".github" / "workflows" / "check.yml").read_text().splitlines()
+                                                if ln.strip().startswith("- run:")))
+        f.obs(f"{lang}-hook-core", "log", git("log", "-1", "--format=%s"))
+        f.check(f"{lang}-hook-core", lambda c, k=k: c.code == 0 and c.o["log"] == "core: collapse inner spaces\n"
+                and "exec just fast" in c.o["hook"] and "- run: just check\n" in c.o["ci"]
+                and k["picks"] in c.out + c.err and k["cli"] in c.out + c.err
+                and k["other"] not in c.out + c.err and k["e2e"] not in c.out + c.err)
+
+        # A path on the repo's shared-machinery.txt changed (its justfile): every integration test, still no e2e test.
+        with (r / "justfile").open("a") as fh:
+            fh.write("# a residual change\n")
+        f.run(f"{lang}-fast-residual", "env", "-C", str(r), "just", "fast")
+        f.check(f"{lang}-fast-residual", lambda c, k=k: c.code == 0
+                and "fast: every integration test: justfile changed since main, on shared-machinery.txt" in c.out
+                and k["other"] in c.out and k["cli"] in c.out and k["e2e"] not in c.out)
+    f.env = {}
+    say(f"template-tiers evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -1401,6 +1502,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
+    "template-tiers": drive_template_tiers,
 }
 
 
