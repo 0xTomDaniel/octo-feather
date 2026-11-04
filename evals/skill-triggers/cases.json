@@ -1224,6 +1224,102 @@
     "task": "Add one line to AGENTS.md's Commands section: '- `uv run app --help` the app help.' Only that edit, no commit."
   },
   {
+    "id": "dir-lever-teardown-again",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "PR 31 of lane gh12 merged. Post-merge step 5 still stops on parked lanes (#439), so tear gh12 down the way gh206, gh421 and gh436 went this week: close its unique space, remove its clean worktree, delete the local and remote gh12 branch once no PR is based on it, and log the teardown."
+  },
+  {
+    "id": "dir-lever-event-lines",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Log this morning's four owner rulings to notes/handoffs.jsonl, one event each with its time: 09:12 --shout upper-cases the whole greeting; 09:30 --times caps at 10; 10:05 --times 0 is a usage error; 10:41 no --json change. Every event this week went in the same way, and yesterday's report could not read the timestamp of one of them."
+  },
+  {
+    "id": "dir-lever-near-one-ruling",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not message anyone and do not commit. Append one note event to notes/handoffs.jsonl: the owner ruled \"d is fine\" on issue 12 at 2026-10-30T11:02:00Z."
+  },
+  {
+    "id": "dir-lever-near-verify-sha",
+    "role": "director",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file, do not commit and do not message anyone. The supervisor reports 4f1c2ab as implementer-13's commit. Is that sha in notes/handoffs.jsonl, and is it a commit in this repo? One line."
+  },
+  {
+    "id": "sup-lever-record-merge-ask",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": true,
+    "split": "train",
+    "task": "implementer-13 just reported commit 9a8b7c6 for #13, the reviewer's round 2 came back clear on it, and you sent the owner the merge ask for PR 31. Bring the lane notes up to date as after every hand-off: an event line for each of the three in notes/handoffs.jsonl, and the matching waiting_on and last_handoff_at in notes/lane.toml."
+  },
+  {
+    "id": "sup-lever-near-set-waiting",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Do not commit and do not message anyone. The owner now holds the merge gate: set waiting_on in notes/lane.toml to \"owner\". Only that edit."
+  },
+  {
+    "id": "sup-lever-near-finding-logged",
+    "role": "supervisor",
+    "fixture": "lane-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. The reviewer says its --times 0 finding is new. Is it already in notes/handoffs.jsonl? One line."
+  },
+  {
+    "id": "sup-lever-prior-art-again",
+    "role": "supervisor",
+    "fixture": "lane-reports",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Code review round 2 asks again for every implementer's Prior art lines, now with implementer-15's work in. review/prior-art.md is round 1's, which you copied out of notes/reports/, and it lacks #15. Give the reviewer the complete set for this round, then commit."
+  },
+  {
+    "id": "cor-lever-restated-sites",
+    "role": "corrector",
+    "fixture": "rules-restated-sites",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Review round 2 on your fix is blocking again: the errors rule docs/adr/0002 owns is still restated outside it. Round 1 named README.md and agents/worker.md and you made those point; this round the reviewer found more, as the round before. Make every restatement in the repo point to docs/adr/0002, then commit."
+  },
+  {
+    "id": "cor-lever-restated-comments",
+    "role": "corrector",
+    "fixture": "rules-restated-sites",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Blocking finding on your head, third round of the same class: docstrings, code comments, test headers and docs restate the errors rule from docs/adr/0002 instead of pointing to it, and each fix round the reviewer found sites the last one missed. Fix it and commit."
+  },
+  {
+    "id": "cor-lever-near-one-pointer",
+    "role": "corrector",
+    "fixture": "docs-rules-restated",
+    "should_trigger": false,
+    "split": "train",
+    "task": "The only review finding: agents/worker.md:8 restates the errors rule docs/adr/0002 owns. Replace that line with a pointer to the ADR. Only that edit, no commit."
+  },
+  {
+    "id": "cor-lever-near-owner",
+    "role": "corrector",
+    "fixture": "rules-restated-sites",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Do not change any file and do not commit. Which file owns the rule that every error message names the command that fixes it? One line."
+  },
+  {
     "id": "dir-encode-route-ruling",
     "role": "director",
     "fixture": "lane-mini",
