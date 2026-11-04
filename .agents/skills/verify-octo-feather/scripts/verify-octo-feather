@@ -1465,6 +1465,8 @@ def drive_merge_ask_proof(f: Feature) -> None:
             and f"Head: {c.o['head'].strip()[:12]}\n" in c.out and "Full pass" not in c.err)
     f.env = {}
     say(f"merge-ask-proof evidence: {f.d}")
+
+
 @dataclass(frozen=True)
 class Shows:
     """What a template repo's runner prints: a test of each kind (the second module's, the CLI's, the e2e one), the
