@@ -99,8 +99,13 @@ rec="$(passed)" && [[ "$rec" == *"\"head\": \"$h1\""* && "$rec" == *'"clean": tr
 work t2 'echo 2 > two'; run 0 9 t2
 [[ "$out" == *gate=fast* && "$out" != *gate=full* && "$out" == *provisional* ]] || { echo "integrate test: unlisted change not fast and provisional: $out" >&2; exit 1; }
 ! passed >/dev/null 2>&1 || { echo "integrate test: a fast-only head has a full pass recorded" >&2; exit 1; }
+# Two full passes on heads whose gate configuration did not change (justfile only: no Justfile, .justfile or
+# lock files) record one configuration identity.
+config() { (cd ../t9 && "$kit/scripts/octo-feather-gate" passed "$1") | python3 -c 'import json, sys; print(json.load(sys.stdin)["gate_config"])'; }
+work t4 'echo 4 > four'; run 0 9 --full t4
+[[ "$(config "$h1")" == "$(config HEAD)" && -n "$(config HEAD)" ]] || { echo "integrate test: unchanged configuration, two identities: $(config "$h1") $(config HEAD)" >&2; exit 1; }
 # issue-lifecycle#acceptance-integrate-checkpoint: renaming a listed file runs the full gate; red rolls back, naming it.
 work t3 'g mv machinery/a machinery/b'; before="$(git -C ../t9 rev-parse HEAD)"; run 2 9 t3
 [[ "$out" == *gate=full* && "$out" == *"machinery/a"* && "$out" == *"machinery/b"* && "$(git -C ../t9 rev-parse HEAD)" == "$before" ]] \
   || { echo "integrate test: listed rename not full and rolled back: $out" >&2; exit 1; }
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused; tiers: pilot full and recorded, unlisted fast and provisional, listed rename full and red)"
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused; tiers: pilot full and recorded, unlisted fast and provisional, one configuration identity on unchanged configuration, listed rename full and red)"

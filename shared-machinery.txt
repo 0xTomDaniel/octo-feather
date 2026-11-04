@@ -1,7 +1,5 @@
-# The shared-machinery list (issue-lifecycle #lanes-checkpoints): repository policy the factory keeps;
-# a lane that adds or moves shared machinery updates it in the same change. What it schedules:
-# scripts/octo-feather-gate --help (checkpoint, select). Only what recorded coverage cannot see
-# stays here: Python the gate runs through the kit's venv is mapped by coverage (just fast-map).
+# The shared-machinery list: what it is and what it schedules, issue-lifecycle #lanes-checkpoints; how the
+# kit uses it, scripts/octo-feather-gate --help.
 #
 # One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
 # covers everything under it). `#` starts a comment line.
@@ -28,12 +26,20 @@ tests/gate
 tests/lib
 tests/fixtures
 .github/workflows
-# Data the kit's scripts read: contracts, schemas, role files, Pi configuration.
+# Data the kit's scripts read at run time, which coverage cannot see (a file read is no executed line):
+# contracts, schemas, role files, Pi configuration, skill text, reflection questions, eval suites, specs.
 qc.toml
 schemas
 agents
 web-mcp.json
 extensions
+AGENTS.md
+.gitattributes
+.basedpyright
+reflection/questions.json
+evals
+docs/specs
+.agents/skills/**/*.md
 # Shell, which coverage cannot measure: the kit's bash commands and skill scripts.
 scripts/octo-feather-exclude
 scripts/octo-feather-integrate
