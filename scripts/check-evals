@@ -601,7 +601,7 @@ def check_history(at: str, fx: object, errs: list[str], field: str = "fixture") 
     c = f.get("commit")
     if "commit" in f and not (isinstance(c, str) and SHA.fullmatch(c)):
         errs.append(f"{at}: field {field}.commit: must be a full 40 character sha, got {c!r}")
-    elif repo is not None and isinstance(c, str) and subprocess.run(
+    elif repo is not None and (repo / ".git").exists() and isinstance(c, str) and subprocess.run(
             [shutil.which("git") or "/usr/bin/git", "-C", str(repo), "cat-file", "-e", f"{c}^{{commit}}"], capture_output=True, check=False).returncode:
         errs.append(f"{at}: field {field}.commit: no commit {c} in {repo}")
 
