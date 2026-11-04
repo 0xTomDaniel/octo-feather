@@ -110,3 +110,13 @@ tests = ["tests/lane-merge-ask.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
 tests = ["tests/integrate.sh"]
+
+[demo."quality#acceptance-one-execution"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
+tests = ["tests/qc-one-execution.sh"]
+
+[demo."quality#acceptance-one-execution-incomplete"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
+tests = ["tests/qc-one-execution.sh"]

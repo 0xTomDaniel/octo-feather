@@ -37,7 +37,9 @@ check run also carries a runtime marker:
       outside a check run prints `gate-free: ok`; inside one, whatever it would
       launch, names WHAT on stderr, stops the outermost check run (SIGTERM to
       its just, so a script that swallows the refusal still fails the gate) and
-      exits 1. A caller treats anything but the ok line as refusal.
+      exits 1. A caller treats anything but the ok line as refusal. The qc capture of tagged tests
+      (octo-feather-qc --capture-case, --capture-store) runs inside the full gate by design and never
+      asks: it calls no model and decides nothing (quality spec #qc-capture); the marker stays set.
 
 Stated limit: like `env -i`, a script that deliberately clears or forges the
 marker starts outside the check run, and nothing here can tell it from one
