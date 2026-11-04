@@ -1,6 +1,7 @@
 """The gate's steps as pytest items: each GATE_RECIPES recipe in the justfile, run as a command.
 
-Run through `just check` or `just test`, which export GATE_RECIPES; bare `uv run pytest` skips them.
+Run through `just check`, `just fast` or `just test`, which export GATE_RECIPES; bare
+`uv run pytest` skips them.
 """
 
 import os

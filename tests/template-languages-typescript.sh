@@ -10,5 +10,6 @@
 # shellcheck source=tests/lib/template-languages.sh
 source "$(dirname "$0")/lib/template-languages.sh"
 check_template typescript
+check_tiers typescript
 [[ ! -e "$t/called" ]] || { out="$(cat "$t/called")"; fail "the TypeScript repo's check called Python or uv"; }
 echo "template-languages-typescript: ok (typescript repo green fresh; unknown, Go, uncovered file, env -S shebang, both pnpm pins and a gate recipe out each named; typescript without Python)"
