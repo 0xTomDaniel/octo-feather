@@ -111,3 +111,19 @@ tests = ["tests/qa-review.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
 covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
 tests = ["tests/qa-history.sh"]
+
+# Reflectors stubbed, tracker faked: no model call, no tracker write.
+[demo."comms#acceptance-reflect-files-correction"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."issue-lifecycle#acceptance-writer-route-lane"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."comms#acceptance-correction-intake"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+tests = ["tests/lane-intake.sh"]
