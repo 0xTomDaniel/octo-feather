@@ -180,12 +180,22 @@
       ]
     },
     "acceptance-one-execution": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T213011Z-6e600dd2",
+      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "tests": [
+        "tests/qc-one-execution.sh"
+      ]
     },
     "acceptance-one-execution-incomplete": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T213018Z-1aa5e84e",
+      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "tests": [
+        "tests/qc-one-execution.sh"
+      ]
     },
     "acceptance-review-test-adequacy": {
       "status": "planned",
