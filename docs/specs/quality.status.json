@@ -172,8 +172,8 @@
     "acceptance-fast-affected": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T173317Z-dfb58d12",
-      "commit": "31b579ac3233e583a1b8bb278e8f8d3d8ce064c6",
+      "record": "20261104T182911Z-e93eb272",
+      "commit": "5e2e71fb63b51c883fb67a37c894510206efeec0",
       "tests": [
         "tests/fast.sh",
         "tests/integrate.sh"
