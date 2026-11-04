@@ -28,7 +28,7 @@ A skill-trigger or role-transcript case, an object:
 
 - `id`: matches `[a-z0-9][a-z0-9-]*`, unique in the suite, and has an expectations entry; an expectations id with no case is refused too.
 - `role`: a string matching `[a-z0-9-]+` with a kit `agents/<role>.md`.
-- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`; or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds. Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
+- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`; or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds (checked where it is a git checkout of its own; a copy of the kit's files without its `.git` has no history to check it against). Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
 - `task`: a non-blank string, what the agent sees; `{repo}` and `{head}` in it become the copy's path and HEAD sha. It must not leak its grade (Leaks).
 - skill-trigger only: `should_trigger` (true or false) and `split` (`train` or `held-out`). A true case needs a `skill_read` or `skill_read_before` fact, a false one a `skill_not_read` fact.
 - role-transcript only, optional, the repo setup:
