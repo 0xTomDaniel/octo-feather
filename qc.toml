@@ -80,3 +80,23 @@ tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-spec-status"]
 tests = ["tests/spec-status.sh"]
+
+[demo."quality#acceptance-fast-affected"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
+covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+tests = ["tests/fast.sh", "tests/integrate.sh"]
+
+[demo."issue-lifecycle#acceptance-integrate-fast"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
+covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+tests = ["tests/fast.sh", "tests/integrate.sh"]
+
+[demo."issue-lifecycle#acceptance-integrate-checkpoint"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
+covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+tests = ["tests/fast.sh", "tests/integrate.sh"]
+
+[demo."issue-lifecycle#acceptance-pilot-full"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
+covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
+tests = ["tests/fast.sh", "tests/integrate.sh"]
