@@ -86,6 +86,17 @@ expect check-skills "---\n\"name\":qc-bad\ndescription: d\n---\n"
 expect check-skills "---\nname: qc-bad\n'name': qc-bad\ndescription: d\n---\n"
 expect check-skills "---\n\"description\": d\n---\n"
 expect check-skills ""
+# Pi itself decides what loads (#558, skills #acceptance-only-listed): a plain description holding ': ' is YAML Pi
+# refuses, so it fails naming the skill; quoted, Pi loads it. A role listing the refused skill fails naming both.
+expect check-skills "---\nname: qc-bad\ndescription: Tests worth keeping: seams first.\n---\n$body"
+allow "---\nname: qc-good\ndescription: \"Tests worth keeping: seams first.\"\n---\n$body"
+role=agents/qc-role.md
+plant "---\nname: qc-bad\ndescription: Tests worth keeping: seams first.\n---\n$body"
+printf -- '---\nname: qc-role\ndescription: A role.\nskills: qc-bad\n---\nBody.\n' > "$t/$role"
+set +e; out="$(cd "$t" && "$t/scripts/check-skills" 2>&1)"; rc=$?; set -e
+unplant; rm -f "$t/$role"
+[[ "$rc" != 0 ]] && grep -qF "check-skills: role qc-role ($role): Pi does not offer its skill qc-bad" <<<"$out" \
+  || { echo "check-skills test: a role listing a skill Pi refuses was not reported naming both" >&2; echo "$out" >&2; exit 1; }
 # One bad skill among good ones fails, naming only the bad one.
 plant "---\nname: qc-bad\ndescription:\n---\n$body"
 mkdir -p "$t/.agents/skills/qc-good"; printf -- '---\nname: qc-good\ndescription: Fine.\n---\n' > "$t/.agents/skills/qc-good/SKILL.md"
@@ -104,6 +115,11 @@ printf '#!/bin/sh\necho "python3: broken (check-skills test stub)" >&2\nexit 2\n
 set +e; out="$(cd "$t" && PATH="$h:$PATH" just check-skills 2>&1)"; rc=$?; set -e
 rm -rf "$h"
 [[ "$rc" != 0 ]] && ! grep -qF 'skills: ok' <<<"$out" || { echo "check-skills test: broken python3 passed check-skills" >&2; echo "$out" >&2; exit 1; }
+# Fails closed: a broken pi (a stub first on PATH, the pi pi-role would exec) fails, never skills: ok.
+mkdir -p "$h"; printf '#!/bin/sh\necho "pi: broken (check-skills test stub)" >&2\nexit 1\n' > "$h/pi"; chmod +x "$h/pi"
+set +e; out="$(cd "$t" && PATH="$h:$PATH" "$t/scripts/check-skills" 2>&1)"; rc=$?; set -e
+rm -rf "$h"
+[[ "$rc" != 0 ]] && grep -qF 'pi: broken' <<<"$out" && ! grep -qF 'skills: ok' <<<"$out" || { echo "check-skills test: broken pi passed check-skills" >&2; echo "$out" >&2; exit 1; }
 [[ -z "$(g status --porcelain)" ]] || { echo "check-skills test: cleanup left changes in the copy" >&2; g status --short >&2; exit 1; }
 # The gate includes check-skills: `just check` in the copy fails on a skill with no name, naming its SKILL.md.
 # The copy keeps only this test of tests/*.sh, so the gate there starts no other test, and the guard above
@@ -117,4 +133,4 @@ grep -qF "check-skills: $sk" <<<"$out" || { echo "check-skills test: just check 
 # Only its own item ran (#507): pytest's own selection, through the real `just check`.
 grep -qF "FAILED tests/gate/test_gate.py::test_recipe[check-skills]" <<<"$out" && grep -qE '^=+ 1 failed(, [0-9]+ deselected)? in ' <<<"$out" \
   || { echo "check-skills test: just check ran more than its own item" >&2; echo "$out" >&2; exit 1; }
-echo "check-skills: ok (missing, body-only and empty name or description fail naming the SKILL.md; quoted and folded values pass; adversarial forms and a broken checker fail closed)"
+echo "check-skills: ok (missing, body-only and empty name or description fail naming the SKILL.md; quoted and folded values pass; a description or role skill Pi refuses fails naming both; adversarial forms, a broken checker and a broken pi fail closed)"

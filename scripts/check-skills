@@ -4,11 +4,17 @@ line, a closing `---` line) holding a non-empty `name` and `description`
 (skills spec #acceptance-skill-frontmatter); the five role contracts exist; every
 tracker skill the kit has (scripts/pi-role's TRACKERS) holds each tracker script as
 an executable in its scripts/ (skills spec #acceptance-tracker-scripts).
+Then Pi itself, not a model of its YAML reader, is asked which skills it loads:
+every kit skill must load, and every role in agents/*.md must be offered each
+skill `pi-role --json` hands it (skills spec #acceptance-only-listed, #558: an
+unquoted description holding ': ' is invalid YAML, which Pi drops silently).
 
 Stdlib only. Fails closed: an unreadable skill or an internal error fails the
 gate, never reads as ok. Run by `just check`.
 """
-import glob, importlib.machinery, importlib.util, os, re, sys
+import concurrent.futures, glob, importlib.machinery, importlib.util, json, os, re, shutil, subprocess, sys, tempfile
+from pathlib import Path
+from typing import Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
@@ -133,6 +139,77 @@ def problems(path):
     return out
 
 
+# Pi as an agent runs it, minus everything that is not skills: no model call (RPC get_commands only), no network,
+# no session, extension, context file, template or theme, and only the --skill paths handed to it.
+PI_FLAGS = ("--mode", "rpc", "--offline", "--no-session", "--no-extensions", "--no-context-files",
+            "--no-prompt-templates", "--no-themes", "--no-skills")
+
+
+def private_env(tmp: Path) -> dict[str, str]:
+    """The caller's PATH (the `pi` pi-role execs) and a private home, agent dir and caches under tmp."""
+    env = {"PATH": os.environ.get("PATH", ""), "TMPDIR": str(tmp), "PI_OFFLINE": "1", "PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
+    for k in ("HOME", "PI_CODING_AGENT_DIR", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"):
+        d = tmp / k.lower()
+        d.mkdir(parents=True, exist_ok=True)
+        env[k] = str(d)
+    return env
+
+
+def pi_loaded(dirs: list[Path], tmp: Path) -> set[Path]:
+    """Real paths of the skill folders Pi loads when handed every one of dirs (its RPC get_commands)."""
+    args = ["pi", *PI_FLAGS] + [a for d in dirs for a in ("--skill", str(d))]
+    r = subprocess.run(args, input='{"type":"get_commands"}\n', capture_output=True, text=True,
+                       cwd=tmp, env=private_env(tmp), timeout=120, check=False)
+    for line in r.stdout.splitlines():
+        try:
+            msg = json.loads(line)
+        except ValueError:
+            continue
+        if msg.get("type") == "response" and msg.get("command") == "get_commands":
+            if not msg.get("success"):
+                raise RuntimeError(f"pi get_commands failed: {msg.get('error')}")
+            commands: list[dict[str, Any]] = msg["data"]["commands"]
+            return {Path(c["sourceInfo"]["path"]).parent.resolve() for c in commands if c.get("source") == "skill"}
+    raise RuntimeError(f"pi gave no get_commands answer (exit {r.returncode}): {r.stderr.strip()[-500:]}")
+
+
+def role_skills(role: str, tmp: Path) -> tuple[list[Path], str]:
+    """The skill folders `pi-role --json` hands the role, run outside any repo (default tracker); or its error."""
+    r = subprocess.run([str(Path(ROOT, "scripts", "pi-role")), "--json", str(Path(ROOT, "agents", f"{role}.md"))],
+                       capture_output=True, text=True, cwd=tmp, env=private_env(tmp), timeout=60, check=False)
+    if r.returncode != 0:
+        return [], r.stderr.strip() or f"exit {r.returncode}"
+    args: list[str] = json.loads(r.stdout)["args"]
+    return [Path(args[i + 1]).resolve() for i, a in enumerate(args) if a == "--skill"], ""
+
+
+def pi_problems() -> tuple[list[str], int]:
+    """Messages for each kit skill Pi does not load and each role skill Pi would not offer; the role count.
+
+    One Pi run holds every kit skill: Pi loads a skill folder on its own (only a name collision ties two, and a
+    collision in a role's subset is one in the whole set), so a folder loaded here is loaded in each role's run."""
+    if not shutil.which("pi"):
+        return ["check-skills: pi not on PATH; the check asks Pi which skills it loads (install the pin in pi-version)"], 0
+    root = Path(ROOT)
+    dirs = sorted(p.parent.resolve() for p in root.glob(".agents/skills/*/SKILL.md"))
+    roles = sorted(p.stem for p in root.glob("agents/*.md"))
+    with tempfile.TemporaryDirectory() as t, concurrent.futures.ThreadPoolExecutor() as pool:
+        # Independent processes, each seconds long: Pi's start and each pi-role run side by side.
+        asked = pool.submit(pi_loaded, dirs, Path(t))
+        handed = {r: pool.submit(role_skills, r, Path(t)) for r in roles}
+        loaded = asked.result()
+        out = [f"check-skills: .agents/skills/{d.name}/SKILL.md: Pi does not load it (its frontmatter is not YAML "
+               "Pi reads; quote a value holding ': ')" for d in dirs if d not in loaded]
+        for role in roles:
+            skills, err = handed[role].result()
+            if err:
+                out.append(f"check-skills: role {role}: pi-role --json failed: {err}")
+            out += [f"check-skills: role {role} (agents/{role}.md): Pi does not offer its skill {s.name} "
+                    f"({s.relative_to(root.resolve()) if s.is_relative_to(root.resolve()) else s}/SKILL.md)"
+                    for s in skills if s not in loaded]
+    return out, len(roles)
+
+
 def main():
     os.chdir(ROOT)
     bad, n = 0, 0
@@ -158,7 +235,14 @@ def main():
         bad += 1
     if bad:
         return 1
-    print(f"skills: ok ({n} skills, {len(ROLES)} roles, trackers {', '.join(trackers)})")
+    # Pi is asked only of a tree the checks above pass: each of their findings already fails the gate.
+    found, n_roles = pi_problems()
+    for p in found:
+        print(p, file=sys.stderr)
+    if found:
+        return 1
+    print(f"skills: ok ({n} skills, {len(ROLES)} roles, Pi loads each skill and offers {n_roles} role files their listed skills, "
+          f"trackers {', '.join(trackers)})")
     return 0
 
 
