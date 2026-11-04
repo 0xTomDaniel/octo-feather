@@ -118,6 +118,10 @@ if "STUB-READ-TDD" in prompt and tdd and not ("STUB-ALTERNATE" in prompt and run
     tool("c2", "read", {"path": tdd})
     err, txt = pi_read(tdd)
     out({"type": "tool_execution_end", "toolCallId": "c2", "toolName": "read", "isError": err, "result": {"content": [{"type": "text", "text": txt}]}})
+if "STUB-COSTLY" in prompt and tdd:   # a role listing tdd spends 3 more assistant messages (their usage), reading nothing
+    for _ in range(3):
+        out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
+                                               "content": [{"type": "text", "text": "thinking"}]}})
 if "STUB-LINGER" in prompt:
     time.sleep(120)
 if "STUB-ATTEMPTS" in prompt:   # really run each command in the sandbox, as pi's bash tool would, result and all

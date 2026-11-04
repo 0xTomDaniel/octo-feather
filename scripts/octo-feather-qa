@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--runs N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT] [--baseline COMMIT]   factory evals (`just qa`)
+octo-feather-qa --analyze RUN_DIR   the analysis of a stored run (Analysis, below)
 
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
 Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
@@ -96,6 +97,19 @@ cost, errors), each unavailable one, then the kit's one judgment model (EVALS/ju
 question's best, the kit model's proposed threshold, whether held-out meets it, and its confidence buckets.
 Artifacts <run-id>/<suite>/: input.json (what the classifiers see), extension.js,
 stdout.txt, stderr.txt, sandbox.json, answers.json, bench.json, report.txt; summary.json `benches`.
+Analysis (spec quality#acceptance-qa-analyst): after a run with --baseline or --runs N > 1, a `qa: analysis` block, one
+line per flag (or `no flags`), and always summary.json `analysis` {threshold, non_discriminating_cases,
+non_discriminating_facts, high_variance, cost_tradeoffs}, each a list. Deterministic code over the cases' results, no
+model. The flags, per fact case:
+  high variance             a kit's pass rate strictly between 0 and 1 (each kit with --baseline; without it, the
+                            one kit: the only flag a run with no baseline can show)
+  cost tradeoff             (--baseline) the same pass rate on both kits, and the current kit's time or tokens mean
+                            more than the baseline's by over `threshold` (0.5: half the baseline mean)
+  non-discriminating case   (--baseline) every run on both kits had the same verdict, and no cost tradeoff
+  non-discriminating fact   (--baseline) in a case whose pass rate differs between the kits, a fact with the same
+                            status in every run on both kits
+octo-feather-qa --analyze RUN_DIR prints the analysis of a stored run again from RUN_DIR/summary.json alone: no case,
+sandbox or model runs; no other option; an unreadable summary.json exits 64.
 Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -1428,9 +1442,86 @@ def scores(results):
                  "total": sum(r.get("split") == sp for r in results)} for sp in ("train", "held-out")}
 
 
-def main(argv):
+TRADEOFF = 0.5   # a cost tradeoff's growth over the baseline mean (rule: --help, --analyze)
+
+
+def analyze(cases: list[Result]) -> Result:
+    """The deterministic analysis of a run's fact cases (rules: --help, --analyze); no model."""
+    nd_cases: list[Result] = []
+    nd_facts: list[Result] = []
+    hv: list[Result] = []
+    cost: list[Result] = []
+    for r in cases:
+        if "runs" not in r:
+            continue
+        name = f"{r['suite']}/{r['id']}"
+        b = r.get("baseline")
+        base = cast("Result", b) if isinstance(b, dict) else None
+        for kit, x in ([("baseline", base), ("current", r)] if base else [("", r)]):
+            if 0 < cast("float", x["pass_rate"]) < 1:
+                hv.append({"case": name, "kit": kit or None, "pass_rate": x["pass_rate"], "stddev": x["stddev"]})
+        if base is None:
+            continue
+        same = r["pass_rate"] == base["pass_rate"]
+        grew: Result = {}
+        for k in ("time", "tokens"):
+            c, bm = mean(r, k), mean(base, k)
+            if c is not None and bm is not None and c > bm * (1 + TRADEOFF):
+                grew[k] = {"baseline": bm, "current": c}
+        if same and grew:
+            cost.append({"case": name, "pass_rate": r["pass_rate"], **grew})
+        elif same and r["pass_rate"] in (0.0, 1.0):
+            nd_cases.append({"case": name, "pass_rate": r["pass_rate"]})
+        if not same:
+            fl = [cast("list[Result]", cast("Result", x).get("facts") or []) for x in cast("list[object]", base["runs"]) + cast("list[object]", r["runs"])]
+            for i in range(min(len(f) for f in fl) if fl else 0):
+                st = {f[i].get("status") for f in fl}
+                if len(st) == 1:
+                    nd_facts.append({"case": name, "fact": {k: v for k, v in fl[0][i].items() if k != "status"}, "status": st.pop()})
+    return {"threshold": TRADEOFF, "non_discriminating_cases": nd_cases, "non_discriminating_facts": nd_facts,
+            "high_variance": hv, "cost_tradeoffs": cost}
+
+
+def analysis_lines(a: Result) -> list[str]:
+    """The analysis as printed: one line per flag, or `no flags`."""
+    def fact(f: Result) -> str:
+        return " ".join([str(f.get("fact")), *(json.dumps(v) if isinstance(v, list | dict) else str(v) for k, v in f.items() if k != "fact")])
+
+    out = ["qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):"]
+    out += [f"  non-discriminating case {x['case']}: every run on both kits {'passed' if x['pass_rate'] == 1.0 else 'failed'}"
+            for x in cast("list[Result]", a["non_discriminating_cases"])]
+    out += [f"  non-discriminating fact {x['case']}: {fact(cast('Result', x['fact']))}: {x['status']} in every run on both kits"
+            for x in cast("list[Result]", a["non_discriminating_facts"])]
+    out += [f"  high variance {x['case']}: " + (f"{x['kit']} kit " if x["kit"] else "") + f"pass rate {x['pass_rate']:.2f} +/- {x['stddev']:.2f}"
+            for x in cast("list[Result]", a["high_variance"])]
+    out += [f"  cost tradeoff {x['case']}: pass rate {x['pass_rate']:.2f} on both kits; " + "; ".join(
+            f"{k} mean {cast('Result', x[k])['baseline']:.1f} to {cast('Result', x[k])['current']:.1f}" for k in ("time", "tokens") if k in x)
+            for x in cast("list[Result]", a["cost_tradeoffs"])]
+    return out if len(out) > 1 else [*out, "  no flags"]
+
+
+def reanalyze(run_dir: str) -> int:
+    """--analyze RUN_DIR: the analysis of a stored run, from its summary.json only; no case, sandbox or model runs."""
+    p = Path(run_dir) / "summary.json"
+    try:
+        raw: object = json.loads(p.read_text())
+    except (OSError, ValueError) as e:
+        raw = f"no readable summary.json ({e})"
+    if not isinstance(raw, dict):
+        die(64, f"--analyze {run_dir}: {raw if isinstance(raw, str) else 'summary.json is not an object'}")
+    sm = cast("Result", raw)
+    print(f"qa: run {sm.get('run_id')} reanalyzed from {p}", flush=True)
+    print("\n".join(analysis_lines(analyze(cast("list[Result]", sm.get("cases") or [])))), flush=True)
+    return 0
+
+
+def main(argv: list[str]):
     if argv[:1] == ["--watch"]:
         return watch(argv[1:])
+    if argv[:1] == ["--analyze"]:
+        if argv[2:] or not argv[1:]:
+            die(64, "--analyze takes one RUN_DIR and no other option")
+        return reanalyze(argv[1])
     gate_free()
     o = parse(argv)
     evals = Path(o["evals"]).resolve() if o["evals"] else KIT / "evals"
@@ -1489,12 +1580,15 @@ def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" =
                                  runid.split("-")[-1], run_dir / name, judgment_model(evals)))
     passed = sum(r["verdict"] == "PASS" for r in results)
     sc = scores(results)
+    an = analyze(results)
+    if results and (base or runs > 1):
+        print("\n".join(analysis_lines(an)), flush=True)
     for sp, v in sc.items():
         print(f"qa: {sp} score {v['passed']}/{v['total']} passed")
     (run_dir / "summary.json").write_text(json.dumps({"run_id": runid, "kit_ref": o["kit-ref"] or "HEAD", "kit_sha": sha,
                                                       "passed": passed, "total": len(results), "scores": sc, "runs": runs,
                                                       **({"baseline": {"kit_ref": o["baseline"], "kit_sha": base[1]}} if base else {}),
-                                                      "seconds": round(time.time() - t0, 1), "cases": results,
+                                                      "seconds": round(time.time() - t0, 1), "cases": results, "analysis": an,
                                                       **({"benches": benches} if benches else {})}, indent=2) + "\n")
     if results:
         print(f"qa: {passed}/{len(results)} passed (run {runid}); artifacts {run_dir}")
