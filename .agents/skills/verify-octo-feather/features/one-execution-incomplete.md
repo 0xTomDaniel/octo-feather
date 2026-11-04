@@ -13,7 +13,7 @@ Drive criterion: `quality#acceptance-one-execution-incomplete`
 
 ## How to get to it (user POV)
 
-- A supervisor runs the lane's final full gate with the lane's claimed criteria, `OCTO_FEATHER_QC_CLAIMS="<spec>#<anchor> ..." just check` (or `just integrate --full` with it), then `just qc docs/specs/<slug>.status.json <PR> <id>...` on that head. A test is tagged with the criterion it proves by its pytest `criterion` marker; a kit-style `tests/*.sh` by a header line `# criterion: <spec>#<anchor>` (`tests/gate/test_gate.py`, `tests/gate/conftest.py`). `octo-feather-qc` with no arguments prints its usage, which owns the rest.
+- A supervisor runs the lane's final full gate given the lane's claimed criteria, then `just qc docs/specs/<slug>.status.json <PR> <id>...` on that head. How a test is tagged and how the gate is given the claims: the docstrings of `tests/gate/test_gate.py` and `tests/gate/conftest.py`; `octo-feather-qc` with no arguments prints its usage, which owns the rest.
 
 ## Driving it with verify-octo-feather
 
