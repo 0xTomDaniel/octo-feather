@@ -16,6 +16,9 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       worktree of the repo reads it, and it does not depend on the Herdr session that ran the gate.
   octo-feather-gate passed [REV]
       Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1.
+  octo-feather-gate config [REV]
+      Prints REV's (default HEAD) identity fields as record writes them, JSON: gate_config, list;
+      merge-ask reads it (when a pass is current: issue-lifecycle #lanes-checkpoints).
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
       one per line; each item with why it runs, or why not, on stderr. The selection reads the
@@ -150,18 +153,26 @@ def tree_id(rev: str, path: str) -> str:
     return git("rev-parse", "--verify", "-q", f"{rev}:{path}", check=False).strip() or "absent"
 
 
+def gate_config(rev: str) -> str:
+    """REV's gate configuration identity: sha256 over each CONFIG file's verified blob id."""
+    return hashlib.sha256("\n".join(f"{p} {tree_id(rev, p)}" for p in CONFIG).encode()).hexdigest()
+
+
+def identity(rev: str) -> dict[str, str]:
+    """A full pass's recorded identity besides its head: gate_config, the list's blob id."""
+    return {"gate_config": gate_config(rev), "list": tree_id(rev, LIST)}
+
+
 def record(reason: str, seconds: float) -> None:
     head = git("rev-parse", "HEAD").strip()
-    config = hashlib.sha256(
-        "\n".join(f"{p} {tree_id(head, p)}" for p in CONFIG).encode()
-    ).hexdigest()
+    ident = identity(head)
     rec = {
         "tier": "full",
         "head": head,
         "branch": git("symbolic-ref", "-q", "--short", "HEAD", check=False).strip() or None,
         "clean": not git("status", "--porcelain").strip(),
-        "gate_config": config,
-        "list": tree_id(head, LIST),
+        "gate_config": ident["gate_config"],
+        "list": ident["list"],
         "reason": reason,
         "seconds": round(seconds, 1),
         "at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -366,6 +377,8 @@ def main() -> int:
     r.add_argument("--seconds", type=float, required=True)
     p = sub.add_parser("passed")
     p.add_argument("rev", nargs="?", default="HEAD")
+    g = sub.add_parser("config")
+    g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
@@ -377,6 +390,9 @@ def main() -> int:
         record(a.reason, a.seconds)
     elif a.cmd == "passed":
         return passed(a.rev)
+    elif a.cmd == "config":
+        rev = git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()
+        sys.stdout.write(json.dumps(identity(rev)) + "\n")
     elif a.cmd == "select":
         select()
     else:

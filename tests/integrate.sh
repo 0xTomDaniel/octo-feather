@@ -108,4 +108,17 @@ work t4 'echo 4 > four'; run 0 9 --full t4
 work t3 'g mv machinery/a machinery/b'; before="$(git -C ../t9 rev-parse HEAD)"; run 2 9 t3
 [[ "$out" == *gate=full* && "$out" == *"machinery/a"* && "$out" == *"machinery/b"* && "$(git -C ../t9 rev-parse HEAD)" == "$before" ]] \
   || { echo "integrate test: listed rename not full and rolled back: $out" >&2; exit 1; }
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused; tiers: pilot full and recorded, unlisted fast and provisional, one configuration identity on unchanged configuration, listed rename full and red)"
+# issue-lifecycle#acceptance-brownfield-full: a repo the kit did not create, only its own `just check` (no fast recipe):
+# every integration, past the pilot too, runs that gate in full and records the pass; the repo gains no recipe.
+cd "$t" && g init -q brown && cd brown
+printf 'check:\n    @echo own-gate\n' > justfile; echo a > f; g add -A; g commit -qm base
+recipes="$(just --summary)"; g worktree add -q -b gh11 ../b11
+for n in 1 2 3; do
+  g worktree add -q -b "b$n" ../"b$n" gh11; (cd ../"b$n" && echo "$n" > "n$n" && g add -A && g commit -qm "b$n")
+  run 0 11 "b$n"
+  [[ "$out" == *"tier: full ("*"no fast recipe in this repo: its one gate is the full tier"* && "$out" == *own-gate* && "$out" == *"tier=full"* && "$out" != *provisional* ]] \
+    || { echo "integrate test: brownfield integration $n did not run its own gate in full: $out" >&2; exit 1; }
+  (cd ../b11 && "$kit/scripts/octo-feather-gate" passed >/dev/null) || { echo "integrate test: brownfield pass $n not recorded" >&2; exit 1; }
+  [[ "$(cd ../b11 && just --summary)" == "$recipes" ]] || { echo "integrate test: brownfield repo gained a recipe: $(cd ../b11 && just --summary)" >&2; exit 1; }
+done
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused; tiers: pilot full and recorded, unlisted fast and provisional, one configuration identity on unchanged configuration, listed rename full and red; brownfield: only its own check, full and recorded at every integration, no recipe added)"
