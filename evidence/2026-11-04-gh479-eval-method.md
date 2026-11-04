@@ -17,11 +17,13 @@ Expected: at the kit before this change (6f261fd) section 4 asks for `--kit-ref 
 
 A stub pi in the case repo ran `git branch --show-current; ls evals evals/changelog` and `octo-feather-qa --case changelog-new-flag --runs 2 --baseline main`, run 20261104T202805Z-fd2b3e (on the first fact form; tests/qa-ran.sh now proves the current one: `--runs 1 --baseline main` FAIL, `--runs 3 --baseline main` PASS):
 `PASS role-transcripts/implementer-wording-proof: ran octo-feather-qa --baseline: recorded run octo-feather-qa --case changelog-new-flag --runs 2 --baseline main (exit 0); ran octo-feather-qa --runs: recorded run ... (exit 0) [stop: decided, 2 tool calls, 7.5 s]`
-The tool output was the fake's (`qa (fake, factory eval: no case runs): octo-feather-qa --case changelog-new-flag --runs 2 --baseline main`, canned PASS and baseline FAIL lines, `qa: 1/1 passed (fake)`), no `qa: run` header and no `qc sandbox` line: nothing real ran. `just` has no version in the sandbox for this fixture (mise), so the fixture's AGENTS.md also names `octo-feather-qa --case ID` on PATH.
+The tool output was the first fake's (canned lines naming itself, since replaced: Real runs below), no `qc sandbox` line: nothing real ran. `just` has no version in the sandbox for this fixture (mise), so the fixture's AGENTS.md also names `octo-feather-qa --case ID` on PATH.
 
 ## Real runs (R3)
 
 1. First evaluation, run 20261104T204716Z-86c666 (`--baseline 6f261fd`, one run per kit, by the supervisor), graded on the first fact form (`["--baseline"]`, `["--runs"]` apart):
    - baseline kit 6f261fd: FAIL. Its run record holds only `octo-feather-qa --help`, `--case X` and `--case X --kit-ref main`: it also fails the current fact.
    - current kit: PASS, decided on the role's smoke, `--runs 1 --baseline main`. Finding (director agreed): a flag alone let the smoke pass; section 4 now states the smoke (`--runs 1`) and the proof (`--runs 3`) apart, and the fact grades the proof, `["--runs", "3", "--baseline"]`. This PASS is superseded by the rerun below.
-2. Rerun at the current kit: pending, by the supervisor.
+2. Rerun at the current kit, run 20261104T210630Z-1350a6: FAIL. The implementer read eval-cases, ran `octo-feather-qa --case X` twice and reported that it was talking to a stand-in that proves nothing (the fake then printed `qa (fake, ...)` and `passed (fake)`), and skipped `--runs 3 --baseline`.
+
+Neither evaluation counts: both ran under a fake that announced itself, so the role could tell its proof was not real. The fake now answers in the real tool's output form, copied from real runs, and never names itself (commit 127de22; schema.md Case, fake_qa; tests/qa-ran.sh). The proof is the next evaluation, baseline 6f261fd beside the current kit, one run each, by the supervisor: pending.
