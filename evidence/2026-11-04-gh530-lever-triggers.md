@@ -94,3 +94,5 @@ dir-lever-event-lines is a held-out rerun after a train-driven change; it was ne
 | held-out (written after the change) | sup-lever-prior-art-again | 0/3 | 0/3 | 20261104T204310Z-6d751d |
 
 Reached the moment in all 6 runs: on both kits the supervisor read the three reports, generated review/prior-art.md with a shell loop over notes/reports/ (no hand copying) and committed, in 5 calls, but never loaded principle-build-the-lever. A held-out trigger miss, non-discriminating, not a fixture defect; not tuned on. Supervisor held-out should-trigger evidence for this change is therefore: none passing (sup-lever-handoff-stamp pre-existing, not rerun; sup-lever-prior-art-again 0/3 -> 0/3).
+
+Ruling (supervisor, #530): the supervisor step line ships on its train evidence only (sup-lever-record-merge-ask 0/3 -> 3/3). The held-out sup-lever-prior-art-again went 0/3 -> 0/3 and does not discriminate; the supervisor has no passing held-out evidence of its own.
