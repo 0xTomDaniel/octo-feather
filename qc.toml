@@ -81,21 +81,10 @@ command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc
 covers = ["scripts/octo-feather-spec-status"]
 tests = ["tests/spec-status.sh"]
 
-# `just shape` from a scratch target holding Spec Chat's skills, with the same names (and another skill) in a scratch
-# home: prints pi-role's launch of agents/shaper.md and fails unless its skills are exactly the role file's.
+# tests/shape.sh: `just shape --json` from a scratch target holding Spec Chat's skills, the same names (and another
+# skill) in a scratch home; prints pi-role's launch of agents/shaper.md and fails unless its skills are exactly the
+# role file's. One scenario, the test's, so its literal expectations are the demo's.
 [demo."roles#acceptance-shaper-launch"]
-command = '''t=$(mktemp -d) && for s in spec-chat-shape spec-chat-review tdd; do mkdir -p "$t/home/.agents/skills/$s" "$t/repo/.agents/skills/$s" && echo "# $s" > "$t/home/.agents/skills/$s/SKILL.md"; done && for s in spec-chat-shape spec-chat-review; do cp "$t/home/.agents/skills/$s/SKILL.md" "$t/repo/.agents/skills/$s/"; done && rm -r "$t/repo/.agents/skills/tdd" && git -c init.defaultBranch=main init -q "$t/repo" && cd "$t/repo" && HOME="$t/home" XDG_CACHE_HOME="$t/cache" PATH="$QC_REPO/scripts:$PATH" just --justfile "$QC_REPO/justfile" shape --json > "$t/launch.json" && python3 -c '
-import json, os, sys
-t, kit = sys.argv[1], os.environ["QC_REPO"]
-a = json.load(open(t + "/launch.json"))["args"]
-fm = dict(l.split(": ", 1) for l in open(kit + "/agents/shaper.md").read().split("---")[1].strip().splitlines())
-lst = lambda k: [x.strip() for x in fm[k].split(",")]
-got = sorted(a[i + 1] for i, x in enumerate(a) if x == "--skill")
-want = sorted([kit + "/.agents/skills/" + s for s in lst("skills")] + [t + "/repo/.agents/skills/" + s for s in lst("externalSkills")])
-flag = lambda f: a[a.index(f) + 1] if f in a else None
-print("launch:", *a[:a.index("--append-system-prompt")], sep="\n  ")
-ok = got == want and "--no-skills" in a and flag("--model") == fm["model"] and flag("--thinking") == fm["thinking"] and flag("--tools") == ",".join(lst("tools") + ["codemode"]) and flag("--octo-feather-role") == "shaper"
-print("skills exactly the role file list, Spec Chat from the repo, none from home:", ok)
-sys.exit(0 if ok else 1)' "$t"; rc=$?; rm -rf "$t"; exit $rc'''
+command = "tests/shape.sh"
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
 tests = ["tests/shape.sh"]
