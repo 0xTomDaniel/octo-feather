@@ -2,7 +2,7 @@
 
 Change: the skill's description (via `.skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch`) names the repeat moment; the skill-load step line of agents/director.md and agents/supervisor.md names that role's repeat moment. The corrector step line was changed at 04ae8f9 and reverted (supervisor ruling: no case separates it). No skill text inlined (owner ruling 2026-11-04, #520).
 
-Smoke: .agents/skills/principle-build-the-lever/SKILL.md .skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch agents/director.md agents/supervisor.md agents/corrector.md, skill-triggers lever cases at kit 04ae8f9 (the skill materialized from the patch by --kit-ref) beside baseline origin/main ea7d779: runs 20261104T195144Z-b00744 (should-trigger, --runs 3) and 20261104T202158Z-aa9926 (should-not, once). Pre-change smoke: 20261104T194613Z-140cfb (dir-lever-teardown-again FAIL at ea7d779 and 780ea97).
+Smoke: .agents/skills/principle-build-the-lever/SKILL.md .skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch agents/director.md agents/supervisor.md, skill-triggers lever cases beside baseline origin/main ea7d779 (the skill materialized from the patch by --kit-ref): at 04ae8f9 runs 20261104T195144Z-b00744 (should-trigger, --runs 3) and 20261104T202158Z-aa9926 (should-not); director.md as tuned, at 784aef0, runs 20261104T203155Z-80fa6c (should-trigger, --runs 3) and 20261104T204029Z-82ee45 (should-not). Pre-change smoke: 20261104T194613Z-140cfb (dir-lever-teardown-again FAIL at ea7d779 and 780ea97).
 
 Removed: nothing.
 
@@ -75,3 +75,14 @@ Findings:
 ## Removed cases
 
 - sup-lever-status-rows (held-out should-trigger), removed from the suite after its result was seen (run 20261104T195144Z-b00744: origin/main 0/3, 04ae8f9 0/3). Reason: defective, not a lever result: the lane-mini spec lacks the eight criteria the task names, so on both kits the supervisor refuses after reading (spec-status check would fail on the extra ids) and never reaches the moment. Not edited and no replacement written. It never counts either way. Supervisor held-out should-trigger evidence for this change: the pre-existing sup-lever-handoff-stamp (not rerun) and sup-lever-prior-art-again, written after the change from a different real moment (director ruling), results below once run.
+
+## Director rerun at 784aef0 (after the train-driven step-line tune)
+
+| split | case | origin/main | 784aef0 | run |
+|---|---|---|---|---|
+| train | dir-lever-teardown-again | 0/3 | 3/3 | 20261104T203155Z-80fa6c |
+| train | dir-lever-near-one-ruling (should-not) | PASS | PASS | 20261104T204029Z-82ee45 |
+| held-out RERUN | dir-lever-event-lines | 0/3 | 3/3 | 20261104T203155Z-80fa6c |
+| held-out | dir-lever-near-verify-sha (should-not) | PASS | PASS | 20261104T204029Z-82ee45 |
+
+dir-lever-event-lines is a held-out rerun after a train-driven change; it was never tuned on. The over-trigger on dir-lever-near-one-ruling is gone (FAIL at 04ae8f9, PASS at 784aef0).
