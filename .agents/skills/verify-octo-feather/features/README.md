@@ -38,7 +38,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [lane-archive](./lane-archive.md) covers closing a lane (`octo-feather-lane archive`) and the lane reflection it runs first (`octo-feather-lane reflect`).
 - [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
-- [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`).
+- [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`): its director reflection line and a repository's full gate time against its gate-time budget.
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-insufficient](./qc-insufficient.md) covers `just qc` giving insufficient evidence when a declared demo cannot run to its end, and `octo-feather-lane merge-ask` failing naming it.
@@ -47,4 +47,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qc-fallback](./qc-fallback.md) covers `just qc` sending a criterion with no declared demo to the agent fallback: a fresh, time-capped qc judge whose report becomes that criterion's record.
 - [qc-stale](./qc-stale.md) covers `just qc` linking each built criterion to its evidence record, capture commit and tests, and `octo-feather-spec-status show` naming a built criterion current or stale.
 - [gate-tiers](./gate-tiers.md) covers the gate's two tiers: `octo-feather-integrate` running the full gate at a checkpoint (pilot, listed path) and the fast tier otherwise, and `just fast` selecting tests from recorded coverage.
-- [merge-ask-proof](./merge-ask-proof.md) covers `octo-feather-lane merge-ask` refusing a lane head with no current recorded full gate pass, and `octo-feather-integrate` running a brownfield target's own gate in full at every integration with no recipe added.
+- [merge-ask-proof](./merge-ask-proof.md) covers `octo-feather-lane merge-ask` refusing a lane head with no current recorded full gate pass, and `octo-feather-integrate` running a brownfield target's own gate in full at every integration with no recipe added, and the merge ask's gate time against the target's gate-time budget, shown, never decided on.

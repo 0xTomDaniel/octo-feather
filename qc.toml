@@ -110,3 +110,13 @@ tests = ["tests/lane-merge-ask.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
 tests = ["tests/integrate.sh"]
+
+[demo."comms#acceptance-report-gate-budget"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report"
+covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+tests = ["tests/lane-report.sh", "tests/gate-trend-tier.sh"]
+
+[demo."issue-lifecycle#acceptance-merge-ask-gate-budget"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
+covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+tests = ["tests/lane-merge-ask.sh", "tests/gate-trend-tier.sh"]

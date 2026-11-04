@@ -4,7 +4,12 @@
 # Proves comms#acceptance-report-lanes, #acceptance-report-any-target, #acceptance-report-unreadable,
 # #acceptance-report-owner-queue, #acceptance-report-owner-caught, #acceptance-report-lane-numbers (lane-a: started
 # line's age is its wall time, 2 review rounds, $1.7500 and 2 calls of unknown cost), #acceptance-report-gate-time
-# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago).
+# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago),
+# #acceptance-report-gate-budget (o/a: its latest passed full run, 280.25s, over its 240s budget and grown 12.1% over the
+# median 250s of the 3 passed full runs before it, a share of 10%, with the trend and slowest items; a failed full run
+# and a subset run stay out of the trend; within budget and share, no budget file, an invalid one; no gate on timing:
+# the report exits 0 either way).
+# The kit's own budget file is gate-budget.toml at the repo root (its form: octo-feather-lane --help, report).
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -46,11 +51,34 @@ grep -qx "director reflection: last ran $two (2d0h[0-9]m ago)" "$t/out" && [[ "$
   || fail "director reflection two days ago: $(grep '^director reflection' "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
+# gate budget: within the budget and the share, no budget file, an invalid one (a report fact, the exit stays 0)
+budget() { # FILE_TEXT|-: o/a's gate-budget.toml (- none), then the report's o/a gate budget block
+  if [[ "$1" == - ]]; then rm -f "$t/pr/o__a/gate-budget.toml"; else printf '%s\n' "$1" > "$t/pr/o__a/gate-budget.toml"; fi
+  FAKE_GH_PRS="$t/pr" "$kit/scripts/octo-feather-lane" report >"$t/out" || fail "gate budget $1: exit non-zero"
+  sed -n '/^gate budget o\/a:/,/^gate budget o\/b:/p' "$t/out" | sed -E 's/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/'
+}
+cp -r "$fx/pr" "$t/pr"
+run_line='  full gate: 280.25s, head aaaa5aaaa5aa, started 2026-10-20T10:00:00Z (AGE ago)'
+out="$(budget $'budget_seconds = 300\ngrowth_share = 0.125\ntrend_runs = 2')"
+grep -qxF "$run_line: within budget, 19.75s to spare (budget 300s)" <<<"$out" \
+  && grep -qxF "  growth: +9.7% over the trend's median 255.375s (the 2 passed full runs before it); set share 12.5%: within" <<<"$out" \
+  && grep -qxF '  trend: 250s 0000a0000a00 2026-10-19T12:00:00Z, 260.75s 1111a1111a11 2026-10-20T07:00:00Z, 280.25s aaaa5aaaa5aa 2026-10-20T10:00:00Z (passed full runs, oldest first)' <<<"$out" \
+  || fail "within budget and share: $out"
+out="$(budget -)"
+grep -qxF "$run_line: no budget (gate-budget.toml: none)" <<<"$out" \
+  && grep -qxF "  growth: +12.1% over the trend's median 250s (the 3 passed full runs before it); no set share (gate-budget.toml: none)" <<<"$out" \
+  && grep -qx 'unread: none' "$t/out" || fail "no budget file: $out"
+out="$(budget 'budget_seconds = "fast"')"
+grep -qxF "$run_line: no budget (gate-budget.toml: budget_seconds 'fast' is not a number of the right range; growth_share None is not a number of the right range; trend_runs None is not a number of the right range)" <<<"$out" \
+  && grep -qx 'unread: gate-budget.toml (o/a)' "$t/out" || fail "invalid budget file: $out $(tail -1 "$t/out")"
+[[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
+
 # no spend ledger and no gate run trend: said per lane, nothing else changes
 rm "$S/spend.jsonl" "$S/check-runs.jsonl"; before="$(snap)"
 "$kit/scripts/octo-feather-lane" report >"$t/out" || fail "no ledger: exit non-zero"
 [[ "$(grep -c '^  spend: no spend recorded (spend.jsonl: none)$' "$t/out")" == 4 \
   && "$(grep -c '^  gate time: no gate run recorded (check-runs.jsonl: none)$' "$t/out")" == 4 ]] \
+  && grep -qx 'gate budget o/a: no gate run recorded (check-runs.jsonl: none)' "$t/out" \
   && grep -qx 'unread: none' "$t/out" || fail "no ledger: $(cat "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 echo "lane-report test: ok"

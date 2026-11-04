@@ -1,0 +1,4 @@
+# o/a full gate wall-time budget (fixture)
+budget_seconds = 240
+growth_share = 0.1
+trend_runs = 3
