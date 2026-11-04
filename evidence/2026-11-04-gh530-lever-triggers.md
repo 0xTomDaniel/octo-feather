@@ -2,7 +2,7 @@
 
 Change: the skill's description (via `.skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch`) names the repeat moment; the skill-load step line of agents/director.md, agents/supervisor.md and agents/corrector.md names that role's repeat moment. No skill text inlined (owner ruling 2026-11-04, #520).
 
-Smoke: .agents/skills/principle-build-the-lever/SKILL.md agents/director.md agents/supervisor.md agents/corrector.md, skill-triggers `dir-lever-teardown-again`: run 20261104T194613Z-140cfb, baseline origin/main ea7d779 FAIL, kit 780ea97 (cases only, before the change) FAIL. After-change runs: below.
+Smoke: .agents/skills/principle-build-the-lever/SKILL.md .skillfile/patches/skills/principle-build-the-lever/SKILL.md.patch agents/director.md agents/supervisor.md agents/corrector.md, skill-triggers lever cases at kit 04ae8f9 (the skill materialized from the patch by --kit-ref) beside baseline origin/main ea7d779: runs 20261104T195144Z-b00744 (should-trigger, --runs 3) and 20261104T202158Z-aa9926 (should-not, once). Pre-change smoke: 20261104T194613Z-140cfb (dir-lever-teardown-again FAIL at ea7d779 and 780ea97).
 
 Removed: nothing.
 
@@ -33,3 +33,34 @@ Train: dir-lever-teardown-again, dir-lever-near-one-ruling, sup-lever-record-mer
 - cor-lever-near-owner: gh160.handoffs.jsonl:5-16, duplicated-rule rounds: which file owns the rule, a read only.
 
 Fixture `rules-restated-sites`: no existing fixture holds more than 2 restatements; the real moments had 4 to 6 files.
+
+## Results (runner: lane 479 scripts/octo-feather-qa, scripts/check-evals and eval-cases skill files at fd62302, byte copies in a detached worktree of 04ae8f9; --evals that worktree's evals, --kit-ref 04ae8f9, --baseline origin/main)
+
+Should-trigger, --runs 3, run 20261104T195144Z-b00744 (pass rate baseline -> head):
+
+| split | case | origin/main | 04ae8f9 |
+|---|---|---|---|
+| train | dir-lever-teardown-again | 0/3 | 3/3 |
+| train | sup-lever-record-merge-ask | 0/3 | 3/3 |
+| train | cor-lever-restated-sites | 2/3 | 3/3 |
+| held-out | dir-lever-event-lines | 0/3 | 3/3 |
+| held-out | sup-lever-status-rows | 0/3 | 0/3 |
+| held-out | cor-lever-restated-comments | 3/3 | 3/3 |
+
+Should-not, once, run 20261104T202158Z-aa9926:
+
+| split | case | origin/main | 04ae8f9 |
+|---|---|---|---|
+| train | dir-lever-near-one-ruling | PASS | FAIL |
+| train | sup-lever-near-set-waiting | PASS | PASS |
+| train | cor-lever-near-one-pointer | PASS | PASS |
+| held-out | dir-lever-near-verify-sha | PASS | PASS |
+| held-out | sup-lever-near-finding-logged | PASS | PASS |
+| held-out | cor-lever-near-owner | PASS | PASS |
+
+Findings:
+
+- sup-lever-status-rows (held-out, frozen): never reaches the moment. The fixture's spec lacks the eight criteria, so in all 3 head runs the supervisor refuses after 3 reads (spec-status check would fail on the extra ids) and edits nothing. A case defect, not a trigger result; not edited (held-out).
+- cor-lever-restated-comments (held-out): non-discriminating; the corrector on main already loads the lever with encode-lessons on a third-round class finding.
+- cor-lever-restated-sites (train): weak separation, 2/3 on main.
+- dir-lever-near-one-ruling (train): over-trigger at 04ae8f9; the director's thinking cites the step line's "an event line" for one append (the director logs every action as an event line).
