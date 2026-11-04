@@ -6,7 +6,9 @@ output of `octo-feather-state` when that command is on PATH, else
 ${XDG_STATE_HOME:-~/.local/state}/octo-feather. Fields: start (UTC), repo (git top level
 of the working dir), head, total_s (the run's elapsed wall seconds: the junit testsuite time,
 which pytest's junitxml measures on the controller from session start; never a sum of item
-times), exit, steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
+times), exit, tier (`full` only when the invocation narrowed nothing: no paths or node ids, so pytest
+ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob;
+else `subset`), steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
 
@@ -62,13 +64,20 @@ def _result(case):
     return "ok"
 
 
-def _entry(xml_path, status):
+def _tier(config: pytest.Config) -> str:
+    o = config.option
+    narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.keyword, o.markexpr, getattr(o, "lf", False),
+                getattr(o, "stepwise", False), o.deselect, o.ignore, o.ignore_glob)
+    return "subset" if any(narrowed) else "full"
+
+
+def _entry(xml_path, status, tier: str):
     suite = ET.parse(xml_path).getroot()
     suite = suite if suite.tag == "testsuite" else suite.find("testsuite")
     start = datetime.datetime.fromisoformat(suite.get("timestamp")).astimezone(datetime.timezone.utc)
     return {"start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "repo": _git("rev-parse", "--show-toplevel") or os.getcwd(),
             "head": _git("rev-parse", "HEAD"), "total_s": round(float(suite.get("time")), 3), "exit": int(status),
-            "steps": [{"name": c.get("name"), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c)}
+            "tier": tier, "steps": [{"name": c.get("name"), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c)}
                       for c in suite.iter("testcase")]}
 
 
@@ -193,7 +202,7 @@ class _Capture:
 
 
 @pytest.hookimpl(trylast=True)   # after the junitxml plugin has written its file
-def pytest_sessionfinish(session, exitstatus):
+def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     config = session.config
     if hasattr(config, "workerinput") or _COLLECT_ONLY:   # a worker, or no run: no line
         return
@@ -201,7 +210,7 @@ def pytest_sessionfinish(session, exitstatus):
     try:
         if not xml_path:
             raise OSError("no --junitxml for this run")
-        line = json.dumps(_entry(xml_path, exitstatus), separators=(",", ":"))
+        line = json.dumps(_entry(xml_path, exitstatus, _tier(session.config)), separators=(",", ":"))
         d = _state_dir()
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, TREND), "a") as f:

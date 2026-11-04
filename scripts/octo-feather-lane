@@ -128,7 +128,12 @@ OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gi
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
 `class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: `demo checks`
 when qc.toml at H (this directory's repo) declares a demo for the criterion, else `agent fallback`, the
-rule just qc decides by (quality spec #qc-results); then `Review check classes` listing the comment's
+rule just qc decides by (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
+against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
+head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
+fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
+the items). `Review check classes` lists the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
@@ -255,6 +260,21 @@ docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes 
 
 After the lanes:
 
+  gate budget <owner/name>: the latest passed full gate run against gate-budget.toml on <owner/name>'s default branch
+    full gate: <s>s, head <12 hex>, started <start>: OVER BUDGET by <s>s (budget <s>s)
+                                                 or `within budget, <s>s to spare (budget <s>s)`, `no budget (<why>)`
+    growth: <+x.y%> over the trend's median <s>s (the <N> passed full runs before it); set share <p>%: GROWN
+                                                 or `within`; `no set share (<why>)` with no budget
+    trend: <s>s <12 hex> <start>, ... (passed full runs, oldest first)
+    slowest: <name> <s>s, ...                    the latest run's 5 slowest items
+                                                 one block per open lane's repository (spec comms
+                                                 #report-field-gate-time): check-runs.jsonl lines with tier full
+                                                 and exit 0 (the trend hook writes tier: tests/gate/conftest.py;
+                                                 a line without it is no full run) whose head is a commit of
+                                                 the default branch (the same 100) or of its open lanes' PRs;
+                                                 the latest is the full gate time, trend_runs before it the
+                                                 trend; `gate budget <repo>: no passed full gate run ...` or
+                                                 `unread: ...` instead. Shown only: no gate reads it
   owner queue:                                   (`owner queue: none` with none pending)
     lane <record name> gate <gate> asked <at>    oldest first
   owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
@@ -262,6 +282,13 @@ After the lanes:
   director reflection: last ran <at>             the director log's latest reflection line (`never ran (<log>)`
                                                  with none; `never ran (<log>: none)` with no log)
   spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
+
+gate-budget.toml, a repository's gate-time budget at its root (read from its default branch, `gh api
+repos/<repository>/contents/gate-budget.toml`; by merge-ask at the PR head), kept by the factory like any repo
+policy: TOML, read with the standard library, a file of its own so a budget change changes no gate configuration
+(octo-feather-gate config) and no qc contract. Keys: budget_seconds (a number > 0), growth_share (a number >= 0:
+GROWN when the run is more than that share over the trend's median), trend_runs (an integer >= 1: that many passed
+full runs before the latest make the trend; 5 shown with no file). Anything else is `unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
 read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
@@ -977,6 +1004,32 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
             + (f"; {'; '.join(why)}" if why else f" (none recorded on {h} or the lane commits before it): {fix}")]
 
 
+def merge_ask_gate_time(head: str, base: str) -> list[str]:
+    """The full gate's wall time on the final head against gate-budget.toml at that head, with its trend and slowest
+    items (spec issue-lifecycle #lanes-checkpoints). Shown only: the code reviewer judges it, no gate reads it, and
+    merge-ask passes or fails the same without it."""
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    h = head[:12]
+    title = (f"Gate time (the full gate on the final head against {BUDGET} at {h}; the code reviewer judges it, "
+             "no gate reads it: issue-lifecycle #lanes-checkpoints):")
+    path = state_dir() / ReportSources.TREND
+    try:
+        got = cast("tuple[list[tuple[int, Run]], list[int]] | None", numbered_jsonl(path))
+        if got is None:
+            return [title, f"  no gate run recorded ({path}: none)"]
+        lane = [head] + [r for r in git("rev-list", "--topo-order", head, f"^{base}")[1].split() if r != head]
+        runs = passed_full(got[0], set(git("rev-list", "--max-count=1000", head)[1].split()))
+        last = next((r for c in lane for r in reversed(runs) if r.get("head") == c), None)
+        if last is None:
+            return [title, f"  no passed full gate run recorded on {h} or the lane commits before it ({path})"]
+        rc, text = git("show", f"{head}:{BUDGET}", ok=(0, 128))
+    except (OSError, UnicodeDecodeError, Refuse) as e:
+        return [title, f"  unread: {e}"]
+    budget, why = budget_parse(text if rc == 0 else None)
+    return [title, *budget_lines(last, runs[:runs.index(last)], budget, why, now, "  ")]
+
+
 def subject(c: dict) -> str:
     """A commit's full subject: GitHub cuts messageHeadline at ~70 chars with an ellipsis and starts messageBody with the rest."""
     h, body = c.get("messageHeadline") or "", c.get("messageBody") or ""
@@ -1521,7 +1574,9 @@ def cmd_merge_ask(args: list[str]) -> int:
                        *(f"- {cid}: {'demo checks' if cid in demos else 'agent fallback'}" for cid in sorted(rows))]
         except Refuse as e:
             miss.append(f"Decision sources: {e}")
+    gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
     if miss:
+        print("\n".join(gate_time), file=sys.stderr)
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
@@ -1532,6 +1587,7 @@ def cmd_merge_ask(args: list[str]) -> int:
         print("\n".join(judged_lines))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
+    print("\n" + "\n".join(gate_time))
     return 0
 
 
@@ -2485,12 +2541,100 @@ def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | Non
     return rows, bad
 
 
+BUDGET = "gate-budget.toml"   # the repo root's gate-time budget, kept by the factory (form: budget_text)
+BUDGET_TREND = 5                # trend runs shown when the repo has no budget file to set trend_runs
+SLOWEST = 5                     # slowest items shown
+
+
+Budget = dict[str, float]   # budget_seconds, growth_share, trend_runs (an int)
+Run = dict[str, object]     # one check-runs.jsonl line
+
+
+def budget_parse(text: str | None) -> tuple[Budget | None, str]:
+    """gate-budget.toml's three numbers, or None and why: absent (text None) or invalid. budget_seconds: the
+    full gate's wall-time budget; growth_share: the share of growth over the trend's median that is flagged;
+    trend_runs: how many passed full runs before the latest make the trend. Stdlib tomllib: the kit's scripts
+    stay stdlib-only (AGENTS.md)."""
+    import tomllib
+    if text is None:
+        return None, f"{BUDGET}: none"
+    try:
+        d: dict[str, object] = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return None, f"{BUDGET}: {e}"
+    least = {"budget_seconds": 0.0, "growth_share": 0.0, "trend_runs": 1.0}
+    ok: Budget = {}
+    for k, low in least.items():
+        v = d.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and (v > low if k == "budget_seconds" else v >= low) \
+                and (k != "trend_runs" or isinstance(v, int)):
+            ok[k] = v
+    bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least))]
+    return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
+
+
+def total(d: Run) -> float:
+    t = d.get("total_s")
+    return float(t) if isinstance(t, (int, float)) else 0.0
+
+
+def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
+    """check-runs.jsonl lines of passed full gate runs (tier full, exit 0, the runner's own fields) on HEADS, oldest first."""
+    runs = [d for _, d in rows if d.get("tier") == "full" and d.get("exit") == 0 and d.get("head") in heads
+            and utc(d.get("start")) is not None and isinstance(d.get("total_s"), (int, float))]
+    return sorted(runs, key=lambda d: str(d.get("start")))   # UTC instants of one form: text order is time order
+
+
+def secs(x: float) -> str:
+    return f"{round(x, 3):g}s"
+
+
+def budget_lines(last: Run, before: list[Run], budget: Budget | None, why: str, now: object, pad: str) -> list[str]:
+    """The full gate run LAST against BUDGET, with the trend (passed full runs BEFORE it, oldest first) and its
+    slowest items; flags OVER BUDGET and GROWN. Display only: no gate reads it (issue-lifecycle #lanes-checkpoints)."""
+    import statistics
+    t = total(last)
+    run = f"{pad}full gate: {secs(t)}, head {str(last.get('head'))[:12]}, started {stamp(last.get('start'), now)}"
+    if budget is None:
+        out = [f"{run}: no budget ({why})"]
+    else:
+        b = float(budget["budget_seconds"])
+        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t > b else f"within budget, {secs(b - t)} to spare")
+               + f" (budget {secs(b)})"]
+    base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND):]
+    if not base:
+        out.append(f"{pad}growth: no passed full run before it to compare")
+    else:
+        med = statistics.median(total(d) for d in base)
+        grow = (t - med) / med if med else 0.0
+        g = f"{pad}growth: {grow:+.1%} over the trend's median {secs(med)} (the {len(base)} passed full run{'s' * (len(base) > 1)} before it)"
+        if budget is None:
+            out.append(f"{g}; no set share ({why})")
+        else:
+            share = float(budget["growth_share"])
+            out.append(f"{g}; set share {share * 100:g}%: " + ("GROWN" if grow > share else "within"))
+    out.append(f"{pad}trend: " + ", ".join(f"{secs(total(d))} {str(d.get('head'))[:12]} {d.get('start')}" for d in [*base, last])
+               + " (passed full runs, oldest first)")
+    raw = last.get("steps")
+    steps: list[tuple[float, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else []:
+        st = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+        sec = st.get("seconds")
+        if isinstance(sec, (int, float)):
+            steps.append((float(sec), str(st.get("name"))))
+    top = sorted(steps, key=lambda s: (-s[0], s[1]))[:SLOWEST]
+    out.append(f"{pad}slowest: " + (", ".join(f"{name} {secs(sec)}" for sec, name in top) or "no items recorded"))
+    return out
+
+
 class ReportSources:
     """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
     LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
 
     def __init__(self, state: Path, unread: list[str]):
         self.unread, self.main = unread, {}
+        self.repo_heads: dict[str, set[str]] = {}   # each open lane's repository: its lanes' PR commits
         self.ledger, self.ledger_why = self.load(state / self.LEDGER)
         self.trend, self.trend_why = self.load(state / self.TREND)
         if self.ledger:   # a cost neither dollars nor null (unknown) makes the line unreadable
@@ -2568,6 +2712,45 @@ class ReportSources:
             return [lane, f"  gate time: main {main}"]
         return [lane, run("main", self.last_run(main), f"no gate run on a commit of {repo}'s default branch")]
 
+    def budget_text(self, repo: str) -> str | None:
+        """gate-budget.toml on repo's default branch (None: no such file); Refuse when GitHub cannot say."""
+        try:
+            return gh(["api", f"repos/{repo}/contents/{BUDGET}", "-H", "Accept: application/vnd.github.raw"],
+                      f"check {repo} exists, and gh auth status")
+        except Refuse as e:
+            if "HTTP 404" in str(e):
+                return None
+            raise
+
+    def budgets(self, now: object) -> list[str]:
+        """Per open lane's repository, its latest passed full gate run on a commit of its default branch or of
+        its lanes' PRs, against its gate-time budget (spec comms #report-field-gate-time)."""
+        out: list[str] = []
+        trend = cast("tuple[list[tuple[int, Run]], list[int]] | None", self.trend)
+        for repo in sorted(self.repo_heads):
+            head = f"gate budget {repo}:"
+            if self.trend_why:
+                out.append(f"{head} unread: {self.TREND}: {self.trend_why}"); continue
+            if trend is None:
+                out.append(f"{head} no gate run recorded ({self.TREND}: none)"); continue
+            main = self.main_heads(repo)
+            if isinstance(main, str):
+                out.append(f"{head} {main}"); continue
+            runs = passed_full(trend[0], main | self.repo_heads[repo])
+            if not runs:
+                out.append(f"{head} no passed full gate run on a commit of {repo}'s default branch or its open lanes' PRs"); continue
+            try:
+                text = self.budget_text(repo)
+                budget, why = budget_parse(text)
+                if text is not None and budget is None:
+                    self.unread.append(f"{BUDGET} ({repo})")
+            except Refuse as e:
+                self.unread.append(f"GitHub ({repo} {BUDGET})")
+                budget, why = None, f"unread: GitHub: {e}"
+            out += [f"{head} the latest passed full gate run against {BUDGET} on {repo}'s default branch",
+                    *budget_lines(runs[-1], runs[:-1], budget, why, now, "  ")]
+        return out
+
 
 def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list,
                 src: ReportSources) -> list[str]:
@@ -2579,6 +2762,8 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
         unread.append(f"record {rec_path.name}")
         return [f"lane {name}", f"  unread: record {rec_path.name}: {e}"]
     repo = rec.get("repository")
+    if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        src.repo_heads.setdefault(repo, set())
     out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
            f"  started: {stamp(rec.get('started_at'), now)}"]
     check_waits, pr_heads = [], None
@@ -2596,6 +2781,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
             check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
             pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
+            src.repo_heads[repo] |= pr_heads
         except (Refuse, KeyError, TypeError, AttributeError) as e:
             unread.append(f"GitHub ({name})")
             out.append(f"  pr: #{pr} unread: GitHub: {e}")
@@ -2663,6 +2849,8 @@ def cmd_report(args: list[str]) -> int:
     src = ReportSources(lanes.parent, unread)
     for r in records:
         print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue, src)))
+    for line in src.budgets(now):
+        print(line)
     queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
     print("owner queue:" if queue else "owner queue: none")
     for name, g, at in queue:

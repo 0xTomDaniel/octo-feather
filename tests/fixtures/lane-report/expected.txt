@@ -42,6 +42,12 @@ lane lane-d: issue gh6 o/b "Spec review awaits the owner"
   spend: none recorded for lane-d
   gate time: lane none: no pr
   gate time: main none: no gate run on a commit of o/b's default branch
+gate budget o/a: the latest passed full gate run against gate-budget.toml on o/a's default branch
+  full gate: 280.25s, head aaaa5aaaa5aa, started 2026-10-20T10:00:00Z (AGE ago): OVER BUDGET by 40.25s (budget 240s)
+  growth: +12.1% over the trend's median 250s (the 3 passed full runs before it); set share 10%: GROWN
+  trend: 240s 0000a0000a00 2026-10-19T08:00:00Z, 250s 0000a0000a00 2026-10-19T12:00:00Z, 260.75s 1111a1111a11 2026-10-20T07:00:00Z, 280.25s aaaa5aaaa5aa 2026-10-20T10:00:00Z (passed full runs, oldest first)
+  slowest: t3 100.25s, t1 90s, t2 90s
+gate budget o/b: no passed full gate run on a commit of o/b's default branch or its open lanes' PRs
 owner queue:
   lane lane-d gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
   lane lane-c gate merge asked 2026-10-22T14:00:00Z (AGE ago)

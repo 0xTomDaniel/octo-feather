@@ -15,13 +15,15 @@
 # check's proof line; a non-status file after J fails naming it; a clean main merge keeps the qc
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
 # Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
+# Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-merge-ask test: $*" >&2; exit 1; }
-export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log"
+export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log" XDG_STATE_HOME="$t/xdg"   # the state dir's check-runs.jsonl
+unset HERDR_SESSION
 export OCTO_FEATHER_QC_DIR="$t/qc"   # the qc reports merge-ask reads (octo-feather-qc --help, Report)
 mkdir -p "$HOME" "$t/bin" "$FAKE_GH/pr"
 cat > "$t/bin/gh" <<'EOF'
@@ -68,6 +70,7 @@ status() { # A_B_STATUS A_B_PR
   printf '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {\n  "acceptance-a": {"status": "%s", "pr": %s}, "acceptance-b": {"status": "%s", "pr": %s},\n  "acceptance-c": {"status": "planned", "pr": null}, "acceptance-d": {"status": "built", "pr": 3}}}\n' "$1" "$2" "$1" "$2" > docs/specs/demo.status.json; }
 commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
 status planned null; seq 1 20 > app.py; echo notes > notes.txt
+printf 'budget_seconds = 150\ngrowth_share = 0.25\ntrend_runs = 3\n' > gate-budget.toml   # the repo's gate-time budget
 printf '[demo."demo#acceptance-a"]\ncommand = "true"\n' > qc.toml   # the contract: a demo for acceptance-a only
 echo '{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}' > docs/specs/other.status.json
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
@@ -221,13 +224,42 @@ bad() { # WANT_PATTERN [PY]: merge-ask exits 1 naming it
 
 setpr; run 0 merge-ask 7 "${ST[@]}"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Failed: none" <<<"$out" || fail "pass did not print the section: $out"
-[[ "$(tail -2 <<<"$out")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
+w="$(sed '/^Gate time (/,$d' <<<"$out")"   # the gate time block comes last (below)
+[[ "$(tail -2 <<<"$w")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
 # quality#acceptance-qc-fallback: each row labelled by the contract at the judged head, as just qc decides it.
 [[ "$(grep -xF -A2 "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):" <<<"$out")" == \
    "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):"$'\n- demo#acceptance-a: demo checks\n- demo#acceptance-b: agent fallback' ]] \
   || fail "pass did not label each row's decision source: $out"
 [[ "$(writes)" == "$n" ]] || fail "merge-ask wrote"
+# issue-lifecycle#acceptance-merge-ask-gate-budget: the full gate's wall time on the final head (J's full run: H adds
+# only qc's status commit) against gate-budget.toml at the head, flagged over the budget and grown past the share, beside
+# the trend (passed full runs on the head's history: B's three; a subset run on H and a red full run on J stay out) and
+# the slowest items. No gate on timing: the ask passes, or fails with the same items, as with no run recorded.
+trend="$XDG_STATE_HOME/octo-feather/check-runs.jsonl"
+gate_block() { sed -n '/^Gate time (/,/^$/p' <<<"$1" | sed -E 's/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/'; }
+without() { sed '/^Gate time (/,/^$/d' <<<"$1"; }
+none_out="$out"
+[[ "$(gate_block "$out")" == "Gate time (the full gate on the final head against gate-budget.toml at ${H:0:12}; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):"$'\n'"  no gate run recorded ($trend: none)" ]] \
+  || fail "no trend file: $(gate_block "$out")"
+mkdir -p "$(dirname "$trend")"
+run_line() { # START HEAD TOTAL EXIT TIER
+  printf '{"start":"%s","repo":"%s","head":"%s","total_s":%s,"exit":%s,"tier":"%s","steps":[{"name":"tests/a.sh","seconds":%s,"result":"ok"},{"name":"tests/b.sh","seconds":20.5,"result":"ok"},{"name":"check-lint","seconds":1.0,"result":"ok"}]}\n' "$1" "$R" "$2" "$3" "$4" "$5" "$(( ${3%.*} - 30 ))" >> "$trend"; }
+run_line 2026-10-01T10:00:00Z "$B" 100 0 full; run_line 2026-10-02T10:00:00Z "$B" 120 0 full; run_line 2026-10-03T10:00:00Z "$B" 110 0 full
+run_line 2026-10-04T10:00:00Z "$J" 90 1 full; run_line 2026-10-04T11:00:00Z "$J" 200.5 0 full; run_line 2026-10-04T12:00:00Z "$H" 5 0 subset
+run 0 merge-ask 7 "${ST[@]}"
+[[ "$(gate_block "$out")" == "Gate time (the full gate on the final head against gate-budget.toml at ${H:0:12}; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):
+  full gate: 200.5s, head ${J:0:12}, started 2026-10-04T11:00:00Z (AGE ago): OVER BUDGET by 50.5s (budget 150s)
+  growth: +82.3% over the trend's median 110s (the 3 passed full runs before it); set share 25%: GROWN
+  trend: 100s ${B:0:12} 2026-10-01T10:00:00Z, 120s ${B:0:12} 2026-10-02T10:00:00Z, 110s ${B:0:12} 2026-10-03T10:00:00Z, 200.5s ${J:0:12} 2026-10-04T11:00:00Z (passed full runs, oldest first)
+  slowest: tests/a.sh 170s, tests/b.sh 20.5s, check-lint 1s" ]] || fail "over budget: $(gate_block "$out")"
+[[ "$(without "$out")" == "$(without "$none_out")" ]] || fail "the gate time changed the merge ask: $out"
+# a refusal: the same items with or without the run, the gate time on stderr only
+setpr 'd["statusCheckRollup"][0]["conclusion"] = "FAILURE"'; run 1 merge-ask 7 "${ST[@]}"
+[[ -z "$out" ]] && grep -qF "  full gate: 200.5s, head ${J:0:12}" <<<"$err" || fail "refusal over budget: $out $err"
+over_err="$(sed -n '/merge ask incomplete/,$p' <<<"$err")"; mv "$trend" "$trend.keep"
+run 1 merge-ask 7 "${ST[@]}"; [[ "$(sed -n '/merge ask incomplete/,$p' <<<"$err")" == "$over_err" ]] || fail "the gate time changed the refusal: $err"
+mv "$trend.keep" "$trend"; setpr
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
 snap="$t/snap"; mkdir -p "$snap/pr"; echo '{"repo": "o/r", "counts": {}, "capped": []}' > "$snap/meta.json"; echo x > "$snap/fetched_at"
 cp "$FAKE_GH/pr/7.json" "$snap/pr/7.json"
@@ -314,7 +346,7 @@ bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comment
 bad "Review verdict: the comment carries no usable check classification (report classifies no check" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('\\nChecks: none\\n', '\\n')"
 bad "Review verdict: clear with a proxy check (Check: scripts/x: r (ADR 1) | reads: y | class: proxy): a proxy check blocks" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: proxy')"
 setpr "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: exact')"
-run 0 merge-ask 7 "${ST[@]}"; [[ "$(tail -1 <<<"$out")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
+run 0 merge-ask 7 "${ST[@]}"; w="$(sed '/^Gate time (/,$d' <<<"$out")"; [[ "$(tail -1 <<<"$w")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-c: fail with no triage"
 FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' \
@@ -484,4 +516,4 @@ printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' >
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration or the shared-machinery list makes it stale, one recorded on a dirty tree refuses, a no-criterion lane alike)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration or the shared-machinery list makes it stale, one recorded on a dirty tree refuses, a no-criterion lane alike; gate time: the final head's full run over its budget and grown past the share, with trend and slowest items, the ask passing or failing the same without it)"

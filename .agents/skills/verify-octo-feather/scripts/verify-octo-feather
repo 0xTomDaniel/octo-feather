@@ -801,6 +801,40 @@ def drive_factory_report(f: Feature) -> None:
     f.check("reflection-two-days", lambda c: c.code == 0 and c.o["director-log"] == c.o["before"]
             and len(re.findall(r"(?m)^director reflection: ", c.out)) == 1
             and re.search(rf"(?m)^director reflection: last ran {re.escape(c.o['at'])} \(2d0h\d+m ago\)$", c.out) is not None)
+    # One open lane on o/r, no PR; GitHub is the kit's fake (tests/fixtures/lane-report/gh) over a scratch store: o/r's
+    # default branch commits and its gate-budget.toml. The trend: three passed full runs on main, then one over the
+    # budget and grown past the share; a subset run after it stays out.
+    gh = sc / "gh" / "o__r"
+    gh.mkdir(parents=True)
+    mains = [f"{n}" * 40 for n in "1234"]
+    (gh / "commits.json").write_text(json.dumps([{"sha": m} for m in reversed(mains)]))
+    (gh / "gate-budget.toml").write_text("budget_seconds = 300\ngrowth_share = 0.2\ntrend_runs = 3\n")
+    (lanes / "lane-r.toml").write_text('supervisor = "w1:p1"\nrepository = "o/r"\nissue = "gh1"\ngoal = "Gate grew"\n'
+                                        'started_at = "2026-10-20T08:00:00Z"\nlast_handoff_at = "2026-10-20T08:00:00Z"\nwaiting_on = ""\n')
+
+    def trend(at: str, head: str, total: float, tier: str = "full") -> str:
+        steps = [{"name": "tests/slow.sh", "seconds": total - 60, "result": "ok"}, {"name": "tests/mid.sh", "seconds": 40.0, "result": "ok"},
+                 {"name": "check-lint", "seconds": 2.5, "result": "ok"}]
+        return json.dumps({"start": at, "repo": "/scratch/r", "head": head, "total_s": total, "exit": 0, "tier": tier, "steps": steps}) + "\n"
+    (lanes.parent / "check-runs.jsonl").write_text(
+        trend("2026-10-01T10:00:00Z", mains[0], 200.0) + trend("2026-10-02T10:00:00Z", mains[1], 220.0)
+        + trend("2026-10-03T10:00:00Z", mains[2], 210.0) + trend("2026-10-04T10:00:00Z", mains[3], 330.0)
+        + trend("2026-10-04T11:00:00Z", mains[3], 9.0, "subset"))
+    (sc / "bin").mkdir()
+    (sc / "bin" / "gh").write_text(f'#!/bin/sh\nexec python3 {shlex.quote(f.s.repo)}/tests/fixtures/lane-report/gh "$@"\n')
+    (sc / "bin" / "gh").chmod(0o755)
+    f.env = {**f.env, "FAKE_GH_PRS": str(sc / "gh"), "PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}"}
+    f.obs("gate-budget-over", "trend", (lanes.parent / "check-runs.jsonl").read_text())
+    f.run("gate-budget-over", "octo-feather-lane", "report")
+    f.obs("gate-budget-over", "trend-after", (lanes.parent / "check-runs.jsonl").read_text())
+    block = ("gate budget o/r: the latest passed full gate run against gate-budget.toml on o/r's default branch\n"
+             f"  full gate: 330s, head {mains[3][:12]}, started 2026-10-04T10:00:00Z (")
+    f.check("gate-budget-over", lambda c: c.code == 0 and c.o["trend-after"] == c.o["trend"] and block in c.out
+            and "): OVER BUDGET by 30s (budget 300s)\n  growth: +57.1% over the trend's median 210s (the 3 passed full runs "
+                "before it); set share 20%: GROWN\n" in c.out
+            and f"\n  trend: 200s {mains[0][:12]} 2026-10-01T10:00:00Z, 220s {mains[1][:12]} 2026-10-02T10:00:00Z, 210s {mains[2][:12]} "
+                f"2026-10-03T10:00:00Z, 330s {mains[3][:12]} 2026-10-04T10:00:00Z (passed full runs, oldest first)\n"
+                "  slowest: tests/slow.sh 270s, tests/mid.sh 40s, check-lint 2.5s\n" in c.out)
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
@@ -1517,6 +1551,7 @@ def drive_merge_ask_proof(f: Feature) -> None:
     (r / "docs" / "specs" / "demo.status.json").write_text(
         '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-a": {"status": "planned", "pr": null}}}\n')
     (r / "f").write_text("f\n")
+    (r / "gate-budget.toml").write_text("budget_seconds = 60\ngrowth_share = 0.25\ntrend_runs = 3\n")   # its gate-time budget
     git(r, "add", "-A")
     git(r, "commit", "-q", "-m", "base")
     git(r, "worktree", "add", "-q", "-b", "gh534", str(lane))
@@ -1573,6 +1608,28 @@ def drive_merge_ask_proof(f: Feature) -> None:
     ask("full-proof-after-integrate")
     f.check("full-proof-after-integrate", lambda c: c.code == 0 and c.out.startswith("## Merge ask\n")
             and f"Head: {c.o['head'].strip()[:12]}\n" in c.out and "Full pass" not in c.err)
+    # The same ask with the final head's full gate recorded over the budget (the trend line the full gate's pytest writes,
+    # seeded here: this target's own gate is no pytest), after three passed full runs on main: flagged with the trend and
+    # slowest items, and the ask passes exactly as above, the gate time block (its last) aside.
+    base, head = git(r, "rev-parse", "main"), git(lane, "rev-parse", "HEAD")
+    (sc / "state" / "octo-feather").mkdir(parents=True, exist_ok=True)
+    (sc / "state" / "octo-feather" / "check-runs.jsonl").write_text("".join(json.dumps({
+        "start": at, "repo": str(lane), "head": h, "total_s": s, "exit": 0, "tier": "full",
+        "steps": [{"name": "tests/e2e.sh", "seconds": s - 10, "result": "ok"}, {"name": "check-lint", "seconds": 4.0, "result": "ok"}]}) + "\n"
+        for at, h, s in (("2026-10-01T10:00:00Z", base, 40.0), ("2026-10-02T10:00:00Z", base, 44.0),
+                         ("2026-10-03T10:00:00Z", base, 42.0), ("2026-10-04T10:00:00Z", head, 75.5))))
+    ask("gate-budget-over")
+    f.obs("gate-budget-over", "before", (f.d / "full-proof-after-integrate.stdout").read_text())
+    gate_block = re.compile(r"(?s)\nGate time \(.*\Z")   # the merge ask's last block
+    f.check("gate-budget-over", lambda c: c.code == 0 and f"\nGate time (the full gate on the final head against gate-budget.toml at {head[:12]}; "
+            "the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n"
+            f"  full gate: 75.5s, head {head[:12]}, started 2026-10-04T10:00:00Z (" in c.out
+            and "): OVER BUDGET by 15.5s (budget 60s)\n  growth: +79.8% over the trend's median 42s (the 3 passed full runs before it); "
+                "set share 25%: GROWN\n" in c.out
+            and f"\n  trend: 40s {base[:12]} 2026-10-01T10:00:00Z, 44s {base[:12]} 2026-10-02T10:00:00Z, 42s {base[:12]} "
+                f"2026-10-03T10:00:00Z, 75.5s {head[:12]} 2026-10-04T10:00:00Z (passed full runs, oldest first)\n"
+                "  slowest: tests/e2e.sh 65.5s, check-lint 4s\n" in c.out
+            and gate_block.sub("", c.out) == gate_block.sub("", c.o["before"]))
     f.env = {}
     say(f"merge-ask-proof evidence: {f.d}")
 
