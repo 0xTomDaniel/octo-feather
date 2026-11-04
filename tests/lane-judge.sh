@@ -125,6 +125,7 @@ commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
 status planned null; seq 1 5 > app.py
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
+"$kit/scripts/octo-feather-gate" record --reason "lane final head" --seconds 1 >/dev/null   # J's full gate pass: merge-ask needs one (issue-lifecycle #lanes-checkpoints)
 status built 7; H="$(commit "qc: built acceptance-a (judged ${J:0:12})")"
 ST=(--status docs/specs/demo.status.json)
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},

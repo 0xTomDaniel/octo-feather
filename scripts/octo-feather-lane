@@ -119,6 +119,9 @@ at H: same files, same content. Anything else fails naming the commit and file: 
 and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
 the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
+`octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
+gate_config is the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
 Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
@@ -858,20 +861,22 @@ def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
     return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
 
 
-def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tuple[str | None, list[str]]:
+def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
+               kept: str = "the qc verdict", rerun: str = "") -> tuple[str | None, list[str]]:
     """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
-    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical."""
+    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical.
+    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass)."""
     j, h = judged[:12], head[:12]
     if head.lower() == judged.lower():
         return f"{j} is the PR head", []
-    rerun = f"run just qc and the review again, in parallel, on {h}"
+    rerun = rerun or f"run just qc and the review again, in parallel, on {h}"
     for sha in (judged, head):
         if git("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0]:
             raise Refuse(f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
     if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
         raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
     if git("merge-base", "--is-ancestor", judged, head, ok=(0, 1))[0]:
-        return None, [f"judged head {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
+        return None, [f"{at} {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
     top = os.path.realpath(git("rev-parse", "--show-toplevel")[1].strip())
     status = set()
     for f in status_files:
@@ -888,21 +893,21 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tu
             files = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)[1].split("\0")))
             other = sorted(files - status)
             if other:
-                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} changes {', '.join(other)}, not only the status "
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, not only the status "
                            f"file{'s' * (len(status) > 1)} qc writes ({', '.join(sorted(status))}): {rerun}")
             elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
-                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} is not a `qc: built ... (judged <sha>)` commit: "
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} is not a `qc: built ... (judged <sha>)` commit: "
                            f"only just qc writes the status file; drop it, then {rerun}")
             else:
                 qc.append(c); touched |= files
         elif len(parents) != 2 or not any(git("merge-base", "--is-ancestor", p, base, ok=(0, 1))[0] == 0 for p in parents[1:]):
             why.append(f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, not {base}: "
-                       f"only a merge of main keeps the qc verdict; {rerun}")
+                       f"only a merge of main keeps {kept}; {rerun}")
         else:
             rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
             auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
             if rc:
-                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: the qc verdict does not carry over; {rerun}")
+                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over; {rerun}")
             elif auto != tree:
                 diff = git("diff", "--name-only", auto, tree)[1].split()
                 why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge: {rerun}")
@@ -914,12 +919,55 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tu
         moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
         if moved:
             why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
-                       f"or the lane's diff moved): the qc verdict does not carry over; {rerun}")
+                       f"or the lane's diff moved): {kept} does not carry over; {rerun}")
         else:
             d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
             proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
                       f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})")
     return (None, why) if why else (proof, [])
+
+
+def gate(*args: str) -> tuple[int, str]:
+    """scripts/octo-feather-gate's exit code and stdout (it owns the full pass record and the gate configuration)."""
+    p = subprocess.run([sys.executable, str(KIT / "scripts" / "octo-feather-gate"), *args], capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, check=False)
+    return p.returncode, p.stdout
+
+
+def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
+    """[] when HEAD has a current recorded full gate pass, else why not. The rule: issue-lifecycle #lanes-checkpoints.
+    Current: recorded (octo-feather-gate passed) at HEAD, or at a lane commit head_proof proves HEAD stands for, with the
+    gate_config of HEAD itself (octo-feather-gate config)."""
+    h = head[:12]
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        return [f"commit {h} is not in this repo: run merge-ask in the lane worktree after git fetch origin"]
+    fix = (f"run the full gate, just check, on {h} and record its pass (octo-feather-integrate --full records it; "
+           "octo-feather-gate --help)")
+    rc, config = gate("config", head)
+    if rc:
+        return [f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} exit {rc}): {fix}"]
+    revs = git("rev-list", "--topo-order", head, f"^{base}")[1].split()
+    why: list[str] = []
+    for c in [head] + [r for r in revs if r.lower() != head.lower()]:
+        rc, out = gate("passed", c)
+        try:
+            rec = json.loads(out) if rc == 0 else None
+        except ValueError:
+            rec = None
+        if not isinstance(rec, dict) or rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+            continue
+        try:
+            _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
+        except Refuse as e:
+            no = [str(e)]
+        if not no and rec.get("gate_config") != config.strip():
+            no = [f"its gate_config {str(rec.get('gate_config'))[:12]} is not the head's current {config.strip()[:12]} "
+                  f"(octo-feather-gate config {h}): stale; {fix}"]
+        if not no:
+            return []
+        why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
+    return [f"head {h} has no current recorded full gate pass for that head and its gate configuration"
+            + (f"; {'; '.join(why)}" if why else f" (none recorded on {h} or the lane commits before it): {fix}")]
 
 
 def subject(c: dict) -> str:
@@ -1366,6 +1414,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss += [f"Judged: {w}" for w in why]
         if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
+
+    miss += [f"Full pass: {w}" for w in full_pass(head, files, base)]   # every lane, one building no criterion too
 
     review_checks: list[str] = []
     rv = field(lines, "Review verdict")

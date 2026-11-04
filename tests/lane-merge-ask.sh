@@ -14,6 +14,7 @@
 # #acceptance-one-head), on a real git lane: review on J plus qc's status commit H passes with the
 # check's proof line; a non-status file after J fails naming it; a clean main merge keeps the qc
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
+# Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -71,6 +72,7 @@ printf '[demo."demo#acceptance-a"]\ncommand = "true"\n' > qc.toml   # the contra
 echo '{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}' > docs/specs/other.status.json
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
+G="$kit/scripts/octo-feather-gate"; "$G" record --reason "lane final head" --seconds 1 >/dev/null   # J's full gate pass
 status built 7; H="$(commit "qc: built acceptance-a acceptance-b (judged ${J:0:12})")"
 JS="${J:0:7}"
 OTHER="$(printf 'ffee%.0s' 1 2 3 4 5 6 7 8 9 10)"
@@ -329,6 +331,7 @@ on() { # PARENT CMD...: run CMD on a detached checkout of PARENT, print the new 
 pr_head() { # SHA SUBJECT: python making SHA the PR head, a commit of the PR
   echo "d['headRefOid'] = '$1'; d['commits'].append({'oid': '$1', 'messageHeadline': '$2', 'messageBody': ''})"; }
 F="$(on "$H" sh -c 'echo two >> app.py; git commit -qam "feat: after qc"')"
+on "$F" "$G" record --reason "lane final head" --seconds 1 >/dev/null
 HEADL="${F:0:12}" bad "Judged: commit ${F:0:12} 'feat: after qc' after the judged head ${J:0:12} changes app.py, not only the status file qc writes (docs/specs/demo.status.json): run just qc and the review again, in parallel, on ${F:0:12}" "$(pr_head "$F" "feat: after qc")"
 # qc's own commit carrying a non-status file fails, naming the file
 Q="$(on "$J" sh -c 'sed -i "s/\"planned\", \"pr\": null}, \"acceptance-b/\"built\", \"pr\": 7}, \"acceptance-b/" docs/specs/demo.status.json; echo x > stray.txt; git add -A; git commit -qm "qc: built acceptance-a (judged '"${J:0:12}"')"')"
@@ -357,6 +360,19 @@ git update-ref refs/remotes/origin/main "$M1"
 X="$(on "$B" sh -c 'echo side > side.txt; git add side.txt; git commit -qm side')"
 R4="$(on "$H" git merge -q --no-edit "$X")"
 HEADL="${R4:0:12}" bad "Judged: merge ${R4:0:12} .* brings in ${X:0:12}, not origin/main: only a merge of main keeps the qc verdict" "$(pr_head "$R4" "Merge side")"
+# issue-lifecycle#acceptance-merge-ask-full-proof (rule: #lanes-checkpoints): the passes above stand on J's recorded full
+# pass (H adds only qc's status commit). A head with no recorded full pass refuses, naming it and the missing pass, the
+# section otherwise complete; a pass whose gate configuration is not the head's (main brought a justfile) is stale.
+E="$(on "$H" sh -c 'echo e >> app.py; git commit -qam "feat: no full pass"')"
+HEADL="${E:0:12}" JUDGEDL="${E:0:12} is the PR head" ROWS=$'| demo#acceptance-a | pass | judged '"${E:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${E:0:9}"' | r |' \
+  setpr "$(pr_head "$E" "feat: no full pass"); d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $E')"
+run 1 merge-ask 7 "${ST[@]}"
+[[ "$err" == *"(1 item), head ${E:0:12}:"$'\n'"  - Full pass: head ${E:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${J:0:12} does not carry over: commit ${E:0:12} 'feat: no full pass' after the full pass ${J:0:12} changes app.py"* ]] \
+  || fail "a head with no full pass: $err"
+M4="$(on "$M1" sh -c 'printf "check:\n    true\n" > justfile; git add justfile; git commit -qm "main: a gate"')"; git update-ref refs/remotes/origin/main "$M4"
+R5="$(on "$H" git merge -q --no-edit "$M4")"
+HEADL="${R5:0:12}" bad "Full pass: head ${R5:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${J:0:12} does not carry over: its gate_config [0-9a-f]\{12\} is not the head's current [0-9a-f]\{12\} (octo-feather-gate config ${R5:0:12}): stale" "$(pr_head "$R5" "Merge main")"
+git update-ref refs/remotes/origin/main "$M1"
 ROWS=$'| demo#acceptance-a | pass | judged deadbee | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head qc and the review judged"
 ROWS=$'| demo#acceptance-a | pass | yesterday | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "judged 'yesterday'; write .judged <sha>."
 python3 - "$t/pr7.keep" "$(body)" <<'PY' > "$t/old.body"
@@ -385,6 +401,7 @@ grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two mark
 # off main, no qc commit; Built: none, Failed: none, no rows: passes on head, checks, parent line and the
 # review verdict alone, --status optional; the verdict's head is the judged head
 N="$(on "$B" sh -c 'sed -i 2s/.*/two/ app.py; git commit -qam "fix: a rule"')"
+on "$N" "$G" record --reason "lane final head" --seconds 1 >/dev/null
 pr8() { # HEAD EXTRA_COMMITS_JSON BODY [PY]
   python3 - "$FAKE_GH/pr/8.json" "$t/pr8.keep" "$1" "$2" "$3" "$check_ok" "$N" "${4:-}" <<'EOF'
 import json, os, sys; p, keep, head, extra, body, checks, n, py = sys.argv[1:]
@@ -436,6 +453,11 @@ run 1 merge-ask 8; grep -q "Judged: missing; add the check's proof line .Judged:
 proof8="$(sed -n 's/.*add the check.s proof line `Judged: \(.*\)`$/\1/p' <<<"$err")"
 HEADL="${NM:0:12}" pr8 "$NM" "[{\"oid\": \"$NM\", \"messageHeadline\": \"Merge main\", \"messageBody\": \"\"}]" "$(HEADL="${NM:0:12}" JUDGEDL="Judged: $proof8" nbody)"
 run 0 merge-ask 8; grep -qF "Judged: $proof8" <<<"$out" || fail "no-criterion clean merge with proof: $out"
+# a lane building no criterion is checked the same: its head without a recorded full pass refuses
+N2="$(on "$N" sh -c 'echo four >> app.py; git commit -qam "fix: no full pass"')"
+HEADL="${N2:0:12}" pr8 "$N2" "[{\"oid\": \"$N2\", \"messageHeadline\": \"fix: no full pass\", \"messageBody\": \"\"}]" "$(HEADL="${N2:0:12}" nbody)" \
+  "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $N', 'Head: $N2')"
+run 1 merge-ask 8; [[ "$err" == *"(1 item), head ${N2:0:12}:"$'\n'"  - Full pass: head ${N2:0:12} has no current recorded full gate pass"* ]] || fail "no-criterion lane without a full pass: $err"
 # a lane that claims a criterion with no rows is still refused naming the table (#acceptance-merge-ask-evidence)
 qc8='[{"oid": "4444444444444444444444444444444444444444", "messageHeadline": "qc: built acceptance-a (judged 0123456789ab)", "messageBody": ""}]'
 for tbl in "" "$HDR"; do
@@ -452,4 +474,4 @@ printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' >
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration makes it stale, a no-criterion lane alike)"

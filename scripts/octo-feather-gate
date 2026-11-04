@@ -16,6 +16,9 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       worktree of the repo reads it, and it does not depend on the Herdr session that ran the gate.
   octo-feather-gate passed [REV]
       Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1.
+  octo-feather-gate config [REV]
+      Prints REV's (default HEAD) gate configuration identity, as record writes it in gate_config:
+      a recorded pass is current only while its gate_config equals its head's current one.
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
       one per line; each item with why it runs, or why not, on stderr. The selection reads the
@@ -150,11 +153,14 @@ def tree_id(rev: str, path: str) -> str:
     return git("rev-parse", "--verify", "-q", f"{rev}:{path}", check=False).strip() or "absent"
 
 
+def gate_config(rev: str) -> str:
+    """REV's gate configuration identity: sha256 over each CONFIG file's verified blob id."""
+    return hashlib.sha256("\n".join(f"{p} {tree_id(rev, p)}" for p in CONFIG).encode()).hexdigest()
+
+
 def record(reason: str, seconds: float) -> None:
     head = git("rev-parse", "HEAD").strip()
-    config = hashlib.sha256(
-        "\n".join(f"{p} {tree_id(head, p)}" for p in CONFIG).encode()
-    ).hexdigest()
+    config = gate_config(head)
     rec = {
         "tier": "full",
         "head": head,
@@ -366,6 +372,8 @@ def main() -> int:
     r.add_argument("--seconds", type=float, required=True)
     p = sub.add_parser("passed")
     p.add_argument("rev", nargs="?", default="HEAD")
+    g = sub.add_parser("config")
+    g.add_argument("rev", nargs="?", default="HEAD")
     sub.add_parser("select")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
@@ -377,6 +385,8 @@ def main() -> int:
         record(a.reason, a.seconds)
     elif a.cmd == "passed":
         return passed(a.rev)
+    elif a.cmd == "config":
+        sys.stdout.write(gate_config(git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()) + "\n")
     elif a.cmd == "select":
         select()
     else:

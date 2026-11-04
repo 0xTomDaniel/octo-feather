@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1384,6 +1384,89 @@ def drive_gate_tiers(f: Feature) -> None:
     say(f"gate-tiers evidence: {f.d}")
 
 
+def drive_merge_ask_proof(f: Feature) -> None:
+    """A scratch target the kit did not create, only its own `just check`, with lane gh534 and PR #9 read through the
+    kit's offline gh (github-pr/scripts/gh, a scratch snapshot). merge-ask on the lane head, a commit with no recorded
+    full pass, refuses naming the head and the missing pass; each octo-feather-integrate runs that gate in full, records
+    the pass and adds no recipe; merge-ask on the integrated head then passes."""
+    sc = RUN_DIR / "scratch" / "merge-ask-proof"
+    r, lane, snap = sc / "repo", sc / "lane", sc / "snap"
+    shutil.rmtree(sc, ignore_errors=True)
+    (r / "docs" / "specs").mkdir(parents=True)
+    (snap / "pr").mkdir(parents=True)
+    (sc / "state").mkdir()
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+
+    def git(at: Path, *args: str) -> str:
+        return subprocess.run(["git", "-C", str(at), "-c", "core.hooksPath=/dev/null", *args], check=True, capture_output=True,
+                              text=True, env={**os.environ, **ident}).stdout.strip()
+
+    git(r, "init", "-q", "-b", "main")
+    (r / "justfile").write_text("check:\n    @echo own-gate ran\n")   # its own single gate: no fast recipe
+    (r / "docs" / "specs" / "demo.status.json").write_text(
+        '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-a": {"status": "planned", "pr": null}}}\n')
+    (r / "f").write_text("f\n")
+    git(r, "add", "-A")
+    git(r, "commit", "-q", "-m", "base")
+    git(r, "worktree", "add", "-q", "-b", "gh534", str(lane))
+    (lane / "g").write_text("g\n")   # a lane commit no gate ran on
+    git(lane, "add", "-A")
+    git(lane, "commit", "-q", "-m", "fix: lane change")
+    (snap / "meta.json").write_text('{"repo": "o/r", "counts": {}, "capped": []}\n')
+    (snap / "fetched_at").write_text("scratch\n")
+    url = "https://github.com/o/r/pull/9#issuecomment-1"
+
+    def pr(name: str) -> None:
+        """PR #9 at the lane head: a lane building no criterion, the review verdict clear on that head."""
+        head = git(lane, "rev-parse", "HEAD")
+        commits = [{"oid": c, "messageHeadline": git(lane, "log", "-1", "--format=%s", c), "messageBody": ""}
+                   for c in git(lane, "rev-list", "--reverse", "HEAD", "^main").split()]
+        verdict = f"<!-- octo-feather-review-verdict -->\n## Code review verdict\n\nHead: {head}\nPR head: {head}\nVerdict: clear\nChecks: none\n\n### Findings\n\nnone\n"
+        body = (f"Closes #534\n\n## Merge ask\n\nHead: {head[:12]}\nChecks: check pass\nReview verdict: {url}\n"
+                "Built: none\nFailed: none\n")
+        (snap / "pr" / "9.json").write_text(json.dumps({
+            "number": 9, "headRefName": "gh534", "headRefOid": head, "body": body, "commits": commits,
+            "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
+            "comments": [{"author": {"login": "sup"}, "body": verdict, "url": url}]}))
+        f.obs(name, "head", head + "\n")
+
+    def ask(name: str) -> None:
+        pr(name)
+        f.pre = ["env", "-C", str(lane)]   # merge-ask runs in the lane worktree
+        f.run(name, "octo-feather-lane", "merge-ask", "9", "--status", "docs/specs/demo.status.json", "--base", "main")
+        f.pre = []
+
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_GHSNAP": str(snap),
+             "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
+    ask("full-proof-no-pass")
+    f.check("full-proof-no-pass", lambda c: c.code == 1 and c.out == "" and (h := c.o["head"].strip()[:12]) != "" and
+            f"PR #9 merge ask incomplete (1 item), head {h}:\n  - Full pass: head {h} has no current recorded full gate pass for "
+            f"that head and its gate configuration (none recorded on {h} or the lane commits before it): run the full gate" in c.err)
+    recipes = output(["just", "--summary"], cwd=r)[1]
+    for n in ("1", "2"):
+        w = sc / f"w{n}"
+        git(r, "worktree", "add", "-q", "-b", f"w{n}", str(w), "gh534")
+        (w / f"n{n}").write_text(f"{n}\n")
+        git(w, "add", "-A")
+        git(w, "commit", "-q", "-m", f"w{n}")
+        name = f"brownfield-full-{n}"
+        f.run(name, "env", "-C", str(r), "octo-feather-integrate", "534", f"w{n}")
+        f.obs(name, "head", git(lane, "rev-parse", "HEAD") + "\n")
+        f.obs(name, "passed", "exit {}\n{}".format(*output([f.s.kit, "octo-feather-gate", "passed"], cwd=lane)))
+        f.obs(name, "recipes", output(["just", "--summary"], cwd=lane)[1])
+        f.check(name, lambda c: c.code == 0 and "no fast recipe in this repo: its one gate is the full tier" in c.out
+                and c.out.startswith("tier: full (") and "own-gate ran" in c.out and "tier=full" in c.out and "provisional" not in c.out
+                and c.o["passed"].startswith("exit 0\n")
+                and json.loads(c.o["passed"].split("\n", 1)[1])["head"] == c.o["head"].strip()
+                and c.o["recipes"] == recipes == "check\n")
+    ask("full-proof-after-integrate")
+    f.check("full-proof-after-integrate", lambda c: c.code == 0 and c.out.startswith("## Merge ask\n")
+            and f"Head: {c.o['head'].strip()[:12]}\n" in c.out and "Full pass" not in c.err)
+    f.env = {}
+    say(f"merge-ask-proof evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -1401,6 +1484,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-stale": drive_qc_stale,
     "qc-insufficient": drive_qc_insufficient,
     "gate-tiers": drive_gate_tiers,
+    "merge-ask-proof": drive_merge_ask_proof,
 }
 
 
