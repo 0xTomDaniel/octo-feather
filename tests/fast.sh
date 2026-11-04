@@ -51,4 +51,19 @@ done
 fast 'a b d e'
 [[ "$out" == *"fast: all 4 non-e2e test items: shared-machinery.txt on shared-machinery.txt"* ]] \
   || { echo "fast test: a listed unreached change not named as running every non-e2e item: $out" >&2; exit 1; }
-echo "fast: ok (a mapping run with one failing item writes the map without it, selected on every diff; one-script change: static check, the covering item and the unmapped items, each named, e2e named skipped, the dry run the same and running nothing; listed unreached change: every non-e2e item)"
+(cd "$t" && git checkout -q shared-machinery.txt)
+# A file the map cannot know (absent at the map head, not on the list): every non-e2e item, the file named.
+printf '#!/usr/bin/env python3\nprint("new")\n' > "$t/scripts/fixture-new"
+fast 'a b d e'
+[[ "$out" == *"fast: all 4 non-e2e test items: scripts/fixture-new absent at the map head "*", outside the coverage map's reach"* ]] \
+  || { echo "fast test: a file absent at the map head not named as running every non-e2e item: $out" >&2; exit 1; }
+rm "$t/scripts/fixture-new"
+# A full pass recorded after the map: files changed up to it are gated, so only changes past it feed coverage
+# selection; a test item changed since the map head stays selected (the map does not know its coverage).
+echo '# gated' >> "$t/scripts/fixture-a"; echo '# changed test' >> "$t/tests/b.sh"; g commit -qam 'past the map'
+P="$(g rev-parse HEAD)"; (cd "$t" && scripts/octo-feather-gate record --reason "full pass" --seconds 1 >/dev/null)
+fast 'b d e'
+for want in "fast: diff base: ${P:0:12}, the latest recorded full pass" "fast: tests/b.sh: changed since the map at"; do
+  [[ "$out" == *"$want"* ]] || { echo "fast test: '$want' not in the output past a full pass: $out" >&2; exit 1; }
+done
+echo "fast: ok (a mapping run with one failing item writes the map without it, selected on every diff; one-script change: static check, the covering item and the unmapped items, each named, e2e named skipped, the dry run the same and running nothing; listed unreached change and a file absent at the map head: every non-e2e item; past a recorded full pass, only later changes select, a test changed since the map stays selected)"
