@@ -128,12 +128,12 @@ OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gi
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
 `class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: `demo checks`
 when qc.toml at H (this directory's repo) declares a demo for the criterion, else `agent fallback`, the
-rule just qc decides by (quality spec #qc-results); then `Gate time`, the full gate on the final head (the passed
+rule just qc decides by (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
 full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
 against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
 head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
 fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
-the items); then `Review check classes` listing the comment's
+the items). `Review check classes` lists the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
@@ -1582,12 +1582,12 @@ def cmd_merge_ask(args: list[str]) -> int:
     print("\n".join(lines).strip())
     if sources:
         print("\n" + "\n".join(sources))
-    print("\n" + "\n".join(gate_time))
     if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
         print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
         print("\n".join(judged_lines))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
+    print("\n" + "\n".join(gate_time))
     return 0
 
 

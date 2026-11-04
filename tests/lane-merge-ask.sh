@@ -224,7 +224,8 @@ bad() { # WANT_PATTERN [PY]: merge-ask exits 1 naming it
 
 setpr; run 0 merge-ask 7 "${ST[@]}"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Failed: none" <<<"$out" || fail "pass did not print the section: $out"
-[[ "$(tail -2 <<<"$out")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
+w="$(sed '/^Gate time (/,$d' <<<"$out")"   # the gate time block comes last (below)
+[[ "$(tail -2 <<<"$w")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
 # quality#acceptance-qc-fallback: each row labelled by the contract at the judged head, as just qc decides it.
 [[ "$(grep -xF -A2 "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):" <<<"$out")" == \
@@ -345,7 +346,7 @@ bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comment
 bad "Review verdict: the comment carries no usable check classification (report classifies no check" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('\\nChecks: none\\n', '\\n')"
 bad "Review verdict: clear with a proxy check (Check: scripts/x: r (ADR 1) | reads: y | class: proxy): a proxy check blocks" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: proxy')"
 setpr "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: exact')"
-run 0 merge-ask 7 "${ST[@]}"; [[ "$(tail -1 <<<"$out")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
+run 0 merge-ask 7 "${ST[@]}"; w="$(sed '/^Gate time (/,$d' <<<"$out")"; [[ "$(tail -1 <<<"$w")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-c: fail with no triage"
 FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' \

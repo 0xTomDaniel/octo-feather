@@ -1500,7 +1500,7 @@ def drive_merge_ask_proof(f: Feature) -> None:
             and f"Head: {c.o['head'].strip()[:12]}\n" in c.out and "Full pass" not in c.err)
     # The same ask with the final head's full gate recorded over the budget (the trend line the full gate's pytest writes,
     # seeded here: this target's own gate is no pytest), after three passed full runs on main: flagged with the trend and
-    # slowest items, and the ask passes exactly as above, the gate time block aside.
+    # slowest items, and the ask passes exactly as above, the gate time block (its last) aside.
     base, head = git(r, "rev-parse", "main"), git(lane, "rev-parse", "HEAD")
     (sc / "state" / "octo-feather").mkdir(parents=True, exist_ok=True)
     (sc / "state" / "octo-feather" / "check-runs.jsonl").write_text("".join(json.dumps({
@@ -1510,7 +1510,7 @@ def drive_merge_ask_proof(f: Feature) -> None:
                          ("2026-10-03T10:00:00Z", base, 42.0), ("2026-10-04T10:00:00Z", head, 75.5))))
     ask("gate-budget-over")
     f.obs("gate-budget-over", "before", (f.d / "full-proof-after-integrate.stdout").read_text())
-    gate_block = re.compile(r"(?ms)^Gate time \(.*?\n\n")
+    gate_block = re.compile(r"(?s)\nGate time \(.*\Z")   # the merge ask's last block
     f.check("gate-budget-over", lambda c: c.code == 0 and f"\nGate time (the full gate on the final head against gate-budget.toml at {head[:12]}; "
             "the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):\n"
             f"  full gate: 75.5s, head {head[:12]}, started 2026-10-04T10:00:00Z (" in c.out
