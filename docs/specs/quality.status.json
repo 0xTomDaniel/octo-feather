@@ -170,8 +170,13 @@
       ]
     },
     "acceptance-qa-repeats": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T161949Z-5cfc7539",
+      "commit": "7fdf52e3a3fd30721a84ceeedcebbe4ee110b014",
+      "tests": [
+        "tests/qa-runs.sh"
+      ]
     },
     "acceptance-qa-cost": {
       "status": "planned",
