@@ -1,11 +1,7 @@
-# The shared-machinery list (issue-lifecycle #lanes-checkpoints): repository policy the factory keeps.
-# An integration whose diff touches a path below (an add, a delete, either side of a rename; judged
-# against this list before the integration plus its newly added entries), or that changes this file,
-# runs the full gate, `just check`, on the candidate head (scripts/octo-feather-integrate). In the
-# kit's fast tier, `just fast`, a changed path below that no test's recorded coverage reaches runs
-# every test item (scripts/octo-feather-gate). A lane that adds or moves shared machinery updates
-# this file in the same change. Only what recorded coverage cannot see stays here: Python the gate
-# runs through the kit's venv is mapped by coverage (just fast-map), so it is not listed.
+# The shared-machinery list (issue-lifecycle #lanes-checkpoints): repository policy the factory keeps;
+# a lane that adds or moves shared machinery updates it in the same change. What it schedules:
+# scripts/octo-feather-gate --help (checkpoint, select). Only what recorded coverage cannot see
+# stays here: Python the gate runs through the kit's venv is mapped by coverage (just fast-map).
 #
 # One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
 # covers everything under it). `#` starts a comment line.

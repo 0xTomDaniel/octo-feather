@@ -2,13 +2,10 @@
 # octo-feather-integrate [--full] TICKET REF...   (also: just integrate TICKET REF...)
 #
 # Integrate named worker commits onto the lane's integration branch, then run
-# that worktree's gate on the candidate head (docs/adr/0017): the fast tier,
-# `just fast`, or the full gate, `just check`, at a checkpoint (issue-lifecycle
-# #lanes-checkpoints): forced with --full, a repo with no fast recipe, the pilot,
-# a changed shared-machinery.txt, or a diff touching a path it lists
-# (octo-feather-gate checkpoint decides and names why). Each full pass is
-# recorded against the head (octo-feather-gate record; read it with
-# octo-feather-gate passed). A head only the fast tier passed is provisional.
+# that worktree's gate on the candidate head (docs/adr/0017): `just fast`, or
+# `just check` at a checkpoint, which octo-feather-gate checkpoint names with why
+# (--full forces it); each full pass recorded (octo-feather-gate record, passed).
+# A head only the fast tier passed is provisional.
 # Run from anywhere in the target repo. A branch REF is merged (--no-ff); any
 # other REF is a commit and is cherry-picked (-x), in the order given.
 #
