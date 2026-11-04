@@ -16,7 +16,7 @@ env, an offline gh refusing every call, the copy an overlay whose writes die wit
 sandbox's pre-run proof is printed; a case whose proof fails, or whose sandbox cannot start, is a
 FAIL, never an unsandboxed run. Pi's session goes to --session-dir on the sandbox's private /tmp,
 never ~/.pi. In the sandbox, after its proof: a `fake_gh` case gets a fake gh first on PATH, behind any ran shim (logs argv,
-answers repo view, issue and pr create, lists); an `origin` case gets a bare origin holding main, in the
+answers repo view, issue and pr create, lists); a `fake_qa` case a fake octo-feather-qa there too (schema, Case); an `origin` case gets a bare origin holding main, in the
 sandbox's /tmp. After each tool_execution_end the in-sandbox watcher snapshots the case repo and prints a
 qa_fs event naming each before target the call reached (what a snapshot holds, each target, which call a change
 is credited to: schema, Before targets). For a case graded on test_write only, the collection runs after each
@@ -611,6 +611,18 @@ case "$1 $2" in
   *) echo "fake gh: $*" >&2;;
 esac
 '''
+# A case's fake_qa: octo-feather-qa that runs nothing (no case, sandbox or model): one canned line per run asked for.
+FAKE_QA = r'''#!/bin/sh
+# octo-feather-qa fake (a case's fake_qa): runs nothing; answers each call with canned lines.
+echo "qa (fake, factory eval: no case runs): octo-feather-qa $*"
+runs=1; base=""; prev=""
+for a in "$@"; do
+  [ "$prev" = "--runs" ] && runs="$a"; [ "$prev" = "--baseline" ] && base="$a"; prev="$a"
+done
+echo "PASS fake/case: $runs/$runs runs passed (pass rate 1.00, stddev 0.00)"
+[ -n "$base" ] && echo "  baseline FAIL fake/case: 0/$runs runs passed (pass rate 0.00, stddev 0.00) [kit $base]"
+echo "qa: 1/1 passed (fake)"
+'''
 QA_TMP = "/tmp/qa-case"   # inside the sandbox: its private /tmp
 
 
@@ -622,14 +634,21 @@ def prep(setup):
     """In the sandbox, after its proof: the case's fake gh (first on PATH, logging argv) and bare origin.
     Returns (env for the role, origin dir or None, gh log or None)."""
     env, origin, log = dict(os.environ), None, None
+    on = cast("dict[str, object]", setup)
+    fakes = bool(on.get("fake_gh") or on.get("fake_qa"))   # fakes behind the run shims (schema, Case)
     if setup.get("fake_gh") or setup.get("origin"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
     if setup.get("fake_gh"):
         log = f"{QA_TMP}/gh.log"; open(log, "w").close()
         Path(f"{QA_TMP}/bin/gh").write_text(FAKE_GH); os.chmod(f"{QA_TMP}/bin/gh", 0o755)
+        env["FAKE_GH_LOG"] = log
+    if on.get("fake_qa"):
+        os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
+        Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
+    if fakes:
         ps = env.get("PATH", "").split(":")
-        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran gh records it
-        env.update(PATH=":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]]), FAKE_GH_LOG=log)
+        at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it
+        env["PATH"] = ":".join([*ps[:at], f"{QA_TMP}/bin", *ps[at:]])
     if setup.get("origin"):
         origin = f"{QA_TMP}/origin.git"
         for a in (["init", "-q", "--bare", "-b", "main", origin], ["push", "-q", origin, "main"], ["remote", "add", "origin", origin]):
@@ -936,7 +955,7 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin")}
+        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
         cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]

@@ -41,4 +41,25 @@ run 1 "$Q" --evals "$t/rf"
 rf() { grep -E "^$1 rf/$2: " <<< "$out" || fail "ran $2: want $1: $out"; }
 rf PASS rflag > /dev/null; rf PASS rposok > /dev/null
 for c in rsplit rnoval rpos; do rf FAIL "$c" | grep -q "no run of runme with these arguments" || fail "ran $c: want FAIL naming the record: $out"; done
+# fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered by the fake;
+# a poison octo-feather-qa further down PATH (where the kit's real one would be found) never runs.
+printf '#!/bin/sh\necho POISON-REAL-QA-REACHED\nexit 9\n' > "$t/bin/octo-feather-qa"; chmod +x "$t/bin/octo-feather-qa"
+mkdir -p "$t/fq/fq/reference"; cp -r "$t/good/fixtures" "$t/fq/"
+echo '{"suite": "fq", "kind": "role-transcript", "description": "stub fake qa", "max_tool_calls": 10, "timeout_s": 60}' > "$t/fq/fq/suite.json"
+python3 - "$t/fq/fq" <<'PY'
+import json, sys
+d = sys.argv[1]
+step = [["bash", "octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba < /dev/null; echo rc=$?"]]
+json.dump([{"id": "fq", "role": "implementer", "fixture": "fx", "fake_qa": True, "task": "Prove it. STUB-STEPS:" + json.dumps(step)}],
+          open(f"{d}/cases.json", "w"))
+json.dump({"fq": {"facts": [{"fact": "ran", "program": "octo-feather-qa", "args": ["--baseline"]},
+                            {"fact": "ran", "program": "octo-feather-qa", "args": ["--runs"]}]}}, open(f"{d}/reference/expectations.json", "w"))
+PY
+run 0 "$Q" --evals "$t/fq"
+grep -qE '^PASS fq/fq: ran octo-feather-qa --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba \(exit 0\); ran octo-feather-qa --runs: ' <<< "$out" \
+  || fail "fake_qa: want PASS on both ran facts: $out"
+d="$(ls -dt "$t"/out/*/ | head -1)"
+fo="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/fq/fq/transcript.jsonl")"
+grep -qx 'qa (fake, factory eval: no case runs): octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba' <<< "$fo" && grep -qx 'rc=0' <<< "$fo" \
+  && ! grep -q 'POISON-REAL-QA-REACHED\|qc sandbox' <<< "$fo" || fail "fake_qa: the fake did not answer, or something real ran: $fo"
 echo "qa-ran: ok (ran (a run through the sandbox's recording shim matched by its arguments (positional prefix, flag and value pairs anywhere) and {head}, stdin/stdout/exit passed through, an echo or other arguments fail naming the record, a shim only for a named program))"
