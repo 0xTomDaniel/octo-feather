@@ -25584,14 +25584,6 @@
             {
                 "code": "reportUnknownArgumentType",
                 "range": {
-                    "startColumn": 15,
-                    "endColumn": 19,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
                     "startColumn": 107,
                     "endColumn": 111,
                     "lineCount": 1
