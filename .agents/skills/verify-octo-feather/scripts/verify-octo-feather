@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst", "qa-review")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst", "qa-review")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -775,6 +775,81 @@ def drive_correction_lane(f: Feature) -> None:
         print(f"    filed: {i['repo']}#{i['number']} {i['title']}")
     f.env = {}
     say(f"correction-lane evidence: {f.d}")
+
+
+# The correction-intake drive's stub `pi` for the reflectors (no model): prints the reply file the drive wrote for the
+# reflection asked (the director's when its brief says Director reflection, else the lane's).
+REFLECT_STUB_PI = r"""#!/usr/bin/env python3
+import os, sys
+who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+sys.stdout.write(open(os.path.join(os.environ["REFLECT_STUB_DIR"], f"reply.{who}")).read())
+"""
+
+
+def drive_correction_intake(f: Feature) -> None:
+    """`octo-feather-lane archive` with the reflectors stubbed and the tracker faked, over scratch lane logs holding a
+    class logged blocking in two lanes, one only by reflections and one blocking twice in one lane, the director
+    reflection routing the first: only the first files, naming the route; then `octo-feather-lane intake` over seeded
+    open issues; cases and what each observes: features/correction-intake.md."""
+    sc = RUN_DIR / "scratch" / "correction-intake"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    (lanes / "archive").mkdir(parents=True)
+    (sc / "bin").mkdir()
+    (sc / "bin" / "pi").write_text(REFLECT_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    store = sc / "gh.json"
+
+    def fl(at: str, source: str, cls: str, summary: str, *, blocking: bool = True) -> str:
+        return json.dumps({"at": at, "kind": "finding", "source": source, "class": cls, "blocking": blocking, "summary": summary}) + "\n"
+    logs = {"gh910": [fl("2026-10-20T00:00:00Z", "code-review", "stale-pointer", "gh910 pointer to a moved file"),
+                      fl("2026-10-20T01:00:00Z", "reflection", "slow-gate", "gh910 gate felt slow", blocking=False),
+                      fl("2026-10-20T02:00:00Z", "code-review", "one-lane", "gh910 first"),
+                      fl("2026-10-20T03:00:00Z", "code-review", "one-lane", "gh910 second")],
+            "gh911": [fl("2026-10-21T00:00:00Z", "qc", "stale-pointer", "gh911 demo read a moved file"),
+                      fl("2026-10-21T01:00:00Z", "reflection", "slow-gate", "gh911 gate felt slow", blocking=False)]}
+    for name, lines in logs.items():
+        (lanes / "archive" / f"{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
+        (lanes / "archive" / f"{name}.handoffs.jsonl").write_text("".join(lines))
+    (lanes / "gh912.toml").write_text('supervisor = "w92:p2"\nrepository = "scratch/target"\nissue = "gh912"\ngoal = "scratch lane"\n')
+    (lanes.parent / "director.handoffs.jsonl").write_text("")
+    listed = json.loads((Path(f.s.repo) / "reflection" / "questions.json").read_text())["questions"]
+
+    def qs(kind: str) -> str:
+        return ", ".join(q["id"] for q in listed if q["kind"] == kind)
+
+    (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFindings: none\n")
+    (sc / "reply.director").write_text(f"Questions: {qs('director')}\nFinding: class: stale-pointer | question: writer-route"
+                                       " | route: agents/implementer.md Rules | summary: blocking in gh910 and gh911\n")
+    tr = fake_tracker(f.s.repo, sc)
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "REFLECT_STUB_DIR": str(sc), **tr, "PATH": f"{sc / 'bin'}:{tr['PATH']}"}
+    f.run("file-rule", "octo-feather-lane", "archive", "gh912")
+    f.obs("file-rule", "tracker", store.read_text() if store.is_file() else "{}")
+
+    def filed(c: Case) -> bool:
+        issues = json.loads(c.o["tracker"]).get("issues", [])
+        return (c.code == 0 and len(issues) == 1 and "[correction-lane stale-pointer]" in issues[0]["title"]
+                and "Route: agents/implementer.md Rules" in issues[0]["body"] and re.search(
+                    r"(?m)^correction lane: filed \d+ in github-issues scratch/target for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
+                    c.out) is not None)
+    f.check("file-rule", filed)
+    # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates).
+    db: dict[str, list[dict[str, Any]]] = json.loads(store.read_text()) if store.is_file() else {"issues": []}
+    for n, repo, cls in ((951, "scratch/target", "slow-gate"), (952, "scratch/target", "one-lane"), (953, "0xTomDaniel/octo-feather", "one-lane")):
+        db["issues"].append({"number": n, "repo": repo, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
+                             "state": "OPEN", "closedAt": None})
+    store.write_text(json.dumps(db))
+    before = store.read_text()
+    f.run("intake", "octo-feather-lane", "intake")
+    f.obs("intake", "unchanged", "yes\n" if store.read_text() == before else "no\n")
+    f.check("intake", lambda c: c.code == 0 and c.o["unchanged"] == "yes\n"
+            and "\nclass stale-pointer: due yes; blocking 2 in 2 lane(s) (gh910, gh911); findings 3\n" in c.out
+            and "\nclass slow-gate: due no; blocking 0 in 0 lane(s); findings 2\n" in c.out
+            and "\nclass one-lane: due no; blocking 2 in 1 lane(s) (gh910); findings 2\n" in c.out
+            and "\n  duplicates: 2 open issues of class one-lane\n" in c.out)
+    f.env = {}
+    say(f"correction-intake evidence: {f.d}")
 
 
 def drive_factory_report(f: Feature) -> None:
@@ -1552,6 +1627,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "lane-archive": drive_lane_archive,
     "director-reflection": drive_director_reflection,
     "correction-lane": drive_correction_lane,
+    "correction-intake": drive_correction_intake,
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
