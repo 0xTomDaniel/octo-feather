@@ -43,7 +43,15 @@ import json, subprocess, sys, time
 a = sys.argv[1:]
 prompt = a[a.index("-p") + 1]
 tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)   # None: the role does not list tdd
-out = lambda e: print(json.dumps(e), flush=True)
+import os, re
+# STUB-ALTERNATE: run k of a --runs case (its scratch copy qa-<id>-<n>r<k>-*: octo-feather-qa --help) skips the read on
+# an even k, so runs 1, 3... pass skill_read and runs 2, 4... fail it.
+run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
+def out(e):   # each assistant message_end carries usage, as Pi's: 100 input and 10k output tokens, cost 0.001
+    m = e.get("message") if e.get("type") == "message_end" else None
+    if isinstance(m, dict) and m.get("role") == "assistant":
+        m["usage"] = {"input": 100, "output": 10 * run_k, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 100 + 10 * run_k, "cost": {"total": 0.001}}
+    print(json.dumps(e), flush=True)
 out({"type": "stub_argv", "argv": a})
 out({"type": "session", "version": 3, "id": "stub", "cwd": "."})
 out({"type": "agent_start"})
@@ -106,10 +114,6 @@ def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an 
         return False, open(path).read()
     except OSError as e:
         return True, f"ENOENT: {e}"
-import os, re
-# STUB-ALTERNATE: run k of a --runs case (its scratch copy qa-<id>-<n>r<k>-*: octo-feather-qa --help) skips the read on
-# an even k, so runs 1, 3... pass skill_read and runs 2, 4... fail it.
-run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
 if "STUB-READ-TDD" in prompt and tdd and not ("STUB-ALTERNATE" in prompt and run_k % 2 == 0):
     tool("c2", "read", {"path": tdd})
     err, txt = pi_read(tdd)
