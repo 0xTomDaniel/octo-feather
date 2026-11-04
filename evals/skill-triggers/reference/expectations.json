@@ -159,6 +159,7 @@
   "sup-lever-record-merge-ask": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "sup-lever-near-set-waiting": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
   "sup-lever-near-finding-logged": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},
+  "sup-lever-prior-art-again": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "cor-lever-restated-sites": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "cor-lever-restated-comments": {"facts": [{"fact": "skill_read", "skill": "principle-build-the-lever"}]},
   "cor-lever-near-one-pointer": {"facts": [{"fact": "skill_not_read", "skill": "principle-build-the-lever"}]},

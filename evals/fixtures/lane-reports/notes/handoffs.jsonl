@@ -1,0 +1,8 @@
+{"at": "2026-10-21T10:02:00Z", "kind": "spawn", "worker": "implementer-13", "pane": "w2:p3"}
+{"at": "2026-10-21T14:30:00Z", "kind": "finding", "source": "code-review", "class": "cli-holds-logic", "blocking": true, "summary": "greeting text built in app.cli"}
+{"at": "2026-10-22T11:15:00Z", "kind": "finding", "source": "code-review", "class": "cli-holds-logic", "blocking": true, "summary": "upper-casing done in app.cli, not app.core"}
+{"at": "2026-10-22T12:00:00Z", "kind": "finding", "source": "qc", "class": "missing-error-path", "blocking": false, "summary": "--times 0 not exercised"}
+{"at": "2026-10-22T16:40:00Z", "kind": "result", "worker": "implementer-13", "commit": "4f1c2ab"}
+{"at": "2026-10-23T09:10:00Z", "kind": "result", "worker": "implementer-14", "commit": "7d09e3b"}
+{"at": "2026-10-23T13:55:00Z", "kind": "result", "worker": "implementer-15", "commit": "b2c8e41"}
+{"at": "2026-10-23T15:20:00Z", "kind": "review", "worker": "code-reviewer-12", "round": 1, "summary": "asked for each implementer's Prior art lines; supervisor copied them from notes/reports/ into review/prior-art.md"}

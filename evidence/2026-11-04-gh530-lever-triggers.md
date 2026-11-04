@@ -14,6 +14,7 @@ Removed: nothing.
 - sup-lever-near-finding-logged
 - cor-lever-restated-comments
 - cor-lever-near-owner
+- sup-lever-prior-art-again (added after the batch, director ruling; committed with this mark before any run of it)
 
 Train: dir-lever-teardown-again, dir-lever-near-one-ruling, sup-lever-record-merge-ask, sup-lever-near-set-waiting, cor-lever-restated-sites, cor-lever-near-one-pointer.
 
@@ -30,6 +31,7 @@ Train: dir-lever-teardown-again, dir-lever-near-one-ruling, sup-lever-record-mer
 - cor-lever-restated-sites: gh118.handoffs.jsonl:74-83, review rounds 6-7: corrector-gh118 pointed restatements site by site, round 7 found more.
 - cor-lever-restated-comments: gh121.handoffs.jsonl:25-44, PR 140 rounds 461779c, 6101554, 083a2f5: comments, docstrings, test headers restating owned rules, missed sites each round (fixer an implementer; the same fix-round moment a corrector meets).
 - cor-lever-near-one-pointer: gh127.handoffs.jsonl:94, final review c5da94e: one restatement, one pointer.
+- sup-lever-prior-art-again: gh206.handoffs.jsonl:33 (writer-evidence-not-carried) and gh504.handoffs.jsonl:22 (worker-report-reconstruction): reviewers asked for implementers' Prior art lines and the supervisor rebuilt them from the workers' reports, again each round. Fixture lane-reports (lane-mini plus notes/reports/ with three implementer reports and round 1's review/prior-art.md lacking #15): every report and line the moment needs is in it.
 - cor-lever-near-owner: gh160.handoffs.jsonl:5-16, duplicated-rule rounds: which file owns the rule, a read only.
 
 Fixture `rules-restated-sites`: no existing fixture holds more than 2 restatements; the real moments had 4 to 6 files.
@@ -72,4 +74,4 @@ Findings:
 
 ## Removed cases
 
-- sup-lever-status-rows (held-out should-trigger), removed from the suite after its result was seen (run 20261104T195144Z-b00744: origin/main 0/3, 04ae8f9 0/3). Reason: defective, not a lever result: the lane-mini spec lacks the eight criteria the task names, so on both kits the supervisor refuses after reading (spec-status check would fail on the extra ids) and never reaches the moment. Not edited and no replacement written. Supervisor held-out should-trigger coverage is the pre-existing sup-lever-handoff-stamp only: the supervisor's held-out evidence for this change is that one pre-existing case, which was not rerun here.
+- sup-lever-status-rows (held-out should-trigger), removed from the suite after its result was seen (run 20261104T195144Z-b00744: origin/main 0/3, 04ae8f9 0/3). Reason: defective, not a lever result: the lane-mini spec lacks the eight criteria the task names, so on both kits the supervisor refuses after reading (spec-status check would fail on the extra ids) and never reaches the moment. Not edited and no replacement written. It never counts either way. Supervisor held-out should-trigger evidence for this change: the pre-existing sup-lever-handoff-stamp (not rerun) and sup-lever-prior-art-again, written after the change from a different real moment (director ruling), results below once run.

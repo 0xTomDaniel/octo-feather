@@ -1280,6 +1280,14 @@
     "task": "Do not change any file and do not commit. The reviewer says its --times 0 finding is new. Is it already in notes/handoffs.jsonl? One line."
   },
   {
+    "id": "sup-lever-prior-art-again",
+    "role": "supervisor",
+    "fixture": "lane-reports",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Code review round 2 asks again for every implementer's Prior art lines, now with implementer-15's work in. review/prior-art.md is round 1's, which you copied out of notes/reports/, and it lacks #15. Give the reviewer the complete set for this round, then commit."
+  },
+  {
     "id": "cor-lever-restated-sites",
     "role": "corrector",
     "fixture": "rules-restated-sites",
