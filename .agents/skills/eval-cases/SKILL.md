@@ -44,7 +44,7 @@ Each fact, its parameters and exactly what it reads: schema, Facts. Writing a ca
 - Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020 (Where the fix goes).
 - No judgment fact exists yet (issue #108 judgment-interface comment): one would run separately through Pi codemode `models.classify` with one closed question and the kit's judgment model (`evals/judgment-model.json`), labelled a judgment in the result.
 
-A fact or target the closed list lacks is added to the schema, refused in `scripts/check-evals` and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa.sh`.
+A fact or target the closed list lacks is added to the schema, refused in `scripts/check-evals` and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa*.sh`.
 
 ## 4. Fails before, passes after
 

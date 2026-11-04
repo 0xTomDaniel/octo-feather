@@ -3,7 +3,7 @@
 # #acceptance-judge-advisory, #rule-advisory, issue #156), no network, no model: a fake `gh` holds PR #7 of
 # o/r and logs every call; a stub `pi` runs the judge's classify extension command for real under node
 # with stub classifiers at the model registry (the kit's judgment model among them), in the qa sandbox, so
-# it needs unprivileged user namespaces (`unshare -rm`) as tests/qa.sh does.
+# it needs unprivileged user namespaces (`unshare -rm`) as tests/lib/qa.sh does.
 # Proves: `judge` refuses before the code review's verdict comment exists, an unknown question, an
 # unreadable or empty state and an unavailable kit model, writing nothing; it asks every question of the kit's one
 # judgment model (evals/judgment-model.json, spec judgment#rule-one-model) alone, on the state file's text, posts one marked comment labelled a model
@@ -96,7 +96,7 @@ sys.exit(subprocess.run(["node", "--input-type=module", "-e", harness, "--", a[a
 EOF
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
-# Fake Herdr (as tests/qa.sh's): a session's socket is a file under the config dir naming the session.
+# Fake Herdr (as tests/lib/qa.sh's): a session's socket is a file under the config dir naming the session.
 C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
 while (($#)); do case "$1" in --session) s="$2"; shift 2;; --remote|--machine) shift 2;; *) a+=("$1"); shift;; esac; done
 [[ "$s" == default ]] && sock="$C/herdr.sock" || sock="$C/sessions/$s/herdr.sock"
