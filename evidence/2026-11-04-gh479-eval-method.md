@@ -1,6 +1,6 @@
 # gh479 (#542): eval-cases teaches the measuring method
 
-Smoke: .agents/skills/eval-cases/ (case role-transcripts implementer-wording-proof, `scripts/octo-feather-qa --case implementer-wording-proof --baseline 6f261fd`, run 20261104T212756Z-de8875: baseline 6f261fd FAIL, current 5151022 PASS; R3 final below)
+Smoke: .agents/skills/eval-cases/ (case role-transcripts implementer-wording-proof, `scripts/octo-feather-qa --case implementer-wording-proof --baseline 6f261fd`, run 20261104T214144Z-9c7ea7: baseline 6f261fd FAIL, current ee05a80 PASS; the proof, Real runs item 4)
 Removed: eval-cases section 4's two single runs (`--kit-ref BASE` FAIL, then head PASS) as the proof; it now asks for repeated runs beside the baseline kit in one evaluation and the analysis.
 
 ## Change
@@ -28,7 +28,7 @@ The tool output was the first fake's (canned lines naming itself, since replaced
 
 Neither evaluation counts: both ran under a fake that announced itself, so the role could tell its proof was not real. The fake now answers in the real tool's output form, copied from real runs, and never names itself (commit 127de22; schema.md Case, fake_qa; tests/qa-ran.sh). The proof is the next evaluation.
 
-3. Final evaluation, run 20261104T212756Z-de8875, `scripts/octo-feather-qa --case implementer-wording-proof --baseline 6f261fd1e4a12a52ca591d5ad8ef4dc000ec1293` (one run per kit, by the supervisor). It separates:
+3. Third evaluation, run 20261104T212756Z-de8875, `scripts/octo-feather-qa --case implementer-wording-proof --baseline 6f261fd1e4a12a52ca591d5ad8ef4dc000ec1293` (one run per kit, by the supervisor). It separated, but does not count: the stand-in printed a traceback on the baseline's calls (exit 1 and 120 below), which the baseline role saw:
 
 ```
   baseline run 1/1: FAIL role-transcripts/implementer-wording-proof: ran octo-feather-qa --runs 3 --baseline: no run of octo-feather-qa with these arguments in the sandbox's record (5 entries; runs of octo-feather-qa: octo-feather-qa --help (exit 0); octo-feather-qa --help (exit 0); octo-feather-qa --evals evals --case changelog-new-flag (exit 1); octo-feather-qa --evals evals --suite changelog --baseline main (exit 1); octo-feather-qa --evals evals --suite changelog --baseline main (exit 120))
@@ -48,3 +48,27 @@ qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze)
    - Baseline 6f261fd: $0.540, 31 calls: `--help` twice, `--case changelog-new-flag`, `--suite changelog --baseline main` twice, never `--runs 3`.
    - Current 5151022: $0.354, 16 calls: `--suite changelog --runs 3 --baseline main`.
    - Single samples (one run per kit, the approved R3 budget), no variance claim. The stand-in's exits 1 and 120 above: it wrote its summary.json under the sandbox's read-only state dir (a traceback, exit 1) and a pipe closed early (120); the fact grades the call, never its exit. The stand-in now skips summary.json where it cannot write it (commit after 5151022).
+
+4. The proof: run 20261104T214144Z-9c7ea7, the same command, at the current kit ee05a80 (the stand-in fixed: no traceback), one run per kit, by the supervisor. It separates:
+
+```
+  baseline run 1/1: FAIL role-transcripts/implementer-wording-proof: ran octo-feather-qa --runs 3 --baseline: no run of octo-feather-qa with these arguments in the sandbox's record (4 entries; runs of octo-feather-qa: octo-feather-qa --help (exit 120); octo-feather-qa --evals evals --case changelog-new-flag (exit 0); octo-feather-qa --evals evals --suite changelog (exit 0); octo-feather-qa --evals evals --suite changelog --kit-ref de5f7a5 (exit 0)) [stop: exit, 32 tool calls, 148.4 s] [kit 6f261fd1e4a12a52ca591d5ad8ef4dc000ec1293]
+  current run 1/1: PASS role-transcripts/implementer-wording-proof: ran octo-feather-qa --runs 3 --baseline: recorded run octo-feather-qa --evals evals --suite changelog --runs 3 --baseline c5c97d2 (exit 0) [stop: decided, 28 tool calls, 97.4 s] [kit ee05a80e08c34ab8a8b60d2b13caad53e5629e7b]
+PASS role-transcripts/implementer-wording-proof: 1/1 runs passed (pass rate 1.00, stddev 0.00)
+  baseline FAIL role-transcripts/implementer-wording-proof: 0/1 runs passed (pass rate 0.00, stddev 0.00)
+  compare role-transcripts/implementer-wording-proof: baseline kit 6f261fd1e4a1 beside current kit ee05a80e08c3
+               baseline             current              difference
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     148.4 +/- 0.0        97.4 +/- 0.0         -51.0
+    tokens     590982 +/- 0         374684 +/- 0         -216298
+    cost usd   0.5750 +/- 0.0000    0.4650 +/- 0.0000    -0.1100
+qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):
+  no flags
+```
+
+   - Baseline 6f261fd: FAIL, $0.575, 32 calls, 148.4 s, no traceback; it ran `--help`, `--case changelog-new-flag`, `--suite changelog` and `--suite changelog --kit-ref de5f7a5`, never `--runs 3`.
+   - Current ee05a80: PASS, $0.465, 28 calls, 97.4 s, no traceback: `--suite changelog --runs 3 --baseline c5c97d2`.
+   - Stated plainly: the baseline role read the shim's source once, `cat /tmp/.qc-qa-9c7ea7-1r1-b/rbin/octo-feather-qa | head -30` (with `octo-feather-qa --help`): the qa sandbox's recording shim for octo-feather-qa, whose first lines say it records the call and runs the next octo-feather-qa on PATH unchanged. It did not read the stand-in itself, and went on running octo-feather-qa as its kit's section 4 says.
+   - Single samples (one run per kit, the approved R3 budget), no variance claim.
+
+Counted: only run 4 (9c7ea7). Not counted: 86c666 and 1350a6 (the stand-in announced itself), de8875 (the baseline saw the stand-in's traceback).
