@@ -20,6 +20,8 @@ capture's sandbox (fixture qc_command: `octo-feather-qc --capture-case`), which 
 run, the controller hands the plan, each case's pytest report (outcome, duration, output) and those notes to
 `octo-feather-qc --capture-store`, which appends one evidence record per claimed criterion with a tagged case. A
 store that fails fails the run. Untagged cases, and every case without claims, run as before.
+OCTO_FEATHER_QC_TAGS=FILE (octo-feather-qc, with --collect-only): the collecting process writes every tagged
+case and its criteria there as JSON, so qc knows exactly which criteria a test carries; such a run adds no trend line.
 """
 import datetime, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from collections.abc import Callable
@@ -32,6 +34,7 @@ import pytest
 TREND = "check-runs.jsonl"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
 CAPTURE_DIR = "OCTO_FEATHER_QC_CAPTURE_DIR"   # set by the controller before any worker starts
+TAGS = "OCTO_FEATHER_QC_TAGS"
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 
 
@@ -79,7 +82,12 @@ def _names_criterion(root: Path, claim: str) -> bool:
     return bool(m and spec and spec.is_file() and f'data-anchor="{m.group(2)}"' in spec.read_text(encoding="utf-8"))
 
 
+_COLLECT_ONLY: list[bool] = []   # non-empty in a --collect-only run: no tests ran, so no trend line
+
+
 def pytest_configure(config: pytest.Config) -> None:
+    if config.getoption("collectonly"):
+        _COLLECT_ONLY.append(True)
     config.addinivalue_line("markers", "criterion(*ids, source=None): the acceptance criteria (<spec>#<anchor>) this "
                             "test proves; source: the test's file when the item runs another one (quality #qc-capture)")
     if not _claims() or hasattr(config, "workerinput"):
@@ -108,6 +116,8 @@ def _source(item: pytest.Item) -> str:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    if tags := os.environ.get(TAGS):
+        Path(tags).write_text(json.dumps({i.nodeid: _tags(i) for i in items if _tags(i)}))
     d = os.environ.get(CAPTURE_DIR)
     if not d or not _claims():
         return
@@ -185,7 +195,7 @@ class _Capture:
 @pytest.hookimpl(trylast=True)   # after the junitxml plugin has written its file
 def pytest_sessionfinish(session, exitstatus):
     config = session.config
-    if hasattr(config, "workerinput"):   # an xdist worker: the controller writes the one line
+    if hasattr(config, "workerinput") or _COLLECT_ONLY:   # a worker, or no run: no line
         return
     xml_path = config.option.xmlpath
     try:

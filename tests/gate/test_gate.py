@@ -11,7 +11,7 @@ template installs several items repeat, once per run (pytest-xdist's documented 
 xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps).
 Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path), unless a gate this item runs
 inside already set it: the coverage map of `just fast-map` files each process under the outermost item.
-A tests/*.sh tagged with a criterion it proves carries one header line per criterion, `# criterion: <spec>#<anchor>`
+A tests/*.sh tagged with a criterion it proves carries one header line (its leading `#` lines) per criterion, `# criterion: <spec>#<anchor>`
 (quality #qc-capture), collected here as pytest's own `criterion` marker; a claimed one runs through the qc capture
 (tests/gate/conftest.py). An item exiting 77 (automake's skip status) is skipped, its output saying why.
 """
@@ -28,13 +28,15 @@ PANE = ("OCTO_FEATHER_PARENT", "OCTO_FEATHER_SESSION_ID", "OCTO_FEATHER_ROLE", "
         "OCTO_FEATHER_OPERATING_MODEL",
         "OCTO_FEATHER_QC_CLAIMS", "OCTO_FEATHER_QC_CAPTURE_DIR")   # this run's capture (conftest.py): a nested gate captures nothing
 SCRIPTS = sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/*.sh"))
-TAG = re.compile(r"^# criterion: (\S+)$", re.MULTILINE)
+TAG = re.compile(r"# criterion: (\S+)")
 SKIP = 77
 
 
 def tagged(script: str) -> object:
-    """SCRIPT as a pytest param, marked with each criterion its header lines tag it with (none: unmarked)."""
-    ids = TAG.findall((ROOT / script).read_text(errors="replace"))
+    """SCRIPT as a pytest param, marked with each criterion its header (the leading `#` lines) tags it with (none: unmarked)."""
+    lines = (ROOT / script).read_text(errors="replace").splitlines()
+    head = lines[: next((n for n, ln in enumerate(lines) if not ln.startswith("#")), len(lines))]
+    ids = [m.group(1) for ln in head if (m := TAG.fullmatch(ln))]
     return pytest.param(script, marks=[pytest.mark.criterion(*ids, source=script)] if ids else [])
 
 

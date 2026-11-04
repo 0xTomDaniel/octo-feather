@@ -8,7 +8,8 @@ Run in a lane worktree at its integrated head. A named criterion a tagged test p
 head's full gate captured of it (quality spec #qc-capture; capture_store and tested below: the gate given the lane's
 claims in OCTO_FEATHER_QC_CLAIMS ran each tagged case once in the qc sandbox), never rerun: decision source the
 tagged test assertions, pass when every case passed, fail when one failed, insufficient evidence naming each case
-skipped, missing, errored or not captured, and never the demo or the fallback. Capture first, no model: each other
+skipped, missing, errored or not captured, and never the demo or the fallback; a criterion a test carries (tagged_cases:
+the gate's own collector) with no such record at the head is insufficient evidence too, never the demo or the fallback. Capture first, no model: each other
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
 [demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
@@ -659,11 +660,62 @@ def tested(i: str, cid: str, head: str, text: str, root: str) -> Result | None:
                          + (f"; failed: {' '.join(failed)}" if failed else "")}
 
 
-def main(argv: list[str]) -> int:
-    if argv[:1] == ["--capture-case"] and len(argv) > 3 and argv[2] == "--":
+def tagged_cases(root: str) -> dict[str, list[str]]:
+    """Each criterion id any test at the head carries (its pytest `criterion` marker), with those tests' node ids, from the
+    gate's own collector: `just check-tests --collect-only` with OCTO_FEATHER_QC_TAGS (tests/gate/conftest.py). None
+    without a justfile or with no check-tests recipe (no pytest gate to tag a test in); a justfile just cannot read, or a
+    collection that fails, is refused: whether a criterion has a tagged test is never guessed."""
+    files = [f.name for f in Path(root).iterdir() if f.name.lower() in ("justfile", ".justfile")]
+    if not files:
+        return {}
+    jf = ["just", "--justfile", str(Path(root, files[0])), "--working-directory", root]
+    p = subprocess.run([*jf, "--summary"], capture_output=True, text=True)
+    if p.returncode:
+        die(64, f"{files[0]} does not parse, so the tagged tests are unknown; nothing ran: {p.stderr.strip()[:300]}")
+    if "check-tests" not in p.stdout.split():
+        return {}
+    with tempfile.TemporaryDirectory(prefix="qc-tags-") as d:
+        out = Path(d, "tags.json")
+        env = {k: v for k, v in os.environ.items() if k != "OCTO_FEATHER_QC_CLAIMS"} | {
+            "OCTO_FEATHER_QC_TAGS": str(out), "PYTHONDONTWRITEBYTECODE": "1"}
+        c = subprocess.run([*jf, "check-tests", "--collect-only", "-q", "-n", "0", "-p", "no:cacheprovider"], capture_output=True,
+                           text=True, env=env, stdin=subprocess.DEVNULL)
+        if c.returncode or not out.is_file():
+            die(64, f"collecting the tagged tests failed (just check-tests --collect-only, exit {c.returncode}); nothing ran:\n"
+                    f"{tail(c.stdout + c.stderr, 15)}")
+        cases: dict[str, list[str]] = json.loads(out.read_text())
+    by: dict[str, list[str]] = {}
+    for n, cids in cases.items():
+        for cid in cids:
+            by.setdefault(cid, []).append(n)
+    return by
+
+
+def captured(argv: list[str]) -> int:
+    """The capture's two entries inside a gate: --capture-case NOTE -- CMD..., --capture-store SESSION."""
+    if argv[0] == "--capture-case" and len(argv) > 3 and argv[2] == "--":
         return capture_case(Path(argv[1]), argv[3:])
-    if argv[:1] == ["--capture-store"] and len(argv) == 2:
+    if argv[0] == "--capture-store" and len(argv) == 2:
         return capture_store(Path(argv[1]))
+    die(64, "usage: octo-feather-qc --capture-case NOTE -- CMD... | --capture-store SESSION")
+
+
+def unrecorded(ids: list[str], tags: dict[str, list[str]], stem: str, head: str) -> dict[str, Result]:
+    """Of IDS (no gate record at HEAD), each a test carries (TAGS): a missing execution, insufficient evidence, never the
+    demo or the fallback (quality spec #qc-fallback, #qc-judgment)."""
+    out: dict[str, Result] = {}
+    for i in ids:
+        if cases := tags.get(f"{stem}#{i}"):
+            why = (f"no claims gate record at {head[:12]}: tagged {' '.join(cases)}; run the final full gate with "
+                   f"OCTO_FEATHER_QC_CLAIMS naming {stem}#{i}")
+            out[i] = {"id": i, "evidence": "incomplete", "decision": "tagged test assertions", "record": None, "head": head,
+                      "tests": cases, "missing": [why]}
+    return out
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] in (["--capture-case"], ["--capture-store"]):
+        return captured(argv)
     gate_free()
     flags = {"--no-sandbox", "--no-github"}
     nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
@@ -693,6 +745,8 @@ def main(argv: list[str]) -> int:
     declared = contract_demos(root)
     found = {i: tested(i, f"{stem}#{i}", head, text[i], root) for i in ids}
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
+    if len(tests) < len(ids):
+        tests |= unrecorded([i for i in ids if i not in tests], tagged_cases(root), stem, head)
     demos = {i: declared[f"{stem}#{i}"] for i in ids if f"{stem}#{i}" in declared and i not in tests}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
@@ -728,7 +782,8 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
     for i, r in tests.items():
-        print(f"qc: tagged test {stem}#{i}: judged from the gate's record {r['record']} at {head[:12]}, not rerun", file=sys.stderr)
+        print(f"qc: tagged test {stem}#{i}: " + (f"judged from the gate's record {r['record']} at {head[:12]}, not rerun" if r["record"]
+              else f"no claims gate record at {head[:12]}"), file=sys.stderr)
         done[i] = r if r["evidence"] == "complete" else r | {   # a result, never a failure to triage, never the fallback
             "verdict": "insufficient evidence", "command": f"the gate's run of {' '.join(r['tests'])}",
             "why": f"missing: {'; '.join(r['missing'])}"}

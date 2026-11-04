@@ -14,7 +14,7 @@ unset OCTO_FEATHER_CHECK_RUN OCTO_FEATHER_QC_CLAIMS   # a test harness, as tests
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'chmod -R u+w "$t" 2>/dev/null; rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
-export UV_CACHE_DIR="$(uv cache dir)"   # the kit's locked pytest, offline, where the kit's own gate finds it
+UV_CACHE_DIR="$(uv cache dir)"; export UV_CACHE_DIR   # the kit's locked pytest, offline, where the kit's own gate finds it
 # The box's mise installs, pinned before HOME moves (as tests/lib/qc.sh): the sandbox installs nothing.
 for d in data cache config; do v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(mise doctor --json | jq -r --arg d "$d" '.dirs[$d]')"; done
 fail() { echo "qc-one-execution test: $*" >&2; exit 1; }
@@ -133,4 +133,20 @@ python3 -c 'import json,sys; c=json.loads(sys.argv[1])["criteria"]; sys.exit(c["
 gate
 [[ "$rc" == 0 ]] && ! grep -q "qc capture" <<< "$out" || fail "plain gate: want exit 0 and no capture, got $rc: $out"
 [[ "$(records)" == 2 ]] || fail "plain gate appended records"
+
+# A tagged criterion with no claims gate record at the judged head: insufficient evidence, never its demo or the fallback.
+cat >> qc.toml <<'EOF'
+[demo."demo#acceptance-a"]
+command = "echo DEMO-RAN"
+covers = ["tests"]
+tests = ["tests/accept.sh"]
+EOF
+git commit -qam "a demo beside the tagged test"
+h2="$(git rev-parse HEAD)"
+set +e; out="$(timeout -k 5 120 just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 acceptance-a 2>"$t/err")"; rc=$?; set -e
+[[ "$rc" == 2 ]] || fail "strict: want exit 2, got $rc: $out $(tail -20 "$t/err")"
+grep -A1 '^INSUFFICIENT EVIDENCE acceptance-a: ' <<< "$out" | grep -q "missing: no claims gate record at ${h2:0:12}: tagged tests/gate/test_gate.py::test_script\[tests/accept.sh\]" \
+  || fail "strict: want insufficient evidence naming the missing claims gate record and the tagged case: $out"
+! grep -q 'DEMO-RAN\|agent fallback\|qc: demo ' <<< "$out$(cat "$t/err")" || fail "strict: the demo or the fallback ran: $out $(cat "$t/err")"
+[[ "$(records)" == 2 ]] || fail "strict: qc appended a record"
 echo "qc-one-execution: ok"
