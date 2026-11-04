@@ -109,6 +109,9 @@ def tool(i, name, args):   # as pi: the assistant message holding the call ends,
                                            "content": [{"type": "toolCall", "id": i, "name": name, "arguments": args}]}})
     out({"type": "tool_execution_start", "toolCallId": i, "toolName": name, "args": args})
 tool("c1", "bash", {"command": "ls"})
+out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "bash", "isError": False,
+     "result": {"content": [{"type": "text", "text": "README.md\n"}], "structuredContent": {"output": "README.md\n", "exit_code": 0}}})
+time.sleep(0.5)   # the model's next turn: the watcher snapshots this call's end before the next call runs
 def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an error
     try:
         return False, open(path).read()
@@ -178,6 +181,20 @@ if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] 
     for k, (kind, arg) in enumerate(json.loads(prompt.split("STUB-STEPS:", 1)[1])):
         if kind == "say":
             final = arg; break
+        if kind == "batch":   # a parallel codemode batch, as Pi streams one: the codemode call, then each nested call
+            # <id>/<n> started, all before any ends, the nested ends, then the codemode end; ARG: [["read"|"bash", X]...]
+            tool(f"s{k}", "codemode", {"code": "await Promise.allSettled([...])"})
+            for n, (nk, nx) in enumerate(arg, 1):
+                nx = sub(nx)
+                out({"type": "tool_execution_start", "toolCallId": f"s{k}/{n}", "toolName": nk, "args": {"path": nx} if nk == "read" else {"command": nx}})
+            time.sleep(0.3)
+            for n, (nk, nx) in enumerate(arg, 1):
+                nx = sub(nx)
+                err, o = pi_read(nx) if nk == "read" else (False, subprocess.run(["bash", "-c", nx], capture_output=True, text=True).stdout)
+                out({"type": "tool_execution_end", "toolCallId": f"s{k}/{n}", "toolName": nk, "isError": err, "result": {"content": [{"type": "text", "text": o}]}})
+                time.sleep(0.2)
+            out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": "codemode", "isError": False, "result": {"content": [{"type": "text", "text": "batch done"}]}})
+            time.sleep(0.5); continue
         if kind not in ("read", "bash"):
             tool(f"s{k}", kind, {"query": "q"})
             out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": arg.startswith("ERR:"),

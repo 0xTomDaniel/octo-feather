@@ -28,7 +28,10 @@ Attempt record, Run record), against the
 case's reference/expectations.json, which the agent's prompt never contains (stated limit: the
 kit's evals/ dir is readable inside the sandbox, as the whole kit is). Facts and what each reads: schema, Facts.
 A run stops once every fact is decided (a skill read seen, say), or at the suite's max_tool_calls
-(default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value.
+(default 12) or timeout_s (default 600); a fact still open then takes its end-of-run value. At max_tool_calls (each
+tool_execution_start counts, a codemode call and each call nested in it alike), the calls then in flight (started, not
+ended) finish first, with any call nested in them that starts meanwhile, and are graded; the run stops when none is in
+flight, or at once when any other call starts (it is never credited). Spec quality#acceptance-qa-skill-triggers.
 A fact is decided when the schema's Facts section says.
 A run with no assistant message, or one whose pi exited non-zero on its own, is a FAIL.
 
@@ -552,6 +555,22 @@ def arg_matches(want: str, got: str, head: str | None) -> bool:
     return m is not None and all(head.startswith(g) for g in m.groups())
 
 
+def args_match(want: list[str], got: list[str], head: str | None) -> bool:
+    """Whether a recorded argv GOT holds a ran fact's arguments WANT, HEAD the case's sha (rule: schema, Run record)."""
+    k = next((i for i, w in enumerate(want) if w.startswith("-")), len(want))
+    if len(got) < k or not all(arg_matches(w, g, head) for w, g in zip(want[:k], got)):
+        return False
+    groups: list[list[str]] = []
+    for w in want[k:]:
+        if groups and not w.startswith("-") and len(groups[-1]) == 1:
+            groups[-1].append(w)
+        else:
+            groups.append([w])
+    rest = got[k:]
+    return all(any(all(arg_matches(w, g, head) for w, g in zip(gr, rest[i:i + len(gr)])) for i in range(len(rest) - len(gr) + 1))
+               for gr in groups)
+
+
 def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
     """ran PROGRAM ARGS over the sandbox's RECORD (rule: schema, Run record)."""
     p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
@@ -562,13 +581,12 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
             if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
     def show_(r: dict[str, object]) -> str:
         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-    hit = next((r for r, a in runs if len(a) >= len(want)
-                and all(arg_matches(w, g, head if isinstance(head, str) else None) for w, g in zip(want, a))), None)
+    hit = next((r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)), None)
     if hit is not None:
         return "pass", f"{name}: recorded run {show_(hit)}"
     if not final:
         return "open", f"{name}: no matching run recorded yet"
-    return "fail", (f"{name}: no run of {p} with these leading arguments in the sandbox's record ({len(record)} entries; "
+    return "fail", (f"{name}: no run of {p} with these arguments in the sandbox's record ({len(record)} entries; "
                      + (f"runs of {p}: {'; '.join(show_(r) for r, _ in runs)})" if runs else f"no run of {p} recorded)"))
 
 
@@ -683,6 +701,33 @@ def changed(old, new, known):
                              ("kit_contract_edit", contract(old) != contract(new))) if hit]
 
 
+class Bound:
+    """The max_tool_calls stop rule (--help): the calls in flight when the count reaches the bound, and the calls
+    nested in them, finish and are graded; any other call started after it stops the run."""
+
+    def __init__(self, maxc: int) -> None:
+        self.maxc = maxc
+        self.flight: set[str] = set()   # started, not ended
+        self.cap: set[str] | None = None   # in flight when the bound was reached
+
+    def stops(self, raw: bytes, calls: list[object]) -> bool:
+        """After event RAW, CALLS the tool calls started so far: whether the run stops at the bound now."""
+        e = safe_json(raw)
+        ev = cast("dict[str, object]", e) if isinstance(e, dict) else {}
+        cid = str(ev.get("toolCallId", ""))
+        if ev.get("type") == "tool_execution_start":
+            if self.cap is not None and not any(cid.startswith(c + "/") for c in self.cap):
+                return True   # a call outside the calls in flight at the bound: never credited
+            self.flight.add(cid)
+            if self.cap is not None:
+                self.cap.add(cid)
+        elif ev.get("type") == "tool_execution_end":
+            self.flight.discard(cid)
+        if self.cap is None and len(calls) >= self.maxc:
+            self.cap = set(self.flight)
+        return self.cap is not None and not self.flight
+
+
 def watch(argv):
     """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
     After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
@@ -719,6 +764,7 @@ def watch(argv):
                 pass
     timer = threading.Timer(tmo, stop, args=("timeout",)); timer.daemon = True; timer.start()
     seen, raws, lines = [], [], queue.Queue()
+    bound = Bound(maxc)
 
     def pump():   # the snapshot per end event, off the deciding loop (why: schema, Before targets, stated limit; #170)
         for raw in p.stdout:
@@ -748,7 +794,7 @@ def watch(argv):
             snap = now
         if all(judge(f, seen, False, attempt_record(), marks=fs_marks(raws), lines=raws)[0] != "open" for f in facts):
             stop("decided"); break
-        if len(seen) >= maxc:
+        if bound.stops(cast("bytes", raw), cast("list[object]", seen)):
             stop("max_tool_calls"); break
     rc = p.wait(); timer.cancel()
     paths = (git_out("diff", "-z", "--name-only", "--no-renames", main0) + "\0" + git_out("ls-files", "-z", "-o", "--exclude-standard")).split("\0")
