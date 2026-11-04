@@ -53,11 +53,53 @@ check_template() {
   check; [[ "$rc" != 0 ]] || fail "$lang: planted files passed"
   for s in "${want[@]}"; do grep -qxF -- "check-languages: $s" <<<"$out" || fail "$lang: output lacks: $s"; done
   g "$d" reset -q --hard; g "$d" clean -qfd -e node_modules -e .venv
-  # ShellCheck's recipe out of the gate (GATE_RECIPES in the Python repo, check's dependencies in the TypeScript repo).
+  # ShellCheck's recipe out of the gate (GATE_RECIPES in the Python repo, check-static's dependencies in the TypeScript repo).
   sed -i -e 's/^export GATE_RECIPES := "check-languages check-scripts /export GATE_RECIPES := "check-languages /' \
-    -e 's/^check: check-languages check-scripts /check: check-languages /' "$d/justfile"
+    -e 's/^check-static: check-languages check-scripts /check-static: check-languages /' "$d/justfile"
   g "$d" add -A
   check; [[ "$rc" != 0 ]] || fail "$lang: shellcheck's recipe out of the gate passed"
   s="shellcheck gates BASH, but its recipe check-scripts is not in the gate"
   grep -qxF -- "check-languages: $s" <<<"$out" || fail "$lang: output lacks: $s"
+}
+
+# check_tiers LANG: the created repo's two gate tiers (templates spec #acceptance-fresh-fast, #acceptance-test-kinds,
+# #acceptance-shared-fixture), after check_template, with a second module and its integration test committed. The
+# full tier's tests show each kind, integration and e2e, and the shared fixture prepared once with two workers; then
+# just fast after a one-file change names only that module's test, and after a justfile change (on its
+# shared-machinery.txt) every integration test; neither shows an e2e test. The Python repo's static checks cut to one
+# with just's own command line (--set GATE_RECIPES); the TypeScript repo's run in full (fast depends on check-static).
+check_tiers() {
+  local lang="$1" other other_t full fast integ e2e
+  g "$d" reset -q --hard; g "$d" clean -qfd -e node_modules -e .venv
+  if [[ "$lang" == python ]]; then
+    other=src/app/other.py
+    printf 'def double(n: int) -> int:\n    return n * 2\n' >"$d/$other"
+    printf 'from app.other import double\n\n\ndef test_double() -> None:\n    assert double(2) == 4\n' >"$d/tests/integration/test_other.py"
+    # Two workers: the shared fixture across xdist workers (a nested gate is otherwise -n 0, #208; two tiny tests).
+    full=(env -u GATE_NESTED GATE_WORKERS=2 just --set GATE_RECIPES check-lint check)
+    fast=(just --set GATE_RECIPES check-lint fast)
+    other_t="PASSED tests/integration/test_other.py::test_double"; integ="PASSED tests/integration/test_cli.py::"
+    e2e="tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end"
+  else
+    other=src/other.ts
+    printf 'export function double(n: number): number {\n  return n * 2;\n}\n' >"$d/$other"
+    printf 'import { expect, it } from "vitest";\nimport { double } from "../src/other.ts";\n\nit("doubles", () => {\n  expect(double(2)).toBe(4);\n});\n' >"$d/tests/other.test.ts"
+    full=(just check-tests); fast=(just fast)
+    other_t="✓ |integration| tests/other.test.ts > doubles"; integ="✓ |integration| tests/cli.test.ts > "
+    e2e="|e2e| tests/cli.e2e.test.ts"
+  fi
+  g "$d" add -A; g "$d" commit -qm other
+  # The TypeScript repo's tiers with the recording Python stubs first on PATH, as its check above.
+  local path="$PATH"; [[ "$lang" == python ]] || path="$t/nopy:$PATH"
+  tier() { set +e; out="$(cd "$d" && PATH="$path" "$@" 2>&1)"; rc=$?; set -e; [[ "$rc" == 0 ]] || fail "$lang: $* exited $rc: $out"; }
+  tier "${full[@]}"
+  [[ "$out" == *"$integ"* && "$out" == *"$other_t"* && "$out" == *"$e2e"* ]] || fail "$lang: just check does not show its integration and e2e tests by kind"
+  [[ "$(grep -c "shared fixture greetings.json: prepared once" <<<"$out")" == 1 ]] || fail "$lang: just check did not show the shared fixture prepared exactly once"
+  sed -i 's/n \* 2/n + n/' "$d/$other"
+  tier "${fast[@]}"
+  [[ "$out" == *"$other_t"* && "$out" != *"$integ"* && "$out" != *"$e2e"* ]] || fail "$lang: just fast after a one-file change ($other) did not run exactly its test"
+  g "$d" checkout -q -- "$other"; printf '# changed\n' >>"$d/justfile"
+  tier "${fast[@]}"
+  [[ "$out" == *"fast: every integration test: justfile changed since main, on shared-machinery.txt"* && "$out" == *"$other_t"* \
+    && "$out" == *"$integ"* && "$out" != *"$e2e"* ]] || fail "$lang: just fast after a justfile change did not run every integration test, and only those"
 }

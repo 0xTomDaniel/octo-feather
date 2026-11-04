@@ -1,4 +1,4 @@
-# The one gate (AGENTS.md): agents, .githooks/pre-commit and CI run `just check`.
+# The gate's two tiers (AGENTS.md): CI runs `just check`, the full tier; agents and .githooks/pre-commit run `just fast`.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
@@ -27,7 +27,29 @@ setup:
 
 # Every tracked language gated, shell, types and lint, architecture, dead code, integration and E2E tests: each a
 # dependency of check, so what the gate runs is just's own answer (scripts/check-languages.ts reads it).
-check: check-languages check-scripts check-ts check-arch check-dead-code check-tests
+check: check-static check-tests
+
+# The static checks both tiers run first.
+check-static: check-languages check-scripts check-ts check-arch check-dead-code
+
+# The fast tier (octo-feather quality spec #recipe-fast): the static checks, then the integration test files Vitest
+# picks by their imports of the files changed since the branch left main (vitest --changed), each test named; no
+# end-to-end test (the integration project only: vitest.config.ts). A change since then to a path on
+# shared-machinery.txt, which the import graph cannot see, runs every integration test.
+fast: check-static
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sel=()
+    if ! base="$(git merge-base HEAD main 2>/dev/null)"; then
+      echo "fast: every integration test: no merge base with main to compare against"
+    else
+      mapfile -t specs < <(sed -n '/^[[:space:]]*\(#\|$\)/!s/^/:(glob)/p' shared-machinery.txt)
+      hit="$({ git diff --name-only "$base" -- "${specs[@]}"; git ls-files -o --exclude-standard -- "${specs[@]}"; } | sort -u | paste -sd' ' -)"
+      if [[ -n "$hit" ]]; then
+        echo "fast: every integration test: $hit changed since main, on shared-machinery.txt (the import graph cannot see it)"
+      else echo "fast: the integration test files Vitest picks by their imports of the files changed since main"; sel=(--changed "$base"); fi
+    fi
+    pnpm exec vitest run --project integration --reporter=verbose "${sel[@]}"
 
 # Every language scc finds in the tracked files has its lint and type step in check; rules and what passes by
 # design: the head of scripts/check-languages.ts.
@@ -64,8 +86,9 @@ check-arch:
 check-dead-code:
     pnpm exec knip
 
+# Every test, each named with its kind (its Vitest project: vitest.config.ts).
 check-tests:
-    pnpm exec vitest run
+    pnpm exec vitest run --reporter=verbose
 
 # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
 integrate issue +refs:

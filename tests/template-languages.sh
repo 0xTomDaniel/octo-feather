@@ -8,4 +8,5 @@
 # shellcheck source=tests/lib/template-languages.sh
 source "$(dirname "$0")/lib/template-languages.sh"
 check_template python
+check_tiers python
 echo "template-languages: ok (python repo green fresh; unknown, Go, uncovered file, env -S shebang and a gate recipe out each named)"

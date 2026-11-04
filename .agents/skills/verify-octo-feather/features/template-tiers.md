@@ -1,0 +1,44 @@
+# template-tiers
+
+Criteria:
+
+- [templates#acceptance-fresh-fast](../../../../docs/specs/templates.spec.html#acceptance-fresh-fast)
+- [templates#acceptance-test-kinds](../../../../docs/specs/templates.spec.html#acceptance-test-kinds)
+- [templates#acceptance-shared-fixture](../../../../docs/specs/templates.spec.html#acceptance-shared-fixture)
+- [templates#acceptance-same-gate](../../../../docs/specs/templates.spec.html#acceptance-same-gate)
+
+Drive criterion: `templates#acceptance-fresh-fast`
+Drive criterion: `templates#acceptance-test-kinds`
+Drive criterion: `templates#acceptance-shared-fixture`
+Drive criterion: `templates#acceptance-same-gate`
+
+## Sub-features
+
+Each case runs once per template, `python-<case>` and `typescript-<case>`:
+
+- `new-repo` `just new-repo LANG DEST --no-spec-chat`, then its packages installed offline (observed as `install`).
+- `check` `just check` with two workers: the integration and e2e tests each shown by kind, the shared fixture prepared once.
+- `fast-one-file` `just fast` after a change to one source file: the static checks, then only the integration test the stack's tool picks for it, named; no e2e test.
+- `hook-core` `git commit` of a core change with the repo's hooks on: `.githooks/pre-commit` runs `just fast`, which picks the core's tests and no e2e test; CI's workflow step observed as `ci`.
+- `fast-residual` `just fast` after a justfile change (on the repo's `shared-machinery.txt`): every integration test, no e2e test.
+
+## How to get to it (user POV)
+
+- The owner makes a repo with `just new-repo python|typescript DEST`, then `just setup`; an implementer runs `just fast` on each change (the git hook runs it on commit) and `just check` before handoff; CI runs `just check`. What each tier runs: the created repo's `justfile` (`fast`, `check`) and `AGENTS.md`.
+
+## Driving it with verify-octo-feather
+
+Preconditions:
+
+- `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0.
+- The uv cache and pnpm store hold both templates' locked packages (`uv sync --locked` in `templates/python`, `pnpm install --frozen-lockfile` in `templates/typescript`, once with network): the drive installs offline.
+
+Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive template-tiers`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/template-tiers/`.
+
+- **Scratch repos.** One repo per template under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/template-tiers/<lang>`, with a second module (`double`) and its integration test committed, so a one-file change has a test to pick and one to leave.
+- **Side effects.** `XDG_STATE_HOME` (trend lines) and `MISE_STATE_DIR` (the trust of each created `mise.toml`) under the scratch; `GATE_WORKERS=2`. Every cwd stays empty and the kit's `git status` unchanged.
+
+## Gotchas
+
+- pytest-testmon compares with its own last run in that worktree, not with git: a reverted file is a change to it. The drive commits the one-file change before the next case.
+- The repo's first `just check` records the coverage `just fast` picks from (`--testmon-noselect`); a fresh repo's first `just fast` without one runs every integration test.
