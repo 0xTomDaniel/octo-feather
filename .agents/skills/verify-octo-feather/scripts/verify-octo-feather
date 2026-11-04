@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst", "qa-review")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1145,7 +1145,8 @@ def drive_qc_advisory(f: Feature) -> None:
 # The qa-runs and qa-baseline drives' stub `pi` (no model): emits the Pi JSON events of one turn, each assistant message
 # with usage (100 input and 10k output tokens, cost 0.001, run k from its scratch copy qa-<id>-<n>r<k>-*:
 # octo-feather-qa --help); it reads the role's tdd SKILL.md when the role lists tdd and NOREAD is not in the prompt, with
-# ALTERNATE in the prompt on odd runs only; with COSTLY, a role listing tdd spends 3 more messages; then a final message.
+# ALTERNATE in the prompt on odd runs only; with COSTLY, a role listing tdd spends 3 more messages; then a final message:
+# with SAY: TEXT in the prompt, TEXT, also written to notes.md in the case repo; else done.
 QA_STUB_PI = r"""#!/usr/bin/env python3
 import json, os, re, sys
 a = sys.argv[1:]
@@ -1169,8 +1170,11 @@ if tdd and "NOREAD" not in prompt and not ("ALTERNATE" in prompt and k % 2 == 0)
     out({"type": "tool_execution_start", "toolCallId": "c1", "toolName": "read", "args": {"path": tdd}})
     out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "read", "isError": False,
          "result": {"content": [{"type": "text", "text": open(tdd).read()}]}})
+say = prompt.split("SAY:", 1)[1].strip() if "SAY:" in prompt else "done"
+if "SAY:" in prompt:
+    open("notes.md", "w").write(say + "\n")
 out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                       "content": [{"type": "text", "text": "done"}]}})
+                                       "content": [{"type": "text", "text": say}]}})
 """
 
 
@@ -1362,6 +1366,50 @@ def drive_qa_analyst(f: Feature) -> None:
     say(f"qa-analyst evidence: {f.d}")
 
 
+def drive_qa_review(f: Feature) -> None:
+    """octo-feather-qa on a scratch review case (role implementer), the role's model the stub `pi` (QA_STUB_PI), never a
+    real model: awaiting review with its output, --review showing it, a verdict and note recorded, then a next run
+    showing them beside its new output; cases and what each observes: features/qa-review.md."""
+    sc = RUN_DIR / "scratch" / "qa-review"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vr" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    for d in ("bin", "state"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-review drive fixture\n")
+    (ev / "vr" / "suite.json").write_text(json.dumps({"suite": "vr", "kind": "role-transcript", "description": "qa-review drive",
+                                                     "max_tool_calls": 10, "timeout_s": 60}))
+    (ev / "vr" / "reference" / "expectations.json").write_text(json.dumps({"essay": {"facts": []}}))
+
+    def essay(say: str) -> None:
+        (ev / "vr" / "cases.json").write_text(json.dumps([{"id": "essay", "role": "implementer", "fixture": "fx",
+                                                           "task": f"Write the notes. NOREAD SAY: {say}",
+                                                           "review": {"question": "Do the notes answer the brief?"}}]))
+    essay("The notes say hi.")
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    f.run("run", "octo-feather-qa", "--evals", str(ev))
+    runs = sorted(p for p in (sc / "out").iterdir() if p.name != "reviews") if (sc / "out").is_dir() else []
+    first = runs[-1] if runs else sc / "none"
+    f.check("run", lambda c: c.code == 1 and re.search(r"(?m)^REVIEW vr/essay: awaiting review: Do the notes answer the brief\?; "
+                                                       r"changed files: notes\.md \[", c.out) is not None
+            and "\n  output: final message: The notes say hi.\n" in c.out and "\n  latest review: none\n" in c.out)
+    f.run("awaiting", "octo-feather-qa", "--review", str(first), "vr/essay")
+    f.check("awaiting", lambda c: c.code == 0 and c.out.startswith(f"REVIEW vr/essay: awaiting review (run {first.name})\n"))
+    f.run("record", "octo-feather-qa", "--review", str(first), "vr/essay", "pass", "Clear and short.")
+    shown = rf"pass \(run {first.name}, kit [0-9a-f]{{12}}, \S+Z\): Clear and short\."
+    f.check("record", lambda c: c.code == 0 and re.match(rf"REVIEWED vr/essay: {shown}\n", c.out) is not None)
+    essay("The notes say hello.")
+    f.run("next-run", "octo-feather-qa", "--evals", str(ev))
+    f.check("next-run", lambda c: c.code == 1 and "\n  output: final message: The notes say hello.\n" in c.out
+            and re.search(rf"(?m)^  latest review: {shown}$", c.out) is not None)
+    f.env = {}
+    say(f"qa-review evidence: {f.d}")
+
+
 def drive_qc_fallback(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b: acceptance-a
     decided by its demo's checks, acceptance-b by the agent fallback, a fresh qc judge (the kit's stub judge,
@@ -1515,6 +1563,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-runs": drive_qa_runs,
     "qa-baseline": drive_qa_baseline,
     "qa-analyst": drive_qa_analyst,
+    "qa-review": drive_qa_review,
 }
 
 

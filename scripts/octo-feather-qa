@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """octo-feather-qa [--suite NAME]... [--case ID]... [--classifier P/ID]... [--sample N] [--runs N] [--model MODEL] [--evals DIR] [--kit-ref COMMIT] [--baseline COMMIT]   factory evals (`just qa`)
 octo-feather-qa --analyze RUN_DIR   the analysis of a stored run (Analysis, below)
+octo-feather-qa --review RUN_DIR SUITE/CASE [pass|fail NOTE]   show or record a maintainer's verdict (Review, below)
 
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
 Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
@@ -110,6 +111,19 @@ model. The flags, per fact case:
                             status in every run on both kits
 octo-feather-qa --analyze RUN_DIR prints the analysis of a stored run again from RUN_DIR/summary.json alone: no case,
 sandbox or model runs; no other option; an unreadable summary.json exits 64.
+Review (spec quality#acceptance-qa-review): a role-transcript case with `review` {question} (schema: Case) has no graded
+facts: it runs to its end like any case, its output kept in review.json in its run's dir (question, final_message,
+changed_files: the paths its branch changed, as branch_paths reads them), and its line reads REVIEW (awaiting review:
+the question, the changed files), then indented: the final message, where review.json is, and the case's latest
+recorded verdict (`latest review: none` before any). A run that fails on its own (no answer, pi exited, sandbox) is
+FAIL. A review case is never a pass: it counts as not passed in the totals, scores and exit status, has pass rate 0
+with --runs (each run REVIEW, the case REVIEW unless one FAILS) and gets no analysis flag. A maintainer reads the output,
+then records a verdict on the case in that run, all its runs: `--review RUN_DIR SUITE/CASE pass|fail NOTE` appends one
+line {run_id, kit_sha, verdict, note, at} to REVIEWS/<suite>/<case>.jsonl, REVIEWS the reviews/ dir beside the run dirs
+(RUN_DIR's parent: $OCTO_FEATHER_QA_DIR or $(octo-feather-state)/qa), so it outlives the run dir and the next run of the
+case shows the latest line. `--review RUN_DIR SUITE/CASE` alone shows the case: `REVIEWED SUITE/CASE: <verdict> (run,
+kit, at): <note>` for the latest verdict recorded on that run, else `REVIEW SUITE/CASE: awaiting review`, then its
+kept output. Exit 0; 64 when RUN_DIR holds no such review case, or the verdict is not pass or fail or the note is blank.
 Exit: 0 every case passed (and every bench done), 1 any failed, 2 the shape check failed, 64 usage, 70 inside a
 `just check` run (scripts/check-gate-free --refuse; the gate never runs evals).
 
@@ -619,6 +633,8 @@ def watch(argv):
     """Run CMD, pass its stdout through, stop its process group once every fact is decided or at a bound.
     After each tool_execution_end, snapshot the case repo and print a qa_fs event naming the targets that call reached."""
     facts, maxc, tmo, setup = json.loads(argv[0]), int(argv[1]), float(argv[2]), json.loads(argv[3])
+    if not facts:   # a review case (no facts: --help, Review) runs to its end, this one fact open until then
+        facts = [{"fact": "skill_not_read", "skill": "", "_skill_text": ""}]
     cmd = argv[argv.index("--") + 1:]
     env, origin, log = prep(setup)
     known = set(git_out("rev-list", "--all").split())
@@ -844,7 +860,94 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         problems.append(f"run: model error: {str(errs[0])[:200]}")
     ok = not problems and all(g["status"] == "pass" for g in graded)
     deciding = problems + [g["evidence"] for g in graded if ok or g["status"] != "pass" or problems]
+    rv = cast("ReviewRun", (out, suite, case, used, secs, problems, deciding, graded, w, kits, events, last))
+    if "review" in rv[2]:   # a review case (--help, Review): its output kept, never a pass
+        return review_end(rv)
     return finish(out, suite, case, used, secs, "PASS" if ok else "FAIL", deciding, graded, w, kits)
+
+
+ReviewRun = tuple[Path, "Result", "Result", str, float, list[str], list[str], list["Result"], "Result | None", "Result", list["Result"],
+                  tuple[object, "str | None"]]   # run_case's state at its end, for review_end
+
+
+def review_end(rv: ReviewRun) -> "Result":
+    """A review case's run end (--help, Review): its output kept in review.json, REVIEW unless the run failed on its own."""
+    out, suite, case, used, secs, problems, deciding, graded, w, kits, events, last = rv
+    br = next((e for e in reversed(events) if e.get("type") == "qa_branch"), None)
+    q = cast("Result", case["review"])["question"]
+    kept: Result = {"question": q, "final_message": last[1], "changed_files": (br or {}).get("paths", [])}
+    (out / "review.json").write_text(json.dumps(kept, indent=2) + "\n")
+    if not problems:
+        deciding = [f"awaiting review: {q}", f"changed files: {', '.join(cast('list[str]', kept['changed_files'])) or 'none'}"]
+    fin = cast("Callable[..., Result]", finish)
+    res = fin(out, suite, case, used, secs, "FAIL" if problems else "REVIEW", deciding, graded, w, kits)
+    print("\n".join(review_lines(kept, out / "review.json", latest_review(str(suite["suite"]), str(case["id"])))), flush=True)
+    return res
+
+
+REVIEWS: list[Path] = []
+REVIEW_ARGS = (2, 4)   # --review RUN_DIR SUITE/CASE [VERDICT NOTE]   # the qa artifacts root's reviews dir, set by run_all (--help, Review)
+
+
+def review_file(reviews: Path, suite: str, case: str) -> Path:
+    return reviews / suite / f"{case}.jsonl"
+
+
+def review_records(reviews: Path, suite: str, case: str) -> "list[Result]":
+    """The case's recorded verdicts, oldest first (--help, Review)."""
+    f = review_file(reviews, suite, case)
+    raw = [safe_json(ln) for ln in f.read_text().splitlines()] if f.is_file() else []
+    return [cast("Result", r) for r in raw if isinstance(r, dict)]
+
+
+def latest_review(suite: str, case: str) -> "Result | None":
+    recs = review_records(REVIEWS[0], suite, case) if REVIEWS else []
+    return recs[-1] if recs else None
+
+
+def show_review(r: "Result") -> str:
+    return f"{r.get('verdict')} (run {r.get('run_id')}, kit {str(r.get('kit_sha'))[:12]}, {r.get('at')}): {r.get('note')}"
+
+
+def review_lines(kept: "Result", where: Path, latest: "Result | None") -> list[str]:
+    """A review case's output and its latest recorded verdict, as printed under its line."""
+    msg = " / ".join(str(kept.get("final_message") or "(no final message)").splitlines())
+    return [f"  output: final message: {msg[:400]}", f"  output: kept in {where}",
+            f"  latest review: {show_review(latest) if latest else 'none'}"]
+
+
+def review(argv: list[str]) -> int:
+    """--review RUN_DIR SUITE/CASE [pass|fail NOTE]: show a stored run's review case, or record a verdict on it (--help, Review)."""
+    if len(argv) not in REVIEW_ARGS:
+        die(64, "--review takes RUN_DIR SUITE/CASE, then optionally pass|fail and a NOTE")
+    run_dir, key = Path(argv[0]), argv[1]
+    suite, _, cid = key.partition("/")
+    sm: Result = {}
+    res: Result = {}
+    try:
+        sm = cast("Result", json.loads((run_dir / "summary.json").read_text()))
+        res = cast("Result", json.loads((run_dir / suite / cid / "result.json").read_text()))
+    except (OSError, ValueError) as e:
+        die(64, f"--review {run_dir} {key}: no stored run case ({e})")
+    if not isinstance(res.get("review"), dict):
+        die(64, f"--review {key}: not a review case in run {sm.get('run_id')}")
+    reviews = run_dir.parent / "reviews"
+    if argv[2:]:
+        verdict, note = argv[2], argv[3]
+        if verdict not in ("pass", "fail") or not note.strip():
+            die(64, "--review: the verdict is pass or fail, and the note is not blank")
+        rec = {"run_id": sm.get("run_id"), "kit_sha": res.get("kit_sha"), "verdict": verdict, "note": note,
+               "at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())}
+        review_file(reviews, suite, cid).parent.mkdir(parents=True, exist_ok=True)
+        with review_file(reviews, suite, cid).open("a") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    mine = [r for r in review_records(reviews, suite, cid) if r.get("run_id") == sm.get("run_id")]
+    head = f"REVIEWED {key}: {show_review(mine[-1])}" if mine else f"REVIEW {key}: awaiting review (run {sm.get('run_id')})"
+    print(head, flush=True)
+    for f in sorted((run_dir / suite / cid).glob("**/review.json")):
+        kept = cast("Result", json.loads(f.read_text()))
+        print("\n".join(review_lines(kept, f, None)[:2]), flush=True)
+    return 0
 
 
 def safe_json(line):
@@ -858,7 +961,7 @@ def finish(out, suite, case, model, secs, verdict, deciding, graded, w, kits):
     (out / "grading.json").write_text(json.dumps({"facts": graded, "deciding": deciding}, indent=2) + "\n")
     res = {"suite": suite["suite"], "id": case["id"], "verdict": verdict, "deciding": deciding, "model": model, "seconds": secs,
            "stop": (w or {}).get("stop"), "tool_calls": (w or {}).get("tool_calls"),
-           **({k: case[k] for k in ("role", "should_trigger", "split") if k in case}), **kits}
+           **({k: case[k] for k in ("role", "should_trigger", "split", "review") if k in case}), **kits}
     (out / "result.json").write_text(json.dumps(res, indent=2) + "\n")
     stop = (f" [stop: {res['stop']}, {res['tool_calls']} tool calls, {secs} s]" if w else f" [{secs} s]") + f" [kit {kits['kit_sha']}]"
     if "run" in kits:   # run k of N (--runs): its line indented, under its case
@@ -991,11 +1094,11 @@ def aggregate(done: list[tuple[str, Result]], out: Path, runs: int) -> Result:
     def said(r: Result) -> str:
         return "; ".join(cast("list[str]", r["deciding"]))
 
-    lead = next((r for r in rs if r["verdict"] != "PASS"), rs[0])   # the first failed run, else run 1
+    lead = next((r for r in rs if r["verdict"] == "FAIL"), None) or next((r for r in rs if r["verdict"] != "PASS"), rs[0])   # the first failed run, else run 1
     head = f"{agg['runs_passed']}/{runs} runs passed (pass rate {agg['pass_rate']:.2f}, stddev {agg['stddev']:.2f})"
     why = [f"run {k}: {said(r)}" for k, r in enumerate(rs, 1) if r["verdict"] != "PASS"] or [f"run 1: {said(rs[0])}"]
     secs = round(sum(cast("float", r["seconds"]) for r in rs), 1)
-    return {**{k: v for k, v in lead.items() if k not in ("run", "of", "config")}, "verdict": "PASS" if all(ok) else "FAIL",
+    return {**{k: v for k, v in lead.items() if k not in ("run", "of", "config")}, "verdict": next((v for v in ("FAIL", "REVIEW") if v in {r["verdict"] for r in rs}), "PASS"),
             "deciding": [head, *why], "seconds": secs, **agg}
 
 
@@ -1452,7 +1555,7 @@ def analyze(cases: list[Result]) -> Result:
     hv: list[Result] = []
     cost: list[Result] = []
     for r in cases:
-        if "runs" not in r:
+        if "runs" not in r or "review" in r:
             continue
         name = f"{r['suite']}/{r['id']}"
         b = r.get("baseline")
@@ -1518,6 +1621,8 @@ def reanalyze(run_dir: str) -> int:
 def main(argv: list[str]):
     if argv[:1] == ["--watch"]:
         return watch(argv[1:])
+    if argv[:1] == ["--review"]:
+        return review(argv[1:])
     if argv[:1] == ["--analyze"]:
         if argv[2:] or not argv[1:]:
             die(64, "--analyze takes one RUN_DIR and no other option")
@@ -1564,6 +1669,7 @@ def run_all(o, evals, picked, kit, sha, base: "tuple[Path, str | None] | None" =
     root = Path(os.environ.get("OCTO_FEATHER_QA_DIR") or Path(subprocess.run(
         [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip()) / "qa")
     run_dir = root / runid; run_dir.mkdir(parents=True)
+    REVIEWS[:] = [root / "reviews"]
     runs = int(cast("str | None", o["runs"]) or "1")
     print(f"qa: run {runid}: {len(picked)} case(s)" + (f", {runs} runs each" if runs > 1 else "") + f"; kit {sha}" + (f" (--kit-ref {o['kit-ref']})" if o["kit-ref"] else "")
           + (f"; baseline kit {base[1]} (--baseline {o['baseline']}), runs interleaved" if base else "") + f"; artifacts {run_dir}", flush=True)

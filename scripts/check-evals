@@ -7,7 +7,7 @@ Deterministic and free: reads JSON only, never starts an agent or a model. Run b
 EVALS_DIR: default the kit's evals/.
 Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
 refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
-role-transcript setup branch/head/origin/fake_gh), Facts (reference/expectations.json: the closed fact
+role-transcript setup branch/head/origin/fake_gh, review), Facts (reference/expectations.json: the closed fact
 list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
 suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
 classifiers.json).
@@ -124,7 +124,7 @@ def check_suite(d, evals, errs):
     if kind == "judgment":
         return check_judgment(d, cases, exps, errs)
     need = BASE | (TRIGGER if kind == "skill-trigger" else set())
-    extra = SETUP if kind == "role-transcript" else set()
+    extra = SETUP | {"review"} if kind == "role-transcript" else set()
     ids = []
     for n, c in enumerate(cases):
         if not isinstance(c, dict):
@@ -138,6 +138,8 @@ def check_suite(d, evals, errs):
                         + ("; only a role-transcript case sets up a repo" if k in SETUP else ""))
         if kind == "role-transcript":
             check_setup(at, c, evals, errs)
+        if "review" in c and "review" in extra:
+            check_review(str(at), cast("object", c["review"]), cast("list[str]", errs))
         if "id" in c:
             if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
                 errs.append(f"{at}: field id: must match {ID.pattern}")
@@ -165,7 +167,8 @@ def check_suite(d, evals, errs):
             continue
         tree = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")   # the tree the agent sees
         check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
-                  evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None)
+                  evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None,
+                  review="review" in c and "review" in extra)
         if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
             continue
         for n, f in enumerate(exp["facts"]):
@@ -509,12 +512,16 @@ def check_coverage(name, cases, exps, evals, errs):
                         "needs a should and a should-not (near miss) case, each in train and held-out")
 
 
-def check_exp(at, exp, errs, fixture=None):
+def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
     if not isinstance(exp, dict):
         errs.append(f"{at}: must be a JSON object {{\"facts\": [...]}}"); return
     for k in sorted(set(exp) - {"facts"}):
         errs.append(f"{at}: field {k}: unknown field")
     facts = exp.get("facts")
+    if review:
+        if facts != []:
+            cast("list[str]", errs).append(f"{at}: field facts: a review case has none (its verdict is a maintainer's); want []")
+        return
     if not isinstance(facts, list) or not facts:
         errs.append(f"{at}: field facts: missing or empty"); return
     for n, f in enumerate(facts):
@@ -561,6 +568,17 @@ def check_exp(at, exp, errs, fixture=None):
                     errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
         if "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+def check_review(at: str, rv: object, errs: list[str]) -> None:
+    """A review case's review field (schema.md, Case)."""
+    r = cast("dict[str, object]", rv) if isinstance(rv, dict) else {}
+    q = r.get("question")
+    if not (isinstance(q, str) and q.strip()):
+        errs.append(f"{at}: field review.question: missing or blank (a review case asks the maintainer one question)")
+    errs.extend(f"{at}: field review.{k}: unknown field" for k in sorted(set(r) - {"question"}))
+    if not isinstance(rv, dict):
+        errs.append(f"{at}: field review: must be an object {{\"question\"}}")
 
 
 def check_tools(fa: str, tools: object, errs: list[str]) -> None:
