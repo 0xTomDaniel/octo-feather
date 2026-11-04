@@ -1,0 +1,16 @@
+{
+ "reviewer-toml-parser-at-scale": {
+  "facts": [
+   {
+    "fact": "declared_includes",
+    "field": "blocking",
+    "items": [
+     {
+      "path": "templates/typescript/.agents/skills/verify-app/scripts/toml.ts",
+      "class": "reinvented-library"
+     }
+    ]
+   }
+  ]
+ }
+}

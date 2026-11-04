@@ -28,12 +28,12 @@ A skill-trigger or role-transcript case, an object:
 
 - `id`: matches `[a-z0-9][a-z0-9-]*`, unique in the suite, and has an expectations entry; an expectations id with no case is refused too.
 - `role`: a string matching `[a-z0-9-]+` with a kit `agents/<role>.md`.
-- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`.
+- `fixture`: a string matching `[A-Za-z0-9._-]+` with a dir `EVALS_DIR/fixtures/<fixture>`; or a history fixture, a real repository at the commit an incident happened on: `{"repo", "commit"}`, exactly those keys, `repo` `kit` (the kit's own repository) or the name of a local git clone at `~/src/<repo>`, `commit` a full 40 character sha that repository holds. Its whole tree at that commit, exported by `git archive` before the sandbox starts, is the case repo's main, as a fixture dir's is.
 - `task`: a non-blank string, what the agent sees; `{repo}` and `{head}` in it become the copy's path and HEAD sha. It must not leak its grade (Leaks).
 - skill-trigger only: `should_trigger` (true or false) and `split` (`train` or `held-out`). A true case needs a `skill_read` or `skill_read_before` fact, a false one a `skill_not_read` fact.
 - role-transcript only, optional, the repo setup:
   - `branch`: a branch cut from main and checked out: matches `[A-Za-z0-9][A-Za-z0-9._/-]*`, no `..`, not ending `/` or `.lock`, not `main`.
-  - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
+  - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir or a history fixture as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
   - `origin`: `true` (leave it out for false): a bare origin holding main, for `git push`.
   - `fake_gh`: `true`: a fake gh first on PATH, logging each call.
 - role-transcript only, optional: `review`: `{"question"}`, exactly that key, `question` a non-blank string: a review case, for an outcome no fact can grade. Its expectations entry is `{"facts": []}`, no fact; a maintainer's recorded verdict decides it (what the run keeps, where the verdict is stored, how the case counts: `scripts/octo-feather-qa --help`, Review).

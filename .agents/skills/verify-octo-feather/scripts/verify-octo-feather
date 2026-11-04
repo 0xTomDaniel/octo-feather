@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst", "qa-review")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1146,7 +1146,8 @@ def drive_qc_advisory(f: Feature) -> None:
 # with usage (100 input and 10k output tokens, cost 0.001, run k from its scratch copy qa-<id>-<n>r<k>-*:
 # octo-feather-qa --help); it reads the role's tdd SKILL.md when the role lists tdd and NOREAD is not in the prompt, with
 # ALTERNATE in the prompt on odd runs only; with COSTLY, a role listing tdd spends 3 more messages; then a final message:
-# with SAY: TEXT in the prompt, TEXT, also written to notes.md in the case repo; else done.
+# with SAY: TEXT in the prompt, TEXT, also written to notes.md in the case repo; with TREE, what the case repo holds:
+# files=<tracked files> commits=<commits> deep=ok|missing (.agents/skills/eval-cases/references/schema.md); else done.
 QA_STUB_PI = r"""#!/usr/bin/env python3
 import json, os, re, sys
 a = sys.argv[1:]
@@ -1171,6 +1172,11 @@ if tdd and "NOREAD" not in prompt and not ("ALTERNATE" in prompt and k % 2 == 0)
     out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "read", "isError": False,
          "result": {"content": [{"type": "text", "text": open(tdd).read()}]}})
 say = prompt.split("SAY:", 1)[1].strip() if "SAY:" in prompt else "done"
+if "TREE" in prompt:
+    import subprocess
+    git = lambda *g: subprocess.run(["git", *g], capture_output=True, text=True).stdout
+    deep = "ok" if os.path.isfile(".agents/skills/eval-cases/references/schema.md") else "missing"
+    say = f"files={len(git('ls-files').splitlines())} commits={len(git('rev-list', 'HEAD').splitlines())} deep={deep}"
 if "SAY:" in prompt:
     open("notes.md", "w").write(say + "\n")
 out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
@@ -1410,6 +1416,46 @@ def drive_qa_review(f: Feature) -> None:
     say(f"qa-review evidence: {f.d}")
 
 
+def drive_qa_history(f: Feature) -> None:
+    """octo-feather-qa on a scratch suite whose one case's fixture is the kit's own history at the checkout's HEAD commit
+    (a history fixture), the role's model the stub `pi` (QA_STUB_PI) reporting what the case repo holds, never a real
+    model; then check-evals refusing an unknown commit; cases and what each observes: features/qa-history.md."""
+    sc = RUN_DIR / "scratch" / "qa-history"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vh" / "reference").mkdir(parents=True)
+    (ev / "fixtures").mkdir(parents=True)
+    for d in ("bin", "state"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    at = output(["git", "-C", f.s.repo, "rev-parse", "HEAD"])[1].strip()
+    files = len(output(["git", "-C", f.s.repo, "ls-tree", "-r", "--name-only", at])[1].splitlines())
+    (ev / "vh" / "suite.json").write_text(json.dumps({"suite": "vh", "kind": "role-transcript", "description": "qa-history drive",
+                                                     "max_tool_calls": 10, "timeout_s": 120}))
+    (ev / "vh" / "reference" / "expectations.json").write_text(json.dumps({"tree": {"facts": [{"fact": "skill_not_read", "skill": "pull"}]}}))
+
+    def case(commit: str) -> None:
+        (ev / "vh" / "cases.json").write_text(json.dumps([{"id": "tree", "role": "implementer", "fixture": {"repo": "kit", "commit": commit},
+                                                           "task": "Look around. NOREAD TREE"}]))
+    case(at)
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    f.run("whole-tree", "octo-feather-qa", "--evals", str(ev))
+    runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+    tr = runs[-1] / "vh" / "tree" / "transcript.jsonl" if runs else sc / "none"
+    said = [str(c.get("text", "")) for ln in (tr.read_text().splitlines() if tr.is_file() else [])
+            for e in [json.loads(ln)] if e.get("type") == "message_end" for c in e["message"].get("content", []) if c.get("type") == "text"]
+    f.obs("whole-tree", "said", (said[-1] if said else "") + "\n")
+    f.obs("whole-tree", "want", f"files={files} commits=1 deep=ok\n")
+    f.check("whole-tree", lambda c: c.code == 0 and re.search(r"(?m)^PASS vh/tree: ", c.out) is not None and c.o["said"] == c.o["want"])
+    case("0" * 40)
+    f.run("unknown-commit", "check-evals", str(ev))
+    f.check("unknown-commit", lambda c: c.code == 1 and f"vh/cases.json case tree: field fixture.commit: no commit {'0' * 40} in" in c.out + c.err)
+    f.env = {}
+    say(f"qa-history evidence: {f.d}")
+
+
 def drive_qc_fallback(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a demo for acceptance-a and none for acceptance-b: acceptance-a
     decided by its demo's checks, acceptance-b by the agent fallback, a fresh qc judge (the kit's stub judge,
@@ -1564,6 +1610,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-baseline": drive_qa_baseline,
     "qa-analyst": drive_qa_analyst,
     "qa-review": drive_qa_review,
+    "qa-history": drive_qa_history,
 }
 
 

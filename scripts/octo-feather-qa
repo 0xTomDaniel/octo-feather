@@ -5,7 +5,8 @@ octo-feather-qa --review RUN_DIR SUITE/CASE [pass|fail NOTE]   show or record a 
 
 Runs the kit's eval cases (evals/<suite>/; scripts/check-evals runs first and must pass).
 Schema and policy owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md ("schema"
-below, by section). Each case: its fixture (evals/fixtures/<fixture>) is copied and committed on main in a scratch
+below, by section). Each case: its fixture (evals/fixtures/<fixture>, or a history fixture's repository at its commit by git archive, the
+--kit-ref export path; schema, Case) is copied and committed on main in a scratch
 dir (its repo setup and task slots: schema, Case; a fixture with uv.lock synced with `uv sync --locked`;
 a setup failure is a FAIL, case not run), then its role starts headless, `pi-role agents/<role>.md --mode json -p <task>`, in that copy
 inside the product judge's sandbox (scripts/octo-feather-qc-sandbox, started as `just qc` starts it:
@@ -732,7 +733,8 @@ def fixture_copy(src, scratch, case=None, evals=None):
     for a in steps:
         subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
     if case.get("head"):
-        shutil.copytree(evals / "fixtures" / h["fixture"], repo, symlinks=True, dirs_exist_ok=True)
+        src = fixture_src(*cast("tuple[Path, object, Path]", (evals, case["head"]["fixture"], scratch)))
+        shutil.copytree(src, cast("Path", repo), symlinks=True, dirs_exist_ok=True)
         for a in (["add", "-A"], [*commit, h["message"]]):
             subprocess.run(["git", *a], cwd=repo, env=env, check=True, capture_output=True)
     if case.get("branch"):
@@ -765,13 +767,44 @@ def kit_at(ref, opt: str = "--kit-ref"):
     if not sha:
         die(64, f"{opt} {ref}: no such commit in the kit repo {KIT}")
     d = Path(tempfile.mkdtemp(prefix=f"qa-kit-{sha[:12]}-"))
-    a = subprocess.Popen(["git", "-C", str(KIT), "archive", "--format=tar", sha], stdout=subprocess.PIPE)
-    x = subprocess.run(["tar", "-x", "-C", str(d)], stdin=a.stdout, capture_output=True, text=True)
-    a.stdout.close()
-    if a.wait() or x.returncode:
+    err = export(KIT, sha, d)
+    if err is not None:
         shutil.rmtree(d, ignore_errors=True)
-        die(1, f"{opt} {ref}: could not materialize {sha}: {x.stderr.strip()}")
+        die(1, f"{opt} {ref}: could not materialize {sha}: {err}")
     return d, sha
+
+
+def export(repo: Path, sha: str, dest: Path) -> str | None:
+    """REPO's tree at SHA written into DEST by `git archive` (the one export path: --kit-ref's kit, a history fixture);
+    None when done, else why not."""
+    a = subprocess.Popen(["git", "-C", str(repo), "archive", "--format=tar", sha], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    x = subprocess.run(["tar", "-x", "-C", str(dest)], stdin=a.stdout, capture_output=True, text=True)
+    if a.stdout:
+        a.stdout.close()
+    gerr = a.stderr.read().decode(errors="replace").strip() if a.stderr else ""
+    return None if a.wait() == 0 and x.returncode == 0 else (gerr or x.stderr.strip() or "git archive failed")
+
+
+def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
+    """The tree a case's fixture names (schema.md, Case): evals/fixtures/<name>, or a history fixture's repo at its commit,
+    exported into SCRATCH/history-<sha>. Raises RuntimeError when that repo or commit cannot be exported."""
+    if not isinstance(fixture, dict):
+        return evals / "fixtures" / str(fixture)
+    fx = cast("Result", fixture)
+    loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
+    spec = importlib.util.spec_from_loader("check_evals", loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    repo = cast("Path | None", mod.history_repo(fx.get("repo")))
+    if repo is None:
+        raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")
+    dest = scratch / f"history-{str(fx.get('commit'))[:12]}"
+    dest.mkdir()
+    err = export(repo, str(fx.get("commit")), dest)
+    if err is not None:
+        raise RuntimeError(f"history fixture: {repo} at {fx.get('commit')}: {err}")
+    return dest
 
 
 def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_ref=None, kit_sha=None, rep: tuple[int, int, str] | None = None):
@@ -790,7 +823,8 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
     role_model = model or front(kit, case["role"], "model")
     try:
         try:
-            repo, head = fixture_copy(evals / "fixtures" / case["fixture"], scratch, case, evals)
+            src = fixture_src(*cast("tuple[Path, object, Path]", (evals, case["fixture"], scratch)))
+            repo, head = cast("tuple[Path, str]", fixture_copy(*cast("tuple[Path, Path, Result, Path]", (src, scratch, case, evals))))
         except (RuntimeError, subprocess.CalledProcessError, OSError) as e:
             (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, **kits}, indent=2) + "\n")
             why = e.stderr.strip()[-200:] if isinstance(e, subprocess.CalledProcessError) and e.stderr else str(e)

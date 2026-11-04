@@ -1,0 +1,7 @@
+{
+  "suite": "history",
+  "kind": "role-transcript",
+  "description": "Real incidents replayed at real scale: each case's fixture is a real repository at the commit the incident happened on (schema.md, Case, history fixture).",
+  "max_tool_calls": 80,
+  "timeout_s": 1800
+}
