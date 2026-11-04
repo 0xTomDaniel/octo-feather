@@ -17,7 +17,7 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
   octo-feather-gate passed [REV]
       Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1.
   octo-feather-gate config [REV]
-      Prints REV's (default HEAD) gate configuration identity, as record writes it in gate_config:
+      Prints REV's (default HEAD) identity fields as record writes them, JSON: gate_config, list;
       merge-ask reads it (when a pass is current: issue-lifecycle #lanes-checkpoints).
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
@@ -158,16 +158,21 @@ def gate_config(rev: str) -> str:
     return hashlib.sha256("\n".join(f"{p} {tree_id(rev, p)}" for p in CONFIG).encode()).hexdigest()
 
 
+def identity(rev: str) -> dict[str, str]:
+    """A full pass's recorded identity besides its head: gate_config, the list's blob id."""
+    return {"gate_config": gate_config(rev), "list": tree_id(rev, LIST)}
+
+
 def record(reason: str, seconds: float) -> None:
     head = git("rev-parse", "HEAD").strip()
-    config = gate_config(head)
+    ident = identity(head)
     rec = {
         "tier": "full",
         "head": head,
         "branch": git("symbolic-ref", "-q", "--short", "HEAD", check=False).strip() or None,
         "clean": not git("status", "--porcelain").strip(),
-        "gate_config": config,
-        "list": tree_id(head, LIST),
+        "gate_config": ident["gate_config"],
+        "list": ident["list"],
         "reason": reason,
         "seconds": round(seconds, 1),
         "at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
@@ -386,9 +391,8 @@ def main() -> int:
     elif a.cmd == "passed":
         return passed(a.rev)
     elif a.cmd == "config":
-        sys.stdout.write(
-            gate_config(git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()) + "\n"
-        )
+        rev = git("rev-parse", "--verify", f"{a.rev}^{{commit}}").strip()
+        sys.stdout.write(json.dumps(identity(rev)) + "\n")
     elif a.cmd == "select":
         select()
     else:

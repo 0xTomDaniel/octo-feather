@@ -121,7 +121,7 @@ the qc commits and files, and per main merge `lane diff identical (N files, sha2
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
 Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
 `octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
-gate_config is the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
+record is clean and whose gate_config and list are the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
 Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
@@ -936,15 +936,19 @@ def gate(*args: str) -> tuple[int, str]:
 
 def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
     """[] when HEAD has a current recorded full gate pass, else why not. The rule: issue-lifecycle #lanes-checkpoints.
-    Current: recorded (octo-feather-gate passed) at HEAD, or at a lane commit head_proof proves HEAD stands for, with the
-    gate_config of HEAD itself (octo-feather-gate config)."""
+    Current: recorded (octo-feather-gate passed) on a clean tree at HEAD, or at a lane commit head_proof proves HEAD
+    stands for, with the identity fields of HEAD itself (octo-feather-gate config: gate_config, list)."""
     h = head[:12]
     if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
         return [f"commit {h} is not in this repo: run merge-ask in the lane worktree after git fetch origin"]
     fix = (f"run the full gate, just check, on {h} and record its pass (octo-feather-integrate --full records it; "
            "octo-feather-gate --help)")
-    rc, config = gate("config", head)
-    if rc:
+    rc, out = gate("config", head)
+    try:
+        ident = cast("dict[str, object]", json.loads(out)) if rc == 0 else {}
+    except ValueError:
+        ident = {}
+    if not ident:
         return [f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} exit {rc}): {fix}"]
     revs = git("rev-list", "--topo-order", head, f"^{base}")[1].split()
     why: list[str] = []
@@ -957,13 +961,15 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
         rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
         if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
             continue
-        try:
-            _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
-        except Refuse as e:
-            no = [str(e)]
-        if not no and rec.get("gate_config") != config.strip():
-            no = [(f"its gate_config {str(rec.get('gate_config'))[:12]} is not the head's current {config.strip()[:12]} "
-                   f"(octo-feather-gate config {h}): stale; {fix}")]
+        if rec.get("clean") is not True:
+            no = [f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it proves nothing; {fix}"]
+        else:
+            try:
+                _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
+            except Refuse as e:
+                no = [str(e)]
+        no = no or [(f"its {k} {str(rec.get(k))[:12]} is not the head's current {str(v)[:12]} (octo-feather-gate config {h}): "
+                     f"stale; {fix}") for k, v in ident.items() if rec.get(k) != v]
         if not no:
             return []
         why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
