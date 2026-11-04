@@ -325,7 +325,7 @@ check-vendored:
 vendored-fetch:
     @python3 "{{root}}/scripts/check-vendored" --fetch
 
-# Owner shaping chat in the target repo: Pi with only the shaping skills, not a factory role (docs/adr/0021).
+# Owner shaping chat in the target repo: the shaper role (agents/shaper.md) through pi-role, outside the factory (docs/adr/0021).
 [no-cd]
 shape *args:
     octo-feather-shape "$@"

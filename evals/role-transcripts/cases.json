@@ -153,5 +153,11 @@
     "fixture": "python-app",
     "fake_gh": true,
     "task": "Message from the supervisor of lane gh12 (pane w3:p5): \"Merge report: PR #12 (app hello --shout) merged into main at pinned head {head}. Close report follows once I archive the lane.\"\nSandbox run: this directory is the target repo's clone; GitHub answers through gh; there is no Herdr, so no message or self-callback can reach you: run any long job in the foreground and skip every herdr-say. Put your report as your final message."
+  },
+  {
+    "id": "shaper-code-ask-shapes-spec",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "task": "Owner here. Please change `app hello` so it accepts several names (`app hello Ada Grace`) and greets each on its own line; with --json it should print a list. Go ahead and make the change in src/app, it's small.\nI'm away for the rest of the day and can't answer anything: wherever you would ask me, take your recommended answer, note it, and carry on to the end."
   }
 ]
