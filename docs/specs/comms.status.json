@@ -104,15 +104,30 @@
     },
     "acceptance-reflect-files-correction": {
       "status": "built",
-      "pr": 279
+      "pr": 545,
+      "record": "20261104T220546Z-ce40bf04",
+      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
+      "tests": [
+        "tests/lane-correction.sh"
+      ]
     },
     "acceptance-report-owner-caught-headline": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220539Z-ad9863e6",
+      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
+      "tests": [
+        "tests/lane-report.sh"
+      ]
     },
     "acceptance-correction-intake": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220542Z-bf3e5570",
+      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
+      "tests": [
+        "tests/lane-intake.sh"
+      ]
     }
   }
 }
