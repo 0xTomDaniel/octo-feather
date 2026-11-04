@@ -170,8 +170,14 @@
       ]
     },
     "acceptance-fast-affected": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T173317Z-dfb58d12",
+      "commit": "31b579ac3233e583a1b8bb278e8f8d3d8ce064c6",
+      "tests": [
+        "tests/fast.sh",
+        "tests/integrate.sh"
+      ]
     }
   }
 }
