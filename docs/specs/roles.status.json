@@ -63,8 +63,13 @@
       "pr": null
     },
     "acceptance-shaper-launch": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 531,
+      "record": "20261104T171122Z-50504122",
+      "commit": "8a733150e6ce5011e6a3bf6c9f9ae24a0e20e34e",
+      "tests": [
+        "tests/shape.sh"
+      ]
     }
   }
 }
