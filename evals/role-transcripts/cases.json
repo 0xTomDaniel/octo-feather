@@ -159,5 +159,11 @@
     "role": "shaper",
     "fixture": "shape-mini",
     "task": "Owner here. Please change `app hello` so it accepts several names (`app hello Ada Grace`) and greets each on its own line; with --json it should print a list. Go ahead and make the change in src/app, it's small.\nI'm away for the rest of the day and can't answer anything: wherever you would ask me, take your recommended answer, note it, and carry on to the end."
+  },
+  {
+    "id": "dir-spawns-shaper",
+    "role": "director",
+    "fixture": "shape-mini",
+    "task": "Owner here. I want to shape a new feature for this repo before anything gets built: `app hello Ada --lang fr` greeting in French, with English staying the default. Let's get that going.\nSandbox run: this directory is the target repo's clone; there is no live Herdr and no GitHub, so a Herdr command you run fails: run each step's command once anyway, do not retry it, and put your report to me as your final message."
   }
 ]
