@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for the kit's Pi extension on a run stopped by a provider error (issue #152,
 # docs/adr/0023), one gate item per case group (#509): tests/resume-on-error.sh and each tests/resume-on-error-*.sh;
 # setup and the RPC pane driver: tests/lib/resume-on-error.sh. Cases here:

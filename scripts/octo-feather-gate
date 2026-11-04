@@ -22,10 +22,12 @@ issue-lifecycle #lanes-checkpoints, quality #recipe-fast.
       merge ask check.
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
-      one per line; each item with why it runs on stderr. Every GATE_RECIPES recipe (static), then
-      each tests/*.sh item changed since the coverage map's head, or new since it, or whose
-      recorded coverage holds a changed file. A changed file no item's coverage reaches and the
-      list names runs every test item; so do no map, or one from a head that is not an ancestor.
+      one per line; each item with why it runs, or why not, on stderr. Every GATE_RECIPES recipe
+      (static), then each tests/*.sh item changed since the coverage map's head, or whose recorded
+      coverage holds a changed file, or, with no recorded coverage, whose text names a changed
+      path (a development-only proxy). A changed file no item's coverage reaches and the list
+      names runs every test item; so do no map, or one from a head that is not an ancestor. An
+      item with the header line `# gate: e2e` (its one owner) never runs here: just check runs it.
   octo-feather-gate map DATA_DIR
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
@@ -62,6 +64,7 @@ CONFIG = (
     "pnpm-lock.yaml",
 )
 NODE = "tests/gate/test_gate.py::"
+E2E = "# gate: e2e"
 
 
 def git(*args: str, check: bool = True) -> str:
@@ -235,7 +238,7 @@ def select() -> None:
     ids = [f"{NODE}test_recipe[{r}]" for r in recipes]
     for r in recipes:
         say(r, "static check (every GATE_RECIPES recipe)")
-    chosen = choose(items)
+    chosen = choose(root, items)
     ids += [f"{NODE}test_script[{i}]" for i in items if i in chosen]
     sys.stdout.write("".join(f"{i}\n" for i in ids))
 
@@ -248,11 +251,20 @@ def changed_since(at: str, *pats: str) -> set[str]:
     return set(files.split("\n")) - {""}
 
 
-def choose(items: list[str]) -> set[str]:
+def is_e2e(root: Path, item: str) -> bool:
+    """An item declared end-to-end by its own header line E2E: run by just check only."""
+    return E2E in (root / item).read_text(errors="replace").splitlines()
+
+
+def choose(root: Path, items: list[str]) -> set[str]:
+    e2e = [i for i in items if is_e2e(root, i)]
+    for i in e2e:
+        say(i, f"e2e ({E2E}): skipped, just check runs it")
+    items = [i for i in items if i not in e2e]
     m = newest_map(git("rev-parse", "HEAD").strip())
     if m is None:
         say(
-            f"all {len(items)} test items",
+            f"all {len(items)} non-e2e test items",
             "no coverage map from HEAD or an ancestor (build one: just fast-map)",
         )
         return set(items)
@@ -260,33 +272,37 @@ def choose(items: list[str]) -> set[str]:
     cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
     changed = changed_since(at)
     reach = {f for fs in cover.values() for f in fs}
-    unreached = sorted(changed - reach - set(items))
+    unreached = sorted(changed - reach - set(items) - set(e2e))
     pats = entries("HEAD")
     listed = changed_since(at, *specs(pats)) if pats and unreached else set[str]()
     residual = [f for f in unreached if f in listed]
     if residual:
         say(
-            f"all {len(items)} test items",
+            f"all {len(items)} non-e2e test items",
             f"{', '.join(residual)} on {LIST}, outside the coverage map's reach (map at {at[:12]})",
         )
         return set(items)
     chosen: set[str] = set()
     for i in items:
-        hit = sorted(changed & set(cover.get(i, [])))
         if i in changed:
             say(i, f"changed since the map at {at[:12]}")
-        elif i not in cover:
-            say(i, f"no recorded coverage in the map at {at[:12]}")
-        elif hit:
+        elif i in cover:
+            hit = sorted(changed & set(cover[i]))
+            if not hit:
+                continue
             say(i, f"recorded coverage reaches {', '.join(hit)}")
-        else:
-            continue
+        else:  # no recorded coverage: a development-only proxy, the paths its own text names
+            text = (root / i).read_text(errors="replace")
+            named = sorted(f for f in changed if f in text)
+            if not named:
+                continue
+            say(i, f"no recorded coverage; it names {', '.join(named)}")
         chosen.add(i)
     for f in unreached:
         say(f, f"changed; no test item's recorded coverage reaches it and {LIST} does not name it")
     say(
-        f"{len(items) - len(chosen)} test items skipped",
-        f"their recorded coverage reaches no changed file (map at {at[:12]})",
+        f"{len(items) - len(chosen)} non-e2e test items skipped",
+        f"no changed file in their coverage, or their text when unmapped (map at {at[:12]})",
     )
     return chosen
 

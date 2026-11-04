@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for where mise's tools sit on PATH (#261): a dir the caller put first on PATH wins over a tool
 # installed in a mise tool's dir, and mise's tools win over the system's. The layout CI had on eaeaf95a, rebuilt
 # offline: a copy of mise's installs (links) with a `pi` installed by `npm install -g` under mise's node, and mise's

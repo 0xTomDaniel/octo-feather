@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Regression fixture for #493 (the kit installs and passes its gate under the installing user's existing mise setup,
 # never editing that setup: ADR 0005): a throwaway user HOME prepared as #493's "Regression fixture" says, in its own
 # user+mount+network namespace (unshare -rmn: offline, as tests/qc.sh), then #493's assertions (1)-(5) run in it,
