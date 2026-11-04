@@ -272,8 +272,9 @@ check-templates:
 # pytest + pytest-xdist (tests/gate/): each GATE_RECIPES recipe, then each tests/*.sh, one item run as a command
 # (TMPDIR its real path: tests/gate/test_gate.py); every item's duration, failures with their output, one trend line
 # per run in the state dir (tests/gate/conftest.py). Timing never decides pass or fail. Offline: pytest from the
-# uv cache, filled by `uv sync --locked` in the kit (CI's uv step). Workers: GATE_WORKERS, default 2: half the 4 CPUs,
-# since the box runs at most 2 heavy commands at once across lanes (CI sets 4). A gate run inside an item (a test's
+# uv cache, filled by `uv sync --locked` in the kit (CI's uv step). Workers: GATE_WORKERS, default 8: the fastest wall
+# measured on the 4-vCPU box, quiet, 105 items (#510): 2 workers 410 s, 4 269 s, 6 225-238 s, 8 213-231 s, ~730-800
+# CPU s each (the CPU floor ~190 s); no item over 60 s at 6 or 8 (CI sets 4). A gate run inside an item (a test's
 # throwaway copy running `just check`) is sequential and stops at its first failure (-n 0 -x), recipes first, so a red
 # copy fails on its recipe, never fans out a nested gate (#208).
 # Every gate recipe and kit test as a pytest item, parallel, timed, one trend line per run; extra arguments go to pytest.
@@ -281,7 +282,7 @@ check-tests *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
-    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-2}" "$@"; fi
+    if [[ -n "${GATE_NESTED:-}" ]]; then set -- -n 0 -x "$@"; else set -- -n "${GATE_WORKERS:-8}" "$@"; fi
     # The gate's Python: .python-version's release, owned by uv (owner ruling #422, #261), found as uv sync finds it
     # (a venv skipped); without it uv sync --offline only says no interpreter. The fix's --no-bin: its message.
     err="$(uv python find --system 2>&1)" || { printf '%s\n' "$err" >&2
