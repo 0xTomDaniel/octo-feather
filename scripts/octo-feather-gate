@@ -18,7 +18,7 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1.
   octo-feather-gate config [REV]
       Prints REV's (default HEAD) gate configuration identity, as record writes it in gate_config:
-      a recorded pass is current only while its gate_config equals its head's current one.
+      merge-ask reads it (when a pass is current: issue-lifecycle #lanes-checkpoints).
   octo-feather-gate select
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
       one per line; each item with why it runs, or why not, on stderr. The selection reads the
