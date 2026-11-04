@@ -6,7 +6,9 @@ GATE_RECIPES. Items see TMPDIR as its real path (macOS: mktemp paths under the /
 match the pwd -P paths tests compare them with). Items are pane-neutral (#493 AC6): none inherits the
 variables a Herdr pane gives its shell (every HERDR_* one, as HERDR_SESSION names a named session) or the
 route pi-role and herdr-spawn export to a pane, so a gate run in a pane of any session runs every item as
-one outside Herdr does.
+one outside Herdr does. Items share one dir per gate run, GATE_RUN_DIR, where tests/lib/prepared.py prepares the
+template installs several items repeat, once per run (pytest-xdist's documented "session fixture once" pattern: the
+xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps).
 """
 import os, pathlib, subprocess
 
@@ -21,8 +23,15 @@ PANE = ("OCTO_FEATHER_PARENT", "OCTO_FEATHER_SESSION_ID", "OCTO_FEATHER_ROLE", "
 SCRIPTS = sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/*.sh"))
 
 
-def run(cmd):
+@pytest.fixture(scope="session")
+def run_dir(request: pytest.FixtureRequest, tmp_path_factory: pytest.TempPathFactory) -> str:
+    base = tmp_path_factory.getbasetemp()
+    return str(base.parent if hasattr(request.config, "workerinput") else base)   # an xdist worker: the run's shared dir
+
+
+def run(cmd, run_dir: str):
     env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_") and k not in PANE}
+    env["GATE_RUN_DIR"] = run_dir
     env["TMPDIR"] = os.path.realpath(os.environ.get("TMPDIR") or "/tmp")
     rc = subprocess.run(cmd, cwd=ROOT, env=env).returncode
     if rc != 0:
@@ -30,10 +39,10 @@ def run(cmd):
 
 
 @pytest.mark.parametrize("recipe", RECIPES)
-def test_recipe(recipe):
-    run(["just", recipe])
+def test_recipe(recipe, run_dir: str):
+    run(["just", recipe], run_dir)
 
 
 @pytest.mark.parametrize("script", SCRIPTS)
-def test_script(script):
-    run([str(ROOT / script)])
+def test_script(script, run_dir: str):
+    run([str(ROOT / script)], run_dir)

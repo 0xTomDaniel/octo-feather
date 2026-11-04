@@ -8,8 +8,6 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
-# One pnpm store for the kit and its test copies (owner ruling #422; why: tests/check-ts.sh).
-npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "contract test: $*" >&2; exit 1; }
 cmd="$kit/scripts/octo-feather-contract"
 
@@ -82,7 +80,8 @@ run "$t/python" "$t/python"
 # The TypeScript template's verify-app invokes only what qc.toml declares: its setup (here a marker)
 # and its entry, driven with the contract's value. It reads qc.toml with the TOML package smol-toml:
 # with the repo's packages not installed, launch fails naming it and `just setup`, before any setup;
-# then the packages are installed offline from the pnpm store, as `just setup` installs them.
+# then the packages are copied from the run's one offline install of the template from the pnpm store
+# (tests/lib/prepared.py), as `just setup` installs them.
 repo="$t/ts-app"; mkdir -p "$repo"
 (cd "$kit/templates/typescript" && git ls-files -z | xargs -0 cp --parents -t "$repo")
 git -C "$repo" init -q && git -C "$repo" -c user.name=t -c user.email=t@t commit -qm init --allow-empty
@@ -90,7 +89,7 @@ sed -i -e 's/^setup = .*/setup = "echo declared > \\"$QC_REPO\/setup-ran\\""/' "
 set +e; vout="$(VERIFY_APP_RUN_DIR="$t/va0/run" VERIFY_APP_EVIDENCE_DIR="$t/va0/evidence" "$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] && grep -qF 'cannot load the TOML reader smol-toml' <<<"$vout" && grep -qF 'just setup' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
   || fail "launch with the packages not installed did not fail naming smol-toml and just setup (exit $rc): $vout"
-(cd "$repo" && pnpm install --offline --frozen-lockfile --silent) \
+p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && cp -a "$p/node_modules" "$repo/" \
   || fail "pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
 sed -i -e 's/^name = "Ada"/name = "Grace"/' -e 's/^greeting = .*/greeting = "Hello, Grace"/' "$repo/qc.toml"
 run "$repo"; [[ "$rc" == 0 ]] || fail "edited ts contract not ok: $out"
