@@ -1,7 +1,7 @@
-# Native tool pins: mise owns these (`mise install --locked` from mise.lock; CI: jdx/mise-action reading the same
-# files), mise's own version: mise-version. pnpm owns JavaScript packages (pnpm-lock.yaml; no package.json
-# packageManager: scripts/check-languages.ts fails on both pins). [tools] only: no [env], [tasks] or hooks, so mise
-# reads it without `mise trust`. Change a pin here, then `mise lock`.
+# Native tool pins: mise owns these (from mise.lock: `just setup` through octo-feather-mise-install, the octo-feather
+# kit's; CI: jdx/mise-action reading the same files), mise's own version: mise-version. pnpm owns JavaScript
+# packages (pnpm-lock.yaml; no package.json packageManager: scripts/check-languages.ts fails on both pins). [tools]
+# only: no [env], [tasks] or hooks, so mise reads it without `mise trust`. Change a pin here, then `mise lock`.
 [tools]
 node = "22.23.3"
 pnpm = "10.7.0"

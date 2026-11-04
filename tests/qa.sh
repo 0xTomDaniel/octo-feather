@@ -18,11 +18,21 @@ Q="$kit/scripts/octo-feather-qa"; C="$kit/scripts/check-evals"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "qa test: $*" >&2; exit 1; }
 export TMPDIR="$t/tmp"; mkdir "$TMPDIR"
-# The python-app fixtures' setup runs the real uv (the slow-runner shim below wraps it).
-real_uv="$(command -v uv)" || fail "uv not found on PATH: the python-app fixture setup (uv sync --locked) needs it; install uv (CI: astral-sh/setup-uv)"
+# The python-app fixtures' setup runs the real uv (the slow-runner shim below wraps it): the kit's pin, through mise
+# where there is one. Run bare from a pane, the uv on PATH is mise's shim, which resolves no version in a fixture repo
+# and falls back to the next uv on PATH, the wrapper itself: mise's "shim fallback recursion".
+real_uv="$( { command -v mise > /dev/null && mise -C "$kit" which uv; } 2> /dev/null || command -v uv)" || fail "uv not found on PATH: the python-app fixture setup (uv sync --locked) needs it; install uv (CI: astral-sh/setup-uv)"
 # uv's package cache stays the box's (a pytest fixture's runner installs from it, as `just setup` would), read
 # offline: the gate calls no network service (quality #boundary-gate); CI fills the cache in a step before the gate.
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_OFFLINE=1
+# Its managed Pythons too, asked before HOME moves: else a fixture copy (no .python-version) syncs with the first
+# python3 on PATH, whose wheels the cache lacks when its minor differs (CI's ubuntu-26.04: cp314; install-check.sh
+# keeps the dir the same way).
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" python dir)}" UV_OFFLINE=1
+# mise's dirs, as mise reports them before HOME moves (as tests/qc.sh, the kit justfile the same way): the sandbox's
+# proof finds the box's installs whether this test runs bare or through just.
+if command -v mise > /dev/null; then
+  for d in data cache config; do v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(mise doctor --json 2> /dev/null | jq -r --arg d "$d" '.dirs[$d]')"; done
+fi
 # A throwaway HOME: the sandbox masks its (empty) live state, never the box's.
 export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
 # No HERDR_WORKSPACE_ID: every bench is outside any lane (spec spend#rule-lane); no OpenRouter key: `spend` asks no network.
@@ -86,7 +96,7 @@ if (!cmds[name]) { console.error(`stub pi: no command /${name}`); process.exit(1
 process.stdout.write = process.stderr.write.bind(process.stderr);   // as pi's print mode: stdout is pi's own
 await cmds[name].handler(args, {mode: "print", hasUI: false, modelRegistry});
 """
-    p = subprocess.run(["node", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args])
+    p = subprocess.run(["@NODE@", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args])
     sys.exit(p.returncode)
 def tool(i, name, args):   # as pi: the assistant message holding the call ends, then the tool runs
     out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "toolUse",
@@ -211,6 +221,10 @@ EOF
 # longer than the stub's 0.5 s turn, so the next call's write always lands before it ends (which call
 # test_write is credited to: schema.md, Before targets, stated limit).
 printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$real_uv" > "$t/bin/uv"
+# The stub's node: the kit's pin, as uv's above (bare from a pane, node on PATH is mise's shim, which in the sandbox
+# resolves no version where the bench runs, the shims' system fallback off: docs/adr/0022, #465).
+real_node="$( { command -v mise > /dev/null && mise -C "$kit" which node; } 2> /dev/null || command -v node)" || fail "node not found on PATH: the judgment bench stub runs under it"
+sed -i "s#@NODE@#$real_node#" "$t/bin/pi"
 chmod +x "$t/bin/pi" "$t/bin/herdr" "$t/bin/uv"
 export PATH="$t/bin:$kit/scripts:$PATH"
 echo "fixture" > "$t/evals/fixtures/fx/README.md"
@@ -424,7 +438,7 @@ b="$(grep -E '^PASS rep/repos: ' <<< "$out")" || fail "repos: want PASS: $out"
 grep -q "open $HOME/src/sib (tmpfs mask over $HOME/src/sib, 0 entries)" <<< "$b" || fail "repos: the sibling repo's listing not recorded and refused: $b"
 grep -q "open $HOME/src/kit (tmpfs mask over $HOME/src/kit, 2 entries (bound back: .agents, scripts))" <<< "$b" \
   || fail "repos: the head kit's listing in a --kit-ref run not recorded and refused: $b"
-grep -q "qc sandbox: ok   other repos hidden: 2 git repos under $HOME .*: src/kit \[.agents scripts\], src/sib; visible: kit under test $TMPDIR/qa-kit-.*, worktree .*; bound back read-only: $HOME/src/kit/scripts/octo-feather-qc-sandbox, $HOME/src/kit/scripts/octo-feather-state, $HOME/src/kit/.agents/skills/github-pr/scripts, $HOME/src/kit/scripts/octo-feather-qa$" <<< "$out" \
+grep -q "qc sandbox: ok   other repos hidden: 2 git repos under $HOME .*: src/kit \[.agents scripts\], src/sib; visible: kit under test $TMPDIR/qa-kit-.*, worktree .*; bound back read-only: $HOME/src/kit/scripts/octo-feather-qc-sandbox, $HOME/src/kit/scripts/octo-feather-state, $HOME/src/kit/scripts/octo-feather-mise-install, $HOME/src/kit/.agents/skills/github-pr/scripts, $HOME/src/kit/scripts/octo-feather-qa$" <<< "$out" \
   || fail "repos: no proof line naming the masks and what stays visible: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 ! grep -q "SIBSECRET\|$HOME/src/kit/agents/implementer.md" "$d/rep/repos/transcript.jsonl" || fail "repos: another repo's file or the head kit's role reached the case"

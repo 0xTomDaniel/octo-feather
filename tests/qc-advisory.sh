@@ -113,4 +113,29 @@ for i in acceptance-a acceptance-b; do
   adv "$i" "  advisory model judgment unavailable (criterion-evidence by $M): stub: provider error; the result stands as decided"
   results "$i" unavailable "stub: provider error"
 done
-echo "qc-advisory: ok (each recorded criterion asked criterion-evidence of the kit's judgment model on its criterion text, command and output; answer and confidence beside the result and in the report, labelled an advisory model judgment; a pass the model says does-not-show still passes, a fail it says shows still fails, a classifier error shows unavailable; verdicts, exit and status commit unchanged)"
+
+# From a bare pane (#465): the node first on PATH is mise's shim (a link to mise named node). In qc's advice run (a
+# scratch dir pinning no node; the sandbox turns the shims' system fallback off) it resolves no version; the answer still comes.
+mkdir "$t/shim"; ln -s "$(command -v mise)" "$t/shim/node"
+PATH="$t/shim:$PATH" STUB_ANSWER=does-not-show qcrun
+adv acceptance-a "  advisory model judgment (no gate reads it): does-not-show, confidence 0.910 (criterion-evidence by $M; uncalibrated)"
+# No pi on the box, and a pi on PATH that only leads back to the sandbox's pi shim (one running the bare name pi), #493
+# AC1: the shim refuses both (scripts/octo-feather-qc-sandbox, its pi shim); tests/fixtures/qc-advisory/check.py accepts
+# the run. PATH with every pi gone: each dir holding one is mirrored minus it (the stub's dir first loses the stub: a
+# mirror's links into /tmp would not survive the sandbox's private /tmp).
+rm "$t/bin/pi"
+nopi="$(python3 -c 'import os, sys, tempfile
+out = []
+for d in filter(None, sys.argv[2].split(":")):
+    if not os.path.lexists(os.path.join(d, "pi")): out.append(d); continue
+    m = tempfile.mkdtemp(prefix="nopi.", dir=sys.argv[1])
+    for f in sorted(os.listdir(d)) if os.path.isdir(d) else []:
+        if f != "pi": os.symlink(os.path.join(d, f), os.path.join(m, f))
+    out.append(m)
+print(":".join(out), end="")' "$t" "$PATH")"
+rp="$(cd "$t" && PATH="$nopi" && PATH="$(just --justfile "$kit/justfile" --evaluate PATH)" && command -v pi)" && fail "pi hidden, yet a recipe resolves $rp"
+mkdir "$t/loop"; printf '#!/bin/sh\nexec pi "$@"\n' > "$t/loop/pi"; chmod +x "$t/loop/pi"
+refused() { python3 "$kit/tests/fixtures/qc-advisory/check.py" "$1" "$SECONDS" "$M" <<< "$out" || fail "$1: $(tail -20 "$t/err")"; }
+SECONDS=0; PATH="$nopi" qcrun; refused nopi
+SECONDS=0; PATH="$t/loop:$nopi" qcrun; refused loop
+echo "qc-advisory: ok (no pi, or a pi leading back to the sandbox shim: advisory unavailable, no loop; each recorded criterion asked criterion-evidence of the kit's judgment model on its criterion text, command and output; answer and confidence beside the result and in the report, labelled an advisory model judgment; a pass the model says does-not-show still passes, a fail it says shows still fails, a classifier error shows unavailable, node a mise shim first on PATH too; verdicts, exit and status commit unchanged)"

@@ -28,9 +28,9 @@ interface Dump {
 
 function missingTool(tool: string): string {
   const r = spawnSync("mise", ["which", tool], { encoding: "utf8" });
-  if (r.error !== undefined) return "mise is not on PATH: install mise at mise-version, then: mise install --locked";
+  if (r.error !== undefined) return "mise is not on PATH: install mise at mise-version, then: octo-feather-mise-install";
   if (r.status === 0) return `${tool} is installed (${r.stdout.trim()}) but not on PATH: run this through just`;
-  return `${tool} is not installed: mise install --locked (mise.toml, mise.lock)`;
+  return `${tool} is not installed: octo-feather-mise-install (mise.toml, mise.lock)`;
 }
 
 function ask(...cmd: string[]): string {

@@ -1,0 +1,84 @@
+#!/usr/bin/env python3
+"""Install a repo's own locked mise tools, nothing else: the one definition of it (#493 AC5).
+
+  octo-feather-mise-install [--list [--json]] [DIR]   (DIR: default the current directory)
+
+Runs `mise -C DIR install --locked TOOL...` for each tool a config file inside DIR
+requests (`mise -C DIR ls --local --json`, its source path under DIR). A bare
+`mise install --locked` also installs the tools of the user's global mise config,
+which DIR's mise.lock does not hold, and fails on them ("... is not in the
+lockfile"); a config found through a parent dir (the user's global one, when HOME
+moves) is not DIR's either. mise has no flag for "this repo's config only", so
+this names the tools. No tool of DIR's own: nothing to install, exit 0; else
+mise's exit. Named by README's install step, just install-check's fix lines, the
+justfile's missing-tool message, check-templates and octo-feather-lane post-merge
+step 3; a repo created from a template points here too (#500). --list prints those
+tools, one per line, and installs nothing: just install-check judges only them.
+--list --json prints them as mise's own `ls --json` rows ({tool: [{version, installed, ...}]}),
+those tools only: the qc sandbox's proof judges their installs (#496).
+"""
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from typing import cast
+
+ME = "octo-feather-mise-install"
+
+
+def own_tools(mise: str, d: str) -> dict[str, list[dict[str, dict[str, str]]]]:
+    """The tools a config file inside d requests, with mise's rows; exits naming mise's failure."""
+    ls = [mise, "-C", d, "ls", "--local", "--json"]
+    r = subprocess.run(ls, capture_output=True, text=True, check=False)
+    rows: dict[str, list[dict[str, dict[str, str]]]] | None = None
+    try:
+        got: object = json.loads(r.stdout or "{}") if not r.returncode else None
+        rows = (
+            cast("dict[str, list[dict[str, dict[str, str]]]]", got)
+            if isinstance(got, dict)
+            else None
+        )
+    except ValueError:
+        pass
+    if rows is None:
+        why = r.stderr.strip() or r.stdout[:200]
+        sys.exit(f"{ME}: {' '.join(ls[1:])} failed (exit {r.returncode}): {why}")
+
+    def source(rs: list[dict[str, dict[str, str]]]) -> str:
+        return os.path.realpath(((rs or [{}])[0].get("source") or {}).get("path", "/"))
+
+    return {t: rs for t, rs in rows.items() if source(rs).startswith(d + os.sep)}
+
+
+def main(argv: list[str]) -> int:
+    ap = argparse.ArgumentParser(
+        prog=ME, description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    ap.add_argument("--list", action="store_true", help="print the tools; install nothing")
+    ap.add_argument("--json", action="store_true", help="with --list: their mise ls --json rows")
+    ap.add_argument("dir", nargs="?", default=".")
+    a = ap.parse_args(argv)
+    d = os.path.realpath(a.dir)
+    mise = shutil.which("mise")
+    if mise is None:
+        sys.exit(f"{ME}: mise is not on PATH: install mise at the kit's mise-version")
+    own = own_tools(mise, d)
+    if a.json and not a.list:
+        ap.error("--json goes with --list")
+    if a.list and a.json:
+        sys.stdout.write(json.dumps(own) + "\n")
+        return 0
+    if a.list:
+        sys.stdout.writelines(t + "\n" for t in own)
+        return 0
+    if not own:
+        sys.stdout.write(f"{ME}: no mise tool of {d}'s own config: nothing to install\n")
+        return 0
+    return subprocess.run([mise, "-C", d, "install", "--locked", *own], check=False).returncode
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
