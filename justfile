@@ -300,6 +300,29 @@ check-tests *args:
     if [[ -z "${GATE_NESTED:-}" ]]; then MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR"' EXIT; fi
     GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
 
+# The fast tier (quality #recipe-fast): every GATE_RECIPES recipe, then only the tests/*.sh items the change since
+# the coverage map's head can affect, each named with why (scripts/octo-feather-gate select); no map from HEAD or an
+# ancestor, or a changed shared-machinery.txt path no coverage reaches: every item. A head only it passed is provisional.
+fast:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    ids="$(python3 "$root/scripts/octo-feather-gate" select)"
+    mapfile -t ids <<<"$ids"
+    just check-tests "${ids[@]}"
+
+# The coverage map just fast selects from: every gate item run under coverage.py (COVERAGE_PROCESS_START and the
+# .pth coverage installs in the kit venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree,
+# written for HEAD into the git common dir (scripts/octo-feather-gate map). Slower than just check; never in it or CI.
+fast-map *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    cd "$root"
+    [[ -z "$(git status --porcelain)" ]] || { echo "fast-map: the tree has changes; commit them first, the map is written for HEAD" >&2; exit 1; }
+    d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
+    env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" just check-tests "$@"
+    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d"
+
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
 test *args:
     @just check-tests "$@"
@@ -335,7 +358,7 @@ shape *args:
 spec-chat repo:
     octo-feather-spec-chat "$1"
 
-# Integrate worker commits onto the lane's branch (its lane key: gh12, eng-123 for ENG-123), then its `just check`; non-zero on any conflict (docs/adr/0017).
+# Integrate worker commits onto the lane's branch (its lane key: gh12, eng-123 for ENG-123), then its `just fast`, or `just check` at a checkpoint (--full forces it); non-zero on any conflict or red gate (docs/adr/0017).
 [no-cd]
 integrate issue +refs:
     octo-feather-integrate "$@"

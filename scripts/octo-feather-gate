@@ -1,0 +1,380 @@
+#!/usr/bin/env python3
+"""octo-feather-gate: the gate's two tiers.
+
+issue-lifecycle #lanes-checkpoints, quality #recipe-fast.
+
+  octo-feather-gate checkpoint START [--full] [--no-fast]
+      In a lane worktree whose HEAD is the candidate head integrated onto START: the tier
+      octo-feather-integrate runs, `full` or `fast` on line 1, why on line 2. Full when forced
+      (--full), when the repo has no fast recipe (--no-fast: its one gate is the full tier), at
+      the pilot (no full pass recorded on this branch at START or an ancestor), when the
+      shared-machinery list changed, or when the diff START..HEAD touches a listed path (an add,
+      a delete, either side of a rename), judged against the list at START plus the entries the
+      list at HEAD adds.
+  octo-feather-gate record --reason R --seconds S
+      Records the full pass of HEAD: a git note on HEAD under refs/notes/octo-feather-gate, JSON:
+      tier, head, branch, clean (the tree after the gate), gate_config (sha256 of the blob ids of
+      the justfile and the lock and pin files), list (the list file's blob id, or none), reason,
+      seconds, at. A git note, not a state dir file: it sits on the commit it proves, every
+      worktree of the repo reads it, and it does not depend on the Herdr session that ran the gate.
+  octo-feather-gate passed [REV]
+      Prints REV's (default HEAD) recorded full pass and exits 0, else exits 1: the reader for the
+      merge ask check.
+  octo-feather-gate select
+      In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
+      one per line; each item with why it runs on stderr. Every GATE_RECIPES recipe (static), then
+      each tests/*.sh item changed since the coverage map's head, or new since it, or whose
+      recorded coverage holds a changed file. A changed file no item's coverage reaches and the
+      list names runs every test item; so do no map, or one from a head that is not an ancestor.
+  octo-feather-gate map DATA_DIR
+      In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
+      (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
+      /tmp copies of the kit map back to tracked files by their longest shared path suffix.
+
+The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
+comment lines; git itself matches it. Maps live in the repo's git common dir,
+octo-feather/fast-map/<head>.json, shared by every worktree. select and map are kit-only: the
+kit's tests are shell scripts run as commands, which no stack's test impact tool maps; a target
+uses its stack's own tool. Stdlib only, but map, which reads coverage data.
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import hashlib
+import json
+import os
+import subprocess
+import sys
+from pathlib import Path
+
+LIST = "shared-machinery.txt"
+NOTES = "refs/notes/octo-feather-gate"
+CONFIG = (
+    "justfile",
+    "Justfile",
+    ".justfile",
+    "mise.toml",
+    "mise.lock",
+    "uv.lock",
+    "pnpm-lock.yaml",
+)
+NODE = "tests/gate/test_gate.py::"
+
+
+def git(*args: str, check: bool = True) -> str:
+    r = subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S607
+    if check and r.returncode:
+        sys.exit(f"octo-feather-gate: git {' '.join(args)}: {r.stderr.strip()}")
+    return r.stdout
+
+
+def ok(*args: str) -> bool:
+    return subprocess.run(["git", *args], capture_output=True, check=False).returncode == 0  # noqa: S607
+
+
+def lines(text: str) -> list[str]:
+    return [s for s in (x.strip() for x in text.splitlines()) if s and not s.startswith("#")]
+
+
+def entries(rev: str) -> list[str]:
+    return lines(git("show", f"{rev}:{LIST}", check=False))
+
+
+def specs(pats: list[str]) -> list[str]:
+    return [f":(glob){p}" for p in dict.fromkeys(pats)]
+
+
+def records() -> list[dict[str, object]]:
+    out: list[dict[str, object]] = []
+    for row in git("notes", f"--ref={NOTES}", "list", check=False).splitlines():
+        note = row.split()[0]
+        try:
+            rec = json.loads(git("cat-file", "blob", note))
+        except ValueError:
+            continue
+        if isinstance(rec, dict):
+            out.append(rec)  # pyright: ignore[reportUnknownArgumentType]
+    return out
+
+
+def pilot_pass(start: str, branch: str) -> str | None:
+    """The latest full pass recorded on BRANCH at START or an ancestor (fewest commits back)."""
+    best: tuple[int, str] | None = None
+    for rec in records():
+        head = rec.get("head")
+        if rec.get("branch") != branch or not isinstance(head, str):
+            continue
+        if ok("merge-base", "--is-ancestor", head, start):
+            n = int(git("rev-list", "--count", f"{head}..{start}"))
+            best = min(best or (n, head), (n, head))
+    return best[1] if best else None
+
+
+def checkpoint(start: str, *, full: bool, fast: bool) -> tuple[str, str]:
+    why: list[str] = []
+    if full:
+        why.append("forced (--full)")
+    if not fast:
+        why.append("no fast recipe in this repo: its one gate is the full tier")
+    branch = git("symbolic-ref", "-q", "--short", "HEAD", check=False).strip() or "HEAD"
+    passed = pilot_pass(start, branch)
+    if passed is None:
+        why.append(f"pilot: no full pass recorded on {branch}")
+    old, new = entries(start), entries("HEAD")
+    if git("rev-parse", f"{start}:{LIST}", check=False) != git(
+        "rev-parse", f"HEAD:{LIST}", check=False
+    ):
+        why.append(f"{LIST} changed")
+    pats = old + [p for p in new if p not in old]
+    hit = (
+        set(
+            git("diff", "--name-only", "--no-renames", start, "HEAD", "--", *specs(pats)).split(
+                "\n"
+            )
+        )
+        - {""}
+        if pats
+        else set[str]()
+    )
+    for row in git("diff", "--name-status", "-M", start, "HEAD").splitlines():
+        status, *paths = row.split("\t")
+        if hit & set(paths):
+            why.append(f"listed path ({LIST}): {status} {' -> '.join(paths)}")
+    if why:
+        return "full", "; ".join(why)
+    return (
+        "fast",
+        f"no path on {LIST} touched, past the full pass at {(passed or '')[:12]} on {branch}",
+    )
+
+
+def tree_id(rev: str, path: str) -> str:
+    return git("rev-parse", f"{rev}:{path}", check=False).strip() or "none"
+
+
+def record(reason: str, seconds: float) -> None:
+    head = git("rev-parse", "HEAD").strip()
+    config = hashlib.sha256(
+        "\n".join(f"{p} {tree_id(head, p)}" for p in CONFIG).encode()
+    ).hexdigest()
+    rec = {
+        "tier": "full",
+        "head": head,
+        "branch": git("symbolic-ref", "-q", "--short", "HEAD", check=False).strip() or None,
+        "clean": not git("status", "--porcelain").strip(),
+        "gate_config": config,
+        "list": tree_id(head, LIST),
+        "reason": reason,
+        "seconds": round(seconds, 1),
+        "at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    }
+    env = dict(os.environ)
+    if not ok(
+        "var", "GIT_COMMITTER_IDENT"
+    ):  # notes are commits; a box with no git identity still records
+        env |= {
+            "GIT_COMMITTER_NAME": "octo-feather",
+            "GIT_COMMITTER_EMAIL": "octo-feather@localhost",
+        }
+    r = subprocess.run(
+        ["git", "notes", f"--ref={NOTES}", "add", "-f", "-m", json.dumps(rec, indent=1), head],  # noqa: S607
+        capture_output=True,
+        text=True,
+        env=env,
+        check=False,
+    )
+    if r.returncode:
+        sys.exit(f"octo-feather-gate: full pass of {head[:12]} not recorded: {r.stderr.strip()}")
+    sys.stdout.write(f"recorded: full pass of {head[:12]} ({NOTES})\n")
+
+
+def passed(rev: str) -> int:
+    commit = git("rev-parse", "--verify", f"{rev}^{{commit}}").strip()
+    note = git("notes", f"--ref={NOTES}", "show", commit, check=False)
+    if not note:
+        sys.stderr.write(f"octo-feather-gate: no full pass recorded for {commit[:12]}\n")
+        return 1
+    sys.stdout.write(note)
+    return 0
+
+
+def map_dir() -> Path:
+    return (
+        Path(git("rev-parse", "--path-format=absolute", "--git-common-dir").strip())
+        / "octo-feather"
+        / "fast-map"
+    )
+
+
+def newest_map(head: str) -> dict[str, object] | None:
+    best: tuple[int, dict[str, object]] | None = None
+    for f in sorted(map_dir().glob("*.json")) if map_dir().is_dir() else []:
+        m = json.loads(f.read_text())
+        at = m.get("head")
+        if not isinstance(at, str) or not ok("merge-base", "--is-ancestor", at, head):
+            continue
+        n = int(git("rev-list", "--count", f"{at}..{head}"))
+        if best is None or n < best[0]:
+            best = (n, m)
+    return best[1] if best else None
+
+
+def say(item: str, why: str) -> None:
+    sys.stderr.write(f"fast: {item}: {why}\n")
+
+
+def select() -> None:
+    recipes = os.environ.get("GATE_RECIPES", "").split()
+    if not recipes:
+        sys.exit("octo-feather-gate select: GATE_RECIPES is unset: run it through just fast")
+    root = Path(git("rev-parse", "--show-toplevel").strip())
+    items = sorted(p.relative_to(root).as_posix() for p in root.glob("tests/*.sh"))
+    ids = [f"{NODE}test_recipe[{r}]" for r in recipes]
+    for r in recipes:
+        say(r, "static check (every GATE_RECIPES recipe)")
+    chosen = choose(items)
+    ids += [f"{NODE}test_script[{i}]" for i in items if i in chosen]
+    sys.stdout.write("".join(f"{i}\n" for i in ids))
+
+
+def changed_since(at: str, *pats: str) -> set[str]:
+    """Paths changed from AT to the working tree, deletes and untracked ones too; in PATS."""
+    files = git("diff", "--name-only", "--no-renames", at, "--", *pats) + git(
+        "ls-files", "--others", "--exclude-standard", "--", *pats
+    )
+    return set(files.split("\n")) - {""}
+
+
+def choose(items: list[str]) -> set[str]:
+    m = newest_map(git("rev-parse", "HEAD").strip())
+    if m is None:
+        say(
+            f"all {len(items)} test items",
+            "no coverage map from HEAD or an ancestor (build one: just fast-map)",
+        )
+        return set(items)
+    at = str(m["head"])
+    cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
+    changed = changed_since(at)
+    reach = {f for fs in cover.values() for f in fs}
+    unreached = sorted(changed - reach - set(items))
+    pats = entries("HEAD")
+    listed = changed_since(at, *specs(pats)) if pats and unreached else set[str]()
+    residual = [f for f in unreached if f in listed]
+    if residual:
+        say(
+            f"all {len(items)} test items",
+            f"{', '.join(residual)} on {LIST}, outside the coverage map's reach (map at {at[:12]})",
+        )
+        return set(items)
+    chosen: set[str] = set()
+    for i in items:
+        hit = sorted(changed & set(cover.get(i, [])))
+        if i in changed:
+            say(i, f"changed since the map at {at[:12]}")
+        elif i not in cover:
+            say(i, f"no recorded coverage (new since the map at {at[:12]})")
+        elif hit:
+            say(i, f"recorded coverage reaches {', '.join(hit)}")
+        else:
+            continue
+        chosen.add(i)
+    for f in unreached:
+        say(f, f"changed; no test item's recorded coverage reaches it and {LIST} does not name it")
+    say(
+        f"{len(items) - len(chosen)} test items skipped",
+        f"their recorded coverage reaches no changed file (map at {at[:12]})",
+    )
+    return chosen
+
+
+class Tracked:
+    """The repo's tracked files, and a measured file's tracked source: itself under the repo
+    root, else (a copy of the kit under /tmp) every tracked file sharing its longest path
+    suffix; ambiguity over-selects."""
+
+    def __init__(self) -> None:
+        self.root = Path(git("rev-parse", "--show-toplevel").strip()).resolve()
+        self.files = set(git("ls-files").splitlines())
+        self.by_suffix: dict[str, set[str]] = {}
+        for t in self.files:
+            parts = t.split("/")
+            for k in range(len(parts)):
+                self.by_suffix.setdefault("/".join(parts[k:]), set()).add(t)
+
+    def source(self, measured: str) -> set[str]:
+        p = Path(measured).resolve()
+        if p.is_relative_to(self.root):
+            rel = p.relative_to(self.root).as_posix()
+            return {rel} if rel in self.files else set[str]()
+        if "site-packages" in p.parts or p.is_relative_to(Path(sys.base_prefix).resolve()):
+            return set[str]()
+        parts = p.parts[1:]
+        return next(
+            (hit for k in range(len(parts)) if (hit := self.by_suffix.get("/".join(parts[k:])))),
+            set[str](),
+        )
+
+
+def build_map(data: Path) -> None:
+    import coverage  # noqa: PLC0415  # only map needs it: the kit's uv venv has it (pyproject.toml)
+
+    tracked = Tracked()
+    items: dict[str, list[str]] = {}
+    for i in sorted(
+        t
+        for t in tracked.files
+        if t.startswith("tests/") and t.count("/") == 1 and t.endswith(".sh")
+    ):
+        files: set[str] = set()
+        for f in (data / i).glob("cov*"):
+            cd = coverage.CoverageData(basename=str(f))
+            cd.read()
+            for m in cd.measured_files():
+                files |= tracked.source(m)
+        items[i] = sorted(files)
+    head = git("rev-parse", "HEAD").strip()
+    out = map_dir() / f"{head}.json"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(json.dumps({"head": head, "items": items}, indent=1) + "\n")
+    sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(
+        prog="octo-feather-gate",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    sub = ap.add_subparsers(dest="cmd", required=True)
+    c = sub.add_parser("checkpoint")
+    c.add_argument("start")
+    c.add_argument("--full", action="store_true")
+    c.add_argument("--no-fast", action="store_true")
+    r = sub.add_parser("record")
+    r.add_argument("--reason", required=True)
+    r.add_argument("--seconds", type=float, required=True)
+    p = sub.add_parser("passed")
+    p.add_argument("rev", nargs="?", default="HEAD")
+    sub.add_parser("select")
+    m = sub.add_parser("map")
+    m.add_argument("data", type=Path)
+    a = ap.parse_args()
+    if a.cmd == "checkpoint":
+        tier, why = checkpoint(a.start, full=a.full, fast=not a.no_fast)
+        sys.stdout.write(f"{tier}\n{why}\n")
+    elif a.cmd == "record":
+        record(a.reason, a.seconds)
+    elif a.cmd == "passed":
+        return passed(a.rev)
+    elif a.cmd == "select":
+        select()
+    else:
+        build_map(a.data)
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

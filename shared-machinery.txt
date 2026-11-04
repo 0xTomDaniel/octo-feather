@@ -1,0 +1,53 @@
+# The shared-machinery list (issue-lifecycle #lanes-checkpoints): repository policy the factory keeps.
+# An integration whose diff touches a path below (an add, a delete, either side of a rename; judged
+# against this list before the integration plus its newly added entries), or that changes this file,
+# runs the full gate, `just check`, on the candidate head (scripts/octo-feather-integrate). In the
+# kit's fast tier, `just fast`, a changed path below that no test's recorded coverage reaches runs
+# every test item (scripts/octo-feather-gate). A lane that adds or moves shared machinery updates
+# this file in the same change. Only what recorded coverage cannot see stays here: Python the gate
+# runs through the kit's venv is mapped by coverage (just fast-map), so it is not listed.
+#
+# One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
+# covers everything under it). `#` starts a comment line.
+shared-machinery.txt
+# The gate's own configuration, runner, shared fixtures and pins.
+justfile
+pyproject.toml
+uv.lock
+package.json
+pnpm-lock.yaml
+tsconfig.json
+eslint.config.js
+eslint-suppressions.json
+mise.toml
+mise.lock
+mise-version
+pi-version
+agent-browser-version
+.python-version
+Skillfile
+Skillfile.lock
+.skillfile/patches
+tests/gate
+tests/lib
+tests/fixtures
+.github/workflows
+# Data the kit's scripts read: contracts, schemas, role files, Pi configuration.
+qc.toml
+schemas
+agents
+web-mcp.json
+extensions
+# Shell, which coverage cannot measure: the kit's bash commands and skill scripts.
+scripts/octo-feather-exclude
+scripts/octo-feather-integrate
+scripts/octo-feather-new-repo
+scripts/octo-feather-qc-sandbox
+scripts/octo-feather-spec-chat
+scripts/octo-feather-start
+scripts/octo-feather-state
+.agents/skills/github-issues/scripts
+.agents/skills/linear/scripts
+.agents/skills/herdr-comms/assets
+# The templates: their gates run in their own venvs and installs, which kit coverage does not reach.
+templates
