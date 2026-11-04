@@ -1,0 +1,68 @@
+diff --git a/src/app/core.py b/src/app/core.py
+index 7076096..a69c041 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -1,4 +1,5 @@
+ from dataclasses import dataclass
++from datetime import datetime
+ 
+ 
+ @dataclass(frozen=True)
+@@ -12,4 +13,5 @@ def greet(name: str) -> Greeting:
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+-    return Greeting(name=clean, text=f"Hello, {clean}")
++    part = "morning" if datetime.now().hour < 12 else "evening"
++    return Greeting(name=clean, text=f"Good {part}, {clean}")
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 377041b..19dce6c 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -3,15 +3,38 @@
+ import json
+ import shutil
+ import subprocess
++from datetime import datetime
+ 
+ import pytest
+ 
++from app import core
+ from app.cli import main
+ 
+ 
+-def test_hello_json_in_process(capsys: pytest.CaptureFixture[str]) -> None:
++class _NineAm(datetime):
++    @classmethod
++    def now(cls, tz=None):  # type: ignore[override]
++        return cls(2026, 1, 5, 9, 0)
++
++
++class _SixPm(datetime):
++    @classmethod
++    def now(cls, tz=None):  # type: ignore[override]
++        return cls(2026, 1, 5, 18, 0)
++
++
++def test_hello_json_in_process(
++    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
++) -> None:
++    monkeypatch.setattr(core, "datetime", _NineAm)
+     assert main(["hello", "Ada", "--json"]) == 0
+-    assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Hello, Ada"}
++    assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Good morning, Ada"}
++
++
++def test_evening_greeting(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
++    monkeypatch.setattr(core, "datetime", _SixPm)
++    assert main(["hello", "Ada"]) == 0
++    assert capsys.readouterr().out == "Good evening, Ada\n"
+ 
+ 
+ def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
+@@ -25,4 +48,4 @@ def test_installed_command_end_to_end() -> None:
+     done = subprocess.run(
+         [app, "hello", "Grace", "--json"], capture_output=True, text=True, check=True
+     )
+-    assert json.loads(done.stdout) == {"name": "Grace", "text": "Hello, Grace"}
++    assert json.loads(done.stdout)["text"].endswith(", Grace")

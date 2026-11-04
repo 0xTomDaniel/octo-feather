@@ -199,5 +199,13 @@
   "shaper-arch-tangled": {"facts": [{"fact": "skill_read", "skill": "improve-codebase-architecture"}]},
   "shaper-arch-review": {"facts": [{"fact": "skill_read", "skill": "improve-codebase-architecture"}]},
   "shaper-arch-near-new-module": {"facts": [{"fact": "skill_not_read", "skill": "improve-codebase-architecture"}]},
-  "shaper-arch-near-flag": {"facts": [{"fact": "skill_not_read", "skill": "improve-codebase-architecture"}]}
+  "shaper-arch-near-flag": {"facts": [{"fact": "skill_not_read", "skill": "improve-codebase-architecture"}]},
+  "impl-design-seam": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "impl-design-phrasebook": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "impl-design-near-bugfix": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]},
+  "impl-design-near-rename": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]},
+  "rev-design-seam": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "rev-design-phrasebook": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
+  "rev-design-near-bugfix": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]},
+  "rev-design-near-rename": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]}
 }
