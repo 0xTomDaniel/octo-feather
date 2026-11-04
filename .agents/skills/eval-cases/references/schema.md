@@ -36,6 +36,7 @@ A skill-trigger or role-transcript case, an object:
   - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
   - `origin`: `true` (leave it out for false): a bare origin holding main, for `git push`.
   - `fake_gh`: `true`: a fake gh first on PATH, logging each call.
+- role-transcript only, optional: `review`: `{"question"}`, exactly that key, `question` a non-blank string: a review case, for an outcome no fact can grade. Its expectations entry is `{"facts": []}`, no fact; a maintainer's recorded verdict decides it (what the run keeps, where the verdict is stored, how the case counts: `scripts/octo-feather-qa --help`, Review).
 - no other key; `facts` in a case is refused (facts live only in expectations).
 
 ## Facts
