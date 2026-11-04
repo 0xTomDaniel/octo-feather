@@ -94,6 +94,17 @@ still exists, else in a new lane workspace (without `--resume`, an existing
 workspace exits 73). `herdr-say`
 does both for you; see below.
 
+### Start the shaper for the owner
+
+The director's spawn for an owner's shaping ask (roles spec `#role-shaper`):
+in its own workspace, at the target repo, bare.
+
+```
+herdr-spawn --role shaper --workspace "$HERDR_WORKSPACE_ID" --name shaper --label shaper --cwd <target repo>
+```
+
+Send it no brief; tell the owner its `tab=`, where the owner shapes with it.
+
 ## Close an agent or a lane space
 
 ```

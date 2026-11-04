@@ -4,7 +4,9 @@ Change: agents/director.md "Shaping ask" step: on the owner's shaping ask the di
 
 Smoke: agents/director.md, role-transcripts `dir-spawns-shaper`: run 20261104T184819Z-baf764 at `--kit-ref origin/main` FAIL, run 20261104T184850Z-f0e159 at a5761a7 PASS.
 
-Removed: nothing.
+Smoke: agents/director.md .agents/skills/herdr-comms/SKILL.md, after the prose-duty fix (PR #531 review: the launch recipe moved from the director's step into herdr-comms "Start the shaper for the owner", argv unchanged, `--role shaper` first): role-transcripts `dir-spawns-shaper` rerun OWED, the supervisor's `--runs 3` after integrate on lane 479's runner; run id to be added here.
+
+Removed: nothing (the recipe moved: agents/director.md keeps the trigger and a pointer to herdr-comms).
 
 ## Runs
 
