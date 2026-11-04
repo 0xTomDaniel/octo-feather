@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 # Fake gh for tests/lane-report.sh: answers only `gh pr view N --repo O/R --json F` (or -R) from
 # $FAKE_GH_PRS/<owner>__<name>/N.json, and `gh api repos/O/R/commits?...` (the default branch's
-# commits) from $FAKE_GH_PRS/<owner>__<name>/commits.json; a call without a repository fails exit 2.
+# commits) from $FAKE_GH_PRS/<owner>__<name>/commits.json, `gh api repos/O/R/contents/gate-budget.toml -H Accept:
+# application/vnd.github.raw` (the default branch's file) from $FAKE_GH_PRS/<owner>__<name>/gate-budget.toml, HTTP 404
+# without it; a call without a repository fails exit 2.
 # FAKE_GH_FAIL=1 fails every call as an unreachable network does.
 import json, os, sys
 a = sys.argv[1:]
@@ -14,6 +16,12 @@ if a[:1] == ["api"] and len(a) == 2 and a[1].startswith("repos/") and a[1].split
     if not os.path.exists(path):
         die("gh: Not Found (HTTP 404)")
     print(open(path).read()); sys.exit(0)
+m = a[1].split("/") if a[:1] == ["api"] and len(a) == 4 and a[2:] == ["-H", "Accept: application/vnd.github.raw"] else []
+if m[:1] == ["repos"] and m[3:] == ["contents", "gate-budget.toml"]:
+    path = os.path.join(os.environ["FAKE_GH_PRS"], f"{m[1]}__{m[2]}", "gate-budget.toml")
+    if not os.path.exists(path):
+        die("gh: Not Found (HTTP 404)")
+    print(open(path).read(), end=""); sys.exit(0)
 if a[:2] != ["pr", "view"] or "--json" not in a:
     die(f"fake gh: unexpected {a}", 2)
 flag = next((x for x in ("--repo", "-R") if x in a), None)

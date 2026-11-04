@@ -36228,140 +36228,12 @@
                     "endColumn": 41,
                     "lineCount": 1
                 }
-            },
-            {
-                "code": "reportUnknownParameterType",
-                "range": {
-                    "startColumn": 25,
-                    "endColumn": 32,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportMissingParameterType",
-                "range": {
-                    "startColumn": 25,
-                    "endColumn": 32,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownParameterType",
-                "range": {
-                    "startColumn": 34,
-                    "endColumn": 44,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportMissingParameterType",
-                "range": {
-                    "startColumn": 34,
-                    "endColumn": 44,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownVariableType",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 10,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 13,
-                    "endColumn": 27,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 21,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownVariableType",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 12,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 28,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 15,
-                    "endColumn": 36,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 41,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 43,
-                    "endColumn": 53,
-                    "lineCount": 1
-                }
             }
         ],
         "./tests/gate/test_gate.py": [
             {
                 "code": "reportUnknownParameterType",
                 "range": {
-                    "startColumn": 8,
-                    "endColumn": 11,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportMissingParameterType",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 11,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 24,
-                    "endColumn": 27,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 32,
-                    "endColumn": 35,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownParameterType",
-                "range": {
                     "startColumn": 16,
                     "endColumn": 22,
                     "lineCount": 1
@@ -36372,30 +36244,6 @@
                 "range": {
                     "startColumn": 16,
                     "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownParameterType",
-                "range": {
-                    "startColumn": 16,
-                    "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportMissingParameterType",
-                "range": {
-                    "startColumn": 16,
-                    "endColumn": 22,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownArgumentType",
-                "range": {
-                    "startColumn": 13,
-                    "endColumn": 26,
                     "lineCount": 1
                 }
             }

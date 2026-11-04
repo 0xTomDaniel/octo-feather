@@ -41,6 +41,8 @@ lane lane-d: issue gh6 o/b "Spec review awaits the owner"
   spend: none recorded for lane-d
   gate time: lane none: no pr
   gate time: main unread: GitHub: gh api repos/o/b/commits?per_page=100 failed (error connecting to api.github.com): check o/b exists, and gh auth status
+gate budget o/a: unread: GitHub: gh api repos/o/a/commits?per_page=100 failed (error connecting to api.github.com): check o/a exists, and gh auth status
+gate budget o/b: unread: GitHub: gh api repos/o/b/commits?per_page=100 failed (error connecting to api.github.com): check o/b exists, and gh auth status
 owner queue:
   lane lane-d gate spec-review asked 2026-10-21T09:00:00Z (AGE ago)
   lane lane-c gate merge asked 2026-10-22T14:00:00Z (AGE ago)
