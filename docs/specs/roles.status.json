@@ -65,8 +65,8 @@
     "acceptance-shaper-launch": {
       "status": "built",
       "pr": 531,
-      "record": "20261104T171122Z-50504122",
-      "commit": "8a733150e6ce5011e6a3bf6c9f9ae24a0e20e34e",
+      "record": "20261104T180038Z-ec829519",
+      "commit": "44ac81352e2f476860c5bef838a6d75c4859738e",
       "tests": [
         "tests/shape.sh"
       ]
