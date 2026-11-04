@@ -93,7 +93,7 @@
 <tr data-anchor="qaqc-object"><td>Checks</td><td>The kit itself: roles, prompts, gates, escalation, skills, and mistakes that repeat</td><td>The product a work item delivers</td></tr>
 <tr data-anchor="qaqc-question"><td>Asks</td><td>Does the factory behave as its contracts say?</td><td>Does this head do what its accepted spec says?</td></tr>
 <tr data-anchor="qaqc-recipe"><td>Recipe</td><td><code>just qa</code>: eval cases of the kit's own agents and loop; correction lanes running pstack <code>correct</code> on a repeat</td><td><code>just check</code> for what is deterministic; <code>just qc</code> for the product judge; the fresh code reviewer for each lane's diff</td></tr>
-<tr data-anchor="qaqc-when"><td>Runs</td><td>Evals on every change to a prompt, role file or vendored-skill patch; a correction lane when the owner corrects something at a gate or a finding class repeats</td><td><code>just check</code> on every change; <code>just qc</code> on the pilot's integrated head and on the lane's final integrated head, with code review of the same head in parallel, before the merge ask</td></tr>
+<tr data-anchor="qaqc-when"><td>Runs</td><td>Evals on every change to a prompt, role file or vendored-skill patch; a correction lane on the triggers issue-lifecycle <a href="./issue-lifecycle.spec.html#lanes-correction">#lanes-correction</a> owns</td><td><code>just check</code> on every change; <code>just qc</code> on the pilot's integrated head and on the lane's final integrated head, with code review of the same head in parallel, before the merge ask</td></tr>
 <tr data-anchor="qaqc-blocks"><td>Blocks</td><td>The kit change that fails its eval case</td><td>A red gate blocks hand-off; a red judge blocks the merge ask</td></tr>
 </tbody>
 </table>
