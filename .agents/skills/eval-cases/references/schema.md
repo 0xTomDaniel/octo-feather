@@ -36,7 +36,7 @@ A skill-trigger or role-transcript case, an object:
   - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir or a history fixture as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
   - `origin`: `true` (leave it out for false): a bare origin holding main, for `git push`.
   - `fake_gh`: `true`: a fake gh first on PATH, logging each call.
-  - `fake_qa`: `true`: a fake octo-feather-qa first on PATH, behind any `ran` shim as the fake gh is: it runs no case, sandbox or model and answers with canned result lines, so a case can grade a role's own `octo-feather-qa` call (Run record) with no nested eval run.
+  - `fake_qa`: `true`: a fake octo-feather-qa first on PATH, behind any `ran` shim as the fake gh is: it runs no case, sandbox or model and answers in the real tool's output form (its `--help`, run header, run, case, compare, analysis and summary lines, for the case repo's own `evals/`), canned and never naming itself, so a case can grade a role's own `octo-feather-qa` call (Run record) with no nested eval run.
 - role-transcript only, optional: `review`: `{"question"}`, exactly that key, `question` a non-blank string: a review case, for an outcome no fact can grade. Its expectations entry is `{"facts": []}`, no fact; a maintainer's recorded verdict decides it (what the run keeps, where the verdict is stored, how the case counts: `scripts/octo-feather-qa --help`, Review).
 - no other key; `facts` in a case is refused (facts live only in expectations).
 

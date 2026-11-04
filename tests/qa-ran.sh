@@ -41,34 +41,45 @@ run 1 "$Q" --evals "$t/rf"
 rf() { grep -E "^$1 rf/$2: " <<< "$out" || fail "ran $2: want $1: $out"; }
 rf PASS rflag > /dev/null; rf PASS rposok > /dev/null
 for c in rsplit rnoval rpos; do rf FAIL "$c" | grep -q "no run of runme with these arguments" || fail "ran $c: want FAIL naming the record: $out"; done
-# fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered by the fake;
-# a poison octo-feather-qa further down PATH (where the kit's real one would be found) never runs.
+# fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered in the real
+# tool's output form, with no case run; a poison octo-feather-qa further down PATH (where the kit's real one would be
+# found) never runs. The case repo holds an eval suite (fixture fxe: fx plus evals/s1, case c1).
 printf '#!/bin/sh\necho POISON-REAL-QA-REACHED\nexit 9\n' > "$t/bin/octo-feather-qa"; chmod +x "$t/bin/octo-feather-qa"
 mkdir -p "$t/fq/fq/reference"; cp -r "$t/good/fixtures" "$t/fq/"
+cp -r "$t/fq/fixtures/fx" "$t/fq/fixtures/fxe"; mkdir -p "$t/fq/fixtures/fxe/evals/s1/reference"
+echo '{"suite": "s1", "kind": "role-transcript", "description": "x"}' > "$t/fq/fixtures/fxe/evals/s1/suite.json"
+echo '[{"id": "c1", "role": "implementer", "fixture": "fx", "task": "x"}]' > "$t/fq/fixtures/fxe/evals/s1/cases.json"
+echo '{"c1": {"facts": [{"fact": "skill_read", "skill": "tdd"}]}}' > "$t/fq/fixtures/fxe/evals/s1/reference/expectations.json"
 echo '{"suite": "fq", "kind": "role-transcript", "description": "stub fake qa", "max_tool_calls": 10, "timeout_s": 60}' > "$t/fq/fq/suite.json"
 python3 - "$t/fq/fq" <<'PY'
 import json, sys
 d = sys.argv[1]
-step = [["bash", "octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba < /dev/null; echo rc=$?"]]
-json.dump([{"id": "fq", "role": "implementer", "fixture": "fx", "fake_qa": True, "task": "Prove it. STUB-STEPS:" + json.dumps(step)}],
+step = [["bash", "octo-feather-qa --case c1 --runs 3 --baseline main < /dev/null; echo rc=$?; octo-feather-qa --help | head -1"]]
+json.dump([{"id": "fq", "role": "implementer", "fixture": "fxe", "fake_qa": True, "task": "Prove it. STUB-STEPS:" + json.dumps(step)}],
           open(f"{d}/cases.json", "w"))
 json.dump({"fq": {"facts": [{"fact": "ran", "program": "octo-feather-qa", "args": ["--baseline"]},
                             {"fact": "ran", "program": "octo-feather-qa", "args": ["--runs"]}]}}, open(f"{d}/reference/expectations.json", "w"))
 PY
 run 0 "$Q" --evals "$t/fq"
-grep -qE '^PASS fq/fq: ran octo-feather-qa --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba \(exit 0\); ran octo-feather-qa --runs: ' <<< "$out" \
+grep -qE '^PASS fq/fq: ran octo-feather-qa --baseline: recorded run octo-feather-qa --case c1 --runs 3 --baseline main \(exit 0\); ran octo-feather-qa --runs: ' <<< "$out" \
   || fail "fake_qa: want PASS on both ran facts: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 fo="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/fq/fq/transcript.jsonl")"
-grep -qx 'qa (fake, factory eval: no case runs): octo-feather-qa --case c1 --runs 3 --baseline 0f4f1ba' <<< "$fo" && grep -qx 'rc=0' <<< "$fo" \
-  && ! grep -q 'POISON-REAL-QA-REACHED\|qc sandbox' <<< "$fo" || fail "fake_qa: the fake did not answer, or something real ran: $fo"
+for want in '^evals: ok \(1 suites, 1 cases\)$' '^qa: run [0-9]{8}T[0-9]{6}Z-[0-9a-f]{6}: 1 case\(s\), 3 runs each; kit [0-9a-f]{40}; baseline kit [0-9a-f]{40} \(--baseline main\), runs interleaved; artifacts ' \
+    '^  baseline run 1/3: FAIL s1/c1: skill_read tdd: no load of tdd/SKILL.md' '^  current run 3/3: PASS s1/c1: skill_read tdd: loaded at tool call 2 of ' \
+    '^PASS s1/c1: 3/3 runs passed \(pass rate 1.00, stddev 0.00\); run 1: ' '^  baseline FAIL s1/c1: 0/3 runs passed \(pass rate 0.00, stddev 0.00\)' \
+    '^  compare s1/c1: baseline kit [0-9a-f]{12} beside current kit [0-9a-f]{12}$' '^    pass rate  0.00 \+/- 0.00        1.00 \+/- 0.00        \+1.00$' \
+    '^qa: analysis \(deterministic, no model; rules: octo-feather-qa --help, --analyze\):$' '^qa: 1/1 passed \(run [0-9T]{15}Z-[0-9a-f]{6}\); artifacts ' '^rc=0$' \
+    '^octo-feather-qa \[--suite NAME\]'; do
+  grep -qE "$want" <<< "$fo" || fail "fake_qa: no line like $want in: $fo"; done
+! grep -qi 'fake\|POISON-REAL-QA-REACHED\|qc sandbox' <<< "$fo" || fail "fake_qa: the answer names itself, or something real ran: $fo"
 # A run count and a bare flag together (schema.md, Run record): ran octo-feather-qa [--runs, 3, --baseline] holds for
 # `--runs 3 --baseline main`, not for the smoke `--runs 1 --baseline main`.
 python3 - "$t/fq/fq" <<'PY'
 import json, sys
 d = sys.argv[1]
 st = lambda n: "Prove it. STUB-STEPS:" + json.dumps([["bash", f"octo-feather-qa --case c1 --runs {n} --baseline main < /dev/null; echo rc=$?"]])
-json.dump([{"id": f"fq{n}", "role": "implementer", "fixture": "fx", "fake_qa": True, "task": st(n)} for n in (1, 3)], open(f"{d}/cases.json", "w"))
+json.dump([{"id": f"fq{n}", "role": "implementer", "fixture": "fxe", "fake_qa": True, "task": st(n)} for n in (1, 3)], open(f"{d}/cases.json", "w"))
 json.dump({f"fq{n}": {"facts": [{"fact": "ran", "program": "octo-feather-qa", "args": ["--runs", "3", "--baseline"]}]} for n in (1, 3)},
           open(f"{d}/reference/expectations.json", "w"))
 PY
