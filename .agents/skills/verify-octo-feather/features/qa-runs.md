@@ -14,7 +14,7 @@ Drive criterion: `quality#acceptance-qa-repeats`
 
 ## How to get to it (user POV)
 
-- A maintainer runs `just qa --runs N` (or `octo-feather-qa --runs N`, with `--suite`, `--case`, `--sample`, `--kit-ref` as usual). Each selected case runs its role N times, one at a time, each in its own sandbox; the case passes only when every run passed, so the exit status rule is unchanged. Without `--runs`, one run as before. Usage, artifacts and fields: `octo-feather-qa --help`.
+- A maintainer runs `just qa --runs N` (or `octo-feather-qa --runs N`, beside the other selection options). What a run of N does, its verdict rule, artifacts and fields: `octo-feather-qa --help`, `--runs`.
 
 ## Driving it with verify-octo-feather
 
@@ -35,4 +35,4 @@ The drive writes a scratch eval suite `vq` under `$VERIFY_OCTO_FEATHER_RUN_DIR/s
 ## Gotchas
 
 - The stub proves the counting and the verdict rule, not a role's real variance: a real pass rate comes from `just qa --runs N` against the real model, never from this drive.
-- The spread is the sample standard deviation of the runs' results (1 a pass, 0 a fail), as skill-creator's benchmark computes it; one run shows 0.
+- What the spread is: `octo-feather-qa --help` (result.json fields). One run shows 0.
