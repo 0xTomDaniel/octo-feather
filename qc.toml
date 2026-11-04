@@ -96,3 +96,8 @@ tests = ["tests/qa-baseline.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
 covers = ["scripts/octo-feather-qa"]
 tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-analyst"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-analyst"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-analyst.sh"]

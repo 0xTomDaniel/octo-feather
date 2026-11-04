@@ -48,3 +48,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qc-stale](./qc-stale.md) covers `just qc` linking each built criterion to its evidence record, capture commit and tests, and `octo-feather-spec-status show` naming a built criterion current or stale.
 - [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`; criterion: quality#acceptance-qa-repeats).
 - [qa-baseline](./qa-baseline.md) covers a case's time and tokens over several runs and a baseline kit compared beside the current one (`octo-feather-qa --runs N --baseline COMMIT`; criteria: quality#acceptance-qa-cost, quality#acceptance-qa-baseline).
+- [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).
