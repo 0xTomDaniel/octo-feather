@@ -1,6 +1,6 @@
 # This repo's gate-time budget: the full gate's (just check) wall seconds, kept by the factory like any repo policy.
 # What reads it, its keys and what each means: the octo-feather kit's octo-feather-lane --help (report). Fresh from
-# the template, a passed full run took about 25 s; set it from your own passed full runs as the suite grows.
+# the template, a passed full run took 14 to 30 s (2026-11-04); set it from your own passed full runs as the suite grows.
 budget_seconds = 60
 growth_share = 0.25
 trend_runs = 5
