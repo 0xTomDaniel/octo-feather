@@ -52,6 +52,7 @@ An expectations entry is `{"facts": [fact, ...]}`, no other key, a non-empty lis
 - `{"fact": "field_lines", "field": F, optional "none", "includes", "every"}` (Field lines).
 - `{"fact": "branch_paths", optional "untouched": [P...], "touched": [P...]}`: at least one key, each a non-empty list of relative paths P (no leading `/`, no `..` component, no whitespace; a dir ends in `/`) (Branch paths).
 - `{"fact": "tool_called", "tools": [N...]}`: N a non-empty list of tool names, no whitespace (Tool call).
+- `{"fact": "tool_called_before", "tools": [N...], "before": T}`: N as tool_called's; a call to one of N started before the first tool call that reached T (Before targets), decided as skill_read_before is: once T is reached, a call before it passes, none before it fails; T never reached fails. Only the call's start is read, not its result.
 - `{"fact": "ran", "program": P, "args": [A...]}`: P a command name (matches `[A-Za-z0-9_+-][A-Za-z0-9._+-]*`), A a list of strings, possibly empty (Run record).
 
 ### Skill load
@@ -60,7 +61,7 @@ S's SKILL.md entered the agent's context: a tool result (any tool: a Pi read, a 
 
 ### Before targets
 
-`before` is one of the targets below, decided from filesystem snapshots the watcher takes of the case repo after each tool call (content hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log), never from command text:
+`before` is one of the targets below, or `{"edit_under": [P...]}`, P a non-empty list of relative paths as branch_paths takes them (a dir ends in `/`): a file under one of P created or changed, decided from filesystem snapshots the watcher takes of the case repo after each tool call (content hash of every file git does not ignore, HEAD, origin's refs, the fake gh's log), never from command text:
 
 - `test_write`: the files the case repo's declared runner collects, or one's content, changed. The runner is pytest from the repo's own config (`testpaths`, `python_files`...), any name it collects, never a path shape. The fixture, or head's fixture when the case has `head`, must declare its tests: a `pyproject.toml` `[tool.pytest.ini_options]` `testpaths`, a non-empty list of non-empty strings, and a `uv.lock` (setup installs the runner); else refused, naming the fixture. Each snapshot's collection runs on that snapshot's own bytes, so a later call's write never reaches it; pytest giving no list stops the run, naming why.
 - `edit`: any file git does not ignore changed.

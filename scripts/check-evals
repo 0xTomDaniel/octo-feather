@@ -22,7 +22,8 @@ from pathlib import Path
 KIT = Path(__file__).resolve().parent.parent
 FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
          "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
-         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"}}
+         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"},
+         "tool_called_before": {"tools", "before"}}
 PROGRAM = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*")   # a ran fact's program: a command name (schema.md, Facts)
 OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
 FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
@@ -559,7 +560,7 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
         if t == "field_lines":
             check_fields(fa, f, errs)
-        if t == "tool_called" and "tools" in f:
+        if t in ("tool_called", "tool_called_before") and "tools" in f:
             check_tools(fa, cast("object", f["tools"]), cast("list[str]", errs))
         if t == "ran" and "program" in f and not (isinstance(f["program"], str) and PROGRAM.fullmatch(f["program"])):
             cast("list[str]", errs).append(f"{fa}: field program: must be a command name ({PROGRAM.pattern}), got {f['program']!r}")
@@ -571,7 +572,9 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             for k in sorted(set(f) & OPTIONAL[t]):
                 if not (isinstance(f[k], list) and f[k] and all(isinstance(p, str) and PATH.fullmatch(p) for p in f[k])):
                     errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
-        if "before" in f and f["before"] not in BEFORE:
+        if "before" in f and isinstance(cast("object", f["before"]), dict):
+            check_under(fa, cast("object", f["before"]), cast("list[str]", errs))
+        elif "before" in f and f["before"] not in BEFORE:
             errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
 
 
@@ -612,6 +615,17 @@ def check_review(at: str, rv: object, errs: list[str]) -> None:
     errs.extend(f"{at}: field review.{k}: unknown field" for k in sorted(set(r) - {"question"}))
     if not isinstance(rv, dict):
         errs.append(f"{at}: field review: must be an object {{\"question\"}}")
+
+
+def check_under(fa: str, before: object, errs: list[str]) -> None:
+    """A before target {"edit_under": [P...]} (schema.md, Before targets)."""
+    b = cast("dict[str, object]", before)
+    if set(b) != {"edit_under"}:
+        errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)} or {{\"edit_under\": [P...]}}, got {json.dumps(b)}")
+        return
+    ps = cast("list[object]", b["edit_under"]) if isinstance(b["edit_under"], list) else []
+    if not ps or not all(isinstance(p, str) and PATH.fullmatch(p) for p in ps):
+        errs.append(f"{fa}: field before: edit_under must be a non-empty list of relative paths (a dir ends in /)")
 
 
 def check_tools(fa: str, tools: object, errs: list[str]) -> None:

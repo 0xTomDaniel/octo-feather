@@ -404,6 +404,9 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
         return judge_fields(fact, final, last)
     if fact["fact"] == "branch_paths":
         return judge_branch(fact, final, last, lines)
+    if fact["fact"] == "tool_called_before":
+        return judge_tool_before(cast("Fact", fact), cast("list[tuple[str, dict[str, object]]]", calls), final=cast("bool", final),
+                                 last=cast("tuple[object, str | None] | None", last), marks=cast("dict[str, int] | None", marks))
     if fact["fact"] == "tool_called":
         return judge_tool(cast("list[str]", fact["tools"]), cast("list[str] | None", lines), final=cast("bool", final))
     if fact["fact"] == "attempt_blocked":
@@ -425,7 +428,7 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
             return "fail", f"skill_not_read {s}: loaded at {at(r)}"
         return ("pass" if final else "open"), f"skill_not_read {s}: {none}"
     if t == "skill_read_before":
-        b = fact["before"]
+        b = target_name(cast("object", fact["before"]))
         stop, text = last or (None, None)
         if b == "final_message":   # never a mark (rule: schema, Before targets)
             w = n if final and stop in (None, "exit") and text is not None else None
@@ -443,6 +446,56 @@ def judge(fact, calls, final, record=(), last=None, marks=None, lines=None):
             return "open", f"skill_read_before {s} {b}: no {b} yet"
         return "fail", f"skill_read_before {s} {b}: target never reached ({gone}); " + (f"loaded at {at(r)}" if r is not None else none)
     raise ValueError(f"unknown fact {t!r}")
+
+
+Fact = dict[str, object]
+
+
+def target_name(before: object) -> str:
+    """A before target's name, as marks and evidence name it: the target, or `edit_under P...` (schema, Before targets)."""
+    if isinstance(before, dict):
+        return " ".join(["edit_under", *(str(p) for p in cast("list[object]", cast("Fact", before).get("edit_under") or []))])
+    return str(before)
+
+
+def under_targets(facts: list[Fact]) -> dict[str, list[str]]:
+    """{name: paths} of every edit_under target the facts name."""
+    return {target_name(f["before"]): [str(p) for p in cast("list[object]", cast("Fact", f["before"])["edit_under"])]
+            for f in facts if isinstance(f.get("before"), dict)}
+
+
+def under_marks(old: Fact, new: Fact, targets: dict[str, list[str]]) -> list[str]:
+    """The edit_under targets reached between two snapshots: a file under one of a target's paths created or changed."""
+    a, b = cast("dict[str, object]", old["files"]), cast("dict[str, object]", new["files"])
+    hit = [f for f, h in b.items() if f not in a or a[f] != h]
+    return [name for name, ps in targets.items() if any(under(f, p) for f in hit for p in ps)]
+
+
+def judge_tool_before(fact: Fact, calls: list[tuple[str, dict[str, object]]], *, final: bool, last: tuple[object, str | None] | None,
+                      marks: dict[str, int] | None) -> tuple[str, str]:
+    """tool_called_before N T (schema, Facts): a call to one of N started before the first tool call that reached T."""
+    names, b, n = [str(x) for x in cast("list[object]", fact["tools"])], target_name(fact["before"]), len(calls)
+    head = f"tool_called_before {' | '.join(names)} {b}"
+    r = next((i for i, (nm, _) in enumerate(calls) if nm in names), None)
+
+    def at(i: int) -> str:
+        return f"tool call {i + 1} of {n} ({show(calls[i])})"
+
+    stop, text = last or (None, None)
+    if b == "final_message":   # never a mark (rule: schema, Before targets)
+        w = n if final and stop in (None, "exit") and text is not None else None
+    else:
+        w = (marks or {}).get(b)
+        w = w if w is not None and w < n else None
+    if w is not None and r is not None and r < w:
+        return "pass", f"{head}: called at {at(r)}, before " + ("the final message" if b == "final_message" else f"first {b} at {at(w)}")
+    if w is not None:
+        return "fail", (f"{head}: " + ("reached the final message" if b == "final_message" else f"first {b} at {at(w)}")
+                        + (f", called only at {at(r)}" if r is not None else ", no call to any of them before it"))
+    if not final:
+        return "open", f"{head}: no {b} yet"
+    return "fail", f"{head}: target never reached" + (f" (run stopped ({stop}))" if stop not in (None, "exit") else "") \
+        + (f"; called at {at(r)}" if r is not None else "")
 
 
 def judge_tool(names: list[str], lines: list[str] | list[bytes] | None, *, final: bool) -> tuple[str, str]:
@@ -641,6 +694,7 @@ def watch(argv):
     known = set(git_out("rev-list", "--all").split())
     main0 = git_out("rev-parse", "-q", "--verify", "main")   # branch_paths' base (schema, Branch paths)
     tests = any(isinstance(f, dict) and f.get("before") == "test_write" for f in facts)   # only a case graded on it
+    unders = under_targets(cast("list[Fact]", facts))
     snap = snapshot(origin, log, tests)
     if tests:
         try:
@@ -686,6 +740,7 @@ def watch(argv):
                 except RuntimeError as e:
                     err["error"] = str(e); stop("test_runner"); break
             marks = changed(snap, now, known)
+            marks += under_marks(*cast("tuple[Fact, Fact, dict[str, list[str]]]", (snap, now, unders)))
             if marks:
                 ev = {"type": "qa_fs", "toolCallId": end.get("toolCallId"), "marks": marks, "gh": now["gh"][len(snap["gh"]):]}
                 line = (json.dumps(ev) + "\n").encode()
