@@ -1,6 +1,4 @@
-// skills-loaded: refuses a role launch, before any model call, when Pi did not load a skill the role lists or
-// the target declares on its `Repo skills:` line, naming each skill and Pi's reason (spec skills#loading-refuse,
-// #558: Pi leaves out a skill it cannot load, such as invalid YAML frontmatter, and still starts).
+// skills-loaded: the launch's side of spec skills#loading-refuse (#558).
 // scripts/pi-role loads it into every role with --octo-feather-skills-loaded, a JSON object:
 //   role      the role file's name, for the parent's message
 //   listed    the --skill folders the launch hands Pi: each must be among the skills Pi loaded (pi.getCommands)
@@ -13,7 +11,7 @@
 // On a problem: each on stderr, the parent told in a pane launch (herdr-say --parent, as resume-on-error.ts), and
 // Pi exits 1 from session_start, which Pi runs before the first prompt.
 import { spawn } from "node:child_process";
-import { readFileSync, realpathSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, dirname, join } from "node:path";
 
 // Pi's extension API and its exported skill loader, only the parts this file uses: local types, as
@@ -59,7 +57,8 @@ export default function (pi: Pi) {
     const why = (dir: string): string => {
       const d = real(dir);
       const own = loaded.diagnostics.filter((x) => x.path !== undefined && (real(x.path) === d || real(dirname(x.path)) === d));
-      return own.length ? own.map((x) => oneLine(x.message)).join("; ") : "Pi did not load it and gave no reason";
+      if (own.length) return own.map((x) => oneLine(x.message)).join("; ");
+      return existsSync(join(dir, "SKILL.md")) ? "Pi did not load it and gave no reason" : "no SKILL.md in it";
     };
     const session = new Set(pi.getCommands().filter((c) => c.source === "skill").map((c) => real(dirname(c.sourceInfo.path))));
     const byLoader = new Set(loaded.skills.map((s) => real(dirname(s.filePath))));

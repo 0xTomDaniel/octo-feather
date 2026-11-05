@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
-"""Pi itself, not a parse of ours, answers for every skill (skills spec #loading-refuse, #558):
-every .agents/skills/*/SKILL.md loads in Pi with a non-empty name in its frontmatter, as Pi's own
-parser reads it (skills spec #acceptance-skill-frontmatter), and every role in agents/*.md, launched
-as `pi-role --json` hands it to Pi, gets each skill it lists (#acceptance-only-listed). Both ask
-through the extension every launch loads (extensions/skills-loaded.ts), with Pi in RPC mode: no
-model call, no network, a private home. Also: the five role contracts exist; every tracker skill
+"""The gate's side of skills spec #loading-refuse (#558), with #acceptance-skill-frontmatter: every
+.agents/skills/*/SKILL.md and every folder `pi-role --json` hands a role in agents/*.md, asked of
+one Pi through extensions/skills-loaded.ts, in RPC mode: no model call, no network, a private
+home. Also: the five role contracts exist; every tracker skill
 the kit has (scripts/pi-role's TRACKERS) holds each tracker script as an executable in its
 scripts/ (skills spec #acceptance-tracker-scripts).
 
