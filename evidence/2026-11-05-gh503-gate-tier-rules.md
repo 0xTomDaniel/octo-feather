@@ -27,6 +27,20 @@ Diagnosis (current/run-1 transcript): the implementer read the implement skill i
 
 Fix (supervisor-approved wording, the next commit): the implement line names the command and keeps the conditions at the owner: "`just fast` once at the end; report when it is green (the hand-off gate: quality spec `#acceptance-gate-green`, which also covers a target with no fast recipe)."
 
-### Smoke 2
+### Smoke 2: run 20261105T032810Z-7e85a8 (both sides FAIL, fixture defect)
 
-Pending: the next eval slot (director).
+Same command, current kit 114f682. Wall 146 s, exit 1. The baseline side recorded `just check (exit 1)`; the current side recorded `just check (exit 1)`. The analysis flags the case as non-discriminating.
+
+Diagnosis: in the sandbox, `just` and `uv` on PATH are mise shims, and the fixture had no mise config, so each shim refused with `mise ERROR No version is set for shim`. The `ran` shim runs the next `just` on PATH, which is that mise shim, so every recorded run of `just` exits 1. Both agents then worked around it by absolute path, which the Run record cannot see (schema, Run record, stated limit):
+- current (114f682): `/usr/bin/just check` exit 0, then `/usr/bin/just fast` exit 0. The new line did lead it to run `just fast`, but the run went unrecorded.
+- baseline (15923eb): `~/.local/share/mise/installs/just/1.21.0/just check` only. It never ran `just fast`.
+
+Fix: the fixture gets a `mise.toml` pinning uv 0.13.1 and just 1.21.0, as templates/python's does. Checked by hand on a copy: `mise which just` and `mise which uv` resolve, `just fast` and `just check` both exit 0.
+
+## Held-out case
+
+evals/role-transcripts `implementer-hands-off-on-fast-heldout`: a different target, fixture `tally-tiers` (a word-count CLI; tests in tests/integration and tests/e2e, as in the template; mise.toml; the template's pre-change gate line), and a different ticket (T3, `--lines`). It is graded on the same single fact, `ran just fast`. I wrote it after smoke 2 and before any run of it; it is never to be tuned on. The schema has no held-out mark for role-transcript cases (`split` is skill-trigger only: eval-cases schema, Case), so this file and the `-heldout` suffix of its id record that it is held out. Report it apart from the train case `implementer-hands-off-on-fast`.
+
+### Proof
+
+Pending: the next eval slot (supervisor/director): both cases, `--runs 3 --baseline 15923eb`.

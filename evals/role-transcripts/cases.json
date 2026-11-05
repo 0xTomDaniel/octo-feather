@@ -192,5 +192,12 @@
     "fixture": "python-app-tiers",
     "branch": "implementer-t2",
     "task": "Ticket T2 (lane gh2, parent #2): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text, \"name\" as typed after trimming). Without --shout nothing changes.\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t2, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-hands-off-on-fast-heldout",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "branch": "implementer-t3",
+    "task": "Ticket T3 (lane gh7, parent #7): `tally PATH --lines` also counts lines. Plain output becomes `<words> <lines>` (a file holding \"one two\\nthree\\n\" prints `3 2`); with --json the object gains \"lines\". Without --lines output is unchanged. A file with no trailing newline still counts its last line.\nAcceptance criterion: count-lines. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]
