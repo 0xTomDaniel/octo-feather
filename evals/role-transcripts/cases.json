@@ -199,5 +199,12 @@
     "fixture": "tally-tiers",
     "branch": "implementer-t3",
     "task": "Ticket T3 (lane gh7, parent #7): `tally PATH --lines` also counts lines. Plain output becomes `<words> <lines>` (a file holding \"one two\\nthree\\n\" prints `3 2`); with --json the object gains \"lines\". Without --lines output is unchanged. A file with no trailing newline still counts its last line.\nAcceptance criterion: count-lines. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-hands-off-on-fast-heldout-2",
+    "role": "implementer",
+    "fixture": "slug-tiers",
+    "branch": "implementer-slg4",
+    "task": "Ticket SLG-4 (lane gh11, parent #11): long titles make long URLs. Add `--max N` to `slug`: the slug is cut to at most N characters, only at a hyphen, never mid-word, with no trailing hyphen (`slug \"The Quick Brown Fox\" --max 12` prints `the-quick`). If the first word alone is longer than N, print the first word whole. N must be a positive integer, else exit 2 with an error. Without --max nothing changes.\nAcceptance criterion: slug-max. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-slg4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]

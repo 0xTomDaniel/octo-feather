@@ -86,3 +86,21 @@ Current kit, from the transcripts:
 - Train runs 2 and 3 ran `just fast`.
 
 Reading: the implement skill line does not reliably change the hand-off. It fails when the skill is not loaded, and the agent overrides it when it judges the full tier safer. The held-out case is not tuned on and not rerun. Any further wording change needs a new held-out case.
+
+## Option (a): the rule moves to the always-loaded role file (director ruling after proof 26e5e4)
+
+Why: proof 26e5e4 showed the implement skill line misses when the skill is not loaded (held-out runs 1 and 3), and the agent overrides it when the full tier looks safer (train run 1: "`just fast` is a subset"). The ruling: one always-loaded site, tried once. If the new held-out case still does not separate, option (b): report the criterion unproven at the merge ask, with no further tuning.
+
+Change:
+- agents/implementer.md Rules (body only; frontmatter untouched) gains one line, a trigger plus pointers: "Hand off on green `just fast`; the full `just check` belongs to the lane's checkpoints, not your hand-off: quality spec `#acceptance-gate-green`, issue-lifecycle spec `#lanes-checkpoints`."
+- Its Output parenthetical pointer is removed, so the file states this in one place.
+- The implement skill line goes back to a plain pointer, so the rule is not stated twice: "the hand-off gate once at the end (quality spec `#acceptance-gate-green`)".
+
+Smoke: agents/implementer.md .agents/skills/implement/ .skillfile/patches/skills/implement/ (the proof run below)
+Removed: implement skill "`just fast` once at the end; report when it is green (... which also covers a target with no fast recipe)", now one site in agents/implementer.md; agents/implementer.md Output "(the gate a hand-off needs green: quality spec `#acceptance-gate-green`)".
+
+Held-out cases: `implementer-hands-off-on-fast-heldout` (tally-tiers) is spent: it ran in proof 26e5e4 (0/3 on both kits) and is kept as a recorded, spent case, never tuned on. The new held-out case is `implementer-hands-off-on-fast-heldout-2`: a different target, fixture `slug-tiers` (a slug library and command; an e2e test marked by decorator in tests/test_installed.py; mise.toml; the template's pre-change gate line), and a different ticket (SLG-4, `--max N`). It is graded on the same single fact, `ran just fast`. It was written and committed before any run of it. Held out by record, as before (#575).
+
+### Proof 2
+
+Pending: the eval slot: train plus the new held-out, `--runs 3 --baseline 15923eb`.
