@@ -2306,12 +2306,14 @@ def ci_scope(f: Feature, lang: str, r: Path, sc: Path, git: Callable[..., str]) 
     dorny/paths-filter, run as a runner would: the step's own `with:` inputs (read with PyYAML from the kit's locked
     environment) as INPUT_* variables, `before` given, a pull_request synchronize event, the head checked out, the
     action's dist/index.js at the kit's fetch-only pin (scripts/check-vendored --extract paths-filter), offline.
-    A push of only a status file beside a spec gives code=false (the check job skipped); a code push code=true."""
+    A push of only a status file beside a spec gives code=false; a code push code=true. The jobs' wiring (the check job
+    on the scope job's output) is not read here: GitHub's own run proves it (PR #608 at its final head, issue #589), and
+    octo-feather-lane merge-ask refuses a skipped check no Judged proof carries."""
     kit = f.s.repo
     wf = r / ".github" / "workflows" / "check.yml"
     read = ("import json, sys, yaml; w = yaml.safe_load(open(sys.argv[1])); j = w['jobs']; "
             "s = [x for x in j['scope']['steps'] if x.get('id') == 'diff']; "
-            "print(json.dumps({'step': s[0] if s else None, 'check_if': j['check'].get('if'), 'check_needs': j['check'].get('needs')}))")
+            "print(json.dumps({'step': s[0] if s else None}))")
     code, text = output(["uv", "run", "--project", kit, "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", read, str(wf)])
     pins = [ln.split() for ln in (Path(kit) / "Skillfile").read_text().splitlines() if ln.split()[:4] == ["#fetch-only", "github", "skill", "paths-filter"]]
     dist = sc / f"paths-filter-{lang}"
@@ -2329,13 +2331,14 @@ def ci_scope(f: Feature, lang: str, r: Path, sc: Path, git: Callable[..., str]) 
     pinned = bool(pins) and step.get("uses") == f"dorny/paths-filter@{pins[0][4].split('@', 1)[1]}"
     status = r / "docs" / "specs" / "app.status.json"
     pushes = {"status-only": (lambda: status.write_text(status.read_text() + "\n") if status.exists() else status.write_text("{}\n"),
-                              "qc: built acceptance-hello-json (judged 0123456789ab)", "false"),
-              "code": (lambda: (r / "AGENTS.md").write_text((r / "AGENTS.md").read_text() + "\nA code push.\n"), "docs: a code push", "true")}
-    for name, (change, subject, want) in pushes.items():
+                              status, "qc: built acceptance-hello-json (judged 0123456789ab)", "false"),
+              "code": (lambda: (r / "AGENTS.md").write_text((r / "AGENTS.md").read_text() + "\nA code push.\n"), r / "AGENTS.md",
+                       "docs: a code push", "true")}
+    for name, (change, path, subject, want) in pushes.items():
         case = f"{lang}-ci-{name}"
         before = git("rev-parse", "HEAD").strip()
         change()
-        git("add", "-A")
+        git("add", "--", str(path))   # only this push's file: earlier cases leave the tree changed (fast-residual's justfile)
         git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", subject)
         after = git("rev-parse", "HEAD").strip()
         event, out = sc / f"{case}.event.json", sc / f"{case}.output"
@@ -2357,10 +2360,7 @@ def ci_scope(f: Feature, lang: str, r: Path, sc: Path, git: Callable[..., str]) 
 
         def holds(c: Case, want: str = want) -> bool:
             m = re.search(r"(?m)^code<<(\S+)\n(.*)\n\1$", c.o["outputs"])
-            return (c.code == 0 and pinned and xc == 0 and m is not None and m.group(2) == want
-                    and not any("${{" in v for v in inputs.values() if v != BEFORE)
-                    and inputs.get("base") == BEFORE and step.get("if") == "github.event.action == 'synchronize'"
-                    and got.get("check_needs") == "scope" and got.get("check_if") == "needs.scope.outputs.code != 'false'")
+            return c.code == 0 and pinned and xc == 0 and m is not None and m.group(2) == want
         f.check(case, holds)
 
 
