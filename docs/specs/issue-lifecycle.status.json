@@ -197,8 +197,14 @@
       "pr": null
     },
     "acceptance-merge-ask-gate-budget": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T013629Z-60b2c78d",
+      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
+      "tests": [
+        "tests/lane-merge-ask.sh",
+        "tests/gate-trend-tier.sh"
+      ]
     }
   }
 }
