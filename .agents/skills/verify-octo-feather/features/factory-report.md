@@ -18,7 +18,7 @@ Drive criterion: `comms#acceptance-report-skill-reach`
 - `reflection-two-days` the report over a director log whose latest reflection line is two days old: shows that time, the log unchanged.
 - `gate-budget-over` the report with one open lane on o/r whose latest passed full gate run is over o/r's gate-time budget and grown past its share: shows that repository's block flagged `OVER BUDGET` and `GROWN`, with the trend and slowest items, the trend file unchanged.
 - `owner-caught-headline` the report over a director log with owner-caught findings two days and nine days ago: its line after the first, before any lane, counts each week.
-- `skill-reach` the report over scratch Pi session files: per role, each skill's sessions read/offered (a read inside a codemode batch counted), a read of a skill the role was not offered counted apart, a session started nine days ago left out, the session files unchanged.
+- `skill-reach` the report over scratch Pi session files: per role, each skill's sessions read/offered (a read inside a codemode batch counted; a session started nine days ago with a read today counted, its read nine days ago not; a sed script or grep naming a SKILL.md no read), a read of a skill the role was not offered counted apart, a session wholly nine days old left out, the session files unchanged.
 
 ## How to get to it (user POV)
 
@@ -39,7 +39,7 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 - **Two days ago** (`reflection-two-days`). Append an older reflection line, then one two days old. Run `octo-feather-lane report`. Observe exit 0 and one `director reflection: last ran <the latter's at> (2d0h<m>m ago)` line, the director log unchanged.
 
 - **Headline** (`owner-caught-headline`). Append owner-caught findings: two two days ago, one nine days ago. Run `octo-feather-lane report`. Observe exit 0 and the report's second line `owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before`.
-- **Skill reach** (`skill-reach`). Write scratch Pi session files: two implementers offered commit and tdd, one reading tdd inside a codemode batch (a path list mapped to `tools.read`), the other reading commit; a code reviewer offered code-review reading tdd; an implementer session started nine days ago reading tdd. Run `octo-feather-lane report`. Observe exit 0, the block `skill reach (...)`, `  code reviewer (1 session): code-review 0/1; read, not offered: tdd 1`, `  implementer (2 sessions): commit 1/2, tdd 1/2`, and the session files' hashes unchanged.
+- **Skill reach** (`skill-reach`). Write scratch Pi session files, every line timestamped: implementers offered commit and tdd, one reading tdd inside a codemode batch (a path list mapped to `tools.read`), one reading commit, one started nine days ago reading commit then and tdd today, one only naming SKILL.md paths (a sed script naming `a/SKILL.md`, a grep of a variable naming tdd's), and one wholly nine days old reading tdd; a code reviewer offered code-review reading tdd. Run `octo-feather-lane report`. Observe exit 0, the block `skill reach (...)`, `  code reviewer (1 session): code-review 0/1; read, not offered: tdd 1`, `  implementer (4 sessions): commit 1/4, tdd 2/4` (no skill `a`), and the session files' hashes unchanged.
 
 ## Gotchas
 

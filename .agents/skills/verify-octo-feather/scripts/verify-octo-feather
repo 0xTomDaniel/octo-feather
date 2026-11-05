@@ -928,31 +928,42 @@ def drive_factory_report(f: Feature) -> None:
     f.run("owner-caught-headline", "octo-feather-lane", "report")
     f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
             == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
-    # Skill reach (comms #report-skill-reach): scratch Pi session files. Two implementers offered tdd, one reads it inside
-    # a codemode batch; a code reviewer reads tdd, not offered to it; an implementer session started nine days ago.
-    def session(name: str, start: str, role: str, offered: list[str], calls: list[tuple[str, dict[str, str]]]) -> None:
+    # Skill reach (comms #report-skill-reach): scratch Pi session files, each line timestamped. Implementers offered commit
+    # and tdd: one reads tdd inside a codemode batch, one reads commit; one started nine days ago reads commit then (not
+    # counted) and tdd today (counted); one only mentions (a sed script naming a/SKILL.md, a grep of a variable naming
+    # tdd/SKILL.md); one wholly nine days old is left out. A code reviewer reads tdd, not offered to it.
+    today = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def session(name: str, start: str, role: str, offered: list[str], calls: list[tuple[str, dict[str, str], str]]) -> None:
         skills = "".join(f"<skill><name>{n}</name><description>d</description><location>/kit/.agents/skills/{n}/SKILL.md"
                          "</location></skill>" for n in offered)
         lines = [{"type": "session", "version": 3, "id": name, "timestamp": start, "cwd": "/w"},
-                 {"type": "message", "message": {"role": "system", "content": "", "sections": {
+                 {"type": "message", "timestamp": start, "message": {"role": "system", "content": "", "sections": {
                      "addendum": f"# {role}\n", "skills": f"<available_skills>{skills}</available_skills>"}}},
-                 *({"type": "message", "message": {"role": "assistant", "content": [
-                     {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}} for i, (t, a) in enumerate(calls))]
+                 *({"type": "message", "timestamp": at, "message": {"role": "assistant", "content": [
+                     {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}} for i, (t, a, at) in enumerate(calls))]
         d = sc / "pi" / "sessions" / "--w--"
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{name}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
     batch = 'await Promise.all(["/kit/.agents/skills/tdd/SKILL.md", "README.md"].map(p => tools.read({path: p})));'
-    session("impl-1", two_days, "Implementer", ["commit", "tdd"], [("codemode", {"code": batch})])
-    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", {"path": "/kit/.agents/skills/commit/SKILL.md"})])
-    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"})])
-    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", {"path": "/kit/.agents/skills/tdd/SKILL.md"})])
+    mention = ('const p = "/kit/.agents/skills/tdd/SKILL.md"; await tools.grep({pattern: "x", path: p});'
+               ' await tools.read({path: "README.md"});')
+    sed = "git diff | sed -e 's#^--- .agents/skills/tdd/SKILL.md#--- a/SKILL.md#'"
+    commit, tdd = {"path": "/kit/.agents/skills/commit/SKILL.md"}, {"path": "/kit/.agents/skills/tdd/SKILL.md"}
+    session("impl-1", two_days, "Implementer", ["commit", "tdd"], [("codemode", {"code": batch}, two_days)])
+    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", commit, two_days)])
+    session("impl-long", nine_days, "Implementer", ["commit", "tdd"], [("read", commit, nine_days), ("read", tdd, today)])
+    session("impl-mention", two_days, "Implementer", ["commit", "tdd"],
+            [("bash", {"command": sed}, two_days), ("codemode", {"code": mention}, two_days)])
+    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", tdd, nine_days)])
+    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"}, two_days)])
     f.obs_cmd("skill-reach", "before", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
     f.run("skill-reach", "octo-feather-lane", "report")
     f.obs_cmd("skill-reach", "after", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
     f.check("skill-reach", lambda c: c.code == 0 and c.o["after"] == c.o["before"] and (
-        "\nskill reach (Pi sessions started in the last 7 days; per role: skill read/offered, sessions):\n"
+        "\nskill reach (Pi sessions active in the last 7 days; per role: skill read/offered, sessions):\n"
         "  code reviewer (1 session): code-review 0/1; read, not offered: tdd 1\n"
-        "  implementer (2 sessions): commit 1/2, tdd 1/2\n") in c.out)
+        "  implementer (4 sessions): commit 1/4, tdd 2/4\n") in c.out)
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
