@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Integration test for `just shape` (roles#acceptance-shaper-launch): the shaper role's pi-role launch,
 # its model, thinking and tools, exactly its listed kit skills, Spec Chat's from the target repo, none
-# from home. Run by `just check`, and by qc.toml's demo of that criterion, so it prints the launch it checks.
+# from home. Run by `just check`; it prints the launch it checks.
+# criterion: roles#acceptance-shaper-launch
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT

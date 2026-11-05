@@ -130,13 +130,8 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 
-# tests/shape.sh: `just shape --json` from a scratch target holding Spec Chat's skills, the same names (and another
-# skill) in a scratch home; prints pi-role's launch of agents/shaper.md and fails unless its skills are exactly the
-# role file's. One scenario, the test's, so its literal expectations are the demo's.
 [demo."roles#acceptance-shaper-launch"]
-command = "tests/shape.sh"
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
-tests = ["tests/shape.sh"]
 
 # The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
 [demo."quality#acceptance-qa-repeats"]
