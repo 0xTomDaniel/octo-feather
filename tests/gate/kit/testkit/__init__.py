@@ -38,6 +38,9 @@ FAKES = {
     "herdr": HERE / "herdr.py",
     "pi": FIXTURES / "classify-stub" / "pi",
 }
+# Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
+# way: pi_agent.py (Pi at the agent boundary, an eval case's role run) and github.py (GitHub's
+# issues, for octo-feather-qc-ghsnap to snapshot); each file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 CLEARED = (
@@ -193,6 +196,30 @@ class Scratch:
             "commit.gpgsign=false",
         ]
         return self.run(["git", "-C", str(repo), *ident, *args]).out
+
+
+def tool_homes() -> dict[str, str]:
+    """The tools' own installs and caches as the caller's HOME finds them, for a scenario that
+    runs the tools of a repo (mise.toml, uv, pnpm), never the scratch HOME's, where each would
+    fetch again, from the network: mise's installed tools and download cache (its defaults:
+    MISE_DATA_DIR, MISE_CACHE_DIR), uv's package cache and Pythons (`uv cache dir`, `uv python
+    dir`)."""
+    home = Path(os.environ["HOME"])
+    data = os.environ.get("XDG_DATA_HOME") or str(home / ".local" / "share")
+    cache = os.environ.get("XDG_CACHE_HOME") or str(home / ".cache")
+
+    uv_cmd = shutil.which("uv") or "uv"
+
+    def uv(*a: str) -> str:
+        p = subprocess.run([uv_cmd, *a], capture_output=True, text=True, check=True)
+        return p.stdout.strip()
+
+    return {
+        "MISE_DATA_DIR": os.environ.get("MISE_DATA_DIR") or f"{data}/mise",
+        "MISE_CACHE_DIR": os.environ.get("MISE_CACHE_DIR") or f"{cache}/mise",
+        "UV_CACHE_DIR": uv("cache", "dir"),
+        "UV_PYTHON_INSTALL_DIR": uv("python", "dir"),
+    }
 
 
 def main(*scenarios: Callable[..., None]) -> None:

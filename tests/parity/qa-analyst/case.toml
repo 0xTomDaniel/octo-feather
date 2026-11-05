@@ -1,0 +1,4 @@
+# The parity lever's case for tests/qa-analyst.sh, rewritten as tests/gate/kit/test_qa_analyst.py (tests/parity/lever.py --help).
+old = "tests/qa-analyst.sh"
+old_at = "3e8c414"
+new = "tests/gate/kit/test_qa_analyst.py"

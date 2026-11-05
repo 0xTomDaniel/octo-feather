@@ -7,7 +7,10 @@ run/N.json, the repo repo.json, each `--json` answered the same way, `issue|pr|r
 one stored (by number); `gh api [--paginate --slurp] PATH`, a GET, prints api/PATH.json (one
 page; slurped, a list of it), a path not stored is GitHub's 404. `gh api -X POST
 repos/o/r/issues/N/comments` appends a comment, `-X PATCH repos/o/r/issues/comments/ID` replaces
-one's body (PR 7's comments); each prints the comment URL (`--jq .html_url`). As the real gh:
+one's body (PR 7's comments); each prints the comment URL (`--jq .html_url`). `gh api
+repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default branch's commits), `gh api
+repos/o/r/contents/F -H Accept: application/vnd.github.raw` $FAKE_GH/contents/F (the default
+branch's file), each `gh: Not Found (HTTP 404)` when absent. As the real gh:
 no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth login`, and a
 file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log. Anything else
 exits 2 naming it.
@@ -20,6 +23,7 @@ import sys
 from pathlib import Path
 
 STORE = Path(os.environ["FAKE_GH"])
+RAW = ["-H", "Accept: application/vnd.github.raw"]
 
 
 def pr_file(n: str) -> Path:
@@ -38,6 +42,12 @@ def pick(d: dict[str, object], a: list[str]) -> dict[str, object]:
 
 def out(x: object) -> None:
     sys.stdout.write(json.dumps(x) + "\n")
+
+
+def served(p: Path) -> None:
+    if not p.is_file():
+        die("gh: Not Found (HTTP 404)")
+    sys.stdout.write(p.read_text())
 
 
 def view(a: list[str]) -> None:
@@ -65,7 +75,13 @@ def diff(a: list[str]) -> None:
 
 
 def get(a: list[str]) -> None:
-    """`api [--paginate --slurp] PATH`, a GET."""
+    """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
+    if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
+        served(STORE / "commits.json")
+        return
+    if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
+        served(STORE / "contents" / m.group(1))
+        return
     p = STORE / "api" / f"{a[-1].lstrip('/')}.json"
     if not p.is_file():
         die("gh: Not Found (HTTP 404)")
