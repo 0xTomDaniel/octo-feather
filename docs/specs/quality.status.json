@@ -250,8 +250,13 @@
       "pr": null
     },
     "acceptance-qc-carry": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T220216Z-e032cd53",
+      "commit": "f4db698035ec2278227c19a499f9156fdfbfc456",
+      "tests": [
+        "tests/qc-carry.sh"
+      ]
     }
   }
 }
