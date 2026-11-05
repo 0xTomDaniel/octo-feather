@@ -1854,5 +1854,93 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "impl-kit-ts-toml-doctor-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-ts-resume-delays-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-check-roles-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-contract-json-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-check-roles-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-py-contract-json-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-toml-doctor-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-resume-delays-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
   }
 ]
