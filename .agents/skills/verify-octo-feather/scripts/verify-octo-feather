@@ -377,6 +377,15 @@ def qc_report(f: Feature, name: str) -> dict[str, Any]:
     return json.loads(Path(paths[-1]).read_text()) if paths else {}
 
 
+def scratch_state(f: Feature) -> Path:
+    """The state dir the drive's commands use: `octo-feather-state` asked under the drive's env (f.env), never a guessed
+    root (inside a qc sandbox HERDR_SESSION names the run's session, so it is that session's dir)."""
+    r = subprocess.run([f.s.kit, "octo-feather-state"], capture_output=True, text=True, env={**os.environ, **f.env}, check=False)
+    if r.returncode or not r.stdout.strip():
+        die(f"octo-feather-state failed under the drive's env: {r.stderr.strip()}")
+    return Path(r.stdout.strip())
+
+
 def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
     """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
     store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
@@ -1612,8 +1621,9 @@ def drive_merge_ask_proof(f: Feature) -> None:
     # seeded here: this target's own gate is no pytest), after three passed full runs on main: flagged with the trend and
     # slowest items, and the ask passes exactly as above, the gate time block (its last) aside.
     base, head = git(r, "rev-parse", "main"), git(lane, "rev-parse", "HEAD")
-    (sc / "state" / "octo-feather").mkdir(parents=True, exist_ok=True)
-    (sc / "state" / "octo-feather" / "check-runs.jsonl").write_text("".join(json.dumps({
+    state = scratch_state(f)   # where merge-ask reads it under this drive's env (in a qc sandbox: its session's dir)
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "check-runs.jsonl").write_text("".join(json.dumps({
         "start": at, "repo": str(lane), "head": h, "total_s": s, "exit": 0, "tier": "full",
         "steps": [{"name": "tests/e2e.sh", "seconds": s - 10, "result": "ok"}, {"name": "check-lint", "seconds": 4.0, "result": "ok"}]}) + "\n"
         for at, h, s in (("2026-10-01T10:00:00Z", base, 40.0), ("2026-10-02T10:00:00Z", base, 44.0),

@@ -49,6 +49,7 @@ printf '.pytest_cache/\n__pycache__/\n' > .gitignore
 printf '[pytest]\ntestpaths = tests/gate\naddopts = --strict-markers --junitxml=.pytest_cache/junit.xml\n' > pytest.ini
 printf 'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n' > qc.toml
 cat > justfile <<'EOF'
+set positional-arguments
 export GATE_RECIPES := "check-ok"
 export OCTO_FEATHER_CHECK_RUN := `check-gate-free --run`
 check: check-tests
@@ -149,4 +150,29 @@ grep -A1 '^INSUFFICIENT EVIDENCE acceptance-a: ' <<< "$out" | grep -q "missing: 
   || fail "strict: want insufficient evidence naming the missing claims gate record and the tagged case: $out"
 ! grep -q 'DEMO-RAN\|agent fallback\|qc: demo ' <<< "$out$(cat "$t/err")" || fail "strict: the demo or the fallback ran: $out $(cat "$t/err")"
 [[ "$(records)" == 2 ]] || fail "strict: qc appended a record"
+
+# Partial capture: acceptance-a gains a second tagged test. A narrowed gate run with claims is refused before any test
+# runs; a record holding only part of the criterion's tagged cases is insufficient evidence naming the missing case.
+printf '#!/usr/bin/env bash\n# criterion: demo#acceptance-a\necho RAN-accept2\n' > tests/accept2.sh; chmod +x tests/accept2.sh
+git add -A; git commit -qm "a second tagged test"
+h3="$(git rev-parse HEAD)"
+set +e; out="$(timeout -k 5 300 env OCTO_FEATHER_QC_CLAIMS=demo#acceptance-a just check-tests 'tests/gate/test_gate.py::test_script[tests/accept.sh]' 2>&1)"; rc=$?; set -e
+[[ "$rc" != 0 ]] && grep -q "needs the full gate" <<< "$out" && ! grep -q "RAN-accept\|qc capture:" <<< "$out" \
+  || fail "partial: want a narrowed capturing run refused before any test, got $rc: $out"
+[[ "$(records)" == 2 ]] || fail "partial: a narrowed run appended a record"
+partial() { set +e; out="$(timeout -k 5 120 just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 acceptance-a 2>"$t/err")"; rc=$?; set -e
+  [[ "$rc" == 2 ]] && grep -A1 '^INSUFFICIENT EVIDENCE acceptance-a: ' <<< "$out" | grep -q "missing: $1" \
+    && ! grep -q 'DEMO-RAN\|agent fallback' <<< "$out$(cat "$t/err")" || fail "partial: want insufficient evidence, missing: $1; got $rc: $out"; }
+partial "no claims gate record at ${h3:0:12}"
+# A record of only tests/accept.sh at h3, through the capture's store command: qc finds tests/accept2.sh missing.
+python3 - "$t/session.json" "$h3" <<'EOF'
+import json, sys
+n = "tests/gate/test_gate.py::test_script[tests/accept.sh]"
+json.dump({"claims": ["demo#acceptance-a"], "plan": {n: {"criteria": ["demo#acceptance-a"], "source": "tests/accept.sh"}},
+           "reports": {n: {"phases": {w: {"outcome": "passed", "why": ""} for w in ("setup", "call", "teardown")}, "output": "RAN-accept\n", "seconds": 0.1}},
+           "notes": {n: {"command": ["tests/accept.sh"], "ran": True, "exit": 0, "said": "RAN-accept", "sandbox": {"proof": ["ok"]}, "shots": []}},
+           "head_at_start": sys.argv[2], "clean_at_start": True, "argv": ["-n", "2"], "tier": "full", "exit": 0}, open(sys.argv[1], "w"))
+EOF
+octo-feather-qc --capture-store "$t/session.json" | grep -q "1 case(s): tests/accept.sh passed" || fail "partial: the store did not record the session"
+partial "case tests/gate/test_gate.py::test_script\[tests/accept2.sh\] tagged at ${h3:0:12}, not in the record"
 echo "qc-one-execution: ok"
