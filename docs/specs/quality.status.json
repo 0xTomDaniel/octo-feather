@@ -3,8 +3,8 @@
   "accepted_commit": "44c4b559ef96419a88e355390ec4c4ac057bd612",
   "criteria": {
     "acceptance-gate-green": {
-      "status": "built",
-      "pr": 16
+      "status": "planned",
+      "pr": null
     },
     "acceptance-gate-no-model": {
       "status": "built",
@@ -152,13 +152,10 @@
     },
     "acceptance-built-links": {
       "status": "built",
-      "pr": 420,
-      "record": "20261030T041949Z-00421f09",
-      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
-      "tests": [
-        "tests/qc-capture.sh",
-        "tests/spec-status.sh"
-      ]
+      "pr": 546,
+      "record": "20261105T041048Z-f5dfb2ec",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     },
     "acceptance-evidence-stale": {
       "status": "built",
@@ -172,30 +169,23 @@
     "acceptance-fast-affected": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T183304Z-5262e9e8",
-      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
-      "tests": [
-        "tests/fast.sh",
-        "tests/integrate.sh"
-      ]
+      "record": "20261105T041023Z-a36f5104",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     },
     "acceptance-one-execution": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T013535Z-afa8a2c6",
-      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
-      "tests": [
-        "tests/qc-one-execution.sh"
-      ]
+      "record": "20261105T041032Z-95b9678d",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     },
     "acceptance-one-execution-incomplete": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T013544Z-6f31688a",
-      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
-      "tests": [
-        "tests/qc-one-execution.sh"
-      ]
+      "record": "20261105T041038Z-8107a634",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     },
     "acceptance-review-test-adequacy": {
       "status": "planned",
