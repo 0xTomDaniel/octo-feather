@@ -37,3 +37,41 @@ Totals: should-trigger train before 0/6 runs, after 4/6; held-out before 0/6, af
 Of the 4 failed after runs, 3 issued the codebase-design read: rev-design-seam run 1 (call 10 of 12), rev-design-phrasebook run 1 (call 11 of 12), impl-design-phrasebook run 2 (call 12 of 12). Each read was in a parallel codemode batch whose start events reached the suite's `max_tool_calls` 12, so the run stopped before its result, and no load counts. Only impl-design-seam run 2 issued none in 12 calls (it read implement and tdd, then the code). No before run issued one.
 
 Limit: should-not cases pass at the cap too (12 calls without a read); they show no early read, not none at all.
+
+## Pi dropped codebase-design: invalid YAML frontmatter (lane 557 finding)
+
+The patched description (a33a26e through a84b079) is an unquoted plain scalar holding ": " ("where its tests cross it: deep modules"), invalid YAML, and Pi silently skips a skill whose SKILL.md frontmatter does not parse (~/.local/pi/docs/skills.md: "Malformed SKILL.md files ... are not loaded"). So no role was offered codebase-design; every after run above loaded it only through the role step pointers (agents/implementer.md, agents/code-reviewer.md) naming it by path. Fix: the description is double-quoted in the patch, same words; check-vendored reapplies byte-equal.
+
+Proof by asking Pi: real Pi at the kit pin, launched by `scripts/pi-role agents/<role>.md --model fake/fake --no-session -p "say ok"` from this worktree, headless, against a fake OpenAI-compatible provider on 127.0.0.1 that records each request body (the provider, models.json and credential-free `pienv` of tests/lib/resume-on-error.sh: empty HOME, own PI_CODING_AGENT_DIR, PI_OFFLINE=1; no real model call). Offered = the `<name>` entries of `<available_skills>` in the system prompt Pi sent; listed = the role file's `skills:` plus `externalSkills:` ({tracker} counted as github-issues). Pi printed no skill diagnostic on stderr either side. Harness: /tmp/gh529-pi/offered.sh (scratch, removed after), run as `offered.sh <worktree> implementer code-reviewer shaper`.
+
+Before, a84b079:
+
+```
+== implementer: pi-role -p rc=0 answer=fake-answer-ok
+offered: principle-prove-it-works principle-encode-lessons-in-structure blast-radius commit create-verification-skill maintain-verification-skill eval-cases github-pr github-issues implement nodejs pnpm pull agent-browser
+missing: python tdd codebase-design typescript
+== code-reviewer: pi-role -p rc=0 answer=fake-answer-ok
+offered: code-review github-pr
+missing: tdd codebase-design
+== shaper: pi-role -p rc=0 answer=fake-answer-ok
+offered: grill-with-docs grilling domain-modeling sharpen improve-codebase-architecture spec-chat-shape spec-chat-review
+missing: codebase-design
+```
+
+After, description quoted:
+
+```
+== implementer: pi-role -p rc=0 answer=fake-answer-ok
+offered: principle-prove-it-works principle-encode-lessons-in-structure blast-radius commit create-verification-skill maintain-verification-skill eval-cases github-pr github-issues implement nodejs pnpm pull codebase-design agent-browser
+missing: python tdd typescript
+== code-reviewer: pi-role -p rc=0 answer=fake-answer-ok
+offered: code-review github-pr codebase-design
+missing: tdd
+== shaper: pi-role -p rc=0 answer=fake-answer-ok
+offered: grill-with-docs grilling domain-modeling sharpen codebase-design improve-codebase-architecture spec-chat-shape spec-chat-review
+missing: none
+```
+
+Other skills a kit role lists that Pi drops the same way, not fixed here (lane 557 owns them): tdd (implementer, code reviewer), python and typescript (implementer). Corrector, director, qc-judge, reflector and supervisor at a84b079: missing none; the director with `tracker = "linear"` in a scratch repo is offered linear.
+
+Limit: the trigger runs above predate the quoting, so they measure the step pointers, not the description; the codebase-design trigger rerun is owed in the eval slot.
