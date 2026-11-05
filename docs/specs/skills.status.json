@@ -9,8 +9,8 @@
     "acceptance-skill-frontmatter": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T024115Z-04b5f1ce",
-      "commit": "badefbfe064a08d6e5b25071a29f7c53d070e686",
+      "record": "20261105T031511Z-beb70b78",
+      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
       "tests": [
         "tests/check-skills.sh"
       ]
@@ -18,8 +18,8 @@
     "acceptance-only-listed": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T024105Z-64bcb8c0",
-      "commit": "badefbfe064a08d6e5b25071a29f7c53d070e686",
+      "record": "20261105T031457Z-76160de7",
+      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
       "tests": [
         "tests/skills-loaded.sh",
         "tests/check-skills.sh"
@@ -64,8 +64,8 @@
     "acceptance-launch-refuses-unloaded": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T024124Z-22ae336b",
-      "commit": "badefbfe064a08d6e5b25071a29f7c53d070e686",
+      "record": "20261105T031524Z-505a35a8",
+      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
       "tests": [
         "tests/skills-loaded.sh"
       ]
