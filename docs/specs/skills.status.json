@@ -9,21 +9,16 @@
     "acceptance-skill-frontmatter": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T031511Z-beb70b78",
-      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
-      "tests": [
-        "tests/check-skills.sh"
-      ]
+      "record": "20261105T190228Z-3b660e50",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     },
     "acceptance-only-listed": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T031457Z-76160de7",
-      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
-      "tests": [
-        "tests/skills-loaded.sh",
-        "tests/check-skills.sh"
-      ]
+      "record": "20261105T190218Z-f40f66b6",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     },
     "acceptance-external-skill": {
       "status": "planned",
@@ -64,11 +59,9 @@
     "acceptance-launch-refuses-unloaded": {
       "status": "built",
       "pr": 570,
-      "record": "20261105T031524Z-505a35a8",
-      "commit": "61300d6ecd9e0ed348858e2fa148fc7d5143971f",
-      "tests": [
-        "tests/skills-loaded.sh"
-      ]
+      "record": "20261105T190238Z-bdeb08ce",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     }
   }
 }
