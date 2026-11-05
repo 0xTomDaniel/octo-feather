@@ -3,9 +3,8 @@
 # Integration test for qc carry (quality spec #qc-carry), through `just qc` / octo-feather-qc, the status file and the qc
 # report, with a fake herdr and the stub judge tests/fixtures/qc-judge/pi (no model). A scratch target on a lane
 # branch: its earlier head passes demos a, b, c, the agent fallback f (an entry with covers, no demo), the tagged tests
-# g and h (h with no covered path), fails e and gets insufficient evidence on i. Each later head is a merge of main changing one thing; qc on it judges again what that
-# moved and every fallback, failed or insufficient criterion, and carries the rest with the head and record they were
-# judged at. Needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
+# g and h (h with no covered path), fails e and gets insufficient evidence on i. Each later head is a merge of main changing one thing; what qc on it carries or
+# judges again: quality spec #qc-carry, each case below. Needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh.
 set -euo pipefail
 unset OCTO_FEATHER_CHECK_RUN OCTO_FEATHER_QC_CLAIMS   # a test harness, as tests/qc.sh: the scratch gate sets its own
 [[ "$(uname -s)" != Darwin ]] || { echo "qc-carry: skipped, not on macOS (the qc sandbox needs Linux; CI runs it)"; exit 77; }

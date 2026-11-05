@@ -4,9 +4,8 @@
   octo-feather-qc --capture-case NOTE -- CMD...   (a capturing gate's tagged case; tests/gate/conftest.py)
   octo-feather-qc --capture-store SESSION         (that gate's records, after its run)
 
-Run in a lane worktree at its integrated head. A named criterion carried from an earlier head of the lane (quality spec
-#qc-carry; code: carry below) keeps that head's result, neither captured nor judged again; stderr names why each other
-one with a built row is judged again. A named criterion a tagged test proves is judged from the record its
+Run in a lane worktree at its integrated head. Which named criteria keep an earlier head's result: quality spec
+#qc-carry (code: carry below); stderr names why each other one with a built row is judged again. A named criterion a tagged test proves is judged from the record its
 head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
 #qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo command under
@@ -787,7 +786,7 @@ def earlier(at: str, stem: str, i: str, rid: str) -> Result | None:
 
 def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, head: str, root: str,
           tags: dict[str, list[str]]) -> dict[str, Result]:
-    """Of IDS, each carried from an earlier head of this lane (quality spec #qc-carry), its result there labelled carried:
+    """Of IDS, each quality spec #qc-carry carries, its earlier result labelled carried, read from:
     the head from its built row, the result from that head's qc report, what moved from octo-feather-spec-status's stale()
     and the record's own versions, a test newly tagged from TAGS (tagged_cases). Each other one with a built row is named with why it is judged again."""
     st, ev = script("octo-feather-spec-status"), script("octo-feather-evidence")
@@ -906,7 +905,7 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
     for i, r in tests.items():
-        if r.get("carried"):   # its earlier result, neither captured nor judged again (carry)
+        if r.get("carried"):   # carried (quality spec #qc-carry)
             done[i] = r
             continue
         print(f"qc: tagged test {stem}#{i}: " + (f"judged from the gate's record {r['record']} at {head[:12]}, not rerun" if r["record"]

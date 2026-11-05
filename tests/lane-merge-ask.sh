@@ -16,8 +16,7 @@
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
 # Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
 # Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
-# Skipped checks (#acceptance-ci-status-only; the rule: #lanes-one-head): never a pass by themselves, carried only
-# from the judged head's green run by the Judged proof, naming it.
+# Skipped checks: #acceptance-ci-status-only (the rule: #lanes-one-head).
 # Run by `just check`.
 # criterion: issue-lifecycle#acceptance-merge-ask-full-proof
 # criterion: issue-lifecycle#acceptance-ci-status-only
