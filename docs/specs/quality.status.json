@@ -14,6 +14,18 @@
       "status": "built",
       "pr": 16
     },
+    "acceptance-gate-time-targets": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-test-cpu-shown": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-test-cpu-budget": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-qc-listed": {
       "status": "planned",
       "pr": null
