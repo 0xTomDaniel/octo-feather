@@ -1,0 +1,4 @@
+# The parity lever's case for tests/qc-advisory.sh, rewritten as tests/gate/kit/test_qc_advisory.py (tests/parity/lever.py --help).
+old = "tests/qc-advisory.sh"
+old_at = "3e8c414"
+new = "tests/gate/kit/test_qc_advisory.py"

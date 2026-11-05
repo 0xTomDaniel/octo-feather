@@ -89,6 +89,13 @@ class Gh:
     def put(self, n: int, d: Mapping[str, object]) -> None:
         (self.dir / "pr" / f"{n}.json").write_text(json.dumps(d))
 
+    def store(self, rel: str, d: object) -> None:
+        """The store's REL (testkit/gh.py: issue/N.json, run/N.json, repo.json, api/PATH.json,
+        pr/N.diff) holding D, JSON unless a str."""
+        p = self.dir / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(d if isinstance(d, str) else json.dumps(d))
+
     def log(self) -> list[str]:
         return (self.dir / "log").read_text().splitlines()
 
@@ -114,6 +121,7 @@ class Scratch:
             "TMPDIR": str(root / "tmp"),
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_GH": str(self.gh.dir),
+            "GH_TOKEN": "testkit-token",  # the caller's gh auth, as the fake gh asks for it
         }
         self.env = env
 
