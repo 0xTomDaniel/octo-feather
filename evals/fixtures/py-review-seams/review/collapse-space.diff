@@ -1,0 +1,32 @@
+diff --git a/src/app/core.py b/src/app/core.py
+index 7076096..d8407d3 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -8,7 +8,7 @@ class Greeting:
+ 
+ 
+ def greet(name: str) -> Greeting:
+-    clean = name.strip()
++    clean = " ".join(name.split())
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 377041b..91fed1c 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -19,6 +19,14 @@ def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
+     assert json.loads(capsys.readouterr().out) == {"error": "name must not be empty"}
+ 
+ 
++def test_inner_whitespace_collapses(capsys: pytest.CaptureFixture[str]) -> None:
++    assert main(["hello", "Ada \t  Lovelace", "--json"]) == 0
++    assert json.loads(capsys.readouterr().out) == {
++        "name": "Ada Lovelace",
++        "text": "Hello, Ada Lovelace",
++    }
++
++
+ def test_installed_command_end_to_end() -> None:
+     app = shutil.which("app")
+     assert app, "run through `uv run` so the app command is on PATH"

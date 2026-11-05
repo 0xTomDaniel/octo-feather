@@ -919,7 +919,7 @@ def drive_role_launch(f: Feature) -> None:
     v = f.s.contract.values
     if "web_roles" not in v or "web_servers" not in v:
         die("qc.toml [values] needs web_roles and web_servers: the role-launch drive's expected web roles and servers")
-    roles = ("director", "supervisor", "implementer", "corrector", "code-reviewer", "qc-judge")
+    roles = ("director", "supervisor", "implementer", "corrector", "code-reviewer", "qc-judge", "shaper")
     servers = v["web_servers"].split()
     sc = RUN_DIR / "scratch" / "role-launch"
     shutil.rmtree(sc, ignore_errors=True)
