@@ -114,12 +114,9 @@
     "acceptance-report-gate-budget": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T013557Z-f3873b0d",
-      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
-      "tests": [
-        "tests/lane-report.sh",
-        "tests/gate-trend-tier.sh"
-      ]
+      "record": "20261105T041611Z-25919dd5",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     },
     "acceptance-report-owner-caught-headline": {
       "status": "built",
