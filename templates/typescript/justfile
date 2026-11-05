@@ -39,22 +39,9 @@ check-static:
 
 # The fast tier (octo-feather quality spec #recipe-fast): the static checks, then the integration test files Vitest
 # picks by their imports of the files changed since the branch left main (vitest --changed), each test named; no
-# end-to-end test (the integration project only: vitest.config.ts). A change since then to a path on
-# shared-machinery.txt, which the import graph cannot see, runs every integration test.
+# end-to-end test (the integration project only: vitest.config.ts); the choice and its run: scripts/fast-select.ts.
 fast: check-static
-    #!/usr/bin/env bash
-    set -euo pipefail
-    sel=()
-    if ! base="$(git merge-base HEAD main 2>/dev/null)"; then
-      echo "fast: every integration test: no merge base with main to compare against"
-    else
-      mapfile -t specs < <(sed -n '/^[[:space:]]*\(#\|$\)/!s/^/:(glob)/p' shared-machinery.txt)
-      hit="$({ git diff --name-only "$base" -- "${specs[@]}"; git ls-files -o --exclude-standard -- "${specs[@]}"; } | sort -u | paste -sd' ' -)"
-      if [[ -n "$hit" ]]; then
-        echo "fast: every integration test: $hit changed since main, on shared-machinery.txt (the import graph cannot see it)"
-      else echo "fast: the integration test files Vitest picks by their imports of the files changed since main"; sel=(--changed "$base"); fi
-    fi
-    pnpm exec vitest run --project integration "${sel[@]}"
+    node scripts/fast-select.ts
 
 # Every language scc finds in the tracked files has its lint and type step in check; rules and what passes by
 # design: the head of scripts/check-languages.ts.
