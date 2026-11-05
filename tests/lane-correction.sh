@@ -4,13 +4,9 @@
 # #acceptance-writer-route-lane): scripts/octo-feather-lane archive and reflect --director run as commands, the
 # real scripts/pi-role starting agents/reflector.md under a stub pi (it prints the reply the case gives), and the
 # offline fake gh (tests/fixtures/tracker-gh) under the real github-issues scripts; nothing reaches GitHub.
-# Proves, case by case against the rule its spec anchor owns: a second finding of a class files one issue in the
-# lane record's repository naming the class, quoting its findings and the director reflection's route, and the
-# archive prints its key; an open issue, or one closed after the class's latest finding, files nothing; one
-# closed before it files again; a reflection-missed finding files at once (a lane's in the target, the
-# director's in the kit's repo) naming the question list; an owner-caught class files nothing; every due subject files
-# whichever lane's reflection runs (archive of an unrelated lane, reflect --director routing a lane class), each in
-# its own owner's target. Run by `just check`.
+# Proves each case below against the rule as issue-lifecycle #lanes-correction owns it (what counts, when a class is
+# due, refiling, reflection-missed, owner-caught), and comms #reflection-correction (where it files, what it quotes).
+# Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -56,15 +52,14 @@ cr 2026-10-20T00:00:00Z dup-rule "gh1 restated the merge rule" >"$lanes/archive/
 lane gh2 "$(cr 2026-10-21T00:00:00Z dup-rule "gh2 restated the gate rule")"
 none; printf '%s\n%s\n' "$DQ" 'Finding: class: dup-rule | question: writer-route | route: agents/implementer.md Rules | summary: 2 code-review findings in gh1, gh2' >"$t/reply.director"
 out="$("$L" archive gh2 2>&1)" || fail "archive gh2 failed: $out"
-grep -qE '^correction lane: filed 901 in github-issues o/t for dup-rule \(3 findings; route: agents/implementer.md Rules\)$' <<<"$out" \
+grep -qE '^correction lane: filed 901 in github-issues o/t for dup-rule \(2 findings; route: agents/implementer.md Rules\)$' <<<"$out" \
   || fail "archive printed no filed key: $out"
 [[ -f "$lanes/archive/gh2.toml" ]] || fail "gh2 not archived: $out"
 python3 - "$(issues)" <<'EOF' || fail "issue wrong: $(issues)"
 import json, sys
 (i,) = json.loads(sys.argv[1])
 assert i["repo"] == "o/t" and "[correction-lane dup-rule]" in i["title"], i
-for want in ("Class: dup-rule", "Route: agents/implementer.md Rules", "gh1 restated the merge rule", "gh2 restated the gate rule",
-             "2 code-review findings in gh1, gh2"):
+for want in ("Class: dup-rule", "Route: agents/implementer.md Rules", "gh1 restated the merge rule", "gh2 restated the gate rule"):
     assert want in i["body"], (want, i["body"])
 assert "question list" not in i["body"], i["body"]
 EOF
@@ -139,7 +134,7 @@ archived gh1 "$(cr 2026-10-20T00:00:00Z stale-check "gh1 check missed a stale do
 archived gh2 "$(cr 2026-10-21T00:00:00Z stale-check "gh2 check missed a stale doc")"
 none; printf '%s\n%s\n' "$DQ" 'Finding: class: stale-check | question: writer-route | route: agents/code-reviewer.md Rules | summary: 2 code-review findings in gh1, gh2' >"$t/reply.director"
 out="$("$L" reflect --director 2>&1)" || fail "routed: reflect --director failed: $out"
-grep -qE '^correction lane: filed 901 in github-issues o/t for stale-check \(3 findings; route: agents/code-reviewer.md Rules\)$' <<<"$out" \
+grep -qE '^correction lane: filed 901 in github-issues o/t for stale-check \(2 findings; route: agents/code-reviewer.md Rules\)$' <<<"$out" \
   || fail "routed: not filed: $out"
 python3 - "$(issues)" <<'EOF' || fail "routed: issue wrong: $(issues)"
 import json, sys
@@ -147,4 +142,19 @@ import json, sys
 assert i["repo"] == "o/t" and "Route: agents/code-reviewer.md Rules" in i["body"], i
 EOF
 
-echo "lane-correction: ok (every due subject files whichever lane reflects, in its own lane's target; director-routed lane class files naming the route; second finding files in the lane's repo with findings and route, key printed; open or closed-after files nothing, closed-before refiles; reflection-missed files at once, lane's in the target, director's in the kit, naming the question list; owner-caught not filed)"
+# What counts: two reflection findings of a class in two lanes, two blocking ones in one lane, a non-blocking review
+# finding beside a blocking one, or the director log's: none due; a blocking product-judge (qc) finding counts.
+fresh counts
+rf() { printf '{"at":"%s","kind":"finding","source":"reflection","class":"%s","blocking":false,"question":"undetected-rule","route":"r","summary":"%s"}\n' "$@"; }
+archived gh1 "$(rf 2026-10-20T00:00:00Z refl-only "gh1 reflection")" "$(cr 2026-10-20T00:00:00Z one-lane "gh1 a")" "$(cr 2026-10-20T01:00:00Z one-lane "gh1 b")" \
+  "$(cr 2026-10-20T02:00:00Z judged "gh1 review")"
+archived gh2 "$(rf 2026-10-21T00:00:00Z refl-only "gh2 reflection")" \
+  '{"at":"2026-10-21T01:00:00Z","kind":"finding","source":"code-review","class":"one-lane","blocking":false,"summary":"gh2 note"}' \
+  '{"at":"2026-10-21T02:00:00Z","kind":"finding","source":"qc","class":"judged","blocking":true,"summary":"gh2 judge"}'
+printf '%s\n' '{"at":"2026-10-22T00:00:00Z","kind":"finding","class":"one-lane","summary":"director saw it"}' >>"$dlog"
+lane gh3; none
+out="$("$L" archive gh3 2>&1)" || fail "counts: archive gh3 failed: $out"
+grep -qE '^correction lane: filed 901 in github-issues o/t for judged \(2 findings; ' <<<"$out" && [[ "$(count)" == 1 ]] \
+  || fail "counts: want only judged filed: $out $(issues)"
+
+echo "lane-correction: ok (only blocking code-review or qc findings in two lanes count, reflection, one-lane and director findings make none due; every due subject files whichever lane reflects, in its own lane's target; director-routed lane class files naming the route; second finding files in the lane's repo with findings and route, key printed; open or closed-after files nothing, closed-before refiles; reflection-missed files at once, lane's in the target, director's in the kit, naming the question list; owner-caught not filed)"

@@ -5,13 +5,13 @@ description: Writing the factory eval case that ships with a behaviour change. U
 
 # Eval cases
 
-A Pi adaptation of the eval method in Anthropic's `skill-creator` (Apache-2.0, credited in the kit's NOTICE). A behaviour change to a skill, a role or a patch ships with a **case**: a task, a fixture and the **facts** a grader reads from the role's Pi transcript. A case is the proof the change works; prose about it is not.
+A Pi adaptation of the eval method in Anthropic's `skill-creator` (Apache-2.0, credited in the kit's NOTICE). A behaviour change to a skill, a role or a patch ships with a **case**: a task, a fixture and the **facts** a grader reads from the role's Pi transcript. A case is the proof the change works; prose about it is not. This skill owns how a case measures; how the instruction under test is worded is `writing-for-agents`'.
 
 ## Where things live
 
 - `evals/<suite>/suite.json`, `evals/<suite>/cases.json` (what the agent sees), `evals/<suite>/reference/expectations.json` (the facts, hidden from the agent), `evals/fixtures/<name>/` (a small repo copied and committed on main per run).
 - [`references/schema.md`](references/schema.md) (below: schema, by section) owns every eval and bench schema and policy: suite, case and setup fields, the closed fact list and how each fact is graded, judgment suites, calibration, `classifiers.json` and the bench's ranking, threshold and FAIL rule. Read it before writing or changing a case; run `scripts/check-evals` after every edit (it runs in `just check`).
-- `scripts/octo-feather-qa --help` runs cases (`just qa`), in the qc sandbox, one trial per case.
+- `scripts/octo-feather-qa --help` runs cases (`just qa`), in the qc sandbox, and owns what a run shows: repeated runs (`--runs`), a baseline kit beside the current one (`--baseline`), the analysis, review cases.
 
 ## 0. Test the rule as owned
 
@@ -33,12 +33,14 @@ A case tests the rule as its **owner** file states it (the role file, the skill)
 - Repo setup (`branch`, `head`, `origin`, `fake_gh`) and `{repo}`, `{head}` in the task: schema, Case.
 - The task leaks no graded fact: no hint of what is counted (`check-evals` refuses the mechanical leaks, schema: Leaks; the rest is yours).
 - The grade comes from what the role did (tool calls and their results), never its self-report.
+- No fact can grade the outcome (a summary's quality, a design's fit): give the case a review question instead, and a maintainer records the verdict on its kept output (schema: Case, `review`; `scripts/octo-feather-qa --help`, Review).
+- A regression case for an owner-caught or live-caught incident replays it on the real repository at the commit it happened on, with the incident's real brief (schema: Case, history fixture): a toy fixture can miss what made it happen at full size (#321).
 
 ## 3. What a fact reads
 
 Each fact, its parameters and exactly what it reads: schema, Facts. Writing a case against them:
 
-- A skill read is a **load** (schema: Skill load), never a mention.
+- Grade the outcome the role produced, never a proxy for it: a skill read is a **load** (schema: Skill load), never a mention; `ran` grades a command's real run, never its name in a message; a dependency choice is graded by what the branch uses, not by a search or a mention; a finding's free-form class tag is a proxy (docs/owed-evals/541.md).
 - A target never reached fails its `skill_read_before` (schema: Facts): write the task so the role reaches it, and list such a FAIL as a finding, never weaken the case.
 - **Verdicts as data** (schema: Final JSON), e.g. `{"rung": "check"}`, a reviewer's `{"blocking": [{"test": "tests/test_cli.py::test_x"}]}`, a qc judge's `{"criteria": [{"id": "x", "verdict": "pass"}]}`. If the role's contract does not yet ask for that block, the case's change adds it to the contract.
 - Why a fact reads a declared field and never prose, and what a judgment may gate: docs/adr/0008 (rung 2 exact check, rung 3 structured judgment, Who builds what). Who fixes what, where: docs/adr/0020 (Where the fix goes).
@@ -46,11 +48,11 @@ Each fact, its parameters and exactly what it reads: schema, Facts. Writing a ca
 
 A fact or target the closed list lacks is added to the schema, refused in `scripts/check-evals` and graded in `scripts/octo-feather-qa`, with a stub-pi test in `tests/qa*.sh`.
 
-## 4. Fails before, passes after
+## 4. Measure before and after
 
-Prove the case catches the change:
+Prove the case catches the change with repeated runs on the kit before it beside your head, in one evaluation:
 
-1. `scripts/octo-feather-qa --case ID --kit-ref BASE` (BASE: the commit before your change): FAIL.
-2. `scripts/octo-feather-qa --case ID` at your head: PASS.
+1. Smoke: `scripts/octo-feather-qa --case ID --runs 1 --baseline BASE` (BASE: the commit before your change), to see the case run on both kits.
+2. Proof: `scripts/octo-feather-qa --case ID --runs 3 --baseline BASE`, 3 runs per kit.
 
-Smoke one case before a batch. Paste both result lines with the run id into `evidence/<date>-<lane>-<topic>.md`, with its `Smoke:` and `Removed:` lines (`scripts/check-behavior-smoke`).
+Read each case's pass rate on both kits, its spread and the analysis under them (`--help`, `--baseline` and Analysis): the change is proven when the case fails on BASE and passes at your head over the 3 runs, not on one lucky run. Paste the case and compare lines with the run id into `evidence/<date>-<lane>-<topic>.md`, with its `Smoke:` and `Removed:` lines (`scripts/check-behavior-smoke`).

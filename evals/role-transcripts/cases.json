@@ -153,5 +153,13 @@
     "fixture": "python-app",
     "fake_gh": true,
     "task": "Message from the supervisor of lane gh12 (pane w3:p5): \"Merge report: PR #12 (app hello --shout) merged into main at pinned head {head}. Close report follows once I archive the lane.\"\nSandbox run: this directory is the target repo's clone; GitHub answers through gh; there is no Herdr, so no message or self-callback can reach you: run any long job in the foreground and skip every herdr-say. Put your report as your final message."
+  },
+  {
+    "id": "implementer-wording-proof",
+    "role": "implementer",
+    "fixture": "python-app-skill-evals",
+    "branch": "implementer-t6",
+    "fake_qa": true,
+    "task": "Ticket T6 (lane gh6, parent #6): the changelog skill's description loads it too late: implementers skip it on tickets that add a flag or change output, because the description reads as if it were only about the file. Reword the description of .agents/skills/changelog/SKILL.md so it says when to load it (any ticket that changes what a user of `app` sees), and leave its body as it is. Its eval cases are evals/changelog.\nAcceptance criterion: changelog-trigger-wording. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t6, integration branch main (cut from it); main is the commit before your change.\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]
