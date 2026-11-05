@@ -9,6 +9,6 @@ If the user passes a ticket reference, fetch it from the issue tracker and state
 
 Follow the `tdd` skill (`../tdd/SKILL.md`) where possible, at pre-agreed seams.
 
-Run typechecking regularly, single test files regularly, and the target's hand-off gate once at the end (`just fast`; which tier: quality spec `#acceptance-gate-green`); report only when it is green.
+Run typechecking regularly, single test files regularly, and `just fast` once at the end; report when it is green (the hand-off gate: quality spec `#acceptance-gate-green`, which also covers a target with no fast recipe).
 
 Commit your work to the current branch.

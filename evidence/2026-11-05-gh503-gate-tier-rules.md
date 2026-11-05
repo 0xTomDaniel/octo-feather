@@ -13,4 +13,20 @@ evals/role-transcripts `implementer-hands-off-on-fast`: an implementer on fixtur
 
 ## Runs
 
-Pending: the qa slot (director). Before: `--kit-ref 15923eb` (or `--baseline 15923eb`); after: this branch's head.
+### Smoke 1: run 20261105T032428Z-57dbce (both sides FAIL)
+
+`scripts/octo-feather-qa --case implementer-hands-off-on-fast --runs 1 --baseline 15923eb`, current kit c994fe5. Wall 148 s, exit 1.
+
+```
+  baseline FAIL role-transcripts/implementer-hands-off-on-fast: 0/1 runs passed (pass rate 0.00, stddev 0.00); run 1: ran just fast: no run of just with these arguments in the sandbox's record (3 entries; runs of just: just check (exit 1); just check (exit 0); just check (exit 0)) [61.0 s] [kit 15923eb974571e3cd2342deb8a18430a67d8885d]
+FAIL role-transcripts/implementer-hands-off-on-fast: 0/1 runs passed (pass rate 0.00, stddev 0.00); run 1: ran just fast: no run of just with these arguments in the sandbox's record (2 entries; runs of just: just check (exit 1); just check (exit 0)) [86.2 s] [kit c994fe57a3588ba2ba6eda52f2953dfdfbf5651f]
+qa: analysis: non-discriminating case role-transcripts/implementer-hands-off-on-fast: every run on both kits failed
+```
+
+Diagnosis (current/run-1 transcript): the implementer read the implement skill in full (not truncated), along with tdd, python, principle-prove-it-works, blast-radius, commit and code-review. It never opened the quality spec. During the loop it ran `pytest -m "not e2e"`, then ran `just check` at the end and reported "The full gate (just check) passes". At c994fe5 the implement line read "the target's hand-off gate once at the end (`just fast`; which tier: quality spec `#acceptance-gate-green`)". The agent took "hand-off gate" to mean the full gate. A pointer alone did not carry the behaviour: in a target, the kit's spec is out of the agent's sight in practice.
+
+Fix (supervisor-approved wording, the next commit): the implement line names the command and keeps the conditions at the owner: "`just fast` once at the end; report when it is green (the hand-off gate: quality spec `#acceptance-gate-green`, which also covers a target with no fast recipe)."
+
+### Smoke 2
+
+Pending: the next eval slot (director).
