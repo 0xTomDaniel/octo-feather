@@ -314,7 +314,9 @@ repos/<repository>/contents/gate-budget.toml`; by merge-ask at the PR head), kep
 policy: TOML, read with the standard library, a file of its own so a budget change changes no gate configuration
 (octo-feather-gate config) and no qc contract. Keys: budget_seconds (a number > 0), growth_share (a number >= 0:
 GROWN when the run is more than that share over the trend's median), trend_runs (an integer >= 1: that many passed
-full runs before the latest make the trend; 5 shown with no file). Anything else is `unread: gate-budget.toml (<repo>)`.
+full runs before the latest make the trend; 5 shown with no file); optional test_cpu_seconds (a number > 0: the
+per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here). Anything else is
+`unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
 read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
@@ -2683,7 +2685,10 @@ def budget_parse(text: str | None) -> tuple[Budget | None, str]:
                 and (k != "trend_runs" or isinstance(v, int)):
             ok[k] = v
     bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
-    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least))]
+    cpu = d.get("test_cpu_seconds")   # the per-test CPU budget, optional: the gate's own (tests/gate/conftest.py) reads it
+    if cpu is not None and (isinstance(cpu, bool) or not isinstance(cpu, (int, float)) or cpu <= 0):
+        bad.append(f"test_cpu_seconds {cpu!r} is not a number of the right range")
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"})]
     return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
 
 

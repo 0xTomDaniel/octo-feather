@@ -1,5 +1,12 @@
 # The kit's gate-time budget, kept by the factory like any repo policy. What reads it, its keys and what each
-# means: octo-feather-lane --help (report). Passed full runs on this box, 2026-11-04: 360 to 440 s.
-budget_seconds = 420
+# means: octo-feather-lane --help (report). budget_seconds: the full gate under five minutes, quality spec
+# #acceptance-gate-time-targets (passed full runs on this box, 2026-11-04 and 05: 360 to 440 s, over it).
+budget_seconds = 300
 growth_share = 0.25
 trend_runs = 5
+# The per-test CPU budget, seconds of CPU per non-e2e gate item (quality spec #acceptance-test-cpu-shown; read by the
+# gate's runner, tests/gate/conftest.py), report-only (#588), provisional until repeated runs set it
+# (#acceptance-test-cpu-budget). 10 s: the five-minute target on the 4-vCPU box is 1200 CPU s for ~118 items; 9 items
+# x 3 runs idle and 3 under a 4-process CPU hog (2026-11-05, #588) moved an item's CPU by up to +-15% (wall by 3 to 5x),
+# so an item near 10 s may flip; integrate.sh 5 to 7 s stays under, check-refs.sh 15 to 20 s is named.
+test_cpu_seconds = 10
