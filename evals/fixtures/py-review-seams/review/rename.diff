@@ -1,0 +1,44 @@
+diff --git a/src/app/core.py b/src/app/core.py
+index 7076096..4266598 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -2,14 +2,14 @@ from dataclasses import dataclass
+ 
+ 
+ @dataclass(frozen=True)
+-class Greeting:
++class Salutation:
+     name: str
+     text: str
+ 
+ 
+-def greet(name: str) -> Greeting:
++def greet(name: str) -> Salutation:
+     clean = name.strip()
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+-    return Greeting(name=clean, text=f"Hello, {clean}")
++    return Salutation(name=clean, text=f"Hello, {clean}")
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 377041b..9fefbb8 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -9,7 +9,7 @@ import pytest
+ from app.cli import main
+ 
+ 
+-def test_hello_json_in_process(capsys: pytest.CaptureFixture[str]) -> None:
++def test_hello_json(capsys: pytest.CaptureFixture[str]) -> None:
+     assert main(["hello", "Ada", "--json"]) == 0
+     assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Hello, Ada"}
+ 
+@@ -19,7 +19,7 @@ def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
+     assert json.loads(capsys.readouterr().out) == {"error": "name must not be empty"}
+ 
+ 
+-def test_installed_command_end_to_end() -> None:
++def test_installed_app() -> None:
+     app = shutil.which("app")
+     assert app, "run through `uv run` so the app command is on PATH"
+     done = subprocess.run(
