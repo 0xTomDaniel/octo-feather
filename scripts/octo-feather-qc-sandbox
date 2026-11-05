@@ -13,7 +13,9 @@
 #      paragraph): each a tmpfs; QC_KIT the kit under test, default this script's kit
 #   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
 #   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
-#      authenticated against each pin, bound back read-only), /dev/shm and the Pi agent dir (its entries
+#      authenticated against each pin, bound back read-only; uv's cache, as `uv cache dir` names it, bound back as an
+#      overlay like the worktree's below, so an offline `uv sync` finds the box's packages, locks and writes, and
+#      nothing reaches the real cache or outlives the run), /dev/shm and the Pi agent dir (its entries
 #      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
 #      never written back; with QC_PI=none, a run with no Pi such as a declared demo, neither one at all); then every other
 #      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
@@ -223,6 +225,12 @@ if [[ "$phase" == setup ]]; then
   rw=(/tmp "$HC" "$OV")
   VC="$CACHE/octo-feather/skillfile"; : > "$SCR/vcache"   # `just check` in the sandbox reads it; read-only
   vc=0; if [[ -d "$VC" ]]; then exec 10<"$VC" && vc=1; fi
+  # uv's cache (step 5, header), asked of uv itself: its real dir bound on the run tmpfs as the overlay's lower, below.
+  UC=""; : > "$SCR/uvcache"
+  if command -v uv > /dev/null && UC=$(uv cache dir 2> /dev/null) && [[ -d "$UC" ]]; then
+    [[ "$UC" != *[,:]* ]] || die "uv cache dir $UC holds , or : (overlay options)"
+    mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" && mount --bind "$UC" "$OV/uvl" && remount ro "$OV/uvl" || die "uv cache lower $UC"
+  else UC=""; fi
   if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi
   if ((vc)); then
     mkdir -p "$VC" && mount --no-canonicalize --bind /proc/self/fd/10 "$VC" && remount ro "$VC" || die "read-only bind $VC"
@@ -266,6 +274,11 @@ if [[ "$phase" == setup ]]; then
   python3 -c 'import os, sys; os.setxattr(sys.argv[1], "user.qc.probe", b"y"); os.removexattr(sys.argv[1], "user.qc.probe")' "$OV/u" \
     || die "run tmpfs takes no user.* xattrs: the worktree overlay $kreq"
   mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w,userxattr" "$WT" || die "worktree overlay with userxattr: $kreq"
+  if [[ -n "$UC" ]]; then   # uv's cache: the same overlay, its lower the real cache bound read-only above
+    mkdir -p "$UC" && mount -t overlay overlay -o "lowerdir=$OV/uvl,upperdir=$OV/uvu,workdir=$OV/uvw,userxattr" "$UC" \
+      || die "uv cache overlay $UC with userxattr: $kreq"
+    printf '%s\n%s\n' "$UC" "$OV/uvu" > "$SCR/uvcache"
+  fi
   exec 8<"$OV"; mount -t tmpfs -o ro,mode=000 tmpfs "$OV" || die "mask overlay upper"
   echo "$OV/u" > "$SCR/ovupper"
   cd "$PWD" || die "re-enter $PWD"
@@ -655,9 +668,10 @@ check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only${kitn:+; $kitn
 # Every writable mount, by its own flags: tmpfs and /proc die with the run, the worktree overlay's
 # upper dir is on the run tmpfs; anything else is persistent (Pi's auth.json and models.json are binds of run tmpfs files).
 ov=$(cat "$SCR/ovupper"); wt=$(git rev-parse --show-toplevel 2>/dev/null)
-mapfile -t pers < <(awk -v ov="upperdir=$ov," '
+{ read -r uc; read -r ucu; } < "$SCR/uvcache"
+mapfile -t pers < <(awk -v ov="upperdir=$ov," -v uv="upperdir=${ucu:-/nonexistent}," '
   { for (i = 7; $i != "-"; i++); fs = $(i+1); so = $(i+3) ","; mp = $5; gsub(/\\040/, " ", mp); w[mp] = ""
-    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && index(so, ov)))) w[mp] = $1 " " mp }
+    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && (index(so, ov) || index(so, uv))))) w[mp] = $1 " " mp }
   END { for (m in w) if (w[m] != "") print w[m] }' /proc/self/mountinfo)   # last mount on a path wins: covered ones are unreachable
 reach=(); unreach=0   # writable but covered under another path (nested run): unreachable, counted apart
 for e in "${pers[@]}"; do if covered "${e%% *}" "${e#* }"; then unreach=$((unreach + 1)); else reach+=("${e#* }"); fi; done
@@ -666,6 +680,14 @@ ovl=$(awk -v wt="$wt" -v ov="upperdir=$ov," '{ for (i = 7; $i != "-"; i++); mp =
   mp == wt && $(i+1) == "overlay" && index($(i+3) ",", ov) { n++ } END { print n + 0 }' /proc/self/mountinfo)
 check "$(t test "$ovl" -ge 1 -a ! -e "$ov")" "worktree $wt is an overlay, upper dir on the run tmpfs and hidden from the judge"
 check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}"
+if [[ -n "$uc" ]]; then   # uv's cache: an overlay whose upper is on the hidden run tmpfs, writable, its writes discarded
+  ucl=$(awk -v m="$uc" -v u="upperdir=$ucu," '{ for (i = 7; $i != "-"; i++); mp = $5; gsub(/\\040/, " ", mp) }
+    mp == m && $(i+1) == "overlay" && index($(i+3) ",", u) { n++ } END { print n + 0 }' /proc/self/mountinfo)
+  w=0; touch "$uc/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$uc/.qc-w-$S"; }
+  check "$(t test "$ucl" -ge 1 -a "$w" = 1 -a ! -e "$ucu")" "uv cache $uc is an overlay, upper dir $ucu on the run tmpfs and hidden from the judge (writable; its writes discarded with the run)"
+else
+  say "ok   uv cache: none on the box (no uv, or uv cache dir absent), nothing bound"
+fi
 ((unreach == 0)) || say "ok   $unreach writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run)"
 vc=$(cat "$SCR/vcache")
 if [[ -n "$vc" ]]; then   # check-vendored's cache: the last mount on its path is read-only, a write fails

@@ -14,5 +14,5 @@
     "moduleResolution": "nodenext",
     "types": ["node"]
   },
-  "include": ["src", "tests", "scripts", ".agents/skills/verify-app/scripts", "eslint.config.js", ".dependency-cruiser.cjs"]
+  "include": ["src", "tests", "scripts", ".agents/skills/verify-app/scripts", "eslint.config.js", ".dependency-cruiser.cjs", "vitest.config.ts"]
 }

@@ -1,0 +1,55 @@
+# The shared-machinery list: what it is and what it schedules, issue-lifecycle #lanes-checkpoints; how the
+# kit uses it, scripts/octo-feather-gate --help.
+#
+# One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
+# covers everything under it). `#` starts a comment line.
+shared-machinery.txt
+# The gate's own configuration, runner, shared fixtures and pins.
+justfile
+pyproject.toml
+uv.lock
+package.json
+pnpm-lock.yaml
+tsconfig.json
+eslint.config.js
+eslint-suppressions.json
+mise.toml
+mise.lock
+mise-version
+pi-version
+agent-browser-version
+.python-version
+Skillfile
+Skillfile.lock
+.skillfile/patches
+tests/gate
+tests/lib
+tests/fixtures
+.github/workflows
+# Data the kit's scripts read at run time, which coverage cannot see (a file read is no executed line):
+# contracts, schemas, role files, Pi configuration, skill text, reflection questions, eval suites, specs.
+qc.toml
+schemas
+agents
+web-mcp.json
+extensions
+AGENTS.md
+.gitattributes
+.basedpyright
+reflection/questions.json
+evals
+docs/specs
+.agents/skills/**/*.md
+# Shell, which coverage cannot measure: the kit's bash commands and skill scripts.
+scripts/octo-feather-exclude
+scripts/octo-feather-integrate
+scripts/octo-feather-new-repo
+scripts/octo-feather-qc-sandbox
+scripts/octo-feather-spec-chat
+scripts/octo-feather-start
+scripts/octo-feather-state
+.agents/skills/github-issues/scripts
+.agents/skills/linear/scripts
+.agents/skills/herdr-comms/assets
+# The templates: their gates run in their own venvs and installs, which kit coverage does not reach.
+templates

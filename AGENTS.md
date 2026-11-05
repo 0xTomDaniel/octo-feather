@@ -12,7 +12,7 @@ Repo skills: verify-octo-feather
 - `AGENTS.md` is the only instruction file in any repo the kit touches.
 - Agents hand off to each other through Herdr (`.agents/skills/herdr-comms`). No workflow engine, no tracker, no daemon.
 - Tests are integration and end-to-end only, driven through public surfaces (app CLI, HTTP, UI; an integration test may also enter through a public library function, docs/adr/0002). No unit tests of internals. A kit test runs a script as a command and feeds it inputs, never loads or reads it; review judges this (docs/adr/0008 rung 3).
-- Every template exposes one gate command, `just check`, used identically by agents, git hooks and CI. A red gate blocks handoff.
+- The kit and every template have a gate of two tiers, `just fast` and `just check`: what each runs and who runs it, quality spec `#recipes-table` (templates spec `#tpl-gate`, `#tpl-hooks`); when a lane runs the full tier, issue-lifecycle spec `#lanes-checkpoints`; the one a hand-off needs green, quality spec `#acceptance-gate-green`.
 - Where each artifact lives, spec-first change and fixing only seen problems: docs/adr/0024.
 - Shell is for thin glue: calling commands, environment setup, mounts. Logic, parsing and rules go in Python.
 - Every kit mechanism is built for any target repo; a kit-only piece states why.
@@ -30,7 +30,7 @@ Repo skills: verify-octo-feather
 - `.agents/skills/verify-octo-feather/` the kit's own verify skill (quality spec `#verify-skill-what`); its feature map in `features/`. `qc.toml` the kit's driver contract (quality spec `#qc-contract`).
 - `templates/python`, `templates/typescript` starter target repos; each template's `AGENTS.md` describes its layout. Dependency owners: Python's `pyproject.toml` and `uv.lock`, TypeScript's `package.json` and `pnpm-lock.yaml`.
 - `scripts/` published commands on every agent's `PATH`; each script owns its command details: read its source, and its `--help` where supported.
-- `justfile` owns kit recipes, listed by `just --list`; `just check` is the gate. Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`.
+- `justfile` owns kit recipes, listed by `just --list`; `just fast` and `just check` are the gate's tiers (quality spec `#recipes-table`). Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`.
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
 - `evals/` factory eval suites (`<suite>/suite.json`, `cases.json`, hidden `reference/expectations.json`) and their `fixtures/`; shape: `scripts/check-evals --help`.
