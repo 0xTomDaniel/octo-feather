@@ -175,4 +175,14 @@ json.dump({"claims": ["demo#acceptance-a"], "plan": {n: {"criteria": ["demo#acce
 EOF
 octo-feather-qc --capture-store "$t/session.json" | grep -q "1 case(s): tests/accept.sh passed" || fail "partial: the store did not record the session"
 partial "case tests/gate/test_gate.py::test_script\[tests/accept2.sh\] tagged at ${h3:0:12}, not in the record"
+
+# Format 2: an entry without a command is per-criterion metadata, never a demo. acceptance-b, its tagged test gone and
+# its entry holding only covers, has neither a record nor a demo: the agent fallback's (the stub judge
+# tests/fixtures/qc-judge/pi first on the sandbox's PATH: no model).
+git rm -q tests/skip.sh
+printf 'format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-b"]\ncovers = ["tests"]\n' > qc.toml
+git add -A; git commit -qm "acceptance-b: metadata only"
+set +e; out="$(timeout -k 5 300 env OCTO_FEATHER_QC_PATH="$kit/tests/fixtures/qc-judge" just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 acceptance-b 2>"$t/err")"; rc=$?; set -e
+[[ "$rc" == 0 ]] && ! grep -q 'Traceback\|KeyError\|qc: demo ' "$t/err" \
+  && grep -A2 '^PASS acceptance-b: ' <<< "$out" | grep -q "decision agent fallback" || fail "metadata only: want the agent fallback, no demo, no crash; got $rc: $out $(tail -20 "$t/err")"
 echo "qc-one-execution: ok"

@@ -7,8 +7,8 @@
 Run in a lane worktree at its integrated head. A named criterion a tagged test proves is judged from the record its
 head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
 #qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
-named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
-[demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
+named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo command under
+[demo."<spec>#<id>"] (an entry without one is metadata only) has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
 (octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr, and screenshots/<name> for each file
 the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
@@ -16,7 +16,7 @@ headless Chromium shell at the contract's [browser] playwright pin where `just i
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
 the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
-status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v1.schema.json, demo
+status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v<format>.schema.json, demo
 command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
 missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
 until a rerun gives it pass or fail.
@@ -332,8 +332,9 @@ def browsers(root: str, ids: list[str], stem: str) -> str | None:
 
 
 def contract_demos(root: str) -> dict[str, dict[str, Any]]:
-    """The demos the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec #qc-contract); none
-    without a qc.toml. A qc.toml octo-feather-contract refuses is refused here, before anything runs."""
+    """The per-criterion entries the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec
+    #qc-contract), a demo where it has a command; none without a qc.toml. A qc.toml octo-feather-contract refuses is
+    refused here, before anything runs."""
     path = Path(root) / "qc.toml"
     if not path.is_file():
         return {}
@@ -589,7 +590,7 @@ def capture_store(path: Path) -> int:
         die(3, f"HEAD moved during the gate ({str(s['head_at_start'])[:12]} to {head[:12]}); no record written")
     ident = json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head], capture_output=True,
                                       text=True, check=True).stdout)
-    gate = {"command": shlex.join(["pytest", *s["argv"]]), "head_at_start": head, "clean_at_start": s["clean_at_start"],
+    gate = {"command": shlex.join([s.get("runner", "pytest"), *s["argv"]]), "head_at_start": head, "clean_at_start": s["clean_at_start"],
             "exit": s["exit"], **ident}
     declared = contract_demos(root)
     for c in s["claims"]:
@@ -663,27 +664,33 @@ def tested(i: str, cid: str, head: str, text: str, root: str, tagged: list[str])
 
 
 def tagged_cases(root: str) -> dict[str, list[str]]:
-    """Each criterion id any test at the head carries (its pytest `criterion` marker), with those tests' node ids, from the
-    gate's own collector: `just check-tests --collect-only` with OCTO_FEATHER_QC_TAGS (tests/gate/conftest.py). None
-    without a justfile or with no check-tests recipe (no pytest gate to tag a test in); a justfile just cannot read, or a
+    """Each criterion id any test at the head carries (its test runner's tag: pytest's `criterion` marker, a Vitest tag),
+    with those tests' case ids, from the gate's own collector writing OCTO_FEATHER_QC_TAGS: the command qc.toml's `tags`
+    key declares, else `just check-tests --collect-only` (a pytest gate: tests/gate/conftest.py). None with neither (no
+    qc.toml key, no justfile with a check-tests recipe: no gate to tag a test in); a justfile just cannot read, or a
     collection that fails, is refused: whether a criterion has a tagged test is never guessed."""
-    files = [f.name for f in Path(root).iterdir() if f.name.lower() in ("justfile", ".justfile")]
-    if not files:
-        return {}
-    jf = ["just", "--justfile", str(Path(root, files[0])), "--working-directory", root]
-    p = subprocess.run([*jf, "--summary"], capture_output=True, text=True)
-    if p.returncode:
-        die(64, f"{files[0]} does not parse, so the tagged tests are unknown; nothing ran: {p.stderr.strip()[:300]}")
-    if "check-tests" not in p.stdout.split():
-        return {}
+    qc = Path(root, "qc.toml")
+    declared = tomllib.loads(qc.read_text(encoding="utf-8")).get("tags") if qc.is_file() else None   # contract_demos validated it
+    if declared is not None:
+        cmd, what = ["sh", "-c", str(declared)], f"qc.toml tags: {declared}"
+    else:
+        files = [f.name for f in Path(root).iterdir() if f.name.lower() in ("justfile", ".justfile")]
+        if not files:
+            return {}
+        jf = ["just", "--justfile", str(Path(root, files[0])), "--working-directory", root]
+        p = subprocess.run([*jf, "--summary"], capture_output=True, text=True)
+        if p.returncode:
+            die(64, f"{files[0]} does not parse, so the tagged tests are unknown; nothing ran: {p.stderr.strip()[:300]}")
+        if "check-tests" not in p.stdout.split():
+            return {}
+        cmd, what = [*jf, "check-tests", "--collect-only", "-q", "-n", "0", "-p", "no:cacheprovider"], "just check-tests --collect-only"
     with tempfile.TemporaryDirectory(prefix="qc-tags-") as d:
         out = Path(d, "tags.json")
         env = {k: v for k, v in os.environ.items() if k != "OCTO_FEATHER_QC_CLAIMS"} | {
             "OCTO_FEATHER_QC_TAGS": str(out), "PYTHONDONTWRITEBYTECODE": "1"}
-        c = subprocess.run([*jf, "check-tests", "--collect-only", "-q", "-n", "0", "-p", "no:cacheprovider"], capture_output=True,
-                           text=True, env=env, stdin=subprocess.DEVNULL)
+        c = subprocess.run(cmd, capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, cwd=root)
         if c.returncode or not out.is_file():
-            die(64, f"collecting the tagged tests failed (just check-tests --collect-only, exit {c.returncode}); nothing ran:\n"
+            die(64, f"collecting the tagged tests failed ({what}, exit {c.returncode}); nothing ran:\n"
                     f"{tail(c.stdout + c.stderr, 15)}")
         cases: dict[str, list[str]] = json.loads(out.read_text())
     by: dict[str, list[str]] = {}
@@ -749,7 +756,7 @@ def main(argv: list[str]) -> int:
     found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids}
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
     tests |= unrecorded([i for i in ids if i not in tests], tags, stem, head)
-    demos = {i: declared[f"{stem}#{i}"] for i in ids if f"{stem}#{i}" in declared and i not in tests}
+    demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")

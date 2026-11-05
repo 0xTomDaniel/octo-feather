@@ -7,7 +7,7 @@ Repo skills: typescript, pnpm, nodejs, verify-app
 ## Rules
 
 - The gate has two tiers, `just fast` and `just check`: who runs which, octo-feather templates spec #tpl-gate, #tpl-hooks (each runs tsc strictest, typescript-eslint strict-type-checked, dependency-cruiser and knip: GATE_RECIPES in the `justfile`). A red gate blocks handoff.
-- Tests are integration and end-to-end only (octo-feather templates spec #templates-tests-rule, #tpl-tests): integration `tests/*.test.ts` (`main` in-process), end-to-end `tests/*.e2e.test.ts` (`src/cli.ts` as a process), each kind a Vitest project (`vitest.config.ts`); shared read-only fixtures as `tests/shared-fixture.ts` (#acceptance-shared-fixture). No mocks of our own code. One or two tests per acceptance criterion; keep the suite small.
+- Tests are integration and end-to-end only (octo-feather templates spec #templates-tests-rule, #tpl-tests): integration `tests/*.test.ts` (`main` in-process), end-to-end `tests/*.e2e.test.ts` (`src/cli.ts` as a process), each kind a Vitest project (`vitest.config.ts`); shared read-only fixtures as `tests/shared-fixture.ts` (#acceptance-shared-fixture). No mocks of our own code. One or two tests per acceptance criterion; keep the suite small. A criterion's acceptance test is a test tagged with it, which `just qc` judges it from (the verify-app skill, Acceptance).
 - No test detail in production code: no test-only flags, env vars, hooks, parameters or branches. Reach the state from the test, mocking at the boundary.
 - `src/core.ts` never imports `src/cli.ts` (dependency-cruiser enforces it).
 - Only erasable TypeScript syntax (no enums, namespaces or parameter properties); `tsc` enforces it.
@@ -18,4 +18,4 @@ Repo skills: typescript, pnpm, nodejs, verify-app
 ## Layout
 
 - `src/` the app; CLI entry, runtime requirements and dependency declarations: `package.json`. Dependency pins: `pnpm-lock.yaml`.
-- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `tests/trend-reporter.ts` appends one trend line per Vitest run (its head says what); `gate-budget.toml` the gate-time budget (its head says what reads it). `shared-machinery.txt` the shared-machinery list (what it schedules: its header).
+- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `tests/trend-reporter.ts` appends one trend line per Vitest run, `tests/qc-capture.ts` is the qc capture's side of the gate and `tests/qc-tags.ts` its collector of tagged tests (each head says what); `gate-budget.toml` the gate-time budget (its head says what reads it). `shared-machinery.txt` the shared-machinery list (what it schedules: its header).

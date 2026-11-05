@@ -17,6 +17,7 @@
 # Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
 # Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
 # Run by `just check`.
+# criterion: issue-lifecycle#acceptance-merge-ask-full-proof
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
