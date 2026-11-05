@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration test for scripts/octo-feather-lane ci-start (spec issue-lifecycle #acceptance-ci-alongside, issue #589),
+# Integration test for scripts/octo-feather-lane ci-start (spec issue-lifecycle #acceptance-ci-alongside; the rule: #lanes-one-head),
 # no network: a fake `gh` holds draft PR #7 of o/r; `gh pr ready` makes it ready and GitHub's check run on its head
 # appear queued (unless FAKE_GH_NO_RUN). ci-start refuses a local head that is not the PR head and a head with no
 # recorded full gate pass, each before marking the PR ready; else marks it ready, waits for the check run on that head

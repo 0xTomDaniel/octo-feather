@@ -55,7 +55,7 @@ A tracker that cannot be read or written refuses the archive, its reflections' l
   octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
   octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R]
-                                   on the lane's final head, as just qc and the review start: refuse unless
+                                   CI on the lane's final head (when: issue-lifecycle #lanes-one-head): refuse unless
                                    the local HEAD is the PR head with a current full gate pass, mark the PR
                                    ready (gh pr ready), wait (default 120s) and print CI's check runs on it
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
@@ -106,7 +106,8 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
 
   ## Merge ask
   Head: <sha>                     the PR's head H' (7+ hex prefix)
-  Checks: <summary>               verified: every check on that head SUCCESS, none pending
+  Checks: <summary>               verified: every check on that head SUCCESS, none pending; a SKIPPED one only
+                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head)
   Judged: <proof>                 = the line the check prints for H to H' (below)
   | criterion | qc verdict | judged | evidence |
   |---|---|---|---|
@@ -1406,25 +1407,6 @@ def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
     return failed, pending
 
 
-# A status file beside a spec, the only file a push may change for CI to run no full run on it: the scope job's filter
-# in .github/workflows/check.yml (and each template's), spec issue-lifecycle #lanes-one-head.
-STATUS_FILE = re.compile(r"docs/specs/[^/]+\.status\.json")
-
-
-def ci_head(head: str) -> str:
-    """The commit HEAD's CI full run ran on: HEAD walked back over each commit that changes only status files beside a
-    spec against its first parent, the commits check.yml runs no full run for (spec issue-lifecycle #lanes-one-head)."""
-    c = head
-    while True:
-        parents = git("rev-list", "--parents", "-n1", c)[1].split()[1:]
-        if not parents:
-            return c
-        files = git("diff", "--name-only", "--no-renames", "-z", parents[0], c)[1].split("\0")
-        if any(f and not STATUS_FILE.fullmatch(f) for f in files):
-            return c
-        c = parents[0]
-
-
 def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
     """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
     WHAT names the commit in a refusal."""
@@ -1439,8 +1421,7 @@ def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]
 
 @no_traceback
 def cmd_ci_start(args: list[str]) -> int:
-    """Start CI's full run on the lane's final head as just qc and the review start (spec issue-lifecycle
-    #lanes-one-head, #acceptance-ci-alongside): refuse unless the local HEAD is the PR's head and has a current full
+    """CI on the lane's final head (when: spec issue-lifecycle #lanes-one-head): refuse unless the local HEAD is the PR's head and has a current full
     gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for a check run on that head
     other than a skipped one, and print each such run."""
     args, repo = take_repo(args)
@@ -1488,34 +1469,37 @@ def cmd_ci_start(args: list[str]) -> int:
         time.sleep(min(5.0, left))
 
 
-def status_only_checks(rollup: "list[dict[str, object]]", head: str, repo: str | None) -> tuple[list[str], list[str]]:
-    """(why each check skipped on HEAD fails, a line per one that passes) for a HEAD that adds only status-only commits:
-    a skipped check run there counts only by the same check's latest run on the head those commits follow, completed
-    green (spec issue-lifecycle #lanes-one-head, #acceptance-ci-status-only). Any other HEAD: ([], []), its checks as
-    bad_checks reads them."""
+def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | None, proof: str | None,
+                   repo: str | None) -> tuple[list[str], list[str]]:
+    """(why each check skipped on HEAD fails, a line per one that passes). A skipped check run is never a pass by itself:
+    it counts only when PROOF, head_proof's line for JUDGED to HEAD, carries the JUDGED head, and that head's latest
+    run of the same check completed green (spec issue-lifecycle #lanes-one-head)."""
     skipped = sorted({str(c.get("name") or "?") for c in rollup if c.get("__typename") != "StatusContext" and "conclusion" in c
                       and str(c.get("conclusion") or "").upper() == "SKIPPED"})
-    p = ci_head(head) if skipped else head
-    if p == head:
+    h = head[:12]
+    if not skipped:
         return [], []
-    h, j = head[:12], p[:12]
-    runs = check_runs(p, repo, f"the head the status-only commits on {h} follow")
+    if not judged or judged == head.lower() or not proof:
+        return [(f"Checks: skipped on head {h}: {', '.join(skipped)}; a skipped check is no pass and no Judged proof carries "
+                 f"a judged head's CI to {h} (issue-lifecycle #lanes-one-head): run `octo-feather-lane ci-start <PR>` on the "
+                 "judged head, wait for its CI, then rerun")], []
+    j = judged[:12]
+    runs = check_runs(judged, repo, "the judged head")
     why: list[str] = []; ok: list[str] = []
     for name in skipped:
-        at = f"Checks: {name} skipped on head {h} (status-only commits after {j}: no CI full run) and"
+        at = f"Checks: {name} skipped on head {h}, carried from the judged head {j} by the Judged proof, and"
         r = max((r for r in runs if r.get("name") == name), key=lambda r: int(str(r.get("id") or 0)), default=None)
         status, concl = str((r or {}).get("status") or "").lower(), str((r or {}).get("conclusion") or "").lower()
         if r is None:
-            why.append(f"{at} {j} has no {name} run; push {j} with the PR ready for review, wait for its CI, then rerun")
+            why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
         elif status != "completed":
             why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
         elif concl == "skipped":
-            why.append(f"{at} skipped on {j} too: CI never ran there; mark the PR ready for review (gh pr ready), "
-                       "push a commit for CI's full run, then rerun")
+            why.append(f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start <PR>` on {j}, then rerun")
         elif concl not in ("success", "neutral"):
             why.append(f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never pre-existing)")
         else:
-            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the head its status-only commits follow")
+            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")
     return why, ok
 
 
@@ -1653,11 +1637,6 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
     if pending:
         miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
-    try:
-        why, carried = status_only_checks(cast("list[dict[str, object]]", rollup), cast("str", head), repo)
-    except Refuse as e:
-        why, carried = [f"Checks: {e}"], []
-    miss += why
 
     rows: dict[str, str] = {}; judged_at: set[str] = set()
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
@@ -1700,6 +1679,7 @@ def cmd_merge_ask(args: list[str]) -> int:
     if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
         judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)
         miss += [why] if why else []
+    proof: str | None = None
     if judged:
         try:
             proof, why = head_proof(judged, head, files, base)
@@ -1708,6 +1688,12 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss += [f"Judged: {w}" for w in why]
         if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
+
+    try:
+        why, carried = carried_checks(cast("list[dict[str, object]]", rollup), cast("str", head), judged, proof, repo)
+    except Refuse as e:
+        why, carried = [f"Checks: {e}"], []
+    miss += why
 
     miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
 
@@ -1813,7 +1799,7 @@ def cmd_merge_ask(args: list[str]) -> int:
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
     if carried:
-        print("\nCI on a status-only head (no CI full run there: issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
+        print("\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
     if sources:
         print("\n" + "\n".join(sources))
     if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
