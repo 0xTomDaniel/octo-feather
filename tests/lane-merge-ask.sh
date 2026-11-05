@@ -4,7 +4,7 @@
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
 # wrong head, a report with no verdict or no check classes (docs/adr/0008), a proxy check with a clear verdict
 # and a failed write, leaving no comment behind. `merge-ask`
-# passes a complete section and prints it, then labels each row demo checks or agent fallback from qc.toml at the judged
+# passes a complete section and prints it, then labels each row with its latest qc result's decision source at the judged
 # head (quality#acceptance-qc-fallback) (also through the qc judge's offline gh, github-pr/scripts/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
 # (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
@@ -228,10 +228,19 @@ setpr; run 0 merge-ask 7 "${ST[@]}"
 w="$(sed '/^Gate time (/,$d' <<<"$out")"   # the gate time block comes last (below)
 [[ "$(tail -2 <<<"$w")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
-# quality#acceptance-qc-fallback: each row labelled by the contract at the judged head, as just qc decides it.
-[[ "$(grep -xF -A2 "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):" <<<"$out")" == \
-   "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):"$'\n- demo#acceptance-a: demo checks\n- demo#acceptance-b: agent fallback' ]] \
-  || fail "pass did not label each row's decision source: $out"
+# quality#acceptance-qc-fallback: each row labelled with the decision source of its latest qc result at the judged head,
+# never from qc.toml (which declares a demo for acceptance-a): none yet, then a report's tagged test and agent fallback.
+src="Decision sources (the latest qc result at the judged head ${J:0:12}; quality spec #qc-results):"
+[[ "$(grep -xF -A2 "$src" <<<"$out")" == "$src"$'\n- demo#acceptance-a: no qc result at the judged head\n- demo#acceptance-b: no qc result at the judged head' ]] \
+  || fail "pass without a qc report did not say each row has no qc result: $out"
+mkdir -p "$t/qc"; python3 - "$t/qc/$J-20261029T090000Z-src123.json" "$J" <<'EOF'
+import json, sys; p, head = sys.argv[1:]
+res = lambda i, d: {"id": i, "verdict": "pass", "evidence": "complete", "decision": d, "record": "r", "head": head}
+json.dump({"head": head, "spec": "demo", "results": [res("acceptance-a", "tagged test assertions"), res("acceptance-b", "agent fallback")]}, open(p, "w"))
+EOF
+run 0 merge-ask 7 "${ST[@]}"
+[[ "$(grep -xF -A2 "$src" <<<"$out")" == "$src"$'\n- demo#acceptance-a: tagged test assertions\n- demo#acceptance-b: agent fallback' ]] \
+  || fail "pass did not label each row's decision source from the qc report: $out"
 [[ "$(writes)" == "$n" ]] || fail "merge-ask wrote"
 # issue-lifecycle#acceptance-merge-ask-gate-budget: the full gate's wall time on the final head (J's full run: H adds
 # only qc's status commit) against gate-budget.toml at the head, flagged over the budget and grown past the share, beside
@@ -517,4 +526,4 @@ printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' >
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration or the shared-machinery list makes it stale, one recorded on a dirty tree refuses, a no-criterion lane alike; gate time: the final head's full run over its budget and grown past the share, with trend and slowest items, the ask passing or failing the same without it)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (the latest qc result at the judged head, none without one), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks, rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration or the shared-machinery list makes it stale, one recorded on a dirty tree refuses, a no-criterion lane alike; gate time: the final head's full run over its budget and grown past the share, with trend and slowest items, the ask passing or failing the same without it)"
