@@ -61,7 +61,8 @@ A tracker that cannot be read or written refuses the archive, its reflections' l
   octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R]
                                    CI on the lane's final head (when: issue-lifecycle #lanes-one-head): refuse unless
                                    the local HEAD is the PR head with a current full gate pass, mark the PR
-                                   ready (gh pr ready), wait (default 120s) and print CI's check runs on it
+                                   ready (gh pr ready), wait (default 120s) until CI's full run on it has
+                                   started (when that is: #acceptance-ci-alongside) and print its jobs
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
                                    the kit's judgment model answers it on FILE's text; create, or
                                    update in place, the PR's one comment for QUESTION, labelled a model judgment
@@ -1007,7 +1008,7 @@ def resolution_files(merge: str) -> list[str]:
 def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
                kept: str = "the qc verdict", rerun: str = "", resolved: dict[str, str] | None = None) -> tuple[str | None, list[str]]:
     """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
-    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical.
+    (what may lie between them: spec #lanes-one-head).
     AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass). RESOLVED, for the
     review verdict only: {merge sha: URL} of each clear resolution verdict, whose merge's resolution files may move."""
     j, h = judged[:12], head[:12]
@@ -1492,8 +1493,8 @@ def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]
 @no_traceback
 def cmd_ci_start(args: list[str]) -> int:
     """CI on the lane's final head (when: spec issue-lifecycle #lanes-one-head): refuse unless the local HEAD is the PR's head and has a current full
-    gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for a check run on that head
-    other than a skipped one, and print each such run."""
+    gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for CI's full run on that head to
+    start (ci_full_run), and print its jobs."""
     args, repo = take_repo(args)
     files: list[str] = []; rest: list[str] = []; i, base_arg, wait = 0, cast("str | None", None), 120.0
     while i < len(args):
@@ -1525,25 +1526,78 @@ def cmd_ci_start(args: list[str]) -> int:
         print(f"PR #{pr} marked ready for review at head {h}")
     end = time.monotonic() + wait
     while True:
-        runs = check_runs(head, repo, f"PR #{pr}'s head")
-        live = [r for r in runs if str(r.get("status")).lower() != "completed" or str(r.get("conclusion")).lower() != "skipped"]
-        if live:
+        why, jobs = ci_full_run(head, repo)
+        if not why:
             print(f"CI on {h} (issue-lifecycle #lanes-one-head):")
-            print("\n".join(f"- {r.get('name')} {r.get('conclusion') or r.get('status')} on {h}: {r.get('html_url')}" for r in live))
+            print("\n".join(jobs))
             return 0
         left = end - time.monotonic()
         if left <= 0:
-            seen = ", ".join(f"{r.get('name')} {r.get('conclusion') or r.get('status')}" for r in runs) or "none"
-            raise Refuse(f"no CI check run started on {h} within {wait:g}s (GitHub shows: {seen}): check PR #{pr} is ready "
+            raise Refuse(f"CI's full run did not start on {h} within {wait:g}s: {'; '.join(why)}: check PR #{pr} is ready "
                          "for review and its workflow runs on pull_request ready_for_review, then rerun")
         time.sleep(min(5.0, left))
 
 
+def workflow_jobs(head: str, path: str) -> int | None:
+    """How many jobs the workflow file PATH defines at HEAD (its `jobs` map), read with PyYAML in the kit's locked
+    environment (the standard library reads no YAML); None when it is unreadable."""
+    rc, text = git("show", f"{head}:{path}", ok=(0, 128))
+    if rc:
+        return None
+    try:
+        count = ("import sys, yaml; w = yaml.safe_load(sys.stdin); j = w.get('jobs') if isinstance(w, dict) else None; "
+                 "print(len(j) if isinstance(j, dict) else '')")
+        p = subprocess.run(["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", count],
+                           input=text, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        raise Refuse("uv not on PATH: it runs the kit's locked environment that reads the workflow (just install-check)")
+    out = p.stdout.strip()
+    return int(out) if p.returncode == 0 and out.isdigit() else None
+
+
+def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
+    """([], a line per job) once CI's full run on HEAD has started, else (why not, []); the rule: issue-lifecycle
+    #acceptance-ci-alongside. Read for each workflow's latest run on HEAD: its jobs (REST), and the count of jobs its
+    workflow file defines at HEAD, since GitHub lists a job that waits on `needs` only once those finish (run
+    42118019970: check created when scope completed)."""
+    api = f"repos/{repo or '{owner}/{repo}'}/actions"
+    def read(path: str, key: str) -> "list[dict[str, object]]":
+        out = gh(["api", f"{api}/{path}"], f"read {path} for {head[:12]} (gh auth status)")
+        try:
+            got = cast("list[object]", json.loads(out)[key])
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh api {path} printed no {key}: check the gh on PATH ({out[:100]!r})")
+        return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+    latest: dict[str, dict[str, object]] = {}
+    for r in read(f"runs?head_sha={head}&per_page=100", "workflow_runs"):
+        w = str(r.get("workflow_id"))
+        if w not in latest or int(str(r.get("id") or 0)) > int(str(latest[w].get("id") or 0)):
+            latest[w] = r
+    if not latest:
+        return ["no workflow run on it yet"], []
+    why: list[str] = []; lines: list[str] = []
+    for r in latest.values():
+        path = str(r.get("path") or "")
+        jobs = read(f"runs/{r.get('id')}/jobs?per_page=100", "jobs")
+        state = {str(j.get("name")): (str(j.get("status") or "").lower(), str(j.get("conclusion") or "").lower()) for j in jobs}
+        # The run's own job list is the fact; the workflow file's job count is only the guard against GitHub creating a
+        # needs-dependent job late (run 42118019970 listed check only after scope completed). Started, none skipped, not
+        # completed: waiting for completion would put CI before qc and review again (issue-lifecycle #lanes-one-head).
+        n = workflow_jobs(head, path)
+        if n is None:
+            why.append(f"{path or 'its workflow'} at {head[:12]} is unreadable: no job count to compare")
+        elif len(jobs) < n:
+            why.append(f"run {r.get('id')} lists {len(jobs)} of the {n} jobs {path} defines (a job waiting on `needs` is not created yet)")
+        why += [f"run {r.get('id')} job {k} {c or s}" for k, (s, c) in state.items()
+                if c == "skipped" or s not in ("queued", "in_progress", "completed")]
+        lines += [f"- {j.get('name')} {j.get('conclusion') or j.get('status')} on {head[:12]}: {j.get('html_url')}" for j in jobs]
+    return why, ([] if why else lines)
+
+
 def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | None, proof: str | None,
                    repo: str | None) -> tuple[list[str], list[str]]:
-    """(why each check skipped on HEAD fails, a line per one that passes). A skipped check run is never a pass by itself:
-    it counts only when PROOF, head_proof's line for JUDGED to HEAD, carries the JUDGED head, and that head's latest
-    run of the same check completed green (spec issue-lifecycle #lanes-one-head)."""
+    """(why each check skipped on HEAD fails, a line per one that passes; when a skipped check counts: spec issue-lifecycle
+    #lanes-one-head). PROOF is head_proof's line for JUDGED to HEAD."""
     skipped = sorted({str(c.get("name") or "?") for c in rollup if c.get("__typename") != "StatusContext" and "conclusion" in c
                       and str(c.get("conclusion") or "").upper() == "SKIPPED"})
     h = head[:12]
