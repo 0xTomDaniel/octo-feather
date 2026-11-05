@@ -114,8 +114,8 @@
     "acceptance-report-gate-budget": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T213029Z-2b39a4bf",
-      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "record": "20261105T013557Z-f3873b0d",
+      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
       "tests": [
         "tests/lane-report.sh",
         "tests/gate-trend-tier.sh"
