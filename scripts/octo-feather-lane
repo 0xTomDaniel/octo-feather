@@ -126,9 +126,9 @@ Insufficient evidence (quality spec #qc-results) is never triaged: the check fai
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
-`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: `demo checks`
-when qc.toml at H (this directory's repo) declares a demo for the criterion, else `agent fallback`, the
-rule just qc decides by (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
+of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
 full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
 against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
 head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
@@ -1449,23 +1449,31 @@ def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]
     return at[0].lower(), None
 
 
-def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
-    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
-    (quality spec #qc-results), named with what is missing and its report; reports: octo-feather-qc --help."""
+def qc_latest(judged: str) -> dict[str, tuple[dict[str, object], str]]:
+    """Each criterion's (<spec>#<id>) latest result in the qc reports at the JUDGED head, with its report's name
+    (reports: octo-feather-qc --help, Report; OCTO_FEATHER_QC_DIR as there)."""
     d = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc")
-    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    latest: dict[str, tuple[dict[str, object], str]] = {}
     for p in sorted(d.glob(f"{judged.lower()}-*.json"), key=lambda p: (p.name.split("-")[1], p.stat().st_mtime_ns)):
         try:   # <head>-<UTC stamp>-<runid>.json, oldest first: a rerun's result replaces the earlier one
             rep = json.loads(p.read_text(encoding="utf-8"))
             spec, results = str(rep.get("spec")), list(rep.get("results") or [])
         except (OSError, ValueError, AttributeError, TypeError):
             continue
-        for r in results if spec in specs else []:
-            try:
-                short = r.get("verdict") == "insufficient evidence"
-                latest[f"{spec}#{r['id']}"] = (("; ".join(map(str, r.get("missing") or [])) or "evidence incomplete") if short else "", p.name)
-            except (AttributeError, KeyError, TypeError):
-                continue
+        for r in results:
+            if isinstance(r, dict) and "id" in r:
+                latest[f"{spec}#{r['id']}"] = (cast("dict[str, object]", r), p.name)
+    return latest
+
+
+def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
+    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
+    (quality spec #qc-results), named with what is missing and its report (qc_latest)."""
+    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    for cid, (r, name) in qc_latest(judged).items():
+        if cid.split("#", 1)[0] in specs:
+            short = r.get("verdict") == "insufficient evidence"
+            latest[cid] = (("; ".join(map(str, cast("list[object]", r.get("missing") or []))) or "evidence incomplete") if short else "", name)
     return [f"criterion {cid}: insufficient evidence at the judged head {judged[:12]} ({why}; qc report {name}): never triaged; "
             "make what is missing available, then rerun just qc on it until it gives pass or fail"
             for cid, (why, name) in sorted(latest.items()) if why]
@@ -1657,12 +1665,10 @@ def cmd_merge_ask(args: list[str]) -> int:
 
     sources: list[str] = []
     if rows and judged:
-        try:
-            demos = declared_demos(judged)
-            sources = [f"Decision sources (qc.toml at the judged head {judged[:12]}; quality spec #qc-results):",
-                       *(f"- {cid}: {'demo checks' if cid in demos else 'agent fallback'}" for cid in sorted(rows))]
-        except Refuse as e:
-            miss.append(f"Decision sources: {e}")
+        latest = qc_latest(judged)
+        sources = [f"Decision sources (the latest qc result at the judged head {judged[:12]}; quality spec #qc-results):",
+                   *(f"- {cid}: {latest[cid][0].get('decision') or 'none named'}" if cid in latest
+                     else f"- {cid}: no qc result at the judged head" for cid in sorted(rows))]
     gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
     if miss:
         print("\n".join(gate_time), file=sys.stderr)
@@ -1678,21 +1684,6 @@ def cmd_merge_ask(args: list[str]) -> int:
     print("\n".join(f"- {c}" for c in review_checks))
     print("\n" + "\n".join(gate_time))
     return 0
-
-
-def declared_demos(rev: str) -> set[str]:
-    """The criterion ids (<spec>#<anchor>) the app-driver contract, qc.toml at REV in this directory's repo, declares a demo
-    for (quality spec #qc-contract); none when REV has no qc.toml. just qc gives each other criterion the agent fallback."""
-    import tomllib
-    if git("cat-file", "-e", f"{rev}^{{commit}}", ok=(0, 1, 128))[0]:
-        raise Refuse(f"commit {rev[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
-    if git("cat-file", "-e", f"{rev}:qc.toml", ok=(0, 1, 128))[0]:
-        return set()
-    try:
-        demo = tomllib.loads(git("show", f"{rev}:qc.toml")[1]).get("demo", {})
-    except tomllib.TOMLDecodeError as e:
-        raise Refuse(f"qc.toml at {rev[:12]} is not TOML ({e}): just qc refuses it too; fix the contract, run just qc again")
-    return {str(k) for k in cast("dict[str, object]", demo)} if isinstance(demo, dict) else set()
 
 
 class Unchecked(Refuse):

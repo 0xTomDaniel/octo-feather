@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -97,7 +97,7 @@ def git_rev(repo: Path) -> str:
 
 @dataclass(frozen=True)
 class Contract:
-    """The kit's contract, qc.toml at the kit root (format 1). The helper enters the kit only through it."""
+    """The kit's contract, qc.toml at the kit root (format 2). The helper enters the kit only through it."""
 
     setup: str
     entry: str
@@ -113,15 +113,15 @@ def read_contract() -> Contract:
             c: dict[str, Any] = tomllib.load(fh)
     except (OSError, ValueError) as e:
         die(f"cannot read the kit's contract {CONTRACT}: {e}")
-    if c.get("format") != 1:
-        die(f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 1 (validate: octo-feather-contract)")
+    if c.get("format") != 2:
+        die(f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 2 (validate: octo-feather-contract)")
     entry, services, fixture, values = (c.get(k) for k in ("entry", "services", "fixture", "values"))
     if not (isinstance(entry, dict) and isinstance(entry.get("command"), str) and isinstance(services, dict)
             and isinstance(fixture, dict)
             and all(isinstance(f, dict) and isinstance(f.get("reset"), str) for f in fixture.values())
             and isinstance(values, dict) and all(isinstance(v, str) for v in values.values())
             and isinstance(c.get("setup", ""), str)):
-        die(f"{CONTRACT} does not match format 1 (validate: octo-feather-contract)")
+        die(f"{CONTRACT} does not match format 2 (validate: octo-feather-contract)")
     return Contract(setup=c.get("setup", ""), entry=entry["command"], services=list(services),
                     fixtures={k: f["reset"] for k, f in fixture.items()}, values=dict(values),
                     browser=str(c.get("browser", {}).get("playwright", "")))
@@ -458,7 +458,7 @@ def drive_new_repo(f: Feature) -> None:
             and re.fullmatch(r"Initial commit from octo-feather templates/" + c.v["lang"] + r" @ [0-9a-f]+\n", c.o["log"])
             and c.o["branch"] == "main\n" and c.o["status"] == "" and c.o["files"] == c.o["template-files"]
             and re.search(r"\bverify-\w+", c.o["repo-skills"]) and c.o["verify-skill"].strip()
-            and c.o["contract"].endswith(": ok (format 1)\n"))
+            and c.o["contract"].endswith(": ok (format 2)\n"))
 
     # Over the repo just made: refused, the repo untouched.
     f.obs_cmd("refuse-nonempty", "head-before", "git", "-C", str(dest), "rev-parse", "HEAD")
@@ -519,7 +519,7 @@ def drive_contract(f: Feature) -> None:
     (sc / "missing-entry" / "qc.toml").write_text("format = 1\n[services]\n[fixture]\n[values]\n")
 
     f.run("kit", "octo-feather-contract", f.s.repo)
-    f.check("kit", lambda c: c.code == 0 and c.out == f"octo-feather-contract: {c.kit}/qc.toml: ok (format 1)\n")
+    f.check("kit", lambda c: c.code == 0 and c.out == f"octo-feather-contract: {c.kit}/qc.toml: ok (format 2)\n")
     f.run("missing-entry", "octo-feather-contract", str(sc / "missing-entry"))
     f.check("missing-entry", lambda c: c.code == 1 and "missing entry" in c.out + c.err and "ok" not in c.out)
     f.run("no-contract", "octo-feather-contract", str(sc / "none"))
@@ -1129,7 +1129,8 @@ def drive_qc_insufficient(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract with a demo that needs GitHub")
     head = git("rev-parse", "HEAD")
-    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports and the scratch evidence store; never a live lane's
+    # qc's reports and the scratch evidence store, never a live lane's; the stub classifier: no real model (a rerun passes)
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
     f.pre = ["env", "-C", str(r)]   # where the supervisor stands: the lane worktree
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     f.obs("qc", "after", f"{git('rev-parse', 'HEAD')} {json.loads(git('show', 'HEAD:docs/specs/demo.status.json'))['criteria']['acceptance-a']['status']}"
@@ -1148,7 +1149,8 @@ def drive_qc_insufficient(f: Feature) -> None:
         "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
         "commits": [{"oid": head, "messageHeadline": "contract with a demo that needs GitHub", "messageBody": ""}]}))
     f.env |= {"OCTO_FEATHER_GHSNAP": str(snap), "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
-    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json")
+    # The lane's base, the commit the PR's one commit sits on (no origin/main in the scratch repo).
+    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json", "--base", git("rev-parse", "HEAD^"))
     f.check("merge-ask", lambda c: c.code == 1 and not c.out and re.search(
         rf"criterion demo#acceptance-a: insufficient evidence at the judged head {head[:12]} \(demo did not run to its end \(exit 77, "
         r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
@@ -2215,6 +2217,78 @@ def drive_template_tiers(f: Feature) -> None:
     say(f"template-tiers evidence: {f.d}")
 
 
+def drive_starter_acceptance(f: Feature) -> None:
+    """A template-born repo's starter criterion proven by its tagged acceptance test, per template: `just new-repo`, its
+    packages from the box's caches offline, its status file made and committed; its full gate told the claim
+    (OCTO_FEATHER_QC_CLAIMS=app#acceptance-hello-json just check) stores one record naming the tagged case passed; `just
+    qc` on the starter criterion then judges it PASS from that record, reruns nothing (no new record), runs no demo and
+    no judge, and builds it naming the record, its commit and the test. The stub classifier at the model boundary."""
+    sc = RUN_DIR / "scratch" / "starter-acceptance"
+    shutil.rmtree(sc, ignore_errors=True)
+    sc.mkdir(parents=True)
+    ident = {"GIT_AUTHOR_NAME": "verify-octo-feather", "GIT_AUTHOR_EMAIL": "verify@octo-feather.invalid",
+             "GIT_COMMITTER_NAME": "verify-octo-feather", "GIT_COMMITTER_EMAIL": "verify@octo-feather.invalid"}
+    f.env = {**ident, "XDG_STATE_HOME": str(sc / "state"), "MISE_STATE_DIR": str(sc / "mise-state"), "GATE_WORKERS": "2",
+             "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
+    env = {**os.environ, **f.env}
+    cid = "app#acceptance-hello-json"
+    tests = {"python": "tests/e2e/test_cli_e2e.py", "typescript": "tests/cli.e2e.test.ts"}
+    rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
+    for lang, test in tests.items():
+        r = sc / lang
+
+        def git(*args: str, at: Path = r) -> str:
+            return subprocess.run(["git", "-C", str(at), *args], check=True, capture_output=True, text=True, env=env).stdout.strip()
+
+        f.run(f"{lang}-new-repo", "just", "--justfile", f"{f.s.repo}/justfile", "new-repo", lang, str(r), "--no-spec-chat")
+        install = ["uv", "sync", "--locked", "--offline", "--quiet"] if lang == "python" else ["pnpm", "install", "--offline", "--frozen-lockfile"]
+        code, text = output(install, cwd=r, env=env)
+        init = output([f.s.kit, "octo-feather-spec-status", "init", str(r / "docs" / "specs" / "app.spec.html"), git("rev-parse", "--short", "HEAD")], env=env)
+        git("add", "-A")
+        git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", "status")
+        f.obs(f"{lang}-new-repo", "install", f"{shlex.join(install)}: exit {code}\n{text}\nstatus init: exit {init[0]}\n{init[1]}")
+        f.check(f"{lang}-new-repo", lambda c: c.code == 0 and c.o["install"].split("\n", 1)[0].endswith(": exit 0")
+                and "status init: exit 0" in c.o["install"])
+        head = git("rev-parse", "HEAD")
+
+        def store(name: str, r: Path = r, head: str = head) -> None:
+            f.obs(name, "store", output([f.s.kit, "octo-feather-evidence", "read", "--repo", str(r), "--commit", head, "--json"], env=env)[1])
+
+        # The final full gate, told the claim: one record, its tagged case named passed.
+        f.pre = ["env", "-C", str(r), f"OCTO_FEATHER_QC_CLAIMS={cid}"]
+        f.run(f"{lang}-gate", "just", "check")
+        f.pre = []
+        store(f"{lang}-gate")
+
+        def gate_holds(c: Case, test: str = test) -> bool:
+            m = re.search(rf"(?m)^qc capture: {cid}: record {rid}, 1 case\(s\): {re.escape(test)} passed$", c.out)
+            recs = json.loads(c.o["store"])
+            return c.code == 0 and m is not None and [x["record"]["id"] for x in recs] == [m.group(1)]
+        f.check(f"{lang}-gate", gate_holds)
+        gate_rec = [x["record"]["id"] for x in json.loads((f.d / f"{lang}-gate.obs.store").read_text())]
+
+        # just qc on the starter criterion: judged from the gate's record, nothing rerun, no demo, no judge.
+        f.pre = ["env", "-C", str(r)]
+        f.run(f"{lang}-qc", "just", "qc", "docs/specs/app.status.json", "7", "acceptance-hello-json")
+        f.pre = []
+        f.obs(f"{lang}-qc", "report", json.dumps(qc_report(f, f"{lang}-qc")))
+        store(f"{lang}-qc")
+        f.obs(f"{lang}-qc", "status", git("show", "HEAD:docs/specs/app.status.json"))
+
+        def qc_holds(c: Case, test: str = test, head: str = head, gate_rec: list[str] = gate_rec) -> bool:
+            m = re.search(rf"(?m)^PASS acceptance-hello-json: \$ .*\n  1/1 tagged cases passed in the gate's run at {head[:12]}, not rerun\n"
+                          rf"  evidence complete; decision tagged test assertions; record {rid}$", c.out)
+            rep = json.loads(c.o["report"])
+            built = json.loads(c.o["status"])["criteria"]["acceptance-hello-json"]
+            return (c.code == 0 and m is not None and [m.group(1)] == gate_rec == [x["record"]["id"] for x in json.loads(c.o["store"])]
+                    and f"judged from the gate's record {gate_rec[0]} at {head[:12]}, not rerun" in c.err
+                    and rep.get("captures") == [] and "fallback" not in rep and "qc: demo " not in c.err
+                    and built == {"status": "built", "pr": 7, "record": gate_rec[0], "commit": head, "tests": [test]})
+        f.check(f"{lang}-qc", qc_holds)
+    f.env = {}
+    say(f"starter-acceptance evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -2237,6 +2311,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "template-tiers": drive_template_tiers,
     "one-execution": drive_one_execution,
     "one-execution-incomplete": drive_one_execution_incomplete,
+    "starter-acceptance": drive_starter_acceptance,
     "qa-runs": drive_qa_runs,
     "qa-baseline": drive_qa_baseline,
     "qa-analyst": drive_qa_analyst,

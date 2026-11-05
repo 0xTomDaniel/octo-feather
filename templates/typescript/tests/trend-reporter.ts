@@ -7,12 +7,13 @@
 // working dir), head, total_s (the run's elapsed wall seconds, from Vitest's onInit to its onTestRunEnd; never a sum
 // of test times), exit (0 when the run passed with no unhandled error, else 1), tier (`full` only when the invocation
 // narrowed nothing: it ran every test file of every configured project, with no --project, --changed, related, -t,
-// --shard, --exclude or --tags-filter; else `subset`), steps (name, seconds, result: ok, FAIL, ERROR or skipped),
-// one per test, plus one ERROR step per test file that failed to load (files run in parallel, so their sum exceeds
+// --shard, --exclude or --tags-filter, and the gate's static steps ran: when the root's justfile declares GATE_RECIPES,
+// the run's GATE_RECIPES is that value, so a bare `vitest run`, which skips them, is no full run; else `subset`),
+// steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per test, plus one ERROR step per test file that failed to load (files run in parallel, so their sum exceeds
 // total_s). A missing state dir it cannot create, or an unwritable one, is a warning on stderr, never a failure: the
 // trend line never changes the run's exit status.
 import { execFileSync } from "node:child_process";
-import { appendFileSync, mkdirSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, relative } from "node:path";
 import type { Reporter, SerializedError, TestModule, TestRunEndReason, TestSpecification, Vitest } from "vitest/node";
@@ -35,6 +36,33 @@ function stateDir(): string {
   return ask("octo-feather-state", []) ?? join(xdg !== undefined && xdg !== "" ? xdg : join(homedir(), ".local", "state"), "octo-feather");
 }
 
+/** True when this run lacks some of the gate's static steps: ROOT's justfile declares GATE_RECIPES (from just's own
+ * --dump) and this run's environment does not hold exactly that literal value; a justfile just cannot read, or a value
+ * that is no string literal, is unknown, so short. */
+function staticShort(root: string): boolean {
+  let dump: string;
+  try {
+    dump = execFileSync("just", ["--dump", "--dump-format", "json"], { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] });
+  } catch (e) {
+    const stderr = (e as { stderr?: unknown }).stderr;
+    if (typeof stderr === "string" && stderr.includes("No justfile found")) return false;
+    return (e as { code?: unknown }).code !== "ENOENT" || ["justfile", "Justfile", ".justfile"].some((n) => existsSync(join(root, n)));
+  }
+  const declared = (JSON.parse(dump) as { assignments?: Record<string, { value?: unknown }> }).assignments?.["GATE_RECIPES"];
+  return declared !== undefined && declared.value !== process.env["GATE_RECIPES"];
+}
+
+/** The run's tier, from Vitest's own resolved config and the files it runs against every file its projects hold, and
+ * the gate's static steps (staticShort). */
+export async function runTier(vitest: Vitest, specifications: readonly TestSpecification[]): Promise<"full" | "subset"> {
+  const c = vitest.config;
+  const narrowed = c.project.length > 0 || Boolean(c.changed) || (c.related?.length ?? 0) > 0 || c.testNamePattern !== undefined
+    || c.shard !== undefined || (c.cliExclude?.length ?? 0) > 0 || (c.tagsFilter?.length ?? 0) > 0;
+  const run = new Set(specifications.map(key));
+  const all = await vitest.globTestSpecifications();
+  return narrowed || all.some((s) => !run.has(key(s))) || staticShort(c.root) ? "subset" : "full";
+}
+
 const seconds = (ms: number | undefined): number => Math.round(ms ?? 0) / 1000;
 const key = (s: TestSpecification): string => `${s.project.name}\0${s.moduleId}`;
 
@@ -50,15 +78,8 @@ export default class TrendReporter implements Reporter {
     this.t0 = performance.now();
   }
 
-  /** The tier, from Vitest's own resolved config and the files it runs against every file its projects hold. */
   async onTestRunStart(specifications: readonly TestSpecification[]): Promise<void> {
-    if (this.vitest === undefined) return;
-    const c = this.vitest.config;
-    const narrowed = c.project.length > 0 || Boolean(c.changed) || (c.related?.length ?? 0) > 0 || c.testNamePattern !== undefined
-      || c.shard !== undefined || (c.cliExclude?.length ?? 0) > 0 || (c.tagsFilter?.length ?? 0) > 0;
-    const run = new Set(specifications.map(key));
-    const all = await this.vitest.globTestSpecifications();
-    this.tier = narrowed || all.some((s) => !run.has(key(s))) ? "subset" : "full";
+    if (this.vitest !== undefined) this.tier = await runTier(this.vitest, specifications);
   }
 
   onTestRunEnd(testModules: readonly TestModule[], unhandledErrors: readonly SerializedError[], reason: TestRunEndReason): void {

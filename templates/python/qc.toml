@@ -1,6 +1,6 @@
 # This app's driver contract (octo-feather quality spec #qc-contract), read by the verify-app skill.
 # Validate it with the kit's octo-feather-contract.
-format = 1
+format = 2
 
 # The repo's own install (`just setup` minus the hook).
 setup = "uv sync --locked"
@@ -19,3 +19,8 @@ command = '"$QC_REPO/.venv/bin/app"'
 [values]
 name = "Ada"
 greeting = "Hello, Ada"
+
+# Per-criterion metadata (quality spec #qc-contract); no demo command: its tagged acceptance test proves it (the
+# verify-app skill, Acceptance).
+[demo."app#acceptance-hello-json"]
+covers = ["src/app"]

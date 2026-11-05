@@ -75,7 +75,7 @@ assert r["format"] == 1 and r["revision"] == c1 and r["dirty"] is False, r
 assert r["criterion"]["id"] == crit, r
 assert r["criterion"]["text_from"] == "spec" and r["criterion"]["text_sha256"] == hashlib.sha256(spec_text.encode()).hexdigest(), r
 qc = open(f"{repo}/qc.toml", "rb").read()
-assert r["contract"] == {"format": 1, "sha256": hashlib.sha256(qc).hexdigest()}, r["contract"]
+assert r["contract"] == {"format": 2, "sha256": hashlib.sha256(qc).hexdigest()}, r["contract"]
 assert r["fixture"] is None, r["fixture"]
 outs = r["outputs"]
 assert "json.stdout" in outs and "summary.txt" in outs, outs

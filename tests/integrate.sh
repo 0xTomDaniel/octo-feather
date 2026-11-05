@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-integrate: clean merge and
 # cherry-pick, conflict, red gate, lane match, in a throwaway repo. Run by `just check`.
+# criterion: issue-lifecycle#acceptance-pilot-full
+# criterion: issue-lifecycle#acceptance-integrate-fast
+# criterion: issue-lifecycle#acceptance-integrate-checkpoint
+# criterion: issue-lifecycle#acceptance-brownfield-full
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT

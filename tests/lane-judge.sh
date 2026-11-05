@@ -127,6 +127,11 @@ B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
 "$kit/scripts/octo-feather-gate" record --reason "lane final head" --seconds 1 >/dev/null   # J's full gate pass: merge-ask needs one (issue-lifecycle #lanes-checkpoints)
 status built 7; H="$(commit "qc: built acceptance-a (judged ${J:0:12})")"
+# That qc run's report at J, where octo-feather-qc writes it ($(octo-feather-state)/qc; octo-feather-qc --help, Report):
+# acceptance-a passed by the agent fallback (no qc.toml here). merge-ask reads its decision source from it.
+q="$("$kit/scripts/octo-feather-state")/qc"; mkdir -p "$q"
+printf '{"head": "%s", "spec": "demo", "results": [{"id": "acceptance-a", "verdict": "pass", "evidence": "complete", "decision": "agent fallback", "record": "r", "head": "%s"}]}\n' \
+  "$J" "$J" > "$q/$J-20261029T100000Z-abc123.json"
 ST=(--status docs/specs/demo.status.json)
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
   {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a (judged ${J:0:12})\", \"messageBody\": \"\"}]"

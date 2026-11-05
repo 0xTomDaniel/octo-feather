@@ -2,7 +2,8 @@
 # Integration test for the trend line's tier (tests/gate/conftest.py, the hook templates/python copies; #536): pytest,
 # run as a command on a throwaway suite holding a copy of the hook, appends one check-runs.jsonl line per run whose
 # tier is `full` only when the invocation narrowed nothing (no paths or node ids, -k, -m, --lf, --deselect,
-# --ignore), xdist or not, else `subset`. The gate-time budget counts full runs only (comms #report-field-gate-time).
+# --ignore) and, where the root's justfile declares GATE_RECIPES, the run carries exactly that value (a bare pytest
+# skips the gate's static steps), xdist or not, else `subset`. The gate-time budget counts full runs only (comms #report-field-gate-time).
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -32,4 +33,11 @@ expect subset 1 -n 2 -k test_c
 expect subset 2 --deselect tests/test_c.py::test_c
 expect subset 2 --ignore tests/test_c.py
 expect subset 3 -m "not slow"
-echo "gate-trend-tier: ok (full with no narrowing, xdist too; subset for a path, a node id, -k, -k under xdist, --deselect, --ignore, -m)"
+# A justfile declaring the gate's static steps (GATE_RECIPES): full only when the run carries exactly that value, so a
+# bare pytest, which skips them (the template's tests/test_gate.py), records subset.
+printf 'export GATE_RECIPES := "check-a check-b"\n' > "$t/s/justfile"
+expect subset 3
+GATE_RECIPES="check-a" expect subset 3
+GATE_RECIPES="check-a check-b" expect full 3
+GATE_RECIPES="check-a check-b" expect full 3 -n 2
+echo "gate-trend-tier: ok (full with no narrowing, xdist too; subset for a path, a node id, -k, -k under xdist, --deselect, --ignore, -m, and without the justfile's GATE_RECIPES)"
