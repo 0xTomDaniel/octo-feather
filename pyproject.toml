@@ -96,6 +96,8 @@ ignore = [
 
 [tool.basedpyright]
 typeCheckingMode = "strict"
+# tests/gate/kit/conftest.py imports the gate runner (test_gate), as pytest's rootdir import puts tests/gate on sys.path.
+extraPaths = ["tests/gate"]
 
 [tool.ruff.lint.extend-per-file-ignores]
 # Baseline (octo-feather-lint): taken once, only shrinks.

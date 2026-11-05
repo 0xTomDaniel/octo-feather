@@ -22,7 +22,11 @@ agent-browser-version
 Skillfile
 Skillfile.lock
 .skillfile/patches
-tests/gate
+# The gate runner (tests/gate/ itself) and the pytest kit tests' shared support; the kit test files
+# under tests/gate/kit/ are test items, which select runs by their own coverage.
+tests/gate/*
+tests/gate/kit/conftest.py
+tests/gate/kit/testkit
 tests/lib
 tests/fixtures
 .github/workflows
