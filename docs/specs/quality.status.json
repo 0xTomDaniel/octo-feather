@@ -168,6 +168,64 @@
       "tests": [
         "tests/spec-status.sh"
       ]
+    },
+    "acceptance-qa-repeats": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220224Z-360b97be",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-runs.sh"
+      ]
+    },
+    "acceptance-qa-cost": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220244Z-65c60aa7",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-baseline.sh"
+      ]
+    },
+    "acceptance-qa-baseline": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220303Z-ced67100",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-baseline.sh"
+      ]
+    },
+    "acceptance-qa-analyst": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220340Z-26202b38",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-analyst.sh"
+      ]
+    },
+    "acceptance-qa-review": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220349Z-4299d09d",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-review.sh"
+      ]
+    },
+    "acceptance-qa-history": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220356Z-56e56902",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-history.sh"
+      ]
+    },
+    "acceptance-qa-tuning-method": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
