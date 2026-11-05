@@ -102,8 +102,13 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
   ## Merge ask
   Head: <sha>                     the PR's head H' (7+ hex prefix)
   Checks: <summary>               verified: every check on that head SUCCESS, none pending; none reported
-                                  passes only on the no-CI fact for that head (post-merge step 2), printed
-                                  after the section as `Checks: no CI: ...`
+                                  passes only when both hold, else fails naming the one that does not or
+                                  could not be read: the no-CI fact for that head (post-merge step 2), and
+                                  the PR base's required-check policy requires no check: `gh api
+                                  repos/<repo>/branches/<base>` protection.required_status_checks empty, and
+                                  `gh api repos/<repo>/rules/branches/<base>` no required_status_checks rule
+                                  (its plan-has-no-rulesets 403 counts as none). Printed after the section
+                                  as `Checks: no CI: ...`, naming each fact and source
   Judged: <proof>                 = the line the check prints for H to H' (below)
   | criterion | qc verdict | judged | evidence |
   |---|---|---|---|
@@ -902,10 +907,7 @@ def pr_number(s: str) -> int:
 
 
 def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
-    """The no-CI fact, one mechanism for post-merge step 2 and merge-ask's Checks (issue 569): the GitHub Actions
-    workflow files in the tree of commit SHA, `.github/workflows/*.yml|*.yaml` as Actions reads them, walked with
-    `gh api repos/<repo>/git/trees/<sha>` (the repo itself, never the absence of runs). Returns the paths and the
-    source as printed; no path means no workflow, so no push run and no check run of the repo's own can appear."""
+    """The no-CI fact (rule: --help, post-merge step 2): the workflow files at commit SHA and the source as printed."""
     name = repo or "{owner}/{repo}"   # gh fills the placeholders from this directory's repo
     src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
     tree = sha
@@ -921,6 +923,59 @@ def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
         if not tree:
             return [], src
     return [], src   # unreachable: the loop returns at its last part
+
+
+# GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
+# repo, free plan; 0xTomDaniel/exosurface read 2026-11-05): no ruleset can be in force.
+NO_RULESETS = "Upgrade to GitHub Pro or make this repository public to enable this feature."
+
+
+def required_none(repo: str | None, base: str) -> str:
+    """The base branch's required-check policy, read from GitHub, when it requires no check: the line naming both
+    sources. Refuse naming the required checks, or the source that could not be read (fail closed)."""
+    name = repo or "{owner}/{repo}"
+    shown = f"repos/{repo or '<this repo>'}"
+    def read(path: str) -> tuple[object, str]:
+        try:
+            p = subprocess.run(["gh", "api", f"repos/{name}/{path}"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
+        err = (p.stderr or p.stdout).strip().splitlines()
+        if p.returncode:
+            return None, err[-1][:200] if err else f"exit {p.returncode}"
+        try:
+            return json.loads(p.stdout), ""
+        except ValueError:
+            return None, f"no JSON ({p.stdout[:80]!r})"
+    br, why = read(f"branches/{base}")
+    try:
+        prot = cast("dict[str, object]", cast("dict[str, object]", br)["protection"])
+        rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
+        req = sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
+    except (KeyError, TypeError):
+        raise Refuse(f"the required checks of base {base} could not be read (gh api {shown}/branches/{base}: "
+                     f"{why or 'no protection.required_status_checks'}): fix gh auth status or read access, then rerun")
+    rules, why = read(f"rules/branches/{base}")
+    if why == f"gh: {NO_RULESETS} (HTTP 403)":
+        rsrc = f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, none in force"
+    elif isinstance(rules, list):
+        try:
+            for r in cast("list[dict[str, object]]", rules):
+                if r["type"] == "required_status_checks":
+                    params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
+                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
+        except (KeyError, TypeError):
+            raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                         "a required_status_checks rule with no contexts): check the gh on PATH, then rerun")
+        rsrc = f"gh api {shown}/rules/branches/{base}: no required_status_checks rule"
+    else:
+        raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                     f"{why or 'no rule list'}): fix gh auth status or read access, then rerun")
+    if req:
+        raise Refuse(f"base {base} requires checks {', '.join(dict.fromkeys(req))} (gh api {shown}/branches/{base}, "
+                     f"{shown}/rules/branches/{base}): push the head and wait for them")
+    return (f"base {base} requires no check (gh api {shown}/branches/{base}: no required status check; {rsrc}), "
+            "so required checks are none")
 
 
 def take_repo(args: list[str]) -> tuple[list[str], str | None]:
@@ -1420,12 +1475,16 @@ def cmd_merge_ask(args: list[str]) -> int:
     rollup = d["statusCheckRollup"] or []
     failed, pending = bad_checks(rollup)
     no_ci = ""
-    if not rollup:   # required checks are none only when the head defines no workflow (issue 569, ADR 0019)
+    if not rollup:   # the rule: --help, merge-ask Checks line
         wf, src = ci_workflows(repo, cast("str", head))
         if wf:
             miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
         else:
-            no_ci = f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}), so required checks are none"
+            try:
+                no_ci = (f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}); "
+                         + required_none(repo, cast("str", pr_view(pr, "baseRefName", repo)["baseRefName"])))
+            except Refuse as e:
+                miss.append(f"Checks: none reported on head {head[:12]}, no workflow file there ({src}), but {e}")
     if failed:
         miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
     if pending:
@@ -2808,7 +2867,7 @@ def pm_ci(pm: PostMerge) -> str:
     """Step 2: wait for main CI on the merge commit; ok only when every push run concluded success."""
     m, deadline = pm.merge[:12], time.monotonic() + pm.wait
     runs, wf = pm_runs(pm), list[str]()
-    if not runs:   # the no-CI fact, read from the repo before any wait (issue 569)
+    if not runs:   # the no-CI fact (--help, post-merge step 2)
         wf, src = ci_workflows(pm.repo, pm.merge)
         if not wf:
             return (f"no CI: no workflow file under .github/workflows at merge commit {m} ({src}), "

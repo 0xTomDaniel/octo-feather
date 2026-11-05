@@ -146,8 +146,8 @@ grep -qx "pr edit 13 --base main (gh12 on origin: yes)" "$GH_LOG" || fail "retar
 run 0
 [[ "$s5" == "step 5 teardown: ok: space w5 already closed; worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already deleted; remote branch gh12 already deleted from origin" ]] || fail "rerun: $s5"
 
-# The no-CI fact (issue 569; exosurface, gh33): no push run and no .github at the merge commit: step 2 ok naming it, no
-# wait, and the same teardown runs; a rerun prints already for each.
+# The no-CI fact (rule: octo-feather-lane --help, post-merge step 2; exosurface, gh33): the same teardown runs; a rerun
+# prints already for each.
 fresh; lane "$lanes/archive/gh12.toml" w5:p1 12
 NO_CI=1 run 0
 grep -qxF "step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit ${M:0:12} (gh api repos/o/r/git/trees/${M:0:12}), so no push run can appear; nothing to wait for" <<<"$out" || fail "no CI step 2: $out"
