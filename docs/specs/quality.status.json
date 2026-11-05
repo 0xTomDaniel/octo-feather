@@ -182,8 +182,8 @@
     "acceptance-one-execution": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T213011Z-6e600dd2",
-      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "record": "20261105T013535Z-afa8a2c6",
+      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
       "tests": [
         "tests/qc-one-execution.sh"
       ]
@@ -191,8 +191,8 @@
     "acceptance-one-execution-incomplete": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T213018Z-1aa5e84e",
-      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "record": "20261105T013544Z-6f31688a",
+      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
       "tests": [
         "tests/qc-one-execution.sh"
       ]
