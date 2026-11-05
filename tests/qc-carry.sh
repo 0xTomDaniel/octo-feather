@@ -120,6 +120,11 @@ echo 'echo g2' >> tests/g.sh; merge "main: c text, tests/g.sh"
 qcrun 2 a c g
 results a="carried@$h0:$a0" c=judged:pass g="judged:insufficient evidence"; said "acceptance-c again: .*criterion text changed"; said "acceptance-g again: .*test file tests/g.sh changed"
 
+# A test newly tagged with c: c judged again (no gate record here, so insufficient); a carried.
+printf '#!/usr/bin/env bash\n# criterion: carry#acceptance-c\necho c2 ok\n' > tests/c2.sh; chmod +x tests/c2.sh; merge "main: tests/c2.sh"
+qcrun 2 a c
+results a="carried@$h0:$a0" c="judged:insufficient evidence"; said "acceptance-c again: newly tagged at ${head:0:12}: tests/gate/test_gate.py::test_script\[tests/c2.sh\]"
+
 # The fixture moves, then the contract: a judged again each time.
 echo "seed v2" > fixtures/seed; merge "main: fixture"
 qcrun 0 a; results a=judged:pass; said "acceptance-a again: fixture"
@@ -128,4 +133,4 @@ qcrun 0 a; results a=judged:pass; said "acceptance-a again: contract"
 # Another lane (PR 10) naming a: judged again, never carried from lane 9's pass.
 echo "b v3" > src/b; merge "main: src/b again"
 PR=10 qcrun 0 a; results a=judged:pass; said "acceptance-a again: built in PR #9"
-echo "qc-carry: ok (a merge of main: the criterion whose covered path moved judged again, the others carried with their judged head and record, both built; fallback, failed and insufficient criteria, and moved text, named test, gate configuration, fixture and contract, or another lane, judged again)"
+echo "qc-carry: ok (a merge of main: the criterion whose covered path moved judged again, the others carried with their judged head and record, both built; fallback, failed and insufficient criteria, and moved text, named test, a newly tagged test, gate configuration, fixture and contract, or another lane, judged again)"
