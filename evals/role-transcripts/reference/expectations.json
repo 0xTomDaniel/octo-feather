@@ -90,6 +90,28 @@
       }
     ]
   },
+  "reviewer-criterion-test-adequacy": {
+    "facts": [
+      {
+        "fact": "field_lines",
+        "field": "Verdict",
+        "includes": [
+          {
+            "text": "blocking"
+          }
+        ]
+      },
+      {
+        "fact": "declared_includes",
+        "field": "blocking",
+        "items": [
+          {
+            "test": "tests/test_cli.py::test_shout_json"
+          }
+        ]
+      }
+    ]
+  },
   "qc-judge-demo-path": {
     "facts": [
       {

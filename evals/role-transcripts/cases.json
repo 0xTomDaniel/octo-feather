@@ -60,6 +60,17 @@
     "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
   },
   {
+    "id": "reviewer-criterion-test-adequacy",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout-tagged",
+      "branch": "implementer-t2",
+      "message": "feat(hello): --shout (T2, hello#acceptance-shout, hello#acceptance-shout-json)"
+    },
+    "task": "Review lane gh2, ticket T2 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text). The lane claims two criteria, each through the acceptance test tagged with it (pytest marker `criterion`):\n- hello#acceptance-shout: Given a user, When they run `app hello Ada --shout`, Then it prints `HELLO, ADA!`.\n- hello#acceptance-shout-json: Given a user, When they run `app hello Grace --shout --json`, Then the \"text\" field is `HELLO, GRACE!`.\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
+  },
+  {
     "id": "qc-judge-demo-path",
     "role": "qc-judge",
     "fixture": "python-app-shout",
