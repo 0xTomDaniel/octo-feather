@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Greet spec</title></head>
+<body>
+<h1>Greet</h1>
+<p>The app greets people from its CLI.</p>
+<h2 id="acceptance">Acceptance</h2>
+<p data-acceptance-criterion data-anchor="greet-plain">Given a name, When <code>app hello Ada</code> runs, Then it prints <code>Hello, Ada</code> and exits 0.</p>
+<p data-acceptance-criterion data-anchor="greet-json">Given a name, When <code>app hello Ada --json</code> runs, Then it prints <code>{"name": "Ada", "text": "Hello, Ada"}</code>.</p>
+<p data-acceptance-criterion data-anchor="greet-shout">Given a name, When <code>app hello Ada --shout</code> runs, Then it prints <code>HELLO, ADA</code>; with <code>--json</code> the <code>text</code> field is upper-cased.</p>
+<p data-acceptance-criterion data-anchor="greet-times">Given a name and N, When <code>app hello Ada --times N</code> runs, Then it prints the greeting N times, one per line; N below 1 exits 2 with an error.</p>
+</body>
+</html>

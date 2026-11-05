@@ -1,0 +1,74 @@
+diff --git a/src/app/cli.py b/src/app/cli.py
+index f4911c0..cd02545 100644
+--- a/src/app/cli.py
++++ b/src/app/cli.py
+@@ -12,10 +12,11 @@ def main(argv: list[str] | None = None) -> int:
+     hello = commands.add_parser("hello", help="greet someone")
+     hello.add_argument("name")
+     hello.add_argument("--json", action="store_true", help="print JSON")
++    hello.add_argument("--lang", default="en", help="greeting language")
+     args = parser.parse_args(argv)
+ 
+     try:
+-        greeting = greet(str(args.name))
++        greeting = greet(str(args.name), str(args.lang))
+     except ValueError as err:
+         if args.json:
+             sys.stdout.write(json.dumps({"error": str(err)}) + "\n")
+diff --git a/src/app/core.py b/src/app/core.py
+index 7076096..a435eec 100644
+--- a/src/app/core.py
++++ b/src/app/core.py
+@@ -1,4 +1,8 @@
++import json
+ from dataclasses import dataclass
++from urllib.request import urlopen
++
++PHRASEBOOK = "https://phrases.example/v1/hello"
+ 
+ 
+ @dataclass(frozen=True)
+@@ -7,9 +11,13 @@ class Greeting:
+     text: str
+ 
+ 
+-def greet(name: str) -> Greeting:
++def greet(name: str, lang: str = "en") -> Greeting:
+     clean = name.strip()
+     if not clean:
+         msg = "name must not be empty"
+         raise ValueError(msg)
+-    return Greeting(name=clean, text=f"Hello, {clean}")
++    word = "Hello"
++    if lang != "en":
++        with urlopen(f"{PHRASEBOOK}?lang={lang}", timeout=5) as resp:
++            word = json.load(resp)["word"]
++    return Greeting(name=clean, text=f"{word}, {clean}")
+diff --git a/tests/test_cli.py b/tests/test_cli.py
+index 377041b..b0b89f9 100644
+--- a/tests/test_cli.py
++++ b/tests/test_cli.py
+@@ -1,11 +1,13 @@
+ """Integration (in-process CLI) and end-to-end (installed `app` command) tests."""
+ 
+ import json
++import io
+ import shutil
+ import subprocess
+ 
+ import pytest
+ 
++from app import core
+ from app.cli import main
+ 
+ 
+@@ -26,3 +28,9 @@ def test_installed_command_end_to_end() -> None:
+         [app, "hello", "Grace", "--json"], capture_output=True, text=True, check=True
+     )
+     assert json.loads(done.stdout) == {"name": "Grace", "text": "Hello, Grace"}
++
++
++def test_hello_in_french(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
++    monkeypatch.setattr(core, "urlopen", lambda url, timeout: io.BytesIO(b'{"word": "Bonjour"}'))
++    assert main(["hello", "Ada", "--lang", "fr", "--json"]) == 0
++    assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Bonjour, Ada"}

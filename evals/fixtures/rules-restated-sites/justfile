@@ -1,0 +1,3 @@
+# The gate (AGENTS.md). Its tests hold the errors rule: each error names its fix, usage errors exit 2.
+check:
+    python3 -m unittest discover -s tests -q

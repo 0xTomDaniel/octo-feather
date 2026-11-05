@@ -1,0 +1,10 @@
+{
+  "spec": "docs/specs/greet.spec.html",
+  "accepted_commit": "0000000000000000000000000000000000000000",
+  "criteria": {
+    "greet-plain": {"status": "built", "pr": 30},
+    "greet-json": {"status": "built", "pr": 30},
+    "greet-shout": {"status": "planned"},
+    "greet-times": {"status": "planned"}
+  }
+}
