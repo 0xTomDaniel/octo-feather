@@ -47,12 +47,9 @@ Pi always gets --extension for the kit's extensions/resume-on-error.ts
 (docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
 Pi always gets --extension for the kit's extensions/skills-loaded.ts with
---octo-feather-skills-loaded naming every --skill folder and each skill the
-target's AGENTS.md declares on its `Repo skills:` line (found in the target's
-.agents/skills as externalSkills are, then the kit's; one found nowhere is
-skipped with a warning; checked, never offered): when Pi did not load one,
-Pi exits 1 before any model call naming each skill and Pi's reason
-(spec skills#loading-refuse).
+--octo-feather-skills-loaded: every --skill folder and each `Repo skills:`
+entry of the target's AGENTS.md (declared_skills), checked, never offered.
+The rule: spec skills#loading-refuse.
 """
 import hashlib, json, os, re, shutil, subprocess, sys, tomllib
 from typing import Any, cast
@@ -123,8 +120,9 @@ def repo_skill_roots(cwd="."):
 
 
 def declared_skills(kit_root: str) -> list[str]:
-    """The skill folders the target's AGENTS.md declares on its `Repo skills:` line: the target's .agents/skills
-    (repo_skill_roots), then the kit's; a name found in neither is skipped with a warning."""
+    """The skill folders the target's AGENTS.md declares on its `Repo skills:` line: the first holding a SKILL.md in
+    the target's .agents/skills (repo_skill_roots), then the kit's. A name none holds keeps a folder anyway, the first
+    that exists (a dangling link, a folder with no SKILL.md) or the target's, so Pi's check refuses it."""
     roots = cast("list[str]", repo_skill_roots())
     try:
         with open(os.path.join(os.path.dirname(os.path.dirname(roots[0])), "AGENTS.md"), encoding="utf-8") as f:
@@ -133,11 +131,9 @@ def declared_skills(kit_root: str) -> list[str]:
         return []
     out: list[str] = []
     for s in [x.strip() for x in (m.group(1) if m else "").split(",") if x.strip()]:
-        hit = [os.path.join(d, s) for d in [*roots, kit_root] if os.path.isfile(os.path.join(d, s, "SKILL.md"))]
-        if hit:
-            out.append(hit[0])
-        else:
-            print(f"pi-role: declared repo skill {s} not found in {' or '.join([*roots, kit_root])}; not checked", file=sys.stderr)
+        dirs = [os.path.join(d, s) for d in [*roots, kit_root]]
+        hit = [d for d in dirs if os.path.isfile(os.path.join(d, "SKILL.md"))] or [d for d in dirs if os.path.lexists(d)]
+        out.append(hit[0] if hit else dirs[0])
     return out
 
 

@@ -42,9 +42,6 @@ judge() {
     ! grep -qF "${a%%/SKILL.md*}" <<<"$out" || { echo "check-skills test: good SKILL.md '${a#*$'\t'}' failed check-skills" >&2; echo "$out" >&2; exit 1; }
   done
 }
-sk=.agents/skills/qc-bad/SKILL.md
-plant() { mkdir -p "$t/${sk%/*}"; printf '%b' "$1" > "$t/$sk"; g add -f "$sk"; }
-unplant() { g rm -qf --cached "$sk" >/dev/null 2>&1 || true; rm -rf "${t:?}/${sk%/*}"; }
 body='# Bad\n'
 # The five criterion cases.
 expect check-skills "---\ndescription: Does a thing.\n---\n$body"
@@ -97,8 +94,8 @@ expect check-skills "---\n\"name\":qc-bad\ndescription: d\n---\n"
 expect check-skills "---\nname: qc-bad\n'name': qc-bad\ndescription: d\n---\n"
 expect check-skills "---\n\"description\": d\n---\n"
 expect check-skills ""
-# Pi itself decides what loads (#558, skills #acceptance-only-listed): a plain description holding ': ' is YAML Pi
-# refuses, so it fails naming the skill; quoted, Pi loads it. A role listing the refused skill fails naming both.
+# skills spec #loading-refuse (#558): a description Pi cannot read fails naming the skill; quoted, it passes; a role
+# listing it fails naming both.
 expect check-skills "---\nname: qc-bad\ndescription: Tests worth keeping: seams first.\n---\n$body"
 allow "---\nname: qc-good\ndescription: \"Tests worth keeping: seams first.\"\n---\n$body"
 judge

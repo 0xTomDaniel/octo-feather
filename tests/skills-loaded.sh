@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Integration test for the launch refusal (spec skills#loading-refuse, skills#acceptance-launch-refuses-unloaded,
+# Integration test for the launch's side of spec skills#loading-refuse (skills#acceptance-launch-refuses-unloaded,
 # skills#acceptance-only-listed; #558): real Pi, at the kit's pin (pi-version), started through a copy of the kit's
 # scripts/pi-role against a fake OpenAI-compatible provider on 127.0.0.1 that logs each request. Cases:
 #   ok        the implementer starts in a target declaring a good repo skill: the request offers every skill its
@@ -7,8 +7,13 @@
 #   listed    a listed kit skill whose description is invalid YAML: pi-role exits non-zero naming the skill and
 #             Pi's reason, and the provider saw no request
 #   declared  the same for a skill the target's AGENTS.md declares on its Repo skills: line
+#   unresolved  a declared entry with no folder, a dangling link or a folder with no SKILL.md: the same refusal,
+#             naming the skill and why
 #   parent    a pane launch (no -p, OCTO_FEATHER_PARENT set) tells the parent through herdr-say --parent
-# The fake provider and herdr-say are hand-written test doubles (stdlib, offline). Never skips: without pi at the
+# No call leaves the test: every start runs under env -i (no Herdr or parent route but the parent case's own
+# OCTO_FEATHER_PARENT), with stub herdr-say and herdr first on PATH recording each call; the parent case asserts
+# exactly one herdr-say call, and every case that herdr never ran.
+# The fake provider, herdr-say and herdr are hand-written test doubles (stdlib, offline). Never skips: without pi at the
 # pin it fails naming the install command. Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -57,7 +62,9 @@ printf '# target\n\nRepo skills: python, local\n' > "$tgt/AGENTS.md"
 good='---\nname: local\ndescription: "A local skill: fine when quoted."\n---\nBody.\n'
 bad='---\nname: %s\ndescription: A broken skill: plain value holding a colon.\n---\nBody.\n'
 printf -- "$good" > "$tgt/.agents/skills/local/SKILL.md"
-printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/said"\n' "$t" > "$t/bin/herdr-say"; chmod +x "$t/bin/herdr-say"
+for b in herdr-say herdr; do
+  printf '#!/bin/sh\nprintf "%%s\\n" "$*" >> "%s/%s.calls"\n' "$t" "$b" > "$t/bin/$b"; chmod +x "$t/bin/$b"
+done
 
 python3 "$t/fake.py" "$t/port" "$t/log" & srv=$!
 for _ in $(seq 50); do [[ -s "$t/port" ]] && break; sleep 0.1; done
@@ -76,11 +83,12 @@ start() {
   set -e
   err="$(cat "$t/err")"
 }
-# refused WHAT SKILL: the last start exited non-zero naming SKILL and Pi's YAML reason, before any request.
+# refused WHAT SKILL [REASON]: the last start exited non-zero naming SKILL and the reason (default Pi's YAML error),
+# before any request.
 refused() {
   [[ "$rc" != 0 ]] || fail "$1: pi-role exited 0 with a skill Pi cannot load"
   grep -qF "Pi did not load skill $2 (" <<<"$err" || fail "$1: stderr does not name $2: $err"
-  grep -qF "Nested mappings are not allowed" <<<"$err" || fail "$1: stderr lacks Pi's reason: $err"
+  grep -qF "${3:-Nested mappings are not allowed}" <<<"$err" || fail "$1: stderr lacks the reason ${3:-}: $err"
   [[ ! -s "$t/log" ]] || fail "$1: the provider saw $(wc -l < "$t/log") request(s)"
 }
 
@@ -108,11 +116,26 @@ printf -- "$bad" local > "$tgt/.agents/skills/local/SKILL.md"
 start implementer -p go; refused declared local
 echo "case declared: a target's declared repo skill Pi cannot load refuses the launch the same way"
 
-# parent: a pane launch (RPC here: not -p, so pi-role keeps OCTO_FEATHER_PARENT) tells the parent.
-rm -f "$t/said"
+# unresolved: a declared name with no folder anywhere, a dangling link, a folder with no SKILL.md.
+printf -- "$good" > "$tgt/.agents/skills/local/SKILL.md"
+printf '# target\n\nRepo skills: python, local, nowhere\n' > "$tgt/AGENTS.md"
+start implementer -p go; refused "unresolved (missing)" nowhere "skill path does not exist"
+ln -s "$t/gone" "$tgt/.agents/skills/nowhere"
+start implementer -p go; refused "unresolved (dangling link)" nowhere "skill path does not exist"
+rm "$tgt/.agents/skills/nowhere"; mkdir -p "$tgt/.agents/skills/nowhere"; echo notes > "$tgt/.agents/skills/nowhere/README.txt"
+start implementer -p go; refused "unresolved (no SKILL.md)" nowhere "no SKILL.md in it"
+rm -rf "$tgt/.agents/skills/nowhere"
+printf '# target\n\nRepo skills: python, local\n' > "$tgt/AGENTS.md"
+printf -- "$bad" local > "$tgt/.agents/skills/local/SKILL.md"
+echo "case unresolved: a declared entry with no folder, a dangling link or no SKILL.md refuses the launch naming it and why"
+
+[[ ! -e "$t/herdr-say.calls" && ! -e "$t/herdr.calls" ]] || fail "a start with no parent route called Herdr: $(cat "$t"/herdr*.calls)"
+# parent: a pane launch (RPC here: not -p, so pi-role keeps OCTO_FEATHER_PARENT) tells the parent, through the stub.
 PARENT=w9:p9 start implementer --mode rpc; refused parent local
-for _ in $(seq 50); do [[ -s "$t/said" ]] && break; sleep 0.1; done
-grep -qF -- "--parent implementer did not start" "$t/said" 2>/dev/null && grep -qF "skill local" "$t/said" \
-  || fail "parent: herdr-say --parent not told: $(cat "$t/said" 2>/dev/null)"
+for _ in $(seq 50); do [[ -s "$t/herdr-say.calls" ]] && break; sleep 0.1; done
+sleep 0.5  # a second send would land by now
+[[ "$(wc -l < "$t/herdr-say.calls" 2>/dev/null)" == 1 ]] && grep -qF -- "--parent implementer did not start" "$t/herdr-say.calls" \
+  && grep -qF "skill local" "$t/herdr-say.calls" || fail "parent: not exactly one herdr-say --parent call naming local: $(cat "$t/herdr-say.calls" 2>/dev/null)"
+[[ ! -e "$t/herdr.calls" ]] || fail "parent: herdr itself ran: $(cat "$t/herdr.calls")"
 printf -- "$good" > "$tgt/.agents/skills/local/SKILL.md"
 echo "skills-loaded: ok (listed and declared skills Pi cannot load refuse the launch before any request, naming skill and reason; a pane launch tells its parent; good skills offered exactly as listed)"

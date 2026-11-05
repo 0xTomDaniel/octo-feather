@@ -132,3 +132,18 @@ tests = ["tests/lane-intake.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
 tests = ["tests/lane-report.sh"]
+
+[demo."skills#acceptance-launch-refuses-unloaded"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
+covers = ["scripts/pi-role", "extensions/skills-loaded.ts"]
+tests = ["tests/skills-loaded.sh"]
+
+[demo."skills#acceptance-only-listed"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
+covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skills"]
+tests = ["tests/skills-loaded.sh", "tests/check-skills.sh"]
+
+[demo."skills#acceptance-skill-frontmatter"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
+covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
+tests = ["tests/check-skills.sh"]
