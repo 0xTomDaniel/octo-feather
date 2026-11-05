@@ -1,0 +1,4 @@
+# The parity lever's case for tests/template-languages.sh, rewritten as tests/gate/kit/test_template_languages.py (tests/parity/lever.py --help).
+old = "tests/template-languages.sh"
+old_at = "3e8c414"
+new = "tests/gate/kit/test_template_languages.py"
