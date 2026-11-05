@@ -17,7 +17,7 @@ A stand-in returns what the real system would and nothing more: the app's own va
 
 ## Recordings
 
-A recording is a tape, never a simulator. Replay recorded responses unmodified: no fallback response, no synthesized error (an error case replays a recorded real error). A missing fixture or recording fails loudly, with an error naming what is missing. No recording yet: record one from the real system, or stop and ask the user; never invent the response.
+A recording is a tape, never a simulator. Replay each recorded response unmodified, its status, headers and body byte for byte: no fallback response, no synthesized error (an error case replays a recorded real error). A missing fixture or recording fails loudly, with an error naming what is missing. No recording yet: record one from the real system, or stop and ask the user; never invent the response.
 
 ## Test support
 
