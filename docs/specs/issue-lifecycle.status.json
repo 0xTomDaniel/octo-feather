@@ -215,8 +215,13 @@
       "pr": null
     },
     "acceptance-ci-status-only": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T202928Z-4eefcead",
+      "commit": "d0e43817f0940287bb352537dbc6ff65a05d8cb1",
+      "tests": [
+        "tests/lane-merge-ask.sh"
+      ]
     },
     "acceptance-review-resolution": {
       "status": "planned",
