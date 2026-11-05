@@ -39,6 +39,3 @@ def test_refusals(case: Case) -> None:
 @pytest.mark.parametrize("which", sorted(CHANGES))
 def test_fast(case: Case, which: str) -> None:
     case(fast, which)
-
-
-

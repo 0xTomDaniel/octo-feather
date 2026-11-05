@@ -16,8 +16,9 @@ suppressions only in a run with no other finding.
 
 from __future__ import annotations
 
-import os
+import shutil
 import subprocess
+import sys
 import tempfile
 from pathlib import Path
 
@@ -25,6 +26,13 @@ from testkit import FIXTURES, ROOT, Ran, Scratch, main, tool_homes
 
 EXT = "extensions/resume-on-error.ts"
 LEDGER = "extensions/spend-ledger.ts"
+
+
+def tool(name: str) -> str:
+    """NAME's path on PATH; a missing tool fails naming it."""
+    path = shutil.which(name)
+    assert path, f"{name} is not on PATH"
+    return path
 
 
 class Copy:
@@ -35,22 +43,30 @@ class Copy:
         self.dir = s.root / "kit"
         self.dir.mkdir()
         files = subprocess.run(
-            ["git", "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
+            [tool("git"), "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
         ).stdout
         tar = subprocess.run(  # a tracked file deleted in the worktree is skipped
-            ["tar", "-cf", "-", "--null", "--ignore-failed-read", "-T", "-"],
-            cwd=ROOT, input=files, capture_output=True, check=False,
+            [tool("tar"), "-cf", "-", "--null", "--ignore-failed-read", "-T", "-"],
+            cwd=ROOT,
+            input=files,
+            capture_output=True,
+            check=False,
         ).stdout
-        subprocess.run(["tar", "-xf", "-"], cwd=self.dir, input=tar, check=True)
+        subprocess.run([tool("tar"), "-xf", "-"], cwd=self.dir, input=tar, check=True)
         self.store = subprocess.run(  # the caller's HOME finds it, never the scratch HOME
-            ["pnpm", "store", "path"], cwd=ROOT, capture_output=True, text=True, check=True
+            [tool("pnpm"), "store", "path"], cwd=ROOT, capture_output=True, text=True, check=True
         ).stdout.strip()
         s.env |= tool_homes() | {"npm_config_store_dir": self.store}
 
     def check_ts(self, **env: str) -> Ran:
         p = subprocess.run(
-            ["just", "check-ts"], cwd=self.dir, env={**self.s.env, **env},
-            stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, check=False,
+            [tool("just"), "check-ts"],
+            cwd=self.dir,
+            env={**self.s.env, **env},
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            check=False,
         )
         return Ran(p.returncode, p.stdout, "")
 
@@ -64,8 +80,16 @@ class Copy:
 def named(c: Copy, out: str, rel: str, line: int) -> None:
     """eslint named LINE of REL for no-explicit-any (the parse: tests/fixtures/check-ts)."""
     p = subprocess.run(
-        ["python3", str(FIXTURES / "check-ts" / "eslint_names.py"), str(c.dir / rel), str(line),
-         "@typescript-eslint/no-explicit-any"], input=out, text=True, check=False,
+        [
+            sys.executable,
+            str(FIXTURES / "check-ts" / "eslint_names.py"),
+            str(c.dir / rel),
+            str(line),
+            "@typescript-eslint/no-explicit-any",
+        ],
+        input=out,
+        text=True,
+        check=False,
     )
     assert p.returncode == 0, f"eslint did not name line {line} of {rel}: {out}"
 
@@ -82,16 +106,19 @@ def other_fs(s: Scratch) -> None:
     """A dir on another filesystem than the kit's installs offline from the kit's store (pnpm
     keeps a store per filesystem: unnamed, a tmpfs copy would install from an empty one)."""
     c = Copy(s)
-    fs = os.environ.get("TMPDIR") or "/tmp"
-    shm = Path("/dev/shm")
+    fs = tempfile.gettempdir()
+    shm = Path("/dev/shm")  # noqa: S108 (the tmpfs probed, never written by name)
     if shm.is_dir() and shm.stat().st_dev != ROOT.stat().st_dev:
         fs = str(shm)
     with tempfile.TemporaryDirectory(prefix="check-ts.", dir=fs) as x:
         for f in ("package.json", "pnpm-lock.yaml"):
             (Path(x) / f).write_bytes((c.dir / f).read_bytes())
         # The kit's pnpm (its mise.toml), as that dir has no mise.toml of its own.
-        pnpm = s.run(["mise", "which", "pnpm"], cwd=c.dir,
-                     env={"MISE_TRUSTED_CONFIG_PATHS": str(c.dir)}).out
+        pnpm = s.run(
+            [tool("mise"), "which", "pnpm"],
+            cwd=c.dir,
+            env={"MISE_TRUSTED_CONFIG_PATHS": str(c.dir)},
+        ).out
         s.run([pnpm, "install", "--offline", "--frozen-lockfile"], cwd=Path(x))
 
 

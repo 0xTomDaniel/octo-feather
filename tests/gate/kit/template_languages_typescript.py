@@ -39,11 +39,11 @@ def full_tier(r: Repo, out: str, head: str) -> None:
     """OUT, a full tier run at HEAD, shows each test kind and the shared fixture prepared once,
     and wrote one trend line of tier full, passed, on HEAD, with every GATE_RECIPES step ok, the
     second module's test and the e2e test."""
-    assert INTEG in out and OTHER_T in out and E2E in out, f"no test shown by kind: {out}"
+    assert all(x in out for x in (INTEG, OTHER_T, E2E)), f"no test shown by kind: {out}"
     assert out.count(FIXTURE) == 1, f"the shared fixture not prepared exactly once: {out}"
     runs = r.trend()
     assert [(x["tier"], x["exit"], x["head"]) for x in runs] == [("full", 0, head)], runs
-    ok = {s["name"] for s in runs[0]["steps"] if s["result"] == "ok"}  # type: ignore[index, union-attr]
+    ok = {str(s["name"]) for s in runs[0]["steps"] if s["result"] == "ok"}
     recipes = r.run("just", "--evaluate", "GATE_RECIPES").out.split()
     want = [f"tests/gate.test.ts > {x}" for x in recipes] + ["tests/other.test.ts > doubles"]
     assert not [w for w in want if w not in ok], f"steps missing from the full run: {ok}"
@@ -86,14 +86,25 @@ def claims_gate(s: Scratch) -> None:
 
 def gate_budget(r: Repo, h: str) -> None:
     s = r.s
-    s.gh.put(1, {
-        "state": "OPEN", "isDraft": False, "baseRefName": "main", "headRefName": "gh1",
-        "headRefOid": h, "statusCheckRollup": [], "comments": [], "commits": [{"oid": h}],
-        "body": f"## Merge ask\n\nHead: {h[:12]}\nBuilt: none\nFailed: none\n",
-    })
+    s.gh.put(
+        1,
+        {
+            "state": "OPEN",
+            "isDraft": False,
+            "baseRefName": "main",
+            "headRefName": "gh1",
+            "headRefOid": h,
+            "statusCheckRollup": [],
+            "comments": [],
+            "commits": [{"oid": h}],
+            "body": f"## Merge ask\n\nHead: {h[:12]}\nBuilt: none\nFailed: none\n",
+        },
+    )
     (s.gh.dir / "commits.json").write_text(f'[{{"sha": "{h}"}}]\n')
     (s.gh.dir / "contents").mkdir()
-    (s.gh.dir / "contents" / "gate-budget.toml").write_text((r.dir / "gate-budget.toml").read_text())
+    (s.gh.dir / "contents" / "gate-budget.toml").write_text(
+        (r.dir / "gate-budget.toml").read_text()
+    )
     lanes = s.root / "xdg" / "octo-feather" / "lanes"
     lanes.mkdir(parents=True)
     (lanes / "ts.toml").write_text(
@@ -106,21 +117,35 @@ def gate_budget(r: Repo, h: str) -> None:
     sock.write_text("default\n")
     e = r.qc_env()
     budget = r"(within budget, [0-9.]+s to spare|OVER BUDGET by [0-9.]+s) \(budget 60s\)"
-    full = (rf"  full gate: [0-9.]+s, head {h[:12]}, started [0-9TZ:-]+ \([0-9hm]+ ago\): "
-            rf"{budget}")
+    full = (
+        rf"  full gate: [0-9.]+s, head {h[:12]}, started [0-9TZ:-]+ \([0-9hm]+ ago\): "
+        rf"{budget}"
+    )
     slow = r"  slowest: .*tests/gate\.test\.ts > check-scripts [0-9.]+s"
     out = r.run("octo-feather-lane", "report", env=e, nopy=False).out
-    block = out[out.find("gate budget o/r:"):]
+    block = out[out.find("gate budget o/r:") :]
     assert block.startswith(
         "gate budget o/r: the latest passed full gate run against gate-budget.toml on o/r's "
         "default branch\n"
     ), out
-    assert re.search(f"^{full}$", block, re.M) and re.search(f"^{slow}", block, re.M), out
-    out = r.run("octo-feather-lane", "merge-ask", "1", "--repo", "o/r", "--base", h, want=None,
-                env=e, nopy=False).out
+    assert re.search(f"^{full}$", block, re.MULTILINE), out
+    assert re.search(f"^{slow}", block, re.MULTILINE), out
+    out = r.run(
+        "octo-feather-lane",
+        "merge-ask",
+        "1",
+        "--repo",
+        "o/r",
+        "--base",
+        h,
+        want=None,
+        env=e,
+        nopy=False,
+    ).out
     gate = f"Gate time (the full gate on the final head against gate-budget.toml at {h[:12]}; "
     assert any(ln.startswith(gate) for ln in out.splitlines()), out
-    assert re.search(f"^{full}$", out, re.M) and re.search(f"^{slow}", out, re.M), out
+    assert re.search(f"^{full}$", out, re.MULTILINE), out
+    assert re.search(f"^{slow}", out, re.MULTILINE), out
 
 
 def refusals(s: Scratch) -> None:
@@ -138,7 +163,9 @@ def justfile(r: Repo) -> None:
 
 
 def selector(r: Repo) -> None:
-    r.write("scripts/fast-select.ts", (r.dir / "scripts/fast-select.ts").read_text() + "// changed\n")
+    r.write(
+        "scripts/fast-select.ts", (r.dir / "scripts/fast-select.ts").read_text() + "// changed\n"
+    )
 
 
 # Each change since main, and the changed file just fast names as why it runs every integration
@@ -159,12 +186,14 @@ def fast(s: Scratch, which: str) -> None:
     change, why = CHANGES[which]
     change(r)
     out = r.run("just", "fast", "--no-color").out
-    assert OTHER_T in out and E2E not in out, out
+    assert OTHER_T in out, out
+    assert E2E not in out, out
     if why is None:
         assert INTEG not in out, f"a one-file change ran more than its test: {out}"
     else:
         named = f"fast: every integration test: {why} changed since main, on shared-machinery.txt"
-        assert named in out and INTEG in out, out
+        assert named in out, out
+        assert INTEG in out, out
     r.no_python()
 
 
@@ -179,12 +208,13 @@ def state_dir(s: Scratch, which: str) -> None:
         (x / "octo-feather").mkdir(parents=True)
         (x / "octo-feather").chmod(0o555)
     try:
-        got = r.run("pnpm", "exec", "vitest", "run", "tests/other.test.ts",
-                    env={"XDG_STATE_HOME": str(x)})
+        got = r.run(
+            "pnpm", "exec", "vitest", "run", "tests/other.test.ts", env={"XDG_STATE_HOME": str(x)}
+        )
     finally:
         if which == "ro":
             (x / "octo-feather").chmod(0o755)
-    assert re.search(WARN, got.out, re.M), got.out
+    assert re.search(WARN, got.out, re.MULTILINE), got.out
     assert r.trend() == [], "a run with another state dir wrote the trend file"
     r.no_python()
 

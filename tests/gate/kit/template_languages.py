@@ -36,7 +36,7 @@ TWO = {"GATE_WORKERS": "2"}
 
 def kinds(out: str) -> None:
     """OUT, a full tier run, shows each test kind and the shared fixture prepared once."""
-    assert INTEG in out and OTHER_T in out and E2E in out, f"no test shown by kind: {out}"
+    assert all(x in out for x in (INTEG, OTHER_T, E2E)), f"no test shown by kind: {out}"
     assert out.count(FIXTURE) == 1, f"the shared fixture not prepared exactly once: {out}"
 
 
@@ -45,7 +45,9 @@ def full_gate(s: Scratch) -> None:
     them, passes with the real tools; one process (a nested gate's -n 0: the two workers' shared
     fixture is claims_gate's)."""
     r = Repo(s, "python")
-    out = r.run("just", "check-tests", "--testmon-noselect", "--color=no", env={"GATE_NESTED": "1"}).out
+    out = r.run(
+        "just", "check-tests", "--testmon-noselect", "--color=no", env={"GATE_NESTED": "1"}
+    ).out
     kinds(out)
     recipes = r.run("just", "--evaluate", "GATE_RECIPES").out.split()
     missing = [x for x in recipes if f"PASSED tests/test_gate.py::test_recipe[{x}]" not in out]
@@ -105,12 +107,14 @@ def fast(s: Scratch, which: str) -> None:
     change, why = CHANGES[which]
     change(r)
     out = r.run("just", "fast", "--color=no").out
-    assert OTHER_T in out and E2E not in out, out
+    assert OTHER_T in out, out
+    assert E2E not in out, out
     if why is None:
         assert INTEG not in out, f"a one-file change ran more than its test: {out}"
     else:
         named = f"fast: every integration test: {why} changed since main, on shared-machinery.txt"
-        assert named in out and INTEG in out, out
+        assert named in out, out
+        assert INTEG in out, out
 
 
 if __name__ == "__main__":
