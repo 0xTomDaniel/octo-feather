@@ -23,6 +23,7 @@ Each case runs once per template, `python-<case>` and `typescript-<case>`:
 - `fast-one-file` `just fast` after a change to one source file: the static checks, then only the integration test the stack's tool picks for it, named; no e2e test.
 - `hook-core` `git commit` of a core change with the repo's hooks on: `.githooks/pre-commit` runs `just fast`, which picks the core's tests and no e2e test; CI's workflow step observed as `ci`.
 - `fast-residual` `just fast` after a justfile change (on the repo's `shared-machinery.txt`): every integration test, no e2e test.
+- `ci-status-only`, `ci-code` CI's decision on a push to the repo's ready pull request: the repo's `.github/workflows/check.yml` scope job's `diff` step, the pinned dorny/paths-filter's `dist/index.js` (the kit's fetch-only Skillfile pin, `scripts/check-vendored --extract paths-filter`), run with node offline as a runner would: the step's own `with:` inputs (read with PyYAML in the kit's locked environment), `before` the previous head, a `pull_request` synchronize event, the head checked out. A qc-style commit of only `docs/specs/app.status.json` gives `code=false` (the check job, `if: needs.scope.outputs.code != 'false'`, skipped); a code commit gives `code=true` (observed as `outputs`, `workflow`, `pin`, `range`).
 - `trend` the repo's lines in the scratch `check-runs.jsonl` (observed as `lines`): `just check`'s one line `tier: full`, exit 0, on its head, a step per `GATE_RECIPES` recipe (observed as `recipes`); every later line (each `just fast`) `subset`. Then `octo-feather-lane report` with one lane on `o/<lang>`: its `gate budget o/<lang>` block shows that full run, against the repo's `gate-budget.toml` (`no budget` in a repo without one), its slowest items naming a gate recipe.
 
 ## How to get to it (user POV)
@@ -34,6 +35,7 @@ Each case runs once per template, `python-<case>` and `typescript-<case>`:
 Preconditions:
 
 - `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0.
+- `just vendored-fetch` has cached the kit's fetch-only pins (the paths-filter one included), and the kit's own `uv sync --locked` has run (PyYAML): the ci cases run offline.
 - The uv cache and pnpm store hold both templates' locked packages (`uv sync --locked` in `templates/python`, `pnpm install --frozen-lockfile` in `templates/typescript`, once with network): the drive installs offline.
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive template-tiers`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/template-tiers/`.

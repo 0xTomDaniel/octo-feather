@@ -16,8 +16,8 @@
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
 # Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
 # Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
-# CI on a status-only head (#acceptance-ci-status-only): a check skipped there takes the judged head's CI, naming it;
-# missing, pending, skipped or red there, or a code commit between them, refuses.
+# Skipped checks (#acceptance-ci-status-only; the rule: #lanes-one-head): never a pass by themselves, carried only
+# from the judged head's green run by the Judged proof, naming it.
 # Run by `just check`.
 # criterion: issue-lifecycle#acceptance-merge-ask-full-proof
 # criterion: issue-lifecycle#acceptance-ci-status-only
@@ -343,14 +343,13 @@ bad "Checks: pending on head .*: check in_progress" 'd["statusCheckRollup"][0].u
 bad "Checks: pending on head .*: ci/x pending" 'd["statusCheckRollup"][1]["state"] = "PENDING"'
 bad "Checks: failing on head .*: ci/x error" 'd["statusCheckRollup"][1]["state"] = "ERROR"'
 bad "Checks: none reported" 'd["statusCheckRollup"] = []'
-# issue-lifecycle#acceptance-ci-status-only: qc's status-only commit H after the CI-green judged head J starts no CI full
-# run (check.yml skips its check job: SKIPPED on H); the Checks item takes J's CI, naming J, and refuses when J's CI is
-# missing, pending or red, or a code commit sits between them.
+# issue-lifecycle#acceptance-ci-status-only (the rule: #lanes-one-head): check SKIPPED on qc's commit H; J's CI carried
+# by the Judged proof, or refused: missing, pending, skipped or red on J, no proof, or H the judged head itself.
 skipped='d["statusCheckRollup"][0]["conclusion"] = "SKIPPED"'
 mkdir -p "$FAKE_GH/runs"
 runs() { # SHA JSON-RUNS: the commit's check runs (REST check-runs API)
   printf '{"total_count": 1, "check_runs": %s}\n' "$2" > "$FAKE_GH/runs/$1.json"; }
-skip="Checks: check skipped on head ${H:0:12} (status-only commits after ${J:0:12}: no CI full run)"
+skip="Checks: check skipped on head ${H:0:12}, carried from the judged head ${J:0:12} by the Judged proof,"
 bad "$skip and ${J:0:12} has no check run" "$skipped"
 runs "$J" '[{"id": 2, "name": "check", "status": "in_progress", "conclusion": null}]'
 bad "$skip and pending on ${J:0:12}: check in_progress" "$skipped"
@@ -361,15 +360,18 @@ bad "$skip and skipped on ${J:0:12} too: CI never ran there" "$skipped"
 # the demo: J's latest check run passed (an earlier one skipped while the PR was a draft): passes, naming J
 runs "$J" '[{"id": 3, "name": "check", "status": "completed", "conclusion": "success"}, {"id": 1, "name": "check", "status": "completed", "conclusion": "skipped"}]'
 setpr "$skipped"; run 0 merge-ask 7 "${ST[@]}"
-grep -qxF -- "- check: skipped on ${H:0:12}; success on ${J:0:12}, the head its status-only commits follow" <<<"$out" \
+grep -qxF -- "- check: skipped on ${H:0:12}; success on ${J:0:12}, the judged head" <<<"$out" \
   || fail "a status-only head did not pass on the judged head's CI, naming it: $out"
 grep -q "api repos/{owner}/{repo}/commits/$J/check-runs" "$FAKE_GH_LOG" || fail "J's check runs not read from GitHub: $(cat "$FAKE_GH_LOG")"
-# a code commit C between J and the status-only head S: S's skipped check takes C's CI, none here, and Judged refuses C
+# a code commit C between J and the status-only head S: no Judged proof, so nothing carries; Judged names C
 C="$(on "$H" sh -c 'echo fix >> app.py; git commit -qam "fix: y"')"
 S="$(on "$C" git commit -q --allow-empty -m "qc: built acceptance-a acceptance-b (judged ${J:0:12})")"
-HEADL="${S:0:12}" bad "Checks: check skipped on head ${S:0:12} (status-only commits after ${C:0:12}: no CI full run) and ${C:0:12} has no check run" \
+HEADL="${S:0:12}" bad "Checks: skipped on head ${S:0:12}: check; a skipped check is no pass and no Judged proof carries" \
   "$skipped; $(pr_head "$C" "fix: y"); $(pr_head "$S" x)"
 grep -q "Judged: commit ${C:0:12} 'fix: y' after the judged head ${J:0:12} changes app.py" <<<"$err" || fail "a code commit before the status-only head: $err"
+# the judged head is the PR head and its check skipped (a draft's run, PR #608 at d0e4381): refused, J's green run aside
+HEADL="${J:0:12}" JUDGEDL="${J:0:12} is the PR head" bad "Checks: skipped on head ${J:0:12}: check; a skipped check is no pass" \
+  "$skipped; d['headRefOid'] = '$J'"
 rm -r "$FAKE_GH/runs"
 ROWS="| demo#acceptance-a | pass | judged $JS | r |" bad "criterion row demo#acceptance-b: missing (it is in Built)"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | |' bad "criterion row demo#acceptance-b: no evidence"

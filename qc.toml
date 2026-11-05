@@ -111,15 +111,14 @@ covers = ["templates/python/tests", "templates/typescript/tests", "templates/pyt
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
 
-# The status-only Checks rule, proven by tests/lane-merge-ask.sh's tagged cases: a check skipped on qc's status-only
-# head counts only by the judged head's CI, named. That CI starts no full run there is the workflows' scope job.
+# Proven by tests/lane-merge-ask.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
-# The supervisor's step: push the final head and gh pr ready as just qc and the review start. No demo: a role's
-# behaviour (owed eval docs/owed-evals/589.md).
+# Proven by tests/lane-ci-start.sh's tagged cases (the rule: issue-lifecycle #lanes-one-head); the role naming the
+# command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
-covers = ["agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
+covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
 
 [demo."issue-lifecycle#acceptance-brownfield-full"]
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]

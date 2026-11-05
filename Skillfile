@@ -54,6 +54,12 @@ github  skill  agent-browser    vercel-labs/agent-browser@c3880a7de9be3b075c8779
 # `scripts/check-vendored --extract spec-chat DEST`, never from the box's clone. To move it:
 # change the sha, `just vendored-fetch`, `just check`.
 #fetch-only  github  skill  spec-chat  0xTomDaniel/spec-chat@077c6b9030dfc6d0fc4f82b902dc2c4a5f7e899b  skill
+# Not a skill: dorny/paths-filter v4.0.3 (MIT), the GitHub Action whose commit the kit's and both templates'
+# .github/workflows/check.yml pin (issue #589). Here because this is the kit's one pinned, offline-authenticated fetch
+# of a GitHub commit (`skill` is only this line's form): the verify-octo-feather template-tiers drive runs its
+# dist/index.js, written out by `scripts/check-vendored --extract paths-filter DEST`, on a created repo. Move it with
+# the workflows' `uses:` pin.
+#fetch-only  github  skill  paths-filter  dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  dist
 
 # octo-feather's own skills, authored in .agents/skills (most ported from octo-lite).
 local  skill  commit                  .agents/skills/commit
