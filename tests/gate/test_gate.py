@@ -13,8 +13,8 @@ Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path)
 inside already set it: the coverage map of `just fast-map` files each process under the outermost item.
 A tests/*.sh tagged with a criterion it proves carries one header line (its leading `#` lines) per criterion, `# criterion: <spec>#<anchor>`
 (quality #qc-capture), collected here as pytest's own `criterion` marker; a claimed one runs through the qc capture
-(tests/gate/conftest.py). A tests/*.sh whose header holds the line `# gate: e2e` is end-to-end, collected with pytest's
-`e2e` marker, never held to the per-test CPU budget (conftest.py). An item exiting 77 (automake's skip status) is skipped, its output saying why.
+(tests/gate/conftest.py). A tests/*.sh end-to-end by its header (`# gate: e2e`, octo-feather-gate --help) is collected
+with pytest's `e2e` marker (what it changes: conftest.py). An item exiting 77 (automake's skip status) is skipped, its output saying why.
 """
 import os, pathlib, re, subprocess
 from collections.abc import Callable
