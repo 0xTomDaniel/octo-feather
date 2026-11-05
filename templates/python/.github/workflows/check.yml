@@ -5,8 +5,37 @@ on:
   push:
     branches: [main]
 jobs:
-  check:
+  # A push to a ready pull request whose commits change only status files beside a spec, just qc's status-only commits,
+  # starts no full run: the check job is skipped, which GitHub reports as skipped, and the octo-feather kit's
+  # octo-feather-lane merge-ask takes the CI of the head those commits follow (its issue-lifecycle spec #lanes-one-head).
+  # Every other event, and a diff that fails, runs it. Not paths-ignore: on a pull request it reads the whole PR's diff,
+  # and a required check it skips stays pending. dorny/paths-filter with no token diffs the pushed range,
+  # github.event.before to the head, in git.
+  scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.diff.outputs.code }}
+    steps:
+      - if: github.event.action == 'synchronize'
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - id: diff
+        if: github.event.action == 'synchronize'
+        continue-on-error: true
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3 (no moving tag)
+        with:
+          token: ''
+          base: ${{ github.event.before }}
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/specs/*.status.json'
+  check:
+    needs: scope
+    if: needs.scope.outputs.code != 'false'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)

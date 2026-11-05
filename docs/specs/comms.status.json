@@ -135,6 +135,10 @@
       "tests": [
         "tests/lane-intake.sh"
       ]
+    },
+    "acceptance-report-skill-reach": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
