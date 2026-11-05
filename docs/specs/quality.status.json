@@ -153,8 +153,8 @@
     "acceptance-built-links": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T155733Z-de0b7099",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171103Z-f4216d2a",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-evidence-stale": {
@@ -169,22 +169,22 @@
     "acceptance-fast-affected": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T155708Z-6cef76a6",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171033Z-2c6c7df0",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-one-execution": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T155717Z-c70ae8f0",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171043Z-b782a451",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-one-execution-incomplete": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T155724Z-13006dae",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171052Z-ad56dc22",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-review-test-adequacy": {
