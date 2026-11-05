@@ -75,6 +75,13 @@ variant demo-extra '$a [demo."app#acceptance-other"]\ncommand = "x"\ncovers = ["
 bad demo-extra 'qc.toml: demo.app#acceptance-other: unknown key checks'
 variant demo-bad-id '$a [demo.acceptance-other]\ncommand = "x"\ncovers = ["src"]'
 bad demo-bad-id 'qc.toml: demo must match ^[a-z0-9][a-z0-9._-]*#[A-Za-z0-9][A-Za-z0-9._-]*$'
+# fixtures: names of this contract's [fixture] entries; artifacts: files the run must leave.
+variant demo-expect 's/^\[fixture\]/[fixture.seed]\nreset = "true"/; $a [demo."app#acceptance-other"]\ncovers = ["src"]\nfixtures = ["seed"]\nartifacts = ["out/a.txt", "out/shots/"]'
+run "$t/demo-expect"; [[ "$rc" == 0 ]] || fail "a demo with declared fixtures and artifacts not ok (exit $rc): $out"
+variant demo-fixture-unknown '$a [demo."app#acceptance-other"]\ncovers = ["src"]\nfixtures = ["seed"]'
+bad demo-fixture-unknown 'qc.toml: demo.app#acceptance-other.fixtures: seed is no declared fixture; declare it under [fixture.seed]'
+variant demo-artifact-empty '$a [demo."app#acceptance-other"]\ncovers = ["src"]\nartifacts = [""]'
+bad demo-artifact-empty 'qc.toml: demo.app#acceptance-other.artifacts.0 must not be empty'
 # tags: the command writing the tagged cases (OCTO_FEATHER_QC_TAGS), a non-empty string.
 variant tags-empty 's/^setup = /tags = ""\nsetup = /'
 bad tags-empty 'qc.toml: tags must not be empty'
@@ -117,4 +124,4 @@ sed -i '/^\[services\]$/d' "$repo/qc.toml"
 set +e; vout="$("$repo/.agents/skills/verify-app/scripts/verify-app" launch 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] && grep -qF 'qc.toml declares services (web)' <<<"$vout" && [[ ! -e "$repo/setup-ran" ]] \
   || fail "a declared service was not refused before setup (exit $rc): $vout"
-echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, a demo missing covers, holding a tests list or an unknown key, or not keyed <spec>#<anchor>, an empty tags command, format 1's demo still needing its command, bad TOML and no file fail naming the field; ts verify-app names the missing install, then follows qc.toml's setup and values)"
+echo "contract: ok (both templates' qc.toml valid; missing or unsupported format, missing, unknown, mistyped or empty keys, a [browser] without a release pin, a demo missing covers, holding a tests list or an unknown key, or not keyed <spec>#<anchor>, an empty tags command, a fixture name not declared or an empty artifact, format 1's demo still needing its command, bad TOML and no file fail naming the field; ts verify-app names the missing install, then follows qc.toml's setup and values)"

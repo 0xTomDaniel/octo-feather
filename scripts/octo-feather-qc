@@ -11,11 +11,12 @@ named criterion whose contract (qc.toml, validated by octo-feather-contract) dec
 [demo."<spec>#<id>"] (an entry without one is metadata only) has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
 (octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr, and screenshots/<name> for each file
-the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
+the demo wrote to $QC_SCREENSHOTS; qc.expect.json when its entry declares fixtures or artifacts: those names, and each
+artifact with whether the run left it). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
 headless Chromium shell at the contract's [browser] playwright pin where `just install-check` names it, bound
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
-the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
+the spec's, every output there, the demo ran to its end, every declared artifact left), decision source the demo's checks, pass on exit
 status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v<format>.schema.json, demo
 command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
 missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
@@ -345,6 +346,25 @@ def contract_demos(root: str) -> dict[str, dict[str, Any]]:
     return demos
 
 
+def left(wrote: list[str], artifacts: list[str]) -> list[dict[str, Any]]:
+    """Each declared artifact (qc.toml demo artifacts) with whether the run left it: a path it wrote, or for a path ending
+    in /, one under it. WROTE: the worktree paths the run created or changed (its overlay upper, never deletions)."""
+    return [{"path": a, "left": any(w == a or (a.endswith("/") and w.startswith(a)) for w in wrote)} for a in artifacts]
+
+
+def wrote(upper: list[list[str]]) -> list[str]:
+    return [p for k, p in upper if k != "deleted"]
+
+
+def expected(cap: dict[str, Any], r: dict[str, Any]) -> list[str]:
+    """What a record lacks of its criterion's declared fixtures and artifacts (CAP: qc.expect.json or test.capture.json;
+    R: the record, its fixture identity)."""
+    fx: dict[str, Any] = r.get("fixture") or {}
+    names: set[str] = set(fx.get("names") or [])
+    return ([f"fixture {n} not in the record's fixture identity" for n in cap.get("fixtures", []) if n not in names]
+            + [f"artifact {a['path']} not left by the run" for a in cap.get("artifacts", []) if not a["left"]])
+
+
 def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: dict[str, str], stem: str, runid: str,
             report_path: Path, *, nosb: bool) -> tuple[dict[str, Result], list[dict[str, Any]]]:
     """Capture (quality spec #qc-capture), no model, deciding nothing: each declared demo run at HEAD in its own qc
@@ -362,13 +382,15 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
         run: subprocess.CompletedProcess[str] | None
         sandbox: dict[str, Any] | bool
+        upper: list[list[str]] = []
         if nosb:
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
             run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
                                      browser=br, shots=True, pi=False)
             assert isinstance(sandbox, dict)
-            sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
+            upper = sandbox.pop("upper", [])
+            sandbox["discarded_writes"] = len(upper)   # the demo's writes died with its overlay
         shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
         caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
@@ -382,6 +404,9 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
             for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
                 Path(d, name).write_text(body)
+            if "fixtures" in demos[i] or "artifacts" in demos[i]:
+                Path(d, EXPECT).write_text(json.dumps({"fixtures": demos[i].get("fixtures", []),
+                                                       "artifacts": left(wrote(upper), demos[i].get("artifacts", []))}, indent=2) + "\n")
             for name, b64 in shots:
                 Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
                 Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
@@ -415,7 +440,7 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
         (f"outputs missing: {' '.join(o for o in DEMO_OUTPUTS if o not in r['outputs'])}", any(o not in r["outputs"] for o in DEMO_OUTPUTS)),
         (f"demo did not run to its end ({unfinished(rc)}): {last_words(d)}", rc in (77, 126, 127) or rc > 128),
-    ) if bad]
+    ) if bad] + (expected(json.loads((d / EXPECT).read_text()), r) if EXPECT in r["outputs"] else [])
     if missing:
         return res | {"missing": missing}
     return res | {"verdict": "pass" if rc == 0 else "fail", "command": (d / "demo.cmd").read_text().rstrip("\n"), "exit": rc,
@@ -518,6 +543,7 @@ def gate_free():
         die(70, "refused inside just check, which stays deterministic and free (message above)")
 
 
+EXPECT = "qc.expect.json"   # a demo record's declared fixtures and artifacts, each artifact with whether the run left it
 TESTED = "test.capture.json"   # the output that makes a record a tagged test's capture from a gate (capture_store)
 COMPLETED = ("passed", "failed")   # a case outcome that ran to its end; any other leaves the record incomplete
 
@@ -541,13 +567,14 @@ def capture_case(note: Path, cmd: list[str]) -> int:
         note.write_text(json.dumps(rec | {"why": "qc sandbox proof failed", "sandbox": sandbox}))
         print(f"qc capture: sandbox proof failed; {shlex.join(cmd)} not run:\n" + "\n".join(sandbox.get("proof", [])), file=sys.stderr)
         return 66
-    sandbox["discarded_writes"] = len(sandbox.pop("upper", []))
+    upper = sandbox.pop("upper", [])
+    sandbox["discarded_writes"] = len(upper)
     shots = sandbox.pop("shots", [])
     sys.stdout.write(run.stdout); sys.stderr.write(run.stderr)
     rc = 128 - run.returncode if run.returncode < 0 else run.returncode
     said = [l.strip() for l in (run.stdout + "\n" + run.stderr).splitlines() if l.strip()]
     note.write_text(json.dumps(rec | {"ran": True, "exit": rc, "said": said[-1][:300] if said else "", "sandbox": sandbox,
-                                      "shots": shots}))
+                                      "shots": shots, "wrote": wrote(upper)}))
     return rc
 
 
@@ -577,7 +604,8 @@ def capture_store(path: Path) -> int:
     """--capture-store SESSION: after a capturing gate run (tests/gate/conftest.py writes SESSION: the claims, the plan it
     wrote before any test ran, each case's pytest reports and capture notes), one evidence record per claimed criterion
     with a tagged case, outputs test.capture.json (the gate: its command, head and tree at its start, configuration ids;
-    each case: its test, command, outcome and why, seconds, exit and sandbox proof; the contract's covers) and
+    each case: its test, command, outcome and why, seconds, exit and sandbox proof; the contract's covers, fixtures and
+    artifacts, each artifact with whether a case left it) and
     test.output (each case's captured output); screenshots/<n>/<name> when a case took any. A claim with no tagged
     case gets no record: just qc runs its demo, else the agent fallback."""
     s: dict[str, Any] = json.loads(path.read_text())
@@ -614,8 +642,12 @@ def capture_store(path: Path) -> int:
                              "outcome": outcome, "why": why, "seconds": (rep or {}).get("seconds"), "exit": note.get("exit"),
                              "sandbox": note.get("sandbox"), "screenshots": [f"screenshots/{k}/{nm}" for nm, _ in shots]})
                 out.append(f"=== {n}: {outcome}\n{(rep or {}).get('output', '')}")
+            notes: dict[str, dict[str, Any]] = s["notes"]
+            made: list[str] = [w for n in cases for w in (notes.get(n) or {}).get("wrote", [])]
             Path(d, TESTED).write_text(json.dumps({"criterion": c, "gate": gate, "cases": rows,
-                                                   "covers": declared.get(c, {}).get("covers", [])}, indent=2) + "\n")
+                                                   "covers": declared.get(c, {}).get("covers", []),
+                                                   "fixtures": declared.get(c, {}).get("fixtures", []),
+                                                   "artifacts": left(made, declared.get(c, {}).get("artifacts", []))}, indent=2) + "\n")
             Path(d, "test.output").write_text("\n".join(out))
             p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", c, "--outputs", d],
                                capture_output=True, text=True)
@@ -652,7 +684,7 @@ def tested(i: str, cid: str, head: str, text: str, root: str, tagged: list[str])
         ("gate configuration differs from the head's", any(cap["gate"].get(k) != v for k, v in cfg.items())),
         ("no tagged case", not cases),
     ) if bad] + [f"case {c['test']} ({c['case']}) {c['outcome']}: {c['why']}" for c in cases if c["outcome"] not in COMPLETED] + [
-        f"case {n} tagged at {head[:12]}, not in the record (a partial capture)" for n in tagged if n not in {c["case"] for c in cases}]
+        f"case {n} tagged at {head[:12]}, not in the record (a partial capture)" for n in tagged if n not in {c["case"] for c in cases}] + expected(cap, r)
     if missing:
         return res | {"missing": missing}
     failed = [c["test"] for c in cases if c["outcome"] == "failed"]

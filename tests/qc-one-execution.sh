@@ -185,4 +185,31 @@ git add -A; git commit -qm "acceptance-b: metadata only"
 set +e; out="$(timeout -k 5 300 env OCTO_FEATHER_QC_PATH="$kit/tests/fixtures/qc-judge" just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 acceptance-b 2>"$t/err")"; rc=$?; set -e
 [[ "$rc" == 0 ]] && ! grep -q 'Traceback\|KeyError\|qc: demo ' "$t/err" \
   && grep -A2 '^PASS acceptance-b: ' <<< "$out" | grep -q "decision agent fallback" || fail "metadata only: want the agent fallback, no demo, no crash; got $rc: $out $(tail -20 "$t/err")"
+
+# Declared fixtures and artifacts (format 2): each record names them; an artifact the run did not leave is
+# insufficient evidence naming it. acceptance-a's tagged test writes out/a.txt only once told to; acceptance-b's demo
+# leaves out/b.txt and not out/none.txt.
+printf 'out/\n' >> .gitignore
+printf 'format = 2\n[entry]\ncommand = "true"\n[services]\n[fixture.seed]\nreset = "true"\n[values]\n[demo."demo#acceptance-a"]\ncovers = ["tests"]\nfixtures = ["seed"]\nartifacts = ["out/a.txt"]\n[demo."demo#acceptance-b"]\ncommand = "mkdir -p out && echo b > out/b.txt"\ncovers = ["tests"]\nfixtures = ["seed"]\nartifacts = ["out/b.txt", "out/none.txt"]\n' > qc.toml
+rm tests/accept2.sh; git add -A; git commit -qm "declared fixtures and artifacts"
+expect_qc() { # ID PATTERN: just qc on ID at the head, its output matching PATTERN
+  set +e; out="$(timeout -k 5 300 env OCTO_FEATHER_QC_PATH="$kit/tests/fixtures/qc-judge" just --justfile "$kit/justfile" qc docs/specs/demo.status.json 9 "$1" 2>"$t/err")"; rc=$?; set -e
+  grep -q -- "$2" <<< "$out" || fail "artifacts: qc $1: want '$2', got $rc: $out $(tail -5 "$t/err")"; }
+gate OCTO_FEATHER_QC_CLAIMS="demo#acceptance-a"; [[ "$rc" == 0 ]] || fail "artifacts: claims gate: $rc: $out"
+expect_qc acceptance-a "missing: artifact out/a.txt not left by the run"
+printf '#!/usr/bin/env bash\n# criterion: demo#acceptance-a\nmkdir -p out && echo a > out/a.txt && echo RAN-accept\n' > tests/accept.sh
+git commit -qam "accept.sh leaves out/a.txt"
+gate OCTO_FEATHER_QC_CLAIMS="demo#acceptance-a"; [[ "$rc" == 0 ]] || fail "artifacts: claims gate 2: $rc: $out"
+ha="$(git rev-parse HEAD)"; expect_qc acceptance-a "^PASS acceptance-a: "   # its status commit moves the head
+octo-feather-evidence read --repo . --criterion demo#acceptance-a --commit "$ha" --json | python3 -c '
+import json, os, sys
+x = json.load(sys.stdin)[-1]; cap = json.load(open(os.path.join(x["dir"], "outputs", "test.capture.json")))
+assert cap["fixtures"] == ["seed"] and cap["artifacts"] == [{"path": "out/a.txt", "left": True}], cap
+assert x["record"]["fixture"]["names"] == ["seed"], x["record"]' || fail "artifacts: the tagged record does not name its fixtures and artifacts"
+hb="$(git rev-parse HEAD)"; expect_qc acceptance-b "missing: artifact out/none.txt not left by the run"
+octo-feather-evidence read --repo . --criterion demo#acceptance-b --commit "$hb" --json | python3 -c '
+import json, os, sys
+x = json.load(sys.stdin)[-1]; e = json.load(open(os.path.join(x["dir"], "outputs", "qc.expect.json")))
+assert e == {"fixtures": ["seed"], "artifacts": [{"path": "out/b.txt", "left": True}, {"path": "out/none.txt", "left": False}]}, e' \
+  || fail "artifacts: the demo record does not name its fixtures and artifacts"
 echo "qc-one-execution: ok"

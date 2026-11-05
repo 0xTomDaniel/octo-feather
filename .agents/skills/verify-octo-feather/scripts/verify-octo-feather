@@ -1129,7 +1129,8 @@ def drive_qc_insufficient(f: Feature) -> None:
     git("add", "-A")
     git("commit", "-q", "-m", "contract with a demo that needs GitHub")
     head = git("rev-parse", "HEAD")
-    f.env = {"XDG_STATE_HOME": str(sc / "state")}   # qc's reports and the scratch evidence store; never a live lane's
+    # qc's reports and the scratch evidence store, never a live lane's; the stub classifier: no real model (a rerun passes)
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
     f.pre = ["env", "-C", str(r)]   # where the supervisor stands: the lane worktree
     f.run("qc", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
     f.obs("qc", "after", f"{git('rev-parse', 'HEAD')} {json.loads(git('show', 'HEAD:docs/specs/demo.status.json'))['criteria']['acceptance-a']['status']}"
