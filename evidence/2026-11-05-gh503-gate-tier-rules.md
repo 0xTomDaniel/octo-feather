@@ -101,6 +101,30 @@ Removed: implement skill "`just fast` once at the end; report when it is green (
 
 Held-out cases: `implementer-hands-off-on-fast-heldout` (tally-tiers) is spent: it ran in proof 26e5e4 (0/3 on both kits) and is kept as a recorded, spent case, never tuned on. The new held-out case is `implementer-hands-off-on-fast-heldout-2`: a different target, fixture `slug-tiers` (a slug library and command; an e2e test marked by decorator in tests/test_installed.py; mise.toml; the template's pre-change gate line), and a different ticket (SLG-4, `--max N`). It is graded on the same single fact, `ran just fast`. It was written and committed before any run of it. Held out by record, as before (#575).
 
-### Proof 2
+### Proof 2: run 20261105T035025Z-46320e (PROVEN: fails before, passes after)
 
-Pending: the eval slot: train plus the new held-out, `--runs 3 --baseline 15923eb`.
+`scripts/octo-feather-qa --case implementer-hands-off-on-fast --case implementer-hands-off-on-fast-heldout-2 --runs 3 --baseline 15923eb`, current kit eb6ecb3. Wall 546 s, exit 0, one invocation, no rerun, no tuning.
+
+| case | split (by record) | baseline 15923eb | current eb6ecb3 |
+|---|---|---|---|
+| implementer-hands-off-on-fast | train | 0/3, pass rate 0.00 +/- 0.00 | 3/3, pass rate 1.00 +/- 0.00 |
+| implementer-hands-off-on-fast-heldout-2 | held-out | 0/3, pass rate 0.00 +/- 0.00 | 3/3, pass rate 1.00 +/- 0.00 |
+
+```
+PASS role-transcripts/implementer-hands-off-on-fast: 3/3 runs passed (pass rate 1.00, stddev 0.00)
+  baseline FAIL role-transcripts/implementer-hands-off-on-fast: 0/3 runs passed (pass rate 0.00, stddev 0.00)
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     53.0 +/- 6.0         34.0 +/- 6.5         -19.1
+    tokens     177429 +/- 28710     93365 +/- 20783      -84064
+PASS role-transcripts/implementer-hands-off-on-fast-heldout-2: 3/3 runs passed (pass rate 1.00, stddev 0.00)
+  baseline FAIL role-transcripts/implementer-hands-off-on-fast-heldout-2: 0/3 runs passed (pass rate 0.00, stddev 0.00)
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     61.9 +/- 5.9         32.8 +/- 3.3         -29.1
+    tokens     209053 +/- 7214      90694 +/- 13773      -118359
+qa: analysis: no flags
+qa: 2/2 passed (run 20261105T035025Z-46320e)
+```
+
+On the baseline kit, every run recorded only `just check`. On the current kit, every run recorded `just fast`.
+
+Limit of what the case grades: the fact passes at the first recorded `just fast`, and the run then stops, so the case grades "ran `just fast`", not "handed off while `just fast` was green". In three current runs (train run 3, held-out runs 2 and 3) that first `just fast` exited 1, a run made while the work was still in progress. Whether the hand-off waited for green, and whether no `just check` followed, is not graded: the closed fact list has neither a final-run nor a negative-run fact. That belongs with #575.
