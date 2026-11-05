@@ -64,6 +64,25 @@ Filed as issue #575 (outside this lane).
 - Schema gap (eval-cases schema, Case): `split` (`train` or `held-out`) exists only for skill-trigger cases, and `check-evals` refuses it on a role-transcript case. So a role-transcript held-out case cannot be marked as data, and `octo-feather-qa` cannot report it apart. Here it is held out by record (this file, the `-heldout` id suffix). The fix belongs to the schema owner: the schema, `scripts/check-evals` and `scripts/octo-feather-qa`, outside this ticket's scope.
 - Fixture environment gap: the python-app fixture family (python-app and its copies: python-app-shout, -skill, -verify-*, -yaml-names, -proxy-check and others) has no `mise.toml`. In the qa sandbox, `just` and `uv` on PATH are mise shims that refuse with no version set (smoke 2 above), so any case there that runs `just` sees exit 1, and a `ran just ...` fact can be bypassed by an absolute path. Proven only for python-app-tiers (smoke 2); for the rest it is inferred from the same setup. Not fixed here (outside scope).
 
-### Proof
+### Proof: run 20261105T033535Z-26e5e4 (NOT proven)
 
-Pending: the next eval slot (supervisor/director): both cases, `--runs 3 --baseline 15923eb`.
+`scripts/octo-feather-qa --case implementer-hands-off-on-fast --case implementer-hands-off-on-fast-heldout --runs 3 --baseline 15923eb`, current kit dc85511. Wall 720 s, exit 1, one invocation.
+
+| case | split (by record) | baseline 15923eb | current dc85511 |
+|---|---|---|---|
+| implementer-hands-off-on-fast | train | 0/3, pass rate 0.00 +/- 0.00 | 2/3, pass rate 0.67 +/- 0.58 |
+| implementer-hands-off-on-fast-heldout | held-out | 0/3, pass rate 0.00 +/- 0.00 | 0/3, pass rate 0.00 +/- 0.00 |
+
+```
+qa: analysis:
+  non-discriminating case role-transcripts/implementer-hands-off-on-fast-heldout: every run on both kits failed
+  high variance role-transcripts/implementer-hands-off-on-fast: current kit pass rate 0.67 +/- 0.58
+```
+
+Current kit, from the transcripts:
+- Held-out run 1 and run 3 never loaded the implement skill. Each ran `just check` once and reported "`just check` passes".
+- Held-out run 2 loaded the implement skill in full and still ran only `just check`.
+- Train run 1 loaded it and ran `just check`. Its report said "`just fast` is a subset of it": the agent chose the full tier as the safer gate.
+- Train runs 2 and 3 ran `just fast`.
+
+Reading: the implement skill line does not reliably change the hand-off. It fails when the skill is not loaded, and the agent overrides it when it judges the full tier safer. The held-out case is not tuned on and not rerun. Any further wording change needs a new held-out case.
