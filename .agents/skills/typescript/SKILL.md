@@ -1,6 +1,6 @@
 ---
 name: typescript
-description: TypeScript policy for implementer work. Use whenever durable repo signals (tsconfig.json, a `Repo skills: typescript` line) show TypeScript is in scope and work touches TypeScript code, config, tests, ESLint rules, compiler behavior, or HTTP replay handlers such as MSW.
+description: "TypeScript policy for implementer work. Use whenever durable repo signals (tsconfig.json, a `Repo skills: typescript` line) show TypeScript is in scope and work touches TypeScript code, config, tests, ESLint rules, compiler behavior, or HTTP replay handlers such as MSW."
 ---
 
 # TypeScript
