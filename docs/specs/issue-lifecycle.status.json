@@ -211,14 +211,19 @@
       "tests": []
     },
     "acceptance-ci-alongside": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T205316Z-4119088f",
+      "commit": "4edfb3558ed0ed764e78a7e01dc660eaddc29438",
+      "tests": [
+        "tests/lane-ci-start.sh"
+      ]
     },
     "acceptance-ci-status-only": {
       "status": "built",
       "pr": 608,
-      "record": "20261105T202928Z-4eefcead",
-      "commit": "d0e43817f0940287bb352537dbc6ff65a05d8cb1",
+      "record": "20261105T205316Z-494ca113",
+      "commit": "4edfb3558ed0ed764e78a7e01dc660eaddc29438",
       "tests": [
         "tests/lane-merge-ask.sh"
       ]
