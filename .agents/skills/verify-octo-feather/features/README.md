@@ -39,7 +39,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [director-reflection](./director-reflection.md) covers the director reflection (`octo-feather-lane reflect --director`), which archive and start run.
 - [correction-lane](./correction-lane.md) covers the correction lane issues the reflection files at archive.
 - [correction-intake](./correction-intake.md) covers which findings make a correction lane due and the read-only intake report of the open ones (`octo-feather-lane intake`).
-- [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`).
+- [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`): its director reflection line, its owner-caught headline and a repository's full gate time against its gate-time budget.
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
 - [skill-loading](./skill-loading.md) covers which skills Pi loads for a role: a launch refused naming each skill Pi did not load, the listed skills offered exactly, and the gate's `check-skills` (criteria: skills#acceptance-launch-refuses-unloaded, skills#acceptance-only-listed, skills#acceptance-skill-frontmatter).
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
@@ -48,6 +48,12 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qc-advisory](./qc-advisory.md) covers `just qc` showing the judgment model's advisory answer beside each recorded result, the result unchanged by it.
 - [qc-fallback](./qc-fallback.md) covers `just qc` sending a criterion with no declared demo to the agent fallback: a fresh, time-capped qc judge whose report becomes that criterion's record.
 - [qc-stale](./qc-stale.md) covers `just qc` linking each built criterion to its evidence record, capture commit and tests, and `octo-feather-spec-status show` naming a built criterion current or stale.
+- [starter-acceptance](./starter-acceptance.md) covers a template-born repo's starter criterion judged by `just qc` from the record its tagged acceptance test left in the claims gate, with no demo.
+- [gate-tiers](./gate-tiers.md) covers the gate's two tiers: `octo-feather-integrate` running the full gate at a checkpoint (pilot, listed path) and the fast tier otherwise, `just fast` selecting tests from recorded coverage, `just fast-list` its dry run, and a map written past a red item.
+- [template-tiers](./template-tiers.md) covers a template-born repo's two tiers: `just check` showing each test kind and the shared fixture prepared once, `just fast` picking tests with the stack's own tool, the git hook on `just fast`, each run's trend line and the factory report's gate budget block from it.
+- [merge-ask-proof](./merge-ask-proof.md) covers `octo-feather-lane merge-ask` refusing a lane head with no current recorded full gate pass, and `octo-feather-integrate` running a brownfield target's own gate in full at every integration with no recipe added, and the merge ask's gate time against the target's gate-time budget, shown, never decided on.
+- [one-execution](./one-execution.md) covers a target's final full gate, given the lane's claims, running a tagged acceptance test once in the qc sandbox into one evidence record, and `just qc` judging the criterion from that record without rerunning it.
+- [one-execution-incomplete](./one-execution-incomplete.md) covers `just qc` giving insufficient evidence, never the agent fallback, for a claimed criterion whose tagged test the gate skipped.
 - [qa-runs](./qa-runs.md) covers the factory evals running each case several times (`octo-feather-qa --runs N`; criterion: quality#acceptance-qa-repeats).
 - [qa-baseline](./qa-baseline.md) covers a case's time and tokens over several runs and a baseline kit compared beside the current one (`octo-feather-qa --runs N --baseline COMMIT`; criteria: quality#acceptance-qa-cost, quality#acceptance-qa-baseline).
 - [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).

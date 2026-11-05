@@ -26,13 +26,13 @@ Communication to and from subagents should be sparse. Communicate primarily thro
 4. Pilot first (docs/adr/0019): run the lane's first ticket alone through steps 4, 5 and 7, then fix the brief template and re-cut the remaining tickets before fanning out. Use **implementer subagents** to implement each ticket, each in its own worktree on its own branch: a Herdr worker, `herdr-spawn --role implementer` in tab `worker-<k>`. Each implementer subagent:
    - confirms its worktree is based on the integration branch before starting, and resets onto it if not;
    - builds the ticket with the `tdd` skill (`../tdd/SKILL.md`);
-   - merges the integration branch tip into its own branch before reporting done
+   - merges the integration branch tip into its own branch before reporting done, on its hand-off gate green (quality spec `#acceptance-gate-green`)
 
-5. Once an **implementer subagent** completes, merge its work to the integration branch yourself: run `just integrate <parent key> <worker branch or commit>` (docs/adr/0017). It exits non-zero on a conflict or a red `just check` and leaves the branch as it was; hand that to an implementer, then integrate its result.
+5. Once an **implementer subagent** completes, merge its work to the integration branch yourself: run `just integrate <parent key> <worker branch or commit>` (docs/adr/0017). It runs the gate tier issue-lifecycle spec `#lanes-checkpoints` names for that head (`--full` forces the full tier), exits non-zero on a conflict or a red gate and leaves the branch as it was; hand that to an implementer, then integrate its result.
 
 6. If this changes the **frontier** of available tickets, kick off more **implementer subagents** to work on the new tickets. This allows for maximum concurrency.
 
-7. Once all tickets are complete and `just check` is green, run `just qc` and a fresh `code-reviewer` pane as spec `#lanes-one-head` and `#gates-merge` say (docs/adr/0022); read them there, never restate them. Log each QC and review finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
+7. Once all tickets are complete and the lane's final head passed the full gate, the lane's claims named in `OCTO_FEATHER_QC_CLAIMS` (issue-lifecycle spec `#lanes-checkpoints`, quality spec `#qc-capture`), run `just qc` and a fresh `code-reviewer` pane as spec `#lanes-one-head` and `#gates-merge` say (docs/adr/0022); read them there, never restate them. Log each QC and review finding with its `class` in the lane's handoffs log (docs/adr/0020). Fix every blocking finding in a single **implementer subagent**; put notes in the PR body.
 
 8. If a draft PR exists, mark it ready for review and send the merge ask to the director with `herdr-say --parent`: post the review verdict with `octo-feather-lane verdict <PR> <head> <report>`, write the merge ask (the head, each criterion's QC verdict, the review verdict link, the criterion ids flipped to built, each failed criterion with its triage) as the PR body's `## Merge ask` section, and send what `octo-feather-lane merge-ask <PR> --status <status file>` prints once it passes. Otherwise, resolve each ticket the way the issue tracker closes work, and report the integration branch.
 

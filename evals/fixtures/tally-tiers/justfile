@@ -1,0 +1,34 @@
+# tally's recipes; the gate's two tiers are `just fast` and `just check` (AGENTS.md).
+
+set shell := ["bash", "-euo", "pipefail", "-c"]
+set positional-arguments
+
+default:
+    @just --list
+
+# Install dependencies.
+setup:
+    uv sync --locked
+
+# Full tier: static checks, integration and end-to-end tests.
+check: static
+    uv run --locked pytest -q
+
+# Fast tier: static checks and integration tests only.
+fast: static
+    uv run --locked pytest -q -m "not e2e"
+
+# Lint, format, types, import boundaries.
+static:
+    uv run --locked ruff check .
+    uv run --locked ruff format --check .
+    uv run --locked basedpyright
+    uv run --locked lint-imports
+
+# Integrate worker commits onto the lane of TICKET (octo-feather kit script on PATH).
+integrate issue +refs:
+    octo-feather-integrate "$@"
+
+# Product QC on the lane head (octo-feather kit script on PATH; never in check).
+qc $status $pr +$ids:
+    octo-feather-qc "$@"

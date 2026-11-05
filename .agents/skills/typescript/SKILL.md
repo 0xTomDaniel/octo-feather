@@ -99,9 +99,10 @@ gate once near handoff unless role workflow, stale evidence, or cross-cutting
 changes require more. Prefer repo-declared package, tier, project, or
 single-file commands for the inner loop.
 
-The gate is the repo's `just check` (in `templates/typescript`: tsc, eslint,
-dependency-cruiser, knip, Vitest). Run it after a completed development slice
-and before reporting; there is no build step.
+The gate has two tiers, `just fast` and `just check` (the full tier in
+`templates/typescript`: tsc, eslint, dependency-cruiser, knip, Vitest); which
+runs when, and which one a report needs green: quality spec `#recipes-table`,
+`#acceptance-gate-green`. There is no build step.
 
 Keep agent-visible output bounded with repo-supported log controls such as
 `LOG_LEVEL` plus summaries, tails, and exit codes for long commands.

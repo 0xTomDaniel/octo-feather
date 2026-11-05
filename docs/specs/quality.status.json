@@ -3,8 +3,8 @@
   "accepted_commit": "44c4b559ef96419a88e355390ec4c4ac057bd612",
   "criteria": {
     "acceptance-gate-green": {
-      "status": "built",
-      "pr": 16
+      "status": "planned",
+      "pr": null
     },
     "acceptance-gate-no-model": {
       "status": "built",
@@ -152,13 +152,10 @@
     },
     "acceptance-built-links": {
       "status": "built",
-      "pr": 420,
-      "record": "20261030T041949Z-00421f09",
-      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
-      "tests": [
-        "tests/qc-capture.sh",
-        "tests/spec-status.sh"
-      ]
+      "pr": 546,
+      "record": "20261105T171103Z-f4216d2a",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
     },
     "acceptance-evidence-stale": {
       "status": "built",
@@ -168,6 +165,31 @@
       "tests": [
         "tests/spec-status.sh"
       ]
+    },
+    "acceptance-fast-affected": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T171033Z-2c6c7df0",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
+    },
+    "acceptance-one-execution": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T171043Z-b782a451",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
+    },
+    "acceptance-one-execution-incomplete": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T171052Z-ad56dc22",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
+    },
+    "acceptance-review-test-adequacy": {
+      "status": "planned",
+      "pr": null
     },
     "acceptance-qa-repeats": {
       "status": "built",

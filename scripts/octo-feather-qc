@@ -1,17 +1,23 @@
 #!/usr/bin/env python3
 """octo-feather-qc STATUS PR ID... [--no-sandbox] [--no-github]   interim product QC (`just qc`, docs/adr/0022)
 
-Run in a lane worktree at its integrated head. Capture first (quality spec #qc-capture), no model: each
-named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo under
-[demo."<spec>#<id>"] has that demo's command run at the head in the sandbox below, one sandbox per demo,
+  octo-feather-qc --capture-case NOTE -- CMD...   (a capturing gate's tagged case; tests/gate/conftest.py)
+  octo-feather-qc --capture-store SESSION         (that gate's records, after its run)
+
+Run in a lane worktree at its integrated head. A named criterion a tagged test proves is judged from the record its
+head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
+#qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
+named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo command under
+[demo."<spec>#<id>"] (an entry without one is metadata only) has that demo's command run at the head in the sandbox below, one sandbox per demo,
 and its command, exit status, stdout and stderr appended to the target's evidence store
 (octo-feather-evidence append: demo.cmd, demo.exit, demo.stdout, demo.stderr, and screenshots/<name> for each file
-the demo wrote to $QC_SCREENSHOTS). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
+the demo wrote to $QC_SCREENSHOTS; qc.expect.json when its entry declares fixtures or artifacts: those names, and each
+artifact with whether the run left it). A demo with browser = true gets PLAYWRIGHT_BROWSERS_PATH, the box's
 headless Chromium shell at the contract's [browser] playwright pin where `just install-check` names it, bound
 read-only (never a download; no pin or none installed there: refused, 64 or 66). Its result is then read
 from that stored record alone: evidence complete (record at the head, clean, criterion text hash as
-the spec's, every output there, the demo ran to its end), decision source the demo's checks, pass on exit
-status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v1.schema.json, demo
+the spec's, every output there, the demo ran to its end, every declared artifact left), decision source the demo's checks, pass on exit
+status 0, else fail; a status that says the demo did not run to its end (schemas/qc.v<format>.schema.json, demo
 command) leaves it incomplete. Incomplete evidence is the result insufficient evidence, naming what is
 missing (quality spec #qc-results): never a failure to triage; it stays planned, and merge-ask fails naming it
 until a rerun gives it pass or fail.
@@ -62,7 +68,9 @@ the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
 positive integer, an id not in the status file or spec) or same-family judge, 65 dirty worktree,
 66 sandbox unavailable or a pre-run proof check failed, 67 GitHub snapshot fetch failed
 (no auth, network; rerun with --no-github to judge without it), 69 on macOS (no sandbox there), 70 inside a `just check`
-run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free). On 64 to 70 the judge never
+run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate stays free; by design --capture-case and
+--capture-store run there: they call no model and decide nothing; their exit: the case's, 66 when its sandbox did not
+run it; 0, or 3 when a record could not be written). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
 import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
@@ -325,8 +333,9 @@ def browsers(root: str, ids: list[str], stem: str) -> str | None:
 
 
 def contract_demos(root: str) -> dict[str, dict[str, Any]]:
-    """The demos the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec #qc-contract); none
-    without a qc.toml. A qc.toml octo-feather-contract refuses is refused here, before anything runs."""
+    """The per-criterion entries the target's qc.toml declares, by criterion id <spec>#<anchor> (quality spec
+    #qc-contract), a demo where it has a command; none without a qc.toml. A qc.toml octo-feather-contract refuses is
+    refused here, before anything runs."""
     path = Path(root) / "qc.toml"
     if not path.is_file():
         return {}
@@ -335,6 +344,25 @@ def contract_demos(root: str) -> dict[str, dict[str, Any]]:
         die(64, f"qc.toml is not a valid contract (octo-feather-contract); nothing ran:\n{(p.stderr or p.stdout).strip()}")
     demos: dict[str, dict[str, Any]] = tomllib.loads(path.read_text(encoding="utf-8")).get("demo", {})
     return demos
+
+
+def left(wrote: list[str], artifacts: list[str]) -> list[dict[str, Any]]:
+    """Each declared artifact (qc.toml demo artifacts) with whether the run left it: a path it wrote, or for a path ending
+    in /, one under it. WROTE: the worktree paths the run created or changed (its overlay upper, never deletions)."""
+    return [{"path": a, "left": any(w == a or (a.endswith("/") and w.startswith(a)) for w in wrote)} for a in artifacts]
+
+
+def wrote(upper: list[list[str]]) -> list[str]:
+    return [p for k, p in upper if k != "deleted"]
+
+
+def expected(cap: dict[str, Any], r: dict[str, Any]) -> list[str]:
+    """What a record lacks of its criterion's declared fixtures and artifacts (CAP: qc.expect.json or test.capture.json;
+    R: the record, its fixture identity)."""
+    fx: dict[str, Any] = r.get("fixture") or {}
+    names: set[str] = set(fx.get("names") or [])
+    return ([f"fixture {n} not in the record's fixture identity" for n in cap.get("fixtures", []) if n not in names]
+            + [f"artifact {a['path']} not left by the run" for a in cap.get("artifacts", []) if not a["left"]])
 
 
 def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: dict[str, str], stem: str, runid: str,
@@ -354,13 +382,15 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
         run: subprocess.CompletedProcess[str] | None
         sandbox: dict[str, Any] | bool
+        upper: list[list[str]] = []
         if nosb:
             run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
         else:
             run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
                                      browser=br, shots=True, pi=False)
             assert isinstance(sandbox, dict)
-            sandbox["discarded_writes"] = len(sandbox.pop("upper", []))   # the demo's writes died with its overlay
+            upper = sandbox.pop("upper", [])
+            sandbox["discarded_writes"] = len(upper)   # the demo's writes died with its overlay
         shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
         caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
@@ -374,6 +404,9 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
             for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
                 Path(d, name).write_text(body)
+            if "fixtures" in demos[i] or "artifacts" in demos[i]:
+                Path(d, EXPECT).write_text(json.dumps({"fixtures": demos[i].get("fixtures", []),
+                                                       "artifacts": left(wrote(upper), demos[i].get("artifacts", []))}, indent=2) + "\n")
             for name, b64 in shots:
                 Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
                 Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
@@ -407,7 +440,7 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
         (f"outputs missing: {' '.join(o for o in DEMO_OUTPUTS if o not in r['outputs'])}", any(o not in r["outputs"] for o in DEMO_OUTPUTS)),
         (f"demo did not run to its end ({unfinished(rc)}): {last_words(d)}", rc in (77, 126, 127) or rc > 128),
-    ) if bad]
+    ) if bad] + (expected(json.loads((d / EXPECT).read_text()), r) if EXPECT in r["outputs"] else [])
     if missing:
         return res | {"missing": missing}
     return res | {"verdict": "pass" if rc == 0 else "fail", "command": (d / "demo.cmd").read_text().rstrip("\n"), "exit": rc,
@@ -510,7 +543,220 @@ def gate_free():
         die(70, "refused inside just check, which stays deterministic and free (message above)")
 
 
+EXPECT = "qc.expect.json"   # a demo record's declared fixtures and artifacts, each artifact with whether the run left it
+TESTED = "test.capture.json"   # the output that makes a record a tagged test's capture from a gate (capture_store)
+COMPLETED = ("passed", "failed")   # a case outcome that ran to its end; any other leaves the record incomplete
+
+
+def capture_case(note: Path, cmd: list[str]) -> int:
+    """--capture-case NOTE -- CMD: one tagged case of a capturing gate run (quality spec #qc-capture), CMD run at the
+    head in its own qc sandbox as a declared demo is (no Pi, no GitHub, no lane history), its stdout and stderr passed
+    through for the test runner, its exit status returned; NOTE (JSON) says whether it ran there, with the sandbox's
+    proof and cleanup and any screenshots. Runs inside a check run by design: it calls no model and decides nothing
+    (the judgment, below, still refuses there)."""
+    root, head = git("rev-parse", "--show-toplevel"), git("rev-parse", "HEAD")
+    rec: dict[str, Any] = {"command": cmd, "ran": False}
+    wrapped = ["env", f"QC_REPO={root}", "sh", "-c", 'cd "$QC_REPO" || exit 127; exec "$@"', "qc-case", *cmd]
+    try:
+        run, sandbox = sandboxed(wrapped, f"qc-{head[:12]}-{secrets.token_hex(3)}-t", {"off": "github: none (a tagged test)"},
+                                 history=False, shots=True, pi=False)
+    except SystemExit as e:   # die(): no sandbox on this box (its message above)
+        note.write_text(json.dumps(rec | {"why": f"qc sandbox unavailable (exit {e.code})"}))
+        return 66
+    if run is None:
+        note.write_text(json.dumps(rec | {"why": "qc sandbox proof failed", "sandbox": sandbox}))
+        print(f"qc capture: sandbox proof failed; {shlex.join(cmd)} not run:\n" + "\n".join(sandbox.get("proof", [])), file=sys.stderr)
+        return 66
+    upper = sandbox.pop("upper", [])
+    sandbox["discarded_writes"] = len(upper)
+    shots = sandbox.pop("shots", [])
+    sys.stdout.write(run.stdout); sys.stderr.write(run.stderr)
+    rc = 128 - run.returncode if run.returncode < 0 else run.returncode
+    said = [l.strip() for l in (run.stdout + "\n" + run.stderr).splitlines() if l.strip()]
+    note.write_text(json.dumps(rec | {"ran": True, "exit": rc, "said": said[-1][:300] if said else "", "sandbox": sandbox,
+                                      "shots": shots, "wrote": wrote(upper)}))
+    return rc
+
+
+def case_outcome(rep: dict[str, Any] | None, note: dict[str, Any] | None) -> tuple[str, str]:
+    """A case's outcome from its pytest reports (setup, call, teardown) and its capture note: passed or failed when it ran
+    to its end in the qc sandbox; else skipped, error, missing or not captured, with why."""
+    if rep is None:
+        return "missing", "collected, never reported (the run stopped before it)"
+    phases: dict[str, dict[str, str]] = rep["phases"]
+    out = {w: p["outcome"] for w, p in phases.items()}
+    why = {w: p["why"].strip() for w, p in phases.items()}
+    skipped = next((w for w in ("setup", "call") if out.get(w) == "skipped"), "")
+    for bad, outcome, because in (
+        (note is not None and not note.get("ran"), "not captured", str((note or {}).get("why", "did not run in the qc sandbox"))),
+        (bool(skipped), "skipped", str((note or {}).get("said") or (why.get(skipped, "").splitlines() or ["skipped"])[-1])),
+        (out.get("setup") == "failed", "error", f"setup failed: {why.get('setup', '')[-300:]}"),
+        ("call" not in out, "missing", "its test body never reported"),
+        (out.get("teardown") == "failed", "error", f"teardown failed: {why.get('teardown', '')[-300:]}"),
+        (note is None, "not captured", "did not run through the qc capture (octo-feather-qc --capture-case)"),
+    ):
+        if bad:
+            return outcome, because
+    return out["call"], "" if out["call"] == "passed" else why["call"][-300:]
+
+
+def capture_store(path: Path) -> int:
+    """--capture-store SESSION: after a capturing gate run (tests/gate/conftest.py writes SESSION: the claims, the plan it
+    wrote before any test ran, each case's pytest reports and capture notes), one evidence record per claimed criterion
+    with a tagged case, outputs test.capture.json (the gate: its command, head and tree at its start, configuration ids;
+    each case: its test, command, outcome and why, seconds, exit and sandbox proof; the contract's covers, fixtures and
+    artifacts, each artifact with whether a case left it) and
+    test.output (each case's captured output); screenshots/<n>/<name> when a case took any. A claim with no tagged
+    case gets no record: just qc runs its demo, else the agent fallback."""
+    s: dict[str, Any] = json.loads(path.read_text())
+    plan: dict[str, dict[str, Any]] = s["plan"]
+    root, head = git("rev-parse", "--show-toplevel"), git("rev-parse", "HEAD")
+    if s.get("tier") != "full":
+        die(3, f"the gate run was not the full gate (tier {s.get('tier')!r}): a record of part of a criterion's cases is no "
+               "evidence; no record written")
+    if head != s["head_at_start"]:
+        die(3, f"HEAD moved during the gate ({str(s['head_at_start'])[:12]} to {head[:12]}); no record written")
+    ident = json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head], capture_output=True,
+                                      text=True, check=True).stdout)
+    gate = {"command": shlex.join([s.get("runner", "pytest"), *s["argv"]]), "head_at_start": head, "clean_at_start": s["clean_at_start"],
+            "exit": s["exit"], **ident}
+    declared = contract_demos(root)
+    for c in s["claims"]:
+        cases = sorted(n for n, p in plan.items() if c in p["criteria"])
+        if not cases:
+            print(f"qc capture: {c}: no tagged test in this run; just qc runs its declared demo, else the agent fallback")
+            continue
+        rows: list[dict[str, Any]] = []
+        out: list[str] = []
+        with tempfile.TemporaryDirectory(prefix="qc-capture-store-") as d:
+            for k, n in enumerate(cases):
+                rep: dict[str, Any] | None = s["reports"].get(n)
+                got: dict[str, Any] | None = s["notes"].get(n)
+                outcome, why = case_outcome(rep, got)
+                note: dict[str, Any] = got or {}
+                shots: list[list[str]] = note.get("shots", [])
+                for name, b64 in shots:
+                    f = Path(d, "screenshots", str(k), name); f.parent.mkdir(parents=True, exist_ok=True)
+                    f.write_bytes(base64.b64decode(b64))
+                rows.append({"case": n, "test": plan[n]["source"], "command": shlex.join(note.get("command", [n])),
+                             "outcome": outcome, "why": why, "seconds": (rep or {}).get("seconds"), "exit": note.get("exit"),
+                             "sandbox": note.get("sandbox"), "screenshots": [f"screenshots/{k}/{nm}" for nm, _ in shots]})
+                out.append(f"=== {n}: {outcome}\n{(rep or {}).get('output', '')}")
+            notes: dict[str, dict[str, Any]] = s["notes"]
+            made: list[str] = [w for n in cases for w in (notes.get(n) or {}).get("wrote", [])]
+            Path(d, TESTED).write_text(json.dumps({"criterion": c, "gate": gate, "cases": rows,
+                                                   "covers": declared.get(c, {}).get("covers", []),
+                                                   "fixtures": declared.get(c, {}).get("fixtures", []),
+                                                   "artifacts": left(made, declared.get(c, {}).get("artifacts", []))}, indent=2) + "\n")
+            Path(d, "test.output").write_text("\n".join(out))
+            p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", c, "--outputs", d],
+                               capture_output=True, text=True)
+        if p.returncode:
+            die(3, f"evidence record for {c} not appended: {p.stderr.strip()}")
+        print(f"qc capture: {c}: record {p.stdout.strip()}, {len(rows)} case(s): "
+              + ", ".join(f"{r['test']} {r['outcome']}" for r in rows))
+    return 0
+
+
+def tested(i: str, cid: str, head: str, text: str, root: str, tagged: list[str]) -> Result | None:
+    """I's result from the newest record a capturing gate wrote for it at HEAD (capture_store), never rerunning it; None
+    with no such record. Complete when the record is at the head from a clean worktree, the gate started clean on it
+    with the head's gate configuration, the criterion text hash is the spec's, and every case ran to its end; then pass
+    when every case passed, else fail (a completed assertion failure). Every case TAGGED with it at the head (the gate's
+    collector, tagged_cases) must be in the record: one missing is a partial capture, named."""
+    p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", head, "--json"],
+                       capture_output=True, text=True)
+    found = [x for x in json.loads(p.stdout) if TESTED in x["record"]["outputs"]] if p.returncode == 0 else []
+    if not found:
+        return None
+    r: dict[str, Any] = found[-1]["record"]   # oldest first: the newest capture at this head
+    d = Path(found[-1]["dir"]) / "outputs"
+    cap = json.loads((d / TESTED).read_text())
+    cases: list[dict[str, Any]] = cap["cases"]
+    cfg = json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head], capture_output=True,
+                                    text=True, check=True).stdout)
+    res: Result = {"id": i, "evidence": "incomplete", "decision": "tagged test assertions", "record": r["id"], "head": head,
+                   "tests": sorted({c["test"] for c in cases})}
+    missing = [m for m, bad in (
+        (f"captured at {r['revision'][:12]}, not the judged head", r["revision"] != head),
+        ("captured from a dirty worktree", r["dirty"] or not cap["gate"]["clean_at_start"]),
+        ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
+        ("gate configuration differs from the head's", any(cap["gate"].get(k) != v for k, v in cfg.items())),
+        ("no tagged case", not cases),
+    ) if bad] + [f"case {c['test']} ({c['case']}) {c['outcome']}: {c['why']}" for c in cases if c["outcome"] not in COMPLETED] + [
+        f"case {n} tagged at {head[:12]}, not in the record (a partial capture)" for n in tagged if n not in {c["case"] for c in cases}] + expected(cap, r)
+    if missing:
+        return res | {"missing": missing}
+    failed = [c["test"] for c in cases if c["outcome"] == "failed"]
+    return res | {"verdict": "fail" if failed else "pass", "evidence": "complete",
+                  "command": "; ".join(dict.fromkeys(c["command"] for c in cases)),
+                  "output": tail((d / "test.output").read_text()),
+                  "why": f"{len(cases) - len(failed)}/{len(cases)} tagged cases passed in the gate's run at {head[:12]}, not rerun"
+                         + (f"; failed: {' '.join(failed)}" if failed else "")}
+
+
+def tagged_cases(root: str) -> dict[str, list[str]]:
+    """Each criterion id any test at the head carries (its test runner's tag: pytest's `criterion` marker, a Vitest tag),
+    with those tests' case ids, from the gate's own collector writing OCTO_FEATHER_QC_TAGS: the command qc.toml's `tags`
+    key declares, else `just check-tests --collect-only` (a pytest gate: tests/gate/conftest.py). None with neither (no
+    qc.toml key, no justfile with a check-tests recipe: no gate to tag a test in); a justfile just cannot read, or a
+    collection that fails, is refused: whether a criterion has a tagged test is never guessed."""
+    qc = Path(root, "qc.toml")
+    declared = tomllib.loads(qc.read_text(encoding="utf-8")).get("tags") if qc.is_file() else None   # contract_demos validated it
+    if declared is not None:
+        cmd, what = ["sh", "-c", str(declared)], f"qc.toml tags: {declared}"
+    else:
+        files = [f.name for f in Path(root).iterdir() if f.name.lower() in ("justfile", ".justfile")]
+        if not files:
+            return {}
+        jf = ["just", "--justfile", str(Path(root, files[0])), "--working-directory", root]
+        p = subprocess.run([*jf, "--summary"], capture_output=True, text=True)
+        if p.returncode:
+            die(64, f"{files[0]} does not parse, so the tagged tests are unknown; nothing ran: {p.stderr.strip()[:300]}")
+        if "check-tests" not in p.stdout.split():
+            return {}
+        cmd, what = [*jf, "check-tests", "--collect-only", "-q", "-n", "0", "-p", "no:cacheprovider"], "just check-tests --collect-only"
+    with tempfile.TemporaryDirectory(prefix="qc-tags-") as d:
+        out = Path(d, "tags.json")
+        env = {k: v for k, v in os.environ.items() if k != "OCTO_FEATHER_QC_CLAIMS"} | {
+            "OCTO_FEATHER_QC_TAGS": str(out), "PYTHONDONTWRITEBYTECODE": "1"}
+        c = subprocess.run(cmd, capture_output=True, text=True, env=env, stdin=subprocess.DEVNULL, cwd=root)
+        if c.returncode or not out.is_file():
+            die(64, f"collecting the tagged tests failed ({what}, exit {c.returncode}); nothing ran:\n"
+                    f"{tail(c.stdout + c.stderr, 15)}")
+        cases: dict[str, list[str]] = json.loads(out.read_text())
+    by: dict[str, list[str]] = {}
+    for n, cids in cases.items():
+        for cid in cids:
+            by.setdefault(cid, []).append(n)
+    return by
+
+
+def captured(argv: list[str]) -> int:
+    """The capture's two entries inside a gate: --capture-case NOTE -- CMD..., --capture-store SESSION."""
+    if argv[0] == "--capture-case" and len(argv) > 3 and argv[2] == "--":
+        return capture_case(Path(argv[1]), argv[3:])
+    if argv[0] == "--capture-store" and len(argv) == 2:
+        return capture_store(Path(argv[1]))
+    die(64, "usage: octo-feather-qc --capture-case NOTE -- CMD... | --capture-store SESSION")
+
+
+def unrecorded(ids: list[str], tags: dict[str, list[str]], stem: str, head: str) -> dict[str, Result]:
+    """Of IDS (no gate record at HEAD), each a test carries (TAGS): a missing execution, insufficient evidence, never the
+    demo or the fallback (quality spec #qc-fallback, #qc-judgment)."""
+    out: dict[str, Result] = {}
+    for i in ids:
+        if cases := tags.get(f"{stem}#{i}"):
+            why = (f"no claims gate record at {head[:12]}: tagged {' '.join(cases)}; run the final full gate with "
+                   f"OCTO_FEATHER_QC_CLAIMS naming {stem}#{i}")
+            out[i] = {"id": i, "evidence": "incomplete", "decision": "tagged test assertions", "record": None, "head": head,
+                      "tests": cases, "missing": [why]}
+    return out
+
+
 def main(argv: list[str]) -> int:
+    if argv[:1] in (["--capture-case"], ["--capture-store"]):
+        return captured(argv)
     gate_free()
     flags = {"--no-sandbox", "--no-github"}
     nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
@@ -536,12 +782,17 @@ def main(argv: list[str]) -> int:
     if missing:
         die(64, f"no criterion text in {spec}: {' '.join(missing)}")
     stem = spec.name.removesuffix(".spec.html")
-    declared = contract_demos(git("rev-parse", "--show-toplevel"))
-    demos = {i: declared[f"{stem}#{i}"] for i in ids if f"{stem}#{i}" in declared}
+    root = git("rev-parse", "--show-toplevel")
+    declared = contract_demos(root)
+    tags = tagged_cases(root)   # the head's tagged cases, from the gate's own collector
+    found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids}
+    tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
+    tests |= unrecorded([i for i in ids if i not in tests], tags, stem, head)
+    demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")
-    if len(demos) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
+    if len(demos) + len(tests) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
     runid = secrets.token_hex(3)
@@ -554,22 +805,29 @@ def main(argv: list[str]) -> int:
         signal.signal(s, killed)
     gh: dict[str, Any] = {}
     try:
-        gh = github_snapshot(nogh, runid) if len(demos) < len(ids) else {"off": "github: none (every criterion has a declared demo: no judge)"}
+        gh = (github_snapshot(nogh, runid) if len(demos) + len(tests) < len(ids) else
+              {"off": "github: none (every criterion has a tagged test's record or a declared demo: no judge)"})
         print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
-        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, nosb=nosb)
+        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, tests, nosb=nosb)
     finally:
         if "dir" in gh:
             drop(gh["dir"])
 
 
 def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], spec: Path, text: dict[str, str], model: str,
-          runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, *, nosb: bool) -> int:
-    rest = [i for i in ids if i not in demos]   # no declared demo: the agent fallback's
+          runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, tests: dict[str, Result], *, nosb: bool) -> int:
+    rest = [i for i in ids if i not in demos and i not in tests]   # neither a tagged test's record nor a demo: the agent fallback's
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
+    for i, r in tests.items():
+        print(f"qc: tagged test {stem}#{i}: " + (f"judged from the gate's record {r['record']} at {head[:12]}, not rerun" if r["record"]
+              else f"no claims gate record at {head[:12]}"), file=sys.stderr)
+        done[i] = r if r["evidence"] == "complete" else r | {   # a result, never a failure to triage, never the fallback
+            "verdict": "insufficient evidence", "command": f"the gate's run of {' '.join(r['tests'])}",
+            "why": f"missing: {'; '.join(r['missing'])}"}
     if not rest:
         advise(done, text, stem, head, runid)
         try:
@@ -738,7 +996,7 @@ def settle(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any
         data["criteria"][i] = {"status": "planned", "pr": None}
     status.write_text(json.dumps(data, indent=2) + "\n", encoding="utf-8")
     for i in passed:   # built with its evidence link (quality spec #qc-results): complete evidence was captured at the head
-        tests = [a for t in demos.get(i, {}).get("tests", []) for a in ("--test", str(t))]
+        tests = [a for t in verdicts[i].get("tests") or demos.get(i, {}).get("tests", []) for a in ("--test", str(t))]
         b = subprocess.run([str(STATUS_TOOL), "built", str(status), str(pr), i, "--record", verdicts[i]["record"],
                             "--commit", verdicts[i]["head"], *tests], capture_output=True, text=True)
         if b.returncode:
