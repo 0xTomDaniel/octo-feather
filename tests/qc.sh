@@ -9,7 +9,7 @@
 # The other sections: qc-judge (--no-sandbox, a killed run, built and planned in one status-only commit, the judge
 # from agents/qc-judge.md), qc-escapes (proof failures, every escape fails), qc-copies and qc-oauth (no judge write
 # persists: credential copies, Pi files, a removed .venv), qc-mise (mise in the sandbox), qc-vendored (the warm
-# vendored-skill cache, new-repo's mise trust).
+# vendored-skill cache, new-repo's mise trust), qc-uv-cache (uv's cache an overlay).
 # Run by `just check`; offline and bounded, in its own namespace and throwaway HOME (tests/lib/qc.sh).
 # shellcheck source=tests/lib/qc.sh
 source "$(dirname "$0")/lib/qc.sh"
