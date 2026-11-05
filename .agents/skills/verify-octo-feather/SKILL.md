@@ -13,22 +13,22 @@ Helper (an executable Python script, `python3` 3.11+, standard library only: `to
 .agents/skills/verify-octo-feather/scripts/verify-octo-feather launch|doctor|drive <feature>|cleanup|run [--unreachable-exit N] [feature]
 ```
 
-`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed or, for a `PASS-with-unreachable` drive, every case but the named unreachable steps passed. With `--unreachable-exit N`, a `PASS-with-unreachable` run exits N instead and prints its `UNREACHABLE` lines last on stderr: the kit's `qc.toml` demos pass 77, which `just qc` reads as a demo that did not run to its end (`schemas/qc.v1.schema.json`, demo `command`).
+`run [feature]` does launch, doctor, `drive <feature>` (default `new-repo`), cleanup, then lists the evidence folder to show it survived. Exit 0 means every step passed or, for a `PASS-with-unreachable` drive, every case but the named unreachable steps passed. With `--unreachable-exit N`, a `PASS-with-unreachable` run exits N instead and prints its `UNREACHABLE` lines last on stderr: the kit's `qc.toml` demos pass 77, which `just qc` reads as a demo that did not run to its end (`schemas/qc.v2.schema.json`, demo `command`).
 
 ## Contract
 
 [`qc.toml`](../../../qc.toml) at the kit root is the kit's driver contract (quality spec `#qc-contract`); what it declares is that spec section's, not repeated here. The helper invokes only what it declares; edit the contract, never the helper, to change any of it. How the helper uses each key:
 
-- `format`: the helper reads format 1.
+- `format`: the helper reads format 2.
 - `setup`: none declared; `launch` runs it when one is.
 - `entry.command`: `launch` writes it as `bin/kit` in the run state; every case, the doctor's probes and the evidence record run that with the command a user types appended.
 - `services`: none. The helper starts no service: `launch` fails naming any declared one.
 - `fixture`: none. `drive` runs each declared `reset` before its cases.
-- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion; `web_roles` and `web_servers` are the role-launch drive's expected web roles and web list servers; `qc_demo_pass` and `qc_demo_fail` are the qc-capture drive's scratch demos (`qc_demo_pass` also the qc-fallback drive's declared demo, the qc-advisory drive's and the qc-stale drive's two demos); `qc_demo_browser` is the qc-browser drive's scratch browser demo; `qc_demo_insufficient` is the qc-insufficient drive's. The gate-tiers drive takes no value: its scratch target and kit copy are its own. The merge-ask-proof drive takes none either: its scratch target and PR snapshot are its own; nor the template-tiers drive: its created repos are its own; nor the one-execution drives: their scratch target and tagged tests are their own.
-- `demo`: the kit's own criteria's demos, which `just qc` runs (quality spec `#qc-capture`); the helper does not read them.
+- `values`: `lang` is the new-repo drive's template; `scratch_criterion` and `scratch_criterion_text` are the evidence drive's scratch criterion; `web_roles` and `web_servers` are the role-launch drive's expected web roles and web list servers; `qc_demo_pass` and `qc_demo_fail` are the qc-capture drive's scratch demos (`qc_demo_pass` also the qc-fallback drive's declared demo, the qc-advisory drive's and the qc-stale drive's two demos); `qc_demo_browser` is the qc-browser drive's scratch browser demo; `qc_demo_insufficient` is the qc-insufficient drive's. The gate-tiers drive takes no value: its scratch target and kit copy are its own. The merge-ask-proof drive takes none either: its scratch target and PR snapshot are its own; nor the template-tiers drive: its created repos are its own; nor the one-execution drives: their scratch target and tagged tests are their own; nor the starter-acceptance drive: its created repos are its own.
+- `demo`: the kit's per-criterion metadata and demos, which `just qc` reads (quality spec `#qc-contract`, `#qc-capture`); the helper does not read them.
 - `browser.playwright`: the pin the qc-browser drive's scratch target declares, whose headless shell `just install-check` checks on the box.
 
-What each key means and how its commands run: `schemas/qc.v1.schema.json`. Validate the contract: `octo-feather-contract .` (prints ok, or names the missing or wrong key).
+What each key means and how its commands run: `schemas/qc.v2.schema.json`. Validate the contract: `octo-feather-contract .` (prints ok, or names the missing or wrong key).
 
 ## Run state and evidence
 
@@ -49,7 +49,7 @@ What each key means and how its commands run: `schemas/qc.v1.schema.json`. Valid
 
 ## Drive
 
-`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `lane-archive`, `director-reflection`, `correction-lane`, `correction-intake`, `factory-report`, `role-launch`, `qc-capture`, `qc-browser`, `qc-fallback`, `qc-advisory`, `qc-insufficient`, `qc-stale`, `gate-tiers`, `merge-ask-proof`, `template-tiers`, `one-execution`, `one-execution-incomplete`, `qa-runs`, `qa-baseline`, `qa-analyst`, `qa-review`, `qa-history`) with the contract's values. Each case:
+`verify-octo-feather drive <feature>` resets the contract's fixtures, then runs every case of one feature from [features/](features/README.md) (`new-repo`, `install-check`, `contract`, `evidence`, `lane-archive`, `director-reflection`, `correction-lane`, `correction-intake`, `factory-report`, `role-launch`, `qc-capture`, `qc-browser`, `qc-fallback`, `qc-advisory`, `qc-insufficient`, `qc-stale`, `gate-tiers`, `merge-ask-proof`, `template-tiers`, `one-execution`, `one-execution-incomplete`, `starter-acceptance`, `qa-runs`, `qa-baseline`, `qa-analyst`, `qa-review`, `qa-history`) with the contract's values. Each case:
 
 - runs `bin/kit <command>` with cwd an empty `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/cwd/<case>`, the `just` recipes as `just --justfile <kit>/justfile <recipe> ...`;
 - writes `<case>.cmd` (the command as typed, with any scratch env or `unshare` wrapper), `<case>.stdout`, `<case>.stderr`, `<case>.exit`, `<case>.files` (files left in its cwd; must be empty), `<case>.kit-status` (change to the kit's `git status`; must be empty) and `<case>.obs.<key>` (facts observed after it) to `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/<feature>/`;

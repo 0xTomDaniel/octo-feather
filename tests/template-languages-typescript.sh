@@ -11,7 +11,8 @@
 # tiers' just check appends one line of tier full, timing every GATE_RECIPES recipe and each test kind, and each
 # just fast one of tier subset; a state dir it cannot create or write is a warning, the run still green; then
 # `octo-feather-lane report` (fake gh and herdr, tests/fixtures/lane-report/) shows the repo's gate budget block from
-# that full run against the template's gate-budget.toml, and `merge-ask` on its head shows its Gate time block.
+# that full run against the template's gate-budget.toml, and `merge-ask` on its head shows its Gate time block. A bare
+# `vitest run`, which skips the static steps, records tier subset. Then the starter acceptance test (check_acceptance).
 # Run by `just check`.
 # shellcheck source=tests/lib/template-languages.sh
 source "$(dirname "$0")/lib/template-languages.sh"
@@ -44,6 +45,10 @@ for x in "$t/afile" "$t/ro"; do
 done
 chmod 755 "$t/ro/octo-feather"
 [[ "$(wc -l <"$trend")" == 3 ]] || fail "typescript: a run with another state dir wrote the trend file"
+# A bare `vitest run` (no GATE_RECIPES: tests/gate.test.ts skips the gate's static steps) is no full run: tier subset.
+set +e; out="$(cd "$d" && env -u GATE_RECIPES PATH="$t/nopy:$PATH" pnpm exec vitest run 2>&1)"; rc=$?; set -e
+[[ "$rc" == 0 && "$(wc -l <"$trend")" == 4 && "$(tail -1 "$trend" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tier"])')" == subset ]] \
+  || fail "typescript: a bare vitest run: want exit 0 and one more trend line of tier subset, got exit $rc: $(tail -1 "$trend")"
 
 # The factory report and the merge ask show the repo's full gate against its gate-budget.toml: o/ts, PR #1 at H.
 P="$t/pr/o__ts"; mkdir -p "$P" "$S/lanes" "$t/bin"
@@ -63,4 +68,5 @@ grep -qx "gate budget o/ts: the latest passed full gate run against gate-budget.
 set +e; out="$(cd "$d" && PATH="$t/bin:$PATH" "$kit/scripts/octo-feather-lane" merge-ask 1 --repo o/ts --base "$H" 2>&1)"; set -e
 grep -qx "Gate time (the full gate on the final head against gate-budget.toml at ${H:0:12}; .*" <<<"$out" \
   && grep -qE "^$fullre\$" <<<"$out" && grep -qE "^$slow" <<<"$out" || fail "typescript: merge-ask's Gate time block: $out"
-echo "template-languages-typescript: ok (typescript repo green fresh; unknown, Go, uncovered file, env -S shebang, both pnpm pins and a gate recipe out each named; typescript without Python; trend lines full for just check with every gate step, subset for just fast, a bad state dir a warning; report and merge-ask show its gate budget)"
+check_acceptance typescript
+echo "template-languages-typescript: ok (typescript repo green fresh; unknown, Go, uncovered file, env -S shebang, both pnpm pins and a gate recipe out each named; typescript without Python; trend lines full for just check with every gate step, subset for just fast and a bare vitest run, a bad state dir a warning; report and merge-ask show its gate budget; the starter criterion judged by just qc from its tagged test's record in the claims gate, narrowed or unknown claims refused)"

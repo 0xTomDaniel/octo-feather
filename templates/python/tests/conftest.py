@@ -7,8 +7,10 @@ ${XDG_STATE_HOME:-~/.local/state}/octo-feather. Fields: start (UTC), repo (git t
 of the working dir), head, total_s (the run's elapsed wall seconds: the junit testsuite time,
 which pytest's junitxml measures on the controller from session start; never a sum of item
 times), exit, tier (`full` only when the invocation narrowed nothing: no paths or node ids, so pytest
-ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob;
-else `subset`), steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
+ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob, and
+the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
+run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
+steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
 
@@ -22,7 +24,7 @@ fails the run.
 OCTO_FEATHER_QC_TAGS=FILE (octo-feather-qc, with --collect-only): the collecting process writes every tagged
 case and its criteria there as JSON, so qc knows exactly which criteria a test carries; such a run adds no trend line.
 """
-import datetime, hashlib, json, os, re, shutil, subprocess, sys, tempfile
+import datetime, functools, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 from collections.abc import Callable
 from pathlib import Path
 from typing import Any, cast
@@ -61,11 +63,26 @@ def _result(case):
     return "ok"
 
 
+@functools.cache
+def _static_short(root: Path) -> bool:
+    """True when this run lacks some of the gate's static steps: ROOT's justfile declares GATE_RECIPES (from just's own
+    --dump) and this run's environment does not hold exactly that literal value; a justfile just cannot read, or a
+    value that is no string literal, is unknown, so short."""
+    try:
+        p = subprocess.run(["just", "--dump", "--dump-format", "json"], cwd=root, capture_output=True, text=True)
+    except OSError:
+        return any((root / n).is_file() for n in ("justfile", "Justfile", ".justfile"))
+    if p.returncode:
+        return "No justfile found" not in p.stderr
+    declared = json.loads(p.stdout).get("assignments", {}).get("GATE_RECIPES")
+    return declared is not None and declared.get("value") != os.environ.get("GATE_RECIPES")
+
+
 def _tier(config: pytest.Config) -> str:
     o = config.option
     narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.keyword, o.markexpr, getattr(o, "lf", False),
                 getattr(o, "stepwise", False), o.deselect, o.ignore, o.ignore_glob)
-    return "subset" if any(narrowed) else "full"
+    return "subset" if any(narrowed) or _static_short(config.rootpath) else "full"
 
 
 def _entry(xml_path, status, tier: str):
@@ -102,7 +119,8 @@ def pytest_configure(config: pytest.Config) -> None:
     root = Path(_git("rev-parse", "--show-toplevel") or Path.cwd())
     if _tier(config) != "full":   # a narrowed run would record only part of a criterion's cases: refused, nothing runs
         msg = (f"{CLAIMS} needs the full gate: this invocation narrows it (paths or node ids, -k, -m, --lf, --sw, "
-               "--deselect, --ignore); run the full gate with the claims, or unset them; nothing ran")
+               "--deselect, --ignore, or not the justfile's GATE_RECIPES); run the full gate with the claims, or unset "
+               "them; nothing ran")
         raise pytest.UsageError(msg)
     bad = [c for c in _claims() if not _names_criterion(root, c)]
     if bad:

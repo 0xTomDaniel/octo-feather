@@ -119,7 +119,7 @@ function gitRev(repo: string): string {
 }
 
 /**
- * The app-driver contract, qc.toml at the repo root (format 1). The helper sets up, enters and resets the
+ * The app-driver contract, qc.toml at the repo root (format 2). The helper sets up, enters and resets the
  * app only through it; its commands run under sh with QC_REPO set.
  */
 interface Contract {
@@ -157,8 +157,8 @@ function readContract(): Contract {
     throw e;
   }
   const { format, entry, services, fixture, values: rawValues, setup = "" } = c;
-  if (format !== 1) {
-    die(`${CONTRACT}: format ${format === undefined ? "None" : JSON.stringify(format)}; this helper reads format 1 (validate: octo-feather-contract)`);
+  if (format !== 2) {
+    die(`${CONTRACT}: format ${format === undefined ? "None" : JSON.stringify(format)}; this helper reads format 2 (validate: octo-feather-contract)`);
   }
   const values = strings(rawValues);
   const fixtures: Record<string, string> = {};
@@ -172,7 +172,7 @@ function readContract(): Contract {
   }
   const command = isTable(entry) ? entry["command"] : undefined;
   if (typeof command !== "string" || !isTable(services) || !fixturesOk || values === undefined || typeof setup !== "string") {
-    die(`${CONTRACT} does not match format 1 (validate: octo-feather-contract)`);
+    die(`${CONTRACT} does not match format 2 (validate: octo-feather-contract)`);
   }
   return { setup, entry: command, services: Object.keys(services), fixtures, values };
 }
