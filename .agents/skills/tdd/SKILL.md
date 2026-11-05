@@ -1,6 +1,6 @@
 ---
 name: tdd
-description: Tests that are worth keeping: where tests go (seams) and the anti-patterns (implementation-coupled, tautological, test leak), with the red-green loop. Use before writing or changing any test, when building a feature or fixing a bug, and when reviewing a diff that touches tests.
+description: "Tests that are worth keeping: where tests go (seams) and the anti-patterns (implementation-coupled, tautological, test leak), with the red-green loop. Use before writing or changing any test, when building a feature or fixing a bug, and when reviewing a diff that touches tests."
 ---
 
 # Test-Driven Development

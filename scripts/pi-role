@@ -46,9 +46,13 @@ never written (issue #3).
 Pi always gets --extension for the kit's extensions/resume-on-error.ts
 (docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
+Pi always gets --extension for the kit's extensions/skills-loaded.ts with
+--octo-feather-skills-loaded: every --skill folder and each `Repo skills:`
+entry of the target's AGENTS.md (declared_skills), checked, never offered.
+The rule: spec skills#loading-refuse.
 """
 import hashlib, json, os, re, shutil, subprocess, sys, tomllib
-from typing import Any
+from typing import Any, cast
 
 KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
 LIST_KEYS = {"tools", "skills", "externalSkills"}
@@ -65,6 +69,10 @@ EXTENSIONS = ("resume-on-error.ts", "spend-ledger.ts")
 WEB = "web"
 WEB_LIST = "web-mcp.json"
 WEB_EXTENSION = "web-servers.ts"
+# The launch refuses a skill Pi did not load (spec skills#loading-refuse): the extension and its flag.
+SKILLS_EXTENSION = "skills-loaded.ts"
+SKILLS_FLAG = "--octo-feather-skills-loaded"
+REPO_SKILLS = re.compile(r"^Repo skills:(.*)$", re.M)
 
 
 def web_patterns(kit: str) -> list[str]:
@@ -109,6 +117,24 @@ def repo_skill_roots(cwd="."):
         if r not in roots:
             roots.append(r)
     return roots
+
+
+def declared_skills(kit_root: str) -> list[str]:
+    """The skill folders the target's AGENTS.md declares on its `Repo skills:` line: the first holding a SKILL.md in
+    the target's .agents/skills (repo_skill_roots), then the kit's. A name none holds keeps a folder anyway, the first
+    that exists (a dangling link, a folder with no SKILL.md) or the target's, so Pi's check refuses it."""
+    roots = cast("list[str]", repo_skill_roots())
+    try:
+        with open(os.path.join(os.path.dirname(os.path.dirname(roots[0])), "AGENTS.md"), encoding="utf-8") as f:
+            m = REPO_SKILLS.search(f.read())
+    except (OSError, UnicodeDecodeError):
+        return []
+    out: list[str] = []
+    for s in [x.strip() for x in (m.group(1) if m else "").split(",") if x.strip()]:
+        dirs = [os.path.join(d, s) for d in [*roots, kit_root]]
+        hit = [d for d in dirs if os.path.isfile(os.path.join(d, "SKILL.md"))] or [d for d in dirs if os.path.lexists(d)]
+        out.append(hit[0] if hit else dirs[0])
+    return out
 
 
 def kit_trackers(skills_root):
@@ -171,6 +197,9 @@ def launch(path: str, *, to_file: bool = False):
             args += ["--skill", hit[0]]
         else:
             print(f"pi-role: external skill {s} not installed in {' or '.join(ext)}; skipped", file=sys.stderr)
+    listed = [args[i + 1] for i, a in enumerate(args) if a == "--skill"]
+    args += ["--extension", os.path.join(kit, "extensions", SKILLS_EXTENSION),
+             SKILLS_FLAG, json.dumps({"role": fm.get("name", ""), "listed": listed, "declared": declared_skills(roots[0])})]
     if body:
         if to_file:
             # A pane launch goes through `herdr agent start`; hand Pi a file,
