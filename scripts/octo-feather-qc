@@ -4,7 +4,9 @@
   octo-feather-qc --capture-case NOTE -- CMD...   (a capturing gate's tagged case; tests/gate/conftest.py)
   octo-feather-qc --capture-store SESSION         (that gate's records, after its run)
 
-Run in a lane worktree at its integrated head. A named criterion a tagged test proves is judged from the record its
+Run in a lane worktree at its integrated head. A named criterion carried from an earlier head of the lane (quality spec
+#qc-carry; code: carry below) keeps that head's result, neither captured nor judged again; stderr names why each other
+one with a built row is judged again. A named criterion a tagged test proves is judged from the record its
 head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
 #qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
 named criterion whose contract (qc.toml, validated by octo-feather-contract) declares a demo command under
@@ -61,7 +63,7 @@ reads no Linear ticket; the sandbox proof fails if it is set.
 Report: $(octo-feather-state)/qc/<head>-<UTC stamp>-<runid>.json, new per run
 (`fallback`, by criterion: each judge's report, raw run, exit, proof and cleanup, record; `cap_s`; each demo's capture;
 `spec`, the status file's spec slug; `results`, one per criterion: verdict (pass, fail or insufficient evidence), evidence
-state (incomplete: `missing` names what), decision source, evidence record id, judged head, and with a record `advisory`:
+state (incomplete: `missing` names what), decision source, evidence record id, judged head, `carried` true on a carried one, and with a record `advisory`:
 the model's answer and confidence, or unavailable with why). OCTO_FEATHER_QC_DIR: another folder for them.
 Exit: 0 all passed, 1 some failed (or --no-sandbox), 2 none failed but some got insufficient evidence, 3 judge report unusable,
 the judge wrote a tracked or non-ignored file (paths listed), 64 usage (PR not a
@@ -474,7 +476,7 @@ def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str, 
     #qc-judgment), asked through octo-feather-qa's classify path, the bench's and `octo-feather-lane judge`'s (one
     mechanism). Advisory (judgment spec #rule-advisory): stored beside the result as `advisory`, never read to decide it;
     any failure to get an answer shows as unavailable with its reason and changes nothing else."""
-    ids = [i for i, r in done.items() if r.get("record") and r.get("evidence") == "complete"]
+    ids = [i for i, r in done.items() if r.get("record") and r.get("evidence") == "complete" and not r.get("carried")]
     if not ids:
         return
     loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
@@ -754,6 +756,83 @@ def unrecorded(ids: list[str], tags: dict[str, list[str]], stem: str, head: str)
     return out
 
 
+def script(name: str) -> types.ModuleType:
+    """The kit script NAME loaded as a module, so qc applies that script's own rule (one mechanism)."""
+    loader = importlib.machinery.SourceFileLoader(name.replace("-", "_"), str(KIT / "scripts" / name))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def reports() -> Path:
+    """The folder of the qc reports (Report, above)."""
+    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
+    return Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc")
+
+
+def earlier(at: str, stem: str, i: str, rid: str) -> Result | None:
+    """I's latest result in the qc reports at head AT that passed from record RID, or None."""
+    got: Result | None = None
+    for p in sorted(reports().glob(f"{at}-*.json")):   # <head>-<UTC stamp>-<runid>.json: oldest first
+        try:
+            rep: dict[str, Any] = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        results: list[Result] = rep.get("results") or [] if rep.get("spec") == stem else []
+        got = next((r for r in results if (r.get("id"), r.get("record"), r.get("verdict"), r.get("head")) == (i, rid, "pass", at)), got)
+    return got
+
+
+def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, head: str, root: str) -> dict[str, Result]:
+    """Of IDS, each carried from an earlier head of this lane (quality spec #qc-carry), its result there labelled carried:
+    the head from its built row, the result from that head's qc report, what moved from octo-feather-spec-status's stale()
+    and the record's own versions. Each other one with a built row is named with why it is judged again."""
+    st, ev = script("octo-feather-spec-status"), script("octo-feather-evidence")
+    top, now = Path(root).resolve(), st.anchors(spec.read_text(encoding="utf-8"))
+    versions = dict(zip(("contract", "fixture"), ev.contract_and_fixture(root), strict=True))
+    gate: dict[str, Any] | None = None
+    out: dict[str, Result] = {}
+    for i in ids:
+        row: dict[str, Any] = data["criteria"][i]
+        cid, at = f"{stem}#{i}", str(row.get("commit") or "")
+        if row.get("status") != "built" or "record" not in row or at == head:
+            continue   # not passed at an earlier head: judged as before
+        prior = earlier(at, stem, i, row["record"])
+        why = (f"built in PR #{row.get('pr')}, not this lane's #{pr}" if row.get("pr") != pr else
+               f"judged at {at[:12]}, a head {head[:12]} does not contain"
+               if subprocess.run(["git", "merge-base", "--is-ancestor", at, head], capture_output=True).returncode else
+               f"no passing result from record {row['record']} in a qc report at {at[:12]}" if prior is None else
+               "judged by the agent fallback" if prior.get("decision") == "agent fallback" else
+               f"no covered path at {at[:12]}" if not st.covered(top, at, cid) else "")
+        if not why:
+            kind, line = st.stale(spec, i, row, top, now)
+            why = "" if kind == "current" else line
+        if not why:
+            p = subprocess.run([str(EVIDENCE_TOOL), "read", "--repo", root, "--criterion", cid, "--commit", at, "--json"],
+                               capture_output=True, text=True)
+            found = [x for x in json.loads(p.stdout) if x["record"]["id"] == row["record"]] if p.returncode == 0 else []
+            r: dict[str, Any] = found[0]["record"] if found else {}
+            moved = [f"{k} version moved since {at[:12]}" for k, v in versions.items() if r.get(k) != v]
+            if TESTED in r.get("outputs", {}):
+                was = json.loads((Path(found[0]["dir"]) / "outputs" / TESTED).read_text())["gate"]
+                now_gate: dict[str, Any] = gate or json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head],
+                                                                             capture_output=True, text=True, check=True).stdout)
+                gate = now_gate
+                moved += [f"gate configuration moved since {at[:12]}"] if any(was.get(k) != v for k, v in now_gate.items()) else []
+            why = "; ".join(moved) if found else f"record {row['record']} not in the evidence store"
+        if why:
+            print(f"qc: judging {cid} again: {why}", file=sys.stderr)
+            continue
+        assert prior is not None
+        out[i] = prior | {"carried": True, "tests": row.get("tests", []),
+                          "why": f"carried: judged at {at[:12]}, record {row['record']}, its evidence current at {head[:12]}"}
+        print(f"qc: carried {cid}: passed at {at[:12]} from record {row['record']}, its evidence current at {head[:12]}",
+              file=sys.stderr)
+    return out
+
+
 def main(argv: list[str]) -> int:
     if argv[:1] in (["--capture-case"], ["--capture-store"]):
         return captured(argv)
@@ -785,14 +864,15 @@ def main(argv: list[str]) -> int:
     root = git("rev-parse", "--show-toplevel")
     declared = contract_demos(root)
     tags = tagged_cases(root)   # the head's tagged cases, from the gate's own collector
-    found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids}
+    carried = carry(ids, data, pr, spec, stem, head, root)
+    found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids if i not in carried}
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
-    tests |= unrecorded([i for i in ids if i not in tests], tags, stem, head)
-    demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests}
+    tests |= unrecorded([i for i in ids if i not in tests and i not in carried], tags, stem, head)
+    demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests and i not in carried}
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")
-    if len(demos) + len(tests) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
+    if len(demos) + len(tests) + len(carried) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
     runid = secrets.token_hex(3)
@@ -805,10 +885,10 @@ def main(argv: list[str]) -> int:
         signal.signal(s, killed)
     gh: dict[str, Any] = {}
     try:
-        gh = (github_snapshot(nogh, runid) if len(demos) + len(tests) < len(ids) else
-              {"off": "github: none (every criterion has a tagged test's record or a declared demo: no judge)"})
+        gh = (github_snapshot(nogh, runid) if len(demos) + len(tests) + len(carried) < len(ids) else
+              {"off": "github: none (every criterion carried or has a tagged test's record or a declared demo: no judge)"})
         print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
-        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, tests, nosb=nosb)
+        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, tests | carried, nosb=nosb)
     finally:
         if "dir" in gh:
             drop(gh["dir"])
@@ -817,12 +897,14 @@ def main(argv: list[str]) -> int:
 def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any], spec: Path, text: dict[str, str], model: str,
           runid: str, gh: dict[str, Any], demos: dict[str, dict[str, Any]], stem: str, tests: dict[str, Result], *, nosb: bool) -> int:
     rest = [i for i in ids if i not in demos and i not in tests]   # neither a tagged test's record nor a demo: the agent fallback's
-    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
-    out_dir = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state / "qc"); out_dir.mkdir(parents=True, exist_ok=True)
+    out_dir = reports(); out_dir.mkdir(parents=True, exist_ok=True)
     report_path = out_dir / f"{head}-{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{runid}.json"
     ghrec = {k: v for k, v in gh.items() if k in ("off", "line", "repo")} | ({"snapshot": {k: gh["meta"][k] for k in ("fetched_at", "counts", "capped", "absent")}} if "meta" in gh else {})
     done, caps = capture(ids, demos, head, text, stem, runid, report_path, nosb=nosb)
     for i, r in tests.items():
+        if r.get("carried"):   # its earlier result, neither captured nor judged again (carry)
+            done[i] = r
+            continue
         print(f"qc: tagged test {stem}#{i}: " + (f"judged from the gate's record {r['record']} at {head[:12]}, not rerun" if r["record"]
               else f"no claims gate record at {head[:12]}"), file=sys.stderr)
         done[i] = r if r["evidence"] == "complete" else r | {   # a result, never a failure to triage, never the fallback
