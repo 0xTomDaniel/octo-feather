@@ -70,6 +70,10 @@
       "tests": [
         "tests/shape.sh"
       ]
+    },
+    "acceptance-shaper-repair": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
