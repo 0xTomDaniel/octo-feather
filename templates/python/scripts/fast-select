@@ -6,7 +6,8 @@ Prints its choice on one line, then runs `just check-tests` on the integration t
 e2e", the gate's static items left out): the ones pytest-testmon picks from its recorded
 coverage (--testmon-forceselect), or every one (--testmon-noselect) when this branch has no
 merge base with main, or when a path shared-machinery.txt names changed since that base (a git
-pathspec per line, glob magic; coverage cannot see it). Exits with that run's status.
+pathspec per line, glob magic; coverage cannot see it). Its own arguments go to pytest after
+those. Exits with that run's status.
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ from __future__ import annotations
 import os
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 
@@ -42,7 +44,7 @@ def choice() -> tuple[str, str]:
 def main() -> None:
     line, sel = choice()
     print(line, flush=True)  # noqa: T201
-    tests = ["check-tests", sel, "-m", "not e2e", "--ignore", "tests/test_gate.py"]
+    tests = ["check-tests", sel, "-m", "not e2e", "--ignore", "tests/test_gate.py", *sys.argv[1:]]
     os.execvp("just", ["just", *tests])  # noqa: S606, S607
 
 

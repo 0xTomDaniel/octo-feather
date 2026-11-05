@@ -81,8 +81,10 @@ check_tiers() {
     printf 'def double(n: int) -> int:\n    return n * 2\n' >"$d/$other"
     printf 'from app.other import double\n\n\ndef test_double() -> None:\n    assert double(2) == 4\n' >"$d/tests/integration/test_other.py"
     # Two workers: the shared fixture across xdist workers (a nested gate is otherwise -n 0, #208; two tiny tests).
-    full=(env -u GATE_NESTED GATE_WORKERS=2 just --set GATE_RECIPES check-lint check)
-    fast=(just --set GATE_RECIPES check-lint fast)
+    # pytest's own --color=no (just check is check-tests --testmon-noselect), so forced colour never splits the lines
+    # read here.
+    full=(env -u GATE_NESTED GATE_WORKERS=2 just --set GATE_RECIPES check-lint check-tests --testmon-noselect --color=no)
+    fast=(just --set GATE_RECIPES check-lint fast --color=no)
     other_t="PASSED tests/integration/test_other.py::test_double"; integ="PASSED tests/integration/test_cli.py::"
     e2e="tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end"
   else
