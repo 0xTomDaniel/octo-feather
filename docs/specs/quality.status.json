@@ -19,8 +19,13 @@
       "pr": null
     },
     "acceptance-test-cpu-shown": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 605,
+      "record": "20261105T203959Z-572905d1",
+      "commit": "bab3a3a6b33727513e89b91cf4899bc2ad7e6a30",
+      "tests": [
+        "tests/gate/test_cpu.py"
+      ]
     },
     "acceptance-test-cpu-budget": {
       "status": "planned",
