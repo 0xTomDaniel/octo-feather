@@ -1,4 +1,4 @@
-# octo-feather kit commands. `just check` is the one gate (AGENTS.md).
+# octo-feather kit commands. The gate's tiers, `just fast` and `just check`: quality spec #recipes-table (AGENTS.md).
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@"/"$1", never as pasted text (#61).

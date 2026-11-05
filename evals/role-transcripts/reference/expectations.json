@@ -404,5 +404,8 @@
   "dir-spawns-shaper": {"facts": [{"fact": "ran", "program": "herdr-spawn", "args": ["--role", "shaper"]}, {"fact": "branch_paths", "untouched": ["docs/", "src/", "tests/", "GLOSSARY.md"]}]},
   "shaper-library-ask-web": {"facts": [{"fact": "tool_called_before", "tools": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa", "mcp__parallel__web_search", "mcp__parallel__web_fetch"], "before": {"edit_under": ["docs/specs/"]}}, {"fact": "branch_paths", "untouched": ["src/", "tests/"], "touched": ["docs/specs/"]}]},
   "implementer-wording-proof": {"facts": [{"fact": "ran", "program": "octo-feather-qa", "args": ["--runs", "3", "--baseline"]}]},
-  "shaper-table-ask-web": {"facts": [{"fact": "tool_called_before", "tools": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa", "mcp__parallel__web_search", "mcp__parallel__web_fetch"], "before": {"edit_under": ["docs/specs/"]}}, {"fact": "branch_paths", "untouched": ["src/", "tests/"], "touched": ["docs/specs/"]}]}
+  "shaper-table-ask-web": {"facts": [{"fact": "tool_called_before", "tools": ["mcp__exa__web_search_exa", "mcp__exa__web_fetch_exa", "mcp__parallel__web_search", "mcp__parallel__web_fetch"], "before": {"edit_under": ["docs/specs/"]}}, {"fact": "branch_paths", "untouched": ["src/", "tests/"], "touched": ["docs/specs/"]}]},
+  "implementer-hands-off-on-fast": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]},
+  "implementer-hands-off-on-fast-heldout": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]},
+  "implementer-hands-off-on-fast-heldout-2": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]}
 }
