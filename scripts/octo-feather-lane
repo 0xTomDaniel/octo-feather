@@ -316,19 +316,20 @@ After the lanes:
                                                  not opened). Role: the first `# ` heading of the system prompt's
                                                  appended role prompt (`no role` without one). Offered: its
                                                  <available_skills> names, whenever that prompt was written.
-                                                 Read: a tool call timestamped in the last 7 days whose own
-                                                 arguments open <folder>/SKILL.md: the read tool's path; in bash
-                                                 (shell words), a file operand of cat, head, tail, sed, less,
-                                                 more, bat or nl, or a < input (not sed's script text, an
-                                                 option's value, a > target, a heredoc body, sed -i); in a
-                                                 codemode batch, a tools.read path that is a string literal, the
-                                                 literals of a literal list (inline or a const) a .map callback
-                                                 or a for-of loop passes, each unchanged, as a tools.read path,
-                                                 and its literal tools.bash commands as in bash.
-                                                 A path in text, a pattern, a grep, a write or edit is no read,
-                                                 and a computed path ($var, ${...}, K + "x", a glob) is not
-                                                 resolved, so not counted: the count may miss reads, never makes
-                                                 one up. A folder an offered skill's location names counts as
+                                                 Read: a read or bash call (top level, or one a codemode batch
+                                                 dispatched) whose result is timestamped in the last 7 days and
+                                                 did not fail (top level: its result's isError not true; in a
+                                                 batch: the call's status ok in the result's nestedCalls, as Pi
+                                                 records them) and whose own arguments open <folder>/SKILL.md:
+                                                 the read tool's path; in bash (shell words), a file operand of
+                                                 cat, head, tail, sed, less, more, bat or nl, or a < input (not
+                                                 sed's script text, an option's value, a > target, a heredoc
+                                                 body, sed -i). A codemode batch's source is never read: a batch
+                                                 with no nestedCalls record counts no read. A path in text, a
+                                                 pattern, a grep, a write or edit is no read, and a computed
+                                                 path ($var, ${...}, a glob) is not resolved, so not counted:
+                                                 the count may miss reads, never makes one up. A folder an
+                                                 offered skill's location names counts as
                                                  that skill (a linked skill by its offered name), any other by
                                                  the folder. A session counts once per skill; a read of a skill
                                                  the session was not offered counts apart. `... none` with no
@@ -2678,15 +2679,6 @@ SHELL_STOP = {"|", "||", "&", "&&", ";", ";;", "(", ")", "\n"}
 SHELL_LEAD = {"{", "}", "!", "then", "do", "else", "time", "if", "while", "until", "exec", "command"}
 HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
 STAMP = re.compile(r'"timestamp":\s*"([^"]+)"')
-JS_LIT = r"""(?:"(?:[^"\\$]|\\.)*"|'(?:[^'\\$]|\\.)*'|`(?:[^`\\$]|\\.)*`)"""   # a string literal, no interpolation
-READ_LIT = re.compile(rf"\btools\.read\(\s*\{{\s*path\s*:\s*({JS_LIT})\s*[,}}]")
-BASH_LIT = re.compile(rf"\btools\.bash\(\s*\{{\s*command\s*:\s*({JS_LIT})\s*[,}}]")
-LIST = rf"\[\s*((?:{JS_LIT}\s*,\s*)*{JS_LIT})\s*,?\s*\]"
-LIST_MAP = re.compile(LIST + r"\s*\.map\(")
-FOR_OF = re.compile(rf"\bfor\s*\(\s*(?:const|let|var)\s+(\w+)\s+of\s+(?:{LIST}|(\w+))\s*\)")
-CALLBACK = re.compile(r"\s*(?:async\s*)?\(?\s*(\w+)\s*\)?\s*=>")
-CONST_LIST = re.compile(rf"\b(?:const|let|var)\s+(\w+)\s*=\s*{LIST}\s*;?")
-
 
 def sessions_dir() -> Path:
     """Pi's session folder: PI_CODING_AGENT_DIR (else ~/.pi/agent)/sessions, as Pi and octo-feather-qc read it."""
@@ -2694,14 +2686,13 @@ def sessions_dir() -> Path:
 
 
 def skill_operand(word: str) -> str | None:
-    """The skill folder of a file operand that is exactly a SKILL.md path; None for anything computed ($, globs)."""
+    """The skill folder of a file operand that is exactly a SKILL.md path; None for a computed one (--help, report)."""
     m = SKILL_PATH.fullmatch(word)
     return m.group(1) if m and not re.search(r"[$*?\[{`]", word) else None
 
 
 def shell_reads(cmd: str) -> list[str]:
-    """The skill folders whose SKILL.md a shell command CMD opens as a reader's file operand (shell words by shlex;
-    a sed script, an option's value, a write target, a heredoc body and a computed operand never count)."""
+    """The skill folders whose SKILL.md a shell command CMD opens as a reader's file operand (rules: --help, report)."""
     try:
         lex = shlex.shlex(HEREDOC.sub("", cmd), posix=True, punctuation_chars=";&|()<>\n")
         lex.whitespace = " \t\r"
@@ -2755,91 +2746,16 @@ def shell_reads(cmd: str) -> list[str]:
     return out
 
 
-def js_text(lit: str) -> str | None:
-    """A JS string literal's text (\\n, \\t, \\\\, quote escapes); None when it interpolates."""
-    body = lit[1:-1]
-    if lit[0] == "`" and "${" in body:
-        return None
-    return re.sub(r"\\(.)", lambda m: {"n": "\n", "t": "\t"}.get(m.group(1), m.group(1)), body)
-
-
-def call_end(code: str, i: int, pair: str = "()") -> int:
-    """The index past the bracket closing the one opened before CODE[i] (PAIR: parentheses, or braces), strings
-    skipped."""
-    depth, quote = 1, ""
-    while i < len(code) and depth:
-        c = code[i]
-        if quote:
-            quote = "" if c == quote else quote
-            i += c == "\\"
-        elif c in "\"'`":
-            quote = c
-        else:
-            depth += {pair[0]: 1, pair[1]: -1}.get(c, 0)
-        i += 1
-    return i
-
-
-def reads_param(v: str, body: str) -> bool:
-    """Whether BODY passes the variable V, unchanged, as the path of a tools.read call ({path: v}, or {path} when V is
-    path)."""
-    path = rf"path\s*:\s*{re.escape(v)}" + (r"|path" if v == "path" else "")
-    return re.search(rf"\btools\.read\(\s*\{{\s*(?:{path})\s*[,}}]", body) is not None
-
-
-def loop_reads(code: str, at: int, v: str) -> bool:
-    """Whether the for-of loop body starting at CODE[at] (a block, or one statement) reads its variable V."""
-    b = re.match(r"\s*\{", code[at:])
-    body = code[at:call_end(code, at + b.end(), "{}")] if b else re.split(r"[;\n]", code[at:], maxsplit=1)[0]
-    return reads_param(v, body)
-
-
-def maps_to_read(code: str, at: int) -> bool:
-    """Whether the .map( argument list starting at CODE[at] is a callback passing its parameter, unchanged, as the
-    path of a tools.read call ({path: p}, or {path} when the parameter is path)."""
-    cb = code[at:call_end(code, at) - 1]
-    m = CALLBACK.match(cb)
-    return m is not None and reads_param(m.group(1), cb[m.end():])
-
-
-def codemode_reads(code: str) -> list[str]:
-    """The skill folders whose SKILL.md a codemode batch CODE reads: a tools.read path that is a string literal, each
-    literal of a literal list (inline, or a const) whose .map callback or for-of loop passes each as a tools.read path,
-    and
-    each its literal tools.bash commands read as shell_reads does. A computed path is not resolved, so not counted."""
-    lits: list[str] = [m.group(1) for m in READ_LIT.finditer(code)]
-    for m in LIST_MAP.finditer(code):
-        if maps_to_read(code, m.end()):
-            lits += re.findall(JS_LIT, m.group(1))
-    for m in FOR_OF.finditer(code):
-        if m.group(2) and loop_reads(code, m.end(), m.group(1)):
-            lits += re.findall(JS_LIT, m.group(2))
-    for m in CONST_LIST.finditer(code):
-        name = re.escape(m.group(1))
-        uses = [u for u in re.finditer(rf"\b{name}\s*\.map\(", code[m.end():]) if maps_to_read(code, m.end() + u.end())]
-        loops = [u for u in FOR_OF.finditer(code, m.end()) if u.group(3) == m.group(1) and loop_reads(code, u.end(), u.group(1))]
-        if uses or loops:
-            lits += re.findall(JS_LIT, m.group(2))
-    out = [f for t in map(js_text, lits) if t is not None and (f := skill_operand(t.strip()))]
-    for m in BASH_LIT.finditer(code):
-        t = js_text(m.group(1))
-        out += shell_reads(t) if t is not None else []
-    return out
-
-
-def tool_reads(call: dict[str, object]) -> list[str]:
-    """The skill folders whose SKILL.md one tool call reads: the read tool's path, a bash command's reader operands, a
-    codemode batch's literal reads."""
-    name = call.get("name")
-    args = call.get("arguments")
-    key = {"read": "path", "bash": "command", "codemode": "code"}.get(str(name))
+def tool_reads(name: object, args: object) -> list[str]:
+    """The skill folders whose SKILL.md one read or bash call with arguments ARGS opens (rules: --help, report)."""
+    key = {"read": "path", "bash": "command"}.get(str(name))
     arg = cast("dict[str, object]", args).get(key) if isinstance(args, dict) and key else None
     if not isinstance(arg, str):
         return []
     if name == "read":
         f = skill_operand(arg.strip())
         return [f] if f else []
-    return shell_reads(arg) if name == "bash" else codemode_reads(arg)
+    return shell_reads(arg)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -2851,14 +2767,12 @@ class SessionReach:
 
 
 def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
-    """One Pi session file's role (its appended role prompt's first heading), offered skills (whenever its system
-    prompt was written) and the skills its tool calls timestamped after SINCE read (an offered skill's folder by its
-    offered name, any other by the folder); None when no line of it is timestamped after SINCE. OSError or ValueError
-    when unreadable."""
+    """One Pi session file's role, offered skills and read skills (what counts and when: --help, report); None when it
+    has no activity after SINCE. OSError or ValueError when unreadable."""
     role: str | None = None
     offered: dict[str, str] = {}
     folders: set[str] = set()
-    active = False
+    pending: dict[str, list[str]] = {}   # a read or bash call's id: the skill folders it would read, until its result
     with path.open(encoding="utf-8", errors="replace") as fh:
         head: object = json.loads(fh.readline() or "null")
         hd = cast("dict[str, object]", head) if isinstance(head, dict) else {}
@@ -2869,8 +2783,8 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
         for line in fh:
             if not active and (t := STAMP.search(line[:300])):
                 active = (cast("dtm.datetime | None", utc(t.group(1))) or since) > since
-            if "SKILL.md" not in line and '"system"' not in line:
-                continue   # neither a system prompt nor a call naming a SKILL.md: not parsed
+            if "SKILL.md" not in line and '"system"' not in line and not any(i in line[:1000] for i in pending):
+                continue   # no system prompt, no call naming a SKILL.md, no result of one: not parsed
             try:
                 d: object = json.loads(line)
             except ValueError:
@@ -2886,12 +2800,23 @@ def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
                 role = role or (h.group(1).lower() if h else None)
                 offered |= {n.strip(): Path(loc.strip()).parent.name for n, loc in OFFERED.findall(str(sec.get("skills") or ""))}
             elif m.get("role") == "assistant" and isinstance(content := m.get("content"), list):
+                for x in cast("list[object]", content):
+                    c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+                    if c.get("type") == "toolCall" and (got := tool_reads(c.get("name"), c.get("arguments"))):
+                        pending[str(c.get("id"))] = got
+            elif m.get("role") == "toolResult":
+                did = pending.pop(str(m.get("toolCallId")), [])
                 at = cast("dtm.datetime | None", utc(e.get("timestamp")))
                 if at is None or at <= since:
-                    continue   # a read before the window, or at no readable time: not counted
-                for c in cast("list[object]", content):
-                    if isinstance(c, dict) and cast("dict[str, object]", c).get("type") == "toolCall":
-                        folders |= set(tool_reads(cast("dict[str, object]", c)))
+                    continue   # a result before the window, or at no readable time: no read counted
+                if m.get("isError") is not True:
+                    folders |= set(did)
+                nested = m.get("nestedCalls")
+                calls = cast("dict[str, object]", nested).get("calls") if isinstance(nested, dict) else None
+                for x in cast("list[object]", calls) if isinstance(calls, list) else []:
+                    c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+                    if c.get("status") == "ok":
+                        folders |= set(tool_reads(c.get("name"), c.get("arguments")))
     if not active:
         return None
     by_folder = {f: n for n, f in offered.items()}
@@ -2907,8 +2832,7 @@ class RoleReach:
 
 
 def skill_reach(now: dtm.datetime, unread: list[str]) -> list[str]:
-    """The skill reach block (spec comms #report-skill-reach): per role, its sessions active in the last seven days,
-    each skill's sessions read/offered, then the reads of skills not offered."""
+    """The skill reach block (spec comms #report-skill-reach; its lines and rules: --help, report)."""
     root = sessions_dir()
     since = now - dtm.timedelta(days=7)
     head = "skill reach (Pi sessions active in the last 7 days; per role: skill read/offered, sessions):"

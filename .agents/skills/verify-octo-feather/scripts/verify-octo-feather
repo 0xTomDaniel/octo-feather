@@ -928,35 +928,50 @@ def drive_factory_report(f: Feature) -> None:
     f.run("owner-caught-headline", "octo-feather-lane", "report")
     f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
             == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
-    # Skill reach (comms #report-skill-reach): scratch Pi session files, each line timestamped. Implementers offered commit
-    # and tdd: one reads tdd inside a codemode batch, one reads commit; one started nine days ago reads commit then (not
-    # counted) and tdd today (counted); one only mentions (a sed script naming a/SKILL.md, a grep of a variable naming
-    # tdd/SKILL.md); one wholly nine days old is left out. A code reviewer reads tdd, not offered to it.
+    # Skill reach (comms #report-skill-reach): scratch Pi session files, each line timestamped, each tool call with its
+    # result as Pi records it (a codemode batch's with nestedCalls). Implementers offered commit and tdd: one reads tdd
+    # inside a codemode batch, one reads commit; one started nine days ago reads commit then (not counted) and tdd today
+    # (counted); one reads none (a sed script naming a/SKILL.md, a batch grepping tdd/SKILL.md, a batch whose source
+    # names tracker/SKILL.md aborted before it); one wholly nine days old is left out. A code reviewer reads tdd, not
+    # offered to it.
     today = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    def session(name: str, start: str, role: str, offered: list[str], calls: list[tuple[str, dict[str, str], str]]) -> None:
+    def session(name: str, start: str, role: str, offered: list[str],
+                calls: list[tuple[str, dict[str, str], str, list[tuple[str, dict[str, str], str]] | None]]) -> None:
+        """One session file; each call (tool, args, at, nested calls (tool, args, status) or None) with its result."""
         skills = "".join(f"<skill><name>{n}</name><description>d</description><location>/kit/.agents/skills/{n}/SKILL.md"
                          "</location></skill>" for n in offered)
-        lines = [{"type": "session", "version": 3, "id": name, "timestamp": start, "cwd": "/w"},
-                 {"type": "message", "timestamp": start, "message": {"role": "system", "content": "", "sections": {
-                     "addendum": f"# {role}\n", "skills": f"<available_skills>{skills}</available_skills>"}}},
-                 *({"type": "message", "timestamp": at, "message": {"role": "assistant", "content": [
-                     {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}} for i, (t, a, at) in enumerate(calls))]
+        lines: list[dict[str, Any]] = [{"type": "session", "version": 3, "id": name, "timestamp": start, "cwd": "/w"},
+                                       {"type": "message", "timestamp": start, "message": {"role": "system", "content": "", "sections": {
+                                           "addendum": f"# {role}\n", "skills": f"<available_skills>{skills}</available_skills>"}}}]
+        for i, (t, a, at, nested) in enumerate(calls):
+            lines.append({"type": "message", "timestamp": at, "message": {"role": "assistant", "content": [
+                {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}})
+            res: dict[str, Any] = {"role": "toolResult", "toolCallId": f"c{i}", "toolName": t, "content": [], "isError": False}
+            if nested is not None:
+                res["nestedCalls"] = {"complete": True, "calls": [{"id": f"c{i}/{j}", "name": n, "arguments": na, "status": st}
+                                                                  for j, (n, na, st) in enumerate(nested)]}
+                res["isError"] = any(st == "error" for _, _, st in nested)
+            lines.append({"type": "message", "timestamp": at, "message": res})
         d = sc / "pi" / "sessions" / "--w--"
         d.mkdir(parents=True, exist_ok=True)
         (d / f"{name}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    commit, tdd = {"path": "/kit/.agents/skills/commit/SKILL.md"}, {"path": "/kit/.agents/skills/tdd/SKILL.md"}
     batch = 'await Promise.all(["/kit/.agents/skills/tdd/SKILL.md", "README.md"].map(p => tools.read({path: p})));'
     mention = ('const p = "/kit/.agents/skills/tdd/SKILL.md"; await tools.grep({pattern: "x", path: p});'
                ' await tools.read({path: "README.md"});')
+    aborted = 'await tools.read({path: "AGENTS.md"}); await tools.read({path: "nope.md"}); await tools.read({path: ".agents/skills/tracker/SKILL.md"});'
     sed = "git diff | sed -e 's#^--- .agents/skills/tdd/SKILL.md#--- a/SKILL.md#'"
-    commit, tdd = {"path": "/kit/.agents/skills/commit/SKILL.md"}, {"path": "/kit/.agents/skills/tdd/SKILL.md"}
-    session("impl-1", two_days, "Implementer", ["commit", "tdd"], [("codemode", {"code": batch}, two_days)])
-    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", commit, two_days)])
-    session("impl-long", nine_days, "Implementer", ["commit", "tdd"], [("read", commit, nine_days), ("read", tdd, today)])
-    session("impl-mention", two_days, "Implementer", ["commit", "tdd"],
-            [("bash", {"command": sed}, two_days), ("codemode", {"code": mention}, two_days)])
-    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", tdd, nine_days)])
-    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"}, two_days)])
+    session("impl-1", two_days, "Implementer", ["commit", "tdd"],
+            [("codemode", {"code": batch}, two_days, [("read", tdd, "ok"), ("read", {"path": "README.md"}, "ok")])])
+    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", commit, two_days, None)])
+    session("impl-long", nine_days, "Implementer", ["commit", "tdd"], [("read", commit, nine_days, None), ("read", tdd, today, None)])
+    session("impl-none", two_days, "Implementer", ["commit", "tdd"], [
+        ("bash", {"command": sed}, two_days, None),
+        ("codemode", {"code": mention}, two_days, [("grep", {"pattern": "x", **tdd}, "ok"), ("read", {"path": "README.md"}, "ok")]),
+        ("codemode", {"code": aborted}, two_days, [("read", {"path": "AGENTS.md"}, "ok"), ("read", {"path": "nope.md"}, "error")])])
+    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", tdd, nine_days, None)])
+    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"}, two_days, None)])
     f.obs_cmd("skill-reach", "before", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
     f.run("skill-reach", "octo-feather-lane", "report")
     f.obs_cmd("skill-reach", "after", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
