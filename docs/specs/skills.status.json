@@ -8,11 +8,17 @@
     },
     "acceptance-skill-frontmatter": {
       "status": "built",
-      "pr": 50
+      "pr": 570,
+      "record": "20261105T190228Z-3b660e50",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     },
     "acceptance-only-listed": {
       "status": "built",
-      "pr": 16
+      "pr": 570,
+      "record": "20261105T190218Z-f40f66b6",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     },
     "acceptance-external-skill": {
       "status": "planned",
@@ -49,6 +55,13 @@
     "acceptance-browser": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-launch-refuses-unloaded": {
+      "status": "built",
+      "pr": 570,
+      "record": "20261105T190238Z-bdeb08ce",
+      "commit": "709ef5032b0adecd0ae679e2a7a791063fca1680",
+      "tests": []
     }
   }
 }

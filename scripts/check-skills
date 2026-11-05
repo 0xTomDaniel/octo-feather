@@ -1,27 +1,21 @@
 #!/usr/bin/env python3
-"""Every .agents/skills/*/SKILL.md opens with a frontmatter block (a `---` first
-line, a closing `---` line) holding a non-empty `name` and `description`
-(skills spec #acceptance-skill-frontmatter); the five role contracts exist; every
-tracker skill the kit has (scripts/pi-role's TRACKERS) holds each tracker script as
-an executable in its scripts/ (skills spec #acceptance-tracker-scripts).
+"""The gate's side of skills spec #loading-refuse (#558), with #acceptance-skill-frontmatter: every
+.agents/skills/*/SKILL.md and every folder `pi-role --json` hands a role in agents/*.md, asked of
+one Pi through extensions/skills-loaded.ts, in RPC mode: no model call, no network, a private
+home. Also: the five role contracts exist; every tracker skill
+the kit has (scripts/pi-role's TRACKERS) holds each tracker script as an executable in its
+scripts/ (skills spec #acceptance-tracker-scripts).
 
-Stdlib only. Fails closed: an unreadable skill or an internal error fails the
-gate, never reads as ok. Run by `just check`.
+Stdlib only. Fails closed: an unreadable skill, a Pi that gives no answer or an internal error fails
+the gate, never reads as ok. Run by `just check`.
 """
-import glob, importlib.machinery, importlib.util, os, re, sys
+import glob, importlib.machinery, importlib.util, json, os, shutil, subprocess, sys, tempfile
+from types import ModuleType
+from pathlib import Path
+from typing import Any
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 ROLES = ["director", "supervisor", "implementer", "code-reviewer", "corrector"]
-REQUIRED = ("name", "description")
-# KEY: a block mapping key, plain or quoted, as YAML reads it (skills spec #acceptance-skill-frontmatter, #141).
-KEY = re.compile(r"""("(?:[^"\\]|\\.)*"|'(?:[^']|'')*'|[A-Za-z0-9_-]+) *:(?:[ \t]+(.*))?$""")
-# YAML double-quoted escapes: one character, or \x \u \U with 2, 4, 8 hex digits.
-ESCAPES = {"0": "\0", "a": "\a", "b": "\b", "t": "\t", "\t": "\t", "n": "\n", "v": "\v", "f": "\f", "r": "\r",
-           "e": "\x1b", " ": " ", '"': '"', "/": "/", "\\": "\\", "N": "\x85", "_": "\xa0", "L": "\u2028", "P": "\u2029"}
-HEX = {"x": 2, "u": 4, "U": 8}
-DQ_ESCAPE = re.compile(r"\\(?:([xuU])([0-9A-Fa-f]*)|(.))")
-BLOCK = re.compile(r"[|>](?:[1-9][+-]?|[+-][1-9]?)?(?:[ \t]+#.*)?$")
-NULLS = {"", "~", "null", "Null", "NULL"}
 # Spec skills#tracker-scripts: the same names in every tracker skill.
 TRACKER_SCRIPTS = ("lane-key", "key-from-branch", "issue-view", "issue-create", "issue-comment", "issue-done", "pr-line")
 
@@ -52,100 +46,100 @@ def tracker_problems():
     return out, have
 
 
-def key_name(raw):
-    """The key a plain or quoted YAML scalar spells: quotes removed, escapes decoded."""
-    if raw[0] == "'":
-        return raw[1:-1].replace("''", "'")
-    if raw[0] != '"':
-        return raw
-
-    def one(m):
-        if m.group(1):
-            n = HEX[m.group(1)]
-            if len(m.group(2)) < n:
-                raise ValueError(f"bad escape in key {raw}")
-            return chr(int(m.group(2)[:n], 16)) + m.group(2)[n:]
-        if m.group(3) not in ESCAPES:
-            raise ValueError(f"bad escape in key {raw}")
-        return ESCAPES[m.group(3)]
-    return DQ_ESCAPE.sub(one, raw[1:-1])
+# Pi as a launch runs it, minus everything that is not skills: RPC mode with no prompt (no model call), no network,
+# no session, discovered extension, context file, template or theme; only the --skill folders and the launch's
+# skills-loaded extension with its request.
+PI_FLAGS = ("--mode", "rpc", "--offline", "--no-session", "--no-extensions", "--no-context-files",
+            "--no-prompt-templates", "--no-themes", "--no-skills")
 
 
-def scalar_empty(inline, cont):
-    """True when a YAML scalar (inline text plus indented continuation lines) is empty."""
-    if BLOCK.match(inline):  # `|`, `>-`, `|2` ...: the indented lines are the value
-        return not any(c.strip() for c in cont)
-    whole = " ".join([inline] + [c.strip() for c in cont]).strip()
-    if whole[:1] in ("'", '"'):
-        q = whole[0]
-        end = whole.rfind(q)
-        if end == 0:
-            raise ValueError("unterminated quoted value")
-        rest = whole[end + 1:].strip()
-        if rest and not rest.startswith("#"):
-            raise ValueError("text after the closing quote")
-        return not whole[1:end].strip()
-    if whole[:1] in ("[", "{"):
-        raise ValueError("not a string")
-    whole = re.sub(r"(?:^|[ \t])#.*$", "", whole).strip()  # a trailing comment
-    return whole in NULLS
+def private_env(tmp: Path) -> dict[str, str]:
+    """The caller's PATH (the `pi` pi-role execs) and a private home, agent dir and caches under tmp."""
+    env = {"PATH": os.environ.get("PATH", ""), "TMPDIR": str(tmp), "PI_OFFLINE": "1", "PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0"}
+    for k in ("HOME", "PI_CODING_AGENT_DIR", "XDG_CACHE_HOME", "XDG_STATE_HOME", "XDG_CONFIG_HOME"):
+        d = tmp / k.lower()
+        d.mkdir(parents=True, exist_ok=True)
+        env[k] = str(d)
+    return env
 
 
-def problems(path):
-    with open(path, encoding="utf-8") as fh:
-        lines = [ln[:-1] if ln.endswith("\r") else ln for ln in fh.read().split("\n")]
-    if lines[0] != "---":
-        return ["no frontmatter block: the first line must be ---"]
-    try:
-        close = lines.index("---", 1)
-    except ValueError:
-        return ["frontmatter block has no closing --- line"]
-    block = lines[1:close]
-    found = {}
-    for i, line in enumerate(block):
-        m = KEY.match(line)
-        if not m:
-            continue
-        try:
-            key = key_name(m.group(1))
-        except (ValueError, OverflowError) as e:
-            return [str(e)]
-        if key not in REQUIRED:
-            continue
-        if key in found:
-            return [f"duplicate {key}"]
-        cont = []
-        for nxt in block[i + 1:]:
-            if nxt.strip() and not nxt[:1].isspace():
-                break
-            cont.append(nxt)
-        found[key] = ((m.group(2) or "").strip(), cont)
-    out = []
-    for key in REQUIRED:
-        if key not in found:
-            out.append(f"missing {key} in the frontmatter block")
-            continue
-        try:
-            if scalar_empty(*found[key]):
-                out.append(f"empty {key}")
-        except ValueError as e:
-            out.append(f"{key} unreadable: {e}")
-    return out
+def ask_pi(pi: str, pr: ModuleType, dirs: list[str], tmp: Path) -> list[dict[str, Any]]:
+    """The skills-loaded extension's problems ({skill, path, reason, loaded}) for one Pi run handed every folder in
+    dirs, named required: Pi's answer for each folder."""
+    report = tmp / "report.json"
+    request = json.dumps({"listed": dirs, "named": True, "report": str(report)})
+    args = [a for d in dirs for a in ("--skill", d)]
+    args += ["--extension", str(Path(ROOT, "extensions", pr.SKILLS_EXTENSION)), pr.SKILLS_FLAG, request]
+    r = subprocess.run([pi, *PI_FLAGS, *args], input="", capture_output=True, text=True,
+                       cwd=tmp, env=private_env(tmp), timeout=120, check=False)
+    if not report.is_file():
+        raise RuntimeError(f"pi gave no skills report (exit {r.returncode}): {r.stderr.strip()[-500:]}")
+    problems: list[dict[str, Any]] = json.loads(report.read_text(encoding="utf-8"))
+    return problems
+
+
+def launch_skills(pr: ModuleType, role: str, tmp: Path) -> tuple[list[str], str]:
+    """The skill folders the role's launch hands Pi (the listed of its --octo-feather-skills-loaded request), `pi-role --json` run
+    outside any repo (default tracker); or pi-role's error."""
+    r = subprocess.run([str(Path(ROOT, "scripts", "pi-role")), "--json", str(Path(ROOT, "agents", f"{role}.md"))],
+                       capture_output=True, text=True, cwd=tmp, env=private_env(tmp), timeout=60, check=False)
+    if r.returncode != 0:
+        return [], r.stderr.strip() or f"exit {r.returncode}"
+    args: list[str] = json.loads(r.stdout)["args"]
+    if pr.SKILLS_FLAG not in args:
+        return [], f"its launch has no {pr.SKILLS_FLAG}"
+    listed: list[str] = json.loads(args[args.index(pr.SKILLS_FLAG) + 1])["listed"]
+    return listed, ""
+
+
+def pi_problems(dirs: list[Path], pr: ModuleType) -> tuple[list[str], int]:
+    """Messages for each kit skill Pi does not load or that has no name, and each role skill Pi would not load;
+    the role count.
+
+    One Pi process answers for every folder: the kit's skills and every folder a role's launch hands Pi. Pi loads a
+    skill folder on its own (only a name collision ties two, and a collision among a role's folders is one among all
+    of them), so a folder loaded here loads in each role's launch, and one not loaded carries Pi's reason."""
+    pi = shutil.which("pi")
+    if not pi:
+        return ["check-skills: pi not on PATH; the check asks Pi which skills it loads (install the pin in pi-version)"], 0
+    root = Path(ROOT)
+    roles = sorted(p.stem for p in root.glob("agents/*.md"))
+    out: list[str] = []
+    with tempfile.TemporaryDirectory() as t:
+        tmp = Path(t)
+        handed: dict[str, list[str]] = {}
+        for role in roles:
+            listed, err = launch_skills(pr, role, tmp)
+            if err:
+                out.append(f"check-skills: role {role}: pi-role --json failed: {err}")
+            handed[role] = [str(Path(d).resolve()) for d in listed]
+        every = list(dict.fromkeys([str(d) for d in dirs] + [d for ds in handed.values() for d in ds]))
+        problems = {str(Path(p["path"]).parent.resolve()): p for p in ask_pi(pi, pr, every, tmp)}
+    kit = {str(d) for d in dirs}
+    for d, p in problems.items():
+        if d in kit:
+            rel = Path(p["path"]).resolve().relative_to(root.resolve())
+            out.append(f"check-skills: {rel}: {p['reason']}" if p["loaded"] else f"check-skills: {rel}: Pi does not load it: {p['reason']}")
+    for role in roles:
+        out += [f"check-skills: role {role} (agents/{role}.md): Pi does not offer its skill {problems[d]['skill']} "
+                f"({problems[d]['path']}): {problems[d]['reason']}" for d in handed[role] if d in problems and not problems[d]["loaded"]]
+    return out, len(roles)
 
 
 def main():
     os.chdir(ROOT)
-    bad, n = 0, 0
+    bad = 0
+    dirs: list[Path] = []
     for path in sorted(glob.glob(".agents/skills/*/SKILL.md")):
-        n += 1
         try:
-            found = problems(path)
+            with open(path, encoding="utf-8") as fh:
+                fh.read()
         except (OSError, UnicodeDecodeError) as e:
-            found = [f"cannot read: {e}"]
-        for p in found:
-            print(f"check-skills: {path}: {p} (needs a --- frontmatter block with non-empty name and description)", file=sys.stderr)
+            print(f"check-skills: {path}: cannot read: {e}", file=sys.stderr)
             bad += 1
-    if n == 0:
+            continue
+        dirs.append(Path(path).parent.resolve())
+    if not dirs and not bad:
         print("check-skills: no .agents/skills/*/SKILL.md found", file=sys.stderr)
         return 1
     for r in ROLES:
@@ -156,9 +150,13 @@ def main():
     for skill, p in found:
         print(f"check-skills: tracker skill {skill}: {p}; every tracker skill holds {', '.join(TRACKER_SCRIPTS)} (skills spec #tracker-scripts)", file=sys.stderr)
         bad += 1
-    if bad:
+    said, n_roles = pi_problems(dirs, pi_role())
+    for p in said:
+        print(p, file=sys.stderr)
+    if bad or said:
         return 1
-    print(f"skills: ok ({n} skills, {len(ROLES)} roles, trackers {', '.join(trackers)})")
+    print(f"skills: ok ({len(dirs)} skills, {len(ROLES)} roles, Pi loads each skill and offers {n_roles} role files their listed skills, "
+          f"trackers {', '.join(trackers)})")
     return 0
 
 
