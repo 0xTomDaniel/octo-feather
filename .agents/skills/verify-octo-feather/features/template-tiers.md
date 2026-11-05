@@ -21,14 +21,14 @@ Each case runs once per template, `python-<case>` and `typescript-<case>`:
 - `new-repo` `just new-repo LANG DEST --no-spec-chat`, then its packages installed offline (observed as `install`).
 - `check` `just check` with two workers: the integration and e2e tests each shown by kind, the shared fixture prepared once.
 - `fast-one-file` `just fast` after a change to one source file: the static checks, then only the integration test the stack's tool picks for it, named; no e2e test.
-- `hook-core` `git commit` of a core change with the repo's hooks on: `.githooks/pre-commit` runs `just fast`, which picks the core's tests and no e2e test; CI's workflow step observed as `ci`.
+- `hook-core` `git commit` of a core change with the repo's hooks on: `.githooks/pre-commit` runs `just fast`, which picks the core's tests and no e2e test. CI's wiring is not read: GitHub's run of the workflow proves it.
 - `fast-residual` `just fast` after a justfile change (on the repo's `shared-machinery.txt`): every integration test, no e2e test.
 - `ci-status-only`, `ci-code` CI's decision on a push to the repo's ready pull request: the repo's `.github/workflows/check.yml` scope job's `diff` step, the pinned dorny/paths-filter's `dist/index.js` (the kit's fetch-only Skillfile pin, `scripts/check-vendored --extract paths-filter`), run with node offline as a runner would: the step's own `with:` inputs (read with PyYAML in the kit's locked environment), `before` the previous head, a `pull_request` synchronize event, the head checked out. A qc-style commit of only `docs/specs/app.status.json` gives `code=false`; a code commit gives `code=true`; each commit stages only its own file. The jobs' wiring is not read: GitHub's run on PR #608 proves it, and merge-ask refuses an uncarried skip (observed as `outputs`, `workflow`, `pin`, `range`).
 - `trend` the repo's lines in the scratch `check-runs.jsonl` (observed as `lines`): `just check`'s one line `tier: full`, exit 0, on its head, a step per `GATE_RECIPES` recipe (observed as `recipes`); every later line (each `just fast`) `subset`. Then `octo-feather-lane report` with one lane on `o/<lang>`: its `gate budget o/<lang>` block shows that full run, against the repo's `gate-budget.toml` (`no budget` in a repo without one), its slowest items naming a gate recipe.
 
 ## How to get to it (user POV)
 
-- The owner makes a repo with `just new-repo python|typescript DEST`, then `just setup`; an implementer runs `just fast` on each change (the git hook runs it on commit) and `just check` before handoff; CI runs `just check`. What each tier runs: the created repo's `justfile` (`fast`, `check`) and `AGENTS.md`.
+- The owner makes a repo with `just new-repo python|typescript DEST`, then `just setup`; the git hook runs `just fast` on each commit; the tier a hand-off needs: quality spec `#acceptance-gate-green`. What each tier runs: the created repo's `justfile` (`fast`, `check`) and `AGENTS.md`.
 
 ## Driving it with verify-octo-feather
 
