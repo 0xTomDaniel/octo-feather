@@ -20,6 +20,7 @@
 # missing, pending, skipped or red there, or a code commit between them, refuses.
 # Run by `just check`.
 # criterion: issue-lifecycle#acceptance-merge-ask-full-proof
+# criterion: issue-lifecycle#acceptance-ci-status-only
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
