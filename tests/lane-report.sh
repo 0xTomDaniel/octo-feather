@@ -10,7 +10,11 @@
 # #acceptance-report-gate-budget (o/a: its latest passed full run, 280.25s, over its 240s budget and grown 12.1% over the
 # median 250s of the 3 passed full runs before it, a share of 10%, with the trend and slowest items; a failed full run
 # and a subset run stay out of the trend; within budget and share, no budget file, an invalid one; no gate on timing:
-# the report exits 0 either way).
+# the report exits 0 either way),
+# #acceptance-report-skill-reach (Pi session files in a temp PI_CODING_AGENT_DIR, their RECENT times set to a day ago:
+# implementers offered tdd and commit, tdd read by two (one inside a codemode batch), commit by one; a code reviewer
+# reading tdd, not offered to it, counted apart; a supervisor's linked skill counted by its offered name; a session
+# started 2026-10-01 left out; an unreadable session file named under unread:, and the session files unchanged).
 # The kit's own budget file is gate-budget.toml at the repo root (its form: octo-feather-lane --help, report).
 # Run by `just check`.
 set -euo pipefail
@@ -19,11 +23,14 @@ fx="$kit/tests/fixtures/lane-report"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-report test: $*" >&2; exit 1; }
 unset HERDR_SESSION
-export HOME="$t/home" XDG_STATE_HOME="$t/xdg" FAKE_GH_PRS="$fx/pr" FAKE_HERDR_AGENTS="$fx/agents.json"
+export HOME="$t/home" XDG_STATE_HOME="$t/xdg" FAKE_GH_PRS="$fx/pr" FAKE_HERDR_AGENTS="$fx/agents.json" PI_CODING_AGENT_DIR="$t/pi"
 S="$XDG_STATE_HOME/octo-feather"
-mkdir -p "$HOME" "$t/bin" "$S"; cp -r "$fx/state/." "$S/"
+mkdir -p "$HOME" "$t/bin" "$S" "$t/pi"; cp -r "$fx/state/." "$S/"
+cp -r "$fx/sessions" "$t/pi/"
+day="$(date -u -d '1 day ago' +%Y-%m-%dT%H:%M:%S.000Z)"
+find "$t/pi/sessions" -name '*.jsonl' -exec sed -i "s/\"RECENT\"/\"$day\"/g" {} +
 cp "$fx/gh" "$fx/herdr" "$t/bin/"; chmod +x "$t/bin/"*; export PATH="$t/bin:$PATH"
-snap() { (cd "$S" && find . -printf '%p %y %s %T@ %m\n' | sort && find . -type f -exec sha256sum {} + | sort); }
+snap() { for d in "$S" "$t/pi"; do (cd "$d" && find . -printf '%p %y %s %T@ %m\n' | sort && find . -type f -readable -exec sha256sum {} + | sort); done; }
 before="$(snap)"
 run() { # expected-file; runs the report, normalizes now, state dir, ages and the headline's counts (they move with the date), diffs
   local rc=0
@@ -94,4 +101,12 @@ rm "$S/spend.jsonl" "$S/check-runs.jsonl"; before="$(snap)"
   && grep -qx 'gate budget o/a: no gate run recorded (check-runs.jsonl: none)' "$t/out" \
   && grep -qx 'unread: none' "$t/out" || fail "no ledger: $(cat "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
+
+# an unreadable Pi session file: named under unread:, the rest of the skill reach still counted
+chmod 000 "$t/pi/sessions/--w-b--/review-1.jsonl"; before="$(snap)"
+"$kit/scripts/octo-feather-lane" report >"$t/out" || fail "unreadable session: exit non-zero"
+grep -qx '  unread: Pi session --w-b--/review-1.jsonl: .*Permission denied.*' "$t/out" \
+  && grep -qx '  implementer (3 sessions): commit 1/3, tdd 2/3' "$t/out" && ! grep -q '^  code reviewer' "$t/out" \
+  && grep -qx 'unread: Pi session --w-b--/review-1.jsonl' "$t/out" || fail "unreadable session: $(sed -n '/^skill reach/,$p' "$t/out")"
+[[ "$(snap)" == "$before" ]] || fail "the report changed the state dir or a session file"
 echo "lane-report test: ok"
