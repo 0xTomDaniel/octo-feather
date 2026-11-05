@@ -209,6 +209,18 @@
       "record": "20261105T172052Z-39985a1b",
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
+    },
+    "acceptance-ci-alongside": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-ci-status-only": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-review-resolution": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

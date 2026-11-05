@@ -248,6 +248,10 @@
     "acceptance-qa-tuning-method": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-qc-carry": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
