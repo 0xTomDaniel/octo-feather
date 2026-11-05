@@ -869,7 +869,8 @@ def drive_factory_report(f: Feature) -> None:
     dlog = lanes.parent / "director.handoffs.jsonl"
     # No open lane, so no gh call; Herdr points at no server. The director log: a note, no reflection line yet.
     dlog.write_text(json.dumps({"at": "2026-10-27T00:00:00Z", "kind": "note", "text": "status sent"}) + "\n")
-    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock")}
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "PI_CODING_AGENT_DIR": str(sc / "pi")}   # the box's own Pi sessions never read
     f.run("reflection-never", "octo-feather-lane", "report")
     f.check("reflection-never", lambda c: c.code == 0
             and re.findall(r"(?m)^director reflection: .*$", c.out) == ["director reflection: never ran (director.handoffs.jsonl)"])
@@ -927,6 +928,31 @@ def drive_factory_report(f: Feature) -> None:
     f.run("owner-caught-headline", "octo-feather-lane", "report")
     f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
             == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
+    # Skill reach (comms #report-skill-reach): scratch Pi session files. Two implementers offered tdd, one reads it inside
+    # a codemode batch; a code reviewer reads tdd, not offered to it; an implementer session started nine days ago.
+    def session(name: str, start: str, role: str, offered: list[str], calls: list[tuple[str, dict[str, str]]]) -> None:
+        skills = "".join(f"<skill><name>{n}</name><description>d</description><location>/kit/.agents/skills/{n}/SKILL.md"
+                         "</location></skill>" for n in offered)
+        lines = [{"type": "session", "version": 3, "id": name, "timestamp": start, "cwd": "/w"},
+                 {"type": "message", "message": {"role": "system", "content": "", "sections": {
+                     "addendum": f"# {role}\n", "skills": f"<available_skills>{skills}</available_skills>"}}},
+                 *({"type": "message", "message": {"role": "assistant", "content": [
+                     {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}} for i, (t, a) in enumerate(calls))]
+        d = sc / "pi" / "sessions" / "--w--"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{name}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    batch = 'await Promise.all(["/kit/.agents/skills/tdd/SKILL.md", "README.md"].map(p => tools.read({path: p})));'
+    session("impl-1", two_days, "Implementer", ["commit", "tdd"], [("codemode", {"code": batch})])
+    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", {"path": "/kit/.agents/skills/commit/SKILL.md"})])
+    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"})])
+    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", {"path": "/kit/.agents/skills/tdd/SKILL.md"})])
+    f.obs_cmd("skill-reach", "before", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
+    f.run("skill-reach", "octo-feather-lane", "report")
+    f.obs_cmd("skill-reach", "after", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
+    f.check("skill-reach", lambda c: c.code == 0 and c.o["after"] == c.o["before"] and (
+        "\nskill reach (Pi sessions started in the last 7 days; per role: skill read/offered, sessions):\n"
+        "  code reviewer (1 session): code-review 0/1; read, not offered: tdd 1\n"
+        "  implementer (2 sessions): commit 1/2, tdd 1/2\n") in c.out)
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
