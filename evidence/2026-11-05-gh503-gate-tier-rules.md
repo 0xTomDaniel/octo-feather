@@ -43,9 +43,23 @@ evals/role-transcripts `implementer-hands-off-on-fast-heldout`: a different targ
 
 ### Smoke 3 (train only, after the mise.toml fix)
 
-Pending: the next eval slot. The held-out case stays unrun until the proof.
+Run 20261105T033336Z-e103dd: `scripts/octo-feather-qa --case implementer-hands-off-on-fast --runs 1 --baseline 15923eb`, current kit d6639a0. Wall 85 s, exit 0. The sandbox's proof line shows that the fixture's mise config is now judged: `repo: just@1.21.0 uv@0.13.1`.
+
+```
+  baseline run 1/1: FAIL role-transcripts/implementer-hands-off-on-fast: ran just fast: no run of just with these arguments in the sandbox's record (1 entries; runs of just: just check (exit 0)) [stop: exit, 13 tool calls, 50.9 s] [kit 15923eb974571e3cd2342deb8a18430a67d8885d]
+  current run 1/1: PASS role-transcripts/implementer-hands-off-on-fast: ran just fast: recorded run just fast (exit 0) [stop: decided, 14 tool calls, 33.3 s] [kit d6639a021505b6abb8b893c3123271072e659847]
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     50.9 +/- 0.0         33.3 +/- 0.0         -17.6
+    tokens     219176 +/- 0         107784 +/- 0         -111392
+    cost usd   0.2717 +/- 0.0000    0.1781 +/- 0.0000    -0.0936
+qa: analysis: no flags
+```
+
+The case separates on one run per kit: the before kit runs only `just check`, the after kit runs `just fast`. The held-out case stays unrun until the proof.
 
 ## Findings
+
+Filed as issue #575 (outside this lane).
 
 - Schema gap (eval-cases schema, Case): `split` (`train` or `held-out`) exists only for skill-trigger cases, and `check-evals` refuses it on a role-transcript case. So a role-transcript held-out case cannot be marked as data, and `octo-feather-qa` cannot report it apart. Here it is held out by record (this file, the `-heldout` id suffix). The fix belongs to the schema owner: the schema, `scripts/check-evals` and `scripts/octo-feather-qa`, outside this ticket's scope.
 - Fixture environment gap: the python-app fixture family (python-app and its copies: python-app-shout, -skill, -verify-*, -yaml-names, -proxy-check and others) has no `mise.toml`. In the qa sandbox, `just` and `uv` on PATH are mise shims that refuse with no version set (smoke 2 above), so any case there that runs `just` sees exit 1, and a `ran just ...` fact can be bypassed by an absolute path. Proven only for python-app-tiers (smoke 2); for the rest it is inferred from the same setup. Not fixed here (outside scope).
