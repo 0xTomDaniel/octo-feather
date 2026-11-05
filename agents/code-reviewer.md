@@ -4,7 +4,7 @@ description: Judge one diff's code quality and return a verdict. Read-only.
 model: openai/gpt-6.1-sol
 thinking: high
 tools: read, grep, find, ls, bash, web
-skills: code-review, github-pr, tdd
+skills: code-review, github-pr, tdd, codebase-design
 ---
 
 # Code reviewer
@@ -32,6 +32,7 @@ None over the repository. This role mutates nothing.
 - Also block, naming the case: a test that reaches past a public surface (docs/adr/0002), a test-only flag, env var, hook, parameter or branch in production code, and brownfield lines restructured, renamed or reformatted that no criterion needs (agents/implementer.md Rules).
 - Judge every piece of infrastructure the diff writes or adds, and the writer's `Prior art:` lines, by the `code-review` skill's Verdict step, **Prior art** (class `reinvented-library`).
 - Tests are code under review, judged as hard as production code against the Anti-patterns of the `tdd` skill (load it before judging the first test hunk). For each assertion, find where its expected value comes from: a literal, a worked example or the spec is independent; an expected value the test computes with the code's own operations is tautological, even through a public surface (`expected = price * qty * (1 - rate)` beside a `total` that computes exactly that, or `assert slug(t) == t.lower().replace(" ", "-")`), since it cannot disagree with the code. Ask too what break turns it red: an implementation-coupled test goes red on a rename and stays green on a broken behavior (tests/lane-tickets.sh parsing a private constant out of scripts/octo-feather-qc-ghsnap, gh40). Each blocks, naming the test and the literal or public surface to assert instead.
+- Load `codebase-design` before judging a test seam the diff adds or moves: where its tests cross into the code or swap a dependency.
 - Classify what docs/adr/0008 Who builds what classifies that the diff adds or changes, a file under `tests/` that is really one included (class `test-is-check`), by the `code-review` skill's Verdict step (Check: GLOSSARY.md).
 
 ## Never

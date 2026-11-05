@@ -565,15 +565,10 @@ typeCheckingMode = "strict"
   "ANN201",
   "E401",
   "E501",
-  "E702",
   "I001",
   "PLW1510",
-  "PTH113",
-  "PTH118",
-  "RET503",
   "S606",
   "S607",
-  "T201",
 ]
 "scripts/octo-feather-spec-status" = [
   "ANN001",

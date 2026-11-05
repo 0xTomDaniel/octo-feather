@@ -48,7 +48,7 @@ grep -qx "PATH=$t/bin:/usr/bin:/bin" "$t/env.nomise" || { echo "pi-role test: wi
 # #262 (roles#launch-web): a web role's tab args add the kit's two web servers and drop --no-mcp.
 ro=read,grep,find,ls,bash,codemode; rw=read,grep,find,ls,bash,edit,write,codemode
 web=',mcp__parallel__*,mcp__exa__*;web'
-for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "corrector:$rw$web"; do
+for rt in "director:$ro$web" "code-reviewer:$ro$web" "qc-judge:$ro;--no-mcp" "supervisor:$rw;--no-mcp" "implementer:$rw$web" "corrector:$rw$web" "shaper:read,grep,find,ls,bash,edit,write,codemode$web"; do
   role="${rt%%:*}"; want="${rt#*:}"
   got="$(cd "$t/gh1" && "$kit/scripts/pi-role" --json "$kit/agents/$role.md" 2>/dev/null | python3 -c 'import json,sys; a=json.load(sys.stdin)["args"]; print((a[a.index("--tools")+1] if "--tools" in a else "none") + ";" + ("--no-mcp" if "--no-mcp" in a else "web" if a[a.index("--octo-feather-web-servers")+1].endswith("/web-mcp.json") else "?"))')"
   [[ "$got" == "$want" ]] || { echo "pi-role test: $role --tools is $got, want $want" >&2; exit 1; }

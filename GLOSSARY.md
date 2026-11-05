@@ -32,6 +32,10 @@ _Avoid_: Fixer
 A fresh agent, from a different model family than the implementer, that judges one change and returns a verdict, changing nothing. Code review is QC on code (product quality, spec quality `#quality-reviewer`), run in parallel with `just qc` on one head; it is not QA, which judges the factory.
 _Avoid_: Reviewer (alone), QA, approver
 
+**Shaper**:
+The agent that shapes what the owner wants into a spec with them, before the factory sees it (`just shape`). A utility of the factory, not part of it: it talks with the owner directly, builds nothing and has no lane.
+_Avoid_: Shaping chat, spec writer
+
 **Owner**:
 The person the factory works for, who accepts specs and results at gates. Acceptance is never delegated to an agent. Spec Chat's `--owner` flag is that tool's own name for the pane it wakes, not this term.
 _Avoid_: Human, user, operator
