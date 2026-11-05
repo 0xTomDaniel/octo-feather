@@ -24,7 +24,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive contract`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/contract/`. Scratch contracts are written under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/contract/`.
 
-- **Kit contract** (`kit`). Run `octo-feather-contract <kit>`. Observe exit 0 and exactly `octo-feather-contract: <kit>/qc.toml: ok (format 1)`.
+- **Kit contract** (`kit`). Run `octo-feather-contract <kit>`. Observe exit 0 and exactly `octo-feather-contract: <kit>/qc.toml: ok (format 2)`.
 - **Missing key** (`missing-entry`). Run it on a scratch `qc.toml` with format, services, fixture and values but no entry. Observe exit 1 and `missing entry`.
 - **No contract** (`no-contract`). Run it on an empty scratch folder. Observe exit 1 and `no qc.toml at`.
 - **Side effects.** Every cwd stays empty and the kit's `git status` unchanged.

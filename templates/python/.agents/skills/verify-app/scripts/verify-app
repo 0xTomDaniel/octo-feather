@@ -37,6 +37,7 @@ USAGE_EXIT = 2
 SCRIPT_DIR = Path(__file__).absolute().parent
 REPO = Path(os.path.normpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
+CONTRACT_FORMAT = 2  # the qc.toml format this helper reads
 
 
 def cksum(data: bytes) -> int:
@@ -160,7 +161,7 @@ def git_rev(repo: Path) -> str:
 
 @dataclass(frozen=True)
 class Contract:
-    """The app-driver contract, qc.toml at the repo root (format 1). The helper sets up, enters and
+    """The app-driver contract, qc.toml at the repo root (format 2). The helper sets up, enters and
     resets the app only through it; its commands run under sh with QC_REPO set."""
 
     setup: str
@@ -176,9 +177,9 @@ def read_contract() -> Contract:
             c: dict[str, Any] = tomllib.load(fh)
     except (OSError, ValueError) as e:
         die(f"cannot read the app-driver contract {CONTRACT}: {e}")
-    if c.get("format") != 1:
+    if c.get("format") != CONTRACT_FORMAT:
         die(
-            f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 1 "
+            f"{CONTRACT}: format {c.get('format')!r}; this helper reads format 2 "
             "(validate: octo-feather-contract)"
         )
     entry, services, fixture, values = (
@@ -196,7 +197,7 @@ def read_contract() -> Contract:
         or not all(isinstance(v, str) for v in values.values())
         or not isinstance(setup, str)
     ):
-        die(f"{CONTRACT} does not match format 1 (validate: octo-feather-contract)")
+        die(f"{CONTRACT} does not match format 2 (validate: octo-feather-contract)")
     return Contract(
         setup=setup,
         entry=command,

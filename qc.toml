@@ -1,6 +1,6 @@
 # The kit's own driver contract (quality spec #qc-contract, #verify-skill-what: the kit is a target of its
 # own lanes), read by the verify-octo-feather skill. Validate it with octo-feather-contract.
-format = 1
+format = 2
 
 # No setup: the kit's commands run from the checkout as they are; `just install-check` checks the box's tools.
 
@@ -38,175 +38,139 @@ qc_demo_browser = 'shell=$(ls -d "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_s
 [browser]
 playwright = "1.64.1"
 
-# The kit's own demos (quality spec #qc-capture): `just qc` runs each claimed criterion's in the qc sandbox.
+# The kit's per-criterion metadata and its demos (quality spec #qc-contract, #qc-capture): `just qc` runs each claimed
+# criterion's demo in the qc sandbox; an entry with no command is a criterion its tagged test proves (the `# criterion:`
+# header of a tests/*.sh, tests/gate/test_gate.py), judged from the final full gate's record.
 # --unreachable-exit 77: a drive with an unreachable step is a demo that did not run to its end (verify-octo-feather SKILL.md).
 [demo."quality#acceptance-qc-capture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
-tests = ["tests/qc-capture.sh"]
 
 [demo."quality#acceptance-qc-insufficient"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
-tests = ["tests/qc-insufficient.sh", "tests/lane-merge-ask.sh"]
 
 [demo."quality#acceptance-qc-same-verdict"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-contract", "schemas/qc.v1.schema.json"]
-tests = ["tests/qc-capture.sh"]
 
 [demo."quality#acceptance-qc-capture-browser"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-browser"
 browser = true
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
-tests = ["tests/qc-browser.sh"]
 
 [demo."quality#acceptance-qc-advisory"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]
-tests = ["tests/qc-advisory.sh"]
 
 [demo."quality#acceptance-qc-fallback"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
-tests = ["tests/qc-fallback.sh", "tests/lane-merge-ask.sh"]
 
 [demo."quality#acceptance-built-links"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
-tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
 
 [demo."quality#acceptance-evidence-stale"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-spec-status"]
-tests = ["tests/spec-status.sh"]
 
 [demo."quality#acceptance-fast-affected"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
-tests = ["tests/fast.sh", "tests/integrate.sh"]
 
 [demo."issue-lifecycle#acceptance-integrate-fast"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
-tests = ["tests/fast.sh", "tests/integrate.sh"]
 
 [demo."issue-lifecycle#acceptance-integrate-checkpoint"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
-tests = ["tests/fast.sh", "tests/integrate.sh"]
 
 [demo."issue-lifecycle#acceptance-pilot-full"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
 covers = ["scripts/octo-feather-gate", "scripts/octo-feather-integrate", "justfile", "shared-machinery.txt"]
-tests = ["tests/fast.sh", "tests/integrate.sh"]
 
 [demo."templates#acceptance-fresh-fast"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
 covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/shared-machinery.txt", "templates/typescript/shared-machinery.txt"]
-tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
 
 [demo."templates#acceptance-test-kinds"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
 covers = ["templates/python/justfile", "templates/typescript/justfile", "templates/python/tests", "templates/typescript/tests", "templates/python/pyproject.toml", "templates/typescript/vitest.config.ts"]
-tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
 
 [demo."templates#acceptance-shared-fixture"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
 covers = ["templates/python/tests/integration/conftest.py", "templates/typescript/tests/shared-fixture.ts", "templates/typescript/vitest.config.ts"]
-tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh"]
 
 [demo."templates#acceptance-same-gate"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 template-tiers"
 covers = ["templates/python/.githooks/pre-commit", "templates/typescript/.githooks/pre-commit", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml", "scripts/check-templates"]
-tests = ["tests/template-languages.sh", "tests/template-languages-typescript.sh", "tests/check-templates.sh"]
+
+[demo."templates#acceptance-starter-acceptance-test"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 starter-acceptance"
+covers = ["templates/python/tests", "templates/typescript/tests", "templates/python/qc.toml", "templates/typescript/qc.toml", "templates/typescript/vitest.config.ts", "scripts/octo-feather-qc", "tests/gate/conftest.py"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
-tests = ["tests/lane-merge-ask.sh"]
 
 [demo."issue-lifecycle#acceptance-brownfield-full"]
-command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
-tests = ["tests/integrate.sh"]
 
 [demo."quality#acceptance-one-execution"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
-tests = ["tests/qc-one-execution.sh"]
 
 [demo."quality#acceptance-one-execution-incomplete"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
-tests = ["tests/qc-one-execution.sh"]
 
 [demo."comms#acceptance-report-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
-tests = ["tests/lane-report.sh", "tests/gate-trend-tier.sh"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
-tests = ["tests/lane-merge-ask.sh", "tests/gate-trend-tier.sh"]
 
-# tests/shape.sh: `just shape --json` from a scratch target holding Spec Chat's skills, the same names (and another
-# skill) in a scratch home; prints pi-role's launch of agents/shaper.md and fails unless its skills are exactly the
-# role file's. One scenario, the test's, so its literal expectations are the demo's.
 [demo."roles#acceptance-shaper-launch"]
-command = "tests/shape.sh"
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
-tests = ["tests/shape.sh"]
 
 # The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
 [demo."quality#acceptance-qa-repeats"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
 covers = ["scripts/octo-feather-qa"]
-tests = ["tests/qa-runs.sh"]
 
 [demo."quality#acceptance-qa-cost"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
 covers = ["scripts/octo-feather-qa"]
-tests = ["tests/qa-baseline.sh"]
 
 [demo."quality#acceptance-qa-baseline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
 covers = ["scripts/octo-feather-qa"]
-tests = ["tests/qa-baseline.sh"]
 
 [demo."quality#acceptance-qa-analyst"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-analyst"
 covers = ["scripts/octo-feather-qa"]
-tests = ["tests/qa-analyst.sh"]
 
 [demo."quality#acceptance-qa-review"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-review"
 covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
-tests = ["tests/qa-review.sh"]
 
 [demo."quality#acceptance-qa-history"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
 covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
-tests = ["tests/qa-history.sh"]
 
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
 covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
-tests = ["tests/lane-correction.sh"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
 covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
-tests = ["tests/lane-correction.sh"]
 
 [demo."comms#acceptance-correction-intake"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
-tests = ["tests/lane-intake.sh"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
-tests = ["tests/lane-report.sh"]

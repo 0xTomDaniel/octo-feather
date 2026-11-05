@@ -26,14 +26,16 @@ One helper, [`scripts/verify-app`](scripts/verify-app), executable: a thin `sh` 
 
 [`qc.toml`](../../../qc.toml) at the repo root is this app's driver contract (octo-feather quality spec `#qc-contract`); what it declares is that spec section's, not repeated here. The helper invokes only what it declares; edit the contract, never the helper, to change any of it. How the helper uses each key:
 
-- `format`: the helper reads format 1.
+- `format`: the helper reads format 2.
 - `setup`: `setup` and `launch` run it.
 - `entry.command`: `launch` writes it as `bin/app` in the run state; every case runs that with its arguments.
 - `services`: none for this CLI. The helper starts no service: `launch` fails naming any declared one.
 - `fixture`: none for this app. `drive` runs each declared `reset` before its cases.
+- `demo`: not read by the helper: per-criterion metadata for `just qc` (see Acceptance).
+- `tags`: the command `just qc` collects the tagged tests with (`tests/qc-tags.ts`, Vitest's own collection). The helper does not read it.
 - `values`: the hello drive greets `values.name` and expects the greeting `values.greeting`, a worked example the helper compares against, never rebuilds.
 
-What each key means and how its commands run: the kit's `schemas/qc.v1.schema.json`. Validate the contract with the kit's `octo-feather-contract` (prints ok, or names the missing or wrong key).
+What each key means and how its commands run: the kit's `schemas/qc.v2.schema.json`. Validate the contract with the kit's `octo-feather-contract` (prints ok, or names the missing or wrong key).
 
 ## Run state and evidence
 
@@ -77,6 +79,17 @@ The kept record is this repo's evidence store (octo-feather quality spec `#evide
 
 - The criterion is the one the feature file's `Drive criterion:` line names; `octo-feather-evidence` hashes its text from this repo's spec (`docs/specs/<spec>.spec.html`, the element with that anchor). With no such element the drive fails naming the criterion, and no record is kept.
 - Read a criterion's records at a commit: `octo-feather-evidence read --criterion <spec>#<anchor> --commit <rev>` (`--json` for data). Where the store lives and the record format: `octo-feather-evidence --help`.
+
+## Acceptance
+
+The starter criterion `app#acceptance-hello-json` is proven by its acceptance test, the end-to-end test in `tests/cli.e2e.test.ts` tagged with it through a Vitest tag (`{ tags: ["<spec>#<anchor>"] }`), its command run through `qcCommand` (`tests/qc-capture.ts`) (octo-feather quality spec `#qc-capture`). The lane's final full gate, told the claims, runs it once in the qc sandbox and stores its record; `just qc` judges the criterion from that record by the test's own assertions, with no separate demo (`qc.toml` declares none for it):
+
+```
+OCTO_FEATHER_QC_CLAIMS=app#acceptance-hello-json just check          # prints: qc capture: app#acceptance-hello-json: record <id>, 1 case(s): ... passed
+just qc docs/specs/app.status.json <PR> acceptance-hello-json        # PASS ...; evidence complete; decision tagged test assertions; record <id>
+```
+
+What a claims run refuses and when a record is complete: quality spec `#qc-capture`, `#qc-judgment`. `just qc` needs the spec's status file (`octo-feather-spec-status init docs/specs/app.spec.html <accepted commit>`, committed). A new criterion's acceptance test is tagged the same way. The drives below are this skill's own proof of a change, apart from that record.
 
 ## Cleanup
 
