@@ -183,19 +183,20 @@ def record(reason: str, seconds: float) -> None:
         "seconds": round(seconds, 1),
         "at": dt.datetime.now(dt.UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
     }
-    env = dict(os.environ)
-    if not ok(
-        "var", "GIT_COMMITTER_IDENT"
-    ):  # notes are commits; a box with no git identity still records
-        env |= {
-            "GIT_COMMITTER_NAME": "octo-feather",
-            "GIT_COMMITTER_EMAIL": "octo-feather@localhost",
-        }
+    # A note is a commit: it needs the repo's git identity, never one made up here.
+    idents = ("GIT_AUTHOR_IDENT", "GIT_COMMITTER_IDENT")
+    if not all(ok("-c", "user.useConfigOnly=true", "var", v) for v in idents):
+        sys.exit(
+            f"octo-feather-gate: full pass of {head[:12]} not recorded: no git identity "
+            "(a git note "
+            "is a commit): set user.name and user.email, e.g. git config user.name 'NAME' and "
+            "git config user.email 'EMAIL' (--global for every repo), or GIT_AUTHOR_NAME/EMAIL "
+            "and GIT_COMMITTER_NAME/EMAIL; then rerun"
+        )
     r = subprocess.run(
         ["git", "notes", f"--ref={NOTES}", "add", "-f", "-m", json.dumps(rec, indent=1), head],  # noqa: S607
         capture_output=True,
         text=True,
-        env=env,
         check=False,
     )
     if r.returncode:

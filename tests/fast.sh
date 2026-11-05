@@ -12,6 +12,9 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; export FAST_RAN="$t.ran"; trap 'rm -rf "$t" "$FAST_RAN" "$FAST_RAN.fail"' EXIT
 (cd "$kit" && git ls-files -z | grep -zv '^tests/[^/]*\.sh$' | xargs -0 tar -cf - 2>/dev/null) | tar -xf - -C "$t"
 g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
+# Its scratch repo's git identity, for every command that commits (a recorded full pass is a git note), whatever the
+# box has: a runner may have none (GitHub Actions).
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 for n in a b; do
   printf '#!/usr/bin/env python3\nprint("%s ran")\n' "$n" > "$t/scripts/fixture-$n"
   printf '#!/usr/bin/env bash\nset -euo pipefail\necho %s >> "$FAST_RAN"\n"$(dirname "$0")/../scripts/fixture-%s"\n' "$n" "$n" > "$t/tests/$n.sh"
@@ -61,7 +64,17 @@ rm "$t/scripts/fixture-new"
 # A full pass recorded after the map: files changed up to it are gated, so only changes past it feed coverage
 # selection; a test item changed since the map head stays selected (the map does not know its coverage).
 echo '# gated' >> "$t/scripts/fixture-a"; echo '# changed test' >> "$t/tests/b.sh"; g commit -qam 'past the map'
-P="$(g rev-parse HEAD)"; (cd "$t" && scripts/octo-feather-gate record --reason "full pass" --seconds 1 >/dev/null)
+P="$(g rev-parse HEAD)"
+# No git identity (no env, no repo, global or system config): the record fails naming it and how to set it, and
+# records nothing; the gate never makes one up.
+mkdir "$t.noid"; set +e
+out="$(cd "$t" && env -u GIT_AUTHOR_NAME -u GIT_AUTHOR_EMAIL -u GIT_COMMITTER_NAME -u GIT_COMMITTER_EMAIL HOME="$t.noid" \
+  XDG_CONFIG_HOME="$t.noid" GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null EMAIL= scripts/octo-feather-gate record --reason "full pass" --seconds 1 2>&1)"; rc=$?; set -e
+rm -rf "$t.noid"
+[[ "$rc" != 0 && "$out" == *"not recorded: no git identity"*"git config user.name 'NAME' and git config user.email 'EMAIL'"* ]] \
+  || { echo "fast test: a record with no git identity: want a refusal naming it, got $rc: $out" >&2; exit 1; }
+! (cd "$t" && scripts/octo-feather-gate passed >/dev/null 2>&1) || { echo "fast test: a refused record left a full pass" >&2; exit 1; }
+(cd "$t" && scripts/octo-feather-gate record --reason "full pass" --seconds 1 >/dev/null)
 fast 'b d e'
 for want in "fast: diff base: ${P:0:12}, the latest recorded full pass" "fast: tests/b.sh: changed since the map at"; do
   [[ "$out" == *"$want"* ]] || { echo "fast test: '$want' not in the output past a full pass: $out" >&2; exit 1; }
