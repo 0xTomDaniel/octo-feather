@@ -10,18 +10,17 @@ times), exit, tier (`full` only when the invocation narrowed nothing: no paths o
 ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob, and
 the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
 run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
-steps (name, seconds, cpu_s, result: ok, FAIL, ERROR or skipped), one per junit
+steps (name, seconds, result: ok, FAIL, ERROR or skipped, cpu_s: below), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
 
-Also copyable unchanged: each item's CPU seconds (quality spec #acceptance-test-cpu-shown), cpu_s: the CPU time, user
-and system, of the process running the item (an xdist worker, or pytest itself) and of every process it started and
-waited for (RUSAGE_CHILDREN counts a grandchild once each process between waited for it; a process left running, or
-whose parent exited without waiting, is not counted), from its setup to its teardown. Measured there, carried to the
-controller and the junit xml as the item's cpu_s property. After the run the controller shows each item's CPU and wall
-seconds, and, against test_cpu_seconds in gate-budget.toml at the root (the per-test CPU budget; none, no budget),
-names each item over it but one carrying pytest's `e2e` marker, with its CPU time and the budget: report-only, the
-exit status stays the run's. Stdlib getrusage, not a plugin: pytest-monitor (last release 2023) measures the pytest
+Also copyable unchanged: each item's CPU seconds (what the run must show: quality spec #acceptance-test-cpu-shown), cpu_s:
+user and system CPU of the process running the item (an xdist worker, or pytest itself) and of every process it started
+and waited for (RUSAGE_CHILDREN: a grandchild counts once each process between waited for it; a process left running,
+or whose parent exited without waiting, does not), from its setup to its teardown, carried to the controller and the
+junit xml as the item's cpu_s property. After the run the controller shows each item's CPU and wall seconds and names
+each item over test_cpu_seconds in the root's gate-budget.toml (its form: octo-feather-lane --help, report) but one
+carrying pytest's `e2e` marker; report-only. Stdlib getrusage, not a plugin: pytest-monitor (last release 2023) measures the pytest
 process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
 per-test budget.
 
@@ -139,7 +138,7 @@ def pytest_configure(config: pytest.Config) -> None:
         _COLLECT_ONLY.append(True)
     config.addinivalue_line("markers", "criterion(*ids, source=None): the acceptance criteria (<spec>#<anchor>) this "
                             "test proves; source: the test's file when the item runs another one (quality #qc-capture)")
-    config.addinivalue_line("markers", "e2e: an end-to-end test, never held to the per-test CPU budget")
+    config.addinivalue_line("markers", "e2e: an end-to-end test (its CPU: this file's docstring)")
     if not hasattr(config, "workerinput") and not _COLLECT_ONLY:
         config.pluginmanager.register(_CpuShown(config.rootpath), "cpu-shown")
     if not _claims() or hasattr(config, "workerinput"):
@@ -278,8 +277,7 @@ def _secs(x: float) -> str:
 
 
 class _CpuShown:
-    """The controller's side of the CPU measure: each item's CPU and wall seconds as its reports arrive, shown after
-    the run with the items over the per-test CPU budget."""
+    """The controller's side of the CPU measure (this file's docstring)."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
