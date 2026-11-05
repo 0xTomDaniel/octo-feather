@@ -19,11 +19,14 @@ Drive criterion: `issue-lifecycle#acceptance-pilot-full`
 - `fast` an integration touching no listed path: only the fast tier runs, the head is provisional, no pass recorded.
 - `fast-map` `just fast-map -k test_script` in a scratch copy of the kit: the coverage map of its test items.
 - `fast-one-script` `just --set GATE_RECIPES check-dashes fast` in that copy after a one-script change: the static check, the item whose coverage reaches the script and the unmapped item run, each named; the e2e item is named skipped.
+- `fast-list` `just --set GATE_RECIPES check-dashes fast-list` after that change: the same selection named and counted (`fast: selected 3 of 5 gate items`), no item run.
+- `fast-map-red` `just fast-map -k test_script` with a red item `e.sh` (runs b's script, then fails) committed: red, yet the map is written from the items that passed, e named left out.
+- `fast-list-red` `just fast-list` on that unchanged tree: e named as not passing the mapping run, always selected.
 
 ## How to get to it (user POV)
 
 - A supervisor runs `just integrate N REF...` (or `octo-feather-integrate [--full] N REF...`); the tier it ran and why is its first line. When each tier runs: [issue-lifecycle#lanes-checkpoints](../../../../docs/specs/issue-lifecycle.spec.html#lanes-checkpoints); the record and the selection: `octo-feather-gate --help`.
-- An implementer runs `just fast` in the kit; `just fast-map` builds the map it selects from.
+- An implementer runs `just fast` in the kit, or `just fast-list` to see its selection without running it; `just fast-map` builds the map it selects from.
 
 ## Driving it with verify-octo-feather
 

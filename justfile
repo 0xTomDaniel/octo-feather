@@ -310,17 +310,23 @@ fast:
     mapfile -t ids <<<"$ids"
     just check-tests "${ids[@]}"
 
+# The dry run of just fast: the items it would select, each with why, and the count; runs none.
+fast-list:
+    @python3 "$root/scripts/octo-feather-gate" select 2>&1 >/dev/null
+
 # The coverage map just fast selects from: every gate item run under coverage.py (COVERAGE_PROCESS_START and the
 # .pth coverage installs in the kit venv; one data dir per item, GATE_ITEM: tests/gate/coverage.toml), on a clean tree,
-# written for HEAD into the git common dir (scripts/octo-feather-gate map). Slower than just check; never in it or CI.
+# written for HEAD into the git common dir (scripts/octo-feather-gate map), from the items that passed; exits as the run did.
+# Slower than just check; never in it or CI.
 fast-map *args:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
     [[ -z "$(git status --porcelain)" ]] || { echo "fast-map: the tree has changes; commit them first, the map is written for HEAD" >&2; exit 1; }
     d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT
-    env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" just check-tests "$@"
-    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d"
+    rc=0; env -u GATE_ITEM COV_MAP_DIR="$d" COVERAGE_PROCESS_START="$root/tests/gate/coverage.toml" just check-tests --junitxml="$d/junit.xml" "$@" || rc=$?
+    uv run --locked --offline --no-sync python3 "$root/scripts/octo-feather-gate" map "$d" --junit "$d/junit.xml"
+    exit "$rc"
 
 # The gate's pytest items, all or a subset by pytest arguments (`just test -k check-dashes`, `just test --lf`): check-tests.
 test *args:
