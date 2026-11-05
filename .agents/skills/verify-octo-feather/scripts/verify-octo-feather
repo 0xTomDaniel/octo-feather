@@ -1149,7 +1149,8 @@ def drive_qc_insufficient(f: Feature) -> None:
         "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
         "commits": [{"oid": head, "messageHeadline": "contract with a demo that needs GitHub", "messageBody": ""}]}))
     f.env |= {"OCTO_FEATHER_GHSNAP": str(snap), "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
-    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json")
+    # The lane's base, the commit the PR's one commit sits on (no origin/main in the scratch repo).
+    f.run("merge-ask", "octo-feather-lane", "merge-ask", "7", "--status", "docs/specs/demo.status.json", "--base", git("rev-parse", "HEAD^"))
     f.check("merge-ask", lambda c: c.code == 1 and not c.out and re.search(
         rf"criterion demo#acceptance-a: insufficient evidence at the judged head {head[:12]} \(demo did not run to its end \(exit 77, "
         r"[^)]*\): needs GitHub.*; qc report [0-9a-f]{40}-.*\.json\): never triaged", c.err))
