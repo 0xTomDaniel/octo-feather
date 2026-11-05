@@ -19,8 +19,8 @@ printf '[tool.pytest.ini_options]\ntestpaths = ["tests/gate"]\naddopts = "--juni
 printf 'budget_seconds = 300\ntest_cpu_seconds = 0.15\n' > "$t/s/gate-budget.toml"
 burn=$'import time\nt = time.process_time() + 0.3\nwhile time.process_time() < t: pass'
 printf '#!/usr/bin/env bash\necho light\n' > "$t/s/tests/light.sh"
-printf '#!/usr/bin/env bash\npython3 -c "$(printf %q)"\n' "$burn" > "$t/s/tests/heavy.sh"
-printf '#!/usr/bin/env bash\n# gate: e2e\npython3 -c "$(printf %q)"\n' "$burn" > "$t/s/tests/e2e.sh"
+printf '#!/usr/bin/env bash\npython3 -c %q\n' "$burn" > "$t/s/tests/heavy.sh"
+printf '#!/usr/bin/env bash\n# gate: e2e\npython3 -c %q\n' "$burn" > "$t/s/tests/e2e.sh"
 chmod +x "$t/s/tests/"*.sh
 node="tests/gate/test_gate.py::test_script"
 n=0
@@ -34,7 +34,7 @@ for workers in 1 0; do
   cpu="$(sed -nE "s|^ *([0-9.]+)s cpu .*$node\[tests/heavy\.sh\]$|\1|p" <<<"$out")"
   python3 -c "import sys; sys.exit(not 0.27 <= float(sys.argv[1]) < 3)" "$cpu" \
     || fail "-n $workers: heavy.sh shows ${cpu}s CPU, want its child's 0.3s burn counted"
-  grep -qxF "OVER CPU BUDGET: $node[tests/heavy.sh] ${cpu}s CPU, budget 0.15s (report-only)" <<<"$out" \
+  grep -qxF "OVER CPU BUDGET: ${node}[tests/heavy.sh] ${cpu}s CPU, budget 0.15s (report-only)" <<<"$out" \
     || fail "-n $workers: heavy.sh not named over the budget with its CPU time and the budget: $out"
   grep -qE "^OVER CPU BUDGET: .*(e2e|light)\.sh" <<<"$out" && fail "-n $workers: e2e.sh or light.sh named over the budget: $out"
   grep -qxF "cpu budget: 0.15s per non-e2e test (gate-budget.toml test_cpu_seconds): 1 over, report-only" <<<"$out" \
