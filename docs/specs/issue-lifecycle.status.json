@@ -161,8 +161,8 @@
     "acceptance-integrate-fast": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T040818Z-24b2d54d",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T155521Z-fb21e585",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": [
         "tests/integrate.sh"
       ]
@@ -170,8 +170,8 @@
     "acceptance-integrate-checkpoint": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T040818Z-371a4895",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T155521Z-37f28aee",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": [
         "tests/integrate.sh"
       ]
@@ -179,8 +179,8 @@
     "acceptance-pilot-full": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T040818Z-e69e01f0",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T155521Z-f0022694",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": [
         "tests/integrate.sh"
       ]
@@ -188,8 +188,8 @@
     "acceptance-brownfield-full": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T040818Z-d6e10748",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T155521Z-cf13f776",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": [
         "tests/integrate.sh"
       ]
@@ -197,8 +197,8 @@
     "acceptance-merge-ask-full-proof": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T040818Z-9c8a678e",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T155521Z-3a3f6c50",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": [
         "tests/lane-merge-ask.sh"
       ]
@@ -206,8 +206,8 @@
     "acceptance-merge-ask-gate-budget": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T041602Z-52d9952b",
-      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "record": "20261105T160608Z-591eee55",
+      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
       "tests": []
     }
   }
