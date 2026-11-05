@@ -1,4 +1,4 @@
-# The gate's two tiers (AGENTS.md): CI runs `just check`, the full tier; agents and .githooks/pre-commit run `just fast`.
+# The gate's two tiers, `just fast` and `just check` (AGENTS.md); who runs which: octo-feather quality spec #recipes-table, templates spec #tpl-hooks.
 
 set shell := ["bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@", never as pasted text.
