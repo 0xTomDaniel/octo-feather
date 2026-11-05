@@ -23,7 +23,7 @@ lang = "python"
 scratch_criterion = "scratch#acceptance-drive"
 scratch_criterion_text = "Given a scratch repo, When the verify-octo-feather evidence drive appends a record, Then it reads back by commit."
 # The role-launch drive's expected web roles and the servers of the kit's web list (roles spec #acceptance-web-roles).
-web_roles = "director implementer corrector code-reviewer"
+web_roles = "director implementer corrector code-reviewer shaper"
 web_servers = "parallel exa"
 # The qc-capture drive's scratch demos: one whose checks pass, one whose checks fail (the pass one also the qc-fallback
 # drive's declared demo).
@@ -129,6 +129,9 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 [demo."issue-lifecycle#acceptance-merge-ask-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+
+[demo."roles#acceptance-shaper-launch"]
+covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
 
 # The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
 [demo."quality#acceptance-qa-repeats"]

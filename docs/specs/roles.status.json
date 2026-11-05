@@ -61,6 +61,15 @@
     "acceptance-reflector-tools": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-shaper-launch": {
+      "status": "built",
+      "pr": 531,
+      "record": "20261105T023515Z-01ff8aa0",
+      "commit": "3b98ffc0dea282002b4392f7de585fe88617b3cc",
+      "tests": [
+        "tests/shape.sh"
+      ]
     }
   }
 }
