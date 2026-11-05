@@ -3,13 +3,16 @@
 Criteria:
 
 - [comms#acceptance-report-reflection](../../../../docs/specs/comms.spec.html#acceptance-report-reflection)
+- [comms#acceptance-report-owner-caught-headline](../../../../docs/specs/comms.spec.html#acceptance-report-owner-caught-headline)
 
 Drive criterion: `comms#acceptance-report-reflection`
+Drive criterion: `comms#acceptance-report-owner-caught-headline`
 
 ## Sub-features
 
 - `reflection-never` the report over a director log with no reflection line: says the director reflection never ran.
 - `reflection-two-days` the report over a director log whose latest reflection line is two days old: shows that time, the log unchanged.
+- `owner-caught-headline` the report over a director log with owner-caught findings two days and nine days ago: its line after the first, before any lane, counts each week.
 
 ## How to get to it (user POV)
 
@@ -28,7 +31,9 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 - **Never ran** (`reflection-never`). The director log holds one note line. Run `octo-feather-lane report`. Observe exit 0 and one `director reflection:` line, `never ran (director.handoffs.jsonl)`.
 - **Two days ago** (`reflection-two-days`). Append an older reflection line, then one two days old. Run `octo-feather-lane report`. Observe exit 0 and one `director reflection: last ran <the latter's at> (2d0h<m>m ago)` line, the director log unchanged.
 
+- **Headline** (`owner-caught-headline`). Append owner-caught findings: two two days ago, one nine days ago. Run `octo-feather-lane report`. Observe exit 0 and the report's second line `owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before`.
+
 ## Gotchas
 
 - Herdr unreachable prints `unread: Herdr` as the report's last line: expected, the drive reaches no Herdr.
-- The lane fields, owner queue and owner-caught counts are proven by `tests/lane-report.sh` with a fake gh and herdr; this drive covers the reflection line.
+- The lane fields, owner queue and the owner-caught block by class are proven by `tests/lane-report.sh` with a fake gh and herdr; this drive covers the reflection line and the owner-caught headline.

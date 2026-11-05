@@ -1,0 +1,12 @@
+[
+ {
+  "id": "implementer-ts-toml-at-scale",
+  "role": "implementer",
+  "fixture": {
+   "repo": "kit",
+   "commit": "0f4f1bad2c7caf593a6a2e7c1e18c9f1617238f1"
+  },
+  "branch": "implementer-gh243",
+  "task": "Ticket T1 of lane gh243 (parent #136): Verify helpers: logic in Python (kit, Python template) and TypeScript (TS template), shell only as glue.\n\nThe three verify helpers this lane ships move their logic out of shell, per the kit's rule that shell is for thin glue and logic, parsing and rules go in Python (AGENTS.md Rules), and the templates' repo-language reading of it: the Python template's verify-app helper in Python, the TypeScript template's verify-app helper in TypeScript, the kit's verify-octo-feather helper in Python. Same behaviour and the same command line (launch, doctor, drive, cleanup, run; the same environment variables, output lines, exit codes, evidence files and evidence records); only thin shell glue may remain. The eval fixtures that carry byte copies of these helpers (the kit-mini verify-octo-feather copy, python-app-verify-live) are refreshed to match.\n\nAcceptance criteria:\n- [ ] templates#acceptance-starter-verify: both templates still run their verify skill end to end, now through a Python or TypeScript helper\n- [ ] quality#acceptance-verify-launch-fails: an unwritable run state folder still fails launch naming it, with no app process left\n- [ ] quality#acceptance-evidence-record: drives still append one record each with the criterion's own text hashed\n- [ ] quality#acceptance-verify-declared: the kit's and the templates' verify skills keep their Helpers sections, showing the new invocations\n- [ ] demo: `just new-repo typescript /tmp/gh136-demo-port`, then in it `just setup` and the verify-app helper's run passes and prints its evidence record; the same for python; and the kit's verify-octo-feather helper run on the new-repo feature passes\n\nWorktree: this directory, branch implementer-gh243 cut from main (the integration branch). Sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message."
+ }
+]

@@ -151,7 +151,12 @@
     },
     "acceptance-writer-route-lane": {
       "status": "built",
-      "pr": 279
+      "pr": 545,
+      "record": "20261104T220555Z-05d93084",
+      "commit": "de25f6ecc2529c6338b537632c0e618efc8f7e1c",
+      "tests": [
+        "tests/lane-correction.sh"
+      ]
     }
   }
 }
