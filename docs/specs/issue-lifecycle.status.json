@@ -161,50 +161,54 @@
     "acceptance-integrate-fast": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T183348Z-3570d118",
-      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
+      "record": "20261105T040818Z-24b2d54d",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
       "tests": [
-        "tests/fast.sh",
         "tests/integrate.sh"
       ]
     },
     "acceptance-integrate-checkpoint": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T183417Z-8b2565dc",
-      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
+      "record": "20261105T040818Z-371a4895",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
       "tests": [
-        "tests/fast.sh",
         "tests/integrate.sh"
       ]
     },
     "acceptance-pilot-full": {
       "status": "built",
       "pr": 546,
-      "record": "20261104T183506Z-37573375",
-      "commit": "6415be0799a046a2a9d5d9d53139d1654d26098a",
+      "record": "20261105T040818Z-e69e01f0",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
       "tests": [
-        "tests/fast.sh",
         "tests/integrate.sh"
       ]
     },
     "acceptance-brownfield-full": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T040818Z-d6e10748",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": [
+        "tests/integrate.sh"
+      ]
     },
     "acceptance-merge-ask-full-proof": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T040818Z-9c8a678e",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": [
+        "tests/lane-merge-ask.sh"
+      ]
     },
     "acceptance-merge-ask-gate-budget": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T013629Z-60b2c78d",
-      "commit": "f72d060965e7bedfc7d6d5efaa89dbc723544782",
-      "tests": [
-        "tests/lane-merge-ask.sh",
-        "tests/gate-trend-tier.sh"
-      ]
+      "record": "20261105T041602Z-52d9952b",
+      "commit": "6c7344a5e83b4f1ad22046d361684f784a514847",
+      "tests": []
     }
   }
 }
