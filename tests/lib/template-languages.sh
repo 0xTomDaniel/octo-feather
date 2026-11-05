@@ -53,9 +53,8 @@ check_template() {
   check; [[ "$rc" != 0 ]] || fail "$lang: planted files passed"
   for s in "${want[@]}"; do grep -qxF -- "check-languages: $s" <<<"$out" || fail "$lang: output lacks: $s"; done
   g "$d" reset -q --hard; g "$d" clean -qfd -e node_modules -e .venv
-  # ShellCheck's recipe out of the gate (GATE_RECIPES in the Python repo, check-static's dependencies in the TypeScript repo).
-  sed -i -e 's/^export GATE_RECIPES := "check-languages check-scripts /export GATE_RECIPES := "check-languages /' \
-    -e 's/^check-static: check-languages check-scripts /check-static: check-languages /' "$d/justfile"
+  # ShellCheck's recipe out of the gate (GATE_RECIPES in each repo).
+  sed -i -e 's/^export GATE_RECIPES := "check-languages check-scripts /export GATE_RECIPES := "check-languages /' "$d/justfile"
   g "$d" add -A
   check; [[ "$rc" != 0 ]] || fail "$lang: shellcheck's recipe out of the gate passed"
   s="shellcheck gates BASH, but its recipe check-scripts is not in the gate"
@@ -67,7 +66,8 @@ check_template() {
 # full tier's tests show each kind, integration and e2e, and the shared fixture prepared once with two workers; then
 # just fast after a one-file change names only that module's test, and after a justfile change (on its
 # shared-machinery.txt) every integration test; neither shows an e2e test. The Python repo's static checks cut to one
-# with just's own command line (--set GATE_RECIPES); the TypeScript repo's run in full (fast depends on check-static).
+# with just's own command line (--set GATE_RECIPES); the TypeScript repo's run in full (just check is one Vitest run
+# holding them, tests/gate.test.ts; fast runs check-static first).
 check_tiers() {
   local lang="$1" other other_t full fast integ e2e
   g "$d" reset -q --hard; g "$d" clean -qfd -e node_modules -e .venv
@@ -84,7 +84,7 @@ check_tiers() {
     other=src/other.ts
     printf 'export function double(n: number): number {\n  return n * 2;\n}\n' >"$d/$other"
     printf 'import { expect, it } from "vitest";\nimport { double } from "../src/other.ts";\n\nit("doubles", () => {\n  expect(double(2)).toBe(4);\n});\n' >"$d/tests/other.test.ts"
-    full=(just check-tests); fast=(just fast)
+    full=(just check); fast=(just fast)
     other_t="✓ |integration| tests/other.test.ts > doubles"; integ="✓ |integration| tests/cli.test.ts > "
     e2e="|e2e| tests/cli.e2e.test.ts"
   fi

@@ -272,6 +272,9 @@ then per lane:
     gate time: lane <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
     gate time: main <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
                                                  the check-runs.jsonl line with the latest start whose
+                                                 tier is full (a subset run, just fast's, never stands in;
+                                                 a line with no tier, written before the runners recorded
+                                                 one, counts as today) and whose
                                                  head is a commit of the PR (`gh pr view --json commits`),
                                                  then of the default branch's last 100 commits (one
                                                  `gh api repos/<repository>/commits` per repository);
@@ -288,8 +291,11 @@ After the lanes:
     slowest: <name> <s>s, ...                    the latest run's 5 slowest items
                                                  one block per open lane's repository (spec comms
                                                  #report-field-gate-time): check-runs.jsonl lines with tier full
-                                                 and exit 0 (the trend hook writes tier: tests/gate/conftest.py;
-                                                 a line without it is no full run) whose head is a commit of
+                                                 and exit 0 (each runner's trend writer sets tier: the kit's
+                                                 tests/gate/conftest.py and its copy templates/python/tests/
+                                                 conftest.py for pytest, templates/typescript/tests/trend-
+                                                 reporter.ts for Vitest; a line without it is no full run
+                                                 here) whose head is a commit of
                                                  the default branch (the same 100) or of its open lanes' PRs;
                                                  the latest is the full gate time, trend_runs before it the
                                                  trend; `gate budget <repo>: no passed full gate run ...` or
@@ -2772,8 +2778,9 @@ class ReportSources:
                 f"{unknown} call{'s' if unknown != 1 else ''} of unknown cost")
 
     def last_run(self, heads: set[str]) -> dict | None:
+        """The latest gate run on HEADS: a full line, or one with no tier (written before the runners recorded one)."""
         runs = [(utc(d.get("start")) is not None, str(utc(d.get("start")) or ""), i, d)
-                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads]
+                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads and ("tier" not in d or d["tier"] == "full")]
         return max(runs, key=lambda r: r[:3])[3] if runs else None
 
     def main_heads(self, repo: object) -> set[str] | str:
@@ -2807,11 +2814,11 @@ class ReportSources:
         elif pr_heads is None:
             lane = f"  gate time: lane unread: GitHub (PR #{pr})"
         else:
-            lane = run("lane", self.last_run(pr_heads), f"no gate run on a commit of PR #{pr}")
+            lane = run("lane", self.last_run(pr_heads), f"no full gate run on a commit of PR #{pr}")
         main = self.main_heads(repo)
         if isinstance(main, str):
             return [lane, f"  gate time: main {main}"]
-        return [lane, run("main", self.last_run(main), f"no gate run on a commit of {repo}'s default branch")]
+        return [lane, run("main", self.last_run(main), f"no full gate run on a commit of {repo}'s default branch")]
 
     def budget_text(self, repo: str) -> str | None:
         """gate-budget.toml on repo's default branch (None: no such file); Refuse when GitHub cannot say."""

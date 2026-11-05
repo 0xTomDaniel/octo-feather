@@ -4,7 +4,8 @@
 # Proves comms#acceptance-report-lanes, #acceptance-report-any-target, #acceptance-report-unreadable,
 # #acceptance-report-owner-queue, #acceptance-report-owner-caught, #acceptance-report-lane-numbers (lane-a: started
 # line's age is its wall time, 2 review rounds, $1.7500 and 2 calls of unknown cost), #acceptance-report-gate-time
-# (lane-a: its PR's last gate run beside o/a main's last), #acceptance-report-reflection (none ran, then one two days ago), #acceptance-report-owner-caught-headline (both
+# (lane-a: its PR's last gate run beside o/a main's last; lane-b: a subset run on its PR head never stands in for a
+# gate run, and o/b main's line with no tier, written before runners recorded one, counts), #acceptance-report-reflection (none ran, then one two days ago), #acceptance-report-owner-caught-headline (both
 # weeks' counts on the line after the first, before any lane),
 # #acceptance-report-gate-budget (o/a: its latest passed full run, 280.25s, over its 240s budget and grown 12.1% over the
 # median 250s of the 3 passed full runs before it, a share of 10%, with the trend and slowest items; a failed full run

@@ -23,12 +23,18 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
       one per line; each item with why it runs, or why not, on stderr. The selection reads the
       coverage map (below) and the list; an item without recorded coverage always runs; an item
-      whose own header has the line `# gate: e2e` is end-to-end.
-  octo-feather-gate map DATA_DIR
+      whose own header has the line `# gate: e2e` is end-to-end. Changed files count from the diff
+      base, the newer of the map head and the latest commit of HEAD's history with a recorded full
+      pass on a clean tree (record); a test item changed since the map head always runs. A changed
+      file no recorded coverage reaches that the list names, or that is absent at the map head (the
+      map cannot know it), runs every non-e2e item.
+  octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
       (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
-      /tmp copies of the kit map back to tracked files by their longest shared path suffix. An item
-      with no data (not run, or no Python measured) is left out of the map.
+      /tmp copies of the kit map back to tracked files by their longest shared path suffix. FILE is
+      the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
+      is left out and named in the map as not passed. An item with no data (not run, or no Python
+      measured) is left out of the map too.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -243,6 +249,10 @@ def select() -> None:
         say(r, "static check (every GATE_RECIPES recipe)")
     chosen = choose(root, items)
     ids += [f"{NODE}test_script[{i}]" for i in items if i in chosen]
+    sys.stderr.write(
+        f"fast: selected {len(ids)} of {len(recipes) + len(items)} gate items"
+        f" ({len(recipes)} static, {len(chosen)} of {len(items)} test items)\n"
+    )
     sys.stdout.write("".join(f"{i}\n" for i in ids))
 
 
@@ -259,6 +269,38 @@ def is_e2e(root: Path, item: str) -> bool:
     return E2E in (root / item).read_text(errors="replace").splitlines()
 
 
+def diff_base(at: str) -> str:
+    """The newer of the map head AT and the latest commit of HEAD's history descending from it
+    with a recorded full pass on a clean tree (record): what that pass gated needs no selection."""
+    best: tuple[int, str] = (int(git("rev-list", "--count", f"{at}..HEAD")), at)
+    for rec in records():
+        head = rec.get("head")
+        if not isinstance(head, str) or rec.get("clean") is not True:
+            continue
+        if ok("merge-base", "--is-ancestor", at, head) and ok(
+            "merge-base", "--is-ancestor", head, "HEAD"
+        ):
+            best = min(best, (int(git("rev-list", "--count", f"{head}..HEAD")), head))
+    if best[1] != at:
+        say(
+            f"diff base: {best[1][:12]}, the latest recorded full pass on HEAD's history",
+            f"newer than the map at {at[:12]}: only changes past it select",
+        )
+    return best[1]
+
+
+def beyond_map(at: str, base: str, unreached: list[str]) -> str:
+    """Why changed files no recorded coverage reaches send selection to every item: those the
+    list names, and those absent at the map head AT (the map cannot know them); else empty."""
+    pats = entries("HEAD")
+    listed = changed_since(base, *specs(pats)) if pats and unreached else set[str]()
+    residual = [f for f in unreached if f in listed]
+    unknown = [f for f in unreached if f not in listed and not ok("cat-file", "-e", f"{at}:{f}")]
+    why = [f"{', '.join(residual)} on {LIST}"] if residual else []
+    why += [f"{', '.join(unknown)} absent at the map head {at[:12]}"] if unknown else []
+    return "; ".join(why)
+
+
 def choose(root: Path, items: list[str]) -> set[str]:
     e2e = [i for i in items if is_e2e(root, i)]
     for i in e2e:
@@ -273,16 +315,17 @@ def choose(root: Path, items: list[str]) -> set[str]:
         return set(items)
     at = str(m["head"])
     cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
-    changed = changed_since(at)
+    failed: list[str] = m.get("not_passed", [])  # pyright: ignore[reportAssignmentType]
+    base = diff_base(at)
+    moved = changed_since(at) & set(items)  # coverage of a test changed since the map is unknown
+    changed = changed_since(base) | moved
     reach = {f for fs in cover.values() for f in fs}
     unreached = sorted(changed - reach - set(items) - set(e2e))
-    pats = entries("HEAD")
-    listed = changed_since(at, *specs(pats)) if pats and unreached else set[str]()
-    residual = [f for f in unreached if f in listed]
-    if residual:
+    why = beyond_map(at, base, unreached)
+    if why:
         say(
             f"all {len(items)} non-e2e test items",
-            f"{', '.join(residual)} on {LIST}, outside the coverage map's reach (map at {at[:12]})",
+            f"{why}, outside the coverage map's reach (map at {at[:12]})",
         )
         return set(items)
     chosen: set[str] = set()
@@ -294,6 +337,8 @@ def choose(root: Path, items: list[str]) -> set[str]:
             if not hit:
                 continue
             say(i, f"recorded coverage reaches {', '.join(hit)}")
+        elif i in failed:
+            say(i, f"did not pass the mapping run at {at[:12]}, so unmapped: always selected")
         else:
             say(i, f"no recorded coverage in the map at {at[:12]}: always selected")
         chosen.add(i)
@@ -334,16 +379,36 @@ class Tracked:
         )
 
 
-def build_map(data: Path) -> None:
+def outcomes(junit: Path) -> dict[str, bool]:
+    """Each test item in a pytest junit xml report: whether it passed (no failure, error, skip)."""
+    import xml.etree.ElementTree as ET  # noqa: PLC0415  # our own pytest run's report
+
+    out: dict[str, bool] = {}
+    for case in ET.parse(junit).iter("testcase"):  # noqa: S314
+        name = case.get("name", "")
+        if name.startswith("test_script[") and name.endswith("]"):
+            item = name.removeprefix("test_script[").removesuffix("]")
+            bad = any(c.tag in ("failure", "error", "skipped") for c in case)
+            out[item] = out.get(item, True) and not bad
+    return out
+
+
+def build_map(data: Path, junit: Path) -> None:
     import coverage  # noqa: PLC0415  # only map needs it: the kit's uv venv has it (pyproject.toml)
 
+    if not junit.is_file():
+        sys.exit(f"octo-feather-gate map: no junit report at {junit}: which items passed, unknown")
+    ran = outcomes(junit)
     tracked = Tracked()
     items: dict[str, list[str]] = {}
+    not_passed = sorted(i for i, good in ran.items() if not good)
     for i in sorted(
         t
         for t in tracked.files
         if t.startswith("tests/") and t.count("/") == 1 and t.endswith(".sh")
     ):
+        if not ran.get(i):  # not run, or did not pass: its coverage is partial, so always selected
+            continue
         runs = list((data / i).glob("cov*"))
         if not runs:  # not run, or no Python measured: no recorded coverage, so always selected
             continue
@@ -357,8 +422,12 @@ def build_map(data: Path) -> None:
     head = git("rev-parse", "HEAD").strip()
     out = map_dir() / f"{head}.json"
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(json.dumps({"head": head, "items": items}, indent=1) + "\n")
+    out.write_text(
+        json.dumps({"head": head, "items": items, "not_passed": not_passed}, indent=1) + "\n"
+    )
     sys.stdout.write(f"fast-map: {len(items)} test items mapped at {head[:12]}: {out}\n")
+    for i in not_passed:
+        sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
 
 
 def main() -> int:
@@ -382,6 +451,7 @@ def main() -> int:
     sub.add_parser("select")
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
+    m.add_argument("--junit", type=Path, required=True)
     a = ap.parse_args()
     if a.cmd == "checkpoint":
         tier, why = checkpoint(a.start, full=a.full, fast=not a.no_fast)
@@ -396,7 +466,7 @@ def main() -> int:
     elif a.cmd == "select":
         select()
     else:
-        build_map(a.data)
+        build_map(a.data, a.junit)
     return 0
 
 

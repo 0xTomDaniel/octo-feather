@@ -45,8 +45,8 @@ expect "$pj" 'fast:' 'fast-tier:' 'needs check, fast, integrate and product-judg
 expect "$tj" 'fast: check-static' 'fast-tier: check-static' 'needs check, fast, integrate and product-judge recipes'
 expect "$pj" 'export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"' \
   'export GATE_RECIPES := "check-scripts check-lint check-format check-types check-imports"' 'the gate never runs check-languages'
-expect "$tj" 'check-static: check-languages check-scripts check-ts check-arch check-dead-code' \
-  'check-static: check-scripts check-ts check-arch check-dead-code' 'the gate never runs check-languages'
+expect "$tj" 'export GATE_RECIPES := "check-languages check-scripts check-ts check-arch check-dead-code"' \
+  'export GATE_RECIPES := "check-scripts check-ts check-arch check-dead-code"' 'the gate never runs check-languages'
 expect templates/python/mise-version "$(cat "$t/mise-version")" '2000.1.1' "templates/python/mise-version is 2000.1.1, the kit's is $(cat "$t/mise-version")"
 expect templates/typescript/mise.toml 'just = "1.21.0"' 'just = "1.20.0"' "templates/typescript/mise.toml pins just 1.20.0, the kit 1.21.0: set just = '1.21.0' there, then mise lock"
 mv "$t/templates/python/mise.lock" "$t/.lock-old"

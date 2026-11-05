@@ -17,4 +17,4 @@ Repo skills: python, verify-app
 ## Layout
 
 - `src/app/` the app package; CLI entry and dependency declarations: `pyproject.toml`. Dependency pins: `uv.lock`.
-- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `shared-machinery.txt` the shared-machinery list (what it schedules: its header).
+- `tests/` integration and E2E tests; gate recipes and setup: `justfile`, listed by `just --list`. `shared-machinery.txt` the shared-machinery list (what it schedules: its header). `tests/conftest.py` appends one trend line per pytest run (its docstring says what); `gate-budget.toml` the gate-time budget (its head says what reads it).
