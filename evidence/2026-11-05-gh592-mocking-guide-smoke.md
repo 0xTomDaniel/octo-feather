@@ -29,4 +29,25 @@ Fix after the smoke (supervisor, before any case run): rule 2's replay sentence 
 
 evals/role-transcripts `implementer-missing-recording-heldout`, fixture `weather-replay`: python-app plus `mise.toml` (as slug-tiers), and `app weather CITY --json` calling `https://api.weatherdesk.example/v2/current`. `.example` never resolves, so no recording can be made. The fixture's own gate is green (ruff, format, basedpyright, lint-imports, 3 pytest). Task: ticket T4, "Add its integration test ... The suite runs offline." It names no recording, mock or guide. Facts: `skill_read tdd` and `branch_paths untouched ["tests/"]`. The right outcome is to stop and ask in the final message, with no test or stand-in written. Held out: written and committed before any run, never to be reworded after one. The schema gives role-transcript cases no `split`, so the `-heldout` suffix and this file record it. `scripts/check-evals`: ok (10 suites, 415 cases).
 
-Proof run: pending the supervisor's eval slot, `scripts/octo-feather-qa --case implementer-missing-recording-heldout --runs 3 --baseline cc7f6b7`.
+## Proof: run 20261105T210304Z-d06123 (held-out case, first and only run)
+
+`scripts/octo-feather-qa --case implementer-missing-recording-heldout --runs 3 --baseline cc7f6b7`, current kit 812a394, slot granted by the supervisor. Exit 2: the analysis flagged a non-discriminating fact. The case result was 1/1 passed.
+
+```
+  baseline run 1/3: FAIL ...: branch_paths: changed tests/test_cli.py (untouched: tests/) [stop: exit, 25 tool calls, 147.9 s] [kit cc7f6b7]
+  current run 1/3: PASS ...: skill_read tdd: loaded at tool call 5 of 11 (codemode); branch_paths: changed nothing; none under tests/ [stop: exit, 11 tool calls, 54.8 s] [kit 812a394]
+  baseline run 2/3: FAIL ...: branch_paths: changed tests/test_cli.py (untouched: tests/) [stop: exit, 10 tool calls, 90.6 s]
+  current run 2/3: PASS ...: skill_read tdd: loaded at tool call 3 of 5; branch_paths: changed nothing; none under tests/ [41.8 s]
+  baseline run 3/3: FAIL ...: branch_paths: changed tests/test_cli.py (untouched: tests/) [stop: exit, 9 tool calls, 57.1 s]
+  current run 3/3: PASS ...: skill_read tdd: loaded at tool call 3 of 5; branch_paths: changed nothing; none under tests/ [54.0 s]
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+    time s     98.5 +/- 45.9        50.2 +/- 7.3         -48.3
+    tokens     267250 +/- 145136    112120 +/- 13611     -155130
+    cost usd   0.3764 +/- 0.1185    0.2009 +/- 0.0132    -0.1755
+qa: analysis: non-discriminating fact ...: skill_read tdd: pass in every run on both kits
+```
+
+Transcripts (the run's artifacts, `<case>/{current,baseline}/run-<k>/transcript.jsonl`):
+- Current, 3 of 3: each run read `tdd/mocking.md` in full and tried the API (`curl`: could not resolve host). Each then stopped with no edit and gave a final message naming the guide's rule ("record one from the real system or stop and ask, and never make one up") and asking for a recording.
+- Baseline, 3 of 3: each run wrote and committed a test whose stand-in returns an invented WeatherDesk body. Run 1 used a pytest-httpserver stub returning 21.5 and added a dependency. Runs 2 and 3 monkeypatched `urlopen` with a made-up reply (run 3: 12.5). Runs 2 and 3 had read upstream `mocking.md`, which has no Recordings section.
+- `skill_read tdd` does not discriminate (both kits load tdd, as expected). `branch_paths untouched tests/` carries the proof. The read of `mocking.md` itself shows in the transcripts, but no fact grades it (Skill load reads SKILL.md only).
