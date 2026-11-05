@@ -34,7 +34,7 @@ names = {s["name"] for s in runs[0]["steps"] if s["result"] == "ok"}
 want = [f"tests/gate.test.ts > {x}" for x in os.environ["GATE_RECIPES"].split()] + ["tests/other.test.ts > doubles"]
 print("missing:", *[w for w in want if w not in names], *([] if any(n.startswith("tests/cli.e2e.test.ts > ") for n in names) else ["e2e"]))
 ' "$trend" "$H")"
-[[ "$got" == $'full:0:True subset:0:True subset:0:True\nmissing:' ]] || fail "typescript: trend lines (tier:exit:on head, then steps missing from the full run): $got"
+[[ "$got" == $'full:0:True subset:0:True subset:0:True subset:0:True\nmissing:' ]] || fail "typescript: trend lines (tier:exit:on head, then steps missing from the full run): $got"
 
 # A state dir that cannot be created (its parent a file) or written: a warning on stderr, the run's verdict unchanged.
 : >"$t/afile"; mkdir -p "$t/ro/octo-feather"; chmod 555 "$t/ro/octo-feather"
@@ -44,10 +44,10 @@ for x in "$t/afile" "$t/ro"; do
     || fail "typescript: state dir $x: exit $rc, or no warning"
 done
 chmod 755 "$t/ro/octo-feather"
-[[ "$(wc -l <"$trend")" == 3 ]] || fail "typescript: a run with another state dir wrote the trend file"
+[[ "$(wc -l <"$trend")" == 4 ]] || fail "typescript: a run with another state dir wrote the trend file"
 # A bare `vitest run` (no GATE_RECIPES: tests/gate.test.ts skips the gate's static steps) is no full run: tier subset.
 set +e; out="$(cd "$d" && env -u GATE_RECIPES PATH="$t/nopy:$PATH" pnpm exec vitest run 2>&1)"; rc=$?; set -e
-[[ "$rc" == 0 && "$(wc -l <"$trend")" == 4 && "$(tail -1 "$trend" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tier"])')" == subset ]] \
+[[ "$rc" == 0 && "$(wc -l <"$trend")" == 5 && "$(tail -1 "$trend" | python3 -c 'import json, sys; print(json.load(sys.stdin)["tier"])')" == subset ]] \
   || fail "typescript: a bare vitest run: want exit 0 and one more trend line of tier subset, got exit $rc: $(tail -1 "$trend")"
 
 # The factory report and the merge ask show the repo's full gate against its gate-budget.toml: o/ts, PR #1 at H.

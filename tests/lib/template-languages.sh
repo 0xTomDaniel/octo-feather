@@ -66,7 +66,8 @@ check_template() {
 # #acceptance-shared-fixture), after check_template, with a second module and its integration test committed. The
 # full tier's tests show each kind, integration and e2e, and the shared fixture prepared once with two workers; then
 # just fast after a one-file change names only that module's test, and after a justfile change (on its
-# shared-machinery.txt) every integration test; neither shows an e2e test. The Python repo's static checks cut to one
+# shared-machinery.txt) every integration test, and the same after a change to only its selector script (listed too);
+# none shows an e2e test. The Python repo's static checks cut to one
 # with just's own command line (--set GATE_RECIPES); the TypeScript repo's run in full (just check is one Vitest run
 # holding them, tests/gate.test.ts; fast runs check-static first).
 check_tiers() {
@@ -103,6 +104,12 @@ check_tiers() {
   tier "${fast[@]}"
   [[ "$out" == *"fast: every integration test: justfile changed since main, on shared-machinery.txt"* && "$out" == *"$other_t"* \
     && "$out" == *"$integ"* && "$out" != *"$e2e"* ]] || fail "$lang: just fast after a justfile change did not run every integration test, and only those"
+  # Its selector script (shared machinery itself: the list names it) changed alone: every integration test, named.
+  local sel=scripts/fast-select; [[ "$lang" == python ]] && printf '# changed\n' >>"$d/$sel" || { sel=scripts/fast-select.ts; printf '// changed\n' >>"$d/$sel"; }
+  g "$d" checkout -q -- justfile
+  tier "${fast[@]}"
+  [[ "$out" == *"fast: every integration test: $sel changed since main, on shared-machinery.txt"* && "$out" == *"$other_t"* \
+    && "$out" == *"$integ"* && "$out" != *"$e2e"* ]] || fail "$lang: just fast after a change to only $sel did not run every integration test, naming it"
 }
 
 # check_acceptance LANG: the created repo's starter criterion proven by its tagged acceptance test (templates spec

@@ -6,6 +6,7 @@
 # cannot see: configuration, pins, workflows, the shared fixture's setup.
 shared-machinery.txt
 justfile
+scripts/fast-select.ts
 package.json
 pnpm-lock.yaml
 tsconfig.json
