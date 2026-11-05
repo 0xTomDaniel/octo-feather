@@ -1580,6 +1580,9 @@ def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
         path = str(r.get("path") or "")
         jobs = read(f"runs/{r.get('id')}/jobs?per_page=100", "jobs")
         state = {str(j.get("name")): (str(j.get("status") or "").lower(), str(j.get("conclusion") or "").lower()) for j in jobs}
+        # The run's own job list is the fact; the workflow file's job count is only the guard against GitHub creating a
+        # needs-dependent job late (run 42118019970 listed check only after scope completed). Started, none skipped, not
+        # completed: waiting for completion would put CI before qc and review again (issue-lifecycle #lanes-one-head).
         n = workflow_jobs(head, path)
         if n is None:
             why.append(f"{path or 'its workflow'} at {head[:12]} is unreadable: no job count to compare")
