@@ -4,7 +4,7 @@ Lightweight agentic development kit built on octo-lite (`varelaseb/octo-lite`, A
 
 This file governs work on the kit itself. Terms (director, supervisor, worker, work item, lane) are defined in [GLOSSARY.md](GLOSSARY.md). Target repos get their own `AGENTS.md` from `templates/`.
 
-Repo skills: verify-octo-feather
+Repo skills: verify-octo-feather, typescript, python
 
 ## Rules
 
