@@ -80,3 +80,55 @@ tests = ["tests/qc-capture.sh", "tests/spec-status.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
 covers = ["scripts/octo-feather-spec-status"]
 tests = ["tests/spec-status.sh"]
+
+# The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
+[demo."quality#acceptance-qa-repeats"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-runs.sh"]
+
+[demo."quality#acceptance-qa-cost"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-baseline"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-analyst"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-analyst"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-analyst.sh"]
+
+[demo."quality#acceptance-qa-review"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-review"
+covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+tests = ["tests/qa-review.sh"]
+
+[demo."quality#acceptance-qa-history"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
+covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+tests = ["tests/qa-history.sh"]
+
+# Reflectors stubbed, tracker faked: no model call, no tracker write.
+[demo."comms#acceptance-reflect-files-correction"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."issue-lifecycle#acceptance-writer-route-lane"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."comms#acceptance-correction-intake"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+tests = ["tests/lane-intake.sh"]
+
+[demo."comms#acceptance-report-owner-caught-headline"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
+covers = ["scripts/octo-feather-lane"]
+tests = ["tests/lane-report.sh"]

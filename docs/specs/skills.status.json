@@ -49,6 +49,10 @@
     "acceptance-browser": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-launch-refuses-unloaded": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

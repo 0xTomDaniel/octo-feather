@@ -455,7 +455,11 @@ def log_lines(found: list[Finding], ids: list[str], *, lane: bool = True) -> lis
 MARK_WORD = "correction-lane"
 MARK = f"[{MARK_WORD} {{}}]"  # a correction-lane issue's one title marker: found and filed by it
 MISSED = "reflection-missed"
-REPEAT = 2  # findings of one class that make its correction lane due (#lanes-correction)
+REPEAT = 2  # distinct lanes whose counted findings make a class due (#lanes-correction)
+BLOCKERS = (
+    "code-review",
+    "qc",
+)  # the finding sources that count, blocking only (#lanes-correction)
 GATE = "owner-caught-"  # the director's (issue-lifecycle #acceptance-gate-correction-lane)
 DIRECTOR = "director"  # a Due's owner when no lane log holds the subject's findings
 KIT_REPO = "0xTomDaniel/octo-feather"  # the kit's tracker: the director's correction lanes
@@ -511,30 +515,45 @@ class Due:
         )
 
 
+def counts(log: str, d: LogLine) -> bool:
+    """Whether finding line D of LOG counts toward its class's correction lane (the rule:
+    issue-lifecycle #lanes-correction)."""
+    return log != DIRECTOR and d.get("source") in BLOCKERS and d.get("blocking") is True
+
+
 def corrections(logs: dict[str, list[LogLine]], director: list[LogLine]) -> list[Due]:
     """Each correction lane the rule makes due on the finding lines of the lane hand-off logs LOGS
-    ({lane: lines}, archived included) and the DIRECTOR log, before the tracker is asked."""
+    ({lane: lines}, archived included) and the DIRECTOR log, before the tracker is asked; a due
+    class names the routes its reflection findings gave."""
     by: dict[str, list[tuple[str, LogLine]]] = {}
+    routed: dict[str, list[str]] = {}
     for log, lines in [*logs.items(), (DIRECTOR, director)]:
         for d in lines:
             cls = d.get("class")
             if d.get("kind") != "finding" or not isinstance(cls, str) or cls.startswith(GATE):
                 continue
+            if d.get("route"):
+                routed.setdefault(cls, []).append(str(d["route"]))
             if cls == MISSED:  # each one at once: its own subject
                 tag = hashlib.sha256(str(d.get("summary")).encode()).hexdigest()[:8]
                 by[f"{cls} {d.get('at')} {tag}"] = [(log, d)]
-            else:
+            elif counts(log, d):
                 by.setdefault(cls, []).append((log, d))
     out: list[Due] = []
     for subject, found in by.items():
         cls = str(found[0][1]["class"])
-        if cls != MISSED and len(found) < REPEAT:
+        if cls != MISSED and len({log for log, _ in found}) < REPEAT:
             continue
         latest = max(str(d.get("at") or "") for _, d in found)
         lane = [(str(d.get("at") or ""), log) for log, d in found if log != DIRECTOR]
         top = max((at for at, _ in lane), default=None)
         owners = tuple(sorted({log for at, log in lane if at == top})) or (DIRECTOR,)
-        routes = list(dict.fromkeys(str(d["route"]) for _, d in found if d.get("route")))
+        routes = (
+            [str(d["route"]) for _, d in found if d.get("route")]
+            if cls == MISSED
+            else routed.get(cls, [])
+        )
+        routes = list(dict.fromkeys(routes))
         out.append(Due(subject, cls, found, routes, latest, owners))
     return out
 
