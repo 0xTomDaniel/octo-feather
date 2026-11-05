@@ -14,7 +14,7 @@ Drive criterion: `roles#acceptance-web-list-once`
 
 ## Sub-features
 
-- `<role>` each role's launch: `director`, `supervisor`, `implementer`, `corrector`, `code-reviewer`, `qc-judge`.
+- `<role>` each role's launch: `director`, `supervisor`, `implementer`, `corrector`, `code-reviewer`, `qc-judge`, `shaper`.
 - `other-mcp-<role>` the implementer's and the supervisor's launch in a target whose user and project Pi config each name another MCP server.
 - `list-once-<role>` each role's launch from a scratch copy of the kit whose web server list has one more server, no role file changed.
 

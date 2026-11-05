@@ -1,0 +1,18 @@
+{
+ "changelog-new-flag": {
+  "facts": [
+   {
+    "fact": "skill_read",
+    "skill": "changelog"
+   }
+  ]
+ },
+ "changelog-refactor": {
+  "facts": [
+   {
+    "fact": "skill_not_read",
+    "skill": "changelog"
+   }
+  ]
+ }
+}
