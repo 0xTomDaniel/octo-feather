@@ -5,7 +5,8 @@
 # #acceptance-report-owner-queue, #acceptance-report-owner-caught, #acceptance-report-lane-numbers (lane-a: started
 # line's age is its wall time, 2 review rounds, $1.7500 and 2 calls of unknown cost), #acceptance-report-gate-time
 # (lane-a: its PR's last gate run beside o/a main's last; lane-b: a subset run on its PR head never stands in for a
-# gate run, and o/b main's line with no tier, written before runners recorded one, counts), #acceptance-report-reflection (none ran, then one two days ago),
+# gate run, and o/b main's line with no tier, written before runners recorded one, counts), #acceptance-report-reflection (none ran, then one two days ago), #acceptance-report-owner-caught-headline (both
+# weeks' counts on the line after the first, before any lane),
 # #acceptance-report-gate-budget (o/a: its latest passed full run, 280.25s, over its 240s budget and grown 12.1% over the
 # median 250s of the 3 passed full runs before it, a share of 10%, with the trend and slowest items; a failed full run
 # and a subset run stay out of the trend; within budget and share, no budget file, an invalid one; no gate on timing:
@@ -24,11 +25,11 @@ mkdir -p "$HOME" "$t/bin" "$S"; cp -r "$fx/state/." "$S/"
 cp "$fx/gh" "$fx/herdr" "$t/bin/"; chmod +x "$t/bin/"*; export PATH="$t/bin:$PATH"
 snap() { (cd "$S" && find . -printf '%p %y %s %T@ %m\n' | sort && find . -type f -exec sha256sum {} + | sort); }
 before="$(snap)"
-run() { # expected-file; runs the report, normalizes now, state dir and ages, diffs
+run() { # expected-file; runs the report, normalizes now, state dir, ages and the headline's counts (they move with the date), diffs
   local rc=0
   "$kit/scripts/octo-feather-lane" report >"$t/out" 2>"$t/err" || rc=$?
   [[ $rc == 0 ]] || fail "exit $rc: $(cat "$t/err" "$t/out")"
-  sed -E "1s/^report at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z/report at NOW/; s#$S#STATE#; s/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/g" "$t/out" >"$t/norm"
+  sed -E "1s/^report at [0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9:]{8}Z/report at NOW/; s#$S#STATE#; s/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/g; 2s/: [0-9]+ in the last 7 days, [0-9]+ in the 7 days before$/: COUNTS/" "$t/out" >"$t/norm"
   diff -u "$1" "$t/norm" || fail "report differs from $(basename "$1")"
   [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 }
@@ -72,6 +73,17 @@ grep -qxF "$run_line: no budget (gate-budget.toml: none)" <<<"$out" \
 out="$(budget 'budget_seconds = "fast"')"
 grep -qxF "$run_line: no budget (gate-budget.toml: budget_seconds 'fast' is not a number of the right range; growth_share None is not a number of the right range; trend_runs None is not a number of the right range)" <<<"$out" \
   && grep -qx 'unread: gate-budget.toml (o/a)' "$t/out" || fail "invalid budget file: $out $(tail -1 "$t/out")"
+# the headline (comms #report-owner-caught): a director log of owner-caught findings 2, 3 (fractional seconds, an
+# offset) and 9 days ago, one with no readable at; the
+# report's line after its first, before any lane, counts each week
+nine="$(date -u -d '9 days ago' +%Y-%m-%dT%H:%M:%SZ)"
+three="$(date -u -d '3 days ago' +%Y-%m-%dT%H:%M:%S.123456+00:00)"   # ISO 8601 with fractional seconds and an offset
+printf '{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "a"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-y", "summary": "b"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-x", "summary": "c"}\n{"at": "soon", "kind": "finding", "class": "owner-caught-x", "summary": "d"}\n{"at": "%s", "kind": "finding", "class": "owner-caught-z", "summary": "e"}\n' \
+  "$two" "$two" "$nine" "$three" >"$S/director.handoffs.jsonl"; before="$(snap)"
+"$kit/scripts/octo-feather-lane" report >"$t/out" || fail "headline: exit non-zero"
+[[ "$(sed -n 2p "$t/out")" == "owner-caught (headline, director.handoffs.jsonl): 3 in the last 7 days, 1 in the 7 days before; 1 with no readable at, not counted" ]] \
+  || fail "headline: want it second, before any lane: $(head -3 "$t/out")"
+grep -qx '  class owner-caught-x: count 3, last seen .*' "$t/out" && grep -qx "  class owner-caught-z: count 1, last seen ${three%.*}Z (.* ago)" "$t/out" || fail "headline: the per-class block changed: $(cat "$t/out")"
 [[ "$(snap)" == "$before" ]] || fail "the report changed the state dir"
 
 # no spend ledger and no gate run trend: said per lane, nothing else changes

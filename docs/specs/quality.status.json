@@ -180,14 +180,82 @@
       ]
     },
     "acceptance-one-execution": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T213011Z-6e600dd2",
+      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "tests": [
+        "tests/qc-one-execution.sh"
+      ]
     },
     "acceptance-one-execution-incomplete": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261104T213018Z-1aa5e84e",
+      "commit": "cf290b1b47556e1679f379e0516f60d3657b0c94",
+      "tests": [
+        "tests/qc-one-execution.sh"
+      ]
+    },
+    "acceptance-review-test-adequacy": {
       "status": "planned",
       "pr": null
     },
-    "acceptance-review-test-adequacy": {
+    "acceptance-qa-repeats": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220224Z-360b97be",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-runs.sh"
+      ]
+    },
+    "acceptance-qa-cost": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220244Z-65c60aa7",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-baseline.sh"
+      ]
+    },
+    "acceptance-qa-baseline": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220303Z-ced67100",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-baseline.sh"
+      ]
+    },
+    "acceptance-qa-analyst": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220340Z-26202b38",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-analyst.sh"
+      ]
+    },
+    "acceptance-qa-review": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220349Z-4299d09d",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-review.sh"
+      ]
+    },
+    "acceptance-qa-history": {
+      "status": "built",
+      "pr": 545,
+      "record": "20261104T220356Z-56e56902",
+      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
+      "tests": [
+        "tests/qa-history.sh"
+      ]
+    },
+    "acceptance-qa-tuning-method": {
       "status": "planned",
       "pr": null
     }

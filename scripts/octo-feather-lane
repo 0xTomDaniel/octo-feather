@@ -230,10 +230,29 @@ appended in one locked write, so concurrent writers never interleave. It never f
 cannot read, or a ledger it cannot write, prints one stderr line naming the unrecorded spend, and it exits 0
 (spec spend#rule-write-fails).
 
+  octo-feather-lane intake         every open correction-lane issue by class, with the correction-lane rule's
+                                   evidence (spec comms #reflection-correction); reads only, writes nothing
+
+`intake` lists the correction-lane issues (title marker, as `reflect` files them) of the github-issues trackers of
+every lane record's `repository` (lanes/ and lanes/archive/) and the kit's, through the same `gh issue list` call
+as `reflect`; an issue filed in another tracker (Linear) is not found (gh only). Per class of an open one:
+`class <class>: due yes|no; blocking <n> in <m> lane(s) (<lanes>); findings <k>`, under it each open issue
+(`issue <repo>#<n>: <title>`), `duplicates: <n> open issues of class <class>` when two or more, and each finding
+line of the class in the lane logs and the director log (`finding <lane|director> <at> <source> blocking|not
+blocking: <summary>`). Due and what counts: scripts/octo-feather-reflect `corrections`, `counts`. Exit 0; 1 when
+gh cannot list a tracker.
+
   octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
 
 What `report` reads and shows, that it writes nothing, and how it treats a source it cannot read:
-docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then per lane:
+docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then the headline (spec comms
+#report-owner-caught):
+
+  owner-caught (headline, director.handoffs.jsonl): <N> in the last 7 days, <M> in the 7 days before
+                                                 by each finding's at; `; <K> with no readable at, not counted`
+                                                 when some have none; `log none` with no log, `unread` when unreadable
+
+then per lane:
 
   lane <record name>: issue <issue> <repository> "<goal>"
     started: <started_at>                        its age is the lane's wall time
@@ -601,13 +620,7 @@ def file_corrections(lanes: Path) -> list[str]:
                 print(f"correction lane: due, not filed: {d.subject}: tracker skill {skill} offers no search for an existing"
                       f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
             continue
-        out = gh(["issue", "list", *(["--repo", str(repo)] if repo else []), "--state", "all", "--limit", "1000",
-                  "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt"],
-                 "check gh auth and network, then rerun")
-        try:
-            issues = json.loads(out)
-        except ValueError as e:
-            raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
+        issues = correction_issues(str(repo) if repo else None)
         for d in mine:
             if not r.still_due(d, issues):
                 continue
@@ -622,6 +635,76 @@ def file_corrections(lanes: Path) -> list[str]:
     if not filed:
         print("correction lanes: none filed")
     return filed
+
+
+def correction_issues(repo: str | None) -> list[dict[str, object]]:
+    """Every correction-lane issue, open or closed, of the github-issues tracker REPO (None: the current directory's),
+    found by scripts/octo-feather-reflect `MARK_WORD` in its title: {number, title, state, closedAt, url}."""
+    r = reflect_module()
+    out = gh(["issue", "list", *(["--repo", repo] if repo else []), "--state", "all", "--limit", "1000",
+              "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt"],
+             "check gh auth and network, then rerun")
+    try:
+        got = json.loads(out)
+    except ValueError as e:
+        raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
+    if not isinstance(got, list):
+        raise Refuse("correction lanes: gh issue list printed no list: rerun")
+    return [cast("dict[str, object]", i) for i in cast("list[object]", got) if isinstance(i, dict)]
+
+
+def cmd_intake(args: list[str]) -> int:
+    """`octo-feather-lane intake` (spec comms #reflection-correction): every open correction-lane issue, grouped by
+    class, with the rule's evidence (scripts/octo-feather-reflect `corrections`, `counts`); reads only."""
+    import tomllib
+    if args:
+        raise Refuse(f"usage: octo-feather-lane intake (got {' '.join(args)})")
+    r = reflect_module()
+    lanes = lanes_dir()
+    dlog = lanes.parent / DIRECTOR_LOG
+    logs: dict[str, list[dict[str, object]]] = {}
+    for lane, _, lines in lane_logs(lanes):
+        logs[lane] = logs.get(lane, []) + lines
+    director = read_log(dlog)[0] if dlog.exists() else []
+    due = {d.subject for d in r.corrections(logs, director)}
+    repos: list[str] = []
+    for rec in sorted(lanes.glob("archive/*.toml")) + sorted(lanes.glob("*.toml")):
+        try:
+            repo = tomllib.loads(rec.read_text(encoding="utf-8")).get("repository")
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(repo, str) and repo and repo not in repos:
+            repos.append(repo)
+    if r.KIT_REPO not in repos:
+        repos.append(r.KIT_REPO)
+    mark = re.compile(r"\[" + re.escape(r.MARK_WORD) + r" ([^\]]+)\]")
+    by: dict[str, list[tuple[str, str, dict[str, object]]]] = {}
+    for repo in repos:
+        for i in correction_issues(repo):
+            m = mark.search(str(i.get("title")))
+            if m and str(i.get("state")).upper() == "OPEN":
+                subject = m.group(1)
+                by.setdefault(subject.split(" ")[0], []).append((repo, subject, i))
+    found = [(log, d) for log, lines in [*logs.items(), (r.DIRECTOR, director)] for d in lines
+             if d.get("kind") == "finding" and isinstance(d.get("class"), str)]
+    print(f"correction intake: {sum(len(v) for v in by.values())} open correction-lane issue(s) in {len(by)} class(es);"
+          f" trackers searched (github-issues): {', '.join(repos)}; rule: issue-lifecycle #lanes-correction")
+    for cls in sorted(by):
+        mine = [(log, d) for log, d in found if d["class"] == cls]
+        counted = [(log, d) for log, d in mine if r.counts(log, d)]
+        lanes_ = sorted({log for log, _ in counted})
+        subjects = {s for _, s, _ in by[cls]}
+        is_due = all(s in due for s in subjects) if cls == r.MISSED else cls in due
+        print(f"class {cls}: due {'yes' if is_due else 'no'}; blocking {len(counted)} in {len(lanes_)} lane(s)"
+              + (f" ({', '.join(lanes_)})" if lanes_ else "") + f"; findings {len(mine)}")
+        for repo, _, i in by[cls]:
+            print(f"  issue {repo}#{i.get('number')}: {i.get('title')}")
+        if len(by[cls]) > 1:
+            print(f"  duplicates: {len(by[cls])} open issues of class {cls}")
+        for log, d in sorted(mine, key=lambda x: str(x[1].get("at") or "")):
+            print(f"  finding {log} {d.get('at')} {d.get('source') or r.DIRECTOR} {'blocking' if d.get('blocking') is True else 'not blocking'}"
+                  f": {' '.join(str(d.get('summary') or '').split())[:200]}")
+    return 0
 
 
 def cmd_reflect(args: list[str]) -> int:
@@ -2433,11 +2516,16 @@ RUNNING = "working"   # the Herdr agent_status of an agent at work
 
 
 def utc(s: object) -> "datetime.datetime | None":
+    """S as a UTC instant: an ISO 8601 date and time with Z or an offset, fractional seconds allowed
+    (2026-10-29T14:06:08Z, 2026-10-29T14:06:08.770516+00:00); None for anything else, a time with no zone included."""
     import datetime
+    if not isinstance(s, str) or "T" not in s:
+        return None
     try:
-        return datetime.datetime.strptime(str(s), "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=datetime.timezone.utc)
+        t = datetime.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
     except ValueError:
         return None
+    return None if t.tzinfo is None else t.astimezone(datetime.timezone.utc)
 
 
 def stamp(s: object, now) -> str:
@@ -2490,17 +2578,22 @@ def check_results(rollup: list[dict]) -> str:
     return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
 
 
-def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
-    """The director log's owner-caught finding classes (spec comms #report-owner-caught)."""
+def owner_caught(state: Path, now, unread: list[str]) -> tuple[str, list[str]]:
+    """The director log's owner-caught findings (spec comms #report-owner-caught): the headline, the count for the
+    last seven days beside the seven before, and the block by class."""
+    import datetime
     log = state / "director.handoffs.jsonl"
+    head = f"owner-caught (headline, {log.name}):"
     if not log.exists():
-        return [f"owner-caught: log {log.name}: none"]
+        return f"{head} log none", [f"owner-caught: log {log.name}: none"]
     try:
         lines, bad = read_log(log)
     except (OSError, UnicodeDecodeError) as e:
         unread.append(f"log {log.name}")
-        return [f"owner-caught: unread: log {log.name}: {e}"]
+        return f"{head} unread", [f"owner-caught: unread: log {log.name}: {e}"]
     seen: dict[str, list] = {}
+    week = datetime.timedelta(days=7)
+    weeks, undated = [0, 0], 0
     for d in lines:
         c = d.get("class")
         if d.get("kind") == "finding" and isinstance(c, str) and c.startswith("owner-caught-"):
@@ -2509,11 +2602,19 @@ def owner_caught(state: Path, now, unread: list[str]) -> list[str]:
             t = utc(d.get("at"))
             if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
                 s[1] = d.get("at")
+            if t is None:
+                undated += 1
+            elif t > now - week:
+                weeks[0] += 1
+            elif t > now - 2 * week:
+                weeks[1] += 1
+    head += f" {weeks[0]} in the last 7 days, {weeks[1]} in the 7 days before" + (
+        f"; {undated} with no readable at, not counted" if undated else "")
     out = [f"owner-caught ({log.name}):" if seen else f"owner-caught ({log.name}): none"]
     out += [f"  class {c}: count {n}, last seen {stamp(at, now)}" for c, (n, at) in sorted(seen.items())]
     if bad:
         out.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
-    return out
+    return head, out
 
 
 def director_reflection(state: Path, now: object, unread: list[str]) -> str:
@@ -2839,6 +2940,8 @@ def cmd_report(args: list[str]) -> int:
     lanes = lanes_dir()
     print(f"report at {now:%Y-%m-%dT%H:%M:%SZ} ({lanes})")
     unread: list[str] = []
+    headline, caught = owner_caught(lanes.parent, now, unread)
+    print(headline)
     try:
         agents, herdr_why = herdr_agents(), None
     except Refuse as e:
@@ -2862,7 +2965,7 @@ def cmd_report(args: list[str]) -> int:
     print("owner queue:" if queue else "owner queue: none")
     for name, g, at in queue:
         print(f"  lane {name} gate {g} asked {stamp(at, now)}")
-    print("\n".join(owner_caught(lanes.parent, now, unread)))
+    print("\n".join(caught))
     print(director_reflection(lanes.parent, now, unread))
     for n in src.notes():
         print(n)
@@ -3388,6 +3491,7 @@ COMMANDS = {
     "ticket": cmd_ticket,
     "spend": cmd_spend,
     "report": cmd_report,
+    "intake": cmd_intake,
     "post-merge": cmd_post_merge,
 }
 

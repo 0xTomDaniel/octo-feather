@@ -131,6 +131,16 @@ command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
 tests = ["tests/integrate.sh"]
 
+[demo."quality#acceptance-one-execution"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
+tests = ["tests/qc-one-execution.sh"]
+
+[demo."quality#acceptance-one-execution-incomplete"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete"
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
+tests = ["tests/qc-one-execution.sh"]
+
 [demo."comms#acceptance-report-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
@@ -140,3 +150,55 @@ tests = ["tests/lane-report.sh", "tests/gate-trend-tier.sh"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 tests = ["tests/lane-merge-ask.sh", "tests/gate-trend-tier.sh"]
+
+# The stub role's model is a stub `pi` the drive writes first on the qa sandbox's PATH: no real model call.
+[demo."quality#acceptance-qa-repeats"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-runs"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-runs.sh"]
+
+[demo."quality#acceptance-qa-cost"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-baseline"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-baseline"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-baseline.sh"]
+
+[demo."quality#acceptance-qa-analyst"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-analyst"
+covers = ["scripts/octo-feather-qa"]
+tests = ["tests/qa-analyst.sh"]
+
+[demo."quality#acceptance-qa-review"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-review"
+covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+tests = ["tests/qa-review.sh"]
+
+[demo."quality#acceptance-qa-history"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
+covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+tests = ["tests/qa-history.sh"]
+
+# Reflectors stubbed, tracker faked: no model call, no tracker write.
+[demo."comms#acceptance-reflect-files-correction"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."issue-lifecycle#acceptance-writer-route-lane"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+tests = ["tests/lane-correction.sh"]
+
+[demo."comms#acceptance-correction-intake"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
+covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+tests = ["tests/lane-intake.sh"]
+
+[demo."comms#acceptance-report-owner-caught-headline"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
+covers = ["scripts/octo-feather-lane"]
+tests = ["tests/lane-report.sh"]
