@@ -155,9 +155,8 @@ run 1 post-merge 7 "$H" --lane gh7 --wait 0 --repo o/r
 [[ "$out" == *"stopped: no push run on merge commit ${M:0:12} within 0s, its workflows .github/workflows/deploy.yaml:"* ]] || fail "yaml workflow: $out"
 grep -qx "api repos/o/r/git/trees/$M" "$GH_LOG" || fail "--repo tree read: $(cat "$GH_LOG")"
 
-# The no-CI fact (issue 569, owner ruling 2026-10-29 on issue 206): no run listed and no workflow file in the merge
-# commit's tree (no .github; .github/workflows with no .yml or .yaml file): step 2 ok at once naming the fact and its
-# source, one run list and no wait (a --wait bound that would stop a CI repo), steps 3-5 run; a rerun gives the same.
+# The no-CI fact (rule: octo-feather-lane --help, post-merge step 2): no .github, and .github/workflows with no .yml or
+# .yaml file; one run list and no wait (a --wait bound that would stop a CI repo), steps 3-5 run; a rerun the same.
 noci="step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit ${M:0:12} (gh api repos/<this repo>/git/trees/${M:0:12}), so no push run can appear; nothing to wait for"
 for wf in null '[["README.md", "blob"], ["ci.yml.off", "blob"], ["old.yml", "tree"]]' null; do
   WF="$wf" store MERGED "$H" "[[]]"

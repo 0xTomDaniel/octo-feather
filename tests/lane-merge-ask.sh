@@ -9,8 +9,7 @@
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
 # (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
 # Tracks ENG-123 and no Closes line, and fails with one, spec #acceptance-pr-tracks), stale head,
-# failing or pending check, no check reported on a head with a workflow file (none reported with no workflow
-# file, the no-CI fact of issue 569, passes naming it), missing row, Built unequal to the status file or to the qc commits,
+# failing or pending check, no check reported (rule: --help, merge-ask Checks line), missing row, Built unequal to the status file or to the qc commits,
 # verdict link to another head or a blocking verdict, untriaged failed criterion. One judged head (spec
 # #acceptance-one-head), on a real git lane: review on J plus qc's status commit H passes with the
 # check's proof line; a non-status file after J fails naming it; a clean main merge keeps the qc
@@ -43,6 +42,14 @@ if a[0] == "api" and (r := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/git/t
     s = r.group(1); trees = {"g": [["workflows", "tree", "w"]], "w": [["check.yml", "blob", "b"]]}
     e = trees.get(s, [["app.py", "blob", "x"]] + ([] if s == os.environ.get("FAKE_GH_NOCI") else [[".github", "tree", "g"]]))
     print(json.dumps({"sha": s, "tree": [dict(zip(("path", "type", "sha"), x)) for x in e]})); sys.exit(0)
+if a[0] == "api" and (r := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/(branches|rules/branches)/main", a[1])):
+    # the base's required-check policy: FAKE_GH_BRANCH / FAKE_GH_RULES hold the JSON answer, or `fail` (HTTP 502), or
+    # for rules `plan` (GitHub's 403 on a plan without rulesets); default unprotected, no rule
+    v = os.environ.get("FAKE_GH_BRANCH" if r[1] == "branches" else "FAKE_GH_RULES", "")
+    if v == "fail": die("gh: Server Error (HTTP 502)")
+    if v == "plan": die("gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)")
+    print(v or (json.dumps({"name": "main", "protected": False, "protection": {"enabled": False, "required_status_checks":
+        {"enforcement_level": "off", "contexts": [], "checks": []}}}) if r[1] == "branches" else "[]")); sys.exit(0)
 if a[0] == "api":
     m, p = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
     if os.environ.get("FAKE_GH_FAIL") == "write": die("gh: Server Error (HTTP 502)")
@@ -295,14 +302,28 @@ bad "Checks: pending on head .*: check in_progress" 'd["statusCheckRollup"][0].u
 bad "Checks: pending on head .*: ci/x pending" 'd["statusCheckRollup"][1]["state"] = "PENDING"'
 bad "Checks: failing on head .*: ci/x error" 'd["statusCheckRollup"][1]["state"] = "ERROR"'
 bad "Checks: none reported on head ${H:0:12}, its workflows .github/workflows/check.yml; push the head" 'd["statusCheckRollup"] = []'
-# the no-CI fact (issue 569, ADR 0019): no check reported and no workflow file at the head: required checks are none
+# no check reported, no workflow file at the head (rule: --help, merge-ask Checks line): the base's policy decides
 since() { tail -n +"$(($1 + 1))" "$FAKE_GH_LOG"; }   # the gh calls after log line N
 k="$(wc -l < "$FAKE_GH_LOG")"; FAKE_GH_NOCI="$H" bad "Checks: failing on head .*: check failure" 'd["statusCheckRollup"][0]["conclusion"] = "FAILURE"'
 ! since "$k" | grep -q '^api ' || fail "a reported check still read the tree: $(since "$k")"
-setpr 'd["statusCheckRollup"] = []'; k="$(wc -l < "$FAKE_GH_LOG")"; FAKE_GH_NOCI="$H" run 0 merge-ask 7 "${ST[@]}"
-grep -qxF "Checks: no CI: no workflow file under .github/workflows at head ${H:0:12} (gh api repos/<this repo>/git/trees/${H:0:12}), so required checks are none" <<<"$out" \
-  || fail "no-CI head did not pass naming the fact: $out"
-since "$k" | grep -qx "api repos/{owner}/{repo}/git/trees/$H" || fail "no-CI fact not read at the head: $(since "$k")"
+none='d["statusCheckRollup"] = []; d["baseRefName"] = "main"'
+tree="no workflow file under .github/workflows at head ${H:0:12} (gh api repos/<this repo>/git/trees/${H:0:12})"
+setpr "$none"; k="$(wc -l < "$FAKE_GH_LOG")"; FAKE_GH_NOCI="$H" run 0 merge-ask 7 "${ST[@]}"
+grep -qxF "Checks: no CI: $tree; base main requires no check (gh api repos/<this repo>/branches/main: no required status check; gh api repos/<this repo>/rules/branches/main: no required_status_checks rule), so required checks are none" <<<"$out" \
+  || fail "no-CI head did not pass naming both facts: $out"
+[[ "$(since "$k" | grep '^api ')" == "api repos/{owner}/{repo}/git/trees/$H"$'\n'"api repos/{owner}/{repo}/branches/main"$'\n'"api repos/{owner}/{repo}/rules/branches/main" ]] \
+  || fail "no-CI facts not read at the head and the base: $(since "$k")"
+FAKE_GH_NOCI="$H" FAKE_GH_RULES=plan run 0 merge-ask 7 "${ST[@]}"
+grep -qxF "Checks: no CI: $tree; base main requires no check (gh api repos/<this repo>/branches/main: no required status check; gh api repos/<this repo>/rules/branches/main: rulesets unavailable on this plan, none in force), so required checks are none" <<<"$out" \
+  || fail "no-ruleset plan did not pass naming it: $out"
+# required checks in branch protection or a ruleset: fail naming them; a policy gh cannot read: fail closed naming it
+prot='{"protected": true, "protection": {"enabled": true, "required_status_checks": {"enforcement_level": "everyone", "contexts": ["ci/legacy"], "checks": [{"context": "build", "app_id": 1}]}}}'
+FAKE_GH_NOCI="$H" FAKE_GH_BRANCH="$prot" bad "  - Checks: none reported on head ${H:0:12}, no workflow file there (gh api repos/<this repo>/git/trees/${H:0:12}), but base main requires checks build, ci/legacy (gh api repos/<this repo>/branches/main, repos/<this repo>/rules/branches/main): push the head and wait for them" "$none"
+FAKE_GH_NOCI="$H" FAKE_GH_RULES='[{"type": "deletion"}, {"type": "required_status_checks", "parameters": {"required_status_checks": [{"context": "vercel"}]}}]' \
+  bad "but base main requires checks vercel (gh api" "$none"
+FAKE_GH_NOCI="$H" FAKE_GH_BRANCH=fail bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
+FAKE_GH_NOCI="$H" FAKE_GH_BRANCH='{"protected": true}' bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: no protection.required_status_checks)" "$none"
+FAKE_GH_NOCI="$H" FAKE_GH_RULES=fail bad "but the rulesets of base main could not be read (gh api repos/<this repo>/rules/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
 ROWS="| demo#acceptance-a | pass | judged $JS | r |" bad "criterion row demo#acceptance-b: missing (it is in Built)"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | |' bad "criterion row demo#acceptance-b: no evidence"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | ok | judged '"$JS"$' | r |' bad "qc verdict 'ok'; write pass or fail"
@@ -466,4 +487,4 @@ printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' >
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks (no checks with no workflow file at the head passes, naming the no-CI fact), rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks (none reported passes only with no workflow file at the head and a base requiring no check, by protection or ruleset, the no-ruleset plan counting as none; required checks or an unreadable policy fail naming it), rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
