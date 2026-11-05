@@ -137,8 +137,11 @@
       ]
     },
     "acceptance-report-skill-reach": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 614,
+      "record": "20261105T213429Z-ac32c7a0",
+      "commit": "1edb012c02f2dedd5c9a09e91ed61c73d08dd259",
+      "tests": []
     }
   }
 }
