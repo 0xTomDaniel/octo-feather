@@ -1,0 +1,4 @@
+# The parity lever's case for tests/lane-tickets.sh, rewritten as tests/gate/kit/test_lane_tickets.py (tests/parity/lever.py --help).
+old = "tests/lane-tickets.sh"
+old_at = "3e8c414"
+new = "tests/gate/kit/test_lane_tickets.py"
