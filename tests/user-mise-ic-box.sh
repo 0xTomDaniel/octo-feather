@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The #493 regression fixture's install-check section for tests/install-check-box.sh (#508; the fixture, its
 # namespace and the other sections: tests/user-mise.sh; the other install-check items: tests/user-mise-ic.sh): (1)
 # `just test -k tests/install-check-box.sh` passes in the kit copy under the fixture user's HOME, in a pane of the

@@ -1,0 +1,17 @@
+# The shared-machinery list: what it is and what it schedules, octo-feather issue-lifecycle spec #lanes-checkpoints;
+# here also the paths whose change makes `just fast` run every integration test (justfile, fast).
+#
+# One git pathspec per line, glob magic (`*` within a folder, `**` across folders; a folder name
+# covers everything under it). `#` starts a comment line. Only what pytest-testmon's recorded
+# coverage cannot see: configuration, pins, workflows, the conftest files.
+shared-machinery.txt
+justfile
+scripts/fast-select
+pyproject.toml
+uv.lock
+.python-version
+mise.toml
+mise.lock
+mise-version
+.github/workflows
+**/conftest.py

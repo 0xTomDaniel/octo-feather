@@ -1,0 +1,5 @@
+# The kit's gate-time budget, kept by the factory like any repo policy. What reads it, its keys and what each
+# means: octo-feather-lane --help (report). Passed full runs on this box, 2026-11-04: 360 to 440 s.
+budget_seconds = 420
+growth_share = 0.25
+trend_runs = 5

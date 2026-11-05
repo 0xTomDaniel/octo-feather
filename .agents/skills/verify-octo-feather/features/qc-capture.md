@@ -16,7 +16,7 @@ Drive criterion: `quality#acceptance-qc-same-verdict`
 
 ## How to get to it (user POV)
 
-- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. Each claimed criterion with a `[demo."<spec>#<id>"]` in the target's `qc.toml` (keys: `schemas/qc.v1.schema.json`) is captured and decided from its checks; the rest go to the agent fallback ([qc-fallback](qc-fallback.md)). `octo-feather-qc` with no arguments prints its usage, which owns the rest.
+- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. Each claimed criterion with a `[demo."<spec>#<id>"]` in the target's `qc.toml` (keys: `schemas/qc.v2.schema.json`) is captured and decided from its checks; the rest go to the agent fallback ([qc-fallback](qc-fallback.md)). `octo-feather-qc` with no arguments prints its usage, which owns the rest.
 
 ## Driving it with verify-octo-feather
 

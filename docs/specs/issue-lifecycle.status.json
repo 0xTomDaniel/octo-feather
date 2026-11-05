@@ -157,6 +157,58 @@
       "tests": [
         "tests/lane-correction.sh"
       ]
+    },
+    "acceptance-integrate-fast": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T170901Z-e65497f5",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": [
+        "tests/integrate.sh"
+      ]
+    },
+    "acceptance-integrate-checkpoint": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T170901Z-f4ecb65a",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": [
+        "tests/integrate.sh"
+      ]
+    },
+    "acceptance-pilot-full": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T170901Z-90441b14",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": [
+        "tests/integrate.sh"
+      ]
+    },
+    "acceptance-brownfield-full": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T170901Z-f10f033b",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": [
+        "tests/integrate.sh"
+      ]
+    },
+    "acceptance-merge-ask-full-proof": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T170901Z-72099bd9",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": [
+        "tests/lane-merge-ask.sh"
+      ]
+    },
+    "acceptance-merge-ask-gate-budget": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T172052Z-39985a1b",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
     }
   }
 }

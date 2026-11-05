@@ -60,6 +60,17 @@
     "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
   },
   {
+    "id": "reviewer-criterion-test-adequacy",
+    "role": "code-reviewer",
+    "fixture": "python-app-spec",
+    "head": {
+      "fixture": "python-app-shout-tagged",
+      "branch": "implementer-t2",
+      "message": "feat(hello): --shout (T2, hello#acceptance-shout, hello#acceptance-shout-json)"
+    },
+    "task": "Review lane gh2, ticket T2 (`app hello NAME --shout` shouts the greeting; criteria hello#acceptance-shout and hello#acceptance-shout-json, each claimed through its tagged acceptance test).\nDiff: base main, head implementer-t2 in this directory (`git diff main...implementer-t2`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
+  },
+  {
     "id": "qc-judge-demo-path",
     "role": "qc-judge",
     "fixture": "python-app-shout",
@@ -185,5 +196,26 @@
     "role": "shaper",
     "fixture": "shape-mini",
     "task": "Owner here. Scripts love `--json`, but people at a terminal want something nicer: give `app hello` a `--table` flag that prints the name and the greeting as a bordered, aligned table. Names come from everywhere, so wide characters (Chinese, Japanese, emoji) must line up too. Shape this into the spec, and the spec should say what draws the table.\nI'm away for the rest of the day and can't answer anything: wherever you would ask me, take your recommended answer, note it, and carry on to the end."
+  },
+  {
+    "id": "implementer-hands-off-on-fast",
+    "role": "implementer",
+    "fixture": "python-app-tiers",
+    "branch": "implementer-t2",
+    "task": "Ticket T2 (lane gh2, parent #2): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text, \"name\" as typed after trimming). Without --shout nothing changes.\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t2, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-hands-off-on-fast-heldout",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "branch": "implementer-t3",
+    "task": "Ticket T3 (lane gh7, parent #7): `tally PATH --lines` also counts lines. Plain output becomes `<words> <lines>` (a file holding \"one two\\nthree\\n\" prints `3 2`); with --json the object gains \"lines\". Without --lines output is unchanged. A file with no trailing newline still counts its last line.\nAcceptance criterion: count-lines. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-hands-off-on-fast-heldout-2",
+    "role": "implementer",
+    "fixture": "slug-tiers",
+    "branch": "implementer-slg4",
+    "task": "Ticket SLG-4 (lane gh11, parent #11): long titles make long URLs. Add `--max N` to `slug`: the slug is cut to at most N characters, only at a hyphen, never mid-word, with no trailing hyphen (`slug \"The Quick Brown Fox\" --max 12` prints `the-quick`). If the first word alone is longer than N, print the first word whole. N must be a positive integer, else exit 2 with an error. Without --max nothing changes.\nAcceptance criterion: slug-max. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-slg4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
   }
 ]

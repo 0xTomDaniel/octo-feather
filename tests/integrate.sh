@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 # Integration test for scripts/octo-feather-integrate: clean merge and
 # cherry-pick, conflict, red gate, lane match, in a throwaway repo. Run by `just check`.
+# criterion: issue-lifecycle#acceptance-pilot-full
+# criterion: issue-lifecycle#acceptance-integrate-fast
+# criterion: issue-lifecycle#acceptance-integrate-checkpoint
+# criterion: issue-lifecycle#acceptance-brownfield-full
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
@@ -82,4 +86,43 @@ run 0 ENG-123 lw
 run 64 12 lw; [[ "$out" == *"not a Linear issue key"* ]] || { echo "integrate test: 12 in a Linear target: $out" >&2; exit 1; }
 echo 'tracker = "jira"' > .octo-feather.toml; g commit -qam jira; head="$(git -C ../l123 rev-parse HEAD)"
 run 64 ENG-123 lw; [[ "$out" == *"unknown tracker 'jira'"* && "$(git -C ../l123 rev-parse HEAD)" == "$head" ]] || { echo "integrate test: jira target: $out" >&2; exit 1; }
-echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused)"
+# Gate tiers (issue-lifecycle #lanes-checkpoints): a repo with a fast recipe and a shared-machinery list.
+# The full gate reds on machinery/b, the fast tier never reds.
+cd "$t" && g init -q tiers && cd tiers
+printf 'check:\n    @echo gate=full\n    test ! -e machinery/b\nfast:\n    @echo gate=fast\n' > justfile
+printf '# listed\nmachinery\n' > shared-machinery.txt; mkdir machinery; echo a > machinery/a; echo a > f; g add -A; g commit -qm base
+g worktree add -q -b gh9 ../t9
+work() { g worktree add -q -b "$1" "../$1" gh9; (cd "../$1" && eval "$2" && g add -A && g commit -qm "$1"); }
+passed() { (cd ../t9 && "$kit/scripts/octo-feather-gate" passed); }
+# issue-lifecycle#acceptance-pilot-full: the lane's first integration runs the full gate and records the pass.
+work t1 'echo 1 > one'; run 0 9 t1
+[[ "$out" == *gate=full* && "$out" != *gate=fast* && "$out" == *"tier: full (pilot"* ]] || { echo "integrate test: pilot did not run the full gate: $out" >&2; exit 1; }
+h1="$(git -C ../t9 rev-parse HEAD)"
+rec="$(passed)" && [[ "$rec" == *"\"head\": \"$h1\""* && "$rec" == *'"clean": true'* ]] || { echo "integrate test: pilot pass not recorded for $h1: $rec" >&2; exit 1; }
+# issue-lifecycle#acceptance-integrate-fast: past it, a branch touching no listed path runs only the fast tier.
+work t2 'echo 2 > two'; run 0 9 t2
+[[ "$out" == *gate=fast* && "$out" != *gate=full* && "$out" == *provisional* ]] || { echo "integrate test: unlisted change not fast and provisional: $out" >&2; exit 1; }
+! passed >/dev/null 2>&1 || { echo "integrate test: a fast-only head has a full pass recorded" >&2; exit 1; }
+# Two full passes on heads whose gate configuration did not change (justfile only: no Justfile, .justfile or
+# lock files) record one configuration identity.
+config() { (cd ../t9 && "$kit/scripts/octo-feather-gate" passed "$1") | python3 -c 'import json, sys; print(json.load(sys.stdin)["gate_config"])'; }
+work t4 'echo 4 > four'; run 0 9 --full t4
+[[ "$(config "$h1")" == "$(config HEAD)" && -n "$(config HEAD)" ]] || { echo "integrate test: unchanged configuration, two identities: $(config "$h1") $(config HEAD)" >&2; exit 1; }
+# issue-lifecycle#acceptance-integrate-checkpoint: renaming a listed file runs the full gate; red rolls back, naming it.
+work t3 'g mv machinery/a machinery/b'; before="$(git -C ../t9 rev-parse HEAD)"; run 2 9 t3
+[[ "$out" == *gate=full* && "$out" == *"machinery/a"* && "$out" == *"machinery/b"* && "$(git -C ../t9 rev-parse HEAD)" == "$before" ]] \
+  || { echo "integrate test: listed rename not full and rolled back: $out" >&2; exit 1; }
+# issue-lifecycle#acceptance-brownfield-full: a repo the kit did not create, only its own `just check` (no fast recipe):
+# every integration, past the pilot too, runs that gate in full and records the pass; the repo gains no recipe.
+cd "$t" && g init -q brown && cd brown
+printf 'check:\n    @echo own-gate\n' > justfile; echo a > f; g add -A; g commit -qm base
+recipes="$(just --summary)"; g worktree add -q -b gh11 ../b11
+for n in 1 2 3; do
+  g worktree add -q -b "b$n" ../"b$n" gh11; (cd ../"b$n" && echo "$n" > "n$n" && g add -A && g commit -qm "b$n")
+  run 0 11 "b$n"
+  [[ "$out" == *"tier: full ("*"no fast recipe in this repo: its one gate is the full tier"* && "$out" == *own-gate* && "$out" == *"tier=full"* && "$out" != *provisional* ]] \
+    || { echo "integrate test: brownfield integration $n did not run its own gate in full: $out" >&2; exit 1; }
+  (cd ../b11 && "$kit/scripts/octo-feather-gate" passed >/dev/null) || { echo "integrate test: brownfield pass $n not recorded" >&2; exit 1; }
+  [[ "$(cd ../b11 && just --summary)" == "$recipes" ]] || { echo "integrate test: brownfield repo gained a recipe: $(cd ../b11 && just --summary)" >&2; exit 1; }
+done
+echo "integrate: ok (merge, cherry-pick, conflict, red gate, missing lane, lane match gh<N> or <prefix>/gh<N>, review state and factory recipes refused (as just reads them: @qc, defaulted parameter, import; unreadable justfile), an alias-only hand-in integrates, a lane qc recipe's parameters edited, spec kept; Linear ENG-123 on eng-123 only, unknown tracker refused; tiers: pilot full and recorded, unlisted fast and provisional, one configuration identity on unchanged configuration, listed rename full and red; brownfield: only its own check, full and recorded at every integration, no recipe added)"
