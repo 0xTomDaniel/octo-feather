@@ -54,6 +54,10 @@ A tracker that cannot be read or written refuses the archive, its reflections' l
                                    comment (marker, head, verdict, findings); prints its URL
   octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
+  octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R]
+                                   on the lane's final head, as just qc and the review start: refuse unless
+                                   the local HEAD is the PR head with a current full gate pass, mark the PR
+                                   ready (gh pr ready), wait (default 120s) and print CI's check runs on it
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
                                    the kit's judgment model answers it on FILE's text; create, or
                                    update in place, the PR's one comment for QUESTION, labelled a model judgment
@@ -1421,6 +1425,69 @@ def ci_head(head: str) -> str:
         c = parents[0]
 
 
+def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
+    """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
+    WHAT names the commit in a refusal."""
+    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
+             f"read the check runs of {sha[:12]}, {what} (gh auth status)")
+    try:
+        got = cast("list[object]", json.loads(out)["check_runs"])
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
+    return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+
+
+@no_traceback
+def cmd_ci_start(args: list[str]) -> int:
+    """Start CI's full run on the lane's final head as just qc and the review start (spec issue-lifecycle
+    #lanes-one-head, #acceptance-ci-alongside): refuse unless the local HEAD is the PR's head and has a current full
+    gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for a check run on that head
+    other than a skipped one, and print each such run."""
+    args, repo = take_repo(args)
+    files: list[str] = []; rest: list[str] = []; i, base_arg, wait = 0, cast("str | None", None), 120.0
+    while i < len(args):
+        if args[i] in ("--status", "--base", "--wait") and i + 1 < len(args):
+            if args[i] == "--status":
+                files.append(args[i + 1])
+            elif args[i] == "--base":
+                base_arg = args[i + 1]
+            elif re.fullmatch(r"[0-9]+", args[i + 1]):
+                wait = float(args[i + 1])
+            else:
+                raise Refuse(f"--wait needs whole seconds, got {args[i + 1]!r}")
+            i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if len(rest) != 1:
+        raise Refuse(f"usage: octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0])
+    d = cast("dict[str, object]", pr_view(pr, "isDraft,headRefOid,baseRefName,headRefName", repo))
+    head = str(d["headRefOid"]).lower(); h = head[:12]
+    local = git("rev-parse", "HEAD")[1].strip().lower()
+    if local != head:
+        raise Refuse(f"local HEAD {local[:12]} is not PR #{pr}'s head {h}: push it (git push), then rerun in the lane worktree")
+    why = full_pass(head, files, pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
+    if why:
+        raise Refuse("; ".join(why))
+    if d["isDraft"]:
+        gh(["pr", "ready", str(pr), *(["-R", repo] if repo else [])], f"mark PR #{pr} ready for review by hand (gh pr ready {pr})")
+        print(f"PR #{pr} marked ready for review at head {h}")
+    end = time.monotonic() + wait
+    while True:
+        runs = check_runs(head, repo, f"PR #{pr}'s head")
+        live = [r for r in runs if str(r.get("status")).lower() != "completed" or str(r.get("conclusion")).lower() != "skipped"]
+        if live:
+            print(f"CI on {h} (issue-lifecycle #lanes-one-head):")
+            print("\n".join(f"- {r.get('name')} {r.get('conclusion') or r.get('status')} on {h}: {r.get('html_url')}" for r in live))
+            return 0
+        left = end - time.monotonic()
+        if left <= 0:
+            seen = ", ".join(f"{r.get('name')} {r.get('conclusion') or r.get('status')}" for r in runs) or "none"
+            raise Refuse(f"no CI check run started on {h} within {wait:g}s (GitHub shows: {seen}): check PR #{pr} is ready "
+                         "for review and its workflow runs on pull_request ready_for_review, then rerun")
+        time.sleep(min(5.0, left))
+
+
 def status_only_checks(rollup: "list[dict[str, object]]", head: str, repo: str | None) -> tuple[list[str], list[str]]:
     """(why each check skipped on HEAD fails, a line per one that passes) for a HEAD that adds only status-only commits:
     a skipped check run there counts only by the same check's latest run on the head those commits follow, completed
@@ -1432,13 +1499,7 @@ def status_only_checks(rollup: "list[dict[str, object]]", head: str, repo: str |
     if p == head:
         return [], []
     h, j = head[:12], p[:12]
-    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{p}/check-runs?per_page=100"],
-             f"read the check runs of {j}, the head the status-only commits on {h} follow (gh auth status)")
-    try:
-        got = cast("list[object]", json.loads(out)["check_runs"])
-    except (ValueError, KeyError, TypeError):
-        raise Refuse(f"gh api check-runs of {j} printed no check runs: check the gh on PATH ({out[:100]!r})")
-    runs = [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+    runs = check_runs(p, repo, f"the head the status-only commits on {h} follow")
     why: list[str] = []; ok: list[str] = []
     for name in skipped:
         at = f"Checks: {name} skipped on head {h} (status-only commits after {j}: no CI full run) and"
@@ -3554,6 +3615,7 @@ COMMANDS = {
     "verdict": cmd_verdict,
     "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,
+    "ci-start": cmd_ci_start,
     "judge": cmd_judge,
     "tickets": cmd_tickets,
     "done": cmd_done,

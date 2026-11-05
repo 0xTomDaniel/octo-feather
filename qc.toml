@@ -116,10 +116,10 @@ covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/oct
 [demo."issue-lifecycle#acceptance-ci-status-only"]
 covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
-# The supervisor's step: push the final head and gh pr ready as just qc and the review start. No demo: a role's
-# behaviour (owed eval docs/owed-evals/589.md).
+# The supervisor's step, octo-feather-lane ci-start as just qc and the review start, proven by tests/lane-ci-start.sh's
+# tagged cases; the role naming it: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
-covers = ["agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
+covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
 
 [demo."issue-lifecycle#acceptance-brownfield-full"]
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
