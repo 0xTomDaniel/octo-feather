@@ -11,6 +11,12 @@ Base: aa95911 (the case committed, kit before the change). Runs serial, one at a
 
 1. First wording (task pasted both criteria texts; fixture python-app, no spec), base aa95911, run 20261105T031403Z-d9e911, wall 63 s:
    `PASS role-transcripts/reviewer-criterion-test-adequacy: field_lines Verdict: 1 line(s) [{"text": "blocking"}]; holds {"text": "blocking"}; declared_includes blocking: holds {"test": "tests/test_cli.py::test_shout_json"} [stop: exit, 26 tool calls, 61.2 s] [kit aa959113cf09f963ccc4bd71b8e72eb74f1d91b5]`
-   Not a fails-before: with the criterion text in its brief, the old reviewer compared test to text (class acceptance-scenario-mismatch, citing the fixture AGENTS.md "one or two tests per acceptance criterion" and tdd). Reworded to a real brief's form: criterion ids only, their text in the target's spec on main (docs/specs/hello.spec.html), where the old code-quality-only reviewer has no rule sending it.
+   Not a fails-before: with the criterion text in its brief, the old reviewer compared test to text (class acceptance-scenario-mismatch, citing the fixture AGENTS.md "one or two tests per acceptance criterion" and tdd).
 
-RUNS (second wording): pending.
+Case change (commit 0760a86): criterion text moved out of the task into the target's spec on main (base fixture python-app-spec, docs/specs/hello.spec.html); the task names criterion ids only. Evidence that a real review brief names ids, not text: this lane's /tmp/gh503/brief-reviewB2.md line 9, `  - Each of the 4 pilot B criteria (quality#acceptance-one-execution, -one-execution-incomplete; comms#acceptance-report-gate-budget; issue-lifecycle#acceptance-merge-ask-gate-budget): does its captured demo at f72d060 demonstrate it.` (The same line also asks the reviewer outright for the demonstrate judgment, by brief.)
+
+2. Second wording, base aa95911, run 20261105T031631Z-372653, wall 65 s:
+   `PASS role-transcripts/reviewer-criterion-test-adequacy: field_lines Verdict: 1 line(s) [{"text": "blocking"}]; holds {"text": "blocking"}; declared_includes blocking: holds {"test": "tests/test_cli.py::test_shout_json"} [stop: exit, 25 tool calls, 64.1 s] [kit aa959113cf09f963ccc4bd71b8e72eb74f1d91b5]`
+   The old reviewer read docs/specs/hello.spec.html unprompted (read call after code-review and tdd loads) and blocked test_shout_json (class criterion-not-exercised, citing hello.spec.html:10).
+
+Result: no fails-before. The kit before the change (aa95911) already blocks a tagged test that does not demonstrate its criterion, on both wordings, 2 of 2 runs (single samples). Stop rule (director): no further tuning; no after-run made. The role and skill lines are to be judged on need (quality#acceptance-qa-fails-before not shown by this case).
