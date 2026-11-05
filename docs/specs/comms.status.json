@@ -139,8 +139,8 @@
     "acceptance-report-skill-reach": {
       "status": "built",
       "pr": 614,
-      "record": "20261105T222007Z-9957a2f6",
-      "commit": "02fbc1a0337602fc1c8439849938b545e29c3074",
+      "record": "20261105T231417Z-e031c631",
+      "commit": "09c18b062510cc0a2e5ffb6f09700516092dd7cd",
       "tests": []
     }
   }
