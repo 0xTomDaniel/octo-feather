@@ -21,8 +21,8 @@
     "acceptance-same-gate": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T160524Z-89479cf9",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T172004Z-ce18e611",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-target-agents-md": {
@@ -36,29 +36,29 @@
     "acceptance-fresh-fast": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T160124Z-6f68ce8d",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171537Z-7d90ccb4",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-test-kinds": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T160244Z-3421f96c",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171705Z-81c351ec",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-shared-fixture": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T160406Z-e562129b",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T171835Z-cfbecc8c",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     },
     "acceptance-starter-acceptance-test": {
       "status": "built",
       "pr": 546,
-      "record": "20261105T160555Z-f2bc5926",
-      "commit": "db220484ce1ed715ac529f948affa936fa5a4d92",
+      "record": "20261105T172039Z-c6b3dc1c",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
     }
   }
