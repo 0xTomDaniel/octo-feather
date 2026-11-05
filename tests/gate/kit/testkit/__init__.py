@@ -3,15 +3,18 @@ scenario runner every pytest kit test under tests/gate/kit/ goes through.
 
 A kit test drives the kit's commands for real (AGENTS.md Rules); stand-ins sit only where the
 kit does not own the system (what may be stubbed: the tdd skill, Seams and mocking.md): FAKES
-names each one, first on a scratch PATH. A test file holds scenarios, functions of a Scratch;
-each pytest item runs its scenario as this file's own command (`python3 FILE NAME`, main below)
+names each one, first on a scratch PATH. A scenario file (NAME.py, beside its test_NAME.py)
+holds scenarios, functions of a Scratch, and no pytest import, so its command starts light; each
+pytest item runs its scenario as that file's command (`python3 FILE SCENARIO`, main below)
 through the `case` fixture (tests/gate/kit/conftest.py), so a qc capture, which runs a tagged
 item's command in its sandbox with its own /tmp, sees the whole scenario (quality spec
-#qc-capture). A missing fixture fails naming it.
+#qc-capture). A setup several items repeat is prepared once per gate run (Scratch.prepare). A
+missing fixture fails naming it.
 """
 
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import shutil
@@ -121,6 +124,30 @@ class Scratch:
         for name, src in FAKES.items():
             (self.bin / name).unlink(missing_ok=True)
             (self.bin / name).symlink_to(kit_dir / src.relative_to(ROOT))
+
+    def prepare(self, name: str, build: Callable[[Scratch], None]) -> None:
+        """This scratch filled with prepared NAME: a scratch BUILD fills once per gate run under
+        GATE_RUN_DIR (the run's shared dir: tests/gate/test_gate.py), the first caller under an
+        exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
+        installs; read-only by contract, copied here (its bin and tmp aside). Outside a gate run,
+        BUILD fills this scratch itself."""
+        run = os.environ.get("GATE_RUN_DIR")
+        if not run:
+            build(self)
+            return
+        tree, done = Path(run) / f"prepared-{name}", Path(run) / f"prepared-{name}.done"
+        with (Path(run) / f"prepared-{name}.lock").open("w") as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            if not done.exists():
+                shutil.rmtree(tree, ignore_errors=True)  # a caller before failed part way
+                tree.mkdir()
+                build(Scratch(tree))
+                done.touch()
+
+        def own(d: str, names: list[str]) -> set[str]:
+            return {"bin", "tmp"} & set(names) if Path(d) == tree else set()
+
+        shutil.copytree(tree, self.root, symlinks=True, dirs_exist_ok=True, ignore=own)
 
     def run(
         self,

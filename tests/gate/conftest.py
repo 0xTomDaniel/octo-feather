@@ -33,6 +33,9 @@ controller hands plan, pytest reports and capture notes to `octo-feather-qc --ca
 fails the run.
 OCTO_FEATHER_QC_TAGS=FILE (octo-feather-qc, with --collect-only): the collecting process writes every tagged
 case and its criteria there as JSON, so qc knows exactly which criteria a test carries; such a run adds no trend line.
+OCTO_FEATHER_GATE_ITEMS=FILE (octo-feather-gate select, with --collect-only): the collecting process writes every
+collected item there as JSON, {node id: {"e2e": whether it carries pytest's e2e marker}}, so one collection names the
+items and their tier.
 """
 import datetime, functools, hashlib, json, os, re, shutil, subprocess, sys, tempfile
 try:
@@ -54,6 +57,7 @@ TREND = "check-runs.jsonl"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
 CAPTURE_DIR = "OCTO_FEATHER_QC_CAPTURE_DIR"   # set by the controller before any worker starts
 TAGS = "OCTO_FEATHER_QC_TAGS"
+ITEMS = "OCTO_FEATHER_GATE_ITEMS"
 CPU = "cpu_s"
 BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
@@ -174,6 +178,8 @@ def _source(item: pytest.Item) -> str:
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if tags := os.environ.get(TAGS):
         Path(tags).write_text(json.dumps({i.nodeid: _tags(i) for i in items if _tags(i)}))
+    if listed := os.environ.get(ITEMS):
+        Path(listed).write_text(json.dumps({i.nodeid: {"e2e": i.get_closest_marker("e2e") is not None} for i in items}))
     d = os.environ.get(CAPTURE_DIR)
     if not d or not _claims():
         return

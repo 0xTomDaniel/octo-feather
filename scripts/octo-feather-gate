@@ -57,6 +57,7 @@ import json
 import os
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 
 LIST = "shared-machinery.txt"
@@ -268,23 +269,25 @@ def select() -> None:
 def collected(root: Path) -> tuple[list[str], set[str]]:
     """The pytest-native test items (each test function outside test_gate.py, its own gate item,
     named by its node id), as pytest itself collects them in the repo's venv, and those of them
-    carrying pytest's e2e marker."""
-    env = {k: v for k, v in os.environ.items() if not k.startswith("OCTO_FEATHER_QC_")}
-    cmd = ["uv", "run", "--locked", "--offline", "--quiet", "pytest", "--collect-only", "-q"]
-    cmd += ["-p", "no:cacheprovider", f"--junitxml={os.devnull}", f"--ignore={NODE[:-2]}"]
-
-    def ids(*args: str) -> list[str]:
-        p = subprocess.run(
-            [*cmd, *args], cwd=root, env=env, capture_output=True, text=True, check=False
-        )
-        if p.returncode not in (0, 5):  # 5: pytest collected none
+    carrying pytest's e2e marker: one collection, whose process writes each item and its marker
+    to OCTO_FEATHER_GATE_ITEMS (tests/gate/conftest.py)."""
+    with tempfile.TemporaryDirectory() as t:
+        listed = Path(t) / "items.json"
+        env = {k: v for k, v in os.environ.items() if not k.startswith("OCTO_FEATHER_QC_")}
+        env["OCTO_FEATHER_GATE_ITEMS"] = str(listed)
+        cmd = ["uv", "run", "--locked", "--offline", "--quiet", "pytest", "--collect-only", "-q"]
+        cmd += ["-p", "no:cacheprovider", f"--junitxml={os.devnull}", f"--ignore={NODE[:-2]}"]
+        p = subprocess.run(cmd, cwd=root, env=env, capture_output=True, text=True, check=False)
+        if p.returncode not in (0, 5) or (p.returncode == 0 and not listed.is_file()):  # 5: none
             sys.exit(
-                f"octo-feather-gate select: pytest's collection exited {p.returncode}: "
+                f"octo-feather-gate select: pytest's collection exited {p.returncode}"
+                f"{'' if p.returncode else ', listing no items'}: "
                 f"{(p.stdout + p.stderr).strip()[-2000:]}"
             )
-        return [ln for ln in p.stdout.splitlines() if "::" in ln]
-
-    return ids(), set(ids("-m", "e2e"))
+        items: dict[str, dict[str, bool]] = (
+            json.loads(listed.read_text()) if listed.is_file() else {}
+        )
+    return sorted(items), {i for i, m in items.items() if m.get("e2e")}
 
 
 def source(item: str) -> str:
