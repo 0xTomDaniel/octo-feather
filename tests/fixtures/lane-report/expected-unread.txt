@@ -1,4 +1,5 @@
 report at NOW (STATE/lanes)
+owner-caught (headline, director.handoffs.jsonl): COUNTS
 lane lane-a: issue gh1 o/a "Implementer working"
   started: 2026-10-20T08:00:00Z (AGE ago)
   pr: #5 unread: GitHub: gh pr view 5 failed (error connecting to api.github.com): check PR #5 exists in o/a, and gh auth status

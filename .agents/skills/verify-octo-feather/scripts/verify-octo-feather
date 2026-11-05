@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -786,6 +786,81 @@ def drive_correction_lane(f: Feature) -> None:
     say(f"correction-lane evidence: {f.d}")
 
 
+# The correction-intake drive's stub `pi` for the reflectors (no model): prints the reply file the drive wrote for the
+# reflection asked (the director's when its brief says Director reflection, else the lane's).
+REFLECT_STUB_PI = r"""#!/usr/bin/env python3
+import os, sys
+who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+sys.stdout.write(open(os.path.join(os.environ["REFLECT_STUB_DIR"], f"reply.{who}")).read())
+"""
+
+
+def drive_correction_intake(f: Feature) -> None:
+    """`octo-feather-lane archive` with the reflectors stubbed and the tracker faked, over scratch lane logs holding a
+    class logged blocking in two lanes, one only by reflections and one blocking twice in one lane, the director
+    reflection routing the first: only the first files, naming the route; then `octo-feather-lane intake` over seeded
+    open issues; cases and what each observes: features/correction-intake.md."""
+    sc = RUN_DIR / "scratch" / "correction-intake"
+    shutil.rmtree(sc, ignore_errors=True)
+    lanes = sc / "state" / "octo-feather" / "lanes"
+    (lanes / "archive").mkdir(parents=True)
+    (sc / "bin").mkdir()
+    (sc / "bin" / "pi").write_text(REFLECT_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    store = sc / "gh.json"
+
+    def fl(at: str, source: str, cls: str, summary: str, *, blocking: bool = True) -> str:
+        return json.dumps({"at": at, "kind": "finding", "source": source, "class": cls, "blocking": blocking, "summary": summary}) + "\n"
+    logs = {"gh910": [fl("2026-10-20T00:00:00Z", "code-review", "stale-pointer", "gh910 pointer to a moved file"),
+                      fl("2026-10-20T01:00:00Z", "reflection", "slow-gate", "gh910 gate felt slow", blocking=False),
+                      fl("2026-10-20T02:00:00Z", "code-review", "one-lane", "gh910 first"),
+                      fl("2026-10-20T03:00:00Z", "code-review", "one-lane", "gh910 second")],
+            "gh911": [fl("2026-10-21T00:00:00Z", "qc", "stale-pointer", "gh911 demo read a moved file"),
+                      fl("2026-10-21T01:00:00Z", "reflection", "slow-gate", "gh911 gate felt slow", blocking=False)]}
+    for name, lines in logs.items():
+        (lanes / "archive" / f"{name}.toml").write_text(f'supervisor = "w9{name[-1]}:p2"\nrepository = "scratch/target"\nissue = "{name}"\ngoal = "scratch lane"\n')
+        (lanes / "archive" / f"{name}.handoffs.jsonl").write_text("".join(lines))
+    (lanes / "gh912.toml").write_text('supervisor = "w92:p2"\nrepository = "scratch/target"\nissue = "gh912"\ngoal = "scratch lane"\n')
+    (lanes.parent / "director.handoffs.jsonl").write_text("")
+    listed = json.loads((Path(f.s.repo) / "reflection" / "questions.json").read_text())["questions"]
+
+    def qs(kind: str) -> str:
+        return ", ".join(q["id"] for q in listed if q["kind"] == kind)
+
+    (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFindings: none\n")
+    (sc / "reply.director").write_text(f"Questions: {qs('director')}\nFinding: class: stale-pointer | question: writer-route"
+                                       " | route: agents/implementer.md Rules | summary: blocking in gh910 and gh911\n")
+    tr = fake_tracker(f.s.repo, sc)
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "REFLECT_STUB_DIR": str(sc), **tr, "PATH": f"{sc / 'bin'}:{tr['PATH']}"}
+    f.run("file-rule", "octo-feather-lane", "archive", "gh912")
+    f.obs("file-rule", "tracker", store.read_text() if store.is_file() else "{}")
+
+    def filed(c: Case) -> bool:
+        issues = json.loads(c.o["tracker"]).get("issues", [])
+        return (c.code == 0 and len(issues) == 1 and "[correction-lane stale-pointer]" in issues[0]["title"]
+                and "Route: agents/implementer.md Rules" in issues[0]["body"] and re.search(
+                    r"(?m)^correction lane: filed \d+ in github-issues scratch/target for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
+                    c.out) is not None)
+    f.check("file-rule", filed)
+    # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates).
+    db: dict[str, list[dict[str, Any]]] = json.loads(store.read_text()) if store.is_file() else {"issues": []}
+    for n, repo, cls in ((951, "scratch/target", "slow-gate"), (952, "scratch/target", "one-lane"), (953, "0xTomDaniel/octo-feather", "one-lane")):
+        db["issues"].append({"number": n, "repo": repo, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
+                             "state": "OPEN", "closedAt": None})
+    store.write_text(json.dumps(db))
+    before = store.read_text()
+    f.run("intake", "octo-feather-lane", "intake")
+    f.obs("intake", "unchanged", "yes\n" if store.read_text() == before else "no\n")
+    f.check("intake", lambda c: c.code == 0 and c.o["unchanged"] == "yes\n"
+            and "\nclass stale-pointer: due yes; blocking 2 in 2 lane(s) (gh910, gh911); findings 3\n" in c.out
+            and "\nclass slow-gate: due no; blocking 0 in 0 lane(s); findings 2\n" in c.out
+            and "\nclass one-lane: due no; blocking 2 in 1 lane(s) (gh910); findings 2\n" in c.out
+            and "\n  duplicates: 2 open issues of class one-lane\n" in c.out)
+    f.env = {}
+    say(f"correction-intake evidence: {f.d}")
+
+
 def drive_factory_report(f: Feature) -> None:
     sc = RUN_DIR / "scratch" / "factory-report"
     shutil.rmtree(sc, ignore_errors=True)
@@ -844,6 +919,14 @@ def drive_factory_report(f: Feature) -> None:
             and f"\n  trend: 200s {mains[0][:12]} 2026-10-01T10:00:00Z, 220s {mains[1][:12]} 2026-10-02T10:00:00Z, 210s {mains[2][:12]} "
                 f"2026-10-03T10:00:00Z, 330s {mains[3][:12]} 2026-10-04T10:00:00Z (passed full runs, oldest first)\n"
                 "  slowest: tests/slow.sh 270s, tests/mid.sh 40s, check-lint 2.5s\n" in c.out)
+    # The headline: owner-caught findings two days and nine days ago (comms #report-owner-caught).
+    nine_days = datetime.fromtimestamp(datetime.now(UTC).timestamp() - 9 * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    with dlog.open("a") as fh:
+        for at, cls in ((two_days, "owner-caught-x"), (two_days, "owner-caught-y"), (nine_days, "owner-caught-x")):
+            fh.write(json.dumps({"at": at, "kind": "finding", "class": cls, "summary": "seeded"}) + "\n")
+    f.run("owner-caught-headline", "octo-feather-lane", "report")
+    f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
+            == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
@@ -1183,6 +1266,320 @@ def drive_qc_advisory(f: Feature) -> None:
     f.check("qc", holds)
     f.env = {}
     say(f"qc-advisory evidence: {f.d}")
+
+
+# The qa-runs and qa-baseline drives' stub `pi` (no model): emits the Pi JSON events of one turn, each assistant message
+# with usage (100 input and 10k output tokens, cost 0.001, run k from its scratch copy qa-<id>-<n>r<k>-*:
+# octo-feather-qa --help); it reads the role's tdd SKILL.md when the role lists tdd and NOREAD is not in the prompt, with
+# ALTERNATE in the prompt on odd runs only; with COSTLY, a role listing tdd spends 3 more messages; then a final message:
+# with SAY: TEXT in the prompt, TEXT, also written to notes.md in the case repo; with TREE, what the case repo holds:
+# files=<tracked files> commits=<commits> deep=ok|missing (.agents/skills/eval-cases/references/schema.md); else done.
+QA_STUB_PI = r"""#!/usr/bin/env python3
+import json, os, re, sys
+a = sys.argv[1:]
+prompt = a[a.index("-p") + 1]
+k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
+def out(e):
+    m = e.get("message") if e.get("type") == "message_end" else None
+    if isinstance(m, dict):
+        m["usage"] = {"input": 100, "output": 10 * k, "totalTokens": 100 + 10 * k, "cost": {"total": 0.001}}
+    print(json.dumps(e), flush=True)
+out({"type": "stub_argv", "argv": a})
+out({"type": "agent_start"})
+tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)
+if tdd and "COSTLY" in prompt:
+    for _ in range(3):
+        out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
+                                               "content": [{"type": "text", "text": "thinking"}]}})
+if tdd and "NOREAD" not in prompt and not ("ALTERNATE" in prompt and k % 2 == 0):
+    out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "toolUse",
+                                           "content": [{"type": "toolCall", "id": "c1", "name": "read", "arguments": {"path": tdd}}]}})
+    out({"type": "tool_execution_start", "toolCallId": "c1", "toolName": "read", "args": {"path": tdd}})
+    out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "read", "isError": False,
+         "result": {"content": [{"type": "text", "text": open(tdd).read()}]}})
+say = prompt.split("SAY:", 1)[1].strip() if "SAY:" in prompt else "done"
+if "TREE" in prompt:
+    import subprocess
+    git = lambda *g: subprocess.run(["git", *g], capture_output=True, text=True).stdout
+    deep = "ok" if os.path.isfile(".agents/skills/eval-cases/references/schema.md") else "missing"
+    say = f"files={len(git('ls-files').splitlines())} commits={len(git('rev-list', 'HEAD').splitlines())} deep={deep}"
+if "SAY:" in prompt:
+    open("notes.md", "w").write(say + "\n")
+out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
+                                       "content": [{"type": "text", "text": say}]}})
+"""
+
+
+def drive_qa_runs(f: Feature) -> None:
+    """octo-feather-qa --runs on a scratch eval suite (role implementer, graded skill_read tdd), the role's model a stub
+    `pi` first on the qa sandbox's PATH, never a real model; cases and what each observes: features/qa-runs.md."""
+    sc = RUN_DIR / "scratch" / "qa-runs"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vq" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    (sc / "bin").mkdir()
+    (sc / "state").mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-runs drive fixture\n")
+    (ev / "vq" / "suite.json").write_text(json.dumps({"suite": "vq", "kind": "role-transcript", "description": "qa-runs drive",
+                                                     "max_tool_calls": 5, "timeout_s": 60}))
+    (ev / "vq" / "cases.json").write_text(json.dumps([{"id": i, "role": "implementer", "fixture": "fx", "task": t} for i, t in
+                                                      (("alt", "Build it. ALTERNATE"), ("steady", "Build it."))]))
+    (ev / "vq" / "reference" / "expectations.json").write_text(json.dumps(
+        {i: {"facts": [{"fact": "skill_read", "skill": "tdd"}]} for i in ("alt", "steady")}))
+    # The stub first on PATH and on the qa sandbox's PATH; qa's artifacts and state in scratch.
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    qa = ("octo-feather-qa", "--evals", str(ev))
+
+    def last_run(name: str, case: str) -> None:
+        runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+        c = runs[-1] / "vq" / case if runs else sc / "none"
+        f.obs(name, "result", (c / "result.json").read_text() if (c / "result.json").is_file() else "{}\n")
+        f.obs(name, "dirs", "".join(f"{p.name}\n" for p in sorted(c.glob("run-*")) if (p / "transcript.jsonl").is_file()))
+        f.obs(name, "stub", "".join(f"{p.parent.name} {json.loads(p.read_text().splitlines()[0])['type']}\n"
+                                    for p in sorted(c.glob("run-*/transcript.jsonl"))))
+
+    f.run("alternating", *qa, "--case", "alt", "--runs", "4")
+    last_run("alternating", "alt")
+
+    def alternating(c: Case) -> bool:
+        r = json.loads(c.o["result"])
+        return (c.code == 1 and re.search(r"(?m)^FAIL vq/alt: 2/4 runs passed \(pass rate 0\.50, stddev 0\.58\); run 2: skill_read tdd: no load"
+                                          r".*; run 4: skill_read tdd: no load.*\[kit [0-9a-f]{40}\]$", c.out) is not None
+                and all(f"  run {k}/4: {v} vq/alt: " in c.out for k, v in ((1, "PASS"), (2, "FAIL"), (3, "PASS"), (4, "FAIL")))
+                and (r.get("verdict"), r.get("runs_passed"), r.get("pass_rate"), r.get("stddev")) == ("FAIL", 2, 0.5, 0.5774)
+                and c.o["dirs"] == "run-1\nrun-2\nrun-3\nrun-4\n" and c.o["stub"].count(" stub_argv\n") == 4)
+    f.check("alternating", alternating)
+    f.run("every-run", *qa, "--case", "steady", "--runs", "2")
+    last_run("every-run", "steady")
+    f.check("every-run", lambda c: c.code == 0 and re.search(r"(?m)^PASS vq/steady: 2/2 runs passed \(pass rate 1\.00, stddev 0\.00\); run 1: "
+                                                         r"skill_read tdd: loaded at", c.out) is not None
+            and json.loads(c.o["result"]).get("pass_rate") == 1.0 and c.o["stub"].count(" stub_argv\n") == 2)
+    f.run("bad-runs", *qa, "--runs", "0")
+    f.check("bad-runs", lambda c: c.code == 64 and "--runs needs a positive integer" in c.err and "qa: run " not in c.out)
+    f.env = {}
+    say(f"qa-runs evidence: {f.d}")
+
+
+def scratch_kit(f: Feature, kit: Path) -> tuple[str, str]:
+    """A scratch kit repo in KIT (this checkout's tracked files as in its working tree; the checkout's repo never
+    written): commit before, agents/implementer.md not listing tdd, then change, as they are. Returns their shas."""
+    for rel in subprocess.run(["git", "-C", f.s.repo, "ls-files", "-z"], capture_output=True, text=True, check=True).stdout.split("\0"):
+        src = Path(f.s.repo) / rel
+        if rel and (src.is_file() or src.is_symlink()):
+            (kit / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, kit / rel, follow_symlinks=False)
+    im = kit / "agents" / "implementer.md"
+    role = im.read_text()
+    im.write_text(re.sub(r"(?m)^(skills:.*), tdd,", r"\1,", role))
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(kit), "-c", "user.name=verify-octo-feather", "-c", "user.email=verify@octo-feather.invalid",
+                               "-c", "commit.gpgsign=false", "-c", "core.hooksPath=/dev/null", *args],
+                              check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    git("add", "-A")
+    git("commit", "-q", "-m", "before: the implementer does not list tdd")
+    before = git("rev-parse", "HEAD")
+    im.write_text(role)
+    git("commit", "-q", "-am", "change: the implementer lists tdd")
+    change = git("rev-parse", "HEAD")
+    return before, change
+
+
+def drive_qa_baseline(f: Feature) -> None:
+    """octo-feather-qa --runs and --baseline on a scratch eval suite, the role's model the qa-runs drive's stub `pi`, never a
+    real model, against a scratch kit repo (this checkout's tracked files): commit before, the implementer not listing
+    tdd, and change, as checked out; cases and what each observes: features/qa-baseline.md."""
+    sc = RUN_DIR / "scratch" / "qa-baseline"
+    ev, kit = sc / "evals", sc / "kit"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vb" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    for d in ("bin", "state", "kit"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-baseline drive fixture\n")
+    (ev / "vb" / "suite.json").write_text(json.dumps({"suite": "vb", "kind": "role-transcript", "description": "qa-baseline drive",
+                                                     "max_tool_calls": 5, "timeout_s": 60}))
+    (ev / "vb" / "cases.json").write_text(json.dumps([{"id": "build", "role": "implementer", "fixture": "fx", "task": "Build it."}]))
+    (ev / "vb" / "reference" / "expectations.json").write_text(json.dumps({"build": {"facts": [{"fact": "skill_read", "skill": "tdd"}]}}))
+    before, change = scratch_kit(f, kit)
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    qa = (str(kit / "scripts" / "octo-feather-qa"), "--evals", str(ev), "--case", "build", "--runs", "2")
+
+    def result(name: str) -> None:
+        runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+        c = runs[-1] / "vb" / "build" if runs else sc / "none"
+        f.obs(name, "result", (c / "result.json").read_text() if (c / "result.json").is_file() else "{}\n")
+        f.obs(name, "stub", "".join(f"{p.relative_to(c)} {json.loads(p.read_text().splitlines()[0])['type']}\n"
+                                    for p in sorted(c.glob("**/run-*/transcript.jsonl"))))
+
+    f.run("cost", *qa)
+    result("cost")
+    f.check("cost", lambda c: c.code == 0 and re.search(r"(?m)^  cost vb/build: time s [0-9.]+ \+/- [0-9.]+; tokens 115 \+/- 7$", c.out) is not None
+            and json.loads(c.o["result"]).get("tokens") == {"mean": 115, "stddev": 7.0711} and c.o["stub"].count(" stub_argv\n") == 2)
+    f.run("baseline", *qa, "--baseline", before)
+    result("baseline")
+    table = (rf"(?m)^  compare vb/build: baseline kit {before[:12]} beside current kit {change[:12]}\n {{4}} {{10}} baseline {{13}}current {{14}}difference\n"
+             r" {4}pass rate  0\.00 \+/- 0\.00 {8}1\.00 \+/- 0\.00 {8}\+1\.00\n {4}time s {5}\S+ \+/- \S+ +\S+ \+/- \S+ +\S+\n"
+             r" {4}tokens {5}115 \+/- 7 {12}115 \+/- 7 {12}\+0\n {4}cost usd   0\.0010 \+/- 0\.0000 {4}0\.0010 \+/- 0\.0000 {4}\+0\.0000$")
+
+    def compared(c: Case) -> bool:
+        r = json.loads(c.o["result"])
+        order = re.findall(r"(?m)^  (baseline|current) run ([12])/2: (PASS|FAIL)", c.out)
+        return (c.code == 0 and c.out.count("qa: run ") == 1 and re.search(table, c.out) is not None
+                and order == [("baseline", "1", "FAIL"), ("current", "1", "PASS"), ("baseline", "2", "FAIL"), ("current", "2", "PASS")]
+                and (r.get("verdict"), r.get("kit_sha"), r.get("baseline", {}).get("kit_sha"), r.get("delta", {}).get("pass_rate")) == ("PASS", change, before, 1.0)
+                and c.o["stub"].count(" stub_argv\n") == 4)
+    f.check("baseline", compared)
+    f.run("bad-baseline", *qa, "--baseline", "no-such-ref")
+    f.check("bad-baseline", lambda c: c.code == 64 and "--baseline no-such-ref: no such commit" in c.err and "qa: run " not in c.out)
+    f.env = {}
+    say(f"qa-baseline evidence: {f.d}")
+
+
+def drive_qa_analyst(f: Feature) -> None:
+    """octo-feather-qa --runs 2 --baseline on a scratch eval suite holding one case per analysis flag, against the
+    qa-baseline drive's scratch kit, the role's model the stub `pi` (QA_STUB_PI), never a real model; then --analyze on
+    the stored run dir with a poison pi first on PATH; cases and what each observes: features/qa-analyst.md."""
+    sc = RUN_DIR / "scratch" / "qa-analyst"
+    ev, kit = sc / "evals", sc / "kit"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "va" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    for d in ("bin", "poison", "state", "kit"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "poison" / "pi").write_text(f"#!/bin/sh\ntouch {shlex.quote(str(sc / 'poison' / 'ran'))}\nexit 99\n")
+    for p in ("bin", "poison"):
+        (sc / p / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-analyst drive fixture\n")
+    (ev / "va" / "suite.json").write_text(json.dumps({"suite": "va", "kind": "role-transcript", "description": "qa-analyst drive",
+                                                     "max_tool_calls": 10, "timeout_s": 60}))
+    rt, np_ = {"fact": "skill_read", "skill": "tdd"}, {"fact": "skill_not_read", "skill": "pull"}
+    cases = (("same", "Only look. NOREAD", [np_]), ("facts", "Build it.", [rt, np_]), ("alt", "Build it. ALTERNATE", [rt]),
+             ("costly", "Only look. NOREAD COSTLY", [np_]))
+    (ev / "va" / "cases.json").write_text(json.dumps([{"id": i, "role": "implementer", "fixture": "fx", "task": t} for i, t, _ in cases]))
+    (ev / "va" / "reference" / "expectations.json").write_text(json.dumps({i: {"facts": fs} for i, _, fs in cases}))
+    before, _ = scratch_kit(f, kit)
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    qa = str(kit / "scripts" / "octo-feather-qa")
+    want = ("qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):\n"
+            "  non-discriminating case va/same: every run on both kits passed\n"
+            "  non-discriminating fact va/facts: skill_not_read pull: pass in every run on both kits\n"
+            "  high variance va/alt: current kit pass rate 0.50 +/- 0.71\n"
+            "  cost tradeoff va/costly: pass rate 1.00 on both kits; tokens mean 115.0 to 460.0\n")
+    f.run("compare", qa, "--evals", str(ev), "--runs", "2", "--baseline", before)
+    runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+    run_dir = runs[-1] if runs else sc / "none"
+    f.obs("compare", "analysis", json.dumps(json.loads((run_dir / "summary.json").read_text())["analysis"]) + "\n"
+          if (run_dir / "summary.json").is_file() else "{}\n")
+
+    def flagged(c: Case) -> bool:
+        a = json.loads(c.o["analysis"])
+        return (c.code == 1 and want in c.out and [x["case"] for x in a.get("non_discriminating_cases", [])] == ["va/same"]
+                and [(x["case"], x["fact"]) for x in a.get("non_discriminating_facts", [])] == [("va/facts", np_)]
+                and [(x["case"], x["kit"]) for x in a.get("high_variance", [])] == [("va/alt", "current")]
+                and [x["case"] for x in a.get("cost_tradeoffs", [])] == ["va/costly"])
+    f.check("compare", flagged)
+    f.env = {**f.env, "PATH": f"{sc / 'poison'}:{os.environ.get('PATH', '')}"}
+    f.run("rerun", qa, "--analyze", str(run_dir))
+    f.obs("rerun", "poison", "ran\n" if (sc / "poison" / "ran").exists() else "none\n")
+    f.check("rerun", lambda c: c.code == 0 and c.out.endswith(want) and c.o["poison"] == "none\n" and "qc sandbox" not in c.out + c.err)
+    f.env = {}
+    say(f"qa-analyst evidence: {f.d}")
+
+
+def drive_qa_review(f: Feature) -> None:
+    """octo-feather-qa on a scratch review case (role implementer), the role's model the stub `pi` (QA_STUB_PI), never a
+    real model: awaiting review with its output, --review showing it, a verdict and note recorded, then a next run
+    showing them beside its new output; cases and what each observes: features/qa-review.md."""
+    sc = RUN_DIR / "scratch" / "qa-review"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vr" / "reference").mkdir(parents=True)
+    (ev / "fixtures" / "fx").mkdir(parents=True)
+    for d in ("bin", "state"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    (ev / "fixtures" / "fx" / "README.md").write_text("qa-review drive fixture\n")
+    (ev / "vr" / "suite.json").write_text(json.dumps({"suite": "vr", "kind": "role-transcript", "description": "qa-review drive",
+                                                     "max_tool_calls": 10, "timeout_s": 60}))
+    (ev / "vr" / "reference" / "expectations.json").write_text(json.dumps({"essay": {"facts": []}}))
+
+    def essay(say: str) -> None:
+        (ev / "vr" / "cases.json").write_text(json.dumps([{"id": "essay", "role": "implementer", "fixture": "fx",
+                                                           "task": f"Write the notes. NOREAD SAY: {say}",
+                                                           "review": {"question": "Do the notes answer the brief?"}}]))
+    essay("The notes say hi.")
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    f.run("run", "octo-feather-qa", "--evals", str(ev))
+    runs = sorted(p for p in (sc / "out").iterdir() if p.name != "reviews") if (sc / "out").is_dir() else []
+    first = runs[-1] if runs else sc / "none"
+    f.check("run", lambda c: c.code == 1 and re.search(r"(?m)^REVIEW vr/essay: awaiting review: Do the notes answer the brief\?; "
+                                                       r"changed files: notes\.md \[", c.out) is not None
+            and "\n  output: final message: The notes say hi.\n" in c.out and "\n  latest review: none\n" in c.out)
+    f.run("awaiting", "octo-feather-qa", "--review", str(first), "vr/essay")
+    f.check("awaiting", lambda c: c.code == 0 and c.out.startswith(f"REVIEW vr/essay: awaiting review (run {first.name})\n"))
+    f.run("record", "octo-feather-qa", "--review", str(first), "vr/essay", "pass", "Clear and short.")
+    shown = rf"pass \(run {first.name}, kit [0-9a-f]{{12}}, \S+Z\): Clear and short\."
+    f.check("record", lambda c: c.code == 0 and re.match(rf"REVIEWED vr/essay: {shown}\n", c.out) is not None)
+    essay("The notes say hello.")
+    f.run("next-run", "octo-feather-qa", "--evals", str(ev))
+    f.check("next-run", lambda c: c.code == 1 and "\n  output: final message: The notes say hello.\n" in c.out
+            and re.search(rf"(?m)^  latest review: {shown}$", c.out) is not None)
+    f.env = {}
+    say(f"qa-review evidence: {f.d}")
+
+
+def drive_qa_history(f: Feature) -> None:
+    """octo-feather-qa on a scratch suite whose one case's fixture is the kit's own history at the checkout's HEAD commit
+    (a history fixture), the role's model the stub `pi` (QA_STUB_PI) reporting what the case repo holds, never a real
+    model; then check-evals refusing an unknown commit; cases and what each observes: features/qa-history.md."""
+    sc = RUN_DIR / "scratch" / "qa-history"
+    ev = sc / "evals"
+    shutil.rmtree(sc, ignore_errors=True)
+    (ev / "vh" / "reference").mkdir(parents=True)
+    (ev / "fixtures").mkdir(parents=True)
+    for d in ("bin", "state"):
+        (sc / d).mkdir()
+    (sc / "bin" / "pi").write_text(QA_STUB_PI)
+    (sc / "bin" / "pi").chmod(0o755)
+    at = output(["git", "-C", f.s.repo, "rev-parse", "HEAD"])[1].strip()
+    files = len(output(["git", "-C", f.s.repo, "ls-tree", "-r", "--name-only", at])[1].splitlines())
+    (ev / "vh" / "suite.json").write_text(json.dumps({"suite": "vh", "kind": "role-transcript", "description": "qa-history drive",
+                                                     "max_tool_calls": 10, "timeout_s": 120}))
+    (ev / "vh" / "reference" / "expectations.json").write_text(json.dumps({"tree": {"facts": [{"fact": "skill_not_read", "skill": "pull"}]}}))
+
+    def case(commit: str) -> None:
+        (ev / "vh" / "cases.json").write_text(json.dumps([{"id": "tree", "role": "implementer", "fixture": {"repo": "kit", "commit": commit},
+                                                           "task": "Look around. NOREAD TREE"}]))
+    case(at)
+    f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
+             "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    f.run("whole-tree", "octo-feather-qa", "--evals", str(ev))
+    runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
+    tr = runs[-1] / "vh" / "tree" / "transcript.jsonl" if runs else sc / "none"
+    said = [str(c.get("text", "")) for ln in (tr.read_text().splitlines() if tr.is_file() else [])
+            for e in [json.loads(ln)] if e.get("type") == "message_end" for c in e["message"].get("content", []) if c.get("type") == "text"]
+    f.obs("whole-tree", "said", (said[-1] if said else "") + "\n")
+    f.obs("whole-tree", "want", f"files={files} commits=1 deep=ok\n")
+    f.check("whole-tree", lambda c: c.code == 0 and re.search(r"(?m)^PASS vh/tree: ", c.out) is not None and c.o["said"] == c.o["want"])
+    case("0" * 40)
+    f.run("unknown-commit", "check-evals", str(ev))
+    f.check("unknown-commit", lambda c: c.code == 1 and f"vh/cases.json case tree: field fixture.commit: no commit {'0' * 40} in" in c.out + c.err)
+    f.env = {}
+    say(f"qa-history evidence: {f.d}")
 
 
 def drive_qc_fallback(f: Feature) -> None:
@@ -1767,6 +2164,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "lane-archive": drive_lane_archive,
     "director-reflection": drive_director_reflection,
     "correction-lane": drive_correction_lane,
+    "correction-intake": drive_correction_intake,
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
     "qc-capture": drive_qc_capture,
@@ -1780,6 +2178,11 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "template-tiers": drive_template_tiers,
     "one-execution": drive_one_execution,
     "one-execution-incomplete": drive_one_execution_incomplete,
+    "qa-runs": drive_qa_runs,
+    "qa-baseline": drive_qa_baseline,
+    "qa-analyst": drive_qa_analyst,
+    "qa-review": drive_qa_review,
+    "qa-history": drive_qa_history,
 }
 
 
