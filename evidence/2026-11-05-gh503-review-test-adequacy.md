@@ -20,3 +20,5 @@ Case change (commit 0760a86): criterion text moved out of the task into the targ
    The old reviewer read docs/specs/hello.spec.html unprompted (read call after code-review and tdd loads) and blocked test_shout_json (class criterion-not-exercised, citing hello.spec.html:10).
 
 Result: no fails-before. The kit before the change (aa95911) already blocks a tagged test that does not demonstrate its criterion, on both wordings, 2 of 2 runs (single samples). Stop rule (director): no further tuning; no after-run made. The role and skill lines are to be judged on need (quality#acceptance-qa-fails-before not shown by this case).
+
+Decision (supervisor, director's stop rule): the prose is not needed; f86f50b reverted (c4b482b), so agents/code-reviewer.md and the code-review skill and patch are unchanged on the branch. The case and fixture stay as a regression case (passes on both kits).
