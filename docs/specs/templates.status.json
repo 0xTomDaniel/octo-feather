@@ -19,8 +19,11 @@
       "pr": 16
     },
     "acceptance-same-gate": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T211256Z-253c1f04",
+      "commit": "e5432b7a3bff7a5b531603f931786ae47e6ccb5c",
+      "tests": []
     },
     "acceptance-target-agents-md": {
       "status": "built",
