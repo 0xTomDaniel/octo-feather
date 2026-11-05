@@ -1,0 +1,176 @@
+"""The kit tests' one testkit (#606): shared stand-ins, scratch dirs, fixture loading, and the
+scenario runner every pytest kit test under tests/gate/kit/ goes through.
+
+A kit test drives the kit's commands for real (AGENTS.md Rules); stand-ins sit only where the
+kit does not own the system (what may be stubbed: the tdd skill, Seams and mocking.md): FAKES
+names each one, first on a scratch PATH. A test file holds scenarios, functions of a Scratch;
+each pytest item runs its scenario as this file's own command (`python3 FILE NAME`, main below)
+through the `case` fixture (tests/gate/kit/conftest.py), so a qc capture, which runs a tagged
+item's command in its sandbox with its own /tmp, sees the whole scenario (quality spec
+#qc-capture). A missing fixture fails naming it.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import shutil
+import subprocess
+import sys
+import tempfile
+from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping, Sequence
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[3]
+FIXTURES = ROOT / "tests" / "fixtures"
+# Each stand-in by the command it stands in for: gh (GitHub), herdr (Herdr), pi (Pi, at its
+# classifier boundary: tests/fixtures/classify-stub/pi's header says what it answers).
+FAKES = {
+    "gh": HERE / "gh.py",
+    "herdr": HERE / "herdr.py",
+    "pi": FIXTURES / "classify-stub" / "pi",
+}
+# Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
+# run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
+CLEARED = (
+    "XDG_CONFIG_HOME",
+    "XDG_STATE_HOME",
+    "XDG_CACHE_HOME",
+    "GH_CONFIG_DIR",
+    "OPENROUTER_API_KEY",
+    "OCTO_FEATHER_CHECK_RUN",
+)
+
+
+class MissingFixtureError(FileNotFoundError):
+    pass
+
+
+def fixture(name: str) -> str:
+    """The text of tests/fixtures/NAME; a missing one fails naming it."""
+    p = FIXTURES / name
+    if not p.is_file():
+        msg = f"testkit: fixture {name} is missing: no file {p}"
+        raise MissingFixtureError(msg)
+    return p.read_text()
+
+
+def kit(name: str) -> str:
+    """The kit command NAME (scripts/NAME), as a path to run."""
+    return str(ROOT / "scripts" / name)
+
+
+@dataclass(frozen=True)
+class Ran:
+    rc: int
+    out: str
+    err: str
+
+
+class Gh:
+    """The fake gh's store (testkit/gh.py): its PRs as JSON and its call log."""
+
+    def __init__(self, d: Path) -> None:
+        self.dir = d
+        (d / "pr").mkdir(parents=True)
+        (d / "log").write_text("")
+
+    def pr(self, n: int) -> dict[str, object]:
+        return json.loads((self.dir / "pr" / f"{n}.json").read_text())
+
+    def put(self, n: int, d: Mapping[str, object]) -> None:
+        (self.dir / "pr" / f"{n}.json").write_text(json.dumps(d))
+
+    def log(self) -> list[str]:
+        return (self.dir / "log").read_text().splitlines()
+
+    def writes(self) -> int:
+        return sum(ln.startswith("api") for ln in self.log())
+
+
+class Scratch:
+    """One scenario's world under a fresh temp dir: HOME, TMPDIR, the fakes first on PATH,
+    CLEARED unset, and a fake GitHub store. Removed when the scenario ends."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.home = root / "home"
+        self.bin = root / "bin"
+        for d in (self.home, self.bin, root / "tmp"):
+            d.mkdir()
+        self.link_fakes(ROOT)
+        self.gh = Gh(root / "gh")
+        env = {k: v for k, v in os.environ.items() if k not in CLEARED}
+        env |= {
+            "HOME": str(self.home),
+            "TMPDIR": str(root / "tmp"),
+            "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
+            "FAKE_GH": str(self.gh.dir),
+        }
+        self.env = env
+
+    def link_fakes(self, kit_dir: Path) -> None:
+        """The fakes on PATH from the kit at KIT_DIR: a copy of the kit under test must hold its
+        own, as the qc sandbox shows a judge only the kit under test (a link into another kit
+        under /tmp would dangle there)."""
+        for name, src in FAKES.items():
+            (self.bin / name).unlink(missing_ok=True)
+            (self.bin / name).symlink_to(kit_dir / src.relative_to(ROOT))
+
+    def run(
+        self,
+        cmd: Sequence[str],
+        *,
+        want: int = 0,
+        cwd: Path | None = None,
+        env: Mapping[str, str] | None = None,
+        stdin: str | None = None,
+    ) -> Ran:
+        """CMD's exit, stdout and stderr (trailing newlines cut, as a shell's $(...)); fails
+        unless it exits WANT without a traceback."""
+        p = subprocess.run(
+            list(cmd),
+            cwd=cwd or self.root,
+            env={**self.env, **(env or {})},
+            input=stdin,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        said = f"{' '.join(cmd)}: exit {p.returncode}, want {want}\n{p.stdout}\n{p.stderr}"
+        assert p.returncode == want, said
+        assert "Traceback" not in p.stderr, f"a traceback: {said}"
+        return Ran(p.returncode, p.stdout.rstrip("\n"), p.stderr.rstrip("\n"))
+
+    def git(self, repo: Path, *args: str) -> str:
+        """git ARGS in REPO with a scratch identity; its stdout."""
+        ident = [
+            "-c",
+            "user.email=t@example.com",
+            "-c",
+            "user.name=t",
+            "-c",
+            "commit.gpgsign=false",
+        ]
+        return self.run(["git", "-C", str(repo), *ident, *args]).out
+
+
+def main(*scenarios: Callable[..., None]) -> None:
+    """A test file's own command: `python3 FILE NAME [ARG...]` runs scenario NAME(scratch, *ARGS)
+    in a fresh Scratch."""
+    by = {s.__name__: s for s in scenarios}
+    name, *args = sys.argv[1:] or [""]
+    if name not in by:
+        sys.exit(f"usage: {sys.argv[0]} SCENARIO [ARG...], SCENARIO one of {', '.join(by)}")
+    base = Path(tempfile.gettempdir()).resolve()
+    t = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=base))
+    try:
+        by[name](Scratch(t), *args)
+    finally:
+        shutil.rmtree(t, ignore_errors=True)
+    sys.stdout.write(f"{name}: ok\n")

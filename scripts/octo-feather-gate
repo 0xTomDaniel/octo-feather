@@ -20,17 +20,21 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       Prints REV's (default HEAD) identity fields as record writes them, JSON: gate_config, list;
       merge-ask reads it (when a pass is current: issue-lifecycle #lanes-checkpoints).
   octo-feather-gate select
-      In the kit: the fast tier's pytest node ids for `just check-tests` (tests/gate/test_gate.py),
-      one per line; each item with why it runs, or why not, on stderr. The selection reads the
-      coverage map (below) and the list; an item without recorded coverage always runs; an item
-      whose own header has the line `# gate: e2e` is end-to-end. Changed files count from the diff
+      In the kit: the fast tier's pytest node ids for `just check-tests`, one per line; each item
+      with why it runs, or why not, on stderr. Test items: each tests/*.sh (its test_gate.py
+      item), and each pytest test function outside test_gate.py, named by its node id, as pytest
+      collects them (tests/gate/kit/). The selection reads the coverage map (below) and the list;
+      an item without recorded coverage always runs; a tests/*.sh whose own header has the line
+      `# gate: e2e`, or a pytest item carrying pytest's e2e marker, is end-to-end. A pytest item's
+      file is the file its node id names. Changed files count from the diff
       base, the newer of the map head and the latest commit of HEAD's history with a recorded full
       pass on a clean tree (record); a test item changed since the map head always runs. A changed
       file no recorded coverage reaches that the list names, or that is absent at the map head (the
       map cannot know it), runs every non-e2e item.
   octo-feather-gate map DATA_DIR --junit FILE
       In the kit, under its uv venv (coverage): writes the coverage map from a mapping run's data
-      (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/; files measured under
+      (just fast-map), one coverage data dir per gate item, DATA_DIR/<item>/ (<item> GATE_ITEM: a
+      tests/*.sh path, or a pytest node id, its `/` and `::` kept); files measured under
       /tmp copies of the kit map back to tracked files by their longest shared path suffix. FILE is
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
       is left out and named in the map as not passed. An item with no data (not run, or no Python
@@ -39,8 +43,9 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
 octo-feather/fast-map/<head>.json, shared by every worktree. select and map are kit-only: the
-kit's tests are shell scripts run as commands, which no stack's test impact tool maps; a target
-uses its stack's own tool. Stdlib only, but map, which reads coverage data.
+kit's tests run the kit's scripts as commands (shell items, and pytest items that run their
+scenario as a command), which no stack's test impact tool maps; a target uses its stack's own
+tool. Stdlib only, but map, which reads coverage data.
 """
 
 from __future__ import annotations
@@ -244,17 +249,47 @@ def select() -> None:
     if not recipes:
         sys.exit("octo-feather-gate select: GATE_RECIPES is unset: run it through just fast")
     root = Path(git("rev-parse", "--show-toplevel").strip())
-    items = sorted(p.relative_to(root).as_posix() for p in root.glob("tests/*.sh"))
+    scripts = sorted(p.relative_to(root).as_posix() for p in root.glob("tests/*.sh"))
+    native, native_e2e = collected(root)
+    items = scripts + native
     ids = [f"{NODE}test_recipe[{r}]" for r in recipes]
     for r in recipes:
         say(r, "static check (every GATE_RECIPES recipe)")
-    chosen = choose(root, items)
-    ids += [f"{NODE}test_script[{i}]" for i in items if i in chosen]
+    chosen = choose(root, items, native_e2e)
+    ids += [f"{NODE}test_script[{i}]" for i in scripts if i in chosen]
+    ids += [i for i in native if i in chosen]
     sys.stderr.write(
         f"fast: selected {len(ids)} of {len(recipes) + len(items)} gate items"
         f" ({len(recipes)} static, {len(chosen)} of {len(items)} test items)\n"
     )
     sys.stdout.write("".join(f"{i}\n" for i in ids))
+
+
+def collected(root: Path) -> tuple[list[str], set[str]]:
+    """The pytest-native test items (each test function outside test_gate.py, its own gate item,
+    named by its node id), as pytest itself collects them in the repo's venv, and those of them
+    carrying pytest's e2e marker."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("OCTO_FEATHER_QC_")}
+    cmd = ["uv", "run", "--locked", "--offline", "--quiet", "pytest", "--collect-only", "-q"]
+    cmd += ["-p", "no:cacheprovider", f"--junitxml={os.devnull}", f"--ignore={NODE[:-2]}"]
+
+    def ids(*args: str) -> list[str]:
+        p = subprocess.run(
+            [*cmd, *args], cwd=root, env=env, capture_output=True, text=True, check=False
+        )
+        if p.returncode not in (0, 5):  # 5: pytest collected none
+            sys.exit(
+                f"octo-feather-gate select: pytest's collection exited {p.returncode}: "
+                f"{(p.stdout + p.stderr).strip()[-2000:]}"
+            )
+        return [ln for ln in p.stdout.splitlines() if "::" in ln]
+
+    return ids(), set(ids("-m", "e2e"))
+
+
+def source(item: str) -> str:
+    """An item's file: a tests/*.sh item is its file; a pytest item's node id leads with it."""
+    return item.split("::", 1)[0]
 
 
 def changed_since(at: str, *pats: str) -> set[str]:
@@ -302,10 +337,10 @@ def beyond_map(at: str, base: str, unreached: list[str]) -> str:
     return "; ".join(why)
 
 
-def choose(root: Path, items: list[str]) -> set[str]:
-    e2e = [i for i in items if is_e2e(root, i)]
+def choose(root: Path, items: list[str], native_e2e: set[str]) -> set[str]:
+    e2e = [i for i in items if i in native_e2e or ("::" not in i and is_e2e(root, i))]
     for i in e2e:
-        say(i, f"e2e ({E2E}): skipped, just check runs it")
+        say(i, f"e2e ({'marker' if i in native_e2e else E2E}): skipped, just check runs it")
     items = [i for i in items if i not in e2e]
     m = newest_map(git("rev-parse", "HEAD").strip())
     if m is None:
@@ -318,10 +353,11 @@ def choose(root: Path, items: list[str]) -> set[str]:
     cover: dict[str, list[str]] = m["items"]  # pyright: ignore[reportAssignmentType]
     failed: list[str] = m.get("not_passed", [])  # pyright: ignore[reportAssignmentType]
     base = diff_base(at)
-    moved = changed_since(at) & set(items)  # coverage of a test changed since the map is unknown
-    changed = changed_since(base) | moved
+    since_map = changed_since(at)  # coverage of a test changed since the map is unknown
+    moved = {i for i in items if source(i) in since_map}
+    changed = changed_since(base) | {source(i) for i in moved}
     reach = {f for fs in cover.values() for f in fs}
-    unreached = sorted(changed - reach - set(items) - set(e2e))
+    unreached = sorted(changed - reach - {source(i) for i in items + e2e})
     why = beyond_map(at, base, unreached)
     if why:
         say(
@@ -331,7 +367,7 @@ def choose(root: Path, items: list[str]) -> set[str]:
         return set(items)
     chosen: set[str] = set()
     for i in items:
-        if i in changed:
+        if source(i) in changed:
             say(i, f"changed since the map at {at[:12]}")
         elif i in cover:
             hit = sorted(changed & set(cover[i]))
@@ -380,17 +416,33 @@ class Tracked:
         )
 
 
+def junit_key(item: str) -> str:
+    """ITEM (a tests/*.sh path, or a pytest node id) as outcomes() keys it: a node id
+    PATH.py::[CLASS::]NAME as pytest's junit xml names it, classname PATH's module path (and
+    .CLASS), then ::NAME."""
+    if "::" not in item:
+        return item
+    path, *rest = item.split("::")
+    return ".".join([path.removesuffix(".py").replace("/", "."), *rest[:-1]]) + "::" + rest[-1]
+
+
 def outcomes(junit: Path) -> dict[str, bool]:
-    """Each test item in a pytest junit xml report: whether it passed (no failure, error, skip)."""
+    """Each test item in a pytest junit xml report (junit_key): whether it passed (no failure,
+    error, skip)."""
     import xml.etree.ElementTree as ET  # noqa: PLC0415  # our own pytest run's report
 
     out: dict[str, bool] = {}
+    gate = junit_key(f"{NODE}x").removesuffix("::x")
     for case in ET.parse(junit).iter("testcase"):  # noqa: S314
-        name = case.get("name", "")
+        name, cls = case.get("name", ""), case.get("classname", "")
         if name.startswith("test_script[") and name.endswith("]"):
             item = name.removeprefix("test_script[").removesuffix("]")
-            bad = any(c.tag in ("failure", "error", "skipped") for c in case)
-            out[item] = out.get(item, True) and not bad
+        elif cls != gate:
+            item = f"{cls}::{name}"
+        else:
+            continue
+        bad = any(c.tag in ("failure", "error", "skipped") for c in case)
+        out[item] = out.get(item, True) and not bad
     return out
 
 
@@ -402,13 +454,18 @@ def build_map(data: Path, junit: Path) -> None:
     ran = outcomes(junit)
     tracked = Tracked()
     items: dict[str, list[str]] = {}
-    not_passed = sorted(i for i, good in ran.items() if not good)
-    for i in sorted(
+    # The pytest items: each data dir named by a node id (GATE_ITEM holds its `/` and `::`).
+    native = {f.parent.relative_to(data).as_posix() for f in data.rglob("cov*") if f.is_file()}
+    native = {i for i in native if "::" in i}
+    scripts = {
         t
         for t in tracked.files
         if t.startswith("tests/") and t.count("/") == 1 and t.endswith(".sh")
-    ):
-        if not ran.get(i):  # not run, or did not pass: its coverage is partial, so always selected
+    }
+    not_passed = sorted(i for i, good in ran.items() if not good and i in scripts)
+    not_passed += sorted(i for i in native if ran.get(junit_key(i)) is False)
+    for i in sorted(scripts) + sorted(native):
+        if not ran.get(junit_key(i)):  # not run, or did not pass: partial coverage, always selected
             continue
         runs = list((data / i).glob("cov*"))
         if not runs:  # not run, or no Python measured: no recorded coverage, so always selected

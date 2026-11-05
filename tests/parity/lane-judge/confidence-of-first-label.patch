@@ -1,0 +1,12 @@
+Seeded defect: judge reports the first label's probability as the answer's confidence.
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -1308,7 +1308,7 @@
+     if choice not in q["labels"]:
+         err = (bench.get("errors") or [])[ei] if ei is not None else f"answer {choice!r} is not one of {q['labels']}"
+         raise Refuse(f"{model} gave no answer ({err}): rerun, or check the provider")
+-    conf = (probs or [None] * len(q["labels"]))[q["labels"].index(choice)]
++    conf = (probs or [None] * len(q["labels"]))[0]
+     conf_s = f"{conf:.3f}" if isinstance(conf, (int, float)) else "unreported"
+     fence = "`" * max(3, 1 + max((len(m) for m in re.findall(r"`+", state)), default=0))
+     quoted = state if len(state) <= STATE_MAX else state[:STATE_MAX] + f"\n[... {len(state) - STATE_MAX} more characters]"

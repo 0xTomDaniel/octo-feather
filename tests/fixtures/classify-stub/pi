@@ -3,7 +3,9 @@
 
 `pi --version` exits 0. An extension command (`pi ... -e EXT -p "/cmd args"`, the kit's one
 classify path) runs for real under node with harness.mjs here: a stub model registry listing one
-classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json). Every answer
+classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json), and each
+provider/id in STUB_ALSO (space-separated), a classify call to any of which exits 5 (only STUB_KIT
+may be asked). Every answer
 is STUB_ANSWER at confidence STUB_CONFIDENCE (default 0.91), the rest spread over the other
 labels; STUB_ANSWER unset: each call fails with a provider error. STUB_WANT: a state not
 containing it is refused with an error naming it (the caller's proof of what the classifier was

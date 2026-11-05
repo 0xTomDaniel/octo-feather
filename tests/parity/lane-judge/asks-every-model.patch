@@ -1,0 +1,12 @@
+Seeded defect: judge asks every available classifier, not the kit's one judgment model (spec judgment#rule-one-model).
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -1294,7 +1294,7 @@
+         raise Refuse("refused inside just check, which stays deterministic and free (message above)")
+     qa = qa_module()
+     inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
+-           "cases": [{"id": "state", "state": state}], "classifiers": [model]}
++           "cases": [{"id": "state", "state": state}], "classifiers": None}
+     bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
+                                       purpose="judge")
+     if problem:
