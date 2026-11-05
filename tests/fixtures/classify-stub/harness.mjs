@@ -15,6 +15,7 @@ const mod = /** @type {Extension} */ (await import(pathToFileURL(ext).href));
 mod.default({ registerCommand: (n, d) => { cmds[n] = d; } });
 const answer = process.env["STUB_ANSWER"] ?? "";
 const want = process.env["STUB_WANT"];
+const exact = process.env["STUB_WANT_EXACT"] === "1";
 const conf = Number(process.env["STUB_CONFIDENCE"] ?? "0.91");
 /** @type {Model[]} */
 const models = [kit, ...(process.env["STUB_ALSO"] ?? "").split(" ").filter((m) => m !== "")].map((m) => {
@@ -32,6 +33,9 @@ const modelRegistry = {
     if (`${m.provider}/${m.id}` !== kit) process.exit(5);
     const out = { provider: m.provider, model: m.id, usage: { input: 100, output: 2, totalTokens: 102, cost: { total: 0.0001 } } };
     if (answer === "") return Promise.resolve({ ...out, answers: {}, stopReason: "error", errorMessage: "stub: provider error" });
+    if (want !== undefined && exact && state !== want) {
+      return Promise.resolve({ ...out, answers: {}, stopReason: "error", errorMessage: "stub: state is not " + JSON.stringify(want) });
+    }
     if (want !== undefined && !state.includes(want)) {
       return Promise.resolve({ ...out, answers: {}, stopReason: "error", errorMessage: "stub: state lacks " + JSON.stringify(want) });
     }

@@ -82,8 +82,8 @@ MSW replays third-party HTTP responses. Add MSW to a repo only when it calls
 such an API. What a handler may do: the `tdd` skill's mocking guide
 (`../tdd/mocking.md`).
 
-- A handler matches the request, selects its recorded fixture, and returns
-  that fixture's status, headers, and body.
+- A handler matches the request and selects its recorded fixture; how it
+  replays that fixture: the mocking guide.
 
 ## Validation Commands
 
