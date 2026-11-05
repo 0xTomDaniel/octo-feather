@@ -1,0 +1,12 @@
+Seeded defect: check-languages.ts (TypeScript template) lets package.json packageManager and mise.toml both pin pnpm (rule 6).
+--- a/templates/typescript/scripts/check-languages.ts
++++ b/templates/typescript/scripts/check-languages.ts
+@@ -132,7 +132,7 @@ function bothPnpmPins(): string[] {
+   const manifest = fs.existsSync("package.json")
+     ? (JSON.parse(fs.readFileSync("package.json", "utf8")) as Record<string, unknown>)
+     : {};
+-  if (!("pnpm" in pins) || !("packageManager" in manifest)) return [];
++  if (!("pnpm" in pins) || "packageManager" in manifest) return [];
+   return [
+     "package.json: packageManager and mise.toml [tools] pnpm both pin pnpm; delete" +
+       " packageManager: mise owns pnpm (owner ruling, issue #261), and pnpm's switch to" +

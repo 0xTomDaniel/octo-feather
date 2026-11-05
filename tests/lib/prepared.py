@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """prepared.py: the template installs gate items share, each prepared once per gate run (#509).
 
-A test helper run as a command (tests/evidence.sh, contract.sh, template-languages-typescript.sh);
+A test helper run as a command (tests/evidence.sh, contract.sh, tests/gate/kit/testkit/template.py);
 in tests/lib/ so the gate's tests/*.sh glob does not collect it.
 
   prepared.py typescript DIR

@@ -1,0 +1,12 @@
+Seeded defect: check-languages (Python template) never names an unreadable shebang (rule 5).
+--- a/templates/python/scripts/check-languages
++++ b/templates/python/scripts/check-languages
+@@ -141,7 +141,7 @@ def unreadable_shebangs(unlisted: set[str]) -> list[str]:
+         f"{f}: scc cannot name the language of its shebang (it drops `env -S` forms); start it"
+         " with #!/usr/bin/env <interpreter> or give it an extension"
+         for f in sorted(unlisted)
+-        if Path(f).read_bytes()[:2] == b"#!"
++        if Path(f).read_bytes()[:2] == b"#!!"
+     ]
+ 
+ 

@@ -4,8 +4,11 @@
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
 (the fields asked for, those it holds); `gh api -X POST repos/o/r/issues/N/comments` appends a
 comment, `-X PATCH repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each
-prints the comment URL (`--jq .html_url`). Every call is one line in $FAKE_GH/log. Anything
-else exits 2 naming it.
+prints the comment URL (`--jq .html_url`). `gh api repos/o/r/commits?...` prints
+$FAKE_GH/commits.json (the default branch's commits), `gh api repos/o/r/contents/F -H Accept:
+application/vnd.github.raw` $FAKE_GH/contents/F (the default branch's file), each
+`gh: Not Found (HTTP 404)` when absent. Every call is one line in $FAKE_GH/log. Anything else
+exits 2 naming it.
 """
 
 import json
@@ -26,6 +29,12 @@ def die(msg: str, rc: int = 1) -> None:
     sys.exit(rc)
 
 
+def served(p: Path) -> None:
+    if not p.is_file():
+        die("gh: Not Found (HTTP 404)")
+    sys.stdout.write(p.read_text())
+
+
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
         f.write(" ".join(a) + "\n")
@@ -36,6 +45,13 @@ def main(a: list[str]) -> None:
         d = json.loads(p.read_text())
         fields = a[a.index("--json") + 1].split(",")
         sys.stdout.write(json.dumps({k: d[k] for k in fields if k in d}) + "\n")
+        return
+    if a[:1] == ["api"] and len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
+        served(STORE / "commits.json")
+        return
+    raw = ["-H", "Accept: application/vnd.github.raw"]
+    if a[:1] == ["api"] and a[2:] == raw and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
+        served(STORE / "contents" / m.group(1))
         return
     if a[:1] == ["api"] and "-X" in a and "--input" in a:
         method, path = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")

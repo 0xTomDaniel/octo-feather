@@ -1,0 +1,12 @@
+Seeded defect: trend-reporter.ts (TypeScript template) calls a bare vitest run, which skips the static steps, tier full.
+--- a/templates/typescript/tests/trend-reporter.ts
++++ b/templates/typescript/tests/trend-reporter.ts
+@@ -60,7 +60,7 @@ export async function runTier(vitest: Vitest, specifications: readonly TestSpeci
+     || c.shard !== undefined || (c.cliExclude?.length ?? 0) > 0 || (c.tagsFilter?.length ?? 0) > 0;
+   const run = new Set(specifications.map(key));
+   const all = await vitest.globTestSpecifications();
+-  return narrowed || all.some((s) => !run.has(key(s))) || staticShort(c.root) ? "subset" : "full";
++  return narrowed || all.some((s) => !run.has(key(s))) ? "subset" : "full";
+ }
+ 
+ const seconds = (ms: number | undefined): number => Math.round(ms ?? 0) / 1000;

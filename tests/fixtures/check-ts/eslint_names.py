@@ -1,4 +1,4 @@
-"""tests/check-ts.sh's assertion that eslint named a finding at a file and line (#245).
+"""tests/gate/kit/check_ts.py's assertion that eslint named a finding at a file and line (#245).
 
 Run as `python3 eslint_names.py FILE LINE RULE` with `just check-ts` output on stdin. eslint's
 default (stylish) output is a block per file: the file's absolute path on its own line, then one
