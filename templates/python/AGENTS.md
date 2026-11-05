@@ -6,7 +6,7 @@ Repo skills: python, verify-app
 
 ## Rules
 
-- The gate has two tiers, `just fast` and `just check`: who runs which, octo-feather templates spec #tpl-gate, #tpl-hooks. A red gate blocks handoff.
+- The gate has two tiers, `just fast` and `just check`: who runs which, octo-feather templates spec #tpl-gate, #tpl-hooks. The one a hand-off needs green: octo-feather quality spec #acceptance-gate-green; when a lane runs the full tier: octo-feather issue-lifecycle spec #lanes-checkpoints.
 - Tests are integration and end-to-end only (octo-feather templates spec #templates-tests-rule, #tpl-tests): integration in `tests/integration/` (`app.cli.main` in-process), end-to-end in `tests/e2e/` (the `app` command as a process; its conftest.py marks each `e2e`); shared read-only fixtures as `tests/integration/conftest.py` (#acceptance-shared-fixture). No mocks of our own code. One or two tests per acceptance criterion; keep the suite small.
 - No test detail in production code: no test-only flags, env vars, hooks, parameters or branches. Reach the state from the test, mocking at the boundary.
 - `app.cli` may import `app.core`; `app.core` never imports `app.cli` (import-linter enforces it).
