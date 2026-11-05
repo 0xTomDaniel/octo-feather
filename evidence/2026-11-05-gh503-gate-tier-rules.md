@@ -41,6 +41,15 @@ Fix: the fixture gets a `mise.toml` pinning uv 0.13.1 and just 1.21.0, as templa
 
 evals/role-transcripts `implementer-hands-off-on-fast-heldout`: a different target, fixture `tally-tiers` (a word-count CLI; tests in tests/integration and tests/e2e, as in the template; mise.toml; the template's pre-change gate line), and a different ticket (T3, `--lines`). It is graded on the same single fact, `ran just fast`. I wrote it after smoke 2 and before any run of it; it is never to be tuned on. The schema has no held-out mark for role-transcript cases (`split` is skill-trigger only: eval-cases schema, Case), so this file and the `-heldout` suffix of its id record that it is held out. Report it apart from the train case `implementer-hands-off-on-fast`.
 
+### Smoke 3 (train only, after the mise.toml fix)
+
+Pending: the next eval slot. The held-out case stays unrun until the proof.
+
+## Findings
+
+- Schema gap (eval-cases schema, Case): `split` (`train` or `held-out`) exists only for skill-trigger cases, and `check-evals` refuses it on a role-transcript case. So a role-transcript held-out case cannot be marked as data, and `octo-feather-qa` cannot report it apart. Here it is held out by record (this file, the `-heldout` id suffix). The fix belongs to the schema owner: the schema, `scripts/check-evals` and `scripts/octo-feather-qa`, outside this ticket's scope.
+- Fixture environment gap: the python-app fixture family (python-app and its copies: python-app-shout, -skill, -verify-*, -yaml-names, -proxy-check and others) has no `mise.toml`. In the qa sandbox, `just` and `uv` on PATH are mise shims that refuse with no version set (smoke 2 above), so any case there that runs `just` sees exit 1, and a `ran just ...` fact can be bypassed by an absolute path. Proven only for python-app-tiers (smoke 2); for the rest it is inferred from the same setup. Not fixed here (outside scope).
+
 ### Proof
 
 Pending: the next eval slot (supervisor/director): both cases, `--runs 3 --baseline 15923eb`.
