@@ -60,7 +60,7 @@ set +e; out="$(cd "$t" && env -u HERDR_SESSION -u HERDR_PANE_ID PATH="$t/bin:$PA
 
 # Scripts: a kit copy whose github-issues lacks one tracker script fails check-skills naming skill and script.
 mkdir -p "$t/kit/scripts"
-cp -r "$kit/agents" "$t/kit/"; cp -r "$kit/.agents" "$t/kit/"; cp "$kit/scripts/check-skills" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp "$kit/web-mcp.json" "$t/kit/"
+cp -r "$kit/agents" "$t/kit/"; cp -r "$kit/.agents" "$t/kit/"; cp "$kit/scripts/check-skills" "$kit/scripts/pi-role" "$t/kit/scripts/"; cp "$kit/web-mcp.json" "$t/kit/"; cp -r "$kit/extensions" "$t/kit/"
 python3 "$t/kit/scripts/check-skills" >/dev/null || fail "check-skills fails on the kit copy itself"
 out="$(python3 "$t/kit/scripts/check-skills")"; [[ "$out" == *"trackers github, linear)"* ]] || fail "check-skills covers both trackers: $out"
 for sk in github-issues linear; do
