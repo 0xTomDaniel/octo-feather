@@ -54,7 +54,7 @@ set +e; out="$(cd "$d" && env -u GATE_RECIPES PATH="$t/nopy:$PATH" pnpm exec vit
 P="$t/pr/o__ts"; mkdir -p "$P" "$S/lanes" "$t/bin"
 cp "$kit/tests/fixtures/lane-report/gh" "$kit/tests/fixtures/lane-report/herdr" "$t/bin/"; chmod +x "$t/bin/"*
 echo '[]' >"$t/agents.json"; printf '[{"sha": "%s"}]\n' "$H" >"$P/commits.json"; cp "$d/gate-budget.toml" "$P/"
-printf '{"state": "OPEN", "isDraft": false, "headRefName": "gh1", "headRefOid": "%s", "statusCheckRollup": [], "comments": [], "commits": [{"oid": "%s"}], "body": "## Merge ask\\n\\nHead: %s\\nBuilt: none\\nFailed: none\\n"}\n' \
+printf '{"state": "OPEN", "isDraft": false, "baseRefName": "main", "headRefName": "gh1", "headRefOid": "%s", "statusCheckRollup": [], "comments": [], "commits": [{"oid": "%s"}], "body": "## Merge ask\\n\\nHead: %s\\nBuilt: none\\nFailed: none\\n"}\n' \
   "$H" "$H" "${H:0:12}" >"$P/1.json"
 printf 'supervisor = "w9:p1"\nrepository = "o/ts"\nissue = "gh1"\ngoal = "ts"\npr = 1\nstarted_at = "2026-11-04T08:00:00Z"\nlast_handoff_at = "2026-11-04T09:00:00Z"\nwaiting_on = ""\n' >"$S/lanes/ts.toml"
 export FAKE_GH_PRS="$t/pr" FAKE_HERDR_AGENTS="$t/agents.json"

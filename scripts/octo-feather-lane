@@ -93,8 +93,9 @@ The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
 the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
-defaults to origin/main): the judged head's qc.toml for a lane with criterion rows, and the
-history when the PR head is not the judged head. The PR body carries the
+defaults to the PR's base branch on origin): the PR's commits and their subjects (BASE..head:
+`gh pr view --json commits` lists at most 100; `verdict` reads them the same way), the judged
+head's qc.toml for a lane with criterion rows, and the history when the PR head is not the judged head. The PR body carries the
 parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
 the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
 on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
@@ -1119,12 +1120,22 @@ def merge_ask_gate_time(head: str, base: str) -> list[str]:
     return [title, *budget_lines(last, runs[:runs.index(last)], budget, why, now, "  ")]
 
 
-def subject(c: dict) -> str:
-    """A commit's full subject: GitHub cuts messageHeadline at ~70 chars with an ellipsis and starts messageBody with the rest."""
-    h, body = c.get("messageHeadline") or "", c.get("messageBody") or ""
-    if h.endswith("\u2026") and body.startswith("\u2026"):
-        return h[:-1] + body[1:].split("\n", 1)[0]
-    return h
+def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
+    """PR's commits, (sha, subject) each, newest first, read from this directory's repo: `git log BASE..HEAD`, HEAD the
+    PR's head (gh's headRefOid), BASE its base branch on origin or --base; never `gh pr view --json commits`, which
+    lists at most 100. Refused when either is not a commit here: the lane worktree with both fetched."""
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"PR #{pr}'s head {head[:12]} is not a commit in this repo: run it in the lane worktree after "
+                     "git fetch origin (the PR's commits are read from git)")
+    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
+    out = git("log", "--format=%H%x00%s", f"{base}..{head}")[1]
+    return [cast("tuple[str, str]", tuple(l.split("\0", 1))) for l in out.split("\n") if "\0" in l]
+
+
+def pr_base(ref: str, base: str | None) -> str:
+    """The base a PR's commits are read against: BASE (--base) when given, else REF, its base branch, on origin."""
+    return base or f"origin/{ref or 'main'}"
 
 
 def no_traceback(fn):
@@ -1164,9 +1175,9 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
-    d = pr_view(pr, "headRefOid,comments,commits", repo)
-    head = d["headRefOid"]
-    at = [c.get("oid") or "" for c in d["commits"] or [] if head_matches(want, c.get("oid") or "")]
+    d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
+    head = cast("str", d["headRefOid"])
+    at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
     if len(at) != 1:
         raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
                      f"push the reviewed head, or name the head the review judged in full")
@@ -1415,7 +1426,7 @@ def parent_line(body: str, branch: str) -> list[str]:
     return out
 
 
-def no_criterion(lines: list[str], commits: list[dict], specs: dict[str, dict], pr: int) -> bool:
+def no_criterion(lines: list[str], commits: list[tuple[str, str]], specs: dict[str, dict[str, dict[str, object]]], pr: int) -> bool:
     """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
     no `qc: built` commit on the PR and no status entry built with it."""
     b, f = field(lines, "Built"), field(lines, "Failed")
@@ -1427,7 +1438,7 @@ def no_criterion(lines: list[str], commits: list[dict], specs: dict[str, dict], 
             break
         if not all(re.fullmatch(r":?-+:?", c.strip()) for c in l.strip().strip("|").split("|")):
             return False
-    if any(QC_COMMIT.match(subject(c)) for c in commits):
+    if any(QC_COMMIT.match(s) for _, s in commits):
         return False
     return not any(v.get("status") == "built" and v.get("pr") == pr for cr in specs.values() for v in cr.values())
 
@@ -1482,25 +1493,30 @@ def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
-    files, rest, i, base = [], [], 0, "origin/main"
+    files, rest, i, base_arg = [], [], 0, None
     while i < len(args):
         if args[i] == "--status" and i + 1 < len(args):
             files.append(args[i + 1]); i += 2
         elif args[i] == "--base" and i + 1 < len(args):
-            base = args[i + 1]; i += 2
+            base_arg = args[i + 1]; i += 2
         else:
             rest.append(args[i]); i += 1
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0]); specs = load_specs(files) if files else {}
-    d = pr_view(pr, "body,headRefName,headRefOid,statusCheckRollup,comments,commits", repo)
+    d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
     head = d["headRefOid"]; miss: list[str] = []
+    base = pr_base(cast("str | None", d["baseRefName"]) or "", base_arg)
+    try:
+        commits = pr_commits(pr, cast("str", head), base)
+    except Refuse as e:   # named with the other gaps; no commit of the PR is read
+        commits = []; miss.append(f"PR commits: {e}")
     miss += parent_line(d["body"] or "", d["headRefName"] or "")
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
     lines = sec or []
-    no_crit = no_criterion(lines, d["commits"] or [], specs, pr)
+    no_crit = no_criterion(lines, commits, cast("dict[str, dict[str, dict[str, object]]]", specs), pr)
     if not files and not no_crit:
         load_specs(files)   # a lane that claims a criterion names its status files
 
@@ -1521,7 +1537,6 @@ def cmd_merge_ask(args: list[str]) -> int:
     if pending:
         miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
 
-    commits = [(c.get("oid") or "", subject(c)) for c in d["commits"] or []]
     rows: dict[str, str] = {}; judged_at: set[str] = set()
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
     if t is None:
