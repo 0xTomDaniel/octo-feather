@@ -36,9 +36,10 @@ check: (check-tests "--testmon-noselect")
 # pytest-testmon picks from the coverage it recorded (.testmondata, per worktree; none yet: every one), each named;
 # no end-to-end test; the choice and its run: scripts/fast-select.
 # The caller's GATE_RECIPES (a `just --set GATE_RECIPES ...` too), which a new just would reset from this file.
-fast:
-    just --set GATE_RECIPES "$GATE_RECIPES" check-tests tests/test_gate.py
-    python3 scripts/fast-select
+# Extra arguments go to pytest, both runs.
+fast *args:
+    just --set GATE_RECIPES "$GATE_RECIPES" check-tests tests/test_gate.py "$@"
+    python3 scripts/fast-select "$@"
 
 # Every language scc finds in the tracked files has its lint and type step here; rules and what passes by design:
 # the head of scripts/check-languages (the octo-feather kit's, a byte copy).

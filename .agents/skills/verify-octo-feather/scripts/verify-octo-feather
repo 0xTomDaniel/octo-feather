@@ -1145,7 +1145,7 @@ def drive_qc_insufficient(f: Feature) -> None:
     body = (f"Closes #6\n\n## Merge ask\n\nHead: {head[:12]}\nChecks: check passes\n| criterion | qc verdict | judged | evidence |\n|---|---|---|---|\n"
             f"| demo#acceptance-a | fail | judged {head[:12]} | qc report, demo exit 77 |\nBuilt: none\nFailed:\n- acceptance-a: repair ticket\n")
     (snap / "pr" / "7.json").write_text(json.dumps({
-        "number": 7, "headRefName": "gh6", "headRefOid": head, "body": body, "comments": [],
+        "number": 7, "baseRefName": "main", "headRefName": "gh6", "headRefOid": head, "body": body, "comments": [],
         "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
         "commits": [{"oid": head, "messageHeadline": "contract with a demo that needs GitHub", "messageBody": ""}]}))
     f.env |= {"OCTO_FEATHER_GHSNAP": str(snap), "PATH": f"{f.s.repo}/.agents/skills/github-pr/scripts:{os.environ.get('PATH', '')}"}
@@ -2003,7 +2003,7 @@ def drive_merge_ask_proof(f: Feature) -> None:
         body = (f"Closes #534\n\n## Merge ask\n\nHead: {head[:12]}\nChecks: check pass\nReview verdict: {url}\n"
                 "Built: none\nFailed: none\n")
         (snap / "pr" / "9.json").write_text(json.dumps({
-            "number": 9, "headRefName": "gh534", "headRefOid": head, "body": body, "commits": commits,
+            "number": 9, "baseRefName": "main", "headRefName": "gh534", "headRefOid": head, "body": body, "commits": commits,
             "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}],
             "comments": [{"author": {"login": "sup"}, "body": verdict, "url": url}]}))
         f.obs(name, "head", head + "\n")

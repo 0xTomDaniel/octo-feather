@@ -12,6 +12,9 @@ t="$(cd "$t" && pwd -P)"
 npm_config_store_dir="$(cd "$kit" && pnpm store path)"; export npm_config_store_dir
 fail() { echo "template-languages test: $1" >&2; echo "${out:-}" >&2; exit 1; }
 g() { git -C "$1" -c user.name=t -c user.email=t@t "${@:2}"; }
+# The scratch repos' git identity, for every command that commits in them (just qc's status commit too), whatever the
+# box has: a runner may have none (GitHub Actions).
+export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
 # new-repo trusts each created mise.toml: in this test's trust store, never the box's.
 export MISE_STATE_DIR="$t/mise-state"
 mkdir -p "$t/nopy"
@@ -78,15 +81,19 @@ check_tiers() {
     printf 'def double(n: int) -> int:\n    return n * 2\n' >"$d/$other"
     printf 'from app.other import double\n\n\ndef test_double() -> None:\n    assert double(2) == 4\n' >"$d/tests/integration/test_other.py"
     # Two workers: the shared fixture across xdist workers (a nested gate is otherwise -n 0, #208; two tiny tests).
-    full=(env -u GATE_NESTED GATE_WORKERS=2 just --set GATE_RECIPES check-lint check)
-    fast=(just --set GATE_RECIPES check-lint fast)
+    # pytest's own --color=no (just check is check-tests --testmon-noselect), so forced colour never splits the lines
+    # read here.
+    full=(env -u GATE_NESTED GATE_WORKERS=2 just --set GATE_RECIPES check-lint check-tests --testmon-noselect --color=no)
+    fast=(just --set GATE_RECIPES check-lint fast --color=no)
     other_t="PASSED tests/integration/test_other.py::test_double"; integ="PASSED tests/integration/test_cli.py::"
     e2e="tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end"
   else
     other=src/other.ts
     printf 'export function double(n: number): number {\n  return n * 2;\n}\n' >"$d/$other"
     printf 'import { expect, it } from "vitest";\nimport { double } from "../src/other.ts";\n\nit("doubles", () => {\n  expect(double(2)).toBe(4);\n});\n' >"$d/tests/other.test.ts"
-    full=(just check); fast=(just fast)
+    # Vitest's own --no-color (just check is check-tests, which passes it on), so a CI that forces colour (GitHub
+    # Actions) never splits the lines read here.
+    full=(just check-tests --no-color); fast=(just fast --no-color)
     other_t="✓ |integration| tests/other.test.ts > doubles"; integ="✓ |integration| tests/cli.test.ts > "
     e2e="|e2e| tests/cli.e2e.test.ts"
   fi

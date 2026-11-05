@@ -3,7 +3,8 @@
 // Prints its choice on one line, then runs Vitest's integration project: the test files Vitest picks by their
 // imports of the files changed since the branch left main (--changed <merge base>), or every one when this branch
 // has no merge base with main, or when a path shared-machinery.txt names changed since that base (a git pathspec
-// per line, glob magic; the import graph cannot see it). Exits with that run's status.
+// per line, glob magic; the import graph cannot see it). Its own arguments go to Vitest after those. Exits with that
+// run's status.
 import { spawnSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 
@@ -28,5 +29,5 @@ function choice(): [string, string[]] {
 
 const [line, sel] = choice();
 process.stdout.write(`${line}\n`);
-const run = spawnSync("pnpm", ["exec", "vitest", "run", "--project", "integration", ...sel], { stdio: "inherit" });
+const run = spawnSync("pnpm", ["exec", "vitest", "run", "--project", "integration", ...sel, ...process.argv.slice(2)], { stdio: "inherit" });
 process.exit(run.status ?? 1);

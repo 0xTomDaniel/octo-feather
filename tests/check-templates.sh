@@ -41,8 +41,8 @@ allow "$hook" 'exec just fast' '  exec just fast  # the fast tier'
 allow "$hook" 'exec just fast' 'just fast'
 pj=templates/python/justfile; tj=templates/typescript/justfile
 # Each template's fast tier is a recipe beside check, integrate and qc.
-expect "$pj" 'fast:' 'fast-tier:' 'needs check, fast, integrate and product-judge recipes'
-expect "$tj" 'fast: check-static' 'fast-tier: check-static' 'needs check, fast, integrate and product-judge recipes'
+expect "$pj" 'fast *args:' 'fast-tier *args:' 'needs check, fast, integrate and product-judge recipes'
+expect "$tj" 'fast *args: check-static' 'fast-tier *args: check-static' 'needs check, fast, integrate and product-judge recipes'
 expect "$pj" 'export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"' \
   'export GATE_RECIPES := "check-scripts check-lint check-format check-types check-imports"' 'the gate never runs check-languages'
 expect "$tj" 'export GATE_RECIPES := "check-languages check-scripts check-ts check-arch check-dead-code"' \

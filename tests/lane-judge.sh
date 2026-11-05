@@ -135,7 +135,7 @@ printf '{"head": "%s", "spec": "demo", "results": [{"id": "acceptance-a", "verdi
 ST=(--status docs/specs/demo.status.json)
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
   {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a (judged ${J:0:12})\", \"messageBody\": \"\"}]"
-printf '{"number": 7, "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}], "comments": [], "commits": %s}\n' "$H" "$commits" > "$FAKE_GH/pr/7.json"
+printf '{"number": 7, "baseRefName": "main", "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}], "comments": [], "commits": %s}\n' "$H" "$commits" > "$FAKE_GH/pr/7.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"
