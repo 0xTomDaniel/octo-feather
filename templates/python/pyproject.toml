@@ -29,6 +29,7 @@ extend-include = [
   ".agents/skills/verify-app/scripts/verify-app",
   "scripts/check-languages",
   "scripts/own-tool-paths",
+  "scripts/fast-select",
 ]
 # The octo-feather kit's trend hook (tests/gate/conftest.py), copied byte for byte; the kit owns it and
 # does not lint it, so it is outside this repo's lint, format and type checks.
@@ -51,7 +52,7 @@ ignore = [
 typeCheckingMode = "strict"
 # Extensionless scripts by path (skipped unless named). The Python under .agents/ is its own project
 # (.agents/pyrightconfig.json): basedpyright's CLI skips dot directories.
-include = ["src", "tests", "scripts/check-languages", "scripts/own-tool-paths"]
+include = ["src", "tests", "scripts/check-languages", "scripts/own-tool-paths", "scripts/fast-select"]
 exclude = ["tests/conftest.py"]  # the kit's trend hook, copied byte for byte (see [tool.ruff])
 
 [tool.importlinter]

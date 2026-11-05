@@ -2184,7 +2184,8 @@ def drive_template_tiers(f: Feature) -> None:
         # line full, timing every GATE_RECIPES recipe; every just fast line after it subset. Then the factory report
         # over that state, one lane on o/<lang> and the kit's fake gh (tests/fixtures/lane-report/gh) over a scratch
         # store: the repo's commits as o/<lang>'s default branch, its gate-budget.toml (none in a repo without one).
-        trend = sc / "state" / "octo-feather" / "check-runs.jsonl"
+        state = scratch_state(f)   # where the runs' hook wrote and the report reads, under this drive's env
+        trend = state / "check-runs.jsonl"
         top = str(r.resolve())
         f.obs(f"{lang}-trend", "lines", "".join(ln + "\n" for ln in trend.read_text().splitlines() if json.loads(ln).get("repo") == top))
         f.obs(f"{lang}-trend", "recipes", output(["just", "--evaluate", "GATE_RECIPES"], cwd=r, env=env)[1])
@@ -2193,8 +2194,8 @@ def drive_template_tiers(f: Feature) -> None:
         (store / "commits.json").write_text(json.dumps([{"sha": s} for s in git("rev-list", "HEAD").split()]))
         if (r / "gate-budget.toml").exists():
             shutil.copy(r / "gate-budget.toml", store / "gate-budget.toml")
-        (sc / "state" / "octo-feather" / "lanes").mkdir(exist_ok=True)
-        (sc / "state" / "octo-feather" / "lanes" / f"{lang}.toml").write_text(
+        (state / "lanes").mkdir(exist_ok=True)
+        (state / "lanes" / f"{lang}.toml").write_text(
             f'supervisor = "w1:p1"\nrepository = "o/{lang}"\nissue = "gh1"\ngoal = "Template gate"\n'
             'started_at = "2026-11-04T08:00:00Z"\nlast_handoff_at = "2026-11-04T08:00:00Z"\nwaiting_on = ""\n')
         (sc / "bin").mkdir(exist_ok=True)
