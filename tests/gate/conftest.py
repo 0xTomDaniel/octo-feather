@@ -10,9 +10,20 @@ times), exit, tier (`full` only when the invocation narrowed nothing: no paths o
 ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob, and
 the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
 run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
-steps (name, seconds, result: ok, FAIL, ERROR or skipped), one per junit
+steps (name, seconds, cpu_s, result: ok, FAIL, ERROR or skipped), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
+
+Also copyable unchanged: each item's CPU seconds (quality spec #acceptance-test-cpu-shown), cpu_s: the CPU time, user
+and system, of the process running the item (an xdist worker, or pytest itself) and of every process it started and
+waited for (RUSAGE_CHILDREN counts a grandchild once each process between waited for it; a process left running, or
+whose parent exited without waiting, is not counted), from its setup to its teardown. Measured there, carried to the
+controller and the junit xml as the item's cpu_s property. After the run the controller shows each item's CPU and wall
+seconds, and, against test_cpu_seconds in gate-budget.toml at the root (the per-test CPU budget; none, no budget),
+names each item over it but one carrying pytest's `e2e` marker, with its CPU time and the budget: report-only, the
+exit status stays the run's. Stdlib getrusage, not a plugin: pytest-monitor (last release 2023) measures the pytest
+process only, into its own sqlite, without xdist; pytest-timing (new in 2026) records CPU into its own report, with no
+per-test budget.
 
 Also copyable unchanged: the qc capture's side of the gate (what it must capture: quality spec #qc-capture). A test
 carries pytest's `criterion` marker, `@pytest.mark.criterion("<spec>#<anchor>", ..., source=PATH)`. Inert unless
@@ -25,7 +36,15 @@ OCTO_FEATHER_QC_TAGS=FILE (octo-feather-qc, with --collect-only): the collecting
 case and its criteria there as JSON, so qc knows exactly which criteria a test carries; such a run adds no trend line.
 """
 import datetime, functools, hashlib, json, os, re, shutil, subprocess, sys, tempfile
-from collections.abc import Callable
+try:
+    import resource
+except ImportError:   # not POSIX: no CPU measure
+    resource = None
+try:
+    import tomllib
+except ImportError:   # before Python 3.11: no per-test CPU budget read
+    tomllib = None
+from collections.abc import Callable, Generator
 from pathlib import Path
 from typing import Any, cast
 import xml.etree.ElementTree as ET
@@ -36,6 +55,8 @@ TREND = "check-runs.jsonl"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
 CAPTURE_DIR = "OCTO_FEATHER_QC_CAPTURE_DIR"   # set by the controller before any worker starts
 TAGS = "OCTO_FEATHER_QC_TAGS"
+CPU = "cpu_s"
+BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 
 
@@ -91,8 +112,13 @@ def _entry(xml_path, status, tier: str):
     start = datetime.datetime.fromisoformat(suite.get("timestamp")).astimezone(datetime.timezone.utc)
     return {"start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "repo": _git("rev-parse", "--show-toplevel") or os.getcwd(),
             "head": _git("rev-parse", "HEAD"), "total_s": round(float(suite.get("time")), 3), "exit": int(status),
-            "tier": tier, "steps": [{"name": c.get("name"), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c)}
+            "tier": tier, "steps": [{"name": c.get("name"), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c), **_cpu_s(c)}
                       for c in suite.iter("testcase")]}
+
+
+def _cpu_s(case: ET.Element) -> dict[str, float]:
+    p = case.find(f"properties/property[@name='{CPU}']")
+    return {} if p is None else {CPU: float(p.get("value") or 0)}
 
 
 def _claims() -> list[str]:
@@ -113,6 +139,9 @@ def pytest_configure(config: pytest.Config) -> None:
         _COLLECT_ONLY.append(True)
     config.addinivalue_line("markers", "criterion(*ids, source=None): the acceptance criteria (<spec>#<anchor>) this "
                             "test proves; source: the test's file when the item runs another one (quality #qc-capture)")
+    config.addinivalue_line("markers", "e2e: an end-to-end test, never held to the per-test CPU budget")
+    if not hasattr(config, "workerinput") and not _COLLECT_ONLY:
+        config.pluginmanager.register(_CpuShown(config.rootpath), "cpu-shown")
     if not _claims() or hasattr(config, "workerinput"):
         return
     # Arranged before execution: every claim names a criterion of its spec, else nothing runs.
@@ -219,6 +248,82 @@ class _Capture:
         finally:
             shutil.rmtree(self.dir, ignore_errors=True)
 
+
+
+def _cpu() -> float:
+    if resource is None:
+        return 0.0
+    s, c = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    return s.ru_utime + s.ru_stime + c.ru_utime + c.ru_stime
+
+
+_CPU_START = pytest.StashKey[float]()
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_protocol(item: pytest.Item) -> Generator[None, object, object]:
+    item.stash[_CPU_START] = _cpu()   # in the process running the item: an xdist worker runs one item at a time
+    return (yield)
+
+
+@pytest.hookimpl(wrapper=True)
+def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> Generator[None, object, object]:
+    if call.when == "teardown" and resource is not None and _CPU_START in item.stash:   # before its report copies them
+        item.user_properties.append((CPU, round(_cpu() - item.stash[_CPU_START], 3)))
+    return (yield)
+
+
+def _secs(x: float) -> str:
+    return f"{round(x, 3):g}s"
+
+
+class _CpuShown:
+    """The controller's side of the CPU measure: each item's CPU and wall seconds as its reports arrive, shown after
+    the run with the items over the per-test CPU budget."""
+
+    def __init__(self, root: Path) -> None:
+        self.root = root
+        self.items: dict[str, dict[str, Any]] = {}
+
+    def pytest_runtest_logreport(self, report: pytest.TestReport) -> None:
+        r = self.items.setdefault(report.nodeid, {"wall": 0.0, "cpu": None, "e2e": bool(report.keywords.get("e2e"))})
+        r["wall"] += report.duration
+        for k, v in report.user_properties:
+            if k == CPU and report.when == "teardown" and isinstance(v, (int, float)):
+                r["cpu"] = float(v)
+
+    def budget(self) -> tuple[float | None, str]:
+        """test_cpu_seconds from the root's gate-budget.toml, or None and why."""
+        if tomllib is None:
+            return None, f"{BUDGET}: unread, no tomllib before Python 3.11"
+        try:
+            v = tomllib.loads((self.root / BUDGET).read_text()).get(BUDGET_KEY)
+        except FileNotFoundError:
+            return None, f"{BUDGET}: none"
+        except (OSError, ValueError) as e:
+            return None, f"{BUDGET}: {e}"
+        if v is None:
+            return None, f"{BUDGET}: no {BUDGET_KEY}"
+        if isinstance(v, bool) or not isinstance(v, (int, float)) or v <= 0:
+            return None, f"{BUDGET}: {BUDGET_KEY} {v!r} is not a number > 0"
+        return float(v), ""
+
+    def pytest_terminal_summary(self, terminalreporter: pytest.TerminalReporter) -> None:
+        shown = sorted(((n, r) for n, r in self.items.items() if r["cpu"] is not None), key=lambda x: -x[1]["cpu"])
+        if not shown:
+            return
+        tr = terminalreporter
+        tr.write_sep("=", "CPU seconds per item (its processes and their waited-for children)")
+        for n, r in shown:
+            tr.write_line(f"{_secs(r['cpu']):>9} cpu {_secs(r['wall']):>9} wall  {n}" + ("  (e2e)" if r["e2e"] else ""))
+        b, why = self.budget()
+        if b is None:
+            tr.write_line(f"cpu budget: none ({why})")
+            return
+        over = [(n, r) for n, r in shown if not r["e2e"] and r["cpu"] > b]
+        for n, r in over:
+            tr.write_line(f"OVER CPU BUDGET: {n} {_secs(r['cpu'])} CPU, budget {_secs(b)} (report-only)")
+        tr.write_line(f"cpu budget: {_secs(b)} per non-e2e test ({BUDGET} {BUDGET_KEY}): {len(over)} over, report-only")
 
 
 @pytest.hookimpl(trylast=True)   # after the junitxml plugin has written its file
