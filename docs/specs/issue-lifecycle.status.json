@@ -213,8 +213,8 @@
     "acceptance-ci-alongside": {
       "status": "built",
       "pr": 608,
-      "record": "20261105T205316Z-4119088f",
-      "commit": "4edfb3558ed0ed764e78a7e01dc660eaddc29438",
+      "record": "20261105T210944Z-abc24b8e",
+      "commit": "7d2a0f115c252e7b7ec95320718a906c121ee1bf",
       "tests": [
         "tests/lane-ci-start.sh"
       ]
@@ -222,8 +222,8 @@
     "acceptance-ci-status-only": {
       "status": "built",
       "pr": 608,
-      "record": "20261105T205316Z-494ca113",
-      "commit": "4edfb3558ed0ed764e78a7e01dc660eaddc29438",
+      "record": "20261105T210944Z-9e91ac6e",
+      "commit": "7d2a0f115c252e7b7ec95320718a906c121ee1bf",
       "tests": [
         "tests/lane-merge-ask.sh"
       ]
