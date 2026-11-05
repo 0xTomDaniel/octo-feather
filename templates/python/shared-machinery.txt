@@ -6,6 +6,7 @@
 # coverage cannot see: configuration, pins, workflows, the conftest files.
 shared-machinery.txt
 justfile
+scripts/fast-select
 pyproject.toml
 uv.lock
 .python-version
