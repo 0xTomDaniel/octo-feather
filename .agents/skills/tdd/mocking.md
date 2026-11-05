@@ -1,6 +1,6 @@
 # When to Mock
 
-Mock at **system boundaries** only:
+Mock only systems the repo does not control, each at an explicit **system boundary** (a seam):
 
 - External APIs (payment, email, etc.)
 - Databases (sometimes - prefer test DB)
@@ -12,6 +12,16 @@ Don't mock:
 - Your own classes/modules
 - Internal collaborators
 - Anything you control
+
+A stand-in returns what the real system would and nothing more: the app's own validation and business logic run in the app, never in the stand-in.
+
+## Recordings
+
+A recording is a tape, never a simulator. Replay recorded responses unmodified: no fallback response, no synthesized error (an error case replays a recorded real error). A missing fixture or recording fails loudly, with an error naming what is missing. No recording yet: record one from the real system, or stop and ask the user; never invent the response.
+
+## Test support
+
+Shared test support (stand-ins, fixtures, recordings, helpers) lives in one place, the repo's testkit, not in helpers scattered beside the tests.
 
 ## Designing for Mockability
 
