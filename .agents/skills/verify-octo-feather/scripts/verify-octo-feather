@@ -28,7 +28,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -2655,6 +2655,45 @@ def drive_starter_acceptance(f: Feature) -> None:
     say(f"starter-acceptance evidence: {f.d}")
 
 
+def drive_run_slots(f: Feature) -> None:
+    """The box's heavy-run slot (octo-feather-slot --help) as a lane's implementer and the director meet it, in
+    scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite is refused before any
+    item runs, naming the grant to ask for; the implementer's own grant refused; the director's grant; status naming
+    the holder; the same run then holding the slot and passing; the lock released after it. Cases: features/run-slots.md."""
+    sc = RUN_DIR / "scratch" / "run-slots"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "state" / "octo-feather" / "lanes").mkdir(parents=True)
+    (sc / "state" / "octo-feather" / "lanes" / "gh7.toml").write_text('supervisor = "w9:p1"\n')
+    (sc / "suite").mkdir()
+    (sc / "suite" / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
+    (sc / "suite" / "test_many.py").write_text("import pytest\n@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n")
+    box = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "default"}   # scratch slots and lane records
+    agent = {**box, "OCTO_FEATHER_ROLE": "implementer", "HERDR_PANE_ID": "w9:p3", "OCTO_FEATHER_PARENT": "w9:p1",
+             "HERDR_WORKSPACE_ID": "w9"}
+    director = {**box, "OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
+    gate = ("just", "--justfile", f"{f.s.repo}/justfile", "test", str(sc / "suite"))
+    f.env = agent
+    f.run("grant-not-director", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
+    f.check("grant-not-director", lambda c: c.code == 77 and "grant is the director's" in c.err)
+    f.run("refused", *gate)
+    f.check("refused", lambda c: c.code == 75 and "passed" not in c.out and (
+        "octo-feather-slot: refused, nothing ran: this heavy run selects 31 items, over heavy_items 30 (gate-budget.toml), "
+        "and lane gh7 holds no heavy grant; current holder: none; ask the director: octo-feather-slot grant gh7 --kind heavy"
+    ) in c.err)
+    f.env = director
+    f.run("grant", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
+    f.check("grant", lambda c: c.code == 0 and c.out.startswith("granted: heavy slot to lane gh7 (granted ") and "by w1:p1, expires " in c.out)
+    f.run("status", "octo-feather-slot", "status")
+    f.check("status", lambda c: c.code == 0 and "  holder: gh7 (granted " in c.out and "eval (1 slot(s)" in c.out)
+    f.env = agent
+    f.run("granted", *gate)
+    f.check("granted", lambda c: c.code == 0 and "heavy slot: held: the heavy slot for lane gh7, run pid " in c.out and "31 passed" in c.out)
+    f.run("released", "octo-feather-slot", "status")
+    f.check("released", lambda c: c.code == 0 and c.out.count("run holding it now: none") == 2)
+    f.env = {}
+    say(f"run-slots evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -2685,6 +2724,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-analyst": drive_qa_analyst,
     "qa-review": drive_qa_review,
     "qa-history": drive_qa_history,
+    "run-slots": drive_run_slots,
 }
 
 

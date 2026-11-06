@@ -60,3 +60,4 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [qa-analyst](./qa-analyst.md) covers the deterministic analysis of a baseline comparison and its rerun on a stored run (`octo-feather-qa --analyze`; criterion: quality#acceptance-qa-analyst).
 - [qa-review](./qa-review.md) covers an eval case a maintainer reviews: its kept output, a recorded verdict and note, and the next run showing them (`octo-feather-qa --review`; criterion: quality#acceptance-qa-review).
 - [qa-history](./qa-history.md) covers a regression case whose fixture is a real repository at a commit (the kit's own history or a local clone; criterion: quality#acceptance-qa-history).
+- [run-slots](./run-slots.md) covers the box's heavy-run slot: a lane's `just test` over more than heavy_items items refused without its grant, the director's grant (`octo-feather-slot grant`), `octo-feather-slot status`, and the granted run holding the slot.
