@@ -83,9 +83,9 @@ class Target:
         self.s, self.lang = s, lang
         self.repo = copy(s, lang)
         if lang == "typescript":
-            p = s.run(
-                [sys.executable, str(ROOT / "tests" / "lib" / "prepared.py"), lang, str(s.root)]
-            )
+            # The install with the caller's HOME: pnpm's own metadata cache, never fetched again.
+            prep = [sys.executable, str(ROOT / "tests" / "lib" / "prepared.py"), lang, str(s.root)]
+            p = s.run(prep, env={"HOME": os.environ["HOME"]})
             subprocess.run(["cp", "-a", f"{p.out}/node_modules", str(self.repo)], check=True)  # noqa: S607
         commit(s, self.repo)
         self.va = str(self.repo / ".agents" / "skills" / "verify-app" / "scripts" / "verify-app")

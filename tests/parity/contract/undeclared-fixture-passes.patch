@@ -1,0 +1,14 @@
+Seeded defect: a demo's fixture name not declared under [fixture] passes (octo-feather-contract; quality#qc-contract, format 2).
+diff --git a/scripts/octo-feather-contract b/scripts/octo-feather-contract
+index 6b7af05..91a25d1 100755
+--- a/scripts/octo-feather-contract
++++ b/scripts/octo-feather-contract
+@@ -110,7 +110,7 @@ def main(argv):
+         declared: dict[str, object] = doc.get("fixture") or {}
+         demos: dict[str, dict[str, list[str]]] = doc.get("demo") or {}
+         found = [f"demo.{cid}.fixtures: {n} is no declared fixture; declare it under [fixture.{n}]"
+-                 for cid, d in demos.items() for n in d.get("fixtures", []) if n not in declared]
++                 for cid, d in demos.items() for n in d.get("fixtures", []) if n in declared]
+     for p in found:
+         print(f"{ME}: {path}: {p}", file=sys.stderr)
+     if found:
