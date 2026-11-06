@@ -1,0 +1,16 @@
+Seeded defect: a check skipped on the judged head too is carried to the status-only head as a pass, though CI never ran (issue-lifecycle #acceptance-ci-status-only, #lanes-one-head).
+diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
+index 00367e7..56c18ec 100755
+--- a/scripts/octo-feather-lane
++++ b/scripts/octo-feather-lane
+@@ -1739,9 +1739,7 @@ def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | N
+             why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
+         elif status != "completed":
+             why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
+-        elif concl == "skipped":
+-            why.append(f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start <PR>` on {j}, then rerun")
+-        elif concl not in ("success", "neutral"):
++        elif concl not in ("success", "neutral", "skipped"):
+             why.append(f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never pre-existing)")
+         else:
+             ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")

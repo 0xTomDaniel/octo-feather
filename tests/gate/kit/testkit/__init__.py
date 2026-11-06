@@ -103,7 +103,8 @@ class Gh:
         return (self.dir / "log").read_text().splitlines()
 
     def writes(self) -> int:
-        return sum(ln.startswith("api") for ln in self.log())
+        """The calls that write (`api -X`); a GET carries no -X."""
+        return sum(ln.startswith("api -X ") for ln in self.log())
 
 
 class Scratch:

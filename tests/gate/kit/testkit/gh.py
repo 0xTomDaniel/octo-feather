@@ -4,10 +4,14 @@
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
 (as real gh, every field asked: the stored value, or null), its diff pr/N.diff; issue N
 issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
-way, `issue|pr|run list` every one stored (by number); `gh api [--paginate --slurp] PATH`, a
-GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404.
-`gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
-repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each prints the comment URL
+way, `issue|pr|run list` every one stored (by number); a stored pr/N.out is instead the recorded
+stdout of `gh pr view N` (an older gh's answer), printed as is. `gh api [--paginate --slurp]
+PATH`, a GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is
+GitHub's 404; {owner}/{repo} in PATH is o/r, as gh fills it from the repo. A stored
+api/PATH.error is the error GitHub answered PATH with, as gh printed it on stderr (an HTTP 502,
+a plan's 403): any call on PATH prints it and exits 1. `gh api -X POST repos/o/r/issues/N/comments`
+appends a comment, its id the next of the store's (as GitHub's, unique across PRs), `-X PATCH
+repos/o/r/issues/comments/ID` replaces that comment's body; each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
@@ -21,6 +25,7 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Any, cast
 
 STORE = Path(os.environ["FAKE_GH"])
 RAW = ["-H", "Accept: application/vnd.github.raw"]
@@ -53,6 +58,9 @@ def served(p: Path) -> None:
 def view(a: list[str]) -> None:
     """`issue|pr view N --json F`."""
     kind = a[0]
+    if (tape := STORE / kind / f"{a[2]}.out").is_file():
+        sys.stdout.write(tape.read_text())
+        return
     p = STORE / kind / f"{a[2]}.json"
     if not p.is_file():
         what = "a PullRequest" if kind == "pr" else "an issue or pull request"
@@ -74,8 +82,16 @@ def diff(a: list[str]) -> None:
     sys.stdout.write(p.read_text())
 
 
+def failed(path: str) -> None:
+    """The stored error GitHub answered PATH with, if any."""
+    if (e := STORE / "api" / f"{path}.error").is_file():
+        die(e.read_text().rstrip("\n"))
+
+
 def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
+    a = [*a[:-1], a[-1].replace("{owner}/{repo}", "o/r")]
+    failed(a[-1].lstrip("/"))
     if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
         served(STORE / "commits.json")
         return
@@ -92,20 +108,28 @@ def get(a: list[str]) -> None:
 def write(a: list[str]) -> None:
     """`api -X POST|PATCH PATH --input FILE` on PR comments."""
     method, path = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
+    failed(path)
     body = json.loads(Path(a[a.index("--input") + 1]).read_text())["body"]
+    prs: dict[str, dict[str, Any]] = {
+        p.stem: json.loads(p.read_text()) for p in (STORE / "pr").glob("*.json")
+    }
     if method == "POST" and (m := re.fullmatch(r"repos/o/r/issues/(\d+)/comments", path)):
         n = m.group(1)
-        d = json.loads(pr_file(n).read_text())
-        cid = 1001 + len(d["comments"])
+        d = prs[n]
+        cid = 1001 + sum(len(x.get("comments") or []) for x in prs.values())
         url = f"https://github.com/o/r/pull/{n}#issuecomment-{cid}"
         d["comments"].append({"author": {"login": "sup"}, "body": body, "url": url})
     elif method == "PATCH" and (m := re.fullmatch(r"repos/o/r/issues/comments/(\d+)", path)):
-        n = "7"
-        d = json.loads(pr_file(n).read_text())
-        c = next((c for c in d["comments"] if c["url"].endswith(f"-{m.group(1)}")), None)
-        if c is None:
+        found = [
+            (n, d, c)
+            for n, d in prs.items()
+            for c in cast("list[dict[str, str]]", d.get("comments") or [])
+            if c["url"].endswith(f"-{m.group(1)}")
+        ]
+        if not found:
             die("gh: Not Found (HTTP 404)")
             return
+        n, d, c = found[0]
         c["body"] = body
         url = c["url"]
     else:
