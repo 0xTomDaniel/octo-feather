@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S python3 -S
 """Fake `gh` for repo o/r (the testkit's stand-in for GitHub, which the kit does not own).
 
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
@@ -24,15 +24,26 @@ import json
 import os
 import re
 import sys
-from pathlib import Path
-from typing import Any, cast
 
-STORE = Path(os.environ["FAKE_GH"])
+# A process per gh call: it starts light (no site, -S above; os.path, not pathlib or typing, each
+# ~5 ms of import on every call).
+# ruff: noqa: PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
+STORE = os.environ["FAKE_GH"]
 RAW = ["-H", "Accept: application/vnd.github.raw"]
 
 
-def pr_file(n: str) -> Path:
-    return STORE / "pr" / f"{n}.json"
+def at(*parts: str) -> str:
+    """The store's path PARTS."""
+    return os.path.join(STORE, *parts)
+
+
+def read(p: str) -> str:
+    with open(p) as f:
+        return f.read()
+
+
+def pr_file(n: str) -> str:
+    return at("pr", f"{n}.json")
 
 
 def die(msg: str, rc: int = 1) -> None:
@@ -49,43 +60,45 @@ def out(x: object) -> None:
     sys.stdout.write(json.dumps(x) + "\n")
 
 
-def served(p: Path) -> None:
-    if not p.is_file():
+def served(p: str) -> None:
+    if not os.path.isfile(p):
         die("gh: Not Found (HTTP 404)")
-    sys.stdout.write(p.read_text())
+    sys.stdout.write(read(p))
 
 
 def view(a: list[str]) -> None:
     """`issue|pr view N --json F`."""
     kind = a[0]
-    if (tape := STORE / kind / f"{a[2]}.out").is_file():
-        sys.stdout.write(tape.read_text())
+    if os.path.isfile(tape := at(kind, f"{a[2]}.out")):
+        sys.stdout.write(read(tape))
         return
-    p = STORE / kind / f"{a[2]}.json"
-    if not p.is_file():
+    p = at(kind, f"{a[2]}.json")
+    if not os.path.isfile(p):
         what = "a PullRequest" if kind == "pr" else "an issue or pull request"
         die(f"GraphQL: Could not resolve to {what} with the number of {a[2]}.")
-    out(pick(json.loads(p.read_text()), a))
+    out(pick(json.loads(read(p)), a))
 
 
 def listed(a: list[str]) -> None:
     """`issue|pr|run list --json F`: every one stored, by number."""
-    rows = [json.loads(p.read_text()) for p in (STORE / a[0]).glob("*.json")]
+    d = at(a[0])
+    names = sorted(os.listdir(d)) if os.path.isdir(d) else []
+    rows = [json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")]
     key = "databaseId" if a[0] == "run" else "number"
     out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
 
 
 def diff(a: list[str]) -> None:
-    p = STORE / "pr" / f"{a[2]}.diff"
-    if not p.is_file():
+    p = at("pr", f"{a[2]}.diff")
+    if not os.path.isfile(p):
         die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
-    sys.stdout.write(p.read_text())
+    sys.stdout.write(read(p))
 
 
 def failed(path: str) -> None:
     """The stored error GitHub answered PATH with, if any."""
-    if (e := STORE / "api" / f"{path}.error").is_file():
-        die(e.read_text().rstrip("\n"))
+    if os.path.isfile(e := at("api", f"{path}.error")):
+        die(read(e).rstrip("\n"))
 
 
 def get(a: list[str]) -> None:
@@ -93,15 +106,15 @@ def get(a: list[str]) -> None:
     a = [*a[:-1], a[-1].replace("{owner}/{repo}", "o/r")]
     failed(a[-1].lstrip("/"))
     if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
-        served(STORE / "commits.json")
+        served(at("commits.json"))
         return
     if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
-        served(STORE / "contents" / m.group(1))
+        served(at("contents", m.group(1)))
         return
-    p = STORE / "api" / f"{a[-1].lstrip('/')}.json"
-    if not p.is_file():
+    p = at("api", f"{a[-1].lstrip('/')}.json")
+    if not os.path.isfile(p):
         die("gh: Not Found (HTTP 404)")
-    page = json.loads(p.read_text())
+    page = json.loads(read(p))
     out([page] if "--slurp" in a else page)
 
 
@@ -109,9 +122,11 @@ def write(a: list[str]) -> None:
     """`api -X POST|PATCH PATH --input FILE` on PR comments."""
     method, path = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
     failed(path)
-    body = json.loads(Path(a[a.index("--input") + 1]).read_text())["body"]
-    prs: dict[str, dict[str, Any]] = {
-        p.stem: json.loads(p.read_text()) for p in (STORE / "pr").glob("*.json")
+    body = json.loads(read(a[a.index("--input") + 1]))["body"]
+    prs: dict[str, dict[str, list[dict[str, object]]]] = {
+        f[: -len(".json")]: json.loads(read(at("pr", f)))
+        for f in sorted(os.listdir(at("pr")))
+        if f.endswith(".json")
     }
     if method == "POST" and (m := re.fullmatch(r"repos/o/r/issues/(\d+)/comments", path)):
         n = m.group(1)
@@ -123,26 +138,27 @@ def write(a: list[str]) -> None:
         found = [
             (n, d, c)
             for n, d in prs.items()
-            for c in cast("list[dict[str, str]]", d.get("comments") or [])
-            if c["url"].endswith(f"-{m.group(1)}")
+            for c in d.get("comments") or []
+            if str(c["url"]).endswith(f"-{m.group(1)}")
         ]
         if not found:
             die("gh: Not Found (HTTP 404)")
             return
         n, d, c = found[0]
         c["body"] = body
-        url = c["url"]
+        url = str(c["url"])
     else:
         die(f"fake gh: unexpected {a}", 2)
         return
-    pr_file(n).write_text(json.dumps(d))
+    with open(pr_file(n), "w") as f:
+        f.write(json.dumps(d))
     sys.stdout.write(url + "\n")
 
 
 def main(a: list[str]) -> None:
-    with (STORE / "log").open("a") as f:
+    with open(at("log"), "a") as f:
         f.write(" ".join(a) + "\n")
-    if (STORE / "down").exists():
+    if os.path.exists(at("down")):
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
@@ -152,7 +168,7 @@ def main(a: list[str]) -> None:
     elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
         listed(a)
     elif two == ("repo", "view"):
-        out(pick(json.loads((STORE / "repo.json").read_text()), a))
+        out(pick(json.loads(read(at("repo.json"))), a))
     elif two == ("pr", "diff"):
         diff(a)
     elif a[:1] == ["api"] and "-X" not in a:

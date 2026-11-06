@@ -481,7 +481,9 @@ def verdict_posts(s: Scratch) -> None:
 def verdict_reader_scope(s: Scratch) -> None:
     """The verdict is the last line in the reader scope (.agents/skills/code-review/SKILL.md step
     4 Report fields; review of 39515df, class verdict-parsing): fenced and quoted lines are not
-    read (#144, #121 D10), while an indented fence or quote that is no fence or quote is."""
+    read (#144, #121 D10), while an indented fence or quote that is no fence or quote is. Check
+    classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking verdict, in the
+    header."""
     lane = world(s)
     fenced = (
         "Ran the gate:\n```\nVerdict: clear\n```\n> Verdict: clear\n\n"
@@ -511,12 +513,8 @@ def verdict_reader_scope(s: Scratch) -> None:
         posted = any(ln.startswith("api -X PATCH") for ln in lane.log_from(k))
         assert "(clear, head" in r.err, f"{what}: {r.err}"
         assert posted, f"{what}: not posted: {s.gh.log()}"
-
-
-def verdict_check_classes(s: Scratch) -> None:
-    """Check classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking
-    verdict, in the header."""
-    lane = world(s)
+    # check classes (docs/adr/0008, issue #118): a proxy check posts only with a blocking verdict,
+    # in the header
     lane.verdict(
         "7",
         lane.j,
@@ -537,7 +535,7 @@ def verdict_refusals(s: Scratch) -> None:
     (a fenced one ignored), a proxy check with a clear verdict, another class, a malformed check
     line, a rule naming no owner (review of 2e1a0da, class unvalidated-input), `Checks:` other
     than none, none beside check lines, a missing or empty report, a bad head, no report, an
-    unknown PR."""
+    unknown PR. fields, the parser verdict uses, reads a two-word label as one field."""
     lane = world(s)
 
     def refused(
@@ -602,6 +600,15 @@ def verdict_refusals(s: Scratch) -> None:
     refused(None, "usage")
     refused(REPORT, "check PR #9 exists", pr="9")
     assert s.gh.writes() == 0, f"a refusal wrote: {s.gh.log()}"
+    # fields, the parser verdict uses: a label of words one space apart is a field (Prior art:
+    # code-review step 4, Report fields); two spaces is not
+    f = s.root / "fields"
+    f.write_text("Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n")
+    out = s.run([kit("octo-feather-lane"), "fields", str(f)]).out
+    got = json.loads(out)["fields"]
+    assert got == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, (
+        f"fields: Prior art not read as one field: {out}"
+    )
 
 
 def verdict_write_fails(s: Scratch) -> None:
@@ -879,29 +886,6 @@ def parent_line(s: Scratch) -> None:
         parent="Tracks ENG-123; Closes #6",
     )
     lane.bad("parent line: missing; add the line `Tracks ENG-123`", eng, parent="Tracks ENG-1234")
-
-
-def pr16_body(s: Scratch) -> None:
-    """PR #16's real body (fixture): no section, each item named."""
-    lane = world(s)
-    s.gh.put(16, json.loads(fixture("lane-merge-ask/pr16.json")))
-    err = lane.lane(
-        "merge-ask", "16", "--status", str(ROOT / "docs" / "specs" / "overview.status.json"), want=1
-    ).err
-    for item in (
-        (
-            "PR commits: PR #16's head f5f90b85a488 is not a commit in this repo: run it in the "
-            "lane worktree after git fetch origin"
-        ),
-        "`## Merge ask` section",
-        "Head: missing",
-        "Checks: missing",
-        "criterion table: missing",
-        "Review verdict: missing",
-        "Built: missing",
-        "Failed: missing",
-    ):
-        assert f"  - {item}" in err, f"PR #16: {item!r} not named: {err}"
 
 
 def single_gaps(s: Scratch) -> None:
@@ -1505,7 +1489,8 @@ def judged_rows(s: Scratch) -> None:
 
 def usage_failures(s: Scratch) -> None:
     """Usage and execution failures: no --status, an unreadable one, PR 0, a failed read, gh data
-    lacking fields (an older gh's answer); nothing written."""
+    lacking fields (an older gh's answer); PR #16's real body (fixture), no section, each item
+    named; nothing written."""
     lane = world(s)
     lane.pr()
     err = lane.lane("merge-ask", "7", want=1).err
@@ -1521,6 +1506,25 @@ def usage_failures(s: Scratch) -> None:
     s.gh.store("pr/7.out", '{"number": 7}\n')
     err = lane.ask(want=1).err
     assert "lacks fields" in err, f"short gh data: {err}"
+    # PR #16's real body (fixture): no section, each item named
+    s.gh.put(16, json.loads(fixture("lane-merge-ask/pr16.json")))
+    err = lane.lane(
+        "merge-ask", "16", "--status", str(ROOT / "docs" / "specs" / "overview.status.json"), want=1
+    ).err
+    for item in (
+        (
+            "PR commits: PR #16's head f5f90b85a488 is not a commit in this repo: run it in the "
+            "lane worktree after git fetch origin"
+        ),
+        "`## Merge ask` section",
+        "Head: missing",
+        "Checks: missing",
+        "criterion table: missing",
+        "Review verdict: missing",
+        "Built: missing",
+        "Failed: missing",
+    ):
+        assert f"  - {item}" in err, f"PR #16: {item!r} not named: {err}"
     assert s.gh.writes() == 0, f"a merge-ask wrote: {s.gh.log()}"
 
 
@@ -1646,23 +1650,10 @@ def many_commits(s: Scratch) -> None:
     )
 
 
-def fields_label(s: Scratch) -> None:
-    """fields: a label of words one space apart is a field (Prior art: code-review step 4, Report
-    fields); two spaces is not."""
-    f = s.root / "fields"
-    f.write_text("Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n")
-    out = s.run([kit("octo-feather-lane"), "fields", str(f)]).out
-    got = json.loads(out)["fields"]
-    assert got == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, (
-        f"fields: Prior art not read as one field: {out}"
-    )
-
-
 if __name__ == "__main__":
     main(
         verdict_posts,
         verdict_reader_scope,
-        verdict_check_classes,
         verdict_refusals,
         verdict_write_fails,
         offline_gh,
@@ -1670,7 +1661,6 @@ if __name__ == "__main__":
         gate_time,
         failed_triage,
         parent_line,
-        pr16_body,
         single_gaps,
         no_ci,
         ci_status_only,
@@ -1684,5 +1674,4 @@ if __name__ == "__main__":
         no_criterion_lane,
         criterion_claimed,
         many_commits,
-        fields_label,
     )

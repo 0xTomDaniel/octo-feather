@@ -9,7 +9,6 @@ from lane_merge_ask import (
     ci_status_only,
     criterion_claimed,
     failed_triage,
-    fields_label,
     full_pass,
     gate_time,
     judged_rows,
@@ -21,12 +20,10 @@ from lane_merge_ask import (
     offline_gh,
     one_judged_head,
     parent_line,
-    pr16_body,
     review_link,
     rows_and_built,
     single_gaps,
     usage_failures,
-    verdict_check_classes,
     verdict_posts,
     verdict_reader_scope,
     verdict_refusals,
@@ -43,10 +40,6 @@ def test_verdict_posts(case: Case) -> None:
 
 def test_verdict_reader_scope(case: Case) -> None:
     case(verdict_reader_scope)
-
-
-def test_verdict_check_classes(case: Case) -> None:
-    case(verdict_check_classes)
 
 
 def test_verdict_refusals(case: Case) -> None:
@@ -75,10 +68,6 @@ def test_merge_ask_failed_triage(case: Case) -> None:
 
 def test_merge_ask_parent_line(case: Case) -> None:
     case(parent_line)
-
-
-def test_merge_ask_pr16_body(case: Case) -> None:
-    case(pr16_body)
 
 
 def test_merge_ask_single_gaps(case: Case) -> None:
@@ -133,7 +122,3 @@ def test_merge_ask_criterion_claimed(case: Case) -> None:
 
 def test_merge_ask_many_commits(case: Case) -> None:
     case(many_commits)
-
-
-def test_lane_fields_label(case: Case) -> None:
-    case(fields_label)
