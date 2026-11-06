@@ -1,0 +1,15 @@
+Seeded defect: a role listing a skill Pi does not load passes, never named (skills spec #loading-refuse).
+diff --git a/scripts/check-skills b/scripts/check-skills
+index fa3cf75..033e957 100755
+--- a/scripts/check-skills
++++ b/scripts/check-skills
+@@ -120,9 +120,6 @@ def pi_problems(dirs: list[Path], pr: ModuleType) -> tuple[list[str], int]:
+         if d in kit:
+             rel = Path(p["path"]).resolve().relative_to(root.resolve())
+             out.append(f"check-skills: {rel}: {p['reason']}" if p["loaded"] else f"check-skills: {rel}: Pi does not load it: {p['reason']}")
+-    for role in roles:
+-        out += [f"check-skills: role {role} (agents/{role}.md): Pi does not offer its skill {problems[d]['skill']} "
+-                f"({problems[d]['path']}): {problems[d]['reason']}" for d in handed[role] if d in problems and not problems[d]["loaded"]]
+     return out, len(roles)
+ 
+ 

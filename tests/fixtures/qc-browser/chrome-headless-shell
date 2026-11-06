@@ -1,0 +1,5 @@
+#!/bin/sh
+# Planted shell (tests/gate/kit/qc_browser.py, a runner with no browser): writes a 1x1 PNG where --screenshot says.
+for a; do case "$a" in --screenshot=*) out="${a#--screenshot=}";; esac; done
+echo iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC | base64 -d > "$out"
+echo "$(wc -c < "$out") bytes written to file $out"

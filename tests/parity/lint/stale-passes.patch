@@ -1,0 +1,17 @@
+Seeded defect: lint passes with stale ruff baseline entries, never naming octo-feather-lint shrink (octo-feather-lint --help, an entry that no longer fires fails).
+diff --git a/scripts/octo-feather-lint b/scripts/octo-feather-lint
+index 762137c..432452b 100755
+--- a/scripts/octo-feather-lint
++++ b/scripts/octo-feather-lint
+@@ -248,10 +248,7 @@ def cmd_lint(files: list[str]) -> int:
+             f"  fix: {how or 'change the code so the rule holds'}; rule: {f.get('url')}",
+             f"  the [{LINT_TABLE}] baseline only shrinks: never add {f['code']} for {path}",
+         )
+-    for path, code in stale:
+-        gone = f"{path} is not in the file set" if not code else f"{code} no longer fires in {path}"
+-        say(f"stale entry in {PYPROJECT} [{LINT_TABLE}]: {gone}; fix: run `{SHRINK}`")
+-    if new or stale:
++    if new:
+         warn(f"lint: {len(new)} new violations, {len(stale)} stale baseline entries")
+         return 1
+     say(f"lint: ok ({len(files)} files, ruff check)")

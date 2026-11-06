@@ -40,7 +40,9 @@ FAKES = {
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
-# too), and gh.py (above) on a PATH of its own; each file's header says what it answers.
+# too), gh.py (above) on a PATH of its own, git_refused.py (a git remote refusing credentials,
+# as `git`), and argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls); each
+# file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 CLEARED = (
@@ -197,6 +199,36 @@ class Scratch:
             "commit.gpgsign=false",
         ]
         return self.run(["git", "-C", str(repo), *ident, *args]).out
+
+
+def build_kit_repo(p: Scratch) -> None:
+    """The kit's tracked files (their worktree content; a tracked file deleted there skipped) in
+    P/kit, a git repo of one commit."""
+    k = p.root / "kit"
+    names = subprocess.run(
+        ["git", "ls-files", "-z"],  # noqa: S607
+        cwd=ROOT,
+        capture_output=True,
+        check=True,
+    ).stdout.decode()
+    for rel in filter(None, names.split("\0")):
+        src = ROOT / rel
+        if src.is_file() or src.is_symlink():
+            (k / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, k / rel, follow_symlinks=False)
+    p.git(k, "init", "-q")
+    p.git(k, "add", "-A")
+    p.git(k, "-c", "core.hooksPath=/dev/null", "commit", "-qm", "base")
+
+
+def kit_repo(s: Scratch) -> Path:
+    """S/kit: a git repo copy of the kit's tracked files (as `git ls-files` names them), one
+    commit, prepared once per gate run (Scratch.prepare: the prepared tree read-only, S/kit this
+    scenario's own copy of it, free to plant files in), for a scenario that runs the kit's own
+    gate recipes or commands on a copy. check_ts.py's Copy and qa_analyst.py's build_kit stay
+    file-local: each filters the kit differently (no git repo; a dir subset at two commits)."""
+    s.prepare("kit-repo", build_kit_repo)
+    return s.root / "kit"
 
 
 def asked(*cmd: str) -> str:

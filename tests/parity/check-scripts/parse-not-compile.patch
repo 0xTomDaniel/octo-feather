@@ -1,0 +1,14 @@
+Seeded defect: check-scripts parses Python instead of byte-compiling it; a top-level return passes (#121 D1).
+diff --git a/justfile b/justfile
+index bfed447..2dce59e 100644
+--- a/justfile
++++ b/justfile
+@@ -121,7 +121,7 @@ check-scripts:
+     python3 -c 'import sys
+     bad = 0
+     for f in sys.argv[1:]:
+-        try: compile(open(f, "rb").read(), f, "exec", dont_inherit=True)
++        try: __import__("ast").parse(open(f, "rb").read(), f)
+         except SyntaxError as e: print(f"{f}:{e.lineno}: {e.msg}; fix it: Python cannot run this file", file=sys.stderr); bad = 1
+     sys.exit(bad)' "${py[@]}"
+     echo "python: ok (${#py[@]} files compile)"

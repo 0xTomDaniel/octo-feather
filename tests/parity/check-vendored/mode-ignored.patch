@@ -1,0 +1,14 @@
+Seeded defect: a committed mode change is never compared with upstream's (check-vendored, #143).
+diff --git a/scripts/check-vendored b/scripts/check-vendored
+index 01083c3..a94966c 100755
+--- a/scripts/check-vendored
++++ b/scripts/check-vendored
+@@ -392,7 +392,7 @@ def gate(ents, vendored):
+                                              "upstream+patch", "committed", lineterm="", n=1)
+                     for line in list(d)[:20]:
+                         print(f"    {line}", file=sys.stderr)
+-                elif have_modes[rel] != upmodes[name].get(rel, "100644"):
++                elif have_modes[rel] == "120000":
+                     print(f"{TAG}: {name}: {shown} has git mode {have_modes[rel]}, upstream {origin} has "
+                           f"{upmodes[name].get(rel, '100644')}", file=sys.stderr)
+                 else:

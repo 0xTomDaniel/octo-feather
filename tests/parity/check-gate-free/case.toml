@@ -1,0 +1,10 @@
+# The parity lever's case for tests/check-gate-free.sh, rewritten as tests/gate/kit/test_check_gate_free.py (tests/parity/lever.py --help).
+old = "tests/check-gate-free.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_gate_free.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the copy's scripts/check-gate-free, run by its justfile's backticks, outside the kit's own path, which coverage.py's map does not name.
+[ran]
+"scripts/check-gate-free" = "exec scripts/check-gate-free"

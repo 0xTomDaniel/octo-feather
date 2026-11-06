@@ -1,0 +1,14 @@
+Seeded defect: docs/future.md counts as the owed eval again (check-behavior-smoke, #80).
+diff --git a/scripts/check-behavior-smoke b/scripts/check-behavior-smoke
+index 1666d5d..ef30c34 100755
+--- a/scripts/check-behavior-smoke
++++ b/scripts/check-behavior-smoke
+@@ -34,7 +34,7 @@ import argparse, os, re, subprocess, sys
+ 
+ ROLE = re.compile(r"^(agents/[^/]+\.md|\.agents/skills/.+\.md|\.skillfile/patches/.+)$")
+ EVIDENCE = re.compile(r"^evidence/[^/]+\.md$")
+-OWED = re.compile(r"^docs/owed-evals/[^/]+\.md$")
++OWED = re.compile(r"^docs/(owed-evals/[^/]+|future)\.md$")
+ OWED_FIX = "docs/owed-evals/<issue>.md"
+ TRAILER = re.compile(r"^Behaviour-neutral:[ \t]*(\S.*)$", re.M)
+ PRUNE = re.compile(r"^(agents/[^/]+\.md|\.skillfile/patches/.+)$")

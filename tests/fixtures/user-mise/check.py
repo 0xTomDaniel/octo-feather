@@ -255,7 +255,7 @@ def target(d: Path, mise_toml: str = "") -> None:
 
 
 def qc(d: Path, first: str = "", *env: str) -> tuple[int, str]:
-    """octo-feather-qc on the target in D, HOME moved as the gate's tests move it (tests/qc.sh),
+    """octo-feather-qc on the target in D, HOME moved as the gate's tests move it (tests/lib/qc.sh),
     FIRST dirs before the fake herdr ($USER_MISE_T/fake) and the stub judge ($USER_MISE_T/judge)."""
     cmd = ["timeout", "-k", "5", "180", "octo-feather-qc", "docs/specs/demo.status.json", "5"]
     qenv = (
@@ -290,7 +290,7 @@ def judge_stdout() -> str:
 
 
 def sandbox() -> None:
-    """(1), (2): the qc sandbox proof, mise's dirs pinned as tests/qc.sh pins them."""
+    """(1), (2): the qc sandbox proof, mise's dirs pinned as tests/lib/qc.sh pins them."""
     for d in (T / "reports", T / "qchome"):
         d.mkdir(exist_ok=True)
     tgt, pin = H / "src/target", H / "src/pinned"

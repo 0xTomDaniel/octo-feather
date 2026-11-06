@@ -1,0 +1,14 @@
+Seeded defect: the judge gets the box models.json bound back read-only, not a per-run copy (octo-feather-qc --help, Pi's auth.json and models.json).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index c307998..cd8b927 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -241,7 +241,7 @@ if [[ "$phase" == setup ]]; then
+   printf '%s\n' "$PI" "$( ((nopi)) && echo none)" > "$SCR/pi"   # the proof's credential line (step 7)
+   if [[ -d "$PI" ]]; then
+     exec 7<"$PI"
+-    for n in auth.json models.json; do
++    for n in auth.json; do
+       [[ -f "$PI/$n" ]] && ((!nopi)) || continue
+       (umask 077; cat "$PI/$n" > "$OV/pi/$n" && chmod --reference="$PI/$n" "$OV/pi/$n") || die "copy Pi $n"
+     done

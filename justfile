@@ -180,7 +180,7 @@ check-refs:
           "NOTICE"                        => [qr{\(was agents/meta-[o]perator\.md\)}],
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
-          "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+          "tests/gate/kit/accepted.py"    => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };
@@ -829,8 +829,8 @@ state:
 new-repo $lang $dest *$flags:
     octo-feather-new-repo "$@"
 
-# Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+# Opt-in, never part of `just check`: tests/gate/kit/test_qc.py's pane item with the box's real herdr (QC_TEST_HERDR=real) for the
 # sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
 # Offline like the gate; a throwaway HOME with its own "live" session, the box's sessions untouched. Needs herdr on PATH.
 qc-real-herdr:
-    QC_TEST_HERDR=real "$root/tests/qc.sh"
+    QC_TEST_HERDR=real GATE_WORKERS=1 just test tests/gate/kit/test_qc.py::test_qc_pane

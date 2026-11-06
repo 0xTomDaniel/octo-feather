@@ -1,8 +1,9 @@
 # shellcheck shell=bash
-# Sourced by tests/qc.sh and each tests/qc-<section>.sh (the qc sandbox test, one gate item per section, #508), never
+# Sourced by each tests/qc-<section>.sh (the qc sandbox test, one gate item per section, #508; its sections qc, judge and
+# copies are pytest kit items: tests/gate/kit/test_qc.py, test_qc_judge.py, test_qc_copies.py, the stand-ins testkit's), never
 # run itself: in tests/lib/ so the gate's tests/*.sh glob does not collect it. Integration test setup for
 # scripts/octo-feather-qc with a fake `pi` and a fake `herdr` on PATH (no model call; a real Herdr only in the pane
-# test on a box, tests/qc.sh's pane case). Each item gets its own throwaway dir ($t: TMPDIR, HOME holding a "live" box,
+# test on a box, tests/gate/kit/test_qc.py's pane item). Each item gets its own throwaway dir ($t: TMPDIR, HOME holding a "live" box,
 # the judged test repo, the reports), its own per-run token, run/report/jr, and the credential-copy helpers
 # copycase and piok. Needs unprivileged user namespaces (`unshare -rm`).
 # Offline and bounded (#55): each item re-runs itself in a fresh user+network namespace
@@ -174,7 +175,7 @@ P
       && grep -q 'qc sandbox: ok   herdr shim pins sandbox session' <<< "$o" && grep -q 'qc sandbox: ok   Herdr config shows only the sandbox session' <<< "$o" \
       || echo "MISSING nested Herdr proof (real binary, not the outer shim): $o"
     printf "$ok" ;;
-  misepath)   # a bare just call as tests/qc.sh makes one (HOME moved to a fresh dir) through mise's just shim, in the kit
+  misepath)   # a bare just call as a qc test makes one (HOME moved to a fresh dir) through mise's just shim, in the kit
     kit="$(dirname "$(command -v octo-feather-state)")/.."; want="$(command -v pi)"; h="$(mktemp -d)"
     mkdir -p "$h/.local/bin" "$h/shim"; printf '#!/bin/sh\necho "home pi"\n' > "$h/.local/bin/pi"; chmod +x "$h/.local/bin/pi"
     ln -s "$(command -v mise)" "$h/shim/just"   # mise's shim: a link to mise named for the tool
@@ -243,7 +244,7 @@ run() { local want="$1"; shift; set +e; out="$(FAKE_QC="$1" bounded "$Q" "${@:2}
   [[ "$rc" == "$want" ]] || fail "FAKE_QC=$1 '${*:2}' want exit $want, got $rc: $out"; }
 report() { python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))'"$1"')' "$(ls -t "$t"/reports/*.json | head -1)"; }
 jr() { report '["fallback"]["acceptance-a"]'"$1"; }   # acceptance-a's agent fallback run in that report
-# Credential copies (tests/qc-copies.sh, tests/qc-oauth.sh): copycase runs one judge and proves its copies gone, the
+# Credential copies (tests/qc-oauth.sh; tests/gate/kit/test_qc_copies.py's own): copycase runs one judge and proves its copies gone, the
 # worktree pristine and no Pi credential left; piok proves the box's Pi files untouched since $t/auth0, $t/models0.
 copycase() { run 0 "$1" $st 5 acceptance-a; local f; for f in "${@:2}"; do [[ ! -e "$f" ]] || fail "$1: credential copy $f survived"; done
   [[ -z "$(git status --porcelain --ignored)" ]] || fail "$1: worktree not pristine: $(git status --porcelain --ignored)"

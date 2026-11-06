@@ -1,0 +1,14 @@
+Seeded defect: a demo exiting 77 (a step it needs could not run here) is judged fail, not insufficient evidence (quality spec #qc-results).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index b9e93f1..e832c0f 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -440,7 +440,7 @@ def judged(i: str, cid: str, rid: str, head: str, text: str, root: str) -> Resul
+         ("captured from a dirty worktree", r["dirty"]),
+         ("criterion text hash differs from the spec's at the head", r["criterion"]["text_sha256"] != hashlib.sha256(text.encode()).hexdigest()),
+         (f"outputs missing: {' '.join(o for o in DEMO_OUTPUTS if o not in r['outputs'])}", any(o not in r["outputs"] for o in DEMO_OUTPUTS)),
+-        (f"demo did not run to its end ({unfinished(rc)}): {last_words(d)}", rc in (77, 126, 127) or rc > 128),
++        (f"demo did not run to its end ({unfinished(rc)}): {last_words(d)}", rc in (126, 127) or rc > 128),
+     ) if bad] + (expected(json.loads((d / EXPECT).read_text()), r) if EXPECT in r["outputs"] else [])
+     if missing:
+         return res | {"missing": missing}

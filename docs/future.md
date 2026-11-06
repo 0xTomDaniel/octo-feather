@@ -78,7 +78,7 @@ Move templates/typescript to TypeScript 7 when 7.1 ships its programmatic API an
 
 Full list with Tom's guidelines: the take-home's notes (private, not in repo). Kit items:
 
-- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, pilot 1 `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/accepted.sh`).
+- Accept was not recorded: `octo-feather-accepted` waited for a registry `accepted = true` nothing writes, and Exo hand-wrote it twice (canary, pilot 1 `06af3f4`). It now reads the review page's Accept hand-off for the spec at the registered commit and ignores the registry key (ADR 0021, `tests/gate/kit/accepted.py`).
 - Director merged spec PR #1 itself despite the never-merge rule. Now a Merges section at the top of agents/director.md and the MERGES field of the kickoff brief (`docs/kickoff-brief.md`); owed eval case in docs/owed-evals/backlog.md.
 - Supervisor moved the head after its report (1887d52 → f14e2d8) and reworded commit bodies unasked. The merge ask must name the final head; owed eval case.
 - Orders sent during cliproxy 503 outages were lost; `herdr-say` exit 0 does not mean the order was read.
