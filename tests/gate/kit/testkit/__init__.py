@@ -318,6 +318,38 @@ def settled(cmd: Sequence[str]) -> list[str]:
     return [sys.executable, "-c", REAPER, *cmd]
 
 
+# Spec Chat's installer (scripts/install-spec-chat of a Spec Chat clone; the pinned extract,
+# check-vendored --extract spec-chat, holds only its skills): the stand-in records its argv in the
+# clone's `argv` (one per line), links the three skills into PREFIX/.agents/skills (a present link
+# kept), writes its onboarding state under XDG_STATE_HOME, and says where it linked, as the real
+# one does.
+SPEC_CHAT_INSTALLER = """#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd -P)"
+printf '%s\\n' "$@" > "$root/argv"
+prefix=""; while [[ $# -gt 0 ]]; do [[ "$1" == --prefix ]] && { prefix="$2"; shift; }; shift; done
+mkdir -p "$prefix/.agents/skills" "$XDG_STATE_HOME/spec-chat"
+for p in spec-chat-shape:shape-spec spec-chat-review:review-spec repair-specs:repair-specs; do
+  to="$prefix/.agents/skills/${p%%:*}"
+  [[ -L "$to" ]] || ln -s "$root/skill/${p#*:}" "$to"
+done
+echo 'status = "pending"' > "$XDG_STATE_HOME/spec-chat/onboarding.toml"
+echo "fake installer: linked into $prefix"
+"""
+
+
+def spec_chat_clone(d: Path) -> Path:
+    """A Spec Chat clone at D (for SPEC_CHAT_CLONE): its three skills and the installer stand-in
+    (SPEC_CHAT_INSTALLER, above)."""
+    for name in ("shape-spec", "review-spec", "repair-specs"):
+        (d / "skill" / name).mkdir(parents=True)
+        (d / "skill" / name / "SKILL.md").write_text(f"# {name}\n")
+    (d / "scripts").mkdir()
+    (d / "scripts" / "install-spec-chat").write_text(SPEC_CHAT_INSTALLER)
+    (d / "scripts" / "install-spec-chat").chmod(0o755)
+    return d
+
+
 @contextlib.contextmanager
 def provider(*args: str) -> Generator[int]:
     """The fake model provider (testkit/provider.py, ARGS its own) serving while the block runs: its

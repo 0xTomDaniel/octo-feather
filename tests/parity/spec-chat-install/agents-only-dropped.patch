@@ -1,0 +1,14 @@
+Seeded defect: the installer runs without --agents-only (provider dirs would be installed; docs/adr/0001).
+diff --git a/scripts/octo-feather-spec-chat b/scripts/octo-feather-spec-chat
+index 4ff884e..3de34a1 100755
+--- a/scripts/octo-feather-spec-chat
++++ b/scripts/octo-feather-spec-chat
+@@ -25,7 +25,7 @@ installer="$clone/scripts/install-spec-chat"
+   || { echo "$me: no Spec Chat installer at $installer; clone Spec Chat there or set SPEC_CHAT_CLONE to its clone" >&2; exit 1; }
+ clone="$(cd "$clone" && pwd -P)"
+ 
+-"$installer" --agents-only --prefix "$repo"
++"$installer" --prefix "$repo"
+ 
+ exclude="$(git -C "$repo" rev-parse --path-format=absolute --git-path info/exclude)"
+ mkdir -p "$(dirname "$exclude")"; touch "$exclude"
