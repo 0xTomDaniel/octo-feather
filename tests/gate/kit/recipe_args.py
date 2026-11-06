@@ -21,9 +21,10 @@ CMDS = ("shape", "spec-chat", "integrate", "start", "qc", "new-repo")
 A1, A2, A3, A4, A5 = "x $y", "$(touch pwned)", "`touch pwned2`", "q'r\"s", "z w"
 
 
-def args(s: Scratch) -> None:
+def world(s: Scratch) -> tuple[Path, Path]:
+    """The kit copy (its justfile, scripts/ linked to the kit's but the recorder as each recipe's
+    command) and the recorder first on PATH; the oddly named invocation dir, made."""
     t = s.root.resolve()
-    log = t / "log"
     stubs = t / "stubs"
     stubs.mkdir()
     k = t / "kit"
@@ -36,56 +37,67 @@ def args(s: Scratch) -> None:
         (k / "scripts" / f"octo-feather-{c}").unlink(missing_ok=True)
         (k / "scripts" / f"octo-feather-{c}").symlink_to(HERE / "argv_recorder")
     s.env |= {
-        "ARGV_LOG": str(log),
+        "ARGV_LOG": str(t / "log"),
         "XDG_STATE_HOME": str(t / "state"),
         "XDG_CONFIG_HOME": str(t / "config"),
         "PATH": f"{stubs}{os.pathsep}{s.env['PATH']}",
     }
     w = t / "a $b `c` 'd\" e" / "w"
     w.mkdir(parents=True)
+    return k, w
 
-    def check(name: str, cmd: str, cwd: Path, *argv: str) -> None:
-        assert log.is_file(), f"{TAG}: {name}: {cmd} never ran"
-        got = log.read_text().split("\0")
-        want = [cmd, str(cwd), *argv, ""]
-        assert got == want, f"{TAG}: {name}: got {got}, want {want}"
-        log.unlink()
+
+def check(s: Scratch, name: str, cmd: str, cwd: Path, *argv: str) -> None:
+    """CMD ran once, in exactly CWD with exactly ARGV."""
+    log = Path(s.env["ARGV_LOG"])
+    assert log.is_file(), f"{TAG}: {name}: {cmd} never ran"
+    got = log.read_text().split("\0")
+    want = [cmd, str(cwd), *argv, ""]
+    assert got == want, f"{TAG}: {name}: got {got}, want {want}"
+    log.unlink()
+
+
+def args(s: Scratch) -> None:
+    k, w = world(s)
+    t = s.root.resolve()
 
     def kj(*a: str) -> None:
         s.run(["just", "--justfile", str(k / "justfile"), *a], cwd=w)
 
     kj("shape", A1, A2, A3, A4, A5)
-    check("shape", "octo-feather-shape", w, A1, A2, A3, A4, A5)
+    check(s, "shape", "octo-feather-shape", w, A1, A2, A3, A4, A5)
     kj("shape")
-    check("shape (no args)", "octo-feather-shape", w)
+    check(s, "shape (no args)", "octo-feather-shape", w)
     kj("spec-chat", f"{A4} {A2}")
-    check("spec-chat", "octo-feather-spec-chat", w, f"{A4} {A2}")
+    check(s, "spec-chat", "octo-feather-spec-chat", w, f"{A4} {A2}")
     kj("integrate", "59", A1, A5, A2, A3)
-    check("integrate", "octo-feather-integrate", w, "59", A1, A5, A2, A3)
+    check(s, "integrate", "octo-feather-integrate", w, "59", A1, A5, A2, A3)
     kj("start")
-    check("start (default cwd)", "octo-feather-start", k, "--director", "--cwd", str(w))
+    check(s, "start (default cwd)", "octo-feather-start", k, "--director", "--cwd", str(w))
     kj("start", f"{A4} {A2}")
-    check("start", "octo-feather-start", k, "--director", "--cwd", f"{A4} {A2}")
+    check(s, "start", "octo-feather-start", k, "--director", "--cwd", f"{A4} {A2}")
     kj("supervise", "61")
-    check("supervise (default cwd)", "octo-feather-start", k, "--issue", "61", "--cwd", str(w))
+    check(s, "supervise (default cwd)", "octo-feather-start", k, "--issue", "61", "--cwd", str(w))
     kj("supervise", A1, A3)
-    check("supervise", "octo-feather-start", k, "--issue", A1, "--cwd", A3)
+    check(s, "supervise", "octo-feather-start", k, "--issue", A1, "--cwd", A3)
     kj("qc", A4, "7", A1, A5, A2)
-    check("qc", "octo-feather-qc", w, A4, "7", A1, A5, A2)
+    check(s, "qc", "octo-feather-qc", w, A4, "7", A1, A5, A2)
     kj("new-repo", "python", A1, "--no-spec-chat", A5, A2)
-    check("new-repo", "octo-feather-new-repo", w, "python", A1, "--no-spec-chat", A5, A2)
+    check(s, "new-repo", "octo-feather-new-repo", w, "python", A1, "--no-spec-chat", A5, A2)
     kj("new-repo", A3, A4)
-    check("new-repo (no flags)", "octo-feather-new-repo", w, A3, A4)
+    check(s, "new-repo (no flags)", "octo-feather-new-repo", w, A3, A4)
     # Each template's justfile sits at a target repo's root; its recipes run there.
     for lang in ("python", "typescript"):
         r = w / lang
         r.mkdir()
         (r / "justfile").write_bytes((ROOT / "templates" / lang / "justfile").read_bytes())
         s.run(["just", "integrate", "59", A1, A5, A2, A3], cwd=r)
-        check(f"{lang} integrate", "octo-feather-integrate", r, "59", A1, A5, A2, A3)
+        check(s, f"{lang} integrate", "octo-feather-integrate", r, "59", A1, A5, A2, A3)
         s.run(["just", "qc", A4, "7", A1, A5, A3], cwd=r)
-        check(f"{lang} qc", "octo-feather-qc", r, A4, "7", A1, A5, A3)
-    found = [str(p) for d in (t, ROOT) for n in range(1, 5) for p in d.glob("*/" * (n - 1) + "pwned*")]
+        check(s, f"{lang} qc", "octo-feather-qc", r, A4, "7", A1, A5, A3)
+    found = [
+        str(p) for d in (t, ROOT) for n in range(1, 5) for p in d.glob("*/" * (n - 1) + "pwned*")
+    ]
     assert not found, f"{TAG}: an argument ran as shell: {found}"
 
 

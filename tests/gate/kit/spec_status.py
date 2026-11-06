@@ -26,9 +26,12 @@ from __future__ import annotations
 import json
 import re
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import FIXTURES, Scratch, kit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 TAG = "spec-status test"
 S = kit("octo-feather-spec-status")
@@ -56,7 +59,10 @@ def repo(p: Scratch, name: str, fixture: str) -> Path:
 
 
 def crit(cid: str) -> str:
-    return f'<p data-acceptance-criterion data-anchor="{cid}">Given a user, When {cid} runs, then it prints ok.</p>\n'
+    return (
+        f'<p data-acceptance-criterion data-anchor="{cid}">Given a user, When {cid} runs, '
+        "then it prints ok.</p>\n"
+    )
 
 
 def mspec(required: list[str], optional: list[str]) -> str:
@@ -72,8 +78,16 @@ def mspec(required: list[str], optional: list[str]) -> str:
 
 def call(kind: str, anchors: list[str], criteria: list[str], **over: object) -> dict[str, object]:
     c: dict[str, object] = {
-        "at": "2026-10-21T10:00:00Z", "lane": "gh62", "role": "supervisor", "kind": kind, "anchors": anchors,
-        "criteria": criteria, "what": "w", "why": "y", "passes_as_written": False, "evidence": "e",
+        "at": "2026-10-21T10:00:00Z",
+        "lane": "gh62",
+        "role": "supervisor",
+        "kind": kind,
+        "anchors": anchors,
+        "criteria": criteria,
+        "what": "w",
+        "why": "y",
+        "passes_as_written": False,
+        "evidence": "e",
     }
     c.update(over)
     return c
@@ -95,8 +109,19 @@ def build(p: Scratch) -> None:
     p.git(m, "add", "-A")
     p.git(m, "commit", "-qm", "accepted")
     sha = p.git(m, "rev-parse", "--short", "HEAD")
-    (md / "demo.status.json").write_text(json.dumps({"spec": "demo.spec.html", "accepted_commit": sha, "criteria": {
-        "acceptance-a": {"status": "planned", "pr": None}, "acceptance-b": {"status": "planned", "pr": None}}}) + "\n")
+    (md / "demo.status.json").write_text(
+        json.dumps(
+            {
+                "spec": "demo.spec.html",
+                "accepted_commit": sha,
+                "criteria": {
+                    "acceptance-a": {"status": "planned", "pr": None},
+                    "acceptance-b": {"status": "planned", "pr": None},
+                },
+            }
+        )
+        + "\n"
+    )
     p.git(m, "add", "-A")
     p.git(m, "commit", "-qm", "status")
     c = repo(p, "calls", "good")
@@ -107,8 +132,16 @@ def build(p: Scratch) -> None:
 
 
 def lcall(kind: str, what: str, lane: str, **over: object) -> dict[str, object]:
-    return call(kind, ["acceptance-a"], ["acceptance-a"], lane=lane, what=what, why=f"why-{what}",
-                evidence=f"ev-{what}", **over)
+    return call(
+        kind,
+        ["acceptance-a"],
+        ["acceptance-a"],
+        lane=lane,
+        what=what,
+        why=f"why-{what}",
+        evidence=f"ev-{what}",
+        **over,
+    )
 
 
 def world(s: Scratch) -> None:
@@ -137,26 +170,51 @@ def guard(s: Scratch) -> None:
     def a_line(ln: str) -> bool:
         return 'data-anchor="acceptance-a"' in ln
 
-    # An anchored paragraph changed since accepted_commit with no call fails, naming spec and anchor.
-    spec.write_text("".join(ln.replace(A_OK, "then it prints done.</span></p>") if a_line(ln) else ln
-                            for ln in orig_spec.splitlines(keepends=True)))
-    has(run(s, 1, *check), "demo.spec.html: anchor acceptance-a changed since accepted_commit", "calls.jsonl")
+    # An anchored paragraph changed since accepted_commit with no call fails, naming spec and
+    # anchor.
+    spec.write_text(
+        "".join(
+            ln.replace(A_OK, "then it prints done.</span></p>") if a_line(ln) else ln
+            for ln in orig_spec.splitlines(keepends=True)
+        )
+    )
+    has(
+        run(s, 1, *check),
+        "demo.spec.html: anchor acceptance-a changed since accepted_commit",
+        "calls.jsonl",
+    )
     # Beside it, acceptance-b removed and acceptance-c added (their parent section changed too).
-    spec.write_text(spec.read_text().replace('data-anchor="acceptance-b"', 'data-anchor="acceptance-c"')
-                    .replace("When acceptance-b runs", "When acceptance-c runs"))
+    spec.write_text(
+        spec.read_text()
+        .replace('data-anchor="acceptance-b"', 'data-anchor="acceptance-c"')
+        .replace("When acceptance-b runs", "When acceptance-c runs")
+    )
     st = json.loads(orig_status)
     st["criteria"].pop("acceptance-b")
     st["criteria"]["acceptance-c"] = {"status": "planned", "pr": None}
     status.write_text(json.dumps(st))
     # Wrong calls: a's only call denied, b's and c's of kind clarifies.
     log.write_text(
-        line(call("clarifies", ["acceptance-a"], ["acceptance-a"], denied={"at": "2026-10-21T11:00:00Z", "note": "no"}))
+        line(
+            call(
+                "clarifies",
+                ["acceptance-a"],
+                ["acceptance-a"],
+                denied={"at": "2026-10-21T11:00:00Z", "note": "no"},
+            )
+        )
         + line(call("clarifies", ["acceptance-b"], ["acceptance-b"]))
         + line(call("clarifies", ["acceptance-c"], ["acceptance-c"]))
     )
     out = run(s, 1, *check)
-    has(out, "anchor acceptance-a changed", "criterion acceptance-b removed since accepted_commit", "kind weakens",
-        "criterion acceptance-c added since accepted_commit", "kind adds")
+    has(
+        out,
+        "anchor acceptance-a changed",
+        "criterion acceptance-b removed since accepted_commit",
+        "kind weakens",
+        "criterion acceptance-c added since accepted_commit",
+        "kind adds",
+    )
     # The right calls: clarifies, weakens and adds naming the parent section.
     log.write_text(
         line(call("clarifies", ["acceptance-a"], ["acceptance-a"]))
@@ -164,53 +222,100 @@ def guard(s: Scratch) -> None:
         + line(call("adds", ["acceptance-c", "acceptance"], ["acceptance-c"]))
     )
     run(s, 0, *check)
-    # Each log rule fails naming file, line and fix: line 1 a Linear lane key (eng-123 passes like gh62), then one
-    # bad line each.
+    # Each log rule fails naming file, line and fix: line 1 a Linear lane key (eng-123 passes
+    # like gh62), then one bad line each.
     spec.write_text(orig_spec)
     status.write_text(orig_status)
     g77 = {"lane": "gh77"}
     bad: list[tuple[dict[str, object] | str, str]] = [
         ('{"at": ', "not a JSON object"),
-        ({k: v for k, v in call("clarifies", ["acceptance-a"], ["acceptance-a"]).items() if k != "why"},
-         "missing or empty field why"),
+        (
+            {
+                k: v
+                for k, v in call("clarifies", ["acceptance-a"], ["acceptance-a"]).items()
+                if k != "why"
+            },
+            "missing or empty field why",
+        ),
         # #acceptance-call-evidence: an empty, missing or blank evidence fails, naming that call.
-        (call("clarifies", ["acceptance-a"], ["acceptance-a"], evidence="", **g77),
-         "call (lane gh77; anchors acceptance-a): missing or empty field evidence"),
-        ({k: v for k, v in call("clarifies", ["acceptance-a"], ["acceptance-a"], **g77).items() if k != "evidence"},
-         "call (lane gh77; anchors acceptance-a): missing or empty field evidence"),
-        (call("clarifies", ["acceptance-a"], ["acceptance-a"], evidence="  \n\t", **g77),
-         "call (lane gh77; anchors acceptance-a): missing or empty field evidence"),
-        (call("clarifies", ["acceptance-a"], ["acceptance-a"], what=" \t"), "missing or empty field what"),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], evidence="", **g77),
+            "call (lane gh77; anchors acceptance-a): missing or empty field evidence",
+        ),
+        (
+            {
+                k: v
+                for k, v in call("clarifies", ["acceptance-a"], ["acceptance-a"], **g77).items()
+                if k != "evidence"
+            },
+            "call (lane gh77; anchors acceptance-a): missing or empty field evidence",
+        ),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], evidence="  \n\t", **g77),
+            "call (lane gh77; anchors acceptance-a): missing or empty field evidence",
+        ),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], what=" \t"),
+            "missing or empty field what",
+        ),
         (call("clarifies", [" "], ["acceptance-a"]), "missing or empty field anchors"),
-        (call("clarifies", ["acceptance-a"], ["acceptance-a"], role="implementer"), "role 'implementer'"),
-        (call("clarifies", ["acceptance-a"], ["acceptance-a"], passes_as_written=True), "passes_as_written must be false"),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], role="implementer"),
+            "role 'implementer'",
+        ),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], passes_as_written=True),
+            "passes_as_written must be false",
+        ),
         (call("tweaks", ["acceptance-a"], ["acceptance-a"]), "kind 'tweaks' is not one of"),
-        (call("clarifies", ["acceptance-a"], ["acceptance-q"]), "criterion acceptance-q is in neither"),
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-q"]),
+            "criterion acceptance-q is in neither",
+        ),
     ]
-    bad += [(call("clarifies", ["acceptance-a"], ["acceptance-a"], lane=ln), f"lane '{ln}' is not a lane key")
-            for ln in ("ENG-123", "62", "gh62-x", "eng-123-x")]
-    log.write_text(line(call("clarifies", ["acceptance-a"], ["acceptance-a"], lane="eng-123"))
-                   + "".join(line(c) for c, _ in bad))
+    bad += [
+        (
+            call("clarifies", ["acceptance-a"], ["acceptance-a"], lane=ln),
+            f"lane '{ln}' is not a lane key",
+        )
+        for ln in ("ENG-123", "62", "gh62-x", "eng-123-x")
+    ]
+    log.write_text(
+        line(call("clarifies", ["acceptance-a"], ["acceptance-a"], lane="eng-123"))
+        + "".join(line(c) for c, _ in bad)
+    )
     out = run(s, 1, *check)
     assert "demo.calls.jsonl:1:" not in out, f"{TAG}: a Linear lane key's call refused: {out}"
     for n, (_, want) in enumerate(bad, 2):
         hit = [ln for ln in out.splitlines() if f"demo.calls.jsonl:{n}: " in ln]
-        assert any(want in ln and "fix: " in ln for ln in hit), f"{TAG}: line {n} did not report: {want}\n{out}"
+        assert any(want in ln and "fix: " in ln for ln in hit), (
+            f"{TAG}: line {n} did not report: {want}\n{out}"
+        )
     # An accepted_commit missing from the repo is named.
     log.unlink()
-    status.write_text(re.sub(r'"accepted_commit": "[0-9a-f]+"', '"accepted_commit": "deadbee"', orig_status))
+    status.write_text(
+        re.sub(r'"accepted_commit": "[0-9a-f]+"', '"accepted_commit": "deadbee"', orig_status)
+    )
     has(run(s, 1, *check), "accepted_commit deadbee is not in this repo", "fetch full history")
-    # #acceptance-call-guard, structure: moving an unchanged criterion between anchored sections, or reordering two
-    # anchored siblings, changes the parents, so it needs a call naming them.
+    # #acceptance-call-guard, structure: moving an unchanged criterion between anchored sections,
+    # or reordering two anchored siblings, changes the parents, so it needs a call naming them.
     m = s.root / "move" / "docs" / "specs"
     ms, ml = m / "demo.spec.html", m / "demo.calls.jsonl"
     mc = ("check", str(m))
     run(s, 0, *mc)
     ms.write_text(mspec(["acceptance-b"], ["acceptance-a"]))
     out = run(s, 1, *mc)
-    has(out, "anchor acceptance-optional changed since accepted_commit", "anchor acceptance-required changed since accepted_commit")
-    assert "anchor acceptance-a " not in out, f"{TAG}: unchanged moved criterion reported as changed: {out}"
-    ml.write_text(line(call("clarifies", ["acceptance-required", "acceptance-optional"], ["acceptance-a"])))
+    has(
+        out,
+        "anchor acceptance-optional changed since accepted_commit",
+        "anchor acceptance-required changed since accepted_commit",
+    )
+    assert "anchor acceptance-a " not in out, (
+        f"{TAG}: unchanged moved criterion reported as changed: {out}"
+    )
+    ml.write_text(
+        line(call("clarifies", ["acceptance-required", "acceptance-optional"], ["acceptance-a"]))
+    )
     run(s, 0, *mc)
     ml.unlink()
     ms.write_text(mspec(["acceptance-b", "acceptance-a"], []))
@@ -226,34 +331,121 @@ def calls(s: Scratch) -> None:
     base = s.git(c, "rev-parse", "HEAD")
     old = json.loads(cl.read_text())
     old["denied"] = {"at": "2026-10-22T09:00:00Z", "note": "old"}
-    cl.write_text(line(old) + line(lcall("clarifies", "what-clar", "gh63")) + line(lcall("adds", "what-add", "gh63"))
-                  + line(lcall("weakens", "what-weak", "gh63", denied={"at": "2026-10-22T10:00:00Z", "note": "keep it"})))
+    cl.write_text(
+        line(old)
+        + line(lcall("clarifies", "what-clar", "gh63"))
+        + line(lcall("adds", "what-add", "gh63"))
+        + line(
+            lcall(
+                "weakens",
+                "what-weak",
+                "gh63",
+                denied={"at": "2026-10-22T10:00:00Z", "note": "keep it"},
+            )
+        )
+    )
     out = run(s, 0, "calls", "--since", base, "docs/specs", cwd=c)
-    has(out, "3 calls (1 weakens, 1 adds, 1 clarifies; 1 denied).",
-        "weakens DENIED (2026-10-22T10:00:00Z: keep it): docs/specs/demo.spec.html, lane gh63, role supervisor",
-        "   why: why-what-weak", "   evidence: ev-what-add", "   anchors: acceptance-a", "   criteria: acceptance-a")
+    has(
+        out,
+        "3 calls (1 weakens, 1 adds, 1 clarifies; 1 denied).",
+        "weakens DENIED (2026-10-22T10:00:00Z: keep it): docs/specs/demo.spec.html, lane gh63, "
+        "role supervisor",
+        "   why: why-what-weak",
+        "   evidence: ev-what-add",
+        "   anchors: acceptance-a",
+        "   criteria: acceptance-a",
+    )
     assert "old-call" not in out, f"{TAG}: a call at the base was listed: {out}"
-    assert "more than three" not in out, f"{TAG}: three calls printed the more-than-three line: {out}"
+    assert "more than three" not in out, (
+        f"{TAG}: three calls printed the more-than-three line: {out}"
+    )
     lines = out.splitlines()
-    at = [next((i for i, ln in enumerate(lines) if w in ln), -1) for w in
-          ("Weakens or removes", "what-weak", "Adds scope", "what-add", "Clarifies or adds detail", "what-clar")]
-    assert -1 not in at and at == sorted(at), f"{TAG}: calls not grouped weakens, adds, clarifies: {out}"
+    at = [
+        next((i for i, ln in enumerate(lines) if w in ln), -1)
+        for w in (
+            "Weakens or removes",
+            "what-weak",
+            "Adds scope",
+            "what-add",
+            "Clarifies or adds detail",
+            "what-clar",
+        )
+    ]
+    assert -1 not in at, f"{TAG}: calls not all listed: {out}"
+    assert at == sorted(at), f"{TAG}: calls not grouped weakens, adds, clarifies: {out}"
     with cl.open("a") as fh:
         fh.write(line(lcall("clarifies", "what-four", "gh63")))
-    has(run(s, 0, "calls", "--since", base, cwd=c), "4 calls",
-        "Lane gh63 made 4 calls, more than three: the director tells the owner")
+    has(
+        run(s, 0, "calls", "--since", base, cwd=c),
+        "4 calls",
+        "Lane gh63 made 4 calls, more than three: the director tells the owner",
+    )
     # Default base: the merge base with origin/main; none is an error naming the fix.
     has(run(s, 1, "calls", cwd=c), "no merge base with origin/main", "--since REF")
     s.git(c, "update-ref", "refs/remotes/origin/main", base)
     has(run(s, 0, "calls", cwd=c), "4 calls")
 
 
-def links(s: Scratch) -> None:
-    world(s)
+RA, RB, RC = "20261029T100000Z-0a0a0a0a", "20261029T100000Z-0b0b0b0b", "20261029T100000Z-0c0c0c0c"
+QC_TOML = """format = 1
+[entry]
+command = "true"
+[services]
+[fixture]
+[values]
+[demo."demo#acceptance-a"]
+command = "true"
+covers = ["src/a"]
+tests = ["tests/a.sh"]
+[demo."demo#acceptance-b"]
+command = "true"
+covers = ["src/b"]
+tests = ["tests/b.py::test_b"]
+"""
+
+
+class Stale:
+    """The staleness repo: demo.spec.html, qc.toml declaring both demos, their code and tests."""
+
+    def __init__(self, s: Scratch) -> None:
+        self.s = s
+        self.e = s.root / "stale"
+        self.es = self.e / "docs/specs"
+        self.st = self.es / "demo.status.json"
+
+    def commit(self, msg: str) -> str:
+        self.s.git(self.e, "commit", "-qam", msg)
+        return self.s.git(self.e, "rev-parse", "--short=12", "HEAD")
+
+    def show(self) -> str:
+        return run(self.s, 0, "show", cwd=self.e)
+
+    def built(self, cid: str, *link: str) -> None:
+        run(self.s, 0, "built", str(self.st), "7", cid, *link)
+
+
+def crit_line(out: str, cid: str) -> str:
+    hit = [ln for ln in out.splitlines() if f"  {cid}: " in ln]
+    assert hit, f"{TAG}: show: no line for {cid}: {out}"
+    return hit[0]
+
+
+def on(out: str, cid: str, want: str, what: str) -> None:
+    assert want in crit_line(out, cid), f"{TAG}: {what}: {out}"
+
+
+def fixtures(s: Scratch) -> None:
+    """The good and bad fixtures; init and built on a copy."""
     run(s, 0, "check", str(s.root / "good/docs/specs"))
-    has(run(s, 1, "check", str(s.root / "bad/docs/specs")), "missing criterion acceptance-b", "extra criterion acceptance-z",
-        "duplicate key 'acceptance-a'", "duplicate criterion id acceptance-c", "status must be planned or built",
-        "a built criterion names the PR")
+    has(
+        run(s, 1, "check", str(s.root / "bad/docs/specs")),
+        "missing criterion acceptance-b",
+        "extra criterion acceptance-z",
+        "duplicate key 'acceptance-a'",
+        "duplicate criterion id acceptance-c",
+        "status must be planned or built",
+        "a built criterion names the PR",
+    )
     i = s.root / "init"
     i.mkdir()
     shutil.copy2(F / "good/demo.spec.html", i)
@@ -263,114 +455,127 @@ def links(s: Scratch) -> None:
     run(s, 0, "init", str(i / "demo.spec.html"), s.git(i, "rev-parse", "HEAD"))
     run(s, 0, "built", str(i / "demo.status.json"), "7", "acceptance-a")
     run(s, 0, "check", str(i))
-    assert '"pr": 7' in (i / "demo.status.json").read_text(), f"{TAG}: built did not record the PR"
-    # Evidence links and staleness.
-    e = s.root / "stale"
-    es = e / "docs/specs"
-    st = es / "demo.status.json"
-    es.mkdir(parents=True)
+    status = (i / "demo.status.json").read_text()
+    assert '"pr": 7' in status, f"{TAG}: built did not record the PR"
+
+
+def linked(x: Stale) -> str:
+    """Both criteria built with an evidence link at the capture commit, committed; that commit."""
+    s, e = x.s, x.e
+    x.es.mkdir(parents=True)
     (e / "src").mkdir()
     (e / "tests").mkdir()
-    shutil.copy2(F / "good/demo.spec.html", es)
-    (e / "qc.toml").write_text(
-        'format = 1\n[entry]\ncommand = "true"\n[services]\n[fixture]\n[values]\n[demo."demo#acceptance-a"]\n'
-        'command = "true"\ncovers = ["src/a"]\ntests = ["tests/a.sh"]\n[demo."demo#acceptance-b"]\ncommand = "true"\n'
-        'covers = ["src/b"]\ntests = ["tests/b.py::test_b"]\n')
+    shutil.copy2(F / "good/demo.spec.html", x.es)
+    (e / "qc.toml").write_text(QC_TOML)
     for f in ("src/a", "src/b", "tests/a.sh", "tests/b.py", "README"):
         (e / f).write_text(f"{f} v1\n")
     s.git(e, "init", "-q")
     s.git(e, "add", "-A")
     s.git(e, "commit", "-qm", "accepted")
     cap = s.git(e, "rev-parse", "HEAD")
-    run(s, 0, "init", str(es / "demo.spec.html"), cap)
-    run(s, 0, "built", str(st), "7", "acceptance-a", "--record", "20261029T100000Z-0a0a0a0a", "--commit", cap, "--test", "tests/a.sh")
-    run(s, 0, "built", str(st), "7", "acceptance-b", "--record", "20261029T100000Z-0b0b0b0b", "--commit", cap,
-        "--test", "tests/b.py::test_b")
+    run(s, 0, "init", str(x.es / "demo.spec.html"), cap)
+    x.built("acceptance-a", "--record", RA, "--commit", cap, "--test", "tests/a.sh")
+    x.built("acceptance-b", "--record", RB, "--commit", cap, "--test", "tests/b.py::test_b")
     s.git(e, "add", "-A")
     s.git(e, "commit", "-qm", f"qc: built acceptance-a acceptance-b (judged {cap[:12]})")
-    got = json.loads(st.read_text())["criteria"]["acceptance-a"]
-    assert got == {"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a", "commit": cap, "tests": ["tests/a.sh"]}, (
-        f"{TAG}: built did not write the evidence link: {st.read_text()}")
-    run(s, 0, "check", str(es))
+    got = json.loads(x.st.read_text())["criteria"]["acceptance-a"]
+    want = {"status": "built", "pr": 7, "record": RA, "commit": cap, "tests": ["tests/a.sh"]}
+    assert got == want, f"{TAG}: built did not write the evidence link: {x.st.read_text()}"
+    run(s, 0, "check", str(x.es))
+    return cap
 
-    def show() -> str:
-        return run(s, 0, "show", cwd=e)
 
-    def crit_line(out: str, cid: str) -> str:
-        hit = [ln for ln in out.splitlines() if f"  {cid}: " in ln]
-        assert hit, f"{TAG}: show: no line for {cid}: {out}"
-        return hit[0]
-
-    def commit(msg: str) -> str:
-        s.git(e, "commit", "-qam", msg)
-        return s.git(e, "rev-parse", "--short=12", "HEAD")
-
-    out = show()
-    has(out, f"acceptance-a: built (PR #7), current: record 20261029T100000Z-0a0a0a0a captured at {cap[:12]}")
-    assert "current" in crit_line(out, "acceptance-b"), f"{TAG}: acceptance-b not current: {out}"
-    (e / "README").write_text("v2\n")
-    commit("unrelated change")
-    (e / "src/a").write_text("v2\n")
-    ch = commit("change a's code")
-    out = show()
-    has(out, f"acceptance-a: built (PR #7), STALE: record 20261029T100000Z-0a0a0a0a captured at {cap[:12]}; covered path "
-        f"src/a changed since {cap[:12]} by {ch} change a's code", "2 built: 1 current, 1 stale, 0 no evidence link")
-    assert ", current: " in crit_line(out, "acceptance-b"), f"{TAG}: an unrelated change made acceptance-b stale: {out}"
+def staleness(x: Stale, cap: str) -> None:
+    """show: current, then stale by a covered path, an edited or gone test file, the text."""
+    c = cap[:12]
+    out = x.show()
+    has(out, f"acceptance-a: built (PR #7), current: record {RA} captured at {c}")
+    on(out, "acceptance-b", "current", "acceptance-b not current")
+    (x.e / "README").write_text("v2\n")
+    x.commit("unrelated change")
+    (x.e / "src/a").write_text("v2\n")
+    ch = x.commit("change a's code")
+    out = x.show()
+    has(
+        out,
+        f"acceptance-a: built (PR #7), STALE: record {RA} captured at {c}; covered path src/a "
+        f"changed since {c} by {ch} change a's code",
+        "2 built: 1 current, 1 stale, 0 no evidence link",
+    )
+    on(out, "acceptance-b", ", current: ", "an unrelated change made acceptance-b stale")
     # A named test file edited or gone since capture makes it stale (owner ruling #409).
-    (e / "tests/a.sh").write_text("v2\n")
-    ta = commit("edit a's test")
-    assert f"; test file tests/a.sh changed since {cap[:12]} by {ta} edit a's test" in crit_line(show(), "acceptance-a"), (
-        f"{TAG}: edited test file not stale")
-    s.git(e, "rm", "-q", "tests/b.py")
-    tb = commit("drop b's test")
-    out = show()
-    assert (f"STALE: record 20261029T100000Z-0b0b0b0b captured at {cap[:12]}; test file tests/b.py (tests/b.py::test_b) "
-            f"gone since {cap[:12]} by {tb} drop b's test") in crit_line(out, "acceptance-b"), f"{TAG}: gone test not stale: {out}"
-    s.git(e, "checkout", "-q", cap, "--", "tests/b.py")
-    commit("b's test back")
-    spec = es / "demo.spec.html"
+    (x.e / "tests/a.sh").write_text("v2\n")
+    ta = x.commit("edit a's test")
+    want = f"; test file tests/a.sh changed since {c} by {ta} edit a's test"
+    on(x.show(), "acceptance-a", want, "edited test file not stale")
+    x.s.git(x.e, "rm", "-q", "tests/b.py")
+    tb = x.commit("drop b's test")
+    want = (
+        f"STALE: record {RB} captured at {c}; test file tests/b.py (tests/b.py::test_b) gone since "
+        f"{c} by {tb} drop b's test"
+    )
+    on(x.show(), "acceptance-b", want, "gone test not stale")
+    x.s.git(x.e, "checkout", "-q", cap, "--", "tests/b.py")
+    x.commit("b's test back")
+    spec = x.es / "demo.spec.html"
     keep = spec.read_text()
-    spec.write_text("".join(ln.replace("then it prints ok.", "then it prints done.") if "acceptance-b" in ln else ln
-                            for ln in keep.splitlines(keepends=True)))
-    out = show()
-    assert f"STALE: record 20261029T100000Z-0b0b0b0b captured at {cap[:12]}; criterion text changed since {cap[:12]}" in (
-        crit_line(out, "acceptance-b")), f"{TAG}: changed text not stale: {out}"
+    spec.write_text(
+        "".join(
+            ln.replace("then it prints ok.", "then it prints done.") if "acceptance-b" in ln else ln
+            for ln in keep.splitlines(keepends=True)
+        )
+    )
+    want = f"STALE: record {RB} captured at {c}; criterion text changed since {c}"
+    on(x.show(), "acceptance-b", want, "changed text not stale")
     spec.write_text(keep)
-    # A fallback-built criterion (record, no declared demo): only its text makes it stale.
-    q = e / "qc.toml"
+
+
+def fallback_and_legacy(x: Stale) -> None:
+    """A fallback-built criterion (record, no declared demo): only its text makes it stale. A
+    legacy built row (status and PR only) passes check and shows as no evidence link."""
+    q = x.e / "qc.toml"
     q.write_text(q.read_text().split('[demo."demo#acceptance-b"]')[0])
-    commit("no demo for b")
-    fb = s.git(e, "rev-parse", "HEAD")
-    run(s, 0, "built", str(st), "7", "acceptance-b", "--record", "20261029T100000Z-0c0c0c0c", "--commit", fb)
-    commit(f"qc: built acceptance-b (judged {fb[:12]})")
-    (e / "src/b").write_text("v3\n")
-    commit("change b's code")
-    out = show()
-    assert f"current: record 20261029T100000Z-0c0c0c0c captured at {fb[:12]} by the agent fallback" in (
-        crit_line(out, "acceptance-b")), f"{TAG}: fallback-built not current: {out}"
-    # A legacy built row (status and PR only) passes check and shows as no evidence link, never stale.
-    run(s, 0, "built", str(st), "7", "acceptance-b")
-    run(s, 0, "check", str(es))
-    out = show()
-    assert "acceptance-b: built (PR #7), no evidence link" in crit_line(out, "acceptance-b"), f"{TAG}: legacy row: {out}"
+    x.commit("no demo for b")
+    fb = x.s.git(x.e, "rev-parse", "HEAD")
+    x.built("acceptance-b", "--record", RC, "--commit", fb)
+    x.commit(f"qc: built acceptance-b (judged {fb[:12]})")
+    (x.e / "src/b").write_text("v3\n")
+    x.commit("change b's code")
+    want = f"current: record {RC} captured at {fb[:12]} by the agent fallback"
+    on(x.show(), "acceptance-b", want, "fallback-built not current")
+    x.built("acceptance-b")
+    run(x.s, 0, "check", str(x.es))
+    out = x.show()
+    on(out, "acceptance-b", "acceptance-b: built (PR #7), no evidence link", "legacy row")
     has(out, "2 built: 0 current, 1 stale, 1 no evidence link")
-    # check refuses a partial or malformed link, and a planned criterion with one.
-    legacy = st.read_text()
+
+
+def refusals(x: Stale, cap: str) -> None:
+    """check refuses a partial or malformed link, and a planned criterion with one."""
+    legacy = x.st.read_text()
+    link = {"status": "built", "pr": 7, "record": RA, "commit": cap, "tests": []}
     for row, want in (
-        ({"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a"}, "names record without commit, tests"),
-        ({"status": "built", "pr": 7, "record": "r1", "commit": cap, "tests": []}, "record must be an evidence record id"),
-        ({"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a", "commit": "HEAD", "tests": []},
-         "commit must be a commit sha"),
-        ({"status": "built", "pr": 7, "record": "20261029T100000Z-0a0a0a0a", "commit": cap, "tests": "t"},
-         "tests must be a list"),
-        ({"status": "planned", "pr": None, "record": "20261029T100000Z-0a0a0a0a", "commit": cap, "tests": []},
-         "a planned criterion names no evidence"),
+        ({"status": "built", "pr": 7, "record": RA}, "names record without commit, tests"),
+        (link | {"record": "r1"}, "record must be an evidence record id"),
+        (link | {"commit": "HEAD"}, "commit must be a commit sha"),
+        (link | {"tests": "t"}, "tests must be a list"),
+        (link | {"status": "planned", "pr": None}, "a planned criterion names no evidence"),
     ):
         d = json.loads(legacy)
         d["criteria"]["acceptance-b"] = row
-        st.write_text(json.dumps(d))
-        has(run(s, 1, "check", str(es)), f"demo.status.json: acceptance-b: {want}")
-    st.write_text(legacy)
+        x.st.write_text(json.dumps(d))
+        has(run(x.s, 1, "check", str(x.es)), f"demo.status.json: acceptance-b: {want}")
+    x.st.write_text(legacy)
+
+
+def links(s: Scratch) -> None:
+    world(s)
+    fixtures(s)
+    x = Stale(s)
+    cap = linked(x)
+    staleness(x, cap)
+    fallback_and_legacy(x)
+    refusals(x, cap)
 
 
 if __name__ == "__main__":

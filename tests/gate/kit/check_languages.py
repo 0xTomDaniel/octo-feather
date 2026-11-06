@@ -11,16 +11,20 @@ GATE_RECIPES. An extensionless file with no shebang passes by design (no languag
 from __future__ import annotations
 
 import json
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, kit, kit_repo, main, tool_homes
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 TAG = "languages test"
 
 
 def copy(s: Scratch) -> tuple[Path, dict[str, str]]:
     k = kit_repo(s)
-    # A link, which .gitignore's node_modules/ (a directory pattern) does not match: excluded by name.
+    # A link, which .gitignore's node_modules/ (a directory pattern) does not match: excluded by
+    # name.
     (k / "node_modules").symlink_to(ROOT / "node_modules")
     with (k / ".git" / "info" / "exclude").open("a") as fh:
         fh.write("/node_modules\n")
@@ -60,13 +64,21 @@ def languages(s: Scratch) -> None:
     for w in (
         "notes.xyz: scc does not know this file type",
         "Go (tool.go) has no lint or type step",
-        "scripts/x-shell: BASH, but shellcheck's own file list misses it; ShellCheck's file list: give a file the"
-        " `shell` attribute in .gitattributes (just shell-files)",
-        "scripts/x-py: Python, but ruff's own file list misses it; ruff's own file list, which basedpyright gets"
-        " whole: name an extensionless script in pyproject.toml extend-include (just python-files)",
+        (
+            "scripts/x-shell: BASH, but shellcheck's own file list misses it; ShellCheck's file "
+            "list: give a file the `shell` attribute in .gitattributes (just shell-files)"
+        ),
+        (
+            "scripts/x-py: Python, but ruff's own file list misses it; ruff's own file list, which "
+            "basedpyright gets whole: name an extensionless script in pyproject.toml "
+            "extend-include (just python-files)"
+        ),
         "scripts/x-envs: scc cannot name the language of its shebang",
         ".agents/skills/herdr-comms/assets/x.ts: TypeScript, but tsc's own file list misses it",
-        "package.json: packageManager and mise.toml [tools] pnpm both pin pnpm; delete packageManager",
+        (
+            "package.json: packageManager and mise.toml [tools] pnpm both pin pnpm; delete "
+            "packageManager"
+        ),
         "shellcheck gates BASH, but its recipe check-scripts is not in the gate",
     ):
         assert w in out, f"{TAG}: output lacks: {w}\n{out}"

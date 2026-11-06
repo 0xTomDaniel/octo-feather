@@ -25,9 +25,12 @@ from __future__ import annotations
 
 import shutil
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, main, tool_homes
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 TAG = "check-scripts test"
 FILES = (
@@ -74,10 +77,20 @@ def run(s: Scratch, r: Path, want: int, env: dict[str, str] | None = None) -> st
     """`just check-scripts` on R with every plant tracked, exit WANT; then back to the base."""
     s.git(r, "add", "-A")
     e = {**s.env, "UV_PROJECT_ENVIRONMENT": str(ROOT / ".venv"), **(env or {})}
-    # Not Scratch.run: the crashing lister's own traceback is the case below, and the recipe's to print.
-    p = subprocess.run(["just", "check-scripts"], cwd=r, env=e, capture_output=True, text=True, check=False)
+    # Not Scratch.run: the crashing lister's own traceback is the case below, and the recipe's to
+    # print.
+    p = subprocess.run(
+        ["just", "check-scripts"],  # noqa: S607
+        cwd=r,
+        env=e,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
     out = f"{p.stdout}\n{p.stderr}"
-    assert p.returncode == want, f"{TAG}: just check-scripts: exit {p.returncode}, want {want}: {out}"
+    assert p.returncode == want, (
+        f"{TAG}: just check-scripts: exit {p.returncode}, want {want}: {out}"
+    )
     s.git(r, "reset", "-q", "--hard")
     s.git(r, "clean", "-qfd")
     return out
@@ -90,24 +103,40 @@ def named(out: str, *files: str) -> None:
 
 def scripts(s: Scratch) -> None:
     s.prepare("check-scripts", build)
-    s.env |= tool_homes()  # the kit's mise tools and uv cache, never fetched again into the scratch HOME
+    s.env |= (
+        tool_homes()
+    )  # the kit's mise tools and uv cache, never fetched again into the scratch HOME
     r = s.root / "repo"
-    # Clean, plus a file and the file it sources sharing one ShellCheck run, by directive or literal path.
+    # Clean, plus a file and the file it sources sharing one ShellCheck run, by directive or
+    # literal path.
     for i in range(1, 9):
         plant(r, f"tests/lib/x-planted-lib{i}.sh", LIB, 0o644)
-    plant(r, "tests/x-planted-a.sh", '#!/usr/bin/env bash\n# shellcheck source=tests/lib/x-planted-lib3.sh\n'
-          'source "$(dirname "$0")/lib/x-planted-lib3.sh"\necho "$x_planted"')
-    plant(r, "tests/x-planted-b.sh", '#!/usr/bin/env bash\nsource tests/lib/x-planted-lib6.sh\necho "$x_planted"')
+    plant(
+        r,
+        "tests/x-planted-a.sh",
+        "#!/usr/bin/env bash\n# shellcheck source=tests/lib/x-planted-lib3.sh\n"
+        'source "$(dirname "$0")/lib/x-planted-lib3.sh"\necho "$x_planted"',
+    )
+    plant(
+        r,
+        "tests/x-planted-b.sh",
+        '#!/usr/bin/env bash\nsource tests/lib/x-planted-lib6.sh\necho "$x_planted"',
+    )
     named(run(s, r, 0), "scripts: shellcheck ok")
-    # Bad shell wherever the attribute names it, and in a sourced file, still an input: one run, each named.
+    # Bad shell wherever the attribute names it, and in a sourced file, still an input: one run,
+    # each named.
     bad = ["tests/x-planted.sh", "scripts/x-planted", ".agents/skills/herdr-comms/assets/x-planted"]
     for f in bad:
         plant(r, f, BAD_SH)
     shell(r, bad[1])
     shell(r, bad[2])
     plant(r, "tests/lib/x-planted-lib5.sh", "# shellcheck shell=bash\nif then fi", 0o644)
-    plant(r, "tests/x-planted-c.sh", '#!/usr/bin/env bash\n# shellcheck source=tests/lib/x-planted-lib5.sh\n'
-          'source "$(dirname "$0")/lib/x-planted-lib5.sh"')
+    plant(
+        r,
+        "tests/x-planted-c.sh",
+        "#!/usr/bin/env bash\n# shellcheck source=tests/lib/x-planted-lib5.sh\n"
+        'source "$(dirname "$0")/lib/x-planted-lib5.sh"',
+    )
     named(run(s, r, 1), *bad, "tests/lib/x-planted-lib5.sh")
     # D1: each refused by byte-compile, one run.
     for n, body in enumerate(("return 1", "break", "continue", "yield 1", "nonlocal x"), 1):
@@ -117,7 +146,11 @@ def scripts(s: Scratch) -> None:
     venv = s.root / "venv"
     s.run(["uv", "venv", "--offline", "--quiet", str(venv)])
     out = run(s, r, 1, {"UV_PROJECT_ENVIRONMENT": str(venv)})
-    named(out, "check-scripts: the Python file list (octo-feather-lint files) failed", "uv sync --locked")
+    named(
+        out,
+        "check-scripts: the Python file list (octo-feather-lint files) failed",
+        "uv sync --locked",
+    )
     assert "python: ok" not in out, f"{TAG}: a crashing Python file list printed python: ok: {out}"
     # A script in scripts/ that is not executable.
     plant(r, "scripts/x-planted.sh", "#!/usr/bin/env bash\necho ok", 0o644)

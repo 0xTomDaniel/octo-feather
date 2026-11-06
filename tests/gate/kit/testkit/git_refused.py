@@ -11,6 +11,7 @@ sign in for, printed exactly this stderr, no stdout, and exited 128.
 import os
 import shutil
 import sys
+from pathlib import Path
 
 STDERR = "fatal: could not read Username for 'https://github.com': terminal prompts disabled\n"
 EXIT = 128
@@ -18,9 +19,10 @@ EXIT = 128
 if "fetch" in sys.argv[1:]:
     sys.stderr.write(STDERR)
     sys.exit(EXIT)
-here = os.path.dirname(os.path.abspath(sys.argv[0]))
-rest = os.pathsep.join(d for d in os.environ["PATH"].split(os.pathsep) if os.path.abspath(d) != here)
+here = Path(sys.argv[0]).absolute().parent
+dirs = os.environ["PATH"].split(os.pathsep)
+rest = os.pathsep.join(d for d in dirs if Path(d).absolute() != here)
 real = shutil.which("git", path=rest)
 if real is None:
     sys.exit("git_refused: no real git on PATH after the stand-in")
-os.execv(real, [real, *sys.argv[1:]])
+os.execv(real, [real, *sys.argv[1:]])  # noqa: S606 (the real git, by its full path)

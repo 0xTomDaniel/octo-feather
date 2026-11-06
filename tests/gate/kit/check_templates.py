@@ -20,9 +20,12 @@ The checker stops at its first failure, so each case is one run.
 from __future__ import annotations
 
 import shutil
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, kit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 TAG = "check-templates test"
 HOOK = "templates/python/.githooks/pre-commit"
@@ -59,9 +62,10 @@ def has(out: str, want: str) -> None:
     assert want in out, f"{TAG}: output lacks {want!r}: {out}"
 
 
-def swap(s: Scratch, k: Path, rel: str, old: str, new: str, want: str | None) -> None:
-    """The line OLD of REL replaced by NEW: check-templates fails naming WANT (None: passes);
+def swap(s: Scratch, k: Path, rel: str, line: tuple[str, str], want: str | None) -> None:
+    """The LINE (old, new) of REL replaced: check-templates fails naming WANT (None: passes);
     REL restored."""
+    old, new = line
     p = k / rel
     keep = p.read_text()
     lines = keep.split("\n")
@@ -69,7 +73,9 @@ def swap(s: Scratch, k: Path, rel: str, old: str, new: str, want: str | None) ->
     p.write_text("\n".join(new if ln == old else ln for ln in lines))
     try:
         out = check(s, k, 0 if want is None else 1)
-        assert want is None or want in out, f"{TAG}: {rel} with {new!r} did not report: {want}\n{out}"
+        assert want is None or want in out, (
+            f"{TAG}: {rel} with {new!r} did not report: {want}\n{out}"
+        )
     finally:
         p.write_text(keep)
 
@@ -86,43 +92,40 @@ def hook(s: Scratch) -> None:
         ("  exec just fast  # the fast tier", None),
         ("just fast", None),
     ):
-        swap(s, k, HOOK, "exec just fast", new, want)
+        swap(s, k, HOOK, ("exec just fast", new), want)
 
 
 def wiring(s: Scratch) -> None:
     k = copy(s)
     has(check(s, k, 0), "templates: ok (2)")  # the clean copy is green
-    swap(s, k, PJ, "fast *args:", "fast-tier *args:", WIRED)
-    swap(s, k, TJ, "fast *args: check-static", "fast-tier *args: check-static", WIRED)
-    swap(
-        s,
-        k,
-        PJ,
-        'export GATE_RECIPES := "check-languages check-scripts check-lint check-format check-types check-imports"',
-        'export GATE_RECIPES := "check-scripts check-lint check-format check-types check-imports"',
-        LANGS,
-    )
-    swap(
-        s,
-        k,
-        TJ,
-        'export GATE_RECIPES := "check-languages check-scripts check-ts check-arch check-dead-code"',
-        'export GATE_RECIPES := "check-scripts check-ts check-arch check-dead-code"',
-        LANGS,
-    )
+    swap(s, k, PJ, ("fast *args:", "fast-tier *args:"), WIRED)
+    swap(s, k, TJ, ("fast *args: check-static", "fast-tier *args: check-static"), WIRED)
+    gate = 'export GATE_RECIPES := "check-languages {}"'
+    py = "check-scripts check-lint check-format check-types check-imports"
+    swap(s, k, PJ, (gate.format(py), gate.format(py).replace("check-languages ", "")), LANGS)
+    ts = "check-scripts check-ts check-arch check-dead-code"
+    swap(s, k, TJ, (gate.format(ts), gate.format(ts).replace("check-languages ", "")), LANGS)
     mv = (k / "mise-version").read_text().strip()
-    swap(s, k, "templates/python/mise-version", mv, "2000.1.1",
-         f"templates/python/mise-version is 2000.1.1, the kit's is {mv}")
-    swap(s, k, "templates/typescript/mise.toml", 'just = "1.21.0"', 'just = "1.20.0"',
-         "templates/typescript/mise.toml pins just 1.20.0, the kit 1.21.0: set just = '1.21.0' there, then mise lock")
+    pins = f"templates/python/mise-version is 2000.1.1, the kit's is {mv}"
+    swap(s, k, "templates/python/mise-version", (mv, "2000.1.1"), pins)
+    just = (
+        "templates/typescript/mise.toml pins just 1.20.0, the kit 1.21.0: set just = '1.21.0' "
+        "there, then mise lock"
+    )
+    swap(s, k, "templates/typescript/mise.toml", ('just = "1.21.0"', 'just = "1.20.0"'), just)
     lock = k / "templates/python/mise.lock"
     held = s.root / "mise.lock"
     shutil.move(lock, held)
     out = check(s, k, 1)
     shutil.move(held, lock)
-    assert "templates/python/mise.lock is missing" in out, f"{TAG}: a missing mise.lock not named: {out}"
+    assert "templates/python/mise.lock is missing" in out, (
+        f"{TAG}: a missing mise.lock not named: {out}"
+    )
     # Each byte copy drifts from the kit's by one appended line.
-    for copy_, src in (("tests/conftest.py", "tests/gate/conftest.py"), ("scripts/check-languages", "scripts/check-languages")):
+    for copy_, src in (
+        ("tests/conftest.py", "tests/gate/conftest.py"),
+        ("scripts/check-languages", "scripts/check-languages"),
+    ):
         p = k / "templates/python" / copy_
         keep = p.read_bytes()
         p.write_bytes(keep + b"# copy drift\n")

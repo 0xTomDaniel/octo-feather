@@ -8,9 +8,12 @@ at once, so one run names them all).
 
 from __future__ import annotations
 
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import Scratch, kit_repo, main, tool_homes
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 TAG = "check-dashes test"
 # The dashes, written as escapes so this file stays clean under the check it tests.
@@ -29,7 +32,11 @@ def plant(s: Scratch, k: Path, rel: str, text: str) -> None:
 def dashes(s: Scratch) -> None:
     k = kit_repo(s)
     s.env |= tool_homes()  # the kit's mise tools, never fetched again into the scratch HOME
-    vend = next(ln.split()[2] for ln in (k / "Skillfile").read_text().splitlines() if ln.split()[:1] == ["github"])
+    vend = next(
+        ln.split()[2]
+        for ln in (k / "Skillfile").read_text().splitlines()
+        if ln.split()[:1] == ["github"]
+    )
     # The #121 D7 carve-outs.
     for rel, text in (
         ("docs/specs/.viz/runtime.js", f"// a {EM} b"),
@@ -57,7 +64,8 @@ def dashes(s: Scratch) -> None:
     r = s.run(["just", "check-dashes"], cwd=k, want=1)
     out = f"{r.out}\n{r.err}"
     for rel, text in bad:
-        assert f"{rel}:" in out and text in out, f"{TAG}: {rel} with {text!r} not named: {out}"
+        assert f"{rel}:" in out, f"{TAG}: {rel} not named: {out}"
+        assert text in out, f"{TAG}: {rel} with {text!r} not named: {out}"
     assert "check-dashes: replace the em/en dashes above" in out, out
 
 

@@ -29,13 +29,16 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 import time
 import zlib
 from pathlib import Path
 
 from testkit import HERE, ROOT, Ran, Scratch, kit, main
 
-CACHE = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "octo-feather" / "skillfile"
+CACHE = (
+    Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache") / "octo-feather" / "skillfile"
+)
 PIN = "49dd158d1076134a641b33efb035946536778336"
 MP = "mattpocock/skills"
 TAG = "check-vendored test"
@@ -59,15 +62,19 @@ def build(p: Scratch) -> None:
 
 
 def warm() -> None:
-    assert (CACHE / "git").is_dir() and (CACHE / "bin").is_dir(), (
-        f"{TAG}: no warm cache at {CACHE}; run `just vendored-fetch`"
-    )
+    for d in ("git", "bin"):
+        assert (CACHE / d).is_dir(), f"{TAG}: no warm cache at {CACHE}; run `just vendored-fetch`"
 
 
 def repo(s: Scratch) -> Path:
     warm()
     s.prepare("check-vendored", build)
     return s.root / "repo"
+
+
+def skipped(what: str) -> None:
+    """The Linux-only proof WHAT named as skipped, on stdout."""
+    sys.stdout.write(f"{TAG}: skipped, Linux-only proof: {what}\n")
 
 
 def works(cmd: list[str]) -> bool:
@@ -78,7 +85,7 @@ def ns() -> list[str]:
     """The offline-namespace prefix where `unshare -Un` works, else none (the skip named)."""
     if works([*NS, "true"]):
         return NS
-    print(f"{TAG}: skipped, Linux-only proof: offline-namespace gate runs (unshare -Un unavailable)")
+    skipped("offline-namespace gate runs (unshare -Un unavailable)")
     return []
 
 
@@ -97,11 +104,20 @@ def cache(s: Scratch, name: str, *, bin_: bool = True, git: bool = False) -> Pat
     return c
 
 
-def gate(s: Scratch, r: Path, want: int, *, xdg: Path = CACHE.parents[1], pre: list[str] | None = None, stage: bool = True) -> str:
-    """check-vendored on R (staged first unless not STAGE), exit WANT; stdout and stderr."""
-    if stage:
-        s.git(r, "add", "-A")
-    got = s.run([*(pre or []), kit("check-vendored"), "--repo", str(r)], want=want, env={"XDG_CACHE_HOME": str(xdg)})
+def gate(
+    s: Scratch,
+    r: Path,
+    want: int,
+    *,
+    xdg: Path = CACHE.parents[1],
+    pre: list[str] | None = None,
+) -> str:
+    """check-vendored on R as its git index holds it, exit WANT; stdout and stderr."""
+    got = s.run(
+        [*(pre or []), kit("check-vendored"), "--repo", str(r)],
+        want=want,
+        env={"XDG_CACHE_HOME": str(xdg)},
+    )
     return said(got)
 
 
@@ -134,15 +150,19 @@ def findings(s: Scratch) -> None:
     (sk / "tdd" / "empty" / "deeper").mkdir(parents=True)
     s.git(r, "add", "-A")
     s.git(r, "rm", "-q", "--cached", f"{SKILLS}/tdd/STRAY.md")
-    has(gate(s, r, 0, pre=pre, stage=False), OK)
+    has(gate(s, r, 0, pre=pre), OK)
     (sk / "tdd" / "PIPE").unlink()
     shutil.rmtree(sk / "tdd" / "empty")
     # Pinned Spec Chat, written out with no network: its files, exec bits kept.
     dest = s.root / "sc"
-    x = s.run([*pre, kit("check-vendored"), "--repo", str(r), "--extract", "spec-chat", str(dest)],
-              env={"XDG_CACHE_HOME": str(CACHE.parents[1])})
+    x = s.run(
+        [*pre, kit("check-vendored"), "--repo", str(r), "--extract", "spec-chat", str(dest)],
+        env={"XDG_CACHE_HOME": str(CACHE.parents[1])},
+    )
     assert x.out == f"{dest}/skill", f"{TAG}: --extract spec-chat: {said(x)}"
-    assert os.access(dest / "skill" / "review-spec" / "scripts" / "review-host.py", os.X_OK), said(x)
+    assert os.access(dest / "skill" / "review-spec" / "scripts" / "review-host.py", os.X_OK), said(
+        x
+    )
     assert (dest / "skill" / "review-spec" / "assets" / "review-serve.py").is_file(), said(x)
     # Every finding one state can hold, committed (staged): a drifted line in a patched file, an
     # extra file, a missing upstream file, a patch no longer matching its file, the stray now
@@ -151,14 +171,18 @@ def findings(s: Scratch) -> None:
     edit(sk / "tdd" / "SKILL.md", "\n\n", "\ndrift\n")
     (sk / "sharpen" / "EXTRA.md").write_text("x\n")
     shutil.move(sk / "tdd" / "mocking.md", s.root / "mocking.md")
-    edit(r / ".skillfile/patches/skills/sharpen/SKILL.md.patch", "\n-disable-model", "\n disable-model")
+    edit(
+        r / ".skillfile/patches/skills/sharpen/SKILL.md.patch",
+        "\n-disable-model",
+        "\n disable-model",
+    )
     (sk / "tdd" / "EXTRA").symlink_to("../grilling")
     (sk / "tdd" / "LINK.md").symlink_to("SKILL.md")
     shutil.move(sk / "tdd" / "tests.md", s.root / "tests.md")
     (sk / "tdd" / "tests.md").symlink_to(s.root / "tests.md")
     s.git(r, "add", "-A")
     s.git(r, "update-index", "--chmod=+x", f"{SKILLS}/grilling/SKILL.md")
-    out = gate(s, r, 1, stage=False)
+    out = gate(s, r, 1)
     has(
         out,
         f"check-vendored: tdd: {SKILLS}/tdd/SKILL.md differs from upstream {MP}@49dd158",
@@ -179,6 +203,7 @@ def findings(s: Scratch) -> None:
     (sk / "tdd" / "SKILL.md").chmod(0o755)
     shutil.move(sk / "sharpen", s.root / "sharpen")
     (sk / "sharpen").symlink_to(s.root / "sharpen")
+    s.git(r, "add", "-A")
     out = gate(s, r, 1)
     has(
         out,
@@ -203,34 +228,56 @@ def cache_faults(s: Scratch) -> None:
         shutil.move(p, held)
         p.with_suffix(".idx").unlink()
         with held.open("rb") as fh:
-            subprocess.run(["git", "--git-dir", str(g), "unpack-objects", "-q"], stdin=fh, check=True)
-    oid = s.run(["git", "--git-dir", str(g), "rev-parse", f"{PIN}:skills/productivity/grilling/SKILL.md"]).out
+            subprocess.run(
+                ["git", "--git-dir", str(g), "unpack-objects", "-q"],  # noqa: S607
+                stdin=fh,
+                check=True,
+            )
+    oid = s.run(
+        ["git", "--git-dir", str(g), "rev-parse", f"{PIN}:skills/productivity/grilling/SKILL.md"]
+    ).out
     vend = r / SKILLS / "grilling" / "SKILL.md"
     vend.write_text(vend.read_text() + "poisoned line\n")
     loose = g / "objects" / oid[:2] / oid[2:]
     loose.chmod(0o644)
     body = vend.read_bytes()
     loose.write_bytes(zlib.compress(b"blob %d\0" % len(body) + body))
+    s.git(r, "add", "-A")
     out = gate(s, r, 1, xdg=c)
-    has(out, f"check-vendored: grilling: cached upstream {MP}@{PIN} skills/productivity/grilling fails authentication",
-        "just vendored-fetch")
+    has(
+        out,
+        f"check-vendored: grilling: cached upstream {MP}@{PIN} skills/productivity/grilling "
+        "fails authentication",
+        "just vendored-fetch",
+    )
     # Missing cache: fails fast naming the fetch step, never a skip; --extract too.
     c = cache(s, "c-missing")
-    has(gate(s, ROOT, 1, xdg=c, pre=pre, stage=False), "is not cached at", FETCH)
-    x = s.run([kit("check-vendored"), "--repo", str(ROOT), "--extract", "spec-chat", str(s.root / "sc2")], want=1,
-              env={"XDG_CACHE_HOME": str(c)})
+    has(gate(s, ROOT, 1, xdg=c, pre=pre), "is not cached at", FETCH)
+    x = s.run(
+        [kit("check-vendored"), "--repo", str(ROOT), "--extract", "spec-chat", str(s.root / "sc2")],
+        want=1,
+        env={"XDG_CACHE_HOME": str(c)},
+    )
     has(said(x), "extract: spec-chat: 0xTomDaniel/spec-chat@", FETCH)
     # GitHub asks for credentials (#463): named with the sign-in fix, never "check network".
     (s.bin / "git").symlink_to(HERE / "git_refused.py")
     try:
-        f = s.run([kit("check-vendored"), "--repo", str(ROOT), "--fetch"], want=1,
-                  env={"XDG_CACHE_HOME": str(cache(s, "c-auth"))})
+        f = s.run(
+            [kit("check-vendored"), "--repo", str(ROOT), "--fetch"],
+            want=1,
+            env={"XDG_CACHE_HOME": str(cache(s, "c-auth"))},
+        )
     finally:
         (s.bin / "git").unlink()
-    has(said(f), "could not read Username",
-        "GitHub wants credentials (a private pin): sign in and let git use gh: gh auth login && gh auth setup-git, "
-        "then rerun `just vendored-fetch`")
-    assert "check network" not in said(f), f"{TAG}: credential refusal blamed on the network: {said(f)}"
+    has(
+        said(f),
+        "could not read Username",
+        "GitHub wants credentials (a private pin): sign in and let git use gh: gh auth login && "
+        "gh auth setup-git, then rerun `just vendored-fetch`",
+    )
+    assert "check network" not in said(f), (
+        f"{TAG}: credential refusal blamed on the network: {said(f)}"
+    )
 
 
 # Inside `unshare -rn` (only loopback, brought up here): a proxy on loopback that accepts and never
@@ -261,29 +308,52 @@ def stalled_fetch(s: Scratch) -> None:
     """Silent and dripping proxies, the pin's git fetch and the skillfile download: each fetch
     gives up within one total bound, naming the fix. The four run at once."""
     if not works(["unshare", "-rn", "sh", "-c", "ip link set lo up"]):
-        print(f"{TAG}: skipped, Linux-only proof: stalled and dripping proxy fetch (needs unshare -rn and ip)")
+        skipped("stalled and dripping proxy fetch (needs unshare -rn and ip)")
         return
     warm()
     runs = []
     for what, bin_ in (("git", True), ("download", False)):
         for mode in ("silent", "drip"):
             c = cache(s, f"c-{what}-{mode}", bin_=bin_)
-            cmd = ["unshare", "-rn", "python3", "-c", STALL, mode, kit("check-vendored"), "--repo", str(ROOT), "--fetch"]
-            p = subprocess.Popen(cmd, env={**s.env, "XDG_CACHE_HOME": str(c)}, cwd=s.root,
-                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+            cmd = [
+                "unshare",
+                "-rn",
+                "python3",
+                "-c",
+                STALL,
+                mode,
+                kit("check-vendored"),
+                "--repo",
+                str(ROOT),
+                "--fetch",
+            ]
+            p = subprocess.Popen(
+                cmd,
+                env={**s.env, "XDG_CACHE_HOME": str(c)},
+                cwd=s.root,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+            )
             runs.append((what, mode, time.monotonic(), p))
     for what, mode, t0, p in runs:
         out = p.communicate()[0]
         took = time.monotonic() - t0
-        assert p.returncode == 1 and took <= 10, (
-            f"{TAG}: {what} {mode} proxy fetch want exit 1 within 10s, got {p.returncode} after {took:.1f}s: {out}")
+        said_ = f"{TAG}: {what} {mode} proxy fetch want exit 1 within 10s"
+        said_ += f", got {p.returncode} after {took:.1f}s"
+        assert p.returncode == 1, f"{said_}: {out}"
+        assert took <= 10, f"{said_}: {out}"
         assert "Traceback" not in out, out
         has(out, "rerun `just vendored-fetch`")
         if what == "git":
             has(out, f"git fetch of {MP}@{PIN} timed out after 2s")
         else:
-            has(out, "downloading skillfile v1.9.2 from https://github.com/eljulians/skillfile/releases/download/v1.9.2/",
-                "timed out after 2s")
+            has(
+                out,
+                "downloading skillfile v1.9.2 from "
+                "https://github.com/eljulians/skillfile/releases/download/v1.9.2/",
+                "timed out after 2s",
+            )
 
 
 if __name__ == "__main__":
