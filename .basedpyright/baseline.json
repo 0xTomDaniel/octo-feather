@@ -21580,7 +21580,7 @@
                 }
             }
         ],
-        "./scripts/octo-feather-qa": [
+        "./scripts/octo_feather_qa.py": [
             {
                 "code": "reportUnknownParameterType",
                 "range": {
