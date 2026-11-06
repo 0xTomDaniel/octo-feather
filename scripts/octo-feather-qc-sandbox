@@ -980,15 +980,20 @@ def setup(judge: list[str]) -> NoReturn:
     if os.path.isdir(f"{HOME}/.ssh"):
         deny.append(f"{HOME}/.ssh")
         cmask.append(f"{HOME}/.ssh")
+    # Live records masked, each once: a path inside a mask already listed (a named session's state dir RS lies inside
+    # the top's sessions/, as in a nested run, where the outer sandbox's session is the caller's) is hidden by that
+    # mask; denied again, srt would make its mount point inside the outer mask, an entry the proof counts as visible.
     for d in dict.fromkeys((TOP, RS)):
-        for x in ("lanes", "sessions"):
-            if os.path.isdir(f"{d}/{x}"):
-                deny.append(f"{d}/{x}")
-                masked.append(f"{d}/{x}")
-        for x in ("director.toml", "director.handoffs.jsonl"):
-            if os.path.isfile(f"{d}/{x}"):
-                deny.append(f"{d}/{x}")
-                masked.append(f"{d}/{x}")
+        for x, isit in (
+            ("lanes", os.path.isdir),
+            ("sessions", os.path.isdir),
+            ("director.toml", os.path.isfile),
+            ("director.handoffs.jsonl", os.path.isfile),
+        ):
+            m = f"{d}/{x}"
+            if isit(m) and not any(within(m, k) for k in masked):
+                deny.append(m)
+                masked.append(m)
     watch += [("credential", m, []) for m in cmask] + [
         ("lane_state", m, []) for m in masked if os.path.isdir(m)
     ]
