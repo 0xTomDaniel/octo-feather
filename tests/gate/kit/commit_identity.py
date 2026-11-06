@@ -98,7 +98,7 @@ def applied(s: Scratch) -> None:
     ob = onboarding(s)
     ob.parent.mkdir(parents=True)
     ob.write_text("[consent]\npush = false\n")
-    s.run([kit("pi-role"), "--set-identity", NAME, EMAIL])
+    s.identity(NAME, EMAIL)
     assert "[consent]\npush = false\n" in ob.read_text(), ob.read_text()
     s.run([kit("pi-role"), str(ROOT / "agents" / "implementer.md"), "-p", "x"], cwd=repo)
     got = s.run(["git", "-C", str(repo), "log", "-1", "--format=%an <%ae>|%cn <%ce>"]).out

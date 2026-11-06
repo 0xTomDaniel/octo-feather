@@ -67,6 +67,7 @@ def spawn_ready_late(s: Scratch) -> None:
     nothing left typed and unsent."""
     d = herdr_world(s)
     (d / "ready_after").write_text("2")
+    s.identity()
     wt = s.root / "wt"
     wt.mkdir()
     spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w1", "--name", "implementer-gh1"]
