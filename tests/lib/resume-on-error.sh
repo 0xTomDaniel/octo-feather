@@ -126,6 +126,7 @@ try: p.wait(5)
 except subprocess.TimeoutExpired: p.kill()
 EOF
 mkdir -p "$t/bin" "$t/home" "$t/agent" "$t/repo"
+XDG_STATE_HOME="$t/home/.local/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 printf '#!/usr/bin/env bash\nprintf "%%s\\n" "$*" >> "%s/said"\n' "$t" > "$t/bin/herdr-say"; chmod +x "$t/bin/herdr-say"
 git -c init.defaultBranch=main init -q "$t/repo"
 echo '{"retry":{"enabled":false}}' > "$t/agent/settings.json"

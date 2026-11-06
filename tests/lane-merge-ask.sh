@@ -603,7 +603,7 @@ pr8 "$N" "" "$(BUILT=acceptance-a nbody)"; run 1 merge-ask 8; grep -q "name the 
 # verdict accepts NL and merge-ask passes on it.
 NL="$(on "$B" sh -c 'for i in $(seq 1 101); do echo "$i" > many.txt; git add many.txt; git commit -qm "chore: step $i"; done')"
 on "$NL" "$G" record --reason "lane final head" --seconds 1 >/dev/null
-CAP="$(git rev-list --reverse "$B..$NL" | head -100 | python3 -c 'import json, sys; print(json.dumps([{"oid": l.strip(), "messageHeadline": "chore", "messageBody": ""} for l in sys.stdin]))')"
+CAP="$(git rev-list --reverse "$B..$NL" | python3 -c 'import json, sys; print(json.dumps([{"oid": l.strip(), "messageHeadline": "chore", "messageBody": ""} for l in sys.stdin.read().splitlines()[:100]]))')"
 export CAP
 HEADL="${NL:0:12}" pr8 "$NL" "" "$(HEADL="${NL:0:12}" nbody)" "d['commits'] = json.loads(os.environ['CAP'])"
 [[ "$(python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); print(len(d["commits"]), d["headRefOid"] in {c["oid"] for c in d["commits"]})' "$FAKE_GH/pr/8.json")" == "100 False" ]] \
