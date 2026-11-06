@@ -127,6 +127,7 @@ class Lane:
         s.gh.store("repo.json", {"nameWithOwner": "o/r"})
         s.gh.store("api/repos/o/r.json", {"nameWithOwner": "o/r"})
         s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
+        self.merge, self.repo = self.m, ""  # PR #7's merge commit; the --repo gh is asked with
         self.install(self.b, "o/kit")  # steps 1-2: the PR's repo is not the install's
 
     def install(self, at: str, repo: str = "o/r") -> None:
@@ -148,35 +149,34 @@ class Lane:
             return []
         return [x.split("\0")[:-1] for x in self.argv.read_text().splitlines()]
 
+    def pr(self, state: str = "MERGED", head: str = H) -> None:
+        """PR #7 STATE at HEAD, its merge commit self.merge."""
+        self.s.gh.put(
+            7,
+            {
+                "state": state,
+                "headRefOid": head,
+                "mergeCommit": {"oid": self.merge} if state == "MERGED" else None,
+                "baseRefName": "main",
+                "headRefName": "gh7",
+            },
+        )
+
     def store(
         self,
-        state: str = "MERGED",
-        head: str = H,
         lists: Sequence[Sequence[dict[str, object]]] = ((),),
-        *,
-        merge: str = "",
-        repo: str = "",
         watch: dict[int, dict[str, object]] | None = None,
         base: Sequence[Sequence[dict[str, object]]] = (),
         compare: dict[str, str] | None = None,
         wf: Sequence[tuple[str, str]] | None = (("check.yml", "blob"),),
     ) -> None:
-        """PR #7 STATE at HEAD (its merge commit MERGE, default M); the merge commit's push runs,
-        LISTS one answer per run list (the last repeated); each WATCH run's watch answer (a
-        watch of any other run succeeds); BASE the base's later push runs of `check` per list;
-        COMPARE each sha's compare status against the merge commit; the merge commit's
-        .github/workflows entries WF (None: no .github). With REPO, gh is asked with -R REPO."""
-        g, m = self.s.gh, merge or self.m
-        g.put(
-            7,
-            {
-                "state": state,
-                "headRefOid": head,
-                "mergeCommit": {"oid": m} if state == "MERGED" else None,
-                "baseRefName": "main",
-                "headRefName": "gh7",
-            },
-        )
+        """PR #7 merged at H (self.pr); the merge commit's push runs, LISTS one answer per run
+        list (the last repeated); each WATCH run's watch answer (a watch of any other run
+        succeeds); BASE the base's later push runs of `check` per list; COMPARE each sha's compare
+        status against the merge commit; the merge commit's .github/workflows entries WF (None: no
+        .github). With self.repo, gh is asked with -R it."""
+        g, m, repo = self.s.gh, self.merge, self.repo
+        self.pr()
         r = f" -R {repo}" if repo else ""
 
         def ans(runs: Sequence[dict[str, object]], fields: str) -> str:
@@ -190,10 +190,12 @@ class Lane:
             **{f"run watch {i} --exit-status{r}": [(watch or {}).get(i, "")] for i in ids},
         }
         if base:
-            key = f"run list --branch main --event push --workflow check --limit 20 --json {BASE_FIELDS}"
-            tapes[key + r] = [ans(ls, BASE_FIELDS) for ls in base]
+            key = "run list --branch main --event push --workflow check --limit 20 --json "
+            tapes[key + BASE_FIELDS + r] = [ans(ls, BASE_FIELDS) for ls in base]
         for sha, status in (compare or {}).items():
-            tapes[f"api repos/{{owner}}/{{repo}}/compare/{m}...{sha} --jq .status"] = [status + "\n"]
+            tapes[f"api repos/{{owner}}/{{repo}}/compare/{m}...{sha} --jq .status"] = [
+                status + "\n"
+            ]
         g.tape(tapes)
         for f in (g.dir / TREES).glob("*.json") if (g.dir / TREES).is_dir() else ():
             f.unlink()
@@ -234,21 +236,30 @@ def last(r: Ran) -> str:
     return r.out.split("\n")[-1]
 
 
+def says(r: Ran, what: str, *wants: str, summary: str = "") -> None:
+    """R's stdout holds each of WANTS, its last line SUMMARY (when given); WHAT names the case."""
+    for w in wants:
+        assert w in r.out, f"{what}: no {w!r} in: {r.out}"
+    assert not summary or last(r) == summary, f"{what} summary: {last(r)}"
+
+
 def merged_step(s: Scratch) -> None:
     """Step 1: not merged, merged at another head, gh failing: stop at step 1, step 2 not run, no
     run list. Usage: missing --lane, a HEAD that is no sha."""
     lane = Lane(s)
     green = run1("check", "completed", "success", 11, lane.m)
-    lane.store("OPEN", H, [[green]])
+    lane.store([[green]])
+    lane.pr("OPEN")
     r = lane.run(1, "post-merge", "7", H[:7], "--lane", "gh7")
     assert "step 1 merged: stopped: PR #7 is OPEN, not merged" in r.out, f"not merged: {r.out}"
     assert last(r) == STOP1, f"not merged summary: {last(r)}"
-    assert not [x for x in s.gh.log() if x.startswith("run ")], f"not merged listed runs: {s.gh.log()}"
-    lane.store("MERGED", "abcdef0" + H, [[green]])
+    assert not [x for x in s.gh.log() if x.startswith("run ")], (
+        f"not merged listed runs: {s.gh.log()}"
+    )
+    lane.pr("MERGED", "abcdef0" + H)
     r = lane.run(1, "post-merge", "7", H[:12], "--lane", "gh7")
-    want = f"step 1 merged: stopped: PR #7 merged at head abcdef012345, not at the pinned head {H[:12]}"
-    assert want in r.out, f"other head: {r.out}"
-    assert last(r) == STOP1, f"other head summary: {last(r)}"
+    want = "step 1 merged: stopped: PR #7 merged at head abcdef012345, not at the pinned head "
+    says(r, "other head", want + H[:12], summary=STOP1)
     r = lane.run(1, "post-merge", "8", H, "--lane", "gh7")
     assert "step 1 merged: stopped: gh pr view 8 failed" in r.out, f"gh failing: {r.out}"
     assert "step 1 merged stopped" in last(r), f"gh failing: {r.out}"
@@ -263,10 +274,7 @@ def main_ci(s: Scratch) -> None:
     every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
     not the install's leaves it unchanged; a rerun the same. A run appearing within the bound is
     waited for. A red run stops naming its URL; a watch failing while its run reads unfinished
-    stops naming it; no run within the bound stops naming the workflows (either suffix, beside
-    other files); an unreadable tree stops naming the read. No workflow file (no .github, or none
-    in .github/workflows) is the no-CI fact: one run list, no wait, steps 3-5 run, rerun the
-    same."""
+    stops naming it."""
     lane = Lane(s)
     m = lane.m
     m12 = m[:12]
@@ -274,68 +282,64 @@ def main_ci(s: Scratch) -> None:
     lint = run1("lint", "completed", "success", 12, m)
     busy = run1("check", "in_progress", "", 11, m)
     red = run1("check", "completed", "failure", 13, m)
-    lane.store(lists=[[busy], [green, lint]], repo="o/r")
+    lanes = lane.state / "octo-feather" / "lanes"
+    lane.repo = "o/r"
+    lane.store(lists=[[busy], [green, lint]])
     for _ in range(2):  # the rerun: same result, still reads only
         r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--repo", "o/r")
-        ls = r.out.split("\n")
-        assert ls[0] == (
-            f"step 1 merged: ok: PR #7 (gh7) merged into main at head {H[:12]}, merge commit {m12}"
-        ), f"step 1 line: {r.out}"
-        assert (
+        step1 = f"PR #7 (gh7) merged into main at head {H[:12]}, merge commit {m12}"
+        assert r.out.split("\n")[0] == f"step 1 merged: ok: {step1}", f"step 1 line: {r.out}"
+        says(
+            r,
+            "green",
             f"step 2 main CI: ok: 2 push runs on {m12} concluded success: check "
-            "https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12"
-        ) in r.out, f"green line: {r.out}"
-        assert "step 3 kit refresh: ok: kit install unchanged: PR in o/r, install is o/kit" in (
-            r.out
-        ), f"other repo: {r.out}"
-        lanes = lane.state / "octo-feather" / "lanes"
-        assert f"step 4 tell supervisors: ok: no other open lane in {lanes} to tell" in r.out, (
-            f"step 4: {r.out}"
+            "https://github.com/o/r/actions/runs/11, lint https://github.com/o/r/actions/runs/12",
+            "step 3 kit refresh: ok: kit install unchanged: PR in o/r, install is o/kit",
+            f"step 4 tell supervisors: ok: no other open lane in {lanes} to tell",
+            summary=GREEN,
         )
-        assert last(r) == GREEN, f"green summary: {last(r)}"
-        assert len(ls) == 6, f"green prints one line per step and the summary: {r.out}"
-        assert lane.head() == lane.b, "other repo moved the install"
-        assert not lane.calls(), f"other repo refreshed the install: {lane.calls()}"
+        assert len(r.out.split("\n")) == 6, f"green prints one line per step, a summary: {r.out}"
+        assert (lane.head(), lane.calls()) == (lane.b, []), "other repo moved or refreshed"
         log = s.gh.log()
         assert "run watch 11 --exit-status -R o/r" in log, f"run not watched in o/r: {log}"
         assert f"pr view 7 --json {PR_FIELDS} -R o/r" in log, f"pr view: {log}"
-        lane.store(lists=[[busy], [green, lint]], repo="o/r")
+        lane.store(lists=[[busy], [green, lint]])
+    lane.repo = ""
     lane.store(lists=[[], [green]])
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "1")
-    assert f"step 2 main CI: ok: 1 push run on {m12} concluded success" in r.out, f"late: {r.out}"
+    says(r, "late run", f"step 2 main CI: ok: 1 push run on {m12} concluded success")
     lane.store(lists=[[red, lint]], watch={13: {"err": "run 13 failed\n", "exit": 1}})
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
-    assert (
-        f"step 2 main CI: stopped: main CI red on {m12}: check failure "
-        "https://github.com/o/r/actions/runs/13"
-    ) in r.out, f"red: {r.out}"
+    red_line = f"step 2 main CI: stopped: main CI red on {m12}: check failure "
+    says(r, "red", red_line + "https://github.com/o/r/actions/runs/13", summary=STOP2)
     assert "concluded success" not in r.out, f"red: {r.out}"
-    assert last(r) == STOP2, f"red summary: {r.out}"
     lane.store(lists=[[busy]], watch={11: {"err": "failed to get run: HTTP 502\n", "exit": 1}})
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
     assert re.search(
         r"step 2 main CI: stopped: gh run watch 11 failed.*https://github.com/o/r/actions/runs/11",
         r.out,
     ), f"watch failed: {r.out}"
+
+
+def no_ci(s: Scratch) -> None:
+    """Step 2 with no run: no run within the bound stops naming the workflows (either suffix,
+    beside other files); an unreadable tree stops naming the read. No workflow file (no .github,
+    or none in .github/workflows) is the no-CI fact: one run list, no wait, steps 3-5 run, rerun
+    the same."""
+    lane = Lane(s)
+    m = lane.m
+    m12 = m[:12]
     lane.store()
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
-    assert (
-        f"step 2 main CI: stopped: no push run on merge commit {m12} within 0s, its workflows "
-        ".github/workflows/check.yml"
-    ) in r.out, f"no run: {r.out}"
-    assert last(r) == STOP2, f"no run summary: {last(r)}"
+    none = f"stopped: no push run on merge commit {m12} within 0s, its workflows .github/workflows/"
+    says(r, "no run", f"step 2 main CI: {none}check.yml", summary=STOP2)
     lane.store(wf=())
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
-    assert (
-        f"step 2 main CI: stopped: gh api repos/{{owner}}/{{repo}}/git/trees/{m} failed "
-        "(gh: Not Found (HTTP 404))"
-    ) in r.out, f"unreadable tree: {r.out}"
+    tree = f"gh api repos/{{owner}}/{{repo}}/git/trees/{m} failed (gh: Not Found (HTTP 404))"
+    says(r, "unreadable tree", f"step 2 main CI: stopped: {tree}")
     lane.store(wf=[("deploy.yaml", "blob"), ("README.md", "blob"), ("ci", "tree")])
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0", "--repo", "o/r")
-    assert (
-        f"stopped: no push run on merge commit {m12} within 0s, its workflows "
-        ".github/workflows/deploy.yaml:"
-    ) in r.out, f"yaml workflow: {r.out}"
+    says(r, "yaml workflow", f"{none}deploy.yaml:")
     assert f"api repos/o/r/git/trees/{m}" in s.gh.log(), f"--repo tree read: {s.gh.log()}"
     noci = (
         f"step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit "
@@ -457,8 +461,7 @@ def kit_refresh(s: Scratch) -> None:
     target repo. Rerun: no move, the refresh commands run again. Past M, with a mise.toml there:
     no move, the kit's own locked tools installed first (octo-feather-mise-install, #493 AC5). A
     failing refresh command stops naming it, later ones not run. The pinned Python absent: uv
-    sync never downloads it, and the stop names the install command for the pin. Dirty or
-    diverged: stop naming it, nothing changed."""
+    sync never downloads it, and the stop names the install command for the pin."""
     assert shutil.which("uv"), "no uv: the failing refresh cases need it"
     lane = Lane(s)
     lane.homes = tool_homes()
@@ -471,85 +474,85 @@ def kit_refresh(s: Scratch) -> None:
         ["pnpm", str(k), "install", "--frozen-lockfile"],
         ["just", str(k), "install-check", str(t)],
     ]
+    ff = f"kit install {k} fast-forwarded {b12}..{m12}; just vendored-fetch ok; "
+    stop3 = "step 3 kit refresh: stopped: "
     lane.store(lists=[[green]])
     lane.install(b)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
-    assert (
-        f"step 3 kit refresh: ok: kit install {k} fast-forwarded {b12}..{m12}; just "
-        "vendored-fetch ok; uv sync --locked ok; pnpm install --frozen-lockfile ok; just "
-        f"install-check {t} ok (no mise.toml: mise install skipped)"
-    ) in r.out, f"behind: {r.out}"
-    assert last(r) == GREEN, f"behind: {r.out}"
-    assert lane.head() == m, "behind did not reach M"
-    assert s.run(["git", "-C", str(k), "symbolic-ref", "-q", "HEAD"], want=1).out == "", (
-        "behind install left detached HEAD"
+    says(
+        r,
+        "behind",
+        f"step 3 kit refresh: ok: {ff}uv sync --locked ok; pnpm install --frozen-lockfile ok; "
+        f"just install-check {t} ok (no mise.toml: mise install skipped)",
+        summary=GREEN,
     )
-    assert lane.calls() == refresh, f"behind refresh calls: {lane.calls()}"
+    assert (lane.head(), lane.calls()) == (m, refresh), f"behind: {lane.calls()}"
+    attached = s.run(["git", "-C", str(k), "symbolic-ref", "-q", "HEAD"], want=1)
+    assert attached.out == "", "behind install left detached HEAD"
     lane.argv.unlink()
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
-    assert (
-        f"step 3 kit refresh: ok: kit install {k} at {m12}, at or past {m12}: no move; just "
-        "vendored-fetch ok"
-    ) in r.out, f"rerun: {r.out}"
-    assert lane.head() == m, "rerun moved"
-    assert lane.calls() == refresh, f"rerun refresh calls: {lane.calls()}"
+    no_move = f"step 3 kit refresh: ok: kit install {k} at {{}}, at or past {m12}: no move; "
+    says(r, "rerun", no_move.format(m12) + "just vendored-fetch ok")
+    assert (lane.head(), lane.calls()) == (m, refresh), f"rerun: {lane.calls()}"
     lane.install(lane.p)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
-    assert (
-        f"step 3 kit refresh: ok: kit install {k} at {lane.p[:12]}, at or past {m12}: no move; "
-        "octo-feather-mise-install . ok; just vendored-fetch ok"
-    ) in r.out, f"past: {r.out}"
-    assert lane.head() == lane.p, "past moved"
-    assert lane.calls() == refresh, f"past refresh calls: {lane.calls()}"
+    mise = "octo-feather-mise-install . ok; just vendored-fetch ok"
+    says(r, "past", no_move.format(lane.p[:12]) + mise)
+    assert (lane.head(), lane.calls()) == (lane.p, refresh), f"past: {lane.calls()}"
     # the real uv: M's pyproject has no uv.lock, so `uv sync --locked` fails
     lane.install(b)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", tools="real-uv")
-    assert (
-        f"step 3 kit refresh: stopped: kit install {k} fast-forwarded {b12}..{m12}; just "
-        "vendored-fetch ok; uv sync --locked failed (exit 1: error: Unable to find lockfile at "
-        "`uv.lock`, but `--locked` was provided."
-    ) in r.out, f"failing tool: {r.out}"
-    assert f"): fix it in {k}, then rerun" in r.out, f"failing tool: {r.out}"
-    assert last(r) == STOP3, f"failing tool ran on: {r.out}"
+    uv = "uv sync --locked failed (exit {}: error: {}"
+    says(
+        r,
+        "failing tool",
+        stop3 + ff + uv.format(1, "Unable to find lockfile at `uv.lock`, but `--locked` was "),
+        f"): fix it in {k}, then rerun",
+        summary=STOP3,
+    )
     assert lane.calls() == refresh[:1], f"failing tool ran on: {lane.calls()}"
     # the real uv, M2's pin absent, downloads off
-    lane.store(lists=[[run1("check", "completed", "success", 11, lane.m2)]], merge=lane.m2)
+    lane.merge = lane.m2
+    lane.store(lists=[[run1("check", "completed", "success", 11, lane.m2)]])
     lane.install(b)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", tools="real-uv")
-    m2 = lane.m2[:12]
-    assert (
-        f"step 3 kit refresh: stopped: kit install {k} fast-forwarded {b12}..{m2}; just "
-        f"vendored-fetch ok; uv sync --locked failed (exit 2: error: No interpreter found for "
-        f"Python {NO_PIN} in managed installations or search path): the kit's pinned Python "
-        f"{NO_PIN} (.python-version) is not installed and post-merge never downloads one: run "
-        f"`uv python install --no-bin {NO_PIN}` in {k}, then rerun"
-    ) in r.out, f"missing pin: {r.out}"
-    assert last(r) == STOP3, f"missing pin summary: {last(r)}"
+    says(
+        r,
+        "missing pin",
+        f"{stop3}kit install {k} fast-forwarded {b12}..{lane.m2[:12]}; just vendored-fetch ok; "
+        + uv.format(2, f"No interpreter found for Python {NO_PIN} in managed installations or ")
+        + f"search path): the kit's pinned Python {NO_PIN} (.python-version) is not installed "
+        f"and post-merge never downloads one: run `uv python install --no-bin {NO_PIN}` in {k}, "
+        "then rerun",
+        summary=STOP3,
+    )
     assert lane.calls() == refresh[:1], f"missing pin ran on: {lane.calls()}"
     assert not (k / ".venv").exists(), "missing pin: uv made a venv (a Python downloaded)"
-    lane.store(lists=[[green]])
+
+
+def install_stops(s: Scratch) -> None:
+    """Step 3 on a dirty or diverged install: stop naming it, nothing changed (HEAD, the file, no
+    refresh)."""
+    lane = Lane(s)
+    m12, b, k = lane.m[:12], lane.b, lane.kit
+    stop3 = "step 3 kit refresh: stopped: "
+    lane.store(lists=[[run1("check", "completed", "success", 11, lane.m)]])
     lane.install(b)
     (k / "stray").write_text("x\n")
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
-    assert f"step 3 kit refresh: stopped: kit install {k} is dirty (?? stray)" in r.out, r.out
-    assert last(r) == STOP3, f"dirty: {r.out}"
-    assert lane.head() == b, "dirty install moved"
+    says(r, "dirty", f"{stop3}kit install {k} is dirty (?? stray)", summary=STOP3)
+    assert (lane.head(), lane.calls()) == (b, []), f"dirty install changed: {lane.calls()}"
     assert (k / "stray").is_file(), "dirty install lost its file"
-    assert not lane.calls(), f"dirty install refreshed: {lane.calls()}"
     lane.install(b)
     (k / "d").write_text("")
     s.git(k, "add", "d")
     s.git(k, "commit", "-qm", "d")
     d = lane.head()
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
-    assert (
-        f"step 3 kit refresh: stopped: kit install {k} at {d[:12]} has diverged from merge "
-        f"commit {m12}"
-    ) in r.out, f"diverged: {r.out}"
-    assert last(r) == STOP3, f"diverged: {r.out}"
-    assert lane.head() == d, "diverged install moved"
-    assert not lane.calls(), f"diverged install refreshed: {lane.calls()}"
+    diverged = f"kit install {k} at {d[:12]} has diverged from merge commit {m12}"
+    says(r, "diverged", stop3 + diverged, summary=STOP3)
+    assert (lane.head(), lane.calls()) == (d, []), f"diverged install changed: {lane.calls()}"
 
 
 if __name__ == "__main__":
-    main(merged_step, main_ci, superseded, kit_refresh)
+    main(merged_step, main_ci, no_ci, superseded, kit_refresh, install_stops)

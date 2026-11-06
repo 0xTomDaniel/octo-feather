@@ -173,7 +173,7 @@ def taped(call: str) -> bool:
     with open(n_file, "w") as f:
         f.write(json.dumps(n | {call: k + 1}))
     ans = tape[call][min(k, len(tape[call]) - 1)]
-    d: dict[str, object] = ans if isinstance(ans, dict) else {"out": ans}
+    d = {"out": ans} if isinstance(ans, str) else json.loads(json.dumps(ans))
     sys.stdout.write(str(d.get("out", "")))
     sys.stderr.write(str(d.get("err", "")))
     sys.exit(int(str(d.get("exit", 0))))
