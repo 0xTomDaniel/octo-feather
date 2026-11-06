@@ -315,8 +315,16 @@ check-tests *args:
     # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
     # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
     # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
-    if [[ -z "${GATE_NESTED:-}" ]]; then MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR"' EXIT; fi
-    GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
+    [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
+    # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
+    # as it found them, by content, failing and naming each change (owner ruling #584, #587; octo-feather-gate untouched).
+    # Its own TMPDIR, short (unix socket paths under it stay short), removed after: what is this run's is exact.
+    box="$(mktemp)"; gtmp="$(mktemp -d /tmp/gate.XXXXXX)"
+    python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR" --run-tmp "$gtmp"
+    MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR TMPDIR="$gtmp"; trap 'rm -rf "$MISE_STATE_DIR" "$box" "$gtmp"' EXIT
+    rc=0; GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@" || rc=$?
+    python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
+    exit "$rc"
 
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
 # scripts/octo-feather-gate select chooses, each named with why, through check-tests.

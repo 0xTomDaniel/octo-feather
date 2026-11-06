@@ -1945,10 +1945,16 @@ def main(argv: list[str]):
               + ", ".join(f"{s['suite']}/{show_case(c)}" for s, c, _ in picked), flush=True)
     kit, sha = kit_at(o["kit-ref"])
     base: tuple[Path, str | None] | None = None
+    # mise's state dir one per qa run, removed after it: a mise shim (uv) run in a case repo outside the sandbox
+    # (fixture setup, the sandbox's setup before its own per-run dir) records the repo's mise.toml there, never in
+    # the caller's, where the link dangles once the scratch goes (#664).
+    ms = tempfile.mkdtemp(prefix="qa-mise-state-")
+    os.environ["MISE_STATE_DIR"] = ms
     try:
         base = kit_at(o["baseline"], "--baseline") if o["baseline"] else None
         return run_all(o, evals, picked, kit, sha, base)
     finally:
+        shutil.rmtree(ms, ignore_errors=True)
         for k in (kit, base[0] if base else KIT):
             if k != KIT:
                 shutil.rmtree(k, ignore_errors=True)

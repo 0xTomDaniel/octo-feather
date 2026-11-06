@@ -11,6 +11,8 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 ident() { XDG_STATE_HOME="$1" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null; }   # the commit identity a role launch needs (#665)
 export XDG_STATE_HOME="$t/state"; ident "$t/state"
 mkdir -p "$t/bin" "$t/cwd" "$t/cache"
+# mise's state its own, also run bare outside the gate: mise in $t/cwd's mise.toml records it there, never in the caller's (#664).
+export MISE_STATE_DIR="$t/mise-state"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/bin/"
 chmod +x "$t/bin/herdr"
 fail() { echo "herdr-spawn test: $*" >&2; exit 1; }
