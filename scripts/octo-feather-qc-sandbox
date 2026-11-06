@@ -7,7 +7,8 @@
 #   1. private /tmp (tmpfs); QC_KEEP paths (worktree, kit, PATH dirs) bound back
 #   2. tmpfs over the Herdr and gh config dirs; ~/.git-credentials and ~/.ssh masked
 #   3. caller's archived lanes and director log bound read-only at a scratch
-#      state dir (none with QC_HISTORY=none: a factory eval sees no lane history);
+#      state dir (none with QC_HISTORY=none: a factory eval sees no lane history), and the box onboarding file
+#      (the commit identity a role launch applies) read-only at its top;
 #      live lanes/, sessions/, director.toml masked
 #   3b. other repos masked (#182; which repos, what is bound back on a mask: docs/adr/0022, the sandbox
 #      paragraph): each a tmpfs; QC_KIT the kit under test, default this script's kit
@@ -146,6 +147,12 @@ if [[ "$phase" == setup ]]; then
     hist=$((hist + 1))
   fi
   ((nohist)) && hist=none
+  # The box onboarding file read-only at the scratch state dir's top, where a role launch inside (pi-role, under the
+  # XDG_STATE_HOME of step 6) reads the factory commit identity it applies (scripts/pi-role --help, Commit identity).
+  ob="$SCR/state/octo-feather/onboarding.toml"
+  if [[ -f "$TOP/onboarding.toml" ]]; then
+    touch "$ob" && mount --bind "$TOP/onboarding.toml" "$ob" && remount ro "$ob" || die "onboarding file $TOP/onboarding.toml"
+  fi
   echo "$hist" > "$SCR/hist"; : > "$SCR/masked"
   for d in "$TOP" "$RS"; do
     for x in lanes sessions; do

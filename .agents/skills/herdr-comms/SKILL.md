@@ -84,6 +84,12 @@ those leave to the caller:
 - Pi's "Trust project folder?" dialog is never answered: `pi-role` launches
   with `--approve`, so it should not open. If it does, no key is sent and the
   spawn fails closed (exit 69, tab closed, pane text on stderr).
+- A cleared dialog is not readiness: a booting agent reads `unknown`, and a
+  prompt sent then is typed but never submitted (`agent_prompt_stalled`, #585).
+  The spawn returns only once `herdr agent wait PANE --until idle` matches and
+  `herdr agent get` finds the agent by name and by pane, so a `herdr-say` right
+  after it is delivered. Not idle within `HERDR_SPAWN_READY_TIMEOUT` seconds
+  (default 120): exit 69, tab closed, the state named.
 
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 
@@ -143,10 +149,15 @@ is closed.
 ## Send a message
 
 ```
-herdr-say TARGET MESSAGE
+herdr-say [--timeout SECONDS] TARGET MESSAGE
 ```
 
-Wraps `herdr agent prompt TARGET TEXT --wait --until working --until idle`.
+Wraps `herdr agent prompt TARGET TEXT --wait --until working --until idle
+--timeout MS`. A send never hangs or fails silently (#666): the wait is bounded
+by `--timeout` (default 900 s); a prompt Herdr reports stalled
+(`agent_prompt_stalled`: typed, never seen to land) or still unconfirmed at the
+bound (a busy target that stays `working`) exits 1 or 124, Herdr's error kept,
+the last line naming the target's pane and its state.
 
 Exit codes are the contract:
 
@@ -154,6 +165,8 @@ Exit codes are the contract:
 |---|---|
 | 0 | delivered, and Herdr observed the agent change state |
 | 75 | target is blocked on interactive input; retry when it frees |
+| 124 | not confirmed within `--timeout` (still not seen to start or finish a turn); named |
+| 69 | the up-chain guard's `herdr agent get TARGET` lookup failed; named, nothing sent (one answering `agent_not_found` is an answer: 77, the lookup named) |
 | other | anything else |
 
 Never hold your turn in a shell sleep or blocking wait over ~60 s. While one

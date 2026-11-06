@@ -185,6 +185,12 @@ class Scratch:
         assert "Traceback" not in p.stderr, f"a traceback: {said}"
         return Ran(p.returncode, p.stdout.rstrip("\n"), p.stderr.rstrip("\n"))
 
+    def identity(self, name: str = "t", email: str = "t@t") -> None:
+        """The factory commit identity set in the scratch HOME's state, through the kit's command
+        (`pi-role --set-identity`): a launch of a role that would commit refuses without it
+        (scripts/pi-role --help, Commit identity)."""
+        self.run([kit("pi-role"), "--set-identity", name, email])
+
     def git(self, repo: Path, *args: str) -> str:
         """git ARGS in REPO with a scratch identity; its stdout."""
         ident = [

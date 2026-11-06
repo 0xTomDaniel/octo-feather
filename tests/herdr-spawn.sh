@@ -8,7 +8,11 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+ident() { XDG_STATE_HOME="$1" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null; }   # the commit identity a role launch needs (#665)
+export XDG_STATE_HOME="$t/state"; ident "$t/state"
 mkdir -p "$t/bin" "$t/cwd" "$t/cache"
+# mise's state its own, also run bare outside the gate: mise in $t/cwd's mise.toml records it there, never in the caller's (#664).
+export MISE_STATE_DIR="$t/mise-state"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/bin/"
 chmod +x "$t/bin/herdr"
 fail() { echo "herdr-spawn test: $*" >&2; exit 1; }
@@ -62,7 +66,7 @@ spawn_from cwd-jira "$t/cwd" "$t/jira"
 #     from that env through the linear skill's issue-create reaches the fake linear, which takes it only
 #     with the key. Unset in the caller: not set in the tab.
 key="lin-test-$(od -An -N8 -tx8 /dev/urandom | tr -d ' ')"
-lk="$t/lk"; mkdir -p "$lk/home" "$lk/state" "$lk/lbin"
+lk="$t/lk"; mkdir -p "$lk/home" "$lk/state" "$lk/lbin"; ident "$lk/state"
 spawn key LINEAR_API_KEY="$key" HOME="$lk/home" XDG_STATE_HOME="$lk/state"
 [[ "$rc" == 0 ]] || fail "spawn with LINEAR_API_KEY: exit $rc: $(cat "$t/key/err")"
 grep -qxF "LINEAR_API_KEY=$key" "$t/key/tab-env" || fail "tab env lacks LINEAR_API_KEY: $(cut -d= -f1 "$t/key/tab-env" | tr '\n' ' ')"
@@ -150,7 +154,7 @@ cp "$kit/tests/fixtures/herdr-say/herdr" "$t/sbin/"; chmod +x "$t/sbin/herdr"
 # One case: a fresh fake herdr, workspaces $2 ("LABEL ID" lines), a lane gh2
 # hand-off log holding parked line $3. The caller is the director in w2.
 setup() { # $1: case, $2: spaces, $3: parked line
-  c="$t/$1"; mkdir -p "$c/state/octo-feather/lanes"
+  c="$t/$1"; mkdir -p "$c/state/octo-feather/lanes"; ident "$c/state"
   printf '%s' "$2" >"$c/spaces"
   printf '%s\n' "$3" >"$c/state/octo-feather/lanes/gh2.handoffs.jsonl"
 }

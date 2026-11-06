@@ -37,6 +37,9 @@ case "$1 $2" in
     [[ -n "$p" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
     printf '{"result":{"agent":{"agent_status":"idle","name":"%s","pane_id":"%s","workspace_id":"%s","tab_id":"%s"}}}\n' \
       "$(named "$3")" "$p" "${p%%:*}" "$(awk -v t="$3" '$1 == t || $2 == t {print $3; exit}' "$d/agents")" ;;
+  "agent wait")
+    [[ -n "$(live "$3")" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
+    echo '{"result":{"agent_status":"idle"}}' ;;
   "agent prompt")
     [[ -n "$(live "$3")" ]] || { echo '{"error":{"code":"agent_not_found"}}'; exit 1; }
     printf '%s\t%s\n' "$3" "$4" >>"$d/prompts"; echo '{"result":{}}' ;;

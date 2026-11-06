@@ -31,6 +31,7 @@ trap cleanup EXIT
 fail() { echo "review-host test: $*" >&2; exit 1; }
 unset HERDR_SESSION
 export XDG_STATE_HOME="$t/xdg" SPEC_CHAT_APPROVED_INGRESS_PORTS=""   # loopback, any free port
+"$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 
 # 1. A spawned pane's PATH resolves review-host to the kit script; --help passes through.
 mkdir -p "$t/bin" "$t/cwd" "$t/spawn"
