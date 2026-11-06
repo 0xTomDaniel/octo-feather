@@ -3,18 +3,20 @@ is octo-feather-qc --help's, its contract quality spec #qc-contract."""
 
 from __future__ import annotations
 
+import fcntl
 import json
-import os
 import shutil
+import signal
 import subprocess
-import time
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, TypeVar
 
 from testkit import FIXTURES, ROOT, Ran, Scratch, kit, tool_homes
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
+
+T = TypeVar("T")
 
 STATUS = "docs/specs/demo.status.json"
 MODEL = json.loads((ROOT / "evals" / "judgment-model.json").read_text())["model"]
@@ -95,27 +97,44 @@ def reports(s: Scratch, head: str) -> list[dict[str, object]]:
     return [json.loads(p.read_text()) for p in sorted(q.glob(f"{head}-*.json"))]
 
 
-def alive(mark: str) -> bool:
-    """Whether a process `sleep MARK` runs (its cmdline, world-readable: no other /proc read)."""
-    want = f"sleep\0{mark}\0".encode()
+def _alarmed(within: int, what: str, step: Callable[[], T]) -> T:
+    """STEP's answer, a blocking call on a file this scenario owns; fails naming WHAT when it does
+    not return within WITHIN seconds (SIGALRM: the wait ends on the event, never on a sleep)."""
 
-    def cmdline(d: Path) -> bytes:
+    def fire(*_: object) -> None:
+        raise TimeoutError(what)
+
+    was = signal.signal(signal.SIGALRM, fire)
+    signal.alarm(within)
+    try:
+        return step()
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, was)
+
+
+def let_go(lock: Path, within: int = 10) -> bool:
+    """Whether every process holding a shared flock on LOCK (a file this scenario made, that a
+    stand-in locks and keeps open across its exec) has ended within WITHIN seconds: an exclusive
+    flock taken blocking succeeds only once each holder's descriptor is closed, as by its death.
+    No other process is inspected; a lock that cannot be taken fails loudly (OSError)."""
+    with lock.open() as f:
         try:
-            return (d / "cmdline").read_bytes()
-        except OSError:  # gone meanwhile
-            return b""
-
-    return any(cmdline(d) == want for d in Path("/proc").iterdir() if d.name.isdigit())
-
-
-def gone(mark: str, within: float = 10) -> bool:
-    """Whether no `sleep MARK` runs, or none within WITHIN seconds (a process-state wait)."""
-    end = time.monotonic() + within
-    while alive(mark):
-        if time.monotonic() > end:
+            _alarmed(within, f"{lock} still held", lambda: fcntl.flock(f, fcntl.LOCK_EX))
+        except TimeoutError:
             return False
-        time.sleep(0.01)
     return True
+
+
+def ready(fifo: Path, within: int) -> str:
+    """The first line a stand-in writes to FIFO (a named pipe this scenario made), read blocking:
+    its readiness, said once it is there; fails loudly when none comes within WITHIN seconds."""
+
+    def read() -> str:
+        with fifo.open() as f:
+            return f.readline()
+
+    return _alarmed(within, f"nothing on {fifo} within {within} s", read)
 
 
 # The "live" box a qc sandbox test's judge must not reach (as tests/lib/qc.sh's throwaway HOME):
@@ -161,19 +180,16 @@ def build_box(p: Scratch) -> None:
 
 def box(s: Scratch) -> Path:
     """S holding the prepared live box and target (build_box), the fake judge (testkit/judge.py)
-    its pi, the box's secrets in its env, reports in S's reports/, a token marking the judge's
-    sleeps; its repo."""
+    its pi, the box's secrets in its env, reports in S's reports/; its repo."""
     s.prepare("qc-box", build_box)
     clean(s)
     (s.bin / "pi").unlink()
     (s.bin / "pi").symlink_to(ROOT / "tests" / "gate" / "kit" / "testkit" / "judge.py")
-    tok = f"{os.getpid()}{time.monotonic_ns() % 100000}"
     s.env |= (
         tool_homes()
         | BOX_ENV
         | {
             "OCTO_FEATHER_QC_DIR": str(s.root / "reports"),
-            "FAKE_QC_TOK": tok,
         }
     )
     return s.root / "repo"

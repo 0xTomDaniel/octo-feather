@@ -8,20 +8,21 @@ planned in one status-only commit; the judge launches from its own role file
 from __future__ import annotations
 
 import json
+import os
 import re
 import signal
 import subprocess
-import time
 
 from testkit import ROOT, Scratch, kit, main
-from testkit.qc import LIMIT_S, RID, STATUS, box, gone, judged, latest
+from testkit.qc import LIMIT_S, RID, STATUS, box, judged, latest, let_go, ready
 
 
 def no_sandbox(s: Scratch) -> None:
     """--no-sandbox: printed, its report written recording sandbox false, the status file never
     changed, the judge without LINEAR_API_KEY. Then a run killed mid-judge (as a timeout kills it:
-    TERM) leaves no scratch behind, and its judge does not survive; the kill waits on readiness
-    (the run's scratch made), never a sleep."""
+    TERM) leaves no scratch behind, and its judge does not survive (its flock released:
+    testkit.qc.let_go); the kill waits on the judge's own readiness (a named pipe), never a
+    sleep."""
     r = box(s)
     before = s.git(r, "rev-parse", "HEAD")
     out = judged(s, "mixed", "acceptance-a", "acceptance-b", "--no-sandbox", want=1).out
@@ -32,6 +33,9 @@ def no_sandbox(s: Scratch) -> None:
     assert rep["sandbox"] is False, "--no-sandbox report must record sandbox false"
     assert "LINEAR KEY IN JUDGE ENV" not in rep["fallback"]["acceptance-a"]["stdout"], rep
     tmp = s.root / "tmp"
+    lock, fifo = s.home / "judge.lock", s.root / "judge.ready"
+    lock.write_text("")
+    os.mkfifo(fifo)
     cmd = [
         "timeout",
         "-k",
@@ -43,23 +47,20 @@ def no_sandbox(s: Scratch) -> None:
         "acceptance-a",
         "--no-sandbox",
     ]
-    p = subprocess.Popen(
-        cmd,
-        cwd=r,
-        env={**s.env, "FAKE_QC": "hang"},
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    end = time.monotonic() + float(LIMIT_S)
-    while not list(tmp.glob("qc-ghmiss-*")):  # a file-state wait: the run's scratch made
-        assert p.poll() is None, "hang run: ended before its scratch (nothing to prove)"
-        assert time.monotonic() < end, "hang run: no scratch before the judge"
-        time.sleep(0.01)
-    p.send_signal(signal.SIGTERM)
+    env = {**s.env, "FAKE_QC": "hang", "FAKE_QC_LOCK": str(lock), "FAKE_QC_READY": str(fifo)}
+    p = subprocess.Popen(cmd, cwd=r, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    try:
+        assert ready(fifo, int(LIMIT_S)) == "judge ready\n"  # the judge runs, its lock held
+        assert list(tmp.glob("qc-ghmiss-*")), (
+            "hang run: no scratch before the judge (nothing to prove)"
+        )
+    finally:
+        if p.poll() is None:
+            p.send_signal(signal.SIGTERM)
     assert p.wait() != 0, "hang run exited 0"
     left = [f.name for f in tmp.iterdir()]
     assert left == [], f"killed run left scratch: {left}"
-    assert gone(f"3040{s.env['FAKE_QC_TOK']}"), "killed run's judge survived"
+    assert let_go(lock), "killed run's judge survived"
 
 
 def status_commit(s: Scratch) -> None:
