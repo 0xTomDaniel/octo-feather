@@ -4796,7 +4796,7 @@
                 }
             }
         ],
-        "./_.agents/skills/verify-octo-feather/scripts/verify-octo-feather": [
+        "./_.agents/skills/verify-octo-feather/scripts/verify_octo_feather.py": [
             {
                 "code": "reportUnknownMemberType",
                 "range": {

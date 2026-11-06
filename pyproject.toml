@@ -153,7 +153,7 @@ extraPaths = ["tests/gate"]
   "SIM115",
   "T201",
 ]
-".agents/skills/verify-octo-feather/scripts/verify-octo-feather" = [
+".agents/skills/verify-octo-feather/scripts/verify_octo_feather.py" = [
   "ANN401",
   "C901",
   "E501",
@@ -724,7 +724,7 @@ extraPaths = ["tests/gate"]
 exclude = [
   ".agents/skills/github-pr/scripts/gh",
   ".agents/skills/linear/scripts/linear",
-  ".agents/skills/verify-octo-feather/scripts/verify-octo-feather",
+  ".agents/skills/verify-octo-feather/scripts/verify_octo_feather.py",
   "scripts/check-behavior-smoke",
   "scripts/check-decision-log",
   "scripts/check-evals",
