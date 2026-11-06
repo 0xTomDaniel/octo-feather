@@ -11,6 +11,9 @@ appended to FILE as one JSON line. Every answer streams (text/event-stream) one 
 finish with its usage, then [DONE]:
   a request whose messages ask to "use the tool" and hold no tool result yet: a nested_work tool
       call, usage 100 in, 20 out
+  one whose messages hold "PROVIDER-BASH: CMD" (CMD up to the line's end) and no tool result
+      yet: a bash tool call running CMD (its result reaches the log in the next request), usage
+      150 in, 10 out
   a qc brief (scripts/octo-feather-qc BRIEF: "Repo: ..., head SHA."): every criterion it names
       passes, as the judge's JSON, usage 150 in, 10 out
   else TEXT (default fake-answer-ok), usage 150 in, 10 out
@@ -46,6 +49,8 @@ def main() -> None:
                 m.get("role") == "tool" for m in body.get("messages", [])
             )
             qc = re.search(r"Repo: .*, head ([0-9a-f]{40})\.", msgs)
+            sh = re.search(r"PROVIDER-BASH: ((?:[^\"\\]|\\[^n])*)", msgs)
+            done = any(m.get("role") == "tool" for m in body.get("messages", []))
             usage = {"prompt_tokens": 150, "completion_tokens": 10, "total_tokens": 160}
             end = "stop"
             delta: dict[str, Any]
@@ -59,6 +64,16 @@ def main() -> None:
                 }
                 end = "tool_calls"
                 usage = {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}
+            elif sh and not done:
+                cmd = json.loads(f'"{sh.group(1)}"')
+                call = {"name": "bash", "arguments": json.dumps({"command": cmd})}
+                delta = {
+                    "role": "assistant",
+                    "tool_calls": [
+                        {"index": 0, "id": "call_1", "type": "function", "function": call}
+                    ],
+                }
+                end = "tool_calls"
             elif qc:
                 ids = re.findall(r"\\n- (acceptance-[a-z0-9-]+): ", msgs)
                 crit = [
