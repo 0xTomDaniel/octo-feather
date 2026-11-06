@@ -98,14 +98,18 @@ EXPECT = [
 # Judgment suites' label data quote frozen history: only cases.json, reference/expectations.json
 # and REPORT.md of evals/judgment-*/ skip the retired-words and lane-branch scans; the suite's
 # other files and other suites do not.
-for _f in (
+SUITE_FILES = (
     "evals/judgment-x/suite.json",
     "evals/judgment-x/question.json",
     "evals/judgment-x/sources/t/x.sh",
     "evals/role-x/cases.json",
     "evals/judgment-x/cases.md",
-):
-    EXPECT += [(_f, f'"state": "calls the top agent {OP}"', WORDS), (_f, f'"state": "{LB}"', ADR)]
+)
+SUITE_EXPECT = [
+    x
+    for f in SUITE_FILES
+    for x in ((f, f'"state": "calls the top agent {OP}"', WORDS), (f, f'"state": "{LB}"', ADR))
+]
 # Runtime instruction files, named by path (their content empty).
 FILES = [(CL, PI), (CX, PI)]
 # (FILE, LINE): appended, keeps check-refs green.
@@ -122,11 +126,11 @@ ALLOW = [
     ),
     ("README.md", f"Worker branches {GH}<N>-* and {GH}<issue>-*, never the lane."),
 ]
-for _f in ("cases.json", "reference/expectations.json", "REPORT.md"):
-    ALLOW += [
-        (f"evals/judgment-x/{_f}", f'"state": "calls the top agent {OP} or the person {HU}"'),
-        (f"evals/judgment-x/{_f}", f'"state": "{LB}"'),
-    ]
+LABELS_ALLOW = [
+    (f"evals/judgment-x/{f}", line)
+    for f in ("cases.json", "reference/expectations.json", "REPORT.md")
+    for line in (f'"state": "calls the top agent {OP} or the person {HU}"', f'"state": "{LB}"')
+]
 
 
 def append(k: Path, rel: str, line: str) -> int:
@@ -164,15 +168,15 @@ def planted(s: Scratch) -> None:
     """Every passing line planted: green. Then every failing line planted besides: red, each
     named by its own hit with its category's message, no passing line named."""
     k = kit_repo(s)
-    allowed = []
-    for rel, line in ALLOW:
+    allowed: list[str] = []
+    for rel, line in ALLOW + LABELS_ALLOW:
         allowed.append(f"{rel}:{append(k, rel, line)}:{line}")
     s.git(k, "add", "-Af")
     rc, out = just(s, k, "check-refs")
     assert rc == 0, f"the copy with every allowed line failed check-refs:\n{out}"
     assert "refs: ok" in out, out
-    hits = []
-    for rel, line, msg in EXPECT:
+    hits: list[tuple[str, str]] = []
+    for rel, line, msg in EXPECT + SUITE_EXPECT:
         hits.append((f"{rel}:{append(k, rel, line)}:{line}", msg))
     for rel, msg in FILES:
         append(k, rel, "")

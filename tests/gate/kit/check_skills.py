@@ -103,7 +103,7 @@ class Copy:
 
     def plant(self, kind: str, contents: list[str]) -> list[str]:
         """Each content as .agents/skills/KIND-N/SKILL.md, KIND spelled KIND-N inside; the dirs."""
-        dirs = []
+        dirs: list[str] = []
         for n, c in enumerate(contents):
             d = f".agents/skills/{kind}-{n}"
             text = c.replace("qc-bad", f"qc-bad-{n}").replace("qc-good", f"qc-good-{n}")
