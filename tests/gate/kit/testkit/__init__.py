@@ -93,8 +93,8 @@ class Gh:
         (self.dir / "pr" / f"{n}.json").write_text(json.dumps(d))
 
     def store(self, rel: str, d: object) -> None:
-        """The store's REL (testkit/gh.py: issue/N.json, run/N.json, repo.json, api/PATH.json,
-        pr/N.diff) holding D, JSON unless a str."""
+        """The store's REL (its layout: testkit/gh.py's docstring) holding D, JSON unless a
+        str."""
         p = self.dir / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(d if isinstance(d, str) else json.dumps(d))
