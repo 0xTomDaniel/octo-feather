@@ -19,13 +19,17 @@ the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) ask
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 `gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
 state); `gh pr edit N --base B` sets the stored PR N's baseRefName, `gh issue close N` the
-stored issue N's state CLOSED. `gh repo view OWNER/NAME|URL
---json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same way (gh reads
-the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list while
-runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
-one line as the log writes it, to its recorded answers in order, each its stdout (a string) or
-{"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the count in
-tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming it.
+stored issue N's state CLOSED. Another repo's issues (the tracker's, a lane's target):
+repo/OWNER/NAME/issue/N.json, named by --repo or -R, else $GH_REPO; `issue list --search 'WORDS
+in:title' --limit N` lists those whose title holds WORDS; `issue create --title T --body-file
+F|-` stores a new OPEN issue of $GH_REPO (else o/r), numbered after every repo's (901 on none),
+and prints its URL. `gh repo view OWNER/NAME|URL --json F` answers, for a repo other than o/r,
+api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
+unresolved repository. A call over time (a run list while runs start and end, a run watch) is a
+tape: $FAKE_GH/tape.json maps a call's exact argv, one line as the log writes it, to its
+recorded answers in order, each its stdout (a string) or {"out", "err", "exit"}; the Nth such
+call replays the Nth, the last repeated (the count in tape.n.json); a call no tape names is
+answered as above. Anything else exits 2 naming it.
 """
 
 import json
@@ -35,7 +39,7 @@ import sys
 
 # A process per gh call: it starts light (no site, -S above; os.path, not pathlib or typing, each
 # ~5 ms of import on every call).
-# ruff: noqa: PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
+# ruff: noqa: PTH103, PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
 STORE = os.environ["FAKE_GH"]
 RAW = ["-H", "Accept: application/vnd.github.raw"]
 
@@ -87,10 +91,25 @@ def view(a: list[str]) -> None:
     out(pick(json.loads(read(p)), a))
 
 
+def repo_of(a: list[str]) -> str:
+    """The repo a call names (--repo, -R), else $GH_REPO's, else o/r."""
+    for flag in ("--repo", "-R"):
+        if flag in a:
+            return a[a.index(flag) + 1]
+    return os.environ.get("GH_REPO") or "o/r"
+
+
+def issues_of(repo: str) -> str:
+    """REPO's issue dir: issue/ for o/r, repo/OWNER/NAME/issue/ for another."""
+    return at("issue") if repo == "o/r" else at("repo", *repo.split("/"), "issue")
+
+
 def listed(a: list[str]) -> None:
     """`issue|pr|run list --json F`: every one stored, by number; as GitHub filters them, only
-    those on --base B (a stored baseRefName) and in --state S (a stored state), when asked."""
-    d = at(a[0])
+    those on --base B (a stored baseRefName) and in --state S (a stored state), when asked; an
+    issue list of the repo it names; with --search 'WORDS in:title' only those whose stored title
+    holds WORDS, the first --limit N of them."""
+    d = issues_of(repo_of(a)) if a[0] == "issue" else at(a[0])
     names = sorted(os.listdir(d)) if os.path.isdir(d) else []
     rows = [json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")]
     for flag, key in (("--base", "baseRefName"), ("--state", "state")):
@@ -98,7 +117,41 @@ def listed(a: list[str]) -> None:
             want = a[a.index(flag) + 1].upper() if key == "state" else a[a.index(flag) + 1]
             rows = [r for r in rows if str(r.get(key, want)).upper() == want.upper()]
     key = "databaseId" if a[0] == "run" else "number"
-    out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+    rows = sorted(rows, key=lambda d: d[key])
+    if "--search" in a:
+        words = a[a.index("--search") + 1].removesuffix(" in:title").strip('"')
+        rows = [r for r in rows if words in str(r.get("title"))]
+        rows = rows[: int(a[a.index("--limit") + 1])] if "--limit" in a else rows
+    out([pick(d, a) for d in rows])
+
+
+def create(a: list[str]) -> None:
+    """`issue create --title T --body-file F|-`: a new OPEN issue of $GH_REPO (else o/r), its
+    number the next after every repo's stored issues (901 on none); prints its URL."""
+    title, f = a[a.index("--title") + 1], a[a.index("--body-file") + 1]
+    body = sys.stdin.read() if f == "-" else read(f)
+    repo = repo_of([])
+    dirs = [at("issue")]
+    top = at("repo")
+    for owner in sorted(os.listdir(top)) if os.path.isdir(top) else []:
+        dirs += [
+            os.path.join(top, owner, n, "issue")
+            for n in sorted(os.listdir(os.path.join(top, owner)))
+        ]
+    nums = [
+        int(x[: -len(".json")])
+        for d in dirs
+        if os.path.isdir(d)
+        for x in os.listdir(d)
+        if x.endswith(".json")
+    ]
+    n = max(nums, default=900) + 1
+    d = issues_of(repo)
+    os.makedirs(d, exist_ok=True)
+    issue = {"number": n, "title": title, "body": body, "state": "OPEN", "closedAt": None}
+    with open(os.path.join(d, f"{n}.json"), "w") as w:
+        w.write(json.dumps(issue))
+    sys.stdout.write(f"https://github.com/{repo}/issues/{n}\n")
 
 
 def edit(a: list[str]) -> None:
@@ -251,6 +304,8 @@ def answer(a: list[str]) -> None:
         edit(a)
     elif two == ("issue", "close"):
         close(a)
+    elif two == ("issue", "create") and "--title" in a and "--body-file" in a:
+        create(a)
     elif a[:1] == ["api"] and "-X" not in a:
         get(a)
     elif a[:1] == ["api"] and "-X" in a and "--input" in a:
