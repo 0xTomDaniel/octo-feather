@@ -10,12 +10,13 @@ scanned), the lane branch default (docs/adr/0011 the one exempt), Claude/Codex i
 (Pi is the only runtime). Every planted line that must pass is planted at once too: that run
 stays green (refs: ok), which also shows the clean copy green. A broken retired-words scanner
 (perl, grep stubs; a real grep error) fails closed, never refs: ok. `just check` in the copy
-fails on a planted retired word, running only its own recipe item (pytest's -k, #507).
-Each `just` run evaluates the copy's justfile, the cost floor: five runs and one gate.
+fails on a planted retired word, running only its own recipe item (pytest's -k, #507), in one
+gate run with check-decision-log's and check-skills' own gate cases (in_gate).
 """
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from typing import TYPE_CHECKING
@@ -220,23 +221,51 @@ def broken(s: Scratch) -> None:
     assert "refs: ok" not in out, out
 
 
+# The gate case of three recipes, one `just check` run (the gate's setup in a copy, uv sync and
+# pnpm install, is most of its cost): each recipe's planted fault, its recipe item failing naming
+# it, and only those three items run (#507). check-decision-log's and check-skills' plants are
+# those of tests/gate/kit/check_decision_log.py and check_skills.py.
+DLOG = "docs/lane/run/decisions.jsonl"
+DLOG_HEAD = '"ts":"2026-10-19T00:00:00Z","agent":"implementer","phase":"handoff","decision":"ready"'
+DLOG_TAIL = '"evidence":"just check","result":"pending"'
+SKILL = ".agents/skills/qc-bad/SKILL.md"
+IN_GATE = {
+    "check-refs": ("docs/x.md", f"Ask the {HU} before merging.\n", [WORDS, "docs/x.md"]),
+    "check-decision-log": (
+        DLOG,
+        f'{{{DLOG_HEAD},"why":"gate green",{DLOG_TAIL}}}\n{{{DLOG_HEAD},{DLOG_TAIL}}}\n',
+        [f"check-decision-log: {DLOG}:2: missing why"],
+    ),
+    "check-skills": (
+        SKILL,
+        "---\ndescription: Does a thing.\n---\n# Bad\n",
+        [f"check-skills: {SKILL}"],
+    ),
+}
+
+
 def in_gate(s: Scratch) -> None:
-    """The gate includes check-refs: `just check` in the copy fails on a planted retired word,
-    naming the message and the file, and runs only its own recipe item (#507)."""
+    """The gate includes check-refs, check-decision-log and check-skills: `just check` in the copy
+    fails on each one's planted fault (a retired word, a nested log line missing why, a skill
+    with no name), naming it, each recipe's own item failing, and runs only those items (#507)."""
     k = kit_repo(s)
-    (k / "docs" / "x.md").write_text(f"Ask the {HU} before merging.\n")
-    s.git(k, "add", "-f", "docs/x.md")
+    for rel, text, _ in IN_GATE.values():
+        (k / rel).parent.mkdir(parents=True, exist_ok=True)
+        (k / rel).write_text(text)
+        s.git(k, "add", "-f", rel)
     env = {
         "XDG_STATE_HOME": str(s.root / "state"),
-        "PYTEST_ADDOPTS": "-k 'test_recipe and check-refs'",
+        "PYTEST_ADDOPTS": f"-k 'test_recipe and ({' or '.join(IN_GATE)})'",
         "npm_config_store_dir": pnpm_store(),  # the caller's, never the scratch HOME's
+        "PATH": os.environ["PATH"],  # the real pi check-skills asks, not testkit's stand-in
     }
     rc, out = just(s, k, "check", env=env, unset="CI")
-    assert rc != 0, f"docs/x.md with a retired word passed just check:\n{out}"
-    assert WORDS in out, out
-    assert "docs/x.md" in out, out
-    assert "FAILED tests/gate/test_gate.py::test_recipe[check-refs]" in out, out
-    assert re.search(r"^=+ 1 failed(, \d+ deselected)? in ", out, re.MULTILINE), out
+    assert rc != 0, f"the planted faults passed just check:\n{out}"
+    for recipe, (_, _, said) in IN_GATE.items():
+        for x in said:
+            assert x in out, f"just check did not report {x}:\n{out}"
+        assert f"FAILED tests/gate/test_gate.py::test_recipe[{recipe}]" in out, out
+    assert re.search(r"^=+ 3 failed(, \d+ deselected)? in ", out, re.MULTILINE), out
 
 
 if __name__ == "__main__":

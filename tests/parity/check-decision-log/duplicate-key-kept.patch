@@ -1,0 +1,14 @@
+Seeded defect: a log line with a duplicate key passes, its last value winning (check-decision-log, adversarial forms: duplicate key).
+diff --git a/scripts/check-decision-log b/scripts/check-decision-log
+index c431759..647afe3 100755
+--- a/scripts/check-decision-log
++++ b/scripts/check-decision-log
+@@ -128,7 +128,7 @@ def no_constant(name):
+ def line_problems(raw, schema: dict[str, Any], match: Callable[[str, str], bool]):
+     """Problems of one log line; MATCH(name, value) says whether value matches property name's pattern."""
+     try:
+-        obj = json.loads(raw.decode("utf-8"), object_pairs_hook=no_duplicates, parse_constant=no_constant)
++        obj = json.loads(raw.decode("utf-8"), parse_constant=no_constant)
+     except UnicodeDecodeError:
+         return ["not UTF-8"]
+     except ValueError as e:  # json.JSONDecodeError is a ValueError

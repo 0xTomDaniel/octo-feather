@@ -1,0 +1,16 @@
+Seeded defect: an unreadable SKILL.md is skipped, never failing the check (check-skills fails closed).
+diff --git a/scripts/check-skills b/scripts/check-skills
+index fa3cf75..e52a9e7 100755
+--- a/scripts/check-skills
++++ b/scripts/check-skills
+@@ -134,9 +134,7 @@ def main():
+         try:
+             with open(path, encoding="utf-8") as fh:
+                 fh.read()
+-        except (OSError, UnicodeDecodeError) as e:
+-            print(f"check-skills: {path}: cannot read: {e}", file=sys.stderr)
+-            bad += 1
++        except (OSError, UnicodeDecodeError):
+             continue
+         dirs.append(Path(path).parent.resolve())
+     if not dirs and not bad:

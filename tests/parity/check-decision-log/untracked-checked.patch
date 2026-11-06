@@ -1,0 +1,14 @@
+Seeded defect: an untracked decisions.jsonl is checked too (check-decision-log: tracked logs only).
+diff --git a/scripts/check-decision-log b/scripts/check-decision-log
+index c431759..ae1d569 100755
+--- a/scripts/check-decision-log
++++ b/scripts/check-decision-log
+@@ -200,7 +200,7 @@ def main():
+         schema = load_schema()
+     except (OSError, ValueError, SchemaError) as e:
+         return unusable(e)
+-    git = subprocess.run(["git", "-C", ROOT, "ls-files", "-z"], capture_output=True)
++    git = subprocess.run(["git", "-C", ROOT, "ls-files", "-z", "--cached", "--others"], capture_output=True)
+     if git.returncode != 0:
+         sys.stderr.write(git.stderr.decode("utf-8", "replace"))
+         print(f"check-decision-log: git ls-files exited {git.returncode}; the check cannot pass", file=sys.stderr)
