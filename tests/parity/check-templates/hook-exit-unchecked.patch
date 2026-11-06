@@ -1,0 +1,14 @@
+Seeded defect: a hook that swallows just fast's failure passes (check-templates, templates spec #tpl-hooks).
+diff --git a/scripts/check-templates b/scripts/check-templates
+index 293b841..7f0d7a2 100755
+--- a/scripts/check-templates
++++ b/scripts/check-templates
+@@ -106,7 +106,7 @@ def check_hook(template: Path) -> None:
+     if ok_calls != [["fast"]] or bad_calls != [["fast"]]:
+         msg = f"{fix}; it called just {ok_calls or 'never'}"
+         raise TemplateError(msg)
+-    if ok_exit != 0 or bad_exit == 0:
++    if ok_exit != 0:
+         got = f"with just exiting 0 it exited {ok_exit}, with just exiting 1 it exited {bad_exit}"
+         msg = f"{fix}; {got}"
+         raise TemplateError(msg)

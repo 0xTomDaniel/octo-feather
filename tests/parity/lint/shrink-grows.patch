@@ -1,0 +1,14 @@
+Seeded defect: shrink writes the basedpyright baseline anew, so a new type error present is baselined: the baseline grows (octo-feather-lint --help, shrink never adds one).
+diff --git a/scripts/octo-feather-lint b/scripts/octo-feather-lint
+index 762137c..8d2db35 100755
+--- a/scripts/octo-feather-lint
++++ b/scripts/octo-feather-lint
+@@ -389,7 +389,7 @@ def cmd_shrink(files: list[str]) -> int:
+         return 1
+     base_file = baseline_path()
+     if base_file.is_file():
+-        pyright(files, base_file, ["--baselinemode", "auto"])
++        pyright(files, base_file, ["--writebaseline"])
+     say(f"shrink: deleted {len(lint_stale)} ruff check and {len(fmt_stale)} ruff format entries;")
+     say(f"  {base_file} pruned by basedpyright's auto mode")
+     return cmd_lint(files) | cmd_format(files) | cmd_types(files)

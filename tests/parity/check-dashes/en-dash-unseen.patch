@@ -1,0 +1,14 @@
+Seeded defect: check-dashes greps the em dash only; an en dash passes (#121 D7).
+diff --git a/justfile b/justfile
+index bfed447..88ed906 100644
+--- a/justfile
++++ b/justfile
+@@ -209,7 +209,7 @@ check-dashes:
+     cd "$root"
+     vend="$(awk '$1 == "github" {printf "%s|", $3}' Skillfile)"
+     mapfile -t files < <(git ls-files | grep -vE "^(docs/specs/\.(viz|style)/|\.agents/skills/(${vend%|})/|\.skillfile/|LICENSE\$)")
+-    if grep -nHF -e "$(printf '\xe2\x80\x93')" -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
++    if grep -nHF -e "$(printf '\xe2\x80\x94')" "${files[@]}"; then
+       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
+     echo "dashes: ok (${#files[@]} files)"
+ 

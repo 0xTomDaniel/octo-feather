@@ -1,0 +1,14 @@
+Seeded defect: show skips a criterion's first covered path, so a change to its code leaves it current (quality #qc-stale).
+diff --git a/scripts/octo-feather-spec-status b/scripts/octo-feather-spec-status
+index 5289964..98b1582 100755
+--- a/scripts/octo-feather-spec-status
++++ b/scripts/octo-feather-spec-status
+@@ -529,7 +529,7 @@ def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple
+         why.append(f"criterion text changed since {c12}" + (f" by {'; '.join(by)}" if by else " (uncommitted)"))
+     demo = _demo(top, c, f"{spec.name.removesuffix('.spec.html')}#{k}")
+     covers = covered(top, c, f"{spec.name.removesuffix('.spec.html')}#{k}")
+-    for f in _changes(top, c, covers)[0] if covers else []:
++    for f in _changes(top, c, covers[1:])[0] if covers[1:] else []:
+         why.append(f"covered path {f} changed since {c12} by {'; '.join(_changes(top, c, [f])[1])}")
+     for p in dict.fromkeys(t.split("::", 1)[0] for t in tests):   # each named test's file, a selector by its file
+         named = ", ".join(t for t in tests if t != p and t.split("::", 1)[0] == p)

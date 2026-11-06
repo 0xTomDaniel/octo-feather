@@ -1,0 +1,16 @@
+Seeded defect: a failing perl in the retired-words scan reads as no match: the check passes, never naming a scanner error (justfile check-refs, fails closed).
+diff --git a/justfile b/justfile
+index bfed447..3c4fb08 100644
+--- a/justfile
++++ b/justfile
+@@ -183,9 +183,7 @@ check-refs:
+         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
+         $s =~ s/$_//g for @{ $ok{$f} || [] };
+         if ($s =~ /$ENV{RETIRED}/i) { print }' <<<"$hits")" || rc=$?
+-    if (( rc != 0 )); then
+-      echo "check-refs: retired-words scanner error: perl exited $rc (message above); fix the scan, the check cannot pass" >&2; bad=1
+-    elif [[ -n "$found" ]]; then
++    if [[ -n "$found" ]]; then
+       printf '%s\n' "$found"
+       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
+     # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, not scanned (nor the judgment label data above).

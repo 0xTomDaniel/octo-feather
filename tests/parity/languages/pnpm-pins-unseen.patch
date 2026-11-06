@@ -1,0 +1,14 @@
+Seeded defect: package.json's packageManager beside mise's pnpm pin passes (check-languages rule 6, #261).
+diff --git a/scripts/check-languages b/scripts/check-languages
+index c6cee03..a7e5e13 100755
+--- a/scripts/check-languages
++++ b/scripts/check-languages
+@@ -151,7 +151,7 @@ def both_pnpm_pins() -> list[str]:
+     manifest: dict[str, Any] = (
+         json.loads(package.read_text(encoding="utf-8")) if package.is_file() else {}
+     )
+-    if "pnpm" not in pins or "packageManager" not in manifest:
++    if "pnpm" not in pins or "packagemanager" not in manifest:
+         return []
+     return [
+         (

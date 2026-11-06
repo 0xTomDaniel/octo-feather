@@ -1,0 +1,14 @@
+Seeded defect: the lane-branch scan skips every ADR, not only docs/adr/0011 (justfile check-refs, #121 N1 N2).
+diff --git a/justfile b/justfile
+index bfed447..78a3b00 100644
+--- a/justfile
++++ b/justfile
+@@ -190,7 +190,7 @@ check-refs:
+       echo "check-refs: retired words above; use director for the top agent and owner for the person (GLOSSARY.md)" >&2; bad=1; fi
+     # Lane branch strings: the owner's #71 shapes (#121 N1 N2), owned by docs/adr/0011, not scanned (nor the judgment label data above).
+     # The patterns bracket a letter so this justfile does not match itself.
+-    mapfile -t lane < <(git ls-files | grep -vE "^(docs/adr/0011-|$labels)")
++    mapfile -t lane < <(git ls-files | grep -vE "^(docs/adr/|$labels)")
+     if grep -nHE -e 'octo-feather/g[h]<' -e 'g[h]<[^>]*>-<' "${lane[@]}"; then
+       echo "check-refs: lane branch default above; the lane branch is \`gh<N>\`: write only a pointer, docs/adr/0011" >&2; bad=1; fi
+     # Pi has no Skill tool: a skill loads by reading its SKILL.md by path. Fixed strings, in skills (vendored too) and role files (#107).

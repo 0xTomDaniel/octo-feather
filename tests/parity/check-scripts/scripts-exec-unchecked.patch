@@ -1,0 +1,14 @@
+Seeded defect: check-scripts no longer requires scripts/ to hold executables.
+diff --git a/justfile b/justfile
+index bfed447..2d10c34 100644
+--- a/justfile
++++ b/justfile
+@@ -125,7 +125,7 @@ check-scripts:
+         except SyntaxError as e: print(f"{f}:{e.lineno}: {e.msg}; fix it: Python cannot run this file", file=sys.stderr); bad = 1
+     sys.exit(bad)' "${py[@]}"
+     echo "python: ok (${#py[@]} files compile)"
+-    for f in scripts/* .agents/skills/herdr-comms/assets/* tests/*; do
++    for f in .agents/skills/herdr-comms/assets/* tests/*; do
+       [[ ! -f "$f" || -x "$f" ]] || { echo "check-scripts: not executable: $f; chmod +x $f" >&2; exit 1; }
+     done
+ 
