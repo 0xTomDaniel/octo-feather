@@ -421,8 +421,10 @@ step 4 tells no lane twice.
                    $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
                    "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
-                   A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
-                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...; gone: director to resume or
+                   Each send is bounded (#619, #666): `herdr-say --timeout 20`, Herdr's own wait bound, a busy
+                   (working) supervisor's send failing at it naming the pane and its state; a herdr-say still
+                   running 15 s past it is killed, named. A failed send (exit 75 blocked, or other) is named and
+                   writes no prod line; the step stops after trying the rest. Its line: `told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
   step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
@@ -3877,6 +3879,25 @@ def pm_live(pane: str) -> bool:
     raise Refuse(f"herdr agent get {pane} failed ({out[-1][:200] if out else f'exit {p.returncode}'})")
 
 
+# One send's bound (#619, #666; owner load rule: every run bounded): herdr-say --timeout, Herdr's own wait bound; a
+# herdr-say still running PM_TELL_GRACE seconds past it is killed with its process group.
+PM_TELL_BOUND = 20
+PM_TELL_GRACE = 15
+
+
+def pm_say(pane: str, msg: str) -> subprocess.CompletedProcess[str] | None:
+    """`herdr-say --timeout PM_TELL_BOUND PANE MSG`; None when it outlives the bound and its grace (killed)."""
+    with subprocess.Popen(["herdr-say", "--timeout", str(PM_TELL_BOUND), pane, msg], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, start_new_session=True) as p:
+        try:
+            out, err = p.communicate(timeout=PM_TELL_BOUND + PM_TELL_GRACE)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, 9)
+            p.communicate()
+            return None
+        return subprocess.CompletedProcess(p.args, p.returncode, out, err)
+
+
 def pm_tell(pm: PostMerge) -> str:
     """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
     which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
@@ -3939,9 +3960,11 @@ def pm_tell(pm: PostMerge) -> str:
             marks.sort(key=lambda x: str(x.get("at") or ""))
             (parked if marks and marks[-1].get("pane") == sup else gone).append(f"{name} {sup}"); continue
         try:
-            p = subprocess.run(["herdr-say", sup, msg], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            p = pm_say(sup, msg)
         except FileNotFoundError:
             failed.append(f"herdr-say failed: {name} {sup}: herdr-say not on PATH"); continue
+        if p is None:
+            failed.append(f"herdr-say failed: {name} {sup}: no answer within {PM_TELL_BOUND + PM_TELL_GRACE}s, killed"); continue
         if p.returncode:
             err = (p.stderr or p.stdout).strip().splitlines()
             failed.append(f"herdr-say failed: {name} {sup} exit {p.returncode}" + (f" ({err[-1][:200]})" if err else "")); continue

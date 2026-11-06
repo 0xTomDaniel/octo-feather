@@ -16,7 +16,12 @@
 #   0   delivered, and Herdr observed the agent change state
 #   75  not delivered now because the target is blocked on interactive input;
 #       the caller should retry once the target is free
+#   69  the up-chain guard's `herdr agent get` lookup failed (named on stderr)
 #   >0  anything else
+#
+# A send never hangs or fails silently (#666; owner rulings #585, #619): the
+# --timeout bound and the stalled and timed-out failures, herdr-comms SKILL.md,
+# Send a message.
 #
 # A target Herdr does not find may be parked: the latest parked line naming it,
 # in any lane hand-off log of the caller's Herdr session (octo-feather-state),
@@ -37,7 +42,7 @@
 # not kit agents (an owner shell, Spec Chat's wake) are not limited.
 set -euo pipefail
 
-usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
+usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
 here="$(dirname "$(readlink -f "$0")")"
 
 # The latest parked line naming TARGET by pane or name. A line without name is
@@ -51,6 +56,8 @@ while (($#)); do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --kind|--artifact) shift 2 ;;   # accepted for caller compatibility, unused
+    --timeout) [[ "${2:-}" =~ ^[1-9][0-9]*$ ]] || { echo "herdr-say: --timeout needs whole seconds, got ${2:-nothing}" >&2; exit 64; }
+               bound="$2"; shift 2 ;;
     --parked) (($# == 2)) || { usage; exit 64; }; parked "$2"; exit ;;
     --parent) [[ -n "${OCTO_FEATHER_PARENT:-}" ]] || { echo "herdr-say: no parent recorded for this pane" >&2; exit 64; }
               shift; set -- "$OCTO_FEATHER_PARENT" "$@"; break ;;
@@ -60,15 +67,17 @@ while (($#)); do
   esac
 done
 (($# == 2)) || { usage; exit 64; }
-target="$1"; message="$2"
+target="$1"; message="$2"; bound="${bound:-900}"
 
 # The up-chain guard. Resolves TARGET to a pane and workspace through Herdr.
 allowed() {
   local role="${OCTO_FEATHER_ROLE:-}" parent="${OCTO_FEATHER_PARENT:-}" info pane space director line lane
+  looked=""
   case "$role" in implementer|code-reviewer|corrector|supervisor) ;; *) return 0 ;; esac
   [[ -n "$parent" && "$target" == "$parent" ]] && return 0
-  info="$(herdr agent get "$target" 2>/dev/null || true)"
+  info="$(herdr agent get "$target" 2>&1)" && looked="" || looked="$(tail -1 <<<"$info")"
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
+  [[ -n "$pane" || -n "$looked" ]] || looked="no pane in: $(tail -1 <<<"$info")"
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$info" 2>/dev/null || true)"
   [[ -n "$pane" && "$pane" == "$parent" ]] && return 0
   director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
@@ -81,11 +90,17 @@ allowed() {
     lane="$(herdr agent get "$HERDR_PANE_ID" 2>/dev/null | jq -r '.result.agent.name // empty' 2>/dev/null || true)"
     [[ -n "$lane" && "$(jq -r .lane <<<"$line")" == "$lane" ]] && return 0
   fi
+  # A lookup that failed is no answer: an error naming it, never "not in your
+  # chain" (#666). One Herdr answers agent_not_found is an answer.
+  if [[ -z "$pane" && "$looked" != *'"agent_not_found"'* ]]; then
+    echo "herdr-say: herdr agent get $target failed (${looked:-no output}): cannot check $target is up the chain of $role; not sent" >&2
+    exit 69
+  fi
   return 1
 }
-allowed || { echo "herdr-say: $OCTO_FEATHER_ROLE may message only up its chain (its parent ${OCTO_FEATHER_PARENT:-none}; docs/adr/0015), not $target" >&2; exit 77; }
+allowed || { echo "herdr-say: $OCTO_FEATHER_ROLE may message only up its chain (its parent ${OCTO_FEATHER_PARENT:-none}; docs/adr/0015), not $target${looked:+ (herdr agent get: $looked)}" >&2; exit 77; }
 
-prompt() { rc=0; out="$(herdr agent prompt "$1" "$message" --wait --until working --until idle 2>&1)" || rc=$?; }
+prompt() { rc=0; out="$(herdr agent prompt "$1" "$message" --wait --until working --until idle --timeout "$((bound * 1000))" 2>&1)" || rc=$?; }
 code() { jq -r '.error.code // empty' <<<"$out" 2>/dev/null || true; }
 
 prompt "$target"
@@ -114,4 +129,17 @@ fi
   echo "herdr-say: $target is blocked on interactive input; not delivered" >&2; exit 75; }
 
 printf '%s\n' "$out" >&2
+# Stalled or still unconfirmed at the bound: loud, naming the pane and its state.
+case "$(code)" in
+  agent_prompt_stalled|timeout)
+    info="$(herdr agent get "${name:-$target}" 2>/dev/null || true)"
+    pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
+    state="$(jq -r '.result.agent.agent_status // empty' <<<"$info" 2>/dev/null || true)"
+    if [[ "$(code)" == timeout ]]; then
+      echo "herdr-say: $target (pane ${pane:-unknown}) still ${state:-unknown} after ${bound}s: Herdr saw the prompt neither start nor finish a turn; delivery not confirmed" >&2
+    else
+      echo "herdr-say: prompt to $target (pane ${pane:-unknown}, state ${state:-unknown}) stalled: typed but never seen to land (agent_prompt_stalled); it may sit unsent in that pane" >&2
+    fi
+    exit 1 ;;
+esac
 exit "${rc:-1}"
