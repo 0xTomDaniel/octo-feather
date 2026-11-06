@@ -7,7 +7,8 @@ are each prepared once per gate run (testkit Scratch.prepare) and copied into ea
 runs a classify only when its behaviour is the classify's answer. Only the kit's own commands
 run (octo-feather-lane, octo-feather-gate); the judge's classify runs for real in the qa sandbox
 (unprivileged user namespaces, Linux) against the stub pi, which lists the kit's one judgment
-model (evals/judgment-model.json) beside three others and fails the run when any other is asked.
+model (evals/judgment-model.json) beside three others and fails the run when any other is asked;
+it answers only a state equal to the state file's whole text (STUB_WANT_EXACT).
 """
 
 from __future__ import annotations
@@ -173,6 +174,7 @@ class Lane:
             want=want,
             STUB_ANSWER=answer,
             STUB_WANT=state.read_text(),
+            STUB_WANT_EXACT="1",
         )
 
     def merge_ask(self, want: int = 0) -> Ran:
@@ -261,6 +263,7 @@ def build_judged(p: Scratch) -> None:
         str(lane.state),
         STUB_ANSWER="tautological",
         STUB_WANT=STATE,
+        STUB_WANT_EXACT="1",
         HERDR_WORKSPACE_ID="w5",
     )
     lane.file("judged.json", json.dumps({"out": r.out, "err": r.err, "writes_before": n}))
@@ -385,8 +388,9 @@ def rerun_in_place(s: Scratch) -> None:
         want=1,
         STUB_ANSWER="ok",
         STUB_WANT=state2.read_text(),
+        STUB_WANT_EXACT="1",
     ).err
-    assert f"{MODEL} gave no answer (stub: state lacks " in err, err
+    assert f"{MODEL} gave no answer (stub: state is not " in err, err
     assert s.gh.writes() == n, f"no answer, yet a write: {s.gh.log()}"
     ledger = s.home / ".local" / "state" / "octo-feather" / "spend.jsonl"
     ledger.unlink()
