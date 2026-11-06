@@ -294,6 +294,30 @@ def pnpm_store() -> str:
     return asked("pnpm", "store", "path")
 
 
+# settled's reaper: this process the subreaper of what CMD starts (prctl PR_SET_CHILD_SUBREAPER,
+# 36), so a process CMD leaves behind, detached or not, is reparented here; its own children
+# waited for until none is left (ECHILD: no descendant can live without a live child of this one).
+REAPER = """import ctypes, os, subprocess, sys
+libc = ctypes.CDLL(None, use_errno=True)
+assert libc.prctl(36, 1, 0, 0, 0) == 0, "testkit: no subreaper (Linux only)"
+rc = subprocess.call(sys.argv[1:])
+while True:
+    try:
+        os.wait()
+    except ChildProcessError:
+        break
+sys.exit(rc)
+"""
+
+
+def settled(cmd: Sequence[str]) -> list[str]:
+    """CMD as a command that exits, with CMD's exit, only once CMD and every process it started,
+    detached ones too (a Pi extension's unref'd writer or herdr-say), have exited: readiness
+    through the process tree this command owns, never a wait and never another process's /proc.
+    Linux only."""
+    return [sys.executable, "-c", REAPER, *cmd]
+
+
 @contextlib.contextmanager
 def provider(*args: str) -> Generator[int]:
     """The fake model provider (testkit/provider.py, ARGS its own) serving while the block runs: its
@@ -310,13 +334,15 @@ def provider(*args: str) -> Generator[int]:
         p.wait()
 
 
-def real_pi(tag: str) -> str:
-    """The real pi on the caller's PATH (never testkit's stand-in) at the kit's pin (pi-version),
-    else failing naming the install command; its path."""
+def real_pi(tag: str, *, pinned: bool = True) -> str:
+    """The real pi on the caller's PATH (never testkit's stand-in), PINNED: at the kit's pin
+    (pi-version), else failing naming the install command; its path."""
     pin = (ROOT / "pi-version").read_text().strip()
     install = f"npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{pin}"
     pi = shutil.which("pi", path=os.environ["PATH"])
     assert pi, f"{tag}: pi not on PATH; install Pi {pin}: {install}"
+    if not pinned:
+        return pi
     v = subprocess.run([pi, "--version"], capture_output=True, text=True, check=False)
     got = next(iter(re.findall(r"[0-9]+\.[0-9]+\.[0-9]+", v.stdout + v.stderr)), "no version")
     assert got == pin, f"{tag}: pi reports {got}, the kit pins {pin} (pi-version); {install}"
