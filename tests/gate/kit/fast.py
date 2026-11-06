@@ -14,9 +14,9 @@ record of what ran.
 The copy and its mapping run, with e.sh failing, are prepared once per gate run
 (Scratch.prepare): red, yet the map is written from the items that passed, e.sh left out; each
 scenario reads that run's output from the prepared tree and works on its own copy. `selects`:
-nothing changed, then one script changed (the dry run too). `every_item`: a listed path no
-coverage reaches, a file absent at the map head. `past_full_pass`: a record with no git identity
-refused, then a recorded full pass as the diff base."""
+nothing changed, then one script changed (the dry run too). `past_full_pass`: a listed path no
+coverage reaches and a file absent at the map head, then a record with no git identity refused,
+then a recorded full pass as the diff base."""
 
 from __future__ import annotations
 
@@ -88,6 +88,7 @@ def build(p: Scratch) -> None:
     Path(f"{p.env['FAST_RAN']}.fail").touch()
     rc, out = just(p, k, "fast-map", "-k", "not test_recipe")
     (p.root / "map.json").write_text(json.dumps({"rc": rc, "out": out}))
+    shutil.rmtree(k / "node_modules")  # each copy's own pnpm install, never a copy of this one
     for f in (p.root / "ran", p.root / "ran.fail"):
         f.unlink(missing_ok=True)
 
@@ -170,33 +171,27 @@ def selects(s: Scratch) -> None:
         assert want in listed, f"{TAG}: '{want}' not in the just fast-list output: {listed}"
 
 
-def every_item(s: Scratch) -> None:
-    """A listed path no coverage reaches (the list itself), then a file the map cannot know
-    (absent at the map head, not on the list): every non-e2e item, the cause named."""
+def past_full_pass(s: Scratch) -> None:
+    """A listed path no coverage reaches (the list itself) and a file the map cannot know (absent
+    at the map head, not on the list), at once: every non-e2e item, each cause named (one run:
+    each cause its own part of the reason). Then a full pass recorded after the map: files
+    changed up to it are gated, so only changes past it feed coverage selection; a test item
+    changed since the map head stays selected (the map does not know its coverage). Before it, a
+    record with no git identity (no env, no repo, global or system config) fails naming it and how
+    to set it, and records nothing: the gate never makes one up."""
     k = copy(s)
     with (k / "shared-machinery.txt").open("a") as f:
         f.write("# changed\n")
-    out = fast(s, k, "a b d e one two")
-    want = "fast: all 6 non-e2e test items: shared-machinery.txt on shared-machinery.txt"
-    assert want in out, f"{TAG}: a listed unreached change not named: {out}"
-    s.git(k, "checkout", "-q", "shared-machinery.txt")
     new = k / "scripts" / "fixture-new"
     new.write_text('#!/usr/bin/env python3\nprint("new")\n')
     out = fast(s, k, "a b d e one two")
     want = (
-        r"fast: all 6 non-e2e test items: scripts/fixture-new absent at the map head .*, "
-        r"outside the coverage map's reach"
+        r"fast: all 6 non-e2e test items: shared-machinery\.txt on shared-machinery\.txt; "
+        r"scripts/fixture-new absent at the map head \w+, outside the coverage map's reach"
     )
-    assert re.search(want, out), f"{TAG}: a file absent at the map head not named: {out}"
-
-
-def past_full_pass(s: Scratch) -> None:
-    """A full pass recorded after the map: files changed up to it are gated, so only changes past
-    it feed coverage selection; a test item changed since the map head stays selected (the map
-    does not know its coverage). Before it, a record with no git identity (no env, no repo, global
-    or system config) fails naming it and how to set it, and records nothing: the gate never makes
-    one up."""
-    k = copy(s)
+    assert re.search(want, out), f"{TAG}: every item, both causes, not named: {out}"
+    s.git(k, "checkout", "-q", "shared-machinery.txt")
+    new.unlink()
     with (k / "scripts" / "fixture-a").open("a") as f:
         f.write("# gated\n")
     with (k / "tests" / "b.sh").open("a") as f:
@@ -234,4 +229,4 @@ def past_full_pass(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(selects, every_item, past_full_pass)
+    main(selects, past_full_pass)

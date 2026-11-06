@@ -3,17 +3,13 @@ run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from fast import every_item, past_full_pass, selects
+from fast import past_full_pass, selects
 
 Case = Callable[..., None]
 
 
 def test_fast_selects(case: Case) -> None:
     case(selects)
-
-
-def test_fast_every_item(case: Case) -> None:
-    case(every_item)
 
 
 def test_fast_past_full_pass(case: Case) -> None:
