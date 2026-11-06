@@ -2,16 +2,17 @@
 owner ruling #548 2026-11-04, #660: no silent failures), through `just check-languages` in the
 template's repo (testkit/template.py, its own copy of the run's one package install).
 
-tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs) exiting 0 with empty stdout,
-or no tsc at all (the real pnpm prints "Command tsc not found" on stdout, exit 254), eslint a
-stand-in crashing (exit 2, its own stderr), scc a stand-in first on PATH printing no JSON, only
-its own stderr: each is named with the command, its exit code and what it printed, never a JSON
-parse error. The template's check-ts installs nothing, so the kit's install race (#548) has no
-counterpart here.
+tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs) exiting 0 with empty stdout, or
+no tsc at all (none on PATH either, asserted first: check_languages.no_tsc; the real pnpm prints
+"Command tsc not found" on stdout, exit 254), eslint a stand-in crashing (exit 2, its own stderr),
+scc a stand-in first on PATH printing no JSON, only its own stderr: each is named with the command,
+its exit code and what it printed, never a JSON parse error. The template's check-ts installs
+nothing, so the kit's install race (#548) has no counterpart here.
 """
 
 from __future__ import annotations
 
+from check_languages import no_tsc
 from testkit import Ran, Scratch, main
 from testkit.template import Repo
 
@@ -44,6 +45,7 @@ def tsc_silent(s: Scratch) -> None:
 def tsc_absent(s: Scratch) -> None:
     r = Repo(s, "typescript")
     (r.dir / "node_modules" / ".bin" / "tsc").unlink()
+    no_tsc(s, r.dir)
     languages(
         r,
         "ts-files: pnpm exec tsc --showConfig exited 254; stderr: (empty); stdout: ",

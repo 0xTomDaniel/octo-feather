@@ -6,8 +6,9 @@ the kit's uv environment and pnpm store.
 tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs): exiting 0 with empty stdout,
 or failing with its own stderr, check-languages names the command, its exit code and what it
 printed, never a JSON parse error; so for any tool it asks (scc printing only its stderr). No tsc in
-node_modules at all (the state a concurrent pnpm install leaves for a moment: it unlinks and
-rewrites node_modules/.bin/tsc, #548), the real pnpm's exit and its stdout message are named.
+node_modules nor on PATH (a box's global tsc masked, the premise asserted first: no_tsc), the
+state a concurrent pnpm install leaves for a moment (it unlinks and rewrites
+node_modules/.bin/tsc, #548): the real pnpm's exit and its stdout message are named.
 And `just check-ts` on a current node_modules writes nothing there: its tsc launcher is the same
 file after the run, so a check-languages running beside it (the gate runs both at once, after
 check-tests installed) always finds tsc.
@@ -15,8 +16,14 @@ check-tests installed) always finds tsc.
 
 from __future__ import annotations
 
+import shutil
+from typing import TYPE_CHECKING
+
 from check_ts import Copy, tool
 from testkit import ROOT, Ran, Scratch, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 CMD = "pnpm exec tsc --showConfig"
 
@@ -65,10 +72,22 @@ def tsc_fails(s: Scratch) -> None:
     named(languages(c), f"{CMD} exited 3; stderr: tsc stand-in: cannot read tsconfig.json")
 
 
+def no_tsc(s: Scratch, repo: Path) -> None:
+    """No tsc reachable in REPO's recipes, whatever the box installed globally: none on this
+    scratch's PATH (Scratch.without) nor on the PATH REPO's justfile gives its recipes (it adds
+    mise's tool dirs), asked of just itself."""
+    s.without("tsc")
+    path = s.run([tool("just"), "--evaluate", "PATH"], cwd=repo).out
+    found = shutil.which("tsc", path=path)
+    assert found is None, f"premise: a tsc outside node_modules is reachable: {found}"
+
+
 def tsc_absent(s: Scratch) -> None:
-    """No tsc in node_modules: the real pnpm's exit and its message, which it prints on stdout."""
+    """No tsc in node_modules nor on PATH: the real pnpm's exit and its message, which it prints
+    on stdout."""
     c = copy(s)
     (c.dir / "node_modules").mkdir()
+    no_tsc(s, c.dir)
     named(languages(c), f"{CMD} exited 254; stderr: (empty); stdout: ", 'Command "tsc" not found')
 
 
