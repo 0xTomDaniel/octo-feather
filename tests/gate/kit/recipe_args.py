@@ -2,8 +2,11 @@
 (testkit.main): kit and template justfile recipes pass their arguments and the invocation
 directory to the called command as data (#61). Each recipe runs through `just` (the surface under
 test) from a cwd whose path holds `$`, a backtick, both quotes and a space, with arguments holding
-the same; testkit/argv_recorder.sh, as each octo-feather-* command a recipe calls, records the
-exact cwd and argv; nothing expands (no file an argument would touch appears). Offline, HOME
+the same. Where the command would launch agents or external systems (shape, start, supervise,
+qc), testkit/argv_recorder.sh stands in and records the exact cwd and argv (the owner's narrow
+exception, its header); spec-chat, integrate and new-repo run for real, each stopped early by its
+own refusal naming what it got, from the cwd only that dir explains (integrate: the lane worktree
+of the invocation dir's repo). Nothing expands (no file an argument would touch appears). Offline, HOME
 redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes run from a copy
 of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the templates' justfiles
 keep the caller's PATH, the recorder first on it.
@@ -18,9 +21,9 @@ from testkit import HERE, ROOT, Scratch, kit_repo, main
 
 TAG = "recipe-args test"
 # The recipes' commands whose real run launches agents or external systems: the recorder stands in
-# (testkit/argv_recorder.sh, its header: the owner's narrow exception). spec-chat and new-repo,
-# cheap and local, run for real.
-CMDS = ("shape", "integrate", "start", "qc")
+# (testkit/argv_recorder.sh, its header: the owner's narrow exception). spec-chat, integrate and
+# new-repo, our own local code, run for real, each made to stop early and name what it got.
+CMDS = ("shape", "start", "qc")
 A1, A2, A3, A4, A5 = "x $y", "$(touch pwned)", "`touch pwned2`", "q'r\"s", "z w"
 
 
@@ -46,7 +49,23 @@ def world(s: Scratch) -> tuple[Path, Path]:
     }
     w = t / "a $b `c` 'd\" e" / "w"
     w.mkdir(parents=True)
+    # The invocation dir a target repo with lane gh59's worktree, so integrate gets to its REFs.
+    s.git(w, "init", "-q", "-b", "main")
+    s.git(w, "commit", "-q", "--allow-empty", "-m", "base")
+    s.git(w, "worktree", "add", "-q", "-b", "gh59", str(t / "lane-gh59"))
+    (stubs / "octo-feather-integrate").symlink_to(k / "scripts" / "octo-feather-integrate")
     return k, w
+
+
+def integrate(s: Scratch, just: list[str], cwd: Path) -> None:
+    """integrate, for real, from CWD: TICKET 59 finds its lane worktree (branch gh59), and the first
+    REF, which names no commit, is refused by name before any merge or gate."""
+    r = s.run([*just, "integrate", "59", A1, A5, A2, A3], cwd=cwd, want=64)
+    for want in (
+        f"octo-feather-integrate: {A1} is not a branch or commit",
+        "octo-feather-integrate: gh59 reset to",
+    ):
+        assert want in r.err, f"{TAG}: integrate from {cwd}: {r.err}"
 
 
 def check(s: Scratch, name: str, cmd: str, cwd: Path, *argv: str) -> None:
@@ -84,8 +103,7 @@ def args(s: Scratch) -> None:
     )
     want = f"octo-feather-spec-chat: no Spec Chat installer at {clone}/scripts/install-spec-chat"
     assert want in r.err, f"{TAG}: spec-chat: {r.err}"
-    kj("integrate", "59", A1, A5, A2, A3)
-    check(s, "integrate", "octo-feather-integrate", w, "59", A1, A5, A2, A3)
+    integrate(s, ["just", "--justfile", str(k / "justfile")], w)
     kj("start")
     check(s, "start (default cwd)", "octo-feather-start", k, "--director", "--cwd", str(w))
     kj("start", f"{A4} {A2}")
@@ -98,8 +116,9 @@ def args(s: Scratch) -> None:
     check(s, "qc", "octo-feather-qc", w, A4, "7", A1, A5, A2)
     # new-repo, for real (local, no network): DEST, one argument relative to the cwd, made there
     # from the template, the flag taken; LANG reaches it as written.
-    kj("new-repo", "python", f"{A1} {A5} {A2}", "--no-spec-chat")
-    made = w / f"{A1} {A5} {A2}"
+    # (DEST beside the invocation dir's repo: new-repo refuses a nested one.)
+    kj("new-repo", "python", f"../{A1} {A5} {A2}", "--no-spec-chat")
+    made = w.parent / f"{A1} {A5} {A2}"
     assert (made / ".git").is_dir(), f"{TAG}: new-repo made no repo at {made}"
     assert (made / "justfile").is_file(), f"{TAG}: new-repo did not copy the template into {made}"
     # The flag taken: without it new-repo runs spec-chat, which fails here (no clone under the
@@ -111,8 +130,7 @@ def args(s: Scratch) -> None:
         r = w / lang
         r.mkdir()
         (r / "justfile").write_bytes((ROOT / "templates" / lang / "justfile").read_bytes())
-        s.run(["just", "integrate", "59", A1, A5, A2, A3], cwd=r)
-        check(s, f"{lang} integrate", "octo-feather-integrate", r, "59", A1, A5, A2, A3)
+        integrate(s, ["just"], r)
         s.run(["just", "qc", A4, "7", A1, A5, A3], cwd=r)
         check(s, f"{lang} qc", "octo-feather-qc", r, A4, "7", A1, A5, A3)
     found = [
