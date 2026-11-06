@@ -185,8 +185,7 @@ def launch(path: str, *, to_file: bool = False):
                  "--octo-feather-web-servers", os.path.join(kit, WEB_LIST)]
     args += ["--octo-feather-role", os.path.splitext(os.path.basename(path))[0]]
     tracker = tracker_skill(roots[0])
-    # A skill the role lists that the target also declares is passed once, the target's declared copy (a declared
-    # skill outranks the kit's): two folders of one name make Pi load neither (name collision, #595).
+    # pi-role --help, skills
     declared = declared_skills(roots[0])
     own = {os.path.basename(d): d for d in declared if os.path.isfile(os.path.join(d, "SKILL.md"))}
     for s in fm.get("skills", []):
