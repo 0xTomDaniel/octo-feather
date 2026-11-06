@@ -40,6 +40,8 @@ check run also carries a runtime marker:
       exits 1. A caller treats anything but the ok line as refusal. The qc capture of tagged tests
       (octo-feather-qc --capture-case, --capture-store) runs inside the full gate by design and never
       asks: it calls no model and decides nothing (quality spec #qc-capture); the marker stays set.
+  check-gate-free --with-run   the scan, then, only when it passed, the --run marker on a second line:
+      one process answering the justfile's two values (#692: a python start each was most of their cost).
 
 Stated limit: like `env -i`, a script that deliberately clears or forges the
 marker starts outside the check run, and nothing here can tell it from one
@@ -190,6 +192,9 @@ def parent_justfile():
 
 
 def main():
+    with_run = sys.argv[1:2] == ["--with-run"]
+    if with_run:
+        del sys.argv[1]
     if sys.argv[1:2] == ["--run"]:
         return run_marker()
     if sys.argv[1:2] == ["--refuse"]:
@@ -233,6 +238,8 @@ def main():
         print(f"check-gate-free: the gate recipes above reach the product judge or factory evals; {FIX}", file=sys.stderr)
         sys.exit(1)
     print("gate-free: ok")
+    if with_run:
+        run_marker()
 
 
 if __name__ == "__main__":
