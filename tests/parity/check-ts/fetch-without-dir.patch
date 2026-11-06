@@ -1,25 +1,25 @@
 Seeded defect: just check-ts names the fetch command without the kit dir it must run in.
 --- a/justfile
 +++ b/justfile
-@@ -249,7 +249,7 @@ check-ts:
+@@ -266,7 +266,7 @@
      set -euo pipefail
      cd "$root"
-     err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+     pnpm --config.verify-deps-before-run=error exec true >/dev/null 2>&1 || err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
 -      echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
 +      echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile" >&2; exit 1; }
      cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
      mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
      (( ${#files[@]} )) || { echo "check-ts: tsconfig.json lists no files" >&2; exit 1; }
-@@ -292,7 +292,7 @@ check-tests *args:
-     # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
-     # runs, and two installs at once would race (check-ts's own install is then a no-op).
+@@ -310,7 +310,7 @@
+     # runs, and two installs at once would race. check-ts then installs nothing (pnpm finds node_modules current), as
+     # any pnpm install, even an up-to-date one, rewrites node_modules/.bin under a concurrent pnpm exec (#548, #663).
      err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
 -      echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
 +      echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile" >&2; exit 1; }
      # mise's state dir one empty dir per gate run, removed after it, inherited by every item and nested run: each
      # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
      # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
-@@ -645,7 +645,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
+@@ -663,7 +663,7 @@
      # the fetch below ran, which also filled the pnpm store check-ts installs from offline. A file compare, not a pnpm call:
      # pnpm under another HOME (corepack's shim) would download itself.
      if cmp -s "$root/pnpm-lock.yaml" "$root/node_modules/.pnpm/lock.yaml"; then echo "pnpm   kit TypeScript tools ok (pnpm-lock.yaml)"
