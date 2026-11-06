@@ -38,4 +38,4 @@ The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/dem
 
 - `just qc` refuses a dirty worktree: the drive commits everything before each run, and resets to the judged head before the second.
 - The drive's own records (one per Drive criterion line) go to the kit's real store; the scratch target's records stay in the scratch store and go with cleanup.
-- Run inside a qc sandbox (the kit's own `just qc` on these criteria), the nested qc sandbox must pass its proof: that is the nested case `tests/qc.sh` covers.
+- Run inside a qc sandbox (the kit's own `just qc` on these criteria), the nested qc sandbox must pass its proof: that is the nested case `tests/gate/kit/test_qc.py::test_qc_nested` covers.

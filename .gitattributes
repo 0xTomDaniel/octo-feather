@@ -71,3 +71,4 @@ docs/specs/.style/** language-exempt
 uv.lock language-exempt
 mise.lock language-exempt
 Skillfile.lock language-exempt
+tests/fixtures/qc-browser/chrome-headless-shell shell

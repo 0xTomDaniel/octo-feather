@@ -112,7 +112,7 @@ if [[ "${1:-}" == --gate ]]; then shift   # #493 AC1: the gate, or chosen items,
   cd "$K" && exec "$t/user" env GATE_WORKERS="${GATE_WORKERS:-1}" just check-tests "$@"
 fi
 
-# Test doubles for the qc runs (check.py's sandbox()): the stub judge ($t/judge/pi) first runs, as tests/qc.sh's
+# Test doubles for the qc runs (check.py's sandbox()): the stub judge ($t/judge/pi) first runs, as tests/lib/qc.sh's
 # misemissing judge, a tool not installed through its mise shim (a link to mise named just, in a dir pinning just
 # 0.0.1): it must fail, try no install and write nothing to mise's data or cache dir (one PROBE line); then the kit's
 # stub judge (tests/fixtures/qc-judge/pi) reports on the brief's criterion. A fake herdr; and mise whose doctor prints

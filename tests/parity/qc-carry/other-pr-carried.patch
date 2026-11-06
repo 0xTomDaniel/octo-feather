@@ -1,0 +1,14 @@
+Seeded defect: a pass built in another lane's PR is carried into this one (quality spec #qc-carry: judged again when built in another PR).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index b9e93f1..b1f1977 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -800,7 +800,7 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str,
+         if row.get("status") != "built" or "record" not in row or at == head:
+             continue   # not passed at an earlier head: judged as before
+         prior = earlier(at, stem, i, row["record"])
+-        why = (f"built in PR #{row.get('pr')}, not this lane's #{pr}" if row.get("pr") != pr else
++        why = (f"built in PR #{row.get('pr')}, not this lane's #{pr}" if row.get("pr") is None else
+                f"judged at {at[:12]}, a head {head[:12]} does not contain"
+                if subprocess.run(["git", "merge-base", "--is-ancestor", at, head], capture_output=True).returncode else
+                f"no passing result from record {row['record']} in a qc report at {at[:12]}" if prior is None else

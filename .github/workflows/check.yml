@@ -58,7 +58,7 @@ jobs:
         with:
           version: ${{ steps.pins.outputs.mise }}
           cache: false
-      # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
+      # the qc tests (tests/gate/kit/test_qc*.py, tests/qc-*.sh) run the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
       # The spec-chat pin is a private repo: its read-only deploy key, used for that repo's URL only.
       - env:

@@ -4,7 +4,7 @@
 # ($t: TMPDIR, HOME, the run artifacts under it), the stub `pi` and fake `herdr` first on PATH (no model, no live
 # Herdr), the trig stub suite ($t/good, copied to $t/evals), run/line/fail, ic (a role-transcript case), bad (a shape
 # check on a fresh copy), and the stub suites more than one section uses: mk_rt, mk_fl, mk_ran, mk_jg (each writes
-# $t/<suite> and its pristine $t/<suite>-good). Needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
+# $t/<suite> and its pristine $t/<suite>-good). Needs unprivileged user namespaces (`unshare -rm`), as tests/lib/qc.sh does.
 set -euo pipefail
 # A test harness, not a gate recipe reaching the evals: its stub-pi runs start outside any check run (the one
 # boundary; octo-feather-qa refuses under the marker, proved below).
@@ -28,7 +28,7 @@ real_uv="$( { command -v mise > /dev/null && mise -C "$kit" which uv; } 2> /dev/
 # --color never: uv colours even a path it prints when FORCE_COLOR is set (as a CI runner may), and a coloured path
 # is no dir.
 export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" --color never cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" --color never python dir)}" UV_OFFLINE=1
-# mise's dirs, as mise reports them before HOME moves (as tests/qc.sh, the kit justfile the same way): the sandbox's
+# mise's dirs, as mise reports them before HOME moves (as tests/lib/qc.sh, the kit justfile the same way): the sandbox's
 # proof finds the box's installs whether this test runs bare or through just.
 if command -v mise > /dev/null; then
   for d in data cache config; do v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$(mise doctor --json 2> /dev/null | jq -r --arg d "$d" '.dirs[$d]')"; done

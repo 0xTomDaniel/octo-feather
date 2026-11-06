@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# A stub qc judge as `pi` (no model), for the agent fallback (quality spec #qc-fallback): tests/qc-fallback.sh and the
+# A stub qc judge as `pi` (no model), for the agent fallback (quality spec #qc-fallback): tests/gate/kit/test_qc_fallback.py and the
 # verify-octo-feather qc-fallback drive put this folder first on PATH. It prints its parent's argv (the time cap qc runs
 # it under) and its brief's criterion lines, then reports on the brief's one criterion as the brief asks: fail when its
 # id is in FAKE_QC_FAIL (space-separated), else pass. FAKE_QC_JUDGE=cap fires the alarm of its parent timeout, as the
