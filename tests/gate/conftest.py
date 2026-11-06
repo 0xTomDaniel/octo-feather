@@ -150,19 +150,20 @@ def _load1() -> float | None:
 def _last_seconds() -> dict[str, float]:
     """Each item's wall seconds on the last trend line of this repo that names it ({} without history)."""
     repo = _git("rev-parse", "--show-toplevel") or os.getcwd()
-    mark, last = '"repo":' + json.dumps(repo), {}   # as _entry writes it: lines of other repos skip the parse
+    mark = '"repo":' + json.dumps(repo)   # as _entry writes it: lines of other repos skip the parse
+    last: dict[str, float] = {}
     try:
         with open(os.path.join(_state_dir(), TREND)) as f:
             for line in f:
-                try:
-                    d = json.loads(line) if mark in line else None
-                except ValueError:
+                if mark not in line:
                     continue
-                if not isinstance(d, dict) or d.get("repo") != repo or not isinstance(d.get("steps"), list):
+                try:   # a line not of the runner's form: skipped from its first bad field
+                    d: Any = json.loads(line)
+                    if d["repo"] == repo:
+                        for s in d["steps"]:
+                            last[str(s["name"])] = float(s["seconds"])
+                except (ValueError, KeyError, TypeError):
                     continue
-                for s in d["steps"]:
-                    if isinstance(s, dict) and isinstance(s.get("name"), str) and isinstance(s.get("seconds"), (int, float)):
-                        last[s["name"]] = float(s["seconds"])
     except OSError:
         return {}
     return last
@@ -184,7 +185,7 @@ def pytest_xdist_make_scheduler(config: pytest.Config, log: Any) -> Any:
     """--dist load, dealt out one item per worker per round (this file's docstring); any other mode: xdist's own."""
     if config.getoption("dist") != "load":
         return None
-    from xdist.scheduler import LoadScheduling
+    from xdist.scheduler import LoadScheduling  # pyright: ignore[reportMissingTypeStubs]
 
     class Dealt(LoadScheduling):
         def __init__(self, config: pytest.Config, log: Any) -> None:
@@ -270,7 +271,8 @@ def _source(item: pytest.Item) -> str:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    _longest_first(items, getattr(config, "workerinput", {}).get(LAST) or config.stash.get(_LAST, {}))
+    given: dict[str, Any] = getattr(config, "workerinput", {})   # an xdist worker's: the controller's read
+    _longest_first(items, given.get(LAST) or config.stash.get(_LAST, None) or {})
     if tags := os.environ.get(TAGS):
         Path(tags).write_text(json.dumps({i.nodeid: _tags(i) for i in items if _tags(i)}))
     if listed := os.environ.get(ITEMS):
