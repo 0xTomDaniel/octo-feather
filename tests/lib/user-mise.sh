@@ -90,8 +90,8 @@ case "${USER_MISE_STAGE:-0}" in
     git clone -q --no-hardlinks "$kit" "$F/src/octo-feather" || fail "clone the kit"
     (cd "$kit" && git ls-files -z --cached --others --exclude-standard | while IFS= read -r -d '' f; do [[ -e "$f" || -L "$f" ]] && printf '%s\0' "$f"; done \
       | tar --null -T - -cf -) | tar -xf - -C "$F/src/octo-feather" || fail "copy the kit"
-    # The kit's installed JavaScript packages (gitignored, so not copied): srt, the qc sandbox, runs from them.
-    mkdir -p "$F/src/octo-feather/node_modules" && ro "$kit/node_modules" "$F/src/octo-feather/node_modules" || fail "bind the kit's node_modules"
+    # The clone's own JavaScript packages (gitignored, so not copied), offline from the box's pnpm store (named: on another disk pnpm picks its own): srt, the qc sandbox, runs from them.
+    pnpm install --offline --frozen-lockfile --silent --store-dir "$USER_MISE_PNPM" --dir "$F/src/octo-feather" || fail "pnpm install --offline --frozen-lockfile in the kit clone"
     cd / && mount --rbind "$F" "$RH" || fail "mount the user's HOME over $RH"
     set +e; USER_MISE_STAGE=2 USER_MISE_T="$t" unshare -U --map-user="$USER_MISE_UID" --map-group="$USER_MISE_GID" "$RH/src/octo-feather/tests/${0##*/}" "$@"; rc=$?; set -e
     exit "$rc" ;;
