@@ -13,6 +13,7 @@ Drive criterion: `skills#acceptance-skill-frontmatter`
 ## Sub-features
 
 - `offered` the implementer's launch in a target declaring `python` and its own valid skill `local`: starts, and Pi's loaded skills are exactly the role file's `skills:` list (`{tracker}` as `github-issues`), `local` not among them.
+- `own-copy` the implementer's launch in a target that holds and declares its own copy of `python`, a skill its role lists: starts, offered exactly its listed skills, `python` once, from the target's copy.
 - `declared-malformed` a target whose declared skill's description is invalid YAML: refused, naming it and Pi's reason.
 - `declared-dangling` a target whose declared skill is a dangling link: refused, naming it and why.
 - `listed-malformed` a scratch kit copy whose `tdd`, listed by the implementer, is invalid YAML: refused, naming it and Pi's reason.
@@ -31,9 +32,9 @@ Preconditions:
 
 Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive skill-loading` (or `run skill-loading`). Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/skill-loading/`.
 
-Each launch case runs, from a scratch git target under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/skill-loading/targets/<case>`, `pi-role <kit>/agents/implementer.md --mode rpc --offline --no-session --no-mcp` with its RPC input on stdin (`offered`: one `get_commands`; the others: none), `HOME`, `PI_CODING_AGENT_DIR` and `XDG_CACHE_HOME` scratch. The gate cases run the copy's `scripts/check-skills`.
+Each launch case runs, from a scratch git target under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/skill-loading/targets/<case>`, `pi-role <kit>/agents/implementer.md --mode rpc --offline --no-session --no-mcp` with its RPC input on stdin (`offered`, `own-copy`: one `get_commands`; the others: none), `HOME`, `PI_CODING_AGENT_DIR` and `XDG_CACHE_HOME` scratch. The gate cases run the copy's `scripts/check-skills`.
 
-- **Each launch case.** Observe the exit code and, for a refusal, `Pi did not load skill <name> (` and the reason on stderr; for `offered`, the `get_commands` response's skills against `offered.obs.role-skills`.
+- **Each launch case.** Observe the exit code and, for a refusal, `Pi did not load skill <name> (` and the reason on stderr; for `offered`, the `get_commands` response's skills against `offered.obs.role-skills`; for `own-copy`, the same, and `python`'s one path against `own-copy.obs.target-python`.
 - **Each gate case.** Observe the exit code and the stderr lines naming the skill and roles.
 - **Side effects.** Every case cwd stays empty and the kit's `git status` unchanged.
 

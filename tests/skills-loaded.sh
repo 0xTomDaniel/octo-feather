@@ -4,6 +4,7 @@
 # scripts/pi-role against a fake OpenAI-compatible provider on 127.0.0.1 that logs each request. Cases:
 #   ok        the implementer starts in a target declaring a good repo skill: the request offers every skill its
 #             role file lists (tdd, python, typescript among them) and not the declared one
+#   own copy  the target declares a skill the role lists from its own copy: the role starts, offered it once, that copy
 #   listed    a listed kit skill whose description is invalid YAML: pi-role exits non-zero naming the skill and
 #             Pi's reason, and the provider saw no request
 #   declared  the same for a skill the target's AGENTS.md declares on its Repo skills: line
@@ -102,6 +103,16 @@ start code-reviewer -p go
 got="$(python3 "$t/offered.py" "$t/log")"
 [[ " $got " == *" tdd "* ]] || fail "ok: code-reviewer not offered tdd: [$got]"
 echo "case ok: the implementer is offered exactly its listed skills, tdd, python, typescript included; code-reviewer tdd; the declared repo skill is not offered"
+
+# own copy: the target holds its own copy of a skill the role lists and declares it (the kit's own repo, #595): the
+# role starts, offered that skill once, the target's copy.
+mkdir -p "$tgt/.agents/skills/python"; cp "$kit/.agents/skills/python/SKILL.md" "$tgt/.agents/skills/python/"
+start implementer -p go
+[[ "$rc" == 0 && "$out" == *fake-done* ]] || fail "own copy: implementer did not start: rc=$rc $err"
+[[ "$(python3 "$t/offered.py" "$t/log")" == "$want" ]] || fail "own copy: implementer offered [$(python3 "$t/offered.py" "$t/log")], its role file lists [$want]"
+grep -qF "$(cd "$tgt" && pwd -P)/.agents/skills/python/SKILL.md" "$t/log" || fail "own copy: python not offered from the target's copy"
+rm -rf "$tgt/.agents/skills/python"
+echo "case own copy: a listed skill the target declares from its own copy is offered once, that copy, and the role starts"
 
 # listed: the kit's tdd broken; both roles listing it refuse.
 cp "$t/kit/.agents/skills/tdd/SKILL.md" "$t/tdd.keep"
