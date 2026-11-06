@@ -3,9 +3,11 @@
 tests/lib/qa.sh's: a session's socket is a file under the config dir naming the session.
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
-with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
-no agent in Herdr's envelope (as tests/fixtures/lane-report/herdr); any other call prints
-{"session": S}.
+with no socket a call fails `server_not_running`; `agent list` prints no agent in Herdr's envelope
+(as tests/fixtures/lane-report/herdr); one pane per workspace (as tests/lib/qc.sh's): `workspace
+create` answers root pane w1:p1, `pane run P CMD...` starts CMD detached (as the server would) and
+logs {"pane_id": P} beside the socket, which `pane list` prints (nothing before a run); any other
+call prints {"session": S}.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
 each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
@@ -49,9 +51,29 @@ if a[:2] == ["session", "delete"] and len(a) == 3:
     sys.exit(0)
 if not os.path.isfile(sock):
     sys.exit("server_not_running")
-if a == ["agent", "list"]:
+panes = os.path.join(os.path.dirname(sock), "panes")
+if a[:2] == ["workspace", "create"]:
+    sys.stdout.write('{"result":{"root_pane":{"pane_id":"w1:p1"}}}\n')
+    sys.exit(0)
+if a[:2] == ["pane", "run"] and len(a) > 3:
+    with open(panes, "a") as f:
+        f.write(f'{{"pane_id":"{a[2]}"}}\n')
+    import subprocess
+
+    subprocess.Popen(
+        ["setsid", "sh", "-c", " ".join(a[3:])],  # noqa: S607
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    sys.exit(0)
+if a == ["pane", "list"]:
+    if os.path.isfile(panes):
+        with open(panes) as f:
+            sys.stdout.write(f.read())
+elif a == ["agent", "list"]:
     sys.stdout.write('{"id": "1", "result": {"agents": []}}\n')
-elif a != ["pane", "list"]:
+else:
     with open(sock) as f:
         name = f.read().strip()
     if '"' in name or "\\" in name or not (name.isascii() and name.isprintable()):
