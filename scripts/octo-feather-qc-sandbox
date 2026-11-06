@@ -10,8 +10,8 @@
 # ruff: noqa: S103, PERF203
 """octo-feather-qc-sandbox [--] JUDGE_CMD...   the qc judge's sandbox (docs/adr/0022, the sandbox paragraph)
 
-The judge runs inside anthropics/sandbox-runtime (srt, pinned in the kit's mise.toml as
-npm:@anthropic-ai/sandbox-runtime; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
+The judge runs inside anthropics/sandbox-runtime (srt, @anthropic-ai/sandbox-runtime pinned exact in the kit's
+package.json and pnpm-lock.yaml, run from the kit's node_modules: `pnpm install --frozen-lockfile`; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
 namespaces, no capabilities, no_new_privs, every path read-only but what the policy below lets write, read-denied
 paths as empty tmpfs masks whose writes die with the run, and a network allowlist. This script is the kit's policy
 over it (which paths are masked, kept, writable; the shims, the attempt record, the proof and the records) and the
@@ -102,7 +102,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from typing import Any, NoReturn, cast
 
 import tomllib
@@ -174,6 +174,7 @@ INPUTS = (
     "QC_GHSNAP_OFF",
     "QC_GHSNAP_LINE",
 )  # the inputs above, never passed on to the judge
+SRT_PKG = "@anthropic-ai/sandbox-runtime"
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
 
@@ -620,57 +621,36 @@ def hosts_for_pi(pi_dir: str) -> list[str]:
     return sorted(hs)
 
 
-def srt_cmd(data: str, proof: Callable[[], tuple[bool, str]]) -> tuple[list[str], str]:
-    """srt as the kit pins it (mise.toml, npm backend), and the node it runs on, at their install dirs in mise's data
-    dir DATA: read from the pins, not asked of mise (mise resolves an npm tool's install through its cache, which a
-    moved HOME lacks: `missing` though installed)."""
-
+def srt_cmd(data: str) -> tuple[list[str], str]:
+    """srt as the kit pins it (package.json, exact, locked in pnpm-lock.yaml) from the kit's node_modules, run with the
+    node of the kit's mise.toml pin (in mise's data dir DATA), else the first node on PATH. Missing, or at another
+    version than the pin: exit 66 naming the install command."""
+    fix = f"pnpm install --frozen-lockfile --dir {SK}"
     try:
-        tools: dict[str, Any] = tomllib.load(open(f"{SK}/mise.toml", "rb")).get("tools", {})
+        dev: dict[str, Any] = json.load(open(f"{SK}/package.json")).get("devDependencies", {})
     except (OSError, ValueError):
-        tools = {}
-    sv, nv = tools.get("npm:@anthropic-ai/sandbox-runtime"), tools.get("node")
-    srt = (
-        sorted(
-            glob.glob(
-                f"{data}/installs/npm-anthropic-ai-sandbox-runtime/{sv}~*/node_modules/.bin/srt"
-            )
-            + glob.glob(
-                f"{data}/installs/npm-anthropic-ai-sandbox-runtime/{sv}/node_modules/.bin/srt"
-            )
-        )
-        if sv and data
-        else []
-    )
-    node = f"{data}/installs/node/{nv}/bin/node" if nv and data else ""
-    if not srt or not os.path.exists(node):
-        # srt is one of the kit's own mise tools: the 6b line names what is not installed
-        ok, line = proof()
-        if not ok:
-            die(line)
+        dev = {}
+    pin = dev.get(SRT_PKG)
+    got = ""
+    with contextlib.suppress(OSError, ValueError):
+        got = json.load(open(f"{SK}/node_modules/{SRT_PKG}/package.json")).get("version", "")
+    js = os.path.realpath(f"{SK}/node_modules/{SRT_PKG}/dist/cli.js")
+    if not pin or got != pin or not os.path.isfile(js):
         die(
-            f"srt (npm:@anthropic-ai/sandbox-runtime {sv}, the kit's mise.toml) or its node {nv} not installed in {data or 'mise (none)'}: "
-            f"run {SK}/scripts/octo-feather-mise-install {SK}"
+            f"srt ({SRT_PKG} {pin or 'unpinned'}, the kit's package.json and pnpm-lock.yaml) not installed in "
+            f"{SK}/node_modules (found: {got or 'none'}): run {fix}"
         )
-    srt = srt[-1]
-    bd = os.path.dirname(srt)
-    # the bin is mise's (aube's) sh shim naming its target; run that file with the pinned node directly (one exec less)
-    m = re.search(r"target=(\S+)", open(srt, errors="replace").read(400))
-    js = os.path.realpath(os.path.join(bd, m.group(1)) if m else srt)
-    E["NODE_PATH"] = f"{bd}/..:{bd}/../.mise/node_modules"  # as the shim sets it
-    ver = "?"
-    d = os.path.dirname(js)
-    while d != "/":
-        if os.path.isfile(d + "/package.json"):
-            try:
-                pj = json.load(open(d + "/package.json"))
-                if pj.get("name") == "@anthropic-ai/sandbox-runtime":
-                    ver = pj.get("version", "?")
-                    break
-            except (OSError, ValueError):
-                pass
-        d = os.path.dirname(d)
-    return [node, js], ver
+    try:
+        nv = tomllib.load(open(f"{SK}/mise.toml", "rb")).get("tools", {}).get("node")
+    except (OSError, ValueError):
+        nv = None
+    node = f"{data}/installs/node/{nv}/bin/node" if nv and data else ""
+    node = node if os.path.exists(node) else (shutil.which("node") or "")
+    if not node:
+        die(
+            f"node (the kit's mise.toml pin {nv}) not installed: run {SK}/scripts/octo-feather-mise-install {SK}"
+        )
+    return [node, js], got
 
 
 def setup(judge: list[str]) -> NoReturn:
@@ -881,7 +861,7 @@ def setup(judge: list[str]) -> NoReturn:
                     f"mise doctor --json (exit {r.returncode}) printed no dirs.{d}: mise's dirs unknown"
                 )
             menv[f"MISE_{d.upper()}_DIR"] = E.get(f"MISE_{d.upper()}_DIR") or x
-    srt, srtv = srt_cmd(menv.get("MISE_DATA_DIR", ""), lambda: mise_tools(WT, SK, dict(E, **menv)))
+    srt, srtv = srt_cmd(menv.get("MISE_DATA_DIR", ""))
     # 2. the run tmpfs: overlay upper and work dirs, Pi copies.
     for c in (",", ":"):
         if c in WT:
@@ -1066,9 +1046,6 @@ def setup(judge: list[str]) -> NoReturn:
         MISE_NOT_FOUND_AUTO_INSTALL="0",
         MISE_NOT_FOUND_SYSTEM_FALLBACK="0",
         **menv,
-        # the kit's own config trusted (tools only, docs: mise.toml): mise honours an npm tool's locked graph,
-        # srt's, only for a trusted config, and the per-run state dir trusts none
-        MISE_TRUSTED_CONFIG_PATHS=":".join(dict.fromkeys((SK, KUT))),
     )
     open(f"{SCR}/bin/pi", "w").write(pishim(realpi, SCR))
     if HERDR:
@@ -1286,13 +1263,11 @@ def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
     judged: list[str] = []
     fix: list[str] = []
     for d in (wt, kit):
-        # the kit's config trusted for the ask: mise honours an npm tool's locked dependency graph (its ~aube~ install
-        # dir) only for a trusted config, and the throwaway state dir trusts none
         r = subprocess.run(
             [helper, "--list", "--json", d],
             capture_output=True,
             text=True,
-            env=dict(env, MISE_STATE_DIR=ms, MISE_TRUSTED_CONFIG_PATHS=os.path.realpath(kit)),
+            env=dict(env, MISE_STATE_DIR=ms),
         )
         dr = os.path.realpath(d)
         try:

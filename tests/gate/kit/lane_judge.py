@@ -469,6 +469,10 @@ def threshold(s: Scratch, which: str) -> None:
     for d in ("scripts", "agents", ".agents"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
     (k / "evidence").symlink_to(ROOT / "evidence")
+    # The qc sandbox's srt, as the kit pins and installs it (package.json, node_modules): read and
+    # started outside the sandbox, so links out of the copy serve.
+    for f in ("package.json", "node_modules"):
+        (k / f).symlink_to(ROOT / f)
     for f in {src.relative_to(ROOT).parent for src in FAKES.values()}:
         shutil.copytree(ROOT / f, k / f, symlinks=True)
     s.link_fakes(k)

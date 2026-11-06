@@ -19,7 +19,7 @@ Drive criterion: `quality#acceptance-qc-sandbox-maintained`
 Preconditions:
 
 - `verify-octo-feather launch` printed `ready`; `verify-octo-feather doctor` exits 0.
-- Unprivileged nested user namespaces, bubblewrap and socat on the box, and srt installed from the kit's `mise.lock` (`scripts/octo-feather-mise-install <kit>`; `just install-check` names each). Missing: the case exits 66 naming what to install.
+- Unprivileged nested user namespaces, bubblewrap and socat on the box, and srt installed from the kit's `pnpm-lock.yaml` (`pnpm install --frozen-lockfile --dir <kit>`; `just install-check` names each). Missing: the case exits 66 naming what to install.
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-sandbox`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-sandbox/`.
 

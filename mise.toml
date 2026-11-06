@@ -11,6 +11,3 @@ just = "1.21.0"
 shellcheck = "0.9.0"
 # scc is not in mise's short registry: its aqua package (release binaries, sha256 in mise.lock).
 "aqua:boyter/scc" = "4.1.0"
-# The qc sandbox's agent sandbox (scripts/octo-feather-qc-sandbox, docs/adr/0022): anthropics/sandbox-runtime from npm;
-# it needs bubblewrap and socat from the box (just install-check).
-"npm:@anthropic-ai/sandbox-runtime" = "0.0.81"

@@ -2,19 +2,20 @@
 --help, docs/adr/0022 the sandbox paragraph), no model: `octo-feather-qc-sandbox -- CMD` in a
 repo, every input defaulted, prints its pre-run proof naming srt, and CMD's escapes fail (a
 write to HOME, an umount of a mask, a live Herdr session through the shim) and leave nothing
-(its worktree write discarded, listed in the upper record); without srt installed where mise's
-data dir says, it refuses before any judge, naming the kit's install command; the network: a
-run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a local
+(its worktree write discarded, listed in the upper record); without srt in the kit's
+node_modules (no pnpm install yet), it refuses before any judge, naming the install command; the
+network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a local
 provider, through srt's proxy)."""
 
 from __future__ import annotations
 
 import http.server
 import json
+import shutil
 import threading
 from typing import TYPE_CHECKING
 
-from testkit import Scratch, kit, main, tool_homes
+from testkit import ROOT, Scratch, kit, main, tool_homes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -51,19 +52,22 @@ def by_hand(s: Scratch) -> None:
 
 
 def srt_missing(s: Scratch) -> None:
+    """A kit checkout whose node_modules lacks srt (no `pnpm install` yet): refused before any
+    judge, naming the package.json pin and the install command."""
     r = repo(s)
-    empty = s.root / "mise-data"
-    empty.mkdir()
+    k = s.root / "kit"
+    shutil.copytree(ROOT / "scripts", k / "scripts", symlinks=True)
+    shutil.copy(ROOT / "package.json", k)
     ran = s.run(
-        [kit("octo-feather-qc-sandbox"), "--", "true"],
+        [str(k / "scripts" / "octo-feather-qc-sandbox"), "--", "true"],
         cwd=r,
         want=66,
-        env=tool_homes() | {"MISE_DATA_DIR": str(empty)},
+        env=tool_homes(),
     )
     for want in (
-        "FAIL mise offline",
-        "npm:@anthropic-ai/sandbox-runtime@",
-        "octo-feather-mise-install",
+        "qc sandbox: FAIL srt (@anthropic-ai/sandbox-runtime ",
+        f"not installed in {k}/node_modules (found: none)",
+        f"run pnpm install --frozen-lockfile --dir {k}",
         "judge not started (exit 66)",
     ):
         assert want in ran.err, (want, ran.err)

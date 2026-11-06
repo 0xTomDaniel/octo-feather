@@ -323,9 +323,6 @@ check-tests *args:
     # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
     # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
     # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
-    # The kit's own mise.toml alone is trusted (tools only): mise honours an npm tool's locked install (srt's, its
-    # ~aube~ dir) only for a trusted config, and the empty state dir trusts none.
-    export MISE_TRUSTED_CONFIG_PATHS="${MISE_TRUSTED_CONFIG_PATHS:+$MISE_TRUSTED_CONFIG_PATHS:}$root"
     [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
     # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
     # as it found them, by content, failing and naming each change this run made (owner ruling #584, #587; attribution:
@@ -476,7 +473,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards, the dir its
     # kit_install() names (asked of it: OCTO_FEATHER_KIT_INSTALL, else the kit dir), a clone or a worktree of one with
     # an origin, on main, detached or not (the box's install is a detached worktree beside the main checkout, #422).
-    python3 -c 'import importlib.machinery as im, importlib.util as iu, os, re, shutil, subprocess, sys
+    python3 -c 'import importlib.machinery as im, importlib.util as iu, json, os, re, shutil, subprocess, sys
     root = sys.argv[1]
     def run(*a):
         try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
@@ -505,6 +502,13 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     for tool, pkg in (("bwrap", "bubblewrap"), ("socat", "socat")):   # srt needs both (scripts/octo-feather-qc-sandbox)
         if shutil.which(tool): print(f"{tool} ok (srt, the qc sandbox, needs it)")
         else: print(f"{tool} MISSING (srt, the qc sandbox, needs it); sudo apt install {pkg}"); bad = 1
+    srt = "@anthropic-ai/sandbox-runtime"   # the qc sandbox, its pin in package.json (scripts/octo-feather-qc-sandbox)
+    try: pin = json.load(open(os.path.join(root, "package.json"))).get("devDependencies", {}).get(srt)
+    except (OSError, ValueError): pin = None
+    try: got = json.load(open(os.path.join(root, "node_modules", srt, "package.json"))).get("version")
+    except (OSError, ValueError): got = None
+    if pin and got == pin: print(f"srt ok {srt} {got} (package.json pin, the qc sandbox)")
+    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or 'none'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
     rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
     lanes = os.path.join(st, "lanes")
     if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
