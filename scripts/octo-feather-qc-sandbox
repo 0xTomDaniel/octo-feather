@@ -789,13 +789,13 @@ def setup(judge: list[str]) -> NoReturn:
     # absolute, or names no dir, fails naming what uv printed; an absolute one not there yet (uv never ran under this
     # HOME) is named in the proof, nothing bound.
     ucr = run("uv", "--color", "never", "cache", "dir") if shutil.which("uv") else None
-    UC, ucn = "", ""
-    if ucr and ucr.returncode == 0:
-        got = ucr.stdout.rstrip("\n")
-        absent = not os.path.lexists(got)
-        if not got.startswith("/") or any(ch < " " or ch == "\x7f" for ch in got) or not (os.path.isdir(got) or absent):
-            die(f"uv --color never cache dir printed {got!r}: not a directory")
-        UC, ucn = ("", got) if absent else (got, "")
+    got = ucr.stdout.rstrip("\n") if ucr and ucr.returncode == 0 else ""
+    absent = bool(got) and not os.path.lexists(got)
+    bad = not got.startswith("/") or any(ch < " " or ch == "\x7f" for ch in got)
+    if got and (bad or not (os.path.isdir(got) or absent)):
+        die(f"uv --color never cache dir printed {got!r}: not a directory")
+    UC = got if got and not absent else ""
+    ucn = got if absent else ""
     shimless = ":".join(p for p in E.get("PATH", "").split(":") if p and p != f"{SCR}/bin")
     realpi = shutil.which("pi", path=shimless) or ""
     if realpi and os.path.realpath(realpi).startswith(f"{SCR}/bin/"):

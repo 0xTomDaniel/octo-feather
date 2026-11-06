@@ -28,7 +28,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1514,6 +1514,35 @@ def drive_qc_browser(f: Feature) -> None:
     say(f"qc-browser evidence: {f.d}")
 
 
+def drive_qc_sandbox(f: Feature) -> None:
+    """The qc sandbox by hand (`octo-feather-qc-sandbox -- CMD`) in a scratch git repo, CMD trying a write to HOME, an
+    umount of the Herdr config mask and a live Herdr session: the proof names the srt sandbox, each attempt fails, and
+    the worktree write is discarded, listed only in the upper record."""
+    sc = RUN_DIR / "scratch" / "qc-sandbox"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    r.mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    git("commit", "-q", "--allow-empty", "-m", "scratch")
+    home = Path(os.environ.get("HOME", "/"))
+    cmd = ('touch "$HOME/x"; echo "touch $?"; umount "$HOME/.config/herdr"; echo "umount $?"; '
+           'herdr --session default workspace list; echo w > newfile; echo "wrote $?"')
+    f.pre = ["env", "-C", str(r)]
+    f.run("by-hand", "octo-feather-qc-sandbox", "--", "sh", "-c", cmd)
+    f.pre = []
+    f.obs("by-hand", "after", f"{(home / 'x').exists()} {(r / 'newfile').exists()} {git('status', '--porcelain') or 'clean'}\n")
+    f.check("by-hand", lambda c: c.code == 0 and "qc sandbox: ok   judge runs in the srt sandbox (@anthropic-ai/sandbox-runtime " in c.err
+            and "qc sandbox: FAIL" not in c.err and re.search(r"(?m)^touch 1$", c.out) and re.search(r"(?m)^umount 32$", c.out)
+            and '{"upper": [["new", "newfile"]]}' in c.err and c.o["after"] == "False False clean\n")
+    say(f"qc-sandbox evidence: {f.d}")
+
+
 def drive_qc_advisory(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a passing demo, with the classifier boundary stubbed (the
     kit's tests/fixtures/classify-stub/pi first on PATH, never a real model): the kit's judgment model is induced to
@@ -2709,6 +2738,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "shape": drive_shape,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
+    "qc-sandbox": drive_qc_sandbox,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
     "qc-stale": drive_qc_stale,

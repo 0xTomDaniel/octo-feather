@@ -61,6 +61,8 @@ jobs:
           cache: false
       # tests/qc.sh runs the qc judge's sandbox (`unshare -rm`); Ubuntu 24.04 restricts unprivileged user namespaces.
       - run: if sysctl -n kernel.apparmor_restrict_unprivileged_userns >/dev/null 2>&1; then sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0; fi
+      # The qc sandbox runs on srt (mise.toml), which needs bubblewrap and socat from the box.
+      - run: sudo apt-get install -y --no-install-recommends bubblewrap socat
       # The spec-chat pin is a private repo: its read-only deploy key, used for that repo's URL only.
       - env:
           SPEC_CHAT_DEPLOY_KEY: ${{ secrets.SPEC_CHAT_DEPLOY_KEY }}
