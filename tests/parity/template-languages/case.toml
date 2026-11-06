@@ -8,3 +8,8 @@ needs = [
     "tests/fixtures/classify-stub/pi",
 ]
 new = "tests/gate/kit/test_template_languages.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a template script run by the template repo's own interpreter, outside the kit venv: coverage.py cannot see it.
+[ran]
+"templates/python/scripts/check-languages" = "exec scripts/check-languages"
+"templates/python/scripts/fast-select" = "exec scripts/fast-select"

@@ -10,3 +10,8 @@ needs = [
     "tests/fixtures/lane-report/herdr",
 ]
 new = "tests/gate/kit/test_template_languages_typescript.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a template script run by the template repo's own interpreter, outside the kit venv: coverage.py cannot see it; open: a module Vitest loads, never executed as a program: coverage.py cannot see it.
+[ran]
+"templates/typescript/scripts/check-languages.ts" = "exec scripts/check-languages.ts"
+"templates/typescript/tests/trend-reporter.ts" = "open tests/trend-reporter.ts"

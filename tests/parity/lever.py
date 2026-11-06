@@ -6,38 +6,56 @@
 CASE is a dir here, tests/parity/CASE/: case.toml names the old test (`old`, a tests/*.sh
 path, and `old_at`, a commit holding it, as it is gone from HEAD once parity holds), every
 file under tests/ the old test needs at old_at (`needs`: the libraries it sources, the fixtures
-and helpers it runs or reads; a dir stands for every file under it), and the new test (`new`,
-a pytest path); each *.patch there is one seeded defect in a kit command, its first line saying
-what it breaks. In one scratch copy of the kit's files (tracked, and new ones git would track),
-a git repo, first with no defect, then with each patch applied in turn (git apply), the lever
-runs the old test with the old test and its `needs` restored from old_at, then the new one on
-the kit's own files, each through the copy's `just test` (the old as its gate item, the new as
-its file; -x: the first failure decides; -rA: every item's output in its log), and prints one
-line per run: the defect, the old result, the new, and the old side's evidence. Exit 0 only
-when both pass with no defect and both fail on every defect.
+and helpers it runs or reads; a dir stands for every file under it), the new test (`new`, a
+pytest path), and how the old run shows it ran each file a defect patches (`ran`, file: fact);
+each *.patch there is one seeded defect in a kit command, its first line saying what it breaks.
+In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo,
+first with no defect, then with each patch applied in turn (git apply), the lever runs the old
+test with it and its `needs` restored from old_at, then the new one on the kit's own files,
+each through the copy's `just test` (the old as its gate item, the new as its file; -x: the
+first failure decides; -rA: every item's output in its log), and prints one line per run: the
+defect, the old result, the new. Exit 0 only when both pass with no defect and both fail on
+every defect.
 
-Refused before any run (exit 2): a `needs` entry old_at does not hold, and a file the old test
-or a shell file it sources names under tests/ (`source "$(dirname ...)/F"`, `$kit/tests/F`) that
-the restored copy lacks or holds at another content than old_at's while `needs` omits it: the
-copy would run the old test without what it ran with. Refused after a run (exit 2): an old run
-whose log does not show the old item's own output, or shows bash failing to find a file or a
-command in the old test or a file it sources (`F: line N: X: No such file or directory` or
-`... command not found`, bash's own words on stderr, which -rA keeps for a passing item too).
-A test whose `source` failed carries on without its library and can still print its pass line
-and exit 0; it cannot run without bash saying so, so such a run is no evidence.
+The old side must have run what it covers, each an exact fact; the lever refuses the case
+(exit 2), naming which does not hold:
+  (a) on the clean tree the old run ran every file a defect patches, by its `ran` fact:
+      coverage           coverage.py measured it in the old item's processes: the clean old
+                         run goes under just fast-map's configuration (COVERAGE_PROCESS_START
+                         tests/gate/coverage.toml, COV_MAP_DIR, the item's GATE_ITEM dir) and
+                         `octo-feather-gate map` names the files; for a Python file the kit
+                         venv runs
+      exec SUFFIX        a process of the old run (strace -ff, execve) ran a file whose path
+                         ends in SUFFIX as its program, or as the script its interpreter
+                         (python, node) was given first: a file outside the kit venv, which
+                         coverage.py does not see
+      open SUFFIX        a process of the old run opened a file whose path ends in SUFFIX
+                         (openat): a module loaded, never run as a program
+      run PROGRAM ARG    a process of the old run ran PROGRAM with ARG among its arguments: a
+                         file no process executes, read by PROGRAM to run ARG (a justfile)
+  (b) the old test failed on at least one seeded defect.
+A defect patching a file `ran` does not name, a `needs` entry old_at lacks, and a trace fact
+without strace on PATH are refused too. Notes, never a verdict: a file under tests/ the old
+test or a shell file it sources names that the restored copy lacks or holds at another content
+(`source "$(dirname ...)/F"`, `$kit/tests/F`), and, beside a refusal of (a), bash's own "F:
+line N: X: No such file or directory" or "... command not found" from the old test or a shell
+file it sources (a failed `source` lets a test carry on without its library, print its pass
+line and exit 0).
 
 The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
 octo-feather/, removed after; each run's output: in the log dir printed last, kept.
 """
 
+import json
 import os
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn
+from typing import NoReturn, cast
 
 import tomllib
 
@@ -76,8 +94,10 @@ def at(rev: str, path: str) -> bytes | None:
     return p.stdout if p.returncode == 0 else None
 
 
-def sh(cmd: list[str], cwd: Path, log: Path | None = None) -> int:
-    env = {k: v for k, v in os.environ.items() if k not in DROP}
+def sh(
+    cmd: list[str], cwd: Path, log: Path | None = None, add: dict[str, str] | None = None
+) -> int:
+    env = {k: v for k, v in os.environ.items() if k not in DROP} | (add or {})
     with (log or Path(os.devnull)).open("w") as f:
         return subprocess.run(
             cmd, cwd=cwd, env=env, stdout=f, stderr=subprocess.STDOUT, check=False
@@ -145,33 +165,113 @@ def unrestored(old: str, old_at: str, files: dict[str, bytes], copy_dir: Path) -
     return bad
 
 
-def evidence(log: Path, old: str, shells: list[str]) -> str:
-    """The old run's evidence from its -rA log: its last line of output; refused when the log
-    shows none, or bash failing to find a file or command in OLD or SHELLS."""
-    text = log.read_text(errors="replace")
+def bash_errors(log: Path, old: str, shells: list[str]) -> list[str]:
+    """Bash's own "F: line N: X: No such file or directory" or "... command not found" lines in
+    LOG, F the old test or a shell file it sources: a note beside a refusal, never a verdict."""
     names = "|".join(re.escape(s) for s in [old, *shells])
-    m = re.search(
-        rf"^(?:\S*/)?(?:{names}): line \d+: .*(?:No such file or directory|command not found)$",
-        text,
-        re.MULTILINE,
-    )
-    if m:
-        refuse(f"the old test did not run its behaviour: {m.group(0)} (log {log})")
-    item = re.escape(f"test_script[{old}]")
-    sec = re.search(
-        rf"^_+ {item} _+\n(.*?)(?=^_{{5,}} |^={{5,}} |\Z)", text, re.MULTILINE | re.DOTALL
-    )
-    lines = [
-        ln for ln in (sec.group(1).splitlines() if sec else []) if ln and not ln.startswith("---")
+    pat = rf"^(?:\S*/)?(?:{names}): line \d+: .*(?:No such file or directory|command not found)$"
+    return re.findall(pat, log.read_text(errors="replace"), re.MULTILINE)
+
+
+# A traced exec or open (strace -ff): execve("PROG", ["ARGV0", ...], ...) = 0, or
+# openat(DIR, "PATH", ...) = FD.
+EXECVE = re.compile(r'^execve\("((?:[^"\\]|\\.)*)", \[(.*?)\], .*\) = 0$', re.MULTILINE)
+OPENAT = re.compile(r'^openat\([^,]+, "((?:[^"\\]|\\.)*)", .*\) = \d+$', re.MULTILINE)
+ARG = re.compile(r'"((?:[^"\\]|\\.)*)"')
+INTERPRETER = re.compile(r"^(?:python[0-9.]*|node)$")
+
+
+class Trace:
+    """What the old run's processes executed and opened (strace -ff files under DIR)."""
+
+    def __init__(self, d: Path) -> None:
+        self.execs: list[tuple[str, list[str]]] = []
+        self.opened: list[str] = []
+        for f in d.iterdir():
+            text = f.read_text(errors="replace")
+            self.execs += [(m[1], ARG.findall(m[2])) for m in EXECVE.finditer(text)]
+            self.opened += [m[1] for m in OPENAT.finditer(text)]
+
+    def executed(self, suffix: str) -> bool:
+        """A process ran the file at SUFFIX: as the program, or as the script its interpreter
+        (python, node) was given first."""
+
+        def at(p: str) -> bool:
+            return p == suffix or p.endswith("/" + suffix)
+
+        return any(
+            at(prog) or (len(argv) > 1 and INTERPRETER.match(Path(argv[0]).name) and at(argv[1]))
+            for prog, argv in self.execs
+        )
+
+    def ran(self, program: str, arg: str) -> bool:
+        """A process ran PROGRAM with ARG among its arguments."""
+        return any(Path(p).name == program and arg in argv[1:] for p, argv in self.execs)
+
+    def opens(self, suffix: str) -> bool:
+        return any(p.endswith("/" + suffix) for p in self.opened)
+
+
+def covered(k: Path, cov: Path, junit: Path, old: str) -> set[str]:
+    """The kit files coverage.py measured in the old item's processes: the coverage map the
+    kit's own `octo-feather-gate map` builds from the run's data (just fast-map's mechanism)."""
+    gate = [
+        "uv",
+        "run",
+        "--locked",
+        "--offline",
+        "--no-sync",
+        "python3",
+        "scripts/octo-feather-gate",
     ]
-    if not lines:
-        refuse(f"the old test shows no output of its own in its log {log}: no evidence it ran")
-    return lines[-1][:160]
+    sh([*gate, "map", str(cov), "--junit", str(junit)], k, cov / "map.log")
+    common = git("rev-parse", "--path-format=absolute", "--git-common-dir", cwd=k)
+    head = git("rev-parse", "HEAD", cwd=k).stdout.decode().strip()
+    m = Path(common.stdout.decode().strip()) / "octo-feather" / "fast-map" / f"{head}.json"
+    items: dict[str, list[str]] = json.loads(m.read_text())["items"] if m.is_file() else {}
+    return set(items.get(old, []))
+
+
+def facts(case: dict[str, object], defects: list[Path]) -> dict[str, str]:
+    """Each file the case's defects patch and how the old run shows it ran it (`ran` in
+    case.toml: `coverage`, `exec SUFFIX`, `open SUFFIX` or `run PROGRAM ARG`); refused when a
+    patched file has none, or its form is not one of these."""
+    ran = cast("dict[str, str]", case.get("ran", {}))
+    out: dict[str, str] = {}
+    for patch in defects:
+        for f in re.findall(r"^\+\+\+ b/(\S+)$", patch.read_text(), re.MULTILINE):
+            how = ran.get(f)
+            if how is None:
+                refuse(f"{patch.name} patches {f}, and case.toml's ran names no way to show it ran")
+            if not re.fullmatch(r"coverage|(exec|open) \S+|run \S+ \S+", how):
+                refuse(f"case.toml ran {f} = {how!r}: want coverage, exec S, open S or run P A")
+            out[f] = how
+    return out
+
+
+def check_ran(how: dict[str, str], trace: Trace | None, cov: set[str]) -> list[str]:
+    """Each patched file the clean old run did not run, by its fact (facts())."""
+    missing: list[str] = []
+    for f, h in sorted(how.items()):
+        kind, *rest = h.split()
+        if kind == "coverage":
+            held = f in cov
+        elif trace is None:
+            held = False
+        elif kind == "exec":
+            held = trace.executed(rest[0])
+        elif kind == "open":
+            held = trace.opens(rest[0])
+        else:
+            held = trace.ran(rest[0], rest[1])
+        if not held:
+            missing.append(f"{f} ({h})")
+    return missing
 
 
 def reset(k: Path) -> None:
     """The copy back at its commit: a patch and every restored file gone."""
-    subprocess.run(["git", "checkout", "-q", "--", "."], cwd=k, check=True)  # noqa: S607
+    subprocess.run(["git", "reset", "-q", "--hard"], cwd=k, check=True)  # noqa: S607
     subprocess.run(["git", "clean", "-qfd"], cwd=k, check=True)  # noqa: S607
 
 
@@ -182,37 +282,100 @@ def apply(k: Path, patch: Path | None) -> None:
         )
 
 
-def run(
-    k: Path, logs: Path, case: dict[str, str], files: dict[str, bytes], patch: Path | None
-) -> bool:
-    """One defect (PATCH, None: no defect): the old test with FILES restored, then the new on the
-    kit's own files; its line printed; whether both gave the result the defect wants."""
-    name, old = patch.stem if patch else "none", case["old"]
-    apply(k, patch)
-    for p, body in files.items():
-        (k / p).parent.mkdir(parents=True, exist_ok=True)
-        (k / p).write_bytes(body)
-    (k / old).chmod(0o755)
-    old_log = logs / f"{name}.old.log"
-    item = f"tests/gate/test_gate.py::test_script[{old}]"
-    old_rc = sh(["just", "test", "-x", "-rA", item], k, old_log)
-    reset(k)
-    shells = sorted(p for p in files if p != old and p.endswith(".sh"))
-    ran = evidence(old_log, old, shells)
-    apply(k, patch)
-    new_rc = sh(["just", "test", "-x", "-rA", case["new"]], k, logs / f"{name}.new.log")
-    reset(k)
-    said = {0: "pass"}
-    line = (
-        f"defect: {name}  old: {said.get(old_rc, 'FAIL')} (exit {old_rc})  "
-        f"new: {said.get(new_rc, 'FAIL')} (exit {new_rc})"
-    )
-    if patch:
-        line += f"  ({patch.read_text().splitlines()[0]})"
-    sys.stdout.write(f"{line}\n  old ran: {ran}\n")
-    sys.stdout.flush()
-    want = 1 if patch else 0
-    return (old_rc == 0) == (want == 0) and (new_rc == 0) == (want == 0)
+@dataclass
+class Lever:
+    """One case's runs in the kit copy K: CASE (case.toml), FILES (restored from old_at), each
+    run's log under LOGS."""
+
+    k: Path
+    logs: Path
+    case: dict[str, str]
+    files: dict[str, bytes]
+
+    def run_old(self, name: str, how: dict[str, str] | None) -> int:
+        """The old test with FILES restored (staged, so the coverage map sees it as the kit's);
+        with HOW (the clean run), traced and measured, and refused unless it ran every file HOW
+        names."""
+        k, logs, files, old = self.k, self.logs, self.files, self.case["old"]
+        for p, body in files.items():
+            (k / p).parent.mkdir(parents=True, exist_ok=True)
+            (k / p).write_bytes(body)
+        (k / old).chmod(0o755)
+        git("add", "-A", cwd=k)
+        log = logs / f"{name}.old.log"
+        cmd = ["just", "test", "-x", "-rA", f"tests/gate/test_gate.py::test_script[{old}]"]
+        if how is None:
+            return sh(cmd, k, log)
+        with tempfile.TemporaryDirectory(prefix="lever-old-") as w:
+            cov, tr = Path(w) / "cov", Path(w) / "trace"
+            cov.mkdir()
+            tr.mkdir()
+            env = {
+                "COV_MAP_DIR": str(cov),
+                "COVERAGE_PROCESS_START": str(k / "tests/gate/coverage.toml"),
+            }
+            cmd += [f"--junitxml={cov / 'junit.xml'}"]
+            traced = any(not h.startswith("coverage") for h in how.values())
+            if traced:
+                strace = shutil.which("strace")
+                if strace is None:
+                    refuse(
+                        "strace is not on PATH: the old run's exec and open facts cannot be read"
+                    )
+                cmd = [
+                    strace,
+                    "-ff",
+                    "-qq",
+                    "--seccomp-bpf",
+                    "-s",
+                    "4096",
+                    "-e",
+                    "trace=execve,openat",
+                    "-o",
+                    str(tr / "t"),
+                    *cmd,
+                ]
+            rc = sh(cmd, k, log, env)
+            missing = check_ran(
+                how, Trace(tr) if traced else None, covered(k, cov, cov / "junit.xml", old)
+            )
+        if missing:
+            shells = sorted(p for p in files if p != old and p.endswith(".sh"))
+            note = (
+                "; bash said: " + " | ".join(bash_errors(log, old, shells)[:3])
+                if bash_errors(log, old, shells)
+                else ""
+            )
+            ran = ", ".join(missing)
+            refuse(
+                f"(a) on the clean tree the old test did not run {ran} (exit {rc}, log {log}){note}"
+            )
+        sys.stdout.write(
+            f"  old ran (clean tree): {', '.join(f'{f} ({h})' for f, h in sorted(how.items()))}\n"
+        )
+        return rc
+
+    def run(self, patch: Path | None, how: dict[str, str] | None) -> tuple[int, int]:
+        """One defect (PATCH; None: no defect, the run HOW checks): the old test, then the new
+        on the kit's own files; its line printed; the old and new exit statuses."""
+        k, logs, case = self.k, self.logs, self.case
+        name = patch.stem if patch else "none"
+        apply(k, patch)
+        old_rc = self.run_old(name, how)
+        reset(k)
+        apply(k, patch)
+        new_rc = sh(["just", "test", "-x", "-rA", case["new"]], k, logs / f"{name}.new.log")
+        reset(k)
+        said = {0: "pass"}
+        line = (
+            f"defect: {name}  old: {said.get(old_rc, 'FAIL')} (exit {old_rc})  "
+            f"new: {said.get(new_rc, 'FAIL')} (exit {new_rc})"
+        )
+        if patch:
+            line += f"  ({patch.read_text().splitlines()[0]})"
+        sys.stdout.write(line + "\n")
+        sys.stdout.flush()
+        return old_rc, new_rc
 
 
 def main() -> int:
@@ -224,8 +387,8 @@ def main() -> int:
         sys.exit(f"lever: no case {sys.argv[1]}: no file {d / 'case.toml'}")
     case = tomllib.loads((d / "case.toml").read_text())
     old, old_at = case["old"], case["old_at"]
+    defects = sorted(d.glob("*.patch"))
     logs = Path(tempfile.mkdtemp(prefix=f"parity-{sys.argv[1]}-"))
-    good = True
     # The copy outside /tmp, where the kit itself lives: the qc sandbox makes /tmp private, so a
     # kit under /tmp holding a test's own kit copy under /tmp is a setup the real kit never has.
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.decode().strip()
@@ -233,16 +396,25 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="parity-kit-", dir=Path(common) / "octo-feather") as t:
         k = Path(t)
         try:
+            how = facts(case, defects)
             files = old_files(old, old_at, case.get("needs", []))
             copy(k)
-            if bad := unrestored(old, old_at, files, k):
-                refuse(f"needs in {d / 'case.toml'} omits what {old} runs with: {'; '.join(bad)}")
+            for b in unrestored(old, old_at, files, k):  # a hint only: the run's facts decide
+                sys.stdout.write(f"lever: note: {old} names {b}, and needs omits it\n")
             sys.stdout.write(f"restored from {old_at}: {' '.join(sorted(files))}\n")
-            for patch in [None, *sorted(d.glob("*.patch"))]:
-                good &= run(k, logs, case, files, patch)
+            lever = Lever(k, logs, case, files)
+            results = [lever.run(None, how)]
+            results += [lever.run(p, None) for p in defects]
+            if defects and all(o == 0 for o, _ in results[1:]):
+                refuse("(b) the old test failed on no seeded defect: it shows no defect it catches")
         except RefusedError as e:
             sys.stderr.write(f"lever: refused: {e}\n")
             return 2
+    want = [0] + [1] * len(defects)
+    good = all(
+        (o == 0) == (w == 0) and (n == 0) == (w == 0)
+        for (o, n), w in zip(results, want, strict=True)
+    )
     sys.stdout.write(
         f"parity {'holds' if good else 'FAILS'}: want both pass with no defect, both fail on "
         f"each; logs: {logs}\n"
