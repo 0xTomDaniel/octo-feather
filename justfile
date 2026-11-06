@@ -721,7 +721,8 @@ install-check-models:
         except (ValueError, KeyError, TypeError):
             print(f"model  {role} UNREADABLE pi-role --json {f} failed: {(r.stderr.strip().splitlines() or ["no output"])[-1]}; fix the role file (scripts/check-roles names the problem)"); bad = 1; continue
         if "--model" in args: roles.setdefault(args[args.index("--model") + 1], []).append(role)
-    s = iu.spec_from_loader("qa", im.SourceFileLoader("qa", os.path.join(root, "scripts", "octo-feather-qa"))); qa = iu.module_from_spec(s); s.loader.exec_module(qa)
+    sys.path.insert(0, os.path.join(root, "scripts"))
+    import octo_feather_qa as qa  # octo-feather-qa is its launcher
     judge = None
     try: judge = qa.judgment_model(os.path.join(root, "evals"))
     except (OSError, ValueError, KeyError, TypeError) as e: print(f"model  judgment UNREADABLE evals/judgment-model.json ({e}); record the kit judgment model there (shape: scripts/check-evals --help)"); bad = 1

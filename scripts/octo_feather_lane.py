@@ -1436,10 +1436,8 @@ STATE_MAX = 20000   # state characters quoted in the comment (GitHub caps a comm
 
 def qa_module():
     """scripts/octo-feather-qa, whose classify() is the one classify path (the bench's): one mechanism, not a second."""
-    loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_qa", loader))
-    loader.exec_module(mod)
-    return mod
+    import octo_feather_qa  # octo-feather-qa is its launcher
+    return octo_feather_qa
 
 
 def calibration(cal: dict, qid: str) -> str:
