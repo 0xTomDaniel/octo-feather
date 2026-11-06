@@ -35,4 +35,4 @@ The drive makes a scratch target (the kit's `tests/fixtures/spec-status/good/dem
 
 - Put a stub judge on the sandbox's PATH with `OCTO_FEATHER_QC_PATH`, never only on PATH: a mise-shimmed `just` puts the box's real Pi ahead of it, and a real judge runs.
 - The cap stopping a judge is not driven (it would wait the cap): `tests/qc-fallback.sh` fires the stub's timeout alarm instead. Until #406 that run exits 3, evidence incomplete, naming the criterion.
-- The merge ask's `Decision sources` lines are covered by `tests/lane-merge-ask.sh` (a fake GitHub), not by this drive.
+- The merge ask's `Decision sources` lines are covered by `tests/gate/kit/test_lane_merge_ask.py` (a fake GitHub), not by this drive.
