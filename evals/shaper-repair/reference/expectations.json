@@ -1,0 +1,11 @@
+{
+  "repair-moment-bye": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "repair-moment-verbose": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "repair-moment-emoji": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "repair-moment-inner-space": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "repair-moment-near-clean-from": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "repair-moment-near-question-owner": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "repair-moment-near-clean-formal": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "repair-moment-near-question-adr": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "repair-moment-near-typo": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]}
+}
