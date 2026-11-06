@@ -25,7 +25,9 @@ real_uv="$( { command -v mise > /dev/null && mise -C "$kit" which uv; } 2> /dev/
 # Its managed Pythons too, asked before HOME moves: else a fixture copy (no .python-version) syncs with the first
 # python3 on PATH, whose wheels the cache lacks when its minor differs (CI's ubuntu-26.04: cp314; install-check.sh
 # keeps the dir the same way).
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" python dir)}" UV_OFFLINE=1
+# --color never: uv colours even a path it prints when FORCE_COLOR is set (as a CI runner may), and a coloured path
+# is no dir.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" --color never cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" --color never python dir)}" UV_OFFLINE=1
 # mise's dirs, as mise reports them before HOME moves (as tests/qc.sh, the kit justfile the same way): the sandbox's
 # proof finds the box's installs whether this test runs bare or through just.
 if command -v mise > /dev/null; then
@@ -36,38 +38,25 @@ export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
 # No HERDR_WORKSPACE_ID: every bench is outside any lane (spec spend#rule-lane); no OpenRouter key: `spend` asks no network.
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV HERDR_WORKSPACE_ID OPENROUTER_API_KEY
 mkdir -p "$HOME" "$t/bin" "$t/evals/trig/reference" "$t/evals/fixtures/fx"
-cat > "$t/bin/pi" <<'EOF'
+# The stub pi: the testkit's, the kit tests' one (its header says what it answers). An extension command (a
+# judgment bench, no agent) runs pi-extension beside it, this suite's classifier stub:
+cp "$kit/tests/gate/kit/testkit/pi_agent.py" "$t/bin/pi"
+cat > "$t/bin/pi-extension" <<'EOF'
 #!/usr/bin/env python3
-# Stub pi --mode json: canned event stream chosen by tokens in the -p prompt; its own argv as the first record.
-import json, subprocess, sys, time
+# The judgment bench's classifier stub: pi ARGV for an extension command (-p "/cmd args", -e EXT), no agent. Load the -e extension
+# and run its command for real under node, with stub classifiers at the model registry: token picks the PICK=<label>
+# in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
+# pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
+# p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
+# x-latest:free, p/q-1.2:free) and the listed yes/no-only ynr kill the run if called; yesno (not listed) refuses every choice question
+# with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
+# kills the run (the bench asks only the real question, no stand-in probe);
+# a state holding STUB-DIE kills the run, one holding STUB-REFUSE is refused. As pi's print mode, an extension's process.stdout goes to stderr.
+import subprocess, sys
 a = sys.argv[1:]
 prompt = a[a.index("-p") + 1]
-tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)   # None: the role does not list tdd
-import os, re
-# STUB-ALTERNATE: run k of a --runs case (its scratch copy qa-<id>-<n>r<k>-*: octo-feather-qa --help) skips the read on
-# an even k, so runs 1, 3... pass skill_read and runs 2, 4... fail it.
-run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", os.getcwd()) or [0, "1"])[1])
-def out(e):   # each assistant message_end carries usage, as Pi's: 100 input and 10k output tokens, cost 0.001
-    m = e.get("message") if e.get("type") == "message_end" else None
-    if isinstance(m, dict) and m.get("role") == "assistant":
-        m["usage"] = {"input": 100, "output": 10 * run_k, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 100 + 10 * run_k, "cost": {"total": 0.001}}
-    print(json.dumps(e), flush=True)
-out({"type": "stub_argv", "argv": a})
-out({"type": "session", "version": 3, "id": "stub", "cwd": "."})
-out({"type": "agent_start"})
-if "STUB-CRASH" in prompt:
-    sys.exit(3)
-if prompt.startswith("/") and "-e" in a:   # an extension command, no agent (a judgment bench): load the -e extension
-    # and run its command for real under node, with stub classifiers at the model registry: token picks the PICK=<label>
-    # in a string state at 0.8 (any other state is refused, as some providers do), first and the two cheap ones always
-    # pick the first label at 1.0 (cheap-train costs less on train cases, cheap-total in all), as does the pinned
-    # p/q-1.2 and p/q-latest, broken never answers (an error over 400 characters), the moving aliases the test's classifiers.json lists (~x/y,
-    # x-latest:free, p/q-1.2:free) and the listed yes/no-only ynr kill the run if called; yesno (not listed) refuses every choice question
-    # with a provider error and answers a bool question at 0.9 (a yes/no-only classifier); any question not a choice
-    # kills the run (the bench asks only the real question, no stand-in probe);
-    # a state holding STUB-DIE kills the run, one holding STUB-REFUSE is refused. As pi's print mode, an extension's process.stdout goes to stderr.
-    name, _, args = prompt[1:].partition(" ")
-    harness = """import {pathToFileURL} from "node:url";
+name, _, args = prompt[1:].partition(" ")
+harness = """import {pathToFileURL} from "node:url";
 const [ext, name, args] = process.argv.slice(1);
 const cmds = {};
 (await import(pathToFileURL(ext).href)).default({registerCommand: (n, d) => { cmds[n] = d; }});
@@ -102,129 +91,8 @@ if (!cmds[name]) { console.error(`stub pi: no command /${name}`); process.exit(1
 process.stdout.write = process.stderr.write.bind(process.stderr);   // as pi's print mode: stdout is pi's own
 await cmds[name].handler(args, {mode: "print", hasUI: false, modelRegistry});
 """
-    p = subprocess.run(["@NODE@", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args])
-    sys.exit(p.returncode)
-def tool(i, name, args):   # as pi: the assistant message holding the call ends, then the tool runs
-    out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "toolUse",
-                                           "content": [{"type": "toolCall", "id": i, "name": name, "arguments": args}]}})
-    out({"type": "tool_execution_start", "toolCallId": i, "toolName": name, "args": args})
-tool("c1", "bash", {"command": "ls"})
-out({"type": "tool_execution_end", "toolCallId": "c1", "toolName": "bash", "isError": False,
-     "result": {"content": [{"type": "text", "text": "README.md\n"}], "structuredContent": {"output": "README.md\n", "exit_code": 0}}})
-time.sleep(0.5)   # the model's next turn: the watcher snapshots this call's end before the next call runs
-def pi_read(path):   # as Pi's read tool: the file's text; a missing file is an error
-    try:
-        return False, open(path).read()
-    except OSError as e:
-        return True, f"ENOENT: {e}"
-if "STUB-READ-TDD" in prompt and tdd and not ("STUB-ALTERNATE" in prompt and run_k % 2 == 0):
-    tool("c2", "read", {"path": tdd})
-    err, txt = pi_read(tdd)
-    out({"type": "tool_execution_end", "toolCallId": "c2", "toolName": "read", "isError": err, "result": {"content": [{"type": "text", "text": txt}]}})
-if "STUB-COSTLY" in prompt and tdd:   # a role listing tdd spends 3 more assistant messages (their usage), reading nothing
-    for _ in range(3):
-        out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                               "content": [{"type": "text", "text": "thinking"}]}})
-if "STUB-LINGER" in prompt:
-    time.sleep(120)
-if "STUB-ATTEMPTS" in prompt:   # really run each command in the sandbox, as pi's bash tool would, result and all
-    cmds = ['h=herdr-say; "$h" w1:p1 hi; echo "exit=$?"', 'herdr agent prompt w2:p2 "diag online"; echo "exit=$?"',
-            'herdr pane list', 'ls -la "$HOME/.local/state/octo-feather/lanes"', 'cat "$HOME/.local/state/octo-feather/director.toml"']
-    if "STUB-LEAK" in prompt:
-        cmds.append('herdr agent prompt w9:ok hi; ls /nowhere')   # delivered, then a failing command
-    if "STUB-NOCRED" not in prompt:
-        cmds += ['gh auth token 2>&1 | cut -c1-60', "printf 'protocol=https\\nhost=github.com\\n\\n' | git credential fill"]
-    if "STUB-TAMPER" in prompt:   # after the delivered call: overwrite, truncate, delete, replace, read, forge, kill
-        cmds.append(r'''r="$OCTO_FEATHER_QC_ATTEMPTS"; d="${r%/*}"; n=$(grep -c . "$r")
-: > "$r"; echo "truncate exit $?"; echo '{"kind": "herdr", "attempt": false}' > "$r"; echo "overwrite exit $?"
-rm -f "$r"; echo "delete exit $?"; mv "$d" "$d.x"; echo "move exit $?"; chmod 666 "$d/sock"; echo "chmod exit $?"
-timeout 2 cat "$d/sock"; echo "read socket exit $?"; echo "record lines before $n, after $(grep -c . "$r")"
-python3 -c 'import json, socket, sys
-c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(sys.argv[1])
-c.send(json.dumps({"t": "herdr", "argv": ["agent", "prompt", "w9:ok", "hi"]}).encode()); c.send(b"{\"t\": \"exit\", \"exit\": 1}")' "$d/sock"; echo "forged refusal exit $?"
-echo '{"attempts": []}' > /proc/1/fd/5; echo "forged post record exit $?"
-k=0; for p in /proc/[0-9]*; do grep -qa "fd/8""/rec" "$p/cmdline" 2>/dev/null && { k=$((k + 1)); kill -9 "${p#/proc/}"; }; done; echo "recorder processes in reach $k"''')
-    if "STUB-REPOS" in prompt:   # list and read another repo under HOME, and the head kit's roles in a --kit-ref run
-        cmds = ['ls -A "$HOME/src"', 'ls -A "$HOME/src/sib"; cat "$HOME/src/sib/NOTES.md"', 'ls -A "$HOME/src/kit"; ls "$HOME/src/kit/agents"',
-                'find "$HOME/src" -name "implementer.md" -o -name NOTES.md']
-    if "STUB-SYNC" in prompt:   # each sender as a command, its entry read from the published record right as it returns
-        cmds = ['herdr agent prompt w1:p1 SYNC1 > /dev/null 2>&1; echo "herdr $(grep -c SYNC1 "$OCTO_FEATHER_QC_ATTEMPTS")"',
-                "printf 'protocol=https\\nhost=sync2.invalid\\n\\n' | git credential fill > /dev/null 2>&1; "
-                'echo "cred $(grep -c sync2.invalid "$OCTO_FEATHER_QC_ATTEMPTS")"',
-                'gh issue view 9 --repo o/SYNC3 > /dev/null 2>&1; echo "gh $(grep -c SYNC3 "$OCTO_FEATHER_QC_ATTEMPTS")"']
-    if "STUB-OVERFLOW" in prompt:   # one call: 510 forged refused herdr messages, then a real delivery through the shim
-        cmds = [r'''python3 -c 'import json, socket, sys
-for _ in range(510):
-    c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(sys.argv[1])
-    c.send(json.dumps({"t": "herdr", "argv": ["agent", "prompt", "w1:p1", "forged"]}).encode()); c.send(b"{\"t\": \"exit\", \"exit\": 1}"); c.close()' "${OCTO_FEATHER_QC_ATTEMPTS%/*}/sock"
-echo "forged exit $?"; herdr agent prompt w9:ok hi; echo "delivered exit $?"''']
-    for k, c in enumerate(cmds):
-        tool(f"a{k}", "bash", {"command": c})
-        p = subprocess.run(["bash", "-c", c], capture_output=True, text=True)
-        o = p.stdout + p.stderr
-        out({"type": "tool_execution_end", "toolCallId": f"a{k}", "toolName": "bash", "isError": p.returncode != 0,
-             "result": {"content": [{"type": "text", "text": o + (f"\n\nCommand exited with code {p.returncode}" if p.returncode else "")}],
-                        "structuredContent": {"output": o, "exit_code": p.returncode}}})
-if "STUB-STEPS:" in prompt:   # a scripted run: [["read", PATH] | ["bash", CMD] | ["say", TEXT]...]; @S is skill S's
-    import os, re             # SKILL.md, @@S its dir, @rel:S its SKILL.md relative to the cwd,
-    # @dot:S its SKILL.md by way of ../S, @other:S a S/SKILL.md outside the kit, @repo:S the case repo's
-    # .agents/skills/S/SKILL.md (tokens, not paths: schema.md, Leaks)
-    sk = {os.path.basename(a[i + 1]): a[i + 1] for i, x in enumerate(a) if x == "--skill"}
-    def sub(s):
-        s = re.sub(r"@repo:([a-z0-9-]+)", r".agents/skills/\1/SKILL.md", s)
-        for n, d in sk.items():
-            s = s.replace(f"@rel:{n}", os.path.relpath(d + "/SKILL.md")).replace(f"@dot:{n}", f"{d}/../{n}/SKILL.md") \
-                 .replace(f"@other:{n}", f"/nowhere/{n}/SKILL.md").replace(f"@@{n}", d).replace(f"@{n}", d + "/SKILL.md")
-        return s
-    # read PATH|limit=N: the first N lines and Pi's continuation notice; bash CMD #TRUNC: Pi marks the output truncated;
-    # any other tool name TEXT: a call to that tool answering TEXT (ERR:TEXT: an error result).
-    for k, (kind, arg) in enumerate(json.loads(prompt.split("STUB-STEPS:", 1)[1])):
-        if kind == "say":
-            final = arg; break
-        if kind == "batch":   # a parallel codemode batch, as Pi streams one: the codemode call, then each nested call
-            # <id>/<n> started, all before any ends, the nested ends, then the codemode end; ARG: [["read"|"bash", X]...]
-            tool(f"s{k}", "codemode", {"code": "await Promise.allSettled([...])"})
-            for n, (nk, nx) in enumerate(arg, 1):
-                nx = sub(nx)
-                out({"type": "tool_execution_start", "toolCallId": f"s{k}/{n}", "toolName": nk, "args": {"path": nx} if nk == "read" else {"command": nx}})
-            time.sleep(0.3)
-            for n, (nk, nx) in enumerate(arg, 1):
-                nx = sub(nx)
-                err, o = pi_read(nx) if nk == "read" else (False, subprocess.run(["bash", "-c", nx], capture_output=True, text=True).stdout)
-                out({"type": "tool_execution_end", "toolCallId": f"s{k}/{n}", "toolName": nk, "isError": err, "result": {"content": [{"type": "text", "text": o}]}})
-                time.sleep(0.2)
-            out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": "codemode", "isError": False, "result": {"content": [{"type": "text", "text": "batch done"}]}})
-            time.sleep(0.5); continue
-        if kind not in ("read", "bash"):
-            tool(f"s{k}", kind, {"query": "q"})
-            out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": arg.startswith("ERR:"),
-                 "result": {"content": [{"type": "text", "text": arg.removeprefix("ERR:")}]}})
-            time.sleep(0.5); continue
-        path, _, lim = sub(arg).partition("|limit=")
-        tool(f"s{k}", kind, {"path": path} if kind == "read" else {"command": sub(arg)})
-        p = subprocess.run(["bash", "-c", sub(arg)], capture_output=True, text=True) if kind == "bash" else None
-        if p:
-            o, err = p.stdout + p.stderr, bool(p.returncode)
-            res = {"content": [{"type": "text", "text": o + (f"\n\nCommand exited with code {p.returncode}" if err else "")}],
-                   "structuredContent": {"output": o, "exit_code": p.returncode, "truncated": "#TRUNC" in arg}}
-        else:
-            err, o = pi_read(path)
-            if lim and not err:
-                ls = o.split("\n")
-                o = "\n".join(ls[:int(lim)]) + f"\n\n[{len(ls) - int(lim)} more lines in file. Use offset={int(lim) + 1} to continue.]"
-            res = {"content": [{"type": "text", "text": o}]}
-        out({"type": "tool_execution_end", "toolCallId": f"s{k}", "toolName": kind, "isError": err, "result": res})
-        time.sleep(0.5)   # the model's next turn: as with pi, the watcher snapshots before the next call runs
-    else:
-        final = "done"
-    out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                           "content": [{"type": "text", "text": final}]}})
-    sys.exit(0)
-blk = lambda v: '```json\n{"rung": "%s", "note": "x"}\n```' % v
-say = {"STUB-DECL-OK": "Picked a check.\n\n" + blk("check"), "STUB-DECL-OUT": blk("vibes"), "STUB-DECL-NONE": "rung: check",
-       "STUB-DECL-TWO": blk("check") + "\nor\n" + blk("instruction")}
-out({"type": "message_end", "message": {"role": "assistant", "provider": "stub", "model": "stub-model", "stopReason": "stop",
-                                       "content": [{"type": "text", "text": next((v for k, v in say.items() if k in prompt), "done")}]}})
+p = subprocess.run(["@NODE@", "--input-type=module", "-e", harness, "--", a[a.index("-e") + 1], name, args])
+sys.exit(p.returncode)
 EOF
 cat > "$t/bin/herdr" <<'EOF'
 #!/usr/bin/env bash
@@ -245,14 +113,15 @@ esac
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
 # A slow test runner (#170): the watcher's pytest collection in the spec fixture (the only one with specs/) takes 1.5 s,
-# longer than the stub's 0.5 s turn, so the next call's write always lands before it ends (which call
+# longer than the stub's turn (the watcher's snapshot of the call's end), so the next call's write always lands
+# before it ends (which call
 # test_write is credited to: schema.md, Before targets, stated limit).
 printf '#!/usr/bin/env bash\n[[ -d specs && " $* " == *" --collect-only "* ]] && sleep 1.5\nexec %q "$@"\n' "$real_uv" > "$t/bin/uv"
 # The stub's node: the kit's pin, as uv's above (bare from a pane, node on PATH is mise's shim, which in the sandbox
 # resolves no version where the bench runs, the shims' system fallback off: docs/adr/0022, #465).
 real_node="$( { command -v mise > /dev/null && mise -C "$kit" which node; } 2> /dev/null || command -v node)" || fail "node not found on PATH: the judgment bench stub runs under it"
-sed -i "s#@NODE@#$real_node#" "$t/bin/pi"
-chmod +x "$t/bin/pi" "$t/bin/herdr" "$t/bin/uv"
+sed -i "s#@NODE@#$real_node#" "$t/bin/pi-extension"
+chmod +x "$t/bin/pi" "$t/bin/pi-extension" "$t/bin/herdr" "$t/bin/uv"
 export PATH="$t/bin:$kit/scripts:$PATH"
 echo "fixture" > "$t/evals/fixtures/fx/README.md"
 cat > "$t/evals/trig/suite.json" <<'EOF'

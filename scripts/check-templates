@@ -14,7 +14,7 @@ and each tool it shares with the kit's mise.toml has the kit's version (one vers
 the kit runs just in every repo it created). templates/python's tests/conftest.py and
 scripts/check-languages are byte copies of the kit's (the kit owns them). Whether each
 template's own gate covers its languages is that template's check-languages, run in a created
-repo (tests/template-languages.sh for python, tests/template-languages-typescript.sh for
+repo (tests/gate/kit/template_languages.py for python, template_languages_typescript.py for
 typescript).
 Exit: 0 all templates pass, 1 the first failure, named with its fix.
 """

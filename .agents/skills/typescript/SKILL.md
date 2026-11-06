@@ -52,8 +52,6 @@ new TypeScript surfaces.
 - Do not hand-roll ad hoc shape checks when a schema library is already
   established in the repo, unless the reason is documented in the code or
   issue evidence.
-- Keep this boundary validation out of MSW handlers and mock loaders that
-  should replay recorded payloads unmodified.
 
 ## Testing Stack
 
@@ -62,16 +60,15 @@ new TypeScript surfaces.
   CLI, HTTP, UI; an integration test may also enter through a public library
   function, docs/adr/0002). Follow the target repo's documented test placement
   (`templates/typescript`: `tests/*.test.ts`).
-- Keep shared test infrastructure in the repo's established shared test-support location.
+- How a test stands in for what the repo does not own, replays a recording and
+  shares its support: the `tdd` skill's mocking guide (`../tdd/mocking.md`).
 - If the behavior under test needs an end-to-end surface and one does not exist yet, set one up instead of pretending the coverage is optional.
 - Use the repo's declared replay-recording command to record real API
   responses for replay-based integration tests.
 - Control test log visibility with `LOG_LEVEL=error`, `LOG_LEVEL=warn`, or `LOG_LEVEL=debug`.
 
-Use the repo's tier vocabulary. In generic terms, integration tests exercise
-repo wiring through public surfaces with externals mocked; e2e tests are
-opt-in live, streaming-paced, browser, wall-clock, deployed, or full-surface
-checks and are not the red-green loop.
+Which tests are end-to-end, which are integration, and which tier runs each:
+quality spec `#test-kinds`.
 
 During iteration, prefer the narrowest repo-declared Vitest project, tier,
 package, or single-file command that exercises the behavior. When Vitest
@@ -81,16 +78,12 @@ current slice.
 ## MSW And Replay Handlers
 
 Only for apps that call external HTTP APIs. The app CLI drives the e2e tests;
-MSW tapes stand in only for third-party HTTP responses, never for the app's
-own code. Add MSW to a repo only when it calls such an API.
+MSW replays third-party HTTP responses. Add MSW to a repo only when it calls
+such an API. What a handler may do: the `tdd` skill's mocking guide
+(`../tdd/mocking.md`).
 
-- Treat MSW handlers as tape recorders, not API simulators.
-- Match requests and select the correct recorded fixture, then replay status, headers, and body unmodified.
-- Do not transform recorded payloads to fit application expectations.
-- Do not add fallback responses when a mock is missing.
-- Do not synthesize errors; record and replay real error responses.
-- Do not run schema validation in handlers or mock loaders.
-- Keep business logic out of handlers.
+- A handler matches the request and selects its recorded fixture; how it
+  replays that fixture: the mocking guide.
 
 ## Validation Commands
 

@@ -14,6 +14,23 @@
       "status": "built",
       "pr": 16
     },
+    "acceptance-gate-time-targets": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-test-cpu-shown": {
+      "status": "built",
+      "pr": 605,
+      "record": "20261106T035039Z-b749abd4",
+      "commit": "6f46c68d849ef8097e2a00d7b1b276674a0ee15b",
+      "tests": [
+        "tests/gate/test_cpu.py"
+      ]
+    },
+    "acceptance-test-cpu-budget": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-qc-listed": {
       "status": "planned",
       "pr": null
@@ -123,12 +140,10 @@
     },
     "acceptance-qc-advisory": {
       "status": "built",
-      "pr": 420,
-      "record": "20261030T041926Z-d341cbd7",
-      "commit": "b8060c2a7e98a796fb77658c2d0e65b83cb95c46",
-      "tests": [
-        "tests/qc-advisory.sh"
-      ]
+      "pr": 605,
+      "record": "20261106T022927Z-a062f459",
+      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
+      "tests": []
     },
     "acceptance-qc-insufficient": {
       "status": "built",
@@ -220,12 +235,10 @@
     },
     "acceptance-qa-analyst": {
       "status": "built",
-      "pr": 545,
-      "record": "20261104T220340Z-26202b38",
-      "commit": "288cd3fd6ba6664bc3a5a80db787549fc3a50412",
-      "tests": [
-        "tests/qa-analyst.sh"
-      ]
+      "pr": 605,
+      "record": "20261106T022913Z-ff158d12",
+      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
+      "tests": []
     },
     "acceptance-qa-review": {
       "status": "built",

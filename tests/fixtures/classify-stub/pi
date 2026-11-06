@@ -3,11 +3,14 @@
 
 `pi --version` exits 0. An extension command (`pi ... -e EXT -p "/cmd args"`, the kit's one
 classify path) runs for real under node with harness.mjs here: a stub model registry listing one
-classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json). Every answer
+classifier, STUB_KIT (default: the kit's judgment model, evals/judgment-model.json), and each
+provider/id in STUB_ALSO (space-separated), a classify call to any of which exits 5 (only STUB_KIT
+may be asked). Every answer
 is STUB_ANSWER at confidence STUB_CONFIDENCE (default 0.91), the rest spread over the other
 labels; STUB_ANSWER unset: each call fails with a provider error. STUB_WANT: a state not
 containing it is refused with an error naming it (the caller's proof of what the classifier was
-shown). Anything else exits 2. As pi's print mode, an extension's stdout goes to stderr.
+shown); with STUB_WANT_EXACT=1, a state not equal to it, byte for byte, is refused with an
+error naming it. Anything else exits 2. As pi's print mode, an extension's stdout goes to stderr.
 node is the kit's pin (its mise.toml, asked of mise for the kit's dir), else the first on
 PATH: from a bare pane, the node on PATH is mise's shim, which in a dir pinning no node (a
 scratch target, qc's advice run) resolves no version and, the qc sandbox turning the shims'

@@ -31,6 +31,7 @@ Repo skills: verify-octo-feather
 - `templates/python`, `templates/typescript` starter target repos; each template's `AGENTS.md` describes its layout. Dependency owners: Python's `pyproject.toml` and `uv.lock`, TypeScript's `package.json` and `pnpm-lock.yaml`.
 - `scripts/` published commands on every agent's `PATH`; each script owns its command details: read its source, and its `--help` where supported.
 - `justfile` owns kit recipes, listed by `just --list`; `just fast` and `just check` are the gate's tiers (quality spec `#recipes-table`). Gate runner: `tests/gate/`; dependencies and pins: `pyproject.toml`, `uv.lock`.
+- `tests/` the kit's tests: `tests/*.sh`, and pytest kit tests in `tests/gate/kit/` (how each is a gate item: `scripts/octo-feather-gate --help`, select; their shared stand-ins, scratch dirs, fixture loading and scenario runner: `tests/gate/kit/testkit/`, its docstring). `tests/parity/` the parity lever a rewritten test is proved by (`tests/parity/lever.py --help`).
 - `NOTICE`, `LICENSE` Apache-2.0 attribution for the octo-lite-derived files.
 - `docs/kickoff-brief.md` the brief the owner sends the director with `build <spec>` (docs/adr/0021).
 - `evals/` factory eval suites (`<suite>/suite.json`, `cases.json`, hidden `reference/expectations.json`) and their `fixtures/`; shape: `scripts/check-evals --help`.

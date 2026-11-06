@@ -1,0 +1,14 @@
+Seeded defect: fast-select (Python template) sees only shared-machinery files added since main, not changed ones: a justfile change runs the picked tests only.
+--- a/templates/python/scripts/fast-select
++++ b/templates/python/scripts/fast-select
+@@ -31,7 +31,9 @@ def choice() -> tuple[str, str]:
+         return f"fast: every integration test: {why}", "--testmon-noselect"
+     lines = Path("shared-machinery.txt").read_text(encoding="utf-8").splitlines()
+     specs = [f":(glob){ln}" for ln in lines if not re.match(r"^\s*(#|$)", ln)]
+-    changed = git("diff", "--name-only", base.stdout.strip(), "--", *specs).stdout.split("\n")
++    changed = git(
++        "diff", "--name-only", "--diff-filter=A", base.stdout.strip(), "--", *specs
++    ).stdout.split("\n")
+     new = git("ls-files", "-o", "--exclude-standard", "--", *specs).stdout.split("\n")
+     hit = " ".join(sorted({p for p in changed + new if p}))
+     if hit:

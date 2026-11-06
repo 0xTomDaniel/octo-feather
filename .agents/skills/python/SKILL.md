@@ -37,7 +37,7 @@ The project's own tooling wins. A project on pip and `requirements*.txt` stays o
 - Prefer `pytest` for tests in new projects; otherwise keep the project's own runner.
 - Prefer `ruff` for linting and formatting. Never reformat lines a ticket does not change.
 - Use `basedpyright` in strict mode for static type checking, as `templates/python` does.
-- Use replay-based integration tests when realistic HTTP payloads matter.
+- Use replay-based integration tests when realistic HTTP payloads matter. How a test stands in for what the repo does not own, replays a recording and shares its support: the `tdd` skill's mocking guide (`../tdd/mocking.md`).
 
 ## Workflow Notes
 

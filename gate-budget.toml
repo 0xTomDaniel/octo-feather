@@ -1,5 +1,9 @@
 # The kit's gate-time budget, kept by the factory like any repo policy. What reads it, its keys and what each
-# means: octo-feather-lane --help (report). Passed full runs on this box, 2026-11-04: 360 to 440 s.
-budget_seconds = 420
+# means: octo-feather-lane --help (report). budget_seconds: the full-gate target, quality spec
+# #acceptance-gate-time-targets.
+budget_seconds = 300
 growth_share = 0.25
 trend_runs = 5
+# test_cpu_seconds: the per-test CPU budget (quality spec #test-kinds), report-only for now (#588); provisional, from
+# the CPU stability measurement in PR #605's Validation section.
+test_cpu_seconds = 10

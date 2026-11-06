@@ -1,0 +1,12 @@
+Seeded defect: trend-reporter.ts (TypeScript template) counts a run with no GATE_RECIPES as holding the static steps: a bare vitest run, which skips them, is tier full.
+--- a/templates/typescript/tests/trend-reporter.ts
++++ b/templates/typescript/tests/trend-reporter.ts
+@@ -49,7 +49,7 @@ function staticShort(root: string): boolean {
+     return (e as { code?: unknown }).code !== "ENOENT" || ["justfile", "Justfile", ".justfile"].some((n) => existsSync(join(root, n)));
+   }
+   const declared = (JSON.parse(dump) as { assignments?: Record<string, { value?: unknown }> }).assignments?.["GATE_RECIPES"];
+-  return declared !== undefined && declared.value !== process.env["GATE_RECIPES"];
++  return declared !== undefined && process.env["GATE_RECIPES"] !== undefined && declared.value !== process.env["GATE_RECIPES"];
+ }
+ 
+ /** The run's tier, from Vitest's own resolved config and the files it runs against every file its projects hold, and

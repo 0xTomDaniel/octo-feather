@@ -13,7 +13,8 @@ Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path)
 inside already set it: the coverage map of `just fast-map` files each process under the outermost item.
 A tests/*.sh tagged with a criterion it proves carries one header line (its leading `#` lines) per criterion, `# criterion: <spec>#<anchor>`
 (quality #qc-capture), collected here as pytest's own `criterion` marker; a claimed one runs through the qc capture
-(tests/gate/conftest.py). An item exiting 77 (automake's skip status) is skipped, its output saying why.
+(tests/gate/conftest.py). A tests/*.sh end-to-end by its header (`# gate: e2e`, octo-feather-gate --help) is collected
+with pytest's `e2e` marker (what it changes: conftest.py). An item exiting 77 (automake's skip status) is skipped, its output saying why.
 """
 import os, pathlib, re, subprocess
 from collections.abc import Callable
@@ -30,14 +31,17 @@ PANE = ("OCTO_FEATHER_PARENT", "OCTO_FEATHER_SESSION_ID", "OCTO_FEATHER_ROLE", "
 SCRIPTS = sorted(p.relative_to(ROOT).as_posix() for p in ROOT.glob("tests/*.sh"))
 TAG = re.compile(r"# criterion: (\S+)")
 SKIP = 77
+E2E = "# gate: e2e"
 
 
 def tagged(script: str) -> object:
-    """SCRIPT as a pytest param, marked with each criterion its header (the leading `#` lines) tags it with (none: unmarked)."""
+    """SCRIPT as a pytest param, marked with each criterion its header (the leading `#` lines) tags it with, and e2e when
+    the header says so (neither: unmarked)."""
     lines = (ROOT / script).read_text(errors="replace").splitlines()
     head = lines[: next((n for n, ln in enumerate(lines) if not ln.startswith("#")), len(lines))]
     ids = [m.group(1) for ln in head if (m := TAG.fullmatch(ln))]
-    return pytest.param(script, marks=[pytest.mark.criterion(*ids, source=script)] if ids else [])
+    marks = [pytest.mark.criterion(*ids, source=script)] if ids else []
+    return pytest.param(script, marks=[*marks, pytest.mark.e2e] if E2E in head else marks)
 
 
 @pytest.fixture(scope="session")

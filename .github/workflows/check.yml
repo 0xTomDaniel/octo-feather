@@ -84,7 +84,7 @@ jobs:
       # templates/python below keep their own resolution: uv reads .python-version only inside each project. Network.
       - run: uv python install --no-bin
       # The kit's test deps (pytest, pytest-xdist: uv.lock), each eval fixture's and templates/python's locked deps
-      # (tests/template-languages.sh) into uv's cache, with
+      # (tests/gate/kit/template_languages.py) into uv's cache, with
       # mise's uv: the third network step. The gate runs pytest with --offline, and tests/qa.sh syncs python-app copies
       # inside it with UV_OFFLINE=1, from this cache only.
       - run: uv sync --locked --quiet && for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
