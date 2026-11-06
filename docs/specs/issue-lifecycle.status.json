@@ -209,6 +209,33 @@
       "record": "20261105T172052Z-39985a1b",
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
+    },
+    "acceptance-ci-alongside": {
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T223910Z-24feac47",
+      "commit": "73bdfabb9f837a9b3e0c08dc7f8435dddb2284f7",
+      "tests": [
+        "tests/lane-ci-start.sh"
+      ]
+    },
+    "acceptance-ci-status-only": {
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T223910Z-8326fb16",
+      "commit": "73bdfabb9f837a9b3e0c08dc7f8435dddb2284f7",
+      "tests": [
+        "tests/lane-merge-ask.sh"
+      ]
+    },
+    "acceptance-review-resolution": {
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T223910Z-08f65327",
+      "commit": "73bdfabb9f837a9b3e0c08dc7f8435dddb2284f7",
+      "tests": [
+        "tests/lane-review-resolution.sh"
+      ]
     }
   }
 }
