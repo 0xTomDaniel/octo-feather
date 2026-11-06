@@ -10,7 +10,7 @@ times), exit, tier (`full` only when the invocation narrowed nothing: no paths o
 ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or --ignore-glob, and
 the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
 run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
-steps (name, seconds, result: ok, FAIL, ERROR or skipped, cpu_s: below), one per junit
+steps (name, node: its pytest node id, seconds, result: ok, FAIL, ERROR or skipped, cpu_s: below), one per junit
 testcase (under xdist their seconds overlap, so their sum exceeds total_s), load1_start and load1_end (the box's
 1-minute load average when the session starts and when it ends, null where the OS has none: a slow run told apart from
 a heavy one). A missing junit file or an unwritable state dir is a
@@ -18,7 +18,8 @@ warning on stderr, never a failure: the trend line never changes the run's exit 
 
 Also copyable unchanged: longest items first (#618; gate-time discipline: quality spec #test-kinds). The run reads
 this repo's trend lines (repo the same git top level) once, on the controller, before any item runs: each item's
-wall seconds on the last line that has its name (the junit testcase name, pytest's item name). Items with a
+wall seconds on the last line that has its node id (a step's node; on a line before node ids, its name, the junit
+testcase name, pytest's item name). Items with a
 record are reordered among their own places, longest first (ties keep collection order); an item with none keeps
 its place; no history at all leaves collection order. xdist workers get the controller's read (pytest_configure_node),
 so every worker collects the same order. Under xdist's --dist load (the default with -n) the run deals the order out
@@ -80,6 +81,7 @@ CAPTURE_DIR = "OCTO_FEATHER_QC_CAPTURE_DIR"   # set by the controller before any
 TAGS = "OCTO_FEATHER_QC_TAGS"
 ITEMS = "OCTO_FEATHER_GATE_ITEMS"
 CPU = "cpu_s"
+NODE = "node"   # a step's pytest node id, unique where its junit name is not
 BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
 LAST = "octo_feather_last_seconds"   # the controller's read, in each xdist worker's workerinput
@@ -139,7 +141,7 @@ def _entry(xml_path, status, tier: str):
     start = datetime.datetime.fromisoformat(suite.get("timestamp")).astimezone(datetime.timezone.utc)
     return {"start": start.strftime("%Y-%m-%dT%H:%M:%SZ"), "repo": _git("rev-parse", "--show-toplevel") or os.getcwd(),
             "head": _git("rev-parse", "HEAD"), "total_s": round(float(suite.get("time")), 3), "exit": int(status),
-            "tier": tier, "steps": [{"name": c.get("name"), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c), **_cpu_s(c)}
+            "tier": tier, "steps": [{"name": c.get("name"), **_node(c), "seconds": round(float(c.get("time") or 0), 3), "result": _result(c), **_cpu_s(c)}
                       for c in suite.iter("testcase")]}
 
 
@@ -164,7 +166,7 @@ def _last_seconds() -> dict[str, float]:
                     d: Any = json.loads(line)
                     if d["repo"] == repo:
                         for s in d["steps"]:
-                            last[str(s["name"])] = float(s["seconds"])
+                            last[str(s.get(NODE) or s["name"])] = float(s["seconds"])
                 except (ValueError, KeyError, TypeError):
                     continue
     except OSError:
@@ -173,8 +175,11 @@ def _last_seconds() -> dict[str, float]:
 
 
 def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:
-    places = [n for n, i in enumerate(items) if i.name in last]
-    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -last[i.name]), strict=True):
+    def seconds(i: pytest.Item) -> float | None:   # by node id, else by name (a line before node ids)
+        return last.get(i.nodeid, last.get(i.name))
+
+    places = [n for n, i in enumerate(items) if seconds(i) is not None]
+    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -(seconds(i) or 0)), strict=True):
         items[n] = i
 
 
@@ -218,6 +223,11 @@ def pytest_xdist_make_scheduler(config: pytest.Config, log: "Producer | None") -
 
 def pytest_sessionstart(session: pytest.Session) -> None:
     session.config.stash[_LOAD_START] = _load1()
+
+
+def _node(case: ET.Element) -> dict[str, str]:
+    p = case.find(f"properties/property[@name='{NODE}']")
+    return {} if p is None else {NODE: str(p.get("value"))}
 
 
 def _cpu_s(case: ET.Element) -> dict[str, float]:
@@ -378,8 +388,10 @@ def pytest_runtest_protocol(item: pytest.Item) -> Generator[None, object, object
 
 @pytest.hookimpl(wrapper=True)
 def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) -> Generator[None, object, object]:
-    if call.when == "teardown" and resource is not None and _CPU_START in item.stash:   # before its report copies them
-        item.user_properties.append((CPU, round(_cpu() - item.stash[_CPU_START], 3)))
+    if call.when == "teardown":   # before its report copies them
+        item.user_properties.append((NODE, item.nodeid))
+        if resource is not None and _CPU_START in item.stash:
+            item.user_properties.append((CPU, round(_cpu() - item.stash[_CPU_START], 3)))
     return (yield)
 
 

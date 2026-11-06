@@ -15,17 +15,33 @@ import json
 import os
 import shutil
 import subprocess
+from typing import cast
 
 from testkit import ROOT, Scratch, main
 
 SCRIPTS = ("a", "b", "c", "d", "e")
+SAME = ("m1", "m2")  # modules holding one same-named item each
 DROP = ("HERDR_SESSION", "OCTO_FEATHER_QC_CLAIMS", "OCTO_FEATHER_QC_CAPTURE_DIR")
 
 
-def _line(repo: str, steps: dict[str, float]) -> str:
-    rows = [
+def _line(repo: str, steps: dict[str, float], same: dict[str, float] | None = None) -> str:
+    """A trend line of REPO: STEPS by script, as a line before step node ids (name only), and
+    SAME by module, test_same in each, with its node id."""
+    rows: list[dict[str, object]] = [
         {"name": f"test_script[tests/{n}.sh]", "seconds": v, "result": "ok"}
         for n, v in steps.items()
+    ]
+    rows += [
+        cast(
+            "dict[str, object]",
+            {
+                "name": "test_same",
+                "node": f"tests/gate/test_{m}.py::test_same",
+                "seconds": v,
+                "result": "ok",
+            },
+        )
+        for m, v in (same or {}).items()
     ]
     run = {"start": "2026-11-01T00:00:00Z", "repo": repo, "head": None, "total_s": 1, "exit": 0}
     return json.dumps({**run, "tier": "full", "steps": rows}, separators=(",", ":"))
@@ -46,6 +62,12 @@ def longest_first(s: Scratch) -> None:
         log_it = f'echo "${{PYTEST_XDIST_WORKER:-main}} {name}" >> "$ORDER_LOG"'
         sh.write_text(f"#!/usr/bin/env bash\n{log_it}\n")
         sh.chmod(0o755)
+    for m in SAME:
+        (suite / "tests" / "gate" / f"test_{m}.py").write_text(
+            "import os\n\n\ndef test_same():\n"
+            '    with open(os.environ["ORDER_LOG"], "a") as f:\n'
+            f'        f.write(os.environ.get("PYTEST_XDIST_WORKER", "main") + " {m}\\n")\n'
+        )
     git = shutil.which("git")
     assert git, "no git on PATH"
     subprocess.run([git, "init", "-q", str(suite)], check=True)
@@ -54,7 +76,7 @@ def longest_first(s: Scratch) -> None:
     history = "\n".join(
         (
             _line(repo, {"e": 50}),
-            _line(repo, {"a": 1, "c": 3, "d": 2, "e": 0.5}),
+            _line(repo, {"a": 1, "c": 3, "d": 2, "e": 0.5}, {"m1": 0.2, "m2": 0.4}),
             _line(repo + "-other", {"e": 100}),
         )
     )
@@ -80,14 +102,10 @@ def longest_first(s: Scratch) -> None:
         return [ln.split() for ln in log.read_text().splitlines()], json.loads(lines[-1])
 
     got = [n for _, n in run("", 1)[0]]
-    assert got == ["a", "b", "c", "d", "e"], f"no history: {got}, want collection order"
-    want = [
-        "c",
-        "b",
-        "d",
-        "a",
-        "e",
-    ]  # recorded ones longest first in their places; b keeps its place
+    assert got == ["a", "b", "c", "d", "e", "m1", "m2"], f"no history: {got}, want collection order"
+    # Recorded ones longest first in their places; b keeps its place; m1 and m2, one name in two
+    # modules, each by its own node id.
+    want = ["c", "b", "d", "a", "e", "m2", "m1"]
     for workers in (1, 0):
         started, trend_line = run(history, workers)
         got = [n for _, n in started]
@@ -102,6 +120,10 @@ def longest_first(s: Scratch) -> None:
         assert isinstance(trend_line.get(k), float), f"trend line {k}: {trend_line.get(k)!r}"
     old = {"start", "repo", "head", "total_s", "exit", "tier", "steps"}
     assert old <= trend_line.keys(), f"trend line keys {sorted(trend_line)}"
+    rows = cast("list[dict[str, str]]", trend_line["steps"])
+    steps = {st.get("node"): st["name"] for st in rows}
+    for m in SAME:
+        assert steps.get(f"tests/gate/test_{m}.py::test_same") == "test_same", steps
 
 
 if __name__ == "__main__":
