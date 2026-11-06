@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for the kit's spend-ledger Pi extension (extensions/spend-ledger.ts, issue #187), one gate item
 # per case group (#509; the fake provider, Pi environment and helpers: tests/lib/spend-ledger.sh). Case here, on the
-# ledger as tests/spend-ledger.sh's cases agents to zero-priced and tests/spend-ledger-qc.sh's qc case leave it (seed 10):
+# ledger as tests/gate/kit/spend_ledger.py's cases agents to zero-priced and tests/spend-ledger-qc.sh's qc case leave it (seed 10):
 #   qa  a `just qa` eval case (role implementer) in no lane: under no lane and implementer (spend#rule-lane)
 # Linux only (the qa sandbox needs unshare), as tests/qc.sh. Never skips on Linux: without pi, or with pi at another
 # version, it fails naming the install command. Run by `just check`.

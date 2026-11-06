@@ -30,7 +30,7 @@ from testkit import FIXTURES, ROOT, Scratch, main, pnpm_store, tool_homes
 
 TAG = "fast test"
 ANSI = re.compile(r"\x1b\[[0-9;]*m")
-# Not copied: the kit's own tests (fast.sh's grep -zvxE, its copy of the kit).
+# Not copied: the kit's own tests.
 TESTS = re.compile(r"tests/[^/]*\.sh|tests/gate/test_cpu\.py|tests/gate/kit/(.*/)?test_[^/]*\.py")
 ITEM = (
     '#!/usr/bin/env bash\nset -euo pipefail\necho {n} >> "$FAST_RAN"\n'

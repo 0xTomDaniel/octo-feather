@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034  # v, ledger, out, rc, gitenv: used by the scripts that source this file
-# Sourced by tests/spend-ledger.sh and each tests/spend-ledger-*.sh (one gate item per case group, #509), never run
+# Sourced by each tests/spend-ledger-*.sh (one gate item per case group, #509), never run
 # itself: in tests/lib/ so the gate's tests/*.sh glob does not collect it. Real Pi at the kit's pin (pi-version),
 # headless, against a fake OpenAI-compatible provider on 127.0.0.1 whose model has a catalog price (input $1000/M
 # tokens, output $2000/M), then `octo-feather-lane spend`. Credential-free: Pi starts from an empty environment with an
@@ -67,7 +67,7 @@ qc() { set +e
     "$kit/scripts/octo-feather-qc" docs/specs/demo.status.json 5 acceptance-a 2>"$t/err")"; rc=$?
   set -e; }
 # seed N: the ledger's first N records as the cases before leave it (each through `spend record`, the extension's
-# writer): 8, the spend-ledger.sh cases agents to zero-priced (gh149 implementer: fake/fake 100 in 20 out $0.14,
+# writer): 8, tests/gate/kit/spend_ledger.py's cases agents to zero-priced (gh149 implementer: fake/fake 100 in 20 out $0.14,
 # 150 in 10 out $0.17 three times, tool/nested_work 7 in 3 out $0.004, fake/free 150 in 10 out unknown cost; no lane:
 # agent and code-reviewer, fake/fake 150 in 10 out $0.17 each); 10, then the qc case's (gh149 judge and qc-judge).
 seed() {
