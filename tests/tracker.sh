@@ -2,7 +2,7 @@
 # Integration test for the tracker per target (spec skills#tracker, docs/adr/0004), offline:
 #   default: a target with no .octo-feather.toml gets github-pr and github-issues from pi-role, not linear;
 #   unknown: tracker = "jira" makes pi-role and octo-feather-start --issue N exit non-zero naming jira and
-#            the kit's trackers, and no workspace or supervisor starts (fake herdr, tests/start.sh style);
+#            the kit's trackers, and no workspace or supervisor starts (fake herdr, as tests/gate/kit/start.py);
 #   scripts: check-skills (in `just check`) fails a tracker skill missing any tracker script, naming both;
 #   github-issues: each tracker script runs against the offline fake gh (github-pr's scripts/gh), whose
 #            refusal of writes passes through, and against a recording gh for the write arguments; issue-view

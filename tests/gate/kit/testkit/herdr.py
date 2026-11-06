@@ -23,7 +23,11 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
-`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
+`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Workspaces (a start's):
+`workspace create --label L` makes the next wN with its seed tab wN:t0 (`workspaces.json`, a
+scenario may write it), `workspace list` lists them, `workspace close W` drops W; `session list`
+prints Herdr's table: `default` running, and each name in the file `sessions` running. Each call
+is also one line in `session-log`, "HERDR_SESSION=<the caller's> CALL". Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
 each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
@@ -139,9 +143,37 @@ class World:
             return fail("timeout")
         return say({"agent_status": "idle"})
 
+    def workspaces(self) -> list[dict[str, str]]:
+        f = self.dir / "workspaces.json"
+        return json.loads(f.read_text()) if f.exists() else []
+
+    def workspace(self, a: list[str]) -> int:
+        spaces, f = self.workspaces(), self.dir / "workspaces.json"
+        if a[1] == "list":
+            return say({"workspaces": spaces})
+        if a[1] == "close":
+            f.write_text(json.dumps([w for w in spaces if w["workspace_id"] != a[2]]))
+            return 0
+        w = f"w{len(spaces) + 1}"
+        f.write_text(json.dumps([*spaces, {"label": opts(a, "--label")[0], "workspace_id": w}]))
+        return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": f"{w}:t0"}})
+
+    def sessions(self) -> int:
+        f = self.dir / "sessions"
+        names = f.read_text().split() if f.exists() else []
+        rows = ["name status directory socket", "default running /d /d.sock"]
+        sys.stdout.write("\n".join(rows + [f"{n} running /s /s.sock" for n in names]) + "\n")
+        return 0
+
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
+        who = os.environ.get("HERDR_SESSION", "")
+        self.note("session-log", f"HERDR_SESSION={who} {' '.join(a)}")
+        if a[:1] == ["workspace"] and a[1:2] in (["list"], ["create"], ["close"]):
+            return self.workspace(a)
+        if a[:2] == ["session", "list"]:
+            return self.sessions()
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
