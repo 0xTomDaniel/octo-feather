@@ -311,7 +311,7 @@ def stalled_fetch(s: Scratch) -> None:
         skipped("stalled and dripping proxy fetch (needs unshare -rn and ip)")
         return
     warm()
-    runs = []
+    runs: list[tuple[str, str, float, subprocess.Popen[str]]] = []
     for what, bin_ in (("git", True), ("download", False)):
         for mode in ("silent", "drip"):
             c = cache(s, f"c-{what}-{mode}", bin_=bin_)

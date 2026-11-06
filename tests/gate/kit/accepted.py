@@ -75,7 +75,7 @@ def served(s: Scratch, sc: Path) -> list[str]:
         text=True,
     )
     try:
-        url, seen = "", []
+        url, seen = "", list[str]()
         assert p.stdout is not None
         for ln in p.stdout:  # its own readiness line, read from its pipe
             seen.append(ln)
@@ -83,7 +83,7 @@ def served(s: Scratch, sc: Path) -> list[str]:
                 url = ln.split(" on ", 1)[1].split()[0]
                 break
         assert url, f"{TAG}: pinned review-serve did not start: {''.join(seen)}"
-        tags = []
+        tags: list[str] = []
         for f in ("a.spec.html", "a-edited.spec.html"):
             with urllib.request.urlopen(f"{url}/{f}") as r:  # noqa: S310 (the local URL it printed)
                 tags.append((r.headers.get("ETag") or "").strip('"'))

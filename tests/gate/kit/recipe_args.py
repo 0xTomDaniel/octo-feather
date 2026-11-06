@@ -2,7 +2,7 @@
 (testkit.main): kit and template justfile recipes pass their arguments and the invocation
 directory to the called command as data (#61). Each recipe runs through `just` (the surface under
 test) from a cwd whose path holds `$`, a backtick, both quotes and a space, with arguments holding
-the same; testkit/argv_recorder, as each octo-feather-* command a recipe calls, records the
+the same; testkit/argv_recorder.sh, as each octo-feather-* command a recipe calls, records the
 exact cwd and argv; nothing expands (no file an argument would touch appears). Offline, HOME
 redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes run from a copy
 of it whose scripts/ holds the recorder (the rest linked to the kit's); the templates' justfiles
@@ -33,9 +33,9 @@ def world(s: Scratch) -> tuple[Path, Path]:
     for p in (ROOT / "scripts").iterdir():
         (k / "scripts" / p.name).symlink_to(p)
     for c in CMDS:
-        (stubs / f"octo-feather-{c}").symlink_to(HERE / "argv_recorder")
+        (stubs / f"octo-feather-{c}").symlink_to(HERE / "argv_recorder.sh")
         (k / "scripts" / f"octo-feather-{c}").unlink(missing_ok=True)
-        (k / "scripts" / f"octo-feather-{c}").symlink_to(HERE / "argv_recorder")
+        (k / "scripts" / f"octo-feather-{c}").symlink_to(HERE / "argv_recorder.sh")
     s.env |= {
         "ARGV_LOG": str(t / "log"),
         "XDG_STATE_HOME": str(t / "state"),

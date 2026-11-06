@@ -553,14 +553,15 @@ def fallback_and_legacy(x: Stale) -> None:
 def refusals(x: Stale, cap: str) -> None:
     """check refuses a partial or malformed link, and a planned criterion with one."""
     legacy = x.st.read_text()
-    link = {"status": "built", "pr": 7, "record": RA, "commit": cap, "tests": []}
-    for row, want in (
+    link: dict[str, object] = {"status": "built", "pr": 7, "record": RA, "commit": cap, "tests": []}
+    rows: tuple[tuple[dict[str, object], str], ...] = (
         ({"status": "built", "pr": 7, "record": RA}, "names record without commit, tests"),
         (link | {"record": "r1"}, "record must be an evidence record id"),
         (link | {"commit": "HEAD"}, "commit must be a commit sha"),
         (link | {"tests": "t"}, "tests must be a list"),
         (link | {"status": "planned", "pr": None}, "a planned criterion names no evidence"),
-    ):
+    )
+    for row, want in rows:
         d = json.loads(legacy)
         d["criteria"]["acceptance-b"] = row
         x.st.write_text(json.dumps(d))
