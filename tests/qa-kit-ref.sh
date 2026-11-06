@@ -20,6 +20,7 @@ gk init -q -b main; rm "$im"; gk add -A; gk commit -qm c0; c0="$(gk rev-parse HE
 sed 's/^skills:\(.*\), tdd,/skills:\1,/' "$t/im.md" > "$im"; grep -q '^skills:' "$im" && ! grep -q '^skills:.*tdd' "$im" || fail "c1 still lists tdd"
 gk add -A; gk commit -qm c1; c1="$(gk rev-parse HEAD)"
 cp "$t/im.md" "$im"; gk commit -qam c2; c2="$(gk rev-parse HEAD)"
+ln -s "$kit/node_modules" "$HOME/src/kit/node_modules" && echo /node_modules >> "$HOME/src/kit/.git/info/exclude"   # srt, the qc sandbox, runs from the running kit's node_modules
 K="$HOME/src/kit/scripts/octo-feather-qa"
 run 1 "$K" --evals "$t/evals" --case reads --kit-ref "${c1:0:9}"
 line FAIL reads | grep -q "skill_read tdd: no load of tdd/SKILL.md.*\[kit $c1\]" || fail "kit-ref before the change: want FAIL with its sha: $out"

@@ -473,7 +473,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     # prints, with its lanes/; the live kit install octo-feather-lane post-merge step 3 fast-forwards, the dir its
     # kit_install() names (asked of it: OCTO_FEATHER_KIT_INSTALL, else the kit dir), a clone or a worktree of one with
     # an origin, on main, detached or not (the box's install is a detached worktree beside the main checkout, #422).
-    python3 -c 'import importlib.machinery as im, importlib.util as iu, os, re, subprocess, sys
+    python3 -c 'import importlib.machinery as im, importlib.util as iu, json, os, re, shutil, subprocess, sys
     root = sys.argv[1]
     def run(*a):
         try: r = subprocess.run(a, capture_output=True, text=True, timeout=30, stdin=subprocess.DEVNULL)
@@ -499,6 +499,16 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
         else: how = "no sysctl here turns them off (kernel.apparmor_restrict_unprivileged_userns, kernel.unprivileged_userns_clone, user.max_user_namespaces): a container or seccomp policy does; run the kit on a VM or a bare-metal box"
         last = (err.splitlines() or ["exit " + str(rc)])[-1]
         print(f"userns FAILED unshare -rm true: {last} (the qc sandbox runs its judge in unprivileged user namespaces, #404); {how}"); bad = 1
+    for tool, pkg in (("bwrap", "bubblewrap"), ("socat", "socat")):   # srt needs both (scripts/octo-feather-qc-sandbox)
+        if shutil.which(tool): print(f"{tool} ok (srt, the qc sandbox, needs it)")
+        else: print(f"{tool} MISSING (srt, the qc sandbox, needs it); sudo apt install {pkg}"); bad = 1
+    srt = "@anthropic-ai/sandbox-runtime"   # the qc sandbox, its pin in package.json (scripts/octo-feather-qc-sandbox)
+    try: pin = json.load(open(os.path.join(root, "package.json"))).get("devDependencies", {}).get(srt)
+    except (OSError, ValueError): pin = None
+    try: got = json.load(open(os.path.join(root, "node_modules", srt, "package.json"))).get("version")
+    except (OSError, ValueError): got = None
+    if pin and got == pin: print(f"srt ok {srt} {got} (package.json pin, the qc sandbox)")
+    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or 'none'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
     rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
     lanes = os.path.join(st, "lanes")
     if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
