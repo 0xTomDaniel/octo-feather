@@ -3,7 +3,7 @@
 #acceptance-tracer-tickets; rules: octo-feather-lane --help (ticket)), no network. `tickets`
 reads tickets only through the target's tracker skill's issue-view (comms
 #octo-lane-record-tickets). GitHub is a snapshot octo-feather-qc-ghsnap takes of the testkit's
-fake GitHub (testkit/github.py) and the qc judge's offline gh serves
+fake gh (testkit/gh.py) and the qc judge's offline gh serves
 (.agents/skills/github-pr/scripts/gh), so the check is proven to work under it and to ask only
 fields the snapshot stores; a Linear target (tracker = "linear") reads the same through the kit's
 offline fake linear (.agents/skills/linear/scripts/linear, a JSON store). The target repo (the
@@ -22,7 +22,7 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
-from testkit import FIXTURES, HERE, ROOT, Ran, Scratch, fixture, kit, main
+from testkit import FAKES, FIXTURES, ROOT, Ran, Scratch, fixture, kit, main
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
@@ -78,6 +78,19 @@ def draft(name: str) -> str:
     """The path of the draft fixture NAME, failing loudly when missing (testkit.fixture)."""
     fixture(f"{BODIES}/{name}")
     return str(F / name)
+
+
+def github(s: Scratch, issues: dict[int, dict[str, object]]) -> None:
+    """GitHub's o/r in the fake gh's store (testkit/gh.py): ISSUES, no PR, run or branch, no
+    labels, each issue's timeline empty."""
+    for n, d in issues.items():
+        s.gh.store(f"issue/{n}.json", d)
+        s.gh.store(f"api/repos/o/r/issues/{n}/timeline.json", [])
+    repo = {"nameWithOwner": "o/r", "name": "r", "owner": {"login": "o"}}
+    s.gh.store("repo.json", repo | {"defaultBranchRef": {"name": "main"}})
+    s.gh.store("api/repos/o/r.json", {"full_name": "o/r"})
+    for path in ("labels", "branches"):
+        s.gh.store(f"api/repos/o/r/{path}.json", [])
 
 
 def build_repo(s: Scratch) -> None:
@@ -152,12 +165,12 @@ def build_repo(s: Scratch) -> None:
         iss[n] = {"body": b, "subIssues": {"nodes": [], "totalCount": 0}}
     meta = {"title": "", "state": "OPEN", "updatedAt": "2026-10-20T00:00:00Z"}
     store = {n: {**meta, "number": n, "title": f"t{n}", **d} for n, d in iss.items()}
-    (s.root / "github.json").write_text(json.dumps(store))
+    github(s, store)
     gb = s.root / "github"
     gb.mkdir()
-    (gb / "gh").symlink_to(HERE / "github.py")
-    env = {"FAKE_GITHUB": str(s.root / "github.json"), "PATH": f"{gb}:{sysd}"}
-    s.run([kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / "snap")], env=env)
+    (gb / "gh").symlink_to(FAKES["gh"])
+    snap = [kit("octo-feather-qc-ghsnap"), "o/r", str(s.root / "snap")]
+    s.run(snap, env={"PATH": f"{gb}:{sysd}"})
     ghd = s.root / "ghbin"
     ghd.mkdir()
     (ghd / "gh").write_text(

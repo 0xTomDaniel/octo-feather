@@ -2,18 +2,18 @@
 """Fake `gh` for repo o/r (the testkit's stand-in for GitHub, which the kit does not own).
 
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
-(the fields asked for, those it holds), its diff pr/N.diff; issue N issue/N.json, workflow run N
-run/N.json, the repo repo.json, each `--json` answered the same way, `issue|pr|run list` every
-one stored (by number); `gh api [--paginate --slurp] PATH`, a GET, prints api/PATH.json (one
-page; slurped, a list of it), a path not stored is GitHub's 404. `gh api -X POST
-repos/o/r/issues/N/comments` appends a comment, `-X PATCH repos/o/r/issues/comments/ID` replaces
-one's body (PR 7's comments); each prints the comment URL (`--jq .html_url`). `gh api
-repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default branch's commits), `gh api
-repos/o/r/contents/F -H Accept: application/vnd.github.raw` $FAKE_GH/contents/F (the default
-branch's file), each `gh: Not Found (HTTP 404)` when absent. As the real gh:
-no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth login`, and a
-file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log. Anything else
-exits 2 naming it.
+(as real gh, every field asked: the stored value, or null), its diff pr/N.diff; issue N
+issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
+way, `issue|pr|run list` every one stored (by number); `gh api [--paginate --slurp] PATH`, a
+GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404.
+`gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
+repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each prints the comment URL
+(`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
+branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
+$FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
+the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
+login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
+Anything else exits 2 naming it.
 """
 
 import json
@@ -36,8 +36,8 @@ def die(msg: str, rc: int = 1) -> None:
 
 
 def pick(d: dict[str, object], a: list[str]) -> dict[str, object]:
-    fields = a[a.index("--json") + 1].split(",")
-    return {k: d[k] for k in fields if k in d}
+    """As real gh: every --json field asked, the stored value or null."""
+    return {k: d.get(k) for k in a[a.index("--json") + 1].split(",")}
 
 
 def out(x: object) -> None:
