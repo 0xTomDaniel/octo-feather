@@ -6,8 +6,9 @@ macOS, its uname stand-in (testkit/uname.sh).
 
 `session`: on macOS outside Herdr with no HERDR_SESSION, the session is the project's (the
 target's top dir name) and must be running: not running exits 69 naming it and how to start it;
-running, Herdr is called in it; an explicit HERDR_SESSION is kept; on Linux the session is left
-unset. Every start writes the review state exclude into the target, once.
+running, Herdr is called in it; an explicit HERDR_SESSION is kept (on Linux the session is left
+unset: `lanes`' GitHub start shows it). Every start writes the review state exclude into the
+target, once.
 
 `lanes`: the lane key per tracker (roles spec #lane-key, #acceptance-supervise-layout-linear):
 --issue ENG-123 in a Linear target makes workspace eng-123 holding one tab, supervisor (the seed
@@ -124,11 +125,6 @@ def session(s: Scratch) -> None:
     assert any(c.startswith("HERDR_SESSION=other workspace create") for c in log), (
         f"{TAG}: an explicit HERDR_SESSION was overridden: {log}"
     )
-    st = w.start(*sub)
-    log = calls(st, "session-log")
-    assert any(c.startswith("HERDR_SESSION= workspace create") for c in log), (
-        f"{TAG}: Linux start changed the session: {log}"
-    )
     n = excl.read_text().splitlines().count("*.review/")
     assert n == 1, f"{TAG}: exclude line {n} times after reruns, want once"
 
@@ -158,6 +154,11 @@ def lanes(s: Scratch) -> None:
     assert st.rc == 0, f"{TAG}: GitHub 12: rc={st.rc} {st.out} {st.err}"
     assert " name=gh12 role=supervisor " in st.out, f"{TAG}: GitHub 12: {st.out}"
     assert any(c.startswith("workspace create --label gh12 ") for c in calls(st)), calls(st)
+    # A start on Linux (no uname stand-in) leaves the session unset (`session`'s macOS rule).
+    log = calls(st, "session-log")
+    assert any(c.startswith("HERDR_SESSION= workspace create") for c in log), (
+        f"{TAG}: Linux start changed the session: {log}"
+    )
     w.reflected()
     st = w.start("--issue", "12", "--cwd", str(lin))
     assert st.rc == 64, f"{TAG}: 12 in a Linear target: rc={st.rc} {st.err}"
