@@ -1,4 +1,12 @@
 # The parity lever's case for tests/check-ts.sh, rewritten as tests/gate/kit/test_check_ts.py (tests/parity/lever.py --help).
 old = "tests/check-ts.sh"
 old_at = "3e8c414"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/check-ts/eslint_names.py",
+]
 new = "tests/gate/kit/test_check_ts.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: the justfile is no program: just reads it to run the recipe; coverage.py cannot see it.
+[ran]
+"justfile" = "run just check-ts"

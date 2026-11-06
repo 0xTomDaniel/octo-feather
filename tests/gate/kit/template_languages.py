@@ -107,14 +107,14 @@ def fast(s: Scratch, which: str) -> None:
     change, why = CHANGES[which]
     change(r)
     out = r.run("just", "fast", "--color=no").out
-    assert OTHER_T in out, out
-    assert E2E not in out, out
     if why is None:
         assert INTEG not in out, f"a one-file change ran more than its test: {out}"
     else:
         named = f"fast: every integration test: {why} changed since main, on shared-machinery.txt"
         assert named in out, out
         assert INTEG in out, out
+    assert OTHER_T in out, out
+    assert E2E not in out, out
 
 
 if __name__ == "__main__":
