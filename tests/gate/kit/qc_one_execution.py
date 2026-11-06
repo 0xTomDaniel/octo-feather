@@ -19,7 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main
+from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main, tool_homes
 from testkit.qc import RID, STATUS, qc, target
 
 JUSTFILE = """set positional-arguments
@@ -91,12 +91,7 @@ def world(s: Scratch, name: str = "oe") -> Path:
     )
     (s.bin / "pi").chmod(0o755)
     s.env["KIT"] = str(ROOT)
-    s.env["UV_CACHE_DIR"] = subprocess.run(
-        ["uv", "cache", "dir"],  # noqa: S607
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout.strip()
+    s.env |= tool_homes()
     s.env.pop(CLAIMS, None)
     return s.root / "repo"
 

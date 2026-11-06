@@ -18,10 +18,14 @@ supplies; none there: exit 2 naming it. Else one bash call (`ls`), then:
   STUB-DECL-*     the final message a declaration case grades
 Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001.
 
-The model's turn between calls is readiness, never a delay: after each tool_execution_end the
-stub waits until the reader of its stdout (octo-feather-qa's watcher) has taken every byte and
-is blocked reading the pipe again, so the watcher's snapshot of that call's end is done before
-the next call runs (schema.md, Before targets, stated limit: exact while turns separate calls).
+The model's turn between calls is readiness, never a delay, read off the stub's own stdout pipe
+alone (no other process's /proc): each event is written and then waited on until the pipe holds
+no unread byte (FIONREAD, pipe(7)), or its reader is gone (POLLERR). The watcher's pump
+(scripts/octo-feather-qa watch(): `for raw in p.stdout`) reads a line, snapshots the case repo
+when it is a tool_execution_end, and only then reads again. So once a call's end is drained, the
+pump's buffer holds nothing after it, and the next event drains only through a read made after
+that end's snapshot: no call's command runs before the snapshot of the call before it
+(schema.md, Before targets, stated limit: exact while turns separate calls).
 """
 
 # ruff: noqa: E501, S606, S607
@@ -33,8 +37,9 @@ import array
 import fcntl
 import json
 import os
-import platform
 import re
+import select
+import stat
 import subprocess
 import sys
 import termios
@@ -46,7 +51,6 @@ a = sys.argv[1:]
 prompt = a[a.index("-p") + 1]
 tdd = next((x + "/SKILL.md" for x in a if x.endswith("/tdd")), None)  # None: role lacks tdd
 run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", str(Path.cwd())) or [0, "1"])[1])
-READ = {"x86_64": 0, "aarch64": 63}  # the read(2) syscall number, as /proc/PID/syscall shows it
 
 
 def die(msg: str) -> NoReturn:
@@ -54,82 +58,20 @@ def die(msg: str) -> NoReturn:
     sys.exit(2)
 
 
-def find_reader() -> list[tuple[str, str]]:
-    """(pid, fd) of each process holding stdout's pipe open for reading, ancestors first; []
-    when stdout is no pipe."""
-    link = str(Path("/proc/self/fd/1").readlink())
-    if not link.startswith("pipe:"):
-        return []
-    pids: list[str] = []
-    p = os.getppid()
-    while p > 1:
-        pids.append(str(p))
-        try:
-            p = int(Path(f"/proc/{p}/stat").read_text().rsplit(")", 1)[1].split()[1])
-        except (OSError, IndexError, ValueError):
-            break
-    me = str(os.getpid())
-    rest = sorted(d.name for d in Path("/proc").iterdir() if d.name.isdigit())
-    found: list[tuple[str, str]] = []
-    for pid in [*pids, *(x for x in rest if x not in pids and x != me)]:
-        found += [(pid, fd) for fd in read_ends(pid, link)]
-        if found and pid in pids:
-            break
-    return found
-
-
-def read_ends(pid: str, link: str) -> list[str]:
-    """PID's fds open for reading on the pipe LINK names."""
-    try:
-        fds = list(Path(f"/proc/{pid}/fd").iterdir())
-    except OSError:
-        return []
-    ends: list[str] = []
-    for fd in fds:
-        try:
-            if str(fd.readlink()) != link:
-                continue
-            flags = Path(f"/proc/{pid}/fdinfo/{fd.name}").read_text().split("flags:")[1]
-        except (OSError, IndexError):
-            continue
-        if int(flags.split()[0], 8) & 3 == 0:
-            ends.append(fd.name)
-    return ends
-
-
-READERS = find_reader()
-
-
-def blocked(pid: str, fd: str, nr: int) -> bool | None:
-    """Whether a thread of PID is blocked in read(2) on its FD; None when PID is gone."""
-    try:
-        tasks = list(Path(f"/proc/{pid}/task").iterdir())
-    except OSError:
-        return None
-    for t in tasks:
-        try:
-            sc = (t / "syscall").read_text().split()
-        except PermissionError as e:
-            die(f"cannot read {t}/syscall, the watcher's readiness: {e}")
-        except OSError:  # the thread ended meanwhile
-            continue
-        if sc[:2] == [str(nr), hex(int(fd))]:
-            return True
-    return False
+PIPE = stat.S_ISFIFO(os.fstat(1).st_mode)
 
 
 def ready() -> None:
-    """Return once the pipe is empty and a reader is blocked in read(2) on it (or none is left)."""
-    if not READERS:
+    """Return once stdout's pipe holds no unread byte (the reader took every event), or its
+    reader is gone; at once when stdout is no pipe."""
+    if not PIPE:
         return
-    nr = READ.get(platform.machine())
-    if nr is None:
-        die(f"no read syscall number for {platform.machine()}: add it to READ")
     n = array.array("i", [0])
+    p = select.poll()
+    p.register(1, select.POLLOUT)
     while True:
         fcntl.ioctl(1, termios.FIONREAD, n)
-        seen = [blocked(pid, fd, nr) for pid, fd in READERS]
-        if (n[0] == 0 and any(seen)) or all(x is None for x in seen):
+        if n[0] == 0 or any(ev & select.POLLERR for _, ev in p.poll(0)):
             return
         time.sleep(0.002)
 
@@ -148,6 +90,7 @@ def out(e: dict[str, object]) -> None:
         }
     sys.stdout.write(json.dumps(e) + "\n")
     sys.stdout.flush()
+    ready()
 
 
 def say(text: str) -> None:
@@ -164,10 +107,9 @@ def tool(i: str, name: str, args: dict[str, str]) -> None:
 
 
 def end(i: str, name: str, result: dict[str, object], *, error: bool) -> None:
-    """The call's end, then the model's turn: the watcher has snapshotted it (ready)."""
+    """The call's end (the model's turn after it: the next event's drain, out)."""
     out({"type": "tool_execution_end", "toolCallId": i, "toolName": name, "isError": error,
          "result": result})  # fmt: skip
-    ready()
 
 
 def text(t: str) -> dict[str, object]:
@@ -304,14 +246,14 @@ if "STUB-STEPS:" in prompt:
             break
         if kind == "batch":  # a parallel codemode batch, as Pi streams one: the codemode call,
             # each nested call <id>/<n> started, all before any ends, the nested ends, then the
-            # codemode end; ARG: [["read"|"bash", X]...]
+            # codemode end; ARG: [["read"|"bash", X]...]. The nested calls are one turn's, so no
+            # turn separates them (stated limit: of parallel calls, the first to end gets a change).
             tool(f"s{k}", "codemode", {"code": "await Promise.allSettled([...])"})
             for n, (nk, raw) in enumerate(arg, 1):
                 nx = sub(raw)
                 args = {"path": nx} if nk == "read" else {"command": nx}
                 out({"type": "tool_execution_start", "toolCallId": f"s{k}/{n}", "toolName": nk,
                      "args": args})  # fmt: skip
-            ready()
             for n, (nk, raw) in enumerate(arg, 1):
                 nx = sub(raw)
                 if nk == "read":
