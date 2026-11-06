@@ -249,9 +249,17 @@ class Lane:
     def lane(
         self, *args: str, want: int = 0, stdin: str | None = None, env: dict[str, str] | None = None
     ) -> Ran:
-        return self.s.run(
+        """octo-feather-lane ARGS in the worktree; a merge-ask, passing or refused, writes nothing
+        to GitHub (read-only: octo-feather-lane --help, merge-ask), checked on every one."""
+        n = self.s.gh.writes()
+        r = self.s.run(
             [kit("octo-feather-lane"), *args], want=want, cwd=self.repo, env=env, stdin=stdin
         )
+        if args[:1] == ("merge-ask",):
+            assert self.s.gh.writes() == n, (
+                f"merge-ask {' '.join(args[1:])} wrote: {self.s.gh.log()}"
+            )
+        return r
 
     def file(self, name: str, text: str) -> str:
         p = self.s.root / name
