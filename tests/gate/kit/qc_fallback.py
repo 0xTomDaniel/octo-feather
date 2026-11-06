@@ -17,6 +17,7 @@ import json
 import re
 import time
 from pathlib import Path
+from typing import Any
 
 from testkit import FIXTURES, Scratch, kit, main
 from testkit.qc import RID, block, clean, qc, report, target
@@ -36,7 +37,7 @@ def world(s: Scratch) -> tuple[Path, str]:
     return r, s.git(r, "rev-parse", "HEAD")
 
 
-def read(s: Scratch, r: Path, cid: str, head: str) -> list[dict[str, object]]:
+def read(s: Scratch, r: Path, cid: str, head: str) -> list[dict[str, Any]]:
     cmd = [
         kit("octo-feather-evidence"),
         "read",
@@ -114,7 +115,6 @@ def own_judges(s: Scratch) -> None:
     for i, v in (("acceptance-b", "pass"), ("acceptance-a", "fail")):
         (x,) = read(s, r, i, head)
         d, out = x["record"], Path(str(x["dir"])) / "outputs"
-        assert isinstance(d, dict)
         assert (d["id"], d["revision"], d["dirty"]) == (rec[i], head, False), d
         assert sorted(d["outputs"]) == ["judge.exit", "judge.report.json", "judge.stdout"], d
         want = {
@@ -151,7 +151,6 @@ def capped(s: Scratch, mode: str, code: str) -> None:
     assert s.git(r, "status", "--porcelain") == "", f"{mode} judge: status file changed"
     x = read(s, r, "acceptance-b", head)[-1]
     d = x["record"]
-    assert isinstance(d, dict)
     assert sorted(d["outputs"]) == ["judge.exit", "judge.stdout"], d["outputs"]
     assert (Path(str(x["dir"])) / "outputs" / "judge.exit").read_text() == code + "\n"
 

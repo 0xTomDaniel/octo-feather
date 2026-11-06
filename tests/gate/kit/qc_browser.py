@@ -23,6 +23,7 @@ import re
 import struct
 import sys
 from pathlib import Path
+from typing import Any
 
 from testkit import Scratch, fixture, kit, main
 from testkit.qc import RID, block, clean, qc, report, target
@@ -105,7 +106,7 @@ def world(s: Scratch) -> tuple[Path, str]:
     return r, s.git(r, "rev-parse", "HEAD")
 
 
-def evidence(s: Scratch, r: Path, *args: str) -> list[dict[str, object]]:
+def evidence(s: Scratch, r: Path, *args: str) -> list[dict[str, Any]]:
     return json.loads(
         s.run([kit("octo-feather-evidence"), "read", "--repo", ".", *args, "--json"], cwd=r).out
     )
@@ -137,10 +138,9 @@ def screenshot(s: Scratch) -> None:
     (x,) = [
         x
         for x in evidence(s, r, "--criterion", "demo#acceptance-a", "--commit", head)
-        if isinstance(x["record"], dict) and x["record"]["id"] == m.group(1)
+        if x["record"]["id"] == m.group(1)
     ]
     rec, out = x["record"], Path(str(x["dir"])) / "outputs"
-    assert isinstance(rec, dict)
     assert rec["revision"] == head, rec
     assert not rec["dirty"], rec
     want = {"demo.cmd", "demo.exit", "demo.stdout", "demo.stderr", "screenshots/page.png"}

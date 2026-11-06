@@ -42,7 +42,7 @@ def clean(s: Scratch) -> None:
         s.env.pop(k, None)
 
 
-def report(r: Ran) -> dict[str, object]:
+def report(r: Ran) -> dict[str, Any]:
     """Qc run R's report: the file its last stdout line names (octo-feather-qc --help, Report)."""
     return json.loads(Path(r.out.splitlines()[-1].rpartition("; report ")[2]).read_text())
 
