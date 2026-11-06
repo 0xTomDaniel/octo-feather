@@ -69,7 +69,9 @@ def pi_refresh(s: Scratch) -> None:
     ran = copycase(s, "refresh", "scratch/oldauth", ".git/oldauth", str(s.home / "oldauth"))
     piok(s, "refresh", ran)
     proof = "qc sandbox: ok   writable persistent paths: none"
-    assert proof in ran.out.splitlines(), f"proof must say writable persistent paths: none: {ran.out}"
+    assert proof in ran.out.splitlines(), (
+        f"proof must say writable persistent paths: none: {ran.out}"
+    )
     ran = copycase(s, "token", "scratch/tok", ".git/tok2")
     piok(s, "token", ran)
 

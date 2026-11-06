@@ -24,7 +24,7 @@ import struct
 import sys
 from pathlib import Path
 
-from testkit import Scratch, kit, main
+from testkit import Scratch, fixture, kit, main
 from testkit.qc import RID, block, clean, qc, report, target
 
 PIN = "1.64.1"
@@ -32,23 +32,9 @@ PAGE = (
     '<!doctype html><title>qc browser demo</title><body style="background:#2a7"><h1>qc browser '
     "demo</h1></body>\n"
 )
-# The demo: Playwright's headless Chromium shell, found by PLAYWRIGHT_BROWSERS_PATH, screenshots
-# the page into $QC_SCREENSHOTS.
-DEMO = """#!/bin/sh
-set -e
-[ ! -e "$HOME/.cache/ms-playwright/masked-marker" ] || { echo "the masked cache is visible" >&2; exit 9; }
-if touch "$PLAYWRIGHT_BROWSERS_PATH/.w" 2>/dev/null; then echo "browser folder writable" >&2; exit 8; fi
-shell=$(ls -d "$PLAYWRIGHT_BROWSERS_PATH"/chromium_headless_shell-*/chrome-headless-shell-linux64/chrome-headless-shell | head -1)
-"$shell" --no-sandbox --user-data-dir="$TMPDIR/profile" --window-size=640,400 --screenshot="$QC_SCREENSHOTS/page.png" "file://$QC_REPO/page.html"
-echo "screenshot taken with $shell"
-"""
-PLANTED = '''#!/usr/bin/env python3
-# Planted shell (no browser on this runner): writes a 1x1 PNG where --screenshot says.
-import base64, sys
-out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--screenshot="))
-open(out, "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"))
-print(f"{len(open(out, 'rb').read())} bytes written to file {out}")
-'''
+# The demo, and the shell planted on a runner with no browser (each file's header: what it does).
+DEMO = fixture("qc-browser/demo.sh")
+PLANTED = fixture("qc-browser/chrome-headless-shell")
 
 
 def contract(pin: str) -> str:
@@ -66,8 +52,10 @@ def box_shell() -> Path | None:
     home = Path(os.environ["HOME"])
     data = Path(os.environ.get("XDG_DATA_HOME") or home / ".local" / "share")
     cache = Path(os.environ.get("XDG_CACHE_HOME") or home / ".cache")
-    for d in (*sorted((data / "octo-feather" / "ms-playwright").glob("*/chromium_headless_shell-*")),
-              *sorted((cache / "ms-playwright").glob("chromium_headless_shell-*"))):
+    for d in (
+        *sorted((data / "octo-feather" / "ms-playwright").glob("*/chromium_headless_shell-*")),
+        *sorted((cache / "ms-playwright").glob("chromium_headless_shell-*")),
+    ):
         exe = d / "chrome-headless-shell-linux64" / "chrome-headless-shell"
         if (d / "INSTALLATION_COMPLETE").is_file() and os.access(exe, os.X_OK):
             return d
@@ -91,10 +79,19 @@ def build(p: Scratch) -> None:
         (folder / "chromium_headless_shell-0" / "INSTALLATION_COMPLETE").write_text("")
         (sh / "chrome-headless-shell").write_text(PLANTED)
         (sh / "chrome-headless-shell").chmod(0o755)
-        which = ("planted shell (no headless shell on this runner: the bind, environment and "
-                 "collection proved without a browser)")
+        which = (
+            "planted shell (no headless shell on this runner: the bind, environment and "
+            "collection proved without a browser)"
+        )
     (p.root / "which.txt").write_text(which)
-    r = target(p, {"page.html": PAGE, "demo.sh": DEMO, "qc.toml": contract(f'[browser]\nplaywright = "{PIN}"')})
+    r = target(
+        p,
+        {
+            "page.html": PAGE,
+            "demo.sh": DEMO,
+            "qc.toml": contract(f'[browser]\nplaywright = "{PIN}"'),
+        },
+    )
     (r / "demo.sh").chmod(0o755)
     p.git(r, "commit", "-qam", "demo.sh executable")
 
@@ -122,16 +119,26 @@ def screenshot(s: Scratch) -> None:
     sys.stdout.write((s.root / "which.txt").read_text() + "\n")
     q = qc(s, r, "9", "acceptance-a", want=0)
     b = block(q.out, "PASS acceptance-a: ")
-    assert b and b[0] == "PASS acceptance-a: $ ./demo.sh", q.out
-    m = next((m for x in b[1:] if (m := re.fullmatch(
-        rf"  evidence complete; decision demo checks; record ({RID})", x))), None)
+    assert b, q.out
+    assert b[0] == "PASS acceptance-a: $ ./demo.sh", q.out
+    m = next(
+        (
+            m
+            for x in b[1:]
+            if (m := re.fullmatch(rf"  evidence complete; decision demo checks; record ({RID})", x))
+        ),
+        None,
+    )
     assert m, f"want PASS acceptance-a, evidence complete, its record named: {q.out}"
     assert not re.search("^qc sandbox: FAIL", q.err, re.MULTILINE), f"a proof line failed: {q.err}"
     folder = s.root / "data" / "octo-feather" / "ms-playwright" / PIN
     line = f"qc sandbox: ok   browser: PLAYWRIGHT_BROWSERS_PATH={folder} read-only"
     assert line in q.err, f"no browser proof line: {q.err}"
-    (x,) = [x for x in evidence(s, r, "--criterion", "demo#acceptance-a", "--commit", head)
-            if isinstance(x["record"], dict) and x["record"]["id"] == m.group(1)]
+    (x,) = [
+        x
+        for x in evidence(s, r, "--criterion", "demo#acceptance-a", "--commit", head)
+        if isinstance(x["record"], dict) and x["record"]["id"] == m.group(1)
+    ]
     rec, out = x["record"], Path(str(x["dir"])) / "outputs"
     assert isinstance(rec, dict)
     assert rec["revision"] == head, rec

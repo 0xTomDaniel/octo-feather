@@ -16,6 +16,7 @@ import shutil
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 from testkit import ROOT, Scratch, main
 from testkit.qc import LIMIT_S, STATUS, box, gone, judged, latest
@@ -92,7 +93,8 @@ def nested(s: Scratch) -> None:
     box(s)
     judged(s, "nested", "acceptance-a", want=0)
     j = latest(s)["fallback"]["acceptance-a"]["stdout"]
-    assert "ESCAPE" not in j and "MISSING" not in j, f"nested qc: {j}"
+    assert "ESCAPE" not in j, f"nested qc: {j}"
+    assert "MISSING" not in j, f"nested qc: {j}"
     assert "NESTED exit 3" in j, f"nested qc: want the inner judge to run: {j}"
 
 
@@ -141,17 +143,18 @@ def pane(s: Scratch) -> None:
         judged(s, "pane", "acceptance-a", want=0)
         rep = latest(s)
         j = rep["fallback"]["acceptance-a"]["stdout"]
-        assert "ESCAPE" not in j and "MISSING" not in j, f"sandbox pane escape ({mode}): {j}"
+        assert "ESCAPE" not in j, f"sandbox pane escape ({mode} herdr): {j}"
+        assert "MISSING" not in j, f"sandbox pane missing ({mode} herdr): {j}"
         assert "PANE done" in j, f"pane never ran ({mode} herdr): {j}"
         ns = {ln.split()[0]: ln.split()[2] for ln in j.splitlines() if " pidns " in ln}
-        assert ns["judge"] == ns["pane"] != os.readlink("/proc/self/ns/pid"), (
+        assert ns["judge"] == ns["pane"] != str(Path("/proc/self/ns/pid").readlink()), (
             f"pane not in the judge's PID namespace ({mode} herdr): {j}"
         )
         assert rep["fallback"]["acceptance-a"]["sandbox"]["herdr_panes"] == 1, rep
         assert gone(f"303031{s.env['FAKE_QC_TOK']}"), f"judge's pane survived the run ({mode})"
         if live:
             s.run([str(s.bin / "herdr"), "--session", "qclive", "workspace", "list"])
-            left = os.listdir(s.home / ".config" / "herdr" / "sessions")
+            left = [p.name for p in (s.home / ".config" / "herdr" / "sessions").iterdir()]
             assert left == ["qclive"], f"sandbox session left: {left}"
         assert not (r / "scratch").exists(), "pane run's scratch survived"
     finally:
@@ -169,7 +172,7 @@ def recipe_args(s: Scratch) -> None:
         *(ROOT / "templates" / t / "justfile" for t in ("python", "typescript")),
     ):
         p = subprocess.run(
-            [
+            [  # noqa: S607  # just: the recipes are the surface, PATH's just as a user runs it
                 "timeout",
                 "-k",
                 "5",

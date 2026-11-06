@@ -32,10 +32,24 @@ def no_sandbox(s: Scratch) -> None:
     assert rep["sandbox"] is False, "--no-sandbox report must record sandbox false"
     assert "LINEAR KEY IN JUDGE ENV" not in rep["fallback"]["acceptance-a"]["stdout"], rep
     tmp = s.root / "tmp"
-    cmd = ["timeout", "-k", "5", LIMIT_S, kit("octo-feather-qc"), STATUS, "5", "acceptance-a",
-           "--no-sandbox"]
-    p = subprocess.Popen(cmd, cwd=r, env={**s.env, "FAKE_QC": "hang"},
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    cmd = [
+        "timeout",
+        "-k",
+        "5",
+        LIMIT_S,
+        kit("octo-feather-qc"),
+        STATUS,
+        "5",
+        "acceptance-a",
+        "--no-sandbox",
+    ]
+    p = subprocess.Popen(
+        cmd,
+        cwd=r,
+        env={**s.env, "FAKE_QC": "hang"},
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
     end = time.monotonic() + float(LIMIT_S)
     while not list(tmp.glob("qc-ghmiss-*")):  # a file-state wait: the run's scratch made
         assert p.poll() is None, "hang run: ended before its scratch (nothing to prove)"
@@ -70,7 +84,9 @@ def role_file(s: Scratch) -> None:
     box(s)
     judged(s, "argv", "acceptance-a", want=0)
     j = latest(s)["fallback"]["acceptance-a"]["stdout"]
-    m = re.match(r"---\n(.*?)\n---\n?(.*)", (ROOT / "agents" / "qc-judge.md").read_text(), re.S)
+    m = re.match(
+        r"---\n(.*?)\n---\n?(.*)", (ROOT / "agents" / "qc-judge.md").read_text(), re.DOTALL
+    )
     assert m, "agents/qc-judge.md has no frontmatter"
     fm = dict(ln.split(": ", 1) for ln in m.group(1).splitlines())
     a = json.loads(next(ln for ln in j.splitlines() if ln.startswith("ARGV "))[5:])

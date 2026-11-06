@@ -84,13 +84,26 @@ def twice(s: Scratch) -> None:
     for n in (1, 2):
         s.git(r, "reset", "-q", "--hard", head)
         q = judged(s, r, 1)
-        a = record(block(q.out, '$ echo "a checks pass in $QC_REPO"'.join(("PASS acceptance-a: ", ""))), "demo checks")
-        b = record(block(q.out, "FAIL acceptance-b: $ echo b checks fail >&2; exit 3"), "demo checks")
-        assert block(q.out, "PASS acceptance-a: ")[0] == 'PASS acceptance-a: $ echo "a checks pass in $QC_REPO"', q.out
-        assert block(q.out, "FAIL acceptance-b: ")[0] == "FAIL acceptance-b: $ echo b checks fail >&2; exit 3", q.out
+        a = record(
+            block(q.out, 'PASS acceptance-a: $ echo "a checks pass in $QC_REPO"'),
+            "demo checks",
+        )
+        b = record(
+            block(q.out, "FAIL acceptance-b: $ echo b checks fail >&2; exit 3"), "demo checks"
+        )
+        assert (
+            block(q.out, "PASS acceptance-a: ")[0]
+            == 'PASS acceptance-a: $ echo "a checks pass in $QC_REPO"'
+        ), q.out
+        assert (
+            block(q.out, "FAIL acceptance-b: ")[0]
+            == "FAIL acceptance-b: $ echo b checks fail >&2; exit 3"
+        ), q.out
         assert not re.search("pi-role|qc-judge", q.err), f"run {n}: a judge started: {q.err}"
         ids += [a, b]
-        assert s.git(r, "log", "-1", "--format=%s") == f"qc: built acceptance-a (judged {head[:12]})"
+        assert (
+            s.git(r, "log", "-1", "--format=%s") == f"qc: built acceptance-a (judged {head[:12]})"
+        )
         c = json.loads(s.git(r, "show", f"HEAD:{STATUS}"))["criteria"]
         built = {"status": "built", "pr": 9, "record": a, "commit": head, "tests": ["tests/a.sh"]}
         assert c["acceptance-a"] == built, c
@@ -106,10 +119,20 @@ def twice(s: Scratch) -> None:
     assert sorted(recs) == sorted(ids), (sorted(recs), ids)
     csha = hashlib.sha256((r / "qc.toml").read_bytes()).hexdigest()
     want = {
-        "demo#acceptance-a": ("Given a user, When acceptance-a runs, then it prints ok.",
-                              'echo "a checks pass in $QC_REPO"', "0", f"a checks pass in {r}\n", ""),
-        "demo#acceptance-b": ("Given a user, When acceptance-b runs, then it prints ok.",
-                              "echo b checks fail >&2; exit 3", "3", "", "b checks fail\n"),
+        "demo#acceptance-a": (
+            "Given a user, When acceptance-a runs, then it prints ok.",
+            'echo "a checks pass in $QC_REPO"',
+            "0",
+            f"a checks pass in {r}\n",
+            "",
+        ),
+        "demo#acceptance-b": (
+            "Given a user, When acceptance-b runs, then it prints ok.",
+            "echo b checks fail >&2; exit 3",
+            "3",
+            "",
+            "b checks fail\n",
+        ),
     }
     for x in recs.values():
         rec, out = x["record"], Path(x["dir"]) / "outputs"
@@ -118,9 +141,16 @@ def twice(s: Scratch) -> None:
         assert rec["criterion"]["text_sha256"] == hashlib.sha256(text.encode()).hexdigest(), rec
         assert rec["criterion"]["text_from"] == "spec", rec
         assert rec["contract"] == {"format": 1, "sha256": csha}, rec
-        got = {n: (out / n).read_text() for n in ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")}
-        assert got == {"demo.cmd": cmd + "\n", "demo.exit": code + "\n", "demo.stdout": so,
-                       "demo.stderr": se}, got
+        got = {
+            n: (out / n).read_text()
+            for n in ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
+        }
+        assert got == {
+            "demo.cmd": cmd + "\n",
+            "demo.exit": code + "\n",
+            "demo.stdout": so,
+            "demo.stderr": se,
+        }, got
 
 
 def fallback_beside(s: Scratch) -> None:
@@ -130,27 +160,49 @@ def fallback_beside(s: Scratch) -> None:
     r, _ = world(s)
     contract(s, r, CONTRACT, "one demo")
     h = s.git(r, "rev-parse", "HEAD")
-    q = qc(s, r, "9", "acceptance-a", "acceptance-b", want=0,
-           env={"OCTO_FEATHER_QC_PATH": str(FIXTURES / "qc-judge")})
+    q = qc(
+        s,
+        r,
+        "9",
+        "acceptance-a",
+        "acceptance-b",
+        want=0,
+        env={"OCTO_FEATHER_QC_PATH": str(FIXTURES / "qc-judge")},
+    )
     a = record(block(q.out, "PASS acceptance-a: "), "demo checks")
     bl = block(q.out, "PASS acceptance-b: ")
-    assert bl and bl[0] == "PASS acceptance-b: $ judge acceptance-b", q.out
+    assert bl, q.out
+    assert bl[0] == "PASS acceptance-b: $ judge acceptance-b", q.out
     b = record(bl, "agent fallback")
     c = json.loads(s.git(r, "show", f"HEAD:{STATUS}"))["criteria"]
-    assert c["acceptance-a"] == {"status": "built", "pr": 9, "record": a, "commit": h, "tests": ["tests/a.sh"]}, c
-    assert c["acceptance-b"] == {"status": "built", "pr": 9, "record": b, "commit": h, "tests": []}, c
+    assert c["acceptance-a"] == {
+        "status": "built",
+        "pr": 9,
+        "record": a,
+        "commit": h,
+        "tests": ["tests/a.sh"],
+    }, c
+    assert c["acceptance-b"] == {
+        "status": "built",
+        "pr": 9,
+        "record": b,
+        "commit": h,
+        "tests": [],
+    }, c
     lines = report(q)["fallback"]["acceptance-b"]["stdout"].splitlines()
     brief = [ln for ln in lines if ln.startswith("BRIEF ")]
-    assert brief == ["BRIEF - acceptance-b: Given a user, When acceptance-b runs, then it prints ok."], (
-        f"the judge's brief named the demo's criterion: {lines}"
-    )
+    assert brief == [
+        "BRIEF - acceptance-b: Given a user, When acceptance-b runs, then it prints ok."
+    ], f"the judge's brief named the demo's criterion: {lines}"
 
 
 def invalid_demo(s: Scratch) -> None:
     """An invalid demo declaration (a demo without covers or tests): refused naming the problem, no
     demo run, no record appended."""
     r, _ = world(s)
-    contract(s, r, CONTRACT + '[demo."demo#acceptance-b"]\ncommand = "true"\n', "demo without covers")
+    contract(
+        s, r, CONTRACT + '[demo."demo#acceptance-b"]\ncommand = "true"\n', "demo without covers"
+    )
     before = len(evidence(s, r))
     q = judged(s, r, 64)
     assert "qc.toml is not a valid contract" in q.err, q.err

@@ -1,5 +1,5 @@
-"""The pytest items of tests/gate/kit/qc.py's scenarios (what they prove: its docstring), each run as
-that file's command through `case` (tests/gate/kit/conftest.py)."""
+"""The pytest items of tests/gate/kit/qc.py's scenarios (what they prove: its docstring), each run
+as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 import sys
 from collections.abc import Callable
