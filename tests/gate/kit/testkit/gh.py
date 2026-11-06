@@ -17,9 +17,11 @@ branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.githu
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
-`gh repo view OWNER/NAME|URL --json F` answers api/repos/OWNER/NAME.json the same way (gh reads
-the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list
-while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
+`gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
+state); `gh pr edit N --base B` sets the stored PR N's baseRefName. `gh repo view OWNER/NAME|URL
+--json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same way (gh reads
+the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list while
+runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
 one line as the log writes it, to its recorded answers in order, each its stdout (a string) or
 {"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the count in
 tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming it.
@@ -85,12 +87,29 @@ def view(a: list[str]) -> None:
 
 
 def listed(a: list[str]) -> None:
-    """`issue|pr|run list --json F`: every one stored, by number."""
+    """`issue|pr|run list --json F`: every one stored, by number; as GitHub filters them, only
+    those on --base B (a stored baseRefName) and in --state S (a stored state), when asked."""
     d = at(a[0])
     names = sorted(os.listdir(d)) if os.path.isdir(d) else []
     rows = [json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")]
+    for flag, key in (("--base", "baseRefName"), ("--state", "state")):
+        if flag in a and a[a.index(flag) + 1] != "all":
+            want = a[a.index(flag) + 1].upper() if key == "state" else a[a.index(flag) + 1]
+            rows = [r for r in rows if str(r.get(key, want)).upper() == want.upper()]
     key = "databaseId" if a[0] == "run" else "number"
     out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+
+
+def edit(a: list[str]) -> None:
+    """`pr edit N --base B`: the stored PR N's base set to B; prints its URL, as gh does."""
+    p = pr_file(a[2])
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    d = json.loads(read(p))
+    d["baseRefName"] = a[a.index("--base") + 1]
+    with open(p, "w") as f:
+        f.write(json.dumps(d))
+    sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
 
 
 def diff(a: list[str]) -> None:
@@ -180,12 +199,13 @@ def taped(call: str) -> bool:
 
 
 def repo_view(a: list[str]) -> None:
-    """`repo view [OWNER/NAME|URL] --json F`: this dir's repo.json, or the named repo's."""
+    """`repo view [OWNER/NAME|URL] --json F`: repo.json for this dir's repo or o/r, else the
+    named repo's."""
     if a[2:3] == ["--json"] or len(a) == 2:
         out(pick(json.loads(read(at("repo.json"))), a))
         return
     name = re.sub(r"^https://github\.com/|\.git$|/$", "", a[2])
-    p = at("api", "repos", f"{name}.json")
+    p = at("repo.json") if name == "o/r" else at("api", "repos", f"{name}.json")
     if not os.path.isfile(p):
         die(f"GraphQL: Could not resolve to a Repository with the name '{name}'. (repository)")
     out(pick(json.loads(read(p)), a))
@@ -199,8 +219,12 @@ def main(a: list[str]) -> None:
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
-    if taped(call):
-        return
+    if not taped(call):
+        answer(a)
+
+
+def answer(a: list[str]) -> None:
+    """A call no tape names, by its first two words."""
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
@@ -210,6 +234,8 @@ def main(a: list[str]) -> None:
         repo_view(a)
     elif two == ("pr", "diff"):
         diff(a)
+    elif two == ("pr", "edit") and "--base" in a:
+        edit(a)
     elif a[:1] == ["api"] and "-X" not in a:
         get(a)
     elif a[:1] == ["api"] and "-X" in a and "--input" in a:

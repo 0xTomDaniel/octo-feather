@@ -125,7 +125,6 @@ class Lane:
         self.path = {"rec": f"{rec}{os.pathsep}", "real-uv": f"{rec_pnpm}{os.pathsep}"}
         self.homes: dict[str, str] = {}  # the tools' own installs: step 3's real mise and uv
         s.gh.store("repo.json", {"nameWithOwner": "o/r"})
-        s.gh.store("api/repos/o/r.json", {"nameWithOwner": "o/r"})
         s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
         self.merge, self.repo = self.m, ""  # PR #7's merge commit; the --repo gh is asked with
         self.install(self.b, "o/kit")  # steps 1-2: the PR's repo is not the install's

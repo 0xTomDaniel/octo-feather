@@ -23,7 +23,9 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
-`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
+`workspace get W` finds W while an agent's pane is in it, else workspace_not_found;
+`workspace close W` drops W's agents (workspace_not_found when none). `pane read` shows a ready
+Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
 each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
@@ -91,6 +93,19 @@ class World:
         self.save()
         return 0
 
+    def workspace_get(self, a: list[str]) -> int:
+        if not any(g["workspace_id"] == a[2] for g in self.agents.values()):
+            return fail("workspace_not_found")
+        return say({"type": "workspace_info", "workspace": {"workspace_id": a[2]}})
+
+    def workspace_close(self, a: list[str]) -> int:
+        kept = {p: g for p, g in self.agents.items() if g["workspace_id"] != a[2]}
+        if len(kept) == len(self.agents):
+            return fail("workspace_not_found")
+        self.agents = kept
+        self.save()
+        return 0
+
     def agent_start(self, a: list[str]) -> int:
         after = self.dir / "ready_after"
         delay = float(after.read_text()) if after.exists() else 0.0
@@ -151,6 +166,8 @@ class World:
         verbs = {
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
+            ("workspace", "get"): self.workspace_get,
+            ("workspace", "close"): self.workspace_close,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
