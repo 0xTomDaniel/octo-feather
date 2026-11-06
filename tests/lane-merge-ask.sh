@@ -45,6 +45,7 @@ if a[:2] == ["pr", "view"]:
     print(json.dumps({k: d[k] for k in f if k in d})); sys.exit(0)
 if a[0] == "api" and (r := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/git/trees/(\w+)", a[1])):
     # git trees (the no-CI fact): commit FAKE_GH_NOCI has no .github; any other has .github/workflows/check.yml
+    if os.environ.get("FAKE_GH_TREES") == "fail": die("gh: Server Error (HTTP 502)")
     s = r.group(1); trees = {"g": [["workflows", "tree", "w"]], "w": [["check.yml", "blob", "b"]]}
     e = trees.get(s, [["app.py", "blob", "x"]] + ([] if s == os.environ.get("FAKE_GH_NOCI") else [[".github", "tree", "g"]]))
     print(json.dumps({"sha": s, "tree": [dict(zip(("path", "type", "sha"), x)) for x in e]})); sys.exit(0)
@@ -377,6 +378,9 @@ FAKE_GH_NOCI="$H" FAKE_GH_RULES='[{"type": "deletion"}, {"type": "required_statu
 FAKE_GH_NOCI="$H" FAKE_GH_BRANCH=fail bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
 FAKE_GH_NOCI="$H" FAKE_GH_BRANCH='{"protected": true}' bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: no protection.required_status_checks)" "$none"
 FAKE_GH_NOCI="$H" FAKE_GH_RULES=fail bad "but the rulesets of base main could not be read (gh api repos/<this repo>/rules/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
+# the head's tree unreadable: that one Checks item fails closed naming the read; the ask still lists every item (--help)
+FAKE_GH_TREES=fail bad "^  - Checks: none reported on head ${H:0:12}, and the no-CI fact could not be read (gh api repos/{owner}/{repo}/git/trees/$H failed (gh: Server Error (HTTP 502))" "$none"
+grep -q "merge ask incomplete" <<<"$err" && grep -q "^Gate time" <<<"$err" || fail "an unreadable tree aborted the ask: $err"
 # issue-lifecycle#acceptance-ci-status-only (the rule: #lanes-one-head): check SKIPPED on qc's commit H; J's CI carried
 # by the Judged proof, or refused: missing, pending, skipped or red on J, no proof, or H the judged head itself.
 skipped='d["statusCheckRollup"][0]["conclusion"] = "SKIPPED"'

@@ -1857,8 +1857,13 @@ def cmd_merge_ask(args: list[str]) -> int:
     failed, pending = bad_checks(rollup)
     no_ci = ""
     if not rollup:   # the rule: --help, merge-ask Checks line
-        wf, src = ci_workflows(repo, cast("str", head))
-        if wf:
+        try:   # an unreadable no-CI fact is this one item failing closed, never an abort of the whole check
+            wf, src = ci_workflows(repo, cast("str", head))
+        except Refuse as e:
+            wf, src = None, str(e)
+        if wf is None:
+            miss.append(f"Checks: none reported on head {head[:12]}, and the no-CI fact could not be read ({src})")
+        elif wf:
             miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
         else:
             try:
