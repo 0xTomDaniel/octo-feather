@@ -19,9 +19,10 @@ supplies; none there: exit 2 naming it. Else one bash call (`ls`), then:
 Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001.
 
 Print mode (no --mode json: a headless role's text reply, scripts/octo-feather-reflect's
-reflector): the reply recorded in $STUB_REPLY_DIR, reply.director when the -p prompt is a
-director reflection ("Director reflection"), else reply.lane, printed as is; a missing reply
-fails naming it.
+reflector): its argv written to argv.WHO in $STUB_REPLY_DIR (NUL-separated), then the reply
+recorded there, reply.WHO, printed as is, WHO director when the -p prompt is a director
+reflection ("Director reflection"), else lane; with reply.WHO.exit there, a failed run instead:
+reply.WHO.err on stderr, that exit. A missing reply fails naming it.
 
 The model's turn between calls is readiness, never a delay, read off the stub's own stdout pipe
 alone (no other process's /proc): each event is written and then waited on until the pipe holds
@@ -33,20 +34,38 @@ that end's snapshot: no call's command runs before the snapshot of the call befo
 (schema.md, Before targets, stated limit: exact while turns separate calls).
 """
 
-# ruff: noqa: E501, S606, S607
+# ruff: noqa: E501, PTH113, PTH118, PTH123, S606, S607
 # (verbatim shell commands the stub runs as a bash tool would, kept whole; bash and the extension
 # stub found on PATH or beside this file, as Pi's tools find them)
 from __future__ import annotations
 
+import os
+import sys
+
+if "--mode" not in sys.argv and "-p" in sys.argv:  # print mode: the recorded reply (docstring),
+    # before the event stream's imports: a reflector run starts light
+    who = "director" if "Director reflection" in sys.argv[sys.argv.index("-p") + 1] else "lane"
+    rd = os.environ.get("STUB_REPLY_DIR", ".")
+    with open(os.path.join(rd, f"argv.{who}"), "w") as f:
+        f.write("\0".join(sys.argv[1:]))
+    if os.path.isfile(os.path.join(rd, f"reply.{who}.exit")):
+        with open(os.path.join(rd, f"reply.{who}.err")) as f:
+            sys.stderr.write(f.read())
+        with open(os.path.join(rd, f"reply.{who}.exit")) as f:
+            sys.exit(int(f.read()))
+    if not os.path.isfile(os.path.join(rd, f"reply.{who}")):
+        sys.exit(f"stub pi: no recorded reply {os.path.join(rd, f'reply.{who}')} (STUB_REPLY_DIR)")
+    with open(os.path.join(rd, f"reply.{who}")) as f:
+        sys.stdout.write(f.read())
+    sys.exit(0)
+
 import array
 import fcntl
 import json
-import os
 import re
 import select
 import stat
 import subprocess
-import sys
 import termios
 import time
 from pathlib import Path
@@ -61,15 +80,6 @@ run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", str(Path.cwd())) or [0
 def die(msg: str) -> NoReturn:
     sys.stderr.write(f"stub pi: {msg}\n")
     sys.exit(2)
-
-
-if "--mode" not in a:  # print mode: the recorded reply (module docstring)
-    who = "director" if "Director reflection" in prompt else "lane"
-    reply = Path(os.environ.get("STUB_REPLY_DIR", "."), f"reply.{who}")
-    if not reply.is_file():
-        die(f"no recorded reply {reply} (STUB_REPLY_DIR)")
-    sys.stdout.write(reply.read_text())
-    sys.exit(0)
 
 
 PIPE = stat.S_ISFIFO(os.fstat(1).st_mode)
