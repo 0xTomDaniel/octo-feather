@@ -19,17 +19,19 @@ the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) ask
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 `gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
 state); `gh pr edit N --base B` sets the stored PR N's baseRefName, `gh issue close N` the
-stored issue N's state CLOSED, `gh pr ready N` the stored PR N's isDraft false. Another repo's
-issues (the tracker's, a lane's target): repo/OWNER/NAME/issue/N.json, named by --repo or -R,
-else $GH_REPO; `issue list --search 'WORDS in:title' --limit N` lists those whose title holds
-WORDS; `issue create --title T --body-file F|-` stores a new OPEN issue of $GH_REPO (else o/r),
-numbered after every repo's (901 on none), and prints its URL. `gh repo view OWNER/NAME|URL
---json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same way (gh reads
-the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list
-while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
-one line as the log writes it, to its recorded answers in order, each its stdout (a string) or
-{"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the count in
-tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming it.
+stored issue N's state CLOSED, `gh pr ready N` the stored PR N's isDraft false. Another repo
+(the tracker's, a lane's target) keeps the same layout under repo/OWNER/NAME/ (its PRs, issues,
+commits.json, contents/), named by --repo or -R (or repos/OWNER/NAME/ in an api PATH); an issue
+list or create with neither names $GH_REPO's; `issue list --search 'WORDS in:title' --limit N`
+lists those whose title holds WORDS; `issue create --title T --body-file F|-` stores a new OPEN
+issue, numbered after every repo's (901 on none), and prints its URL. `gh repo view
+OWNER/NAME|URL --json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same
+way (gh reads the URL itself), an unstored one GitHub's unresolved repository. A call over time
+(a run list while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's
+exact argv, one line as the log writes it, to its recorded answers in order, each its stdout (a
+string) or {"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the
+count in tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming
+it.
 """
 
 import json
@@ -78,13 +80,19 @@ def served(p: str) -> None:
     sys.stdout.write(read(p))
 
 
+def stored(repo: str, *parts: str) -> str:
+    """REPO's store path PARTS: the store's own for o/r, under repo/OWNER/NAME/ for another."""
+    return at(*parts) if repo == "o/r" else at("repo", *repo.split("/"), *parts)
+
+
 def view(a: list[str]) -> None:
-    """`issue|pr view N --json F`."""
+    """`issue|pr view N --json F [--repo|-R O/R]`."""
     kind = a[0]
-    if os.path.isfile(tape := at(kind, f"{a[2]}.out")):
+    repo = next((a[a.index(f) + 1] for f in ("--repo", "-R") if f in a), "o/r")
+    if os.path.isfile(tape := stored(repo, kind, f"{a[2]}.out")):
         sys.stdout.write(read(tape))
         return
-    p = at(kind, f"{a[2]}.json")
+    p = stored(repo, kind, f"{a[2]}.json")
     if not os.path.isfile(p):
         what = "a PullRequest" if kind == "pr" else "an issue or pull request"
         die(f"GraphQL: Could not resolve to {what} with the number of {a[2]}.")
@@ -100,8 +108,8 @@ def repo_of(a: list[str]) -> str:
 
 
 def issues_of(repo: str) -> str:
-    """REPO's issue dir: issue/ for o/r, repo/OWNER/NAME/issue/ for another."""
-    return at("issue") if repo == "o/r" else at("repo", *repo.split("/"), "issue")
+    """REPO's issue dir."""
+    return stored(repo, "issue")
 
 
 def listed(a: list[str]) -> None:
@@ -207,11 +215,11 @@ def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
     a = [*a[:-1], a[-1].replace("{owner}/{repo}", "o/r")]
     failed(a[-1].lstrip("/"))
-    if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
-        served(at("commits.json"))
+    if len(a) == 2 and (m := re.fullmatch(r"repos/([^/]+/[^/]+)/commits(\?.*)?", a[1])):
+        served(stored(m.group(1), "commits.json"))
         return
-    if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
-        served(at("contents", m.group(1)))
+    if a[2:] == RAW and (m := re.fullmatch(r"repos/([^/]+/[^/]+)/contents/(.+)", a[1])):
+        served(stored(m.group(1), "contents", m.group(2)))
         return
     p = at("api", f"{a[-1].lstrip('/')}.json")
     if not os.path.isfile(p):

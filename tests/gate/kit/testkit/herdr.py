@@ -4,7 +4,7 @@ tests/lib/qa.sh's: a session's socket is a file under the config dir naming the 
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
 with no socket a call fails `server_not_running`; `agent list` prints no agent in Herdr's envelope
-(as tests/fixtures/lane-report/herdr); one pane per workspace (as tests/lib/qc.sh's): `workspace
+(Herdr 0.9.5's form); one pane per workspace (as tests/lib/qc.sh's): `workspace
 create` answers root pane w1:p1, `pane run P CMD...` starts CMD detached (as the server would) and
 logs {"pane_id": P} beside the socket, which `pane list` prints (nothing before a run); any other
 call prints {"session": S}.
@@ -26,8 +26,9 @@ working one (busy, as #619 saw it) never matches, so the wait ends only at --tim
 `workspace get W` finds W while an agent's pane is in it, else workspace_not_found;
 `workspace close W` drops W's agents (workspace_not_found when none); `workspace create --label
 L` makes the next space W with its seed tab W:t1 (a bare pane, no agent), `workspace list` lists
-each space by its label. `pane read` shows a ready
-Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
+each space by its label. `agent list` prints every agent, in the order the world holds them, in
+Herdr's envelope; a file `down` fails every call as a herdr with no server does. `pane read`
+shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
 each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
@@ -173,6 +174,13 @@ class World:
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
+        if (self.dir / "down").exists():
+            sys.stderr.write("error: could not connect to herdr server\n")
+            return 1
+        if a == ["agent", "list"]:
+            shown = [{k: v for k, v in g.items() if k != "ready_at"} for g in self.agents.values()]
+            sys.stdout.write(json.dumps({"id": "1", "result": {"agents": shown}}) + "\n")
+            return 0
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
