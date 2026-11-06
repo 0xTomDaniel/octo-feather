@@ -57,10 +57,12 @@ check_languages := "TypeScript:tsc:check-ts:ts-files TypeScript:eslint:check-ts:
 ts-files:
     @pnpm exec tsc --showConfig | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const f of JSON.parse(s).files ?? []) console.log(f); })'
 
-# Its JSON report of `eslint .`, as check-ts runs it.
+# The files `eslint .` lints, as check-ts runs it: ESLint's own enumeration (lintFiles: eslint.config.js files and
+# ignores), with no rule run (ruleFilter) and no type information (projectService off), which pick no file: the
+# typed lint's cost stays in check-ts alone (octo-feather #686).
 # The files eslint lints: lint the file in eslint.config.js (out of its ignores)
 eslint-files:
-    @{ pnpm exec eslint --format json . || true; } | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const r of JSON.parse(s)) console.log(r.filePath); })'
+    @node --input-type=module -e 'import { ESLint } from "eslint"; const untyped = { languageOptions: { parserOptions: { projectService: false, project: null } } }; for (const r of await new ESLint({ overrideConfig: untyped, ruleFilter: () => false }).lintFiles(["."])) console.log(r.filePath);'
 
 # ShellCheck's file list: give a file the `shell` attribute in .gitattributes
 shell-files:

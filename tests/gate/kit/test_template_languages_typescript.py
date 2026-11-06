@@ -10,6 +10,7 @@ from template_languages_typescript import (
     CHANGES,
     bare_vitest,
     claims_gate,
+    eslint_files,
     fast,
     full_gate,
     refusals,
@@ -27,6 +28,10 @@ def test_full_gate(case: Case) -> None:
 
 def test_rules(case: Case) -> None:
     case(rules)
+
+
+def test_eslint_files(case: Case) -> None:
+    case(eslint_files)
 
 
 @pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")

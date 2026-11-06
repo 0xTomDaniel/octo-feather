@@ -82,7 +82,7 @@ The kept record is this repo's evidence store (octo-feather quality spec `#evide
 
 ## Acceptance
 
-The starter criterion `app#acceptance-hello-json` is proven by its acceptance test, the end-to-end test in `tests/e2e/test_cli_e2e.py` tagged with it through pytest's `criterion` marker (`@pytest.mark.criterion("<spec>#<anchor>")`), its command run through the `qc_command` fixture (`tests/conftest.py`) (octo-feather quality spec `#qc-capture`). The lane's final full gate, told the claims, runs it once in the qc sandbox and stores its record; `just qc` judges the criterion from that record by the test's own assertions, with no separate demo (`qc.toml` declares none for it):
+The starter criterion `app#acceptance-hello-json` is proven by its acceptance test, light: the integration test in `tests/integration/test_cli.py` (the CLI as a command, no install; its flow's end-to-end test beside it in `tests/e2e/`) tagged with it through pytest's `criterion` marker (`@pytest.mark.criterion("<spec>#<anchor>")`), its command run through the `qc_command` fixture (`tests/conftest.py`) (octo-feather quality spec `#qc-capture`). The lane's final full gate, told the claims, runs it once in the qc sandbox and stores its record; `just qc` judges the criterion from that record by the test's own assertions, with no separate demo (`qc.toml` declares none for it):
 
 ```
 OCTO_FEATHER_QC_CLAIMS=app#acceptance-hello-json just check          # prints: qc capture: app#acceptance-hello-json: record <id>, 1 case(s): ... passed
