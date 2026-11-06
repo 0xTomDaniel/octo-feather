@@ -24,7 +24,9 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
 `workspace get W` finds W while an agent's pane is in it, else workspace_not_found;
-`workspace close W` drops W's agents (workspace_not_found when none). `pane read` shows a ready
+`workspace close W` drops W's agents (workspace_not_found when none); `workspace create --label
+L` makes the next space W with its seed tab W:t1 (a bare pane, no agent), `workspace list` lists
+each space by its label. `pane read` shows a ready
 Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
@@ -92,6 +94,20 @@ class World:
         self.agents = {p: g for p, g in self.agents.items() if g["tab_id"] != a[2]}
         self.save()
         return 0
+
+    def workspace_create(self, a: list[str]) -> int:
+        w = f"w{len({g['workspace_id'] for g in self.agents.values()}) + 1}"
+        label = (opts(a, "--label") or [w])[0]
+        self.agents[f"{w}:p1"] = {"name": "", "pane_id": f"{w}:p1", "workspace_id": w}
+        self.agents[f"{w}:p1"] |= {"tab_id": f"{w}:t1", "agent_status": "none", "label": label}
+        self.save()
+        return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": f"{w}:t1"}})
+
+    def workspace_list(self, _: list[str]) -> int:
+        spaces: dict[str, object] = {}
+        for g in self.agents.values():
+            spaces.setdefault(str(g["workspace_id"]), g.get("label", g["workspace_id"]))
+        return say({"workspaces": [{"workspace_id": w, "label": n} for w, n in spaces.items()]})
 
     def workspace_get(self, a: list[str]) -> int:
         if not any(g["workspace_id"] == a[2] for g in self.agents.values()):
@@ -167,6 +183,8 @@ class World:
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
             ("workspace", "get"): self.workspace_get,
+            ("workspace", "create"): self.workspace_create,
+            ("workspace", "list"): self.workspace_list,
             ("workspace", "close"): self.workspace_close,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,

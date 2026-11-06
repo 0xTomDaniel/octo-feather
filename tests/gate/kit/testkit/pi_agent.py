@@ -22,7 +22,9 @@ Print mode (no --mode json: a headless role's text reply, scripts/octo-feather-r
 reflector): its argv written to argv.WHO in $STUB_REPLY_DIR (NUL-separated), then the reply
 recorded there, reply.WHO, printed as is, WHO director when the -p prompt is a director
 reflection ("Director reflection"), else lane; with reply.WHO.exit there, a failed run instead:
-reply.WHO.err on stderr, that exit. A missing reply fails naming it.
+reply.WHO.err on stderr, that exit. With a FIFO reply.WHO.gate there, it answers only once the
+caller opened and closed the gate's write end (the caller's readiness pipe, never a delay). A
+missing reply fails naming it.
 
 The model's turn between calls is readiness, never a delay, read off the stub's own stdout pipe
 alone (no other process's /proc): each event is written and then waited on until the pipe holds
@@ -34,7 +36,7 @@ that end's snapshot: no call's command runs before the snapshot of the call befo
 (schema.md, Before targets, stated limit: exact while turns separate calls).
 """
 
-# ruff: noqa: E501, PTH113, PTH118, PTH123, S606, S607
+# ruff: noqa: E501, PTH110, PTH113, PTH118, PTH123, S606, S607
 # (verbatim shell commands the stub runs as a bash tool would, kept whole; bash and the extension
 # stub found on PATH or beside this file, as Pi's tools find them)
 from __future__ import annotations
@@ -48,6 +50,9 @@ if "--mode" not in sys.argv and "-p" in sys.argv:  # print mode: the recorded re
     rd = os.environ.get("STUB_REPLY_DIR", ".")
     with open(os.path.join(rd, f"argv.{who}"), "w") as f:
         f.write("\0".join(sys.argv[1:]))
+    if os.path.exists(os.path.join(rd, f"reply.{who}.gate")):
+        with open(os.path.join(rd, f"reply.{who}.gate")) as f:
+            f.read()
     if os.path.isfile(os.path.join(rd, f"reply.{who}.exit")):
         with open(os.path.join(rd, f"reply.{who}.err")) as f:
             sys.stderr.write(f.read())
