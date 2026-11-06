@@ -1,0 +1,14 @@
+Seeded defect: a -k run is not narrowed: its trend line says full (tests/gate/conftest.py, tier; #536).
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 4330c85..a5d1960 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -130,7 +130,7 @@ def _static_short(root: Path) -> bool:
+ 
+ def _tier(config: pytest.Config) -> str:
+     o = config.option
+-    narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.keyword, o.markexpr, getattr(o, "lf", False),
++    narrowed = (config.args_source == pytest.Config.ArgsSource.ARGS, o.markexpr, getattr(o, "lf", False),
+                 getattr(o, "stepwise", False), o.deselect, o.ignore, o.ignore_glob)
+     return "subset" if any(narrowed) or _static_short(config.rootpath) else "full"
+ 
