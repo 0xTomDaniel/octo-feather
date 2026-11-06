@@ -270,6 +270,18 @@
       "tests": [
         "tests/qc-carry.sh"
       ]
+    },
+    "acceptance-prior-art-extends": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-sandbox-maintained": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-qc-sandbox-cost": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
