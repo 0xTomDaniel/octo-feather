@@ -4,9 +4,10 @@ directory to the called command as data (#61). Each recipe runs through `just` (
 test) from a cwd whose path holds `$`, a backtick, both quotes and a space, with arguments holding
 the same. Where the command would launch agents or external systems (shape, start, supervise,
 qc), testkit/argv_recorder.sh stands in and records the exact cwd and argv (the owner's narrow
-exception, its header); spec-chat, integrate and new-repo run for real, each stopped early by its
-own refusal naming what it got, from the cwd only that dir explains (integrate: the lane worktree
-of the invocation dir's repo). Nothing expands (no file an argument would touch appears).
+exception, its header); spec-chat, integrate and new-repo run for real, from the cwd only that
+dir explains (integrate: the lane worktree of the invocation dir's repo), each stopped early by
+its own refusal naming what it got (integrate: after every REF before the last integrated, in
+order: REFS). Nothing expands (no file an argument would touch appears).
 Offline, HOME redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes
 run from a copy of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the
 templates' justfiles keep the caller's PATH, the recorder (and the copy's integrate) first on it.
@@ -49,23 +50,48 @@ def world(s: Scratch) -> tuple[Path, Path]:
     }
     w = t / "a $b `c` 'd\" e" / "w"
     w.mkdir(parents=True)
-    # The invocation dir a target repo with lane gh59's worktree, so integrate gets to its REFs.
-    s.git(w, "init", "-q", "-b", "main")
-    s.git(w, "commit", "-q", "--allow-empty", "-m", "base")
-    s.git(w, "worktree", "add", "-q", "-b", "gh59", str(t / "lane-gh59"))
+    lane(s, w, t / "lane-gh59")
     (stubs / "octo-feather-integrate").symlink_to(k / "scripts" / "octo-feather-integrate")
     return k, w
 
 
+# integrate's REFs: three commits named through branches whose names hold `$y`, `$(...)` and
+# backticks, each found by a message holding a space (git's <rev>^{/<text>}); each changes f from
+# the one before it (1, 2, 3), so they cherry-pick cleanly only all present and in this order
+# (one dropped, mangled or moved: refused by name or a conflict). The last REF, quotes and a
+# space, names no commit: refused by name, before any gate.
+REFS = ("x$y^{/one a}", "$(touch${IFS}pwned)^{/two b}", "`touch${IFS}pwned2`^{/three c}")
+LAST = "q'r\"s z"
+
+
+def lane(s: Scratch, w: Path, wt: Path) -> None:
+    """W a target repo (the invocation dir) with lane gh59's worktree WT at its base, and the
+    commits REFS name on branches beside it; an identity for integrate's cherry-picks."""
+    s.git(w, "init", "-q", "-b", "main")
+    for key, v in (("user.name", "t"), ("user.email", "t@example.com")):
+        s.git(w, "config", key, v)
+    s.git(w, "commit", "-q", "--allow-empty", "-m", "base")
+    s.git(w, "worktree", "add", "-q", "-b", "gh59", str(wt))
+    s.git(w, "checkout", "-q", "-b", "side")
+    for n, msg in enumerate(("one a", "two b", "three c"), 1):
+        (w / "f").write_text(f"{n}\n")
+        s.git(w, "add", "f")
+        s.git(w, "commit", "-q", "-m", msg)
+    for ref in REFS:
+        s.git(w, "branch", ref.split("^{")[0])
+    s.git(w, "checkout", "-q", "main")
+
+
 def integrate(s: Scratch, just: list[str], cwd: Path) -> None:
-    """integrate, for real, from CWD: TICKET 59 finds its lane worktree (branch gh59), and the first
-    REF, which names no commit, is refused by name before any merge or gate."""
-    r = s.run([*just, "integrate", "59", A1, A5, A2, A3], cwd=cwd, want=64)
+    """integrate, for real, from CWD: TICKET 59 finds its lane worktree (branch gh59), each REF
+    integrates in order, and the last is refused by name before any gate."""
+    r = s.run([*just, "integrate", "59", *REFS, LAST], cwd=cwd, want=64)
     for want in (
-        f"octo-feather-integrate: {A1} is not a branch or commit",
+        f"octo-feather-integrate: {LAST} is not a branch or commit",
         "octo-feather-integrate: gh59 reset to",
     ):
         assert want in r.err, f"{TAG}: integrate from {cwd}: {r.err}"
+    assert "conflict:" not in r.err, f"{TAG}: integrate from {cwd}: REFs out of order: {r.err}"
 
 
 def check(s: Scratch, name: str, cmd: str, cwd: Path, *argv: str) -> None:

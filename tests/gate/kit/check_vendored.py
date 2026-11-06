@@ -19,7 +19,8 @@ written: a scenario that changes a cache builds its own beside it.
   login && gh auth setup-git, never the network (#463).
 - A fetch through a stalled proxy, silent or dripping headers, times out within its bound naming
   the fix, for the pin's git fetch and the skillfile download alike (own network namespace, only
-  loopback up: never the real network).
+  loopback up: never the real network). A wall-clock proof (each fetch waits out its bound, the
+  drip paced by the clock): its item is e2e, the full tier only (quality #test-kinds).
 The namespace proofs need Linux user namespaces (and `ip` for the proxy): where they do not work
 the scenario names the skip, as the gate's other items run everywhere.
 """
