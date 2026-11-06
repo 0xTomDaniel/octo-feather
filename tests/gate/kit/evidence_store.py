@@ -1,15 +1,14 @@
-"""The scenario of tests/gate/kit/test_evidence_store.py (its items, one per template), this
-file its command (testkit.main): the evidence store (quality spec #evidence-store, docs/adr/0025), through
-its public surfaces: each template's verify-app helper and the kit's octo-feather-evidence
+"""The scenario of tests/gate/kit/test_evidence_store.py (its items, one per template), this file
+its command (testkit.main): the evidence store (quality spec #evidence-store, docs/adr/0025),
+through its public surfaces: each template's verify-app helper and the kit's octo-feather-evidence
 command. In a repo copied from the template LANG, a verify-app drive at a commit adds one record
-naming that commit, the drive's criterion with the hash of its text in the repo's starter spec,
-the contract and fixture versions, and holding the drive's outputs; editing that text changes the
-next record's hash, a drive whose criterion has no text in the repo's specs fails naming it;
-earlier records stay byte-identical and the repo's git status does not change
-(#acceptance-evidence-record). With records at two commits, reading the criterion at one commit
-shows only its records (#acceptance-evidence-read). One store per target: the other template's
-repo has another store. An unknown commit is refused, naming it. The store lives under a
-throwaway XDG_STATE_HOME.
+naming that commit, the drive's criterion with the hash of its text in the repo's starter spec, the
+contract and fixture versions, and holding the drive's outputs; editing that text changes the next
+record's hash, a drive whose criterion has no text in the repo's specs fails naming it; earlier
+records stay byte-identical and the repo's git status does not change (#acceptance-evidence-record).
+With records at two commits, reading the criterion at one commit shows only its records
+(#acceptance-evidence-read). One store per target: the other template's repo has another store. An
+unknown commit is refused, naming it. The store lives under a throwaway XDG_STATE_HOME.
 
 Offline: typescript's packages copied from the run's one offline install of the template from the
 pnpm store (tests/lib/prepared.py) (its helper reads qc.toml with smol-toml), its setup then a

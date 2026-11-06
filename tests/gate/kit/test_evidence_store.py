@@ -1,5 +1,6 @@
 """The pytest items of tests/gate/kit/evidence_store.py's scenario (what it proves: its
-docstring), one per template, each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
+docstring), one per template, each run as that file's command through `case`
+(tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
