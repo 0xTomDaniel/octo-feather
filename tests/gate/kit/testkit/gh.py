@@ -19,17 +19,17 @@ the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) ask
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 `gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
 state); `gh pr edit N --base B` sets the stored PR N's baseRefName, `gh issue close N` the
-stored issue N's state CLOSED. Another repo's issues (the tracker's, a lane's target):
-repo/OWNER/NAME/issue/N.json, named by --repo or -R, else $GH_REPO; `issue list --search 'WORDS
-in:title' --limit N` lists those whose title holds WORDS; `issue create --title T --body-file
-F|-` stores a new OPEN issue of $GH_REPO (else o/r), numbered after every repo's (901 on none),
-and prints its URL. `gh repo view OWNER/NAME|URL --json F` answers, for a repo other than o/r,
-api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
-unresolved repository. A call over time (a run list while runs start and end, a run watch) is a
-tape: $FAKE_GH/tape.json maps a call's exact argv, one line as the log writes it, to its
-recorded answers in order, each its stdout (a string) or {"out", "err", "exit"}; the Nth such
-call replays the Nth, the last repeated (the count in tape.n.json); a call no tape names is
-answered as above. Anything else exits 2 naming it.
+stored issue N's state CLOSED, `gh pr ready N` the stored PR N's isDraft false. Another repo's
+issues (the tracker's, a lane's target): repo/OWNER/NAME/issue/N.json, named by --repo or -R,
+else $GH_REPO; `issue list --search 'WORDS in:title' --limit N` lists those whose title holds
+WORDS; `issue create --title T --body-file F|-` stores a new OPEN issue of $GH_REPO (else o/r),
+numbered after every repo's (901 on none), and prints its URL. `gh repo view OWNER/NAME|URL
+--json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same way (gh reads
+the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list
+while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
+one line as the log writes it, to its recorded answers in order, each its stdout (a string) or
+{"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the count in
+tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming it.
 """
 
 import json
@@ -166,6 +166,18 @@ def edit(a: list[str]) -> None:
     sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
 
 
+def ready(a: list[str]) -> None:
+    """`pr ready N`: the stored PR N no draft; prints what gh prints."""
+    p = pr_file(a[2])
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    d = json.loads(read(p))
+    d["isDraft"] = False
+    with open(p, "w") as f:
+        f.write(json.dumps(d))
+    sys.stdout.write(f'\u2713 Pull request o/r#{a[2]} is marked as "ready for review"\n')
+
+
 def close(a: list[str]) -> None:
     """`issue close N`: the stored issue N's state CLOSED; prints what gh prints."""
     p = at("issue", f"{a[2]}.json")
@@ -291,20 +303,23 @@ def main(a: list[str]) -> None:
 
 def answer(a: list[str]) -> None:
     """A call no tape names, by its first two words."""
-    two = tuple(a[:2])
-    if two in (("pr", "view"), ("issue", "view")):
-        view(a)
-    elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
-        listed(a)
-    elif two == ("repo", "view"):
-        repo_view(a)
-    elif two == ("pr", "diff"):
-        diff(a)
-    elif two == ("pr", "edit") and "--base" in a:
+    two = " ".join(a[:2])
+    simple = {
+        "pr view": view,
+        "issue view": view,
+        "issue list": listed,
+        "pr list": listed,
+        "run list": listed,
+        "repo view": repo_view,
+        "pr diff": diff,
+        "issue close": close,
+        "pr ready": ready,
+    }
+    if two in simple:
+        simple[two](a)
+    elif two == "pr edit" and "--base" in a:
         edit(a)
-    elif two == ("issue", "close"):
-        close(a)
-    elif two == ("issue", "create") and "--title" in a and "--body-file" in a:
+    elif two == "issue create" and "--title" in a and "--body-file" in a:
         create(a)
     elif a[:1] == ["api"] and "-X" not in a:
         get(a)
