@@ -1109,6 +1109,20 @@ def drive_skill_loading(f: Feature) -> None:
                       for x in c.o["role-skills"].removeprefix("skills:").split(",") if x.strip())
         return c.code == 0 and refused not in c.err and got == want and "local" not in got
     f.check("offered", offered)
+    # own-copy: the target holds and declares its own copy of python, a skill the role lists (the kit's own repo, #595).
+    t = target("own-copy", "python", None)
+    shutil.copytree(Path(f.s.repo) / ".agents" / "skills" / "python", t / ".agents" / "skills" / "python")
+    launch("own-copy", t, f.s.repo, '{"type":"get_commands"}\n')
+    f.obs("own-copy", "role-skills", role_line + "\n")
+    f.obs("own-copy", "target-python", str(t / ".agents" / "skills" / "python" / "SKILL.md") + "\n")
+
+    def own_copy(c: Case) -> bool:
+        if not offered(c):
+            return False
+        resp = next(json.loads(ln) for ln in c.out.splitlines() if '"get_commands"' in ln)
+        py = [x["sourceInfo"]["path"] for x in resp["data"]["commands"] if x["source"] == "skill" and x["name"] == "skill:python"]
+        return [os.path.realpath(p) for p in py] == [os.path.realpath(c.o["target-python"].strip())]
+    f.check("own-copy", own_copy)
     launch("declared-malformed", target("declared-malformed", "python, local", bad.format("local")), f.s.repo)
     f.check("declared-malformed", lambda c: c.code != 0 and f"{refused} local (" in c.err and "Nested mappings are not allowed" in c.err)
     t = target("declared-dangling", "python, ghost", good)
