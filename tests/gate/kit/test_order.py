@@ -3,12 +3,10 @@ that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-import pytest
 from order import longest_first
 
 Case = Callable[..., None]
 
 
-@pytest.mark.criterion("quality#acceptance-gate-time-targets")
 def test_longest_first_order(case: Case) -> None:
     case(longest_first)
