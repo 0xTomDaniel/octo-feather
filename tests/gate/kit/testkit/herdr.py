@@ -3,8 +3,9 @@
 tests/lib/qa.sh's: a session's socket is a file under the config dir naming the session.
 
 `server` writes it and sleeps; `session stop S` removes S's socket, `session delete S` its dir;
-with no socket a call fails `server_not_running`; `pane list` prints nothing; any other call
-prints {"session": S}.
+with no socket a call fails `server_not_running`; `pane list` prints nothing; `agent list` prints
+no agent in Herdr's envelope (as tests/fixtures/lane-report/herdr); any other call prints
+{"session": S}.
 """
 
 import json
@@ -36,5 +37,7 @@ if a[:2] == ["session", "delete"] and len(a) == 3:
     sys.exit(0)
 if not sock.is_file():
     sys.exit("server_not_running")
-if a != ["pane", "list"]:
+if a == ["agent", "list"]:
+    sys.stdout.write(json.dumps({"id": "1", "result": {"agents": []}}) + "\n")
+elif a != ["pane", "list"]:
     sys.stdout.write(json.dumps({"session": sock.read_text().strip()}) + "\n")
