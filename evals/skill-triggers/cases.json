@@ -1766,5 +1766,53 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Is review/rename.diff ok to merge? It renames the Greeting dataclass to Salutation and shortens two test names; nothing else changes. Short verdict."
+  },
+  {
+    "id": "shaper-repair-multi-name",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner here. I'd like `app hello` to take several names at once, `app hello Ada Grace`, one greeting per name. Shape it into a spec with me. I'm offline for the rest of the day: wherever you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "shaper-repair-lang",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "can we get a --lang flag on app hello so it greets in french or spanish? spec it out. not around today, go with your recommendations."
+  },
+  {
+    "id": "shaper-repair-near-clean-repo",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Owner here. I'd like `app hello` to take a --repeat N option that prints the greeting N times, JSON as a list. Shape it into a spec with me. I'm offline for the rest of the day: wherever you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "shaper-repair-near-clean-version",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Let's spec an `app version` command that prints the app's version, as text and with --json. Unreachable after this, decide open points yourself."
+  },
+  {
+    "id": "shaper-repair-near-question-exit",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "train",
+    "task": "What exit code does app give for a blank name, and which spec anchor says so? Just answer, no changes."
+  },
+  {
+    "id": "shaper-repair-near-question-json",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Quick check before I file something: what do our specs say `app hello Ada --json` prints? Point me at the anchor, nothing else."
   }
 ]

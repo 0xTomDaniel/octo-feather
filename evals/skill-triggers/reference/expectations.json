@@ -219,5 +219,11 @@
   "rev-design-seam": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
   "rev-design-phrasebook": {"facts": [{"fact": "skill_read", "skill": "codebase-design"}]},
   "rev-design-near-bugfix": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]},
-  "rev-design-near-rename": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]}
+  "rev-design-near-rename": {"facts": [{"fact": "skill_not_read", "skill": "codebase-design"}]},
+  "shaper-repair-multi-name": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "shaper-repair-lang": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-clean-repo": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-clean-version": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-question-exit": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]}
 }
