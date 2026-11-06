@@ -1549,11 +1549,15 @@ def drive_qc_sandbox(f: Feature) -> None:
     f.obs("by-hand", "after", f"{(home / 'x').exists()} {(r / 'newfile').exists()} {(r / 'stolen').exists()} "
                               f"{len(left)} {git('status', '--porcelain') or 'clean'}\n")
 
+    def mask_ok(out: str) -> bool:   # the mask shows only what the run's own Herdr server makes there
+        m = re.search(r"(?m)^mask shows \[(.*)\]$", out)
+        return m is not None and set(m.group(1).split()) <= {"sessions", ".plugins.lock"}
+
     def holds(c: Case) -> bool:
         live = re.search(r"(?m)^live herdr (\S+)$", c.out)
         return (c.code == 0 and "qc sandbox: FAIL" not in c.err and c.o["after"] == "False False False 0 clean\n"
                 and re.search(r"(?m)^umount [1-9][0-9]*$", c.out) is not None   # the mask stays
-                and re.search(r"(?m)^mask shows \[(sessions )?\]$", c.out) is not None   # only the run's own sessions dir
+                and mask_ok(c.out)
                 and re.search(r"(?m)^creds 0 bytes$", c.out) is not None   # nothing to copy out
                 and re.search(r"(?m)^touch [1-9][0-9]*$", c.out) is not None and re.search(r"(?m)^wrote 0$", c.out) is not None
                 and live is not None and live.group(1) != "0")   # the real herdr reaches no default session
