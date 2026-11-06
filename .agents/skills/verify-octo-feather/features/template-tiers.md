@@ -41,7 +41,7 @@ Preconditions:
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive template-tiers`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/template-tiers/`.
 
 - **Scratch repos.** One repo per template under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/template-tiers/<lang>`, with a second module (`double`) and its integration test committed, so a one-file change has a test to pick and one to leave.
-- **GitHub, for the report.** The `trend` case adds one lane record per template on `o/<lang>` (no PR) and reads GitHub through the kit's fake gh (`tests/fixtures/lane-report/gh`, a scratch `bin/gh` wrapper first on PATH, `FAKE_GH_PRS` a scratch store holding the repo's commits as the default branch and its `gate-budget.toml`), never the network.
+- **GitHub, for the report.** The `trend` case adds one lane record per template on `o/<lang>` (no PR) and reads GitHub through the testkit's fake gh (`tests/gate/kit/testkit/gh.py`, linked as `gh` in a scratch dir first on PATH, `FAKE_GH` a scratch store holding the repo's commits as the default branch and its `gate-budget.toml`), never the network.
 - **Side effects.** `XDG_STATE_HOME` (trend lines) and `MISE_STATE_DIR` (the trust of each created `mise.toml`) under the scratch; `GATE_WORKERS=2`. Every cwd stays empty and the kit's `git status` unchanged.
 
 ## Gotchas
