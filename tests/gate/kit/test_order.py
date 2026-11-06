@@ -8,8 +8,8 @@ repo (e.sh 50 s), a later one (a 1, c 3, d 2, e 0.5; b.sh absent) and a line of 
 (e.sh 100 s), which must not count.
 
 Run as a script, this file is the scenario: it prints one JSON line, each run's exit, output,
-log and trend line. The test runs that command (through qc_command, as test_cpu.py does) and
-asserts on what it printed.
+log and trend line. The test runs that command (through qc_command, as tests/gate/test_cpu.py
+does) and asserts on what it printed.
 """
 
 import json
