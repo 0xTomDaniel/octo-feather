@@ -68,7 +68,9 @@ def claims_gate(s: Scratch) -> None:
     just qc judges the criterion from its record (Repo.qc_judges)."""
     r = Repo(s, "python")
     r.gate_recipes("check-scripts")
-    ran, rec = r.claims_gate(TEST, "just", "check", env=TWO)
+    ran, rec = r.claims_gate(
+        TEST, "just", "check-tests", "--testmon-noselect", "--color=no", env=TWO
+    )  # just check, uncoloured
     kinds(ran.out)
     r.qc_judges(rec, TEST)
 

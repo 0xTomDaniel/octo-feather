@@ -23,6 +23,7 @@ import tempfile
 from pathlib import Path
 
 from testkit import FIXTURES, ROOT, Ran, Scratch, main, tool_homes
+from testkit.template import uncoloured
 
 EXT = "extensions/resume-on-error.ts"
 LEDGER = "extensions/spend-ledger.ts"
@@ -57,6 +58,7 @@ class Copy:
             [tool("pnpm"), "store", "path"], cwd=ROOT, capture_output=True, text=True, check=True
         ).stdout.strip()
         s.env |= tool_homes() | {"npm_config_store_dir": self.store}
+        uncoloured(s)  # eslint's stylish rows and tsc's lines read here
 
     def check_ts(self, **env: str) -> Ran:
         p = subprocess.run(

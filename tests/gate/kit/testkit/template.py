@@ -76,6 +76,7 @@ class Repo:
         )
         for k in ("HERDR_SESSION", "GATE_RECIPES", "GATE_NESTED", "GATE_WORKERS"):
             s.env.pop(k, None)  # the kit gate's own, never the repo's
+        uncoloured(s)
         if base:
             return
         s.prepare(f"template-{lang}{'-ran' if ran else ''}", lambda p: build(p, lang, ran=ran))
@@ -244,6 +245,15 @@ class Repo:
     def no_python(self) -> None:
         called = self.s.root / "called"
         assert not called.exists(), f"the TypeScript repo called Python or uv: {called.read_text()}"
+
+
+def uncoloured(s: Scratch) -> None:
+    """Every command of S writes plain text, as its output is read here: NO_COLOR, and no
+    FORCE_COLOR, which a CI may set (GitHub Actions) and some tools honour over NO_COLOR
+    (eslint's chalk, tsc); a runner whose own option exists is also given it where it runs
+    (Vitest --no-color, pytest --color=no)."""
+    s.env.pop("FORCE_COLOR", None)
+    s.env["NO_COLOR"] = "1"
 
 
 def plant_rules(r: Repo) -> list[str]:

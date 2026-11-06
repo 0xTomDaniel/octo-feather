@@ -203,7 +203,8 @@ def tool_homes() -> dict[str, str]:
     runs the tools of a repo (mise.toml, uv, pnpm), never the scratch HOME's, where each would
     fetch again, from the network: mise's installed tools and download cache (its defaults:
     MISE_DATA_DIR, MISE_CACHE_DIR), uv's package cache and Pythons (`uv cache dir`, `uv python
-    dir`)."""
+    dir`, asked with uv's own --color never: a caller forcing colour, as a CI does, would
+    colour the path)."""
     home = Path(os.environ["HOME"])
     data = os.environ.get("XDG_DATA_HOME") or str(home / ".local" / "share")
     cache = os.environ.get("XDG_CACHE_HOME") or str(home / ".cache")
@@ -211,7 +212,9 @@ def tool_homes() -> dict[str, str]:
     uv_cmd = shutil.which("uv") or "uv"
 
     def uv(*a: str) -> str:
-        p = subprocess.run([uv_cmd, *a], capture_output=True, text=True, check=True)
+        p = subprocess.run(
+            [uv_cmd, "--color", "never", *a], capture_output=True, text=True, check=True
+        )
         return p.stdout.strip()
 
     return {

@@ -77,7 +77,7 @@ def claims_gate(s: Scratch) -> None:
     r = Repo(s, "typescript")
     r.gate_recipes("check-scripts")
     h = r.git("rev-parse", "HEAD")
-    ran, rec = r.claims_gate(TEST, "just", "check")
+    ran, rec = r.claims_gate(TEST, "just", "check-tests", "--no-color")  # just check, uncoloured
     full_tier(r, ran.out, h)
     gate_budget(r, h)
     r.qc_judges(rec, TEST)
