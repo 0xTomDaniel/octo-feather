@@ -726,6 +726,9 @@ def setup(judge: list[str]) -> NoReturn:
     ):
         if m and os.path.exists(m):
             back.append(os.path.realpath(m))
+    # srt's own node_modules (the sandbox's machinery, as the script itself): where it lies inside another repo (a kit
+    # copy linking a checkout's), bound back on that mask, as srt reads its own files back through any deny.
+    back.append(snm)
 
     def canon(s: str) -> list[str]:
         return [os.path.realpath(p) for p in s.split(":") if p]
