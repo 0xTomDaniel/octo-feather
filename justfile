@@ -300,8 +300,10 @@ check-tests *args:
     [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
     # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
     # as it found them, by content, failing and naming each change (owner ruling #584, #587; octo-feather-gate untouched).
-    box="$(mktemp)"; python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR"
-    MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR" "$box"' EXIT
+    # Its own TMPDIR, short (unix socket paths under it stay short), removed after: what is this run's is exact.
+    box="$(mktemp)"; gtmp="$(mktemp -d /tmp/gate.XXXXXX)"
+    python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR" --run-tmp "$gtmp"
+    MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR TMPDIR="$gtmp"; trap 'rm -rf "$MISE_STATE_DIR" "$box" "$gtmp"' EXIT
     rc=0; GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@" || rc=$?
     python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
     exit "$rc"

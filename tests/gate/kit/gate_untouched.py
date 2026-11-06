@@ -1,11 +1,12 @@
 """A gate run leaves the caller's mise state and its repo's git config as it found them (#664,
-#584, #587; owner ruling 2026-11-05), judged on what the run could have left: `just test` in a git
-copy of the kit, its caller's mise state dir a scratch one, with one seeded item. Without a seed
-the run passes naming what it found unchanged. It fails naming the change, though the item itself
-passes, when the item leaves in the caller's state a tracked-configs link that dangles, or one into
-a dir the run created and left, or sets a key in the copy's .git/config (the repo's git common dir
-config). What another lane on the box may do meanwhile passes: a link to a live path the run did
-not create (named as not this run's), a branch.<name>.* key (push -u, a worktree's branch)."""
+#584, #587; owner ruling 2026-11-05), judged only on what this run left, attributed exactly:
+`just test` in a git copy of the kit, its caller's mise state dir a scratch one, with one seeded
+item. Without a seed the run passes naming what it found unchanged. It fails naming the change,
+though the item itself passes, when the item leaves in the caller's state a link into the run's
+own TMPDIR (check-tests gives it one), live or dangling, or sets a key in the copy's .git/config
+(the repo's git common dir config). What another agent on the box may do meanwhile passes, named
+as not this run's: a link elsewhere, live or dangling; a branch.<name>.* key (push -u, a
+worktree's branch)."""
 
 from __future__ import annotations
 
@@ -20,16 +21,17 @@ if TYPE_CHECKING:
 
 ITEM = "tests/gate/test_gate.py::test_script[tests/zz-seed.sh]"
 # The seeded item: as each word of SEED says, a link into the caller's mise state (SEED_STATE:
-# the item sees only the gate's own per-run state dir, so the caller's is handed to it) that
-# dangles, one into a dir it makes and leaves, or one to SEED_LIVE (a path made before the run);
-# a key in its repo's git config, user.name or a branch's remote; else nothing. It passes either
-# way.
+# the item sees only the gate's own per-run state dir, so the caller's is handed to it): one that
+# dangles outside the run, one into a dir under its TMPDIR it leaves, or one it removes, one to
+# SEED_LIVE (a path made before the run); a key in its repo's git config, user.name or a branch's
+# remote; else nothing. It passes either way.
 SEED = """#!/usr/bin/env bash
 set -euo pipefail
 tc="${SEED_STATE:-}/tracked-configs"
 for seed in ${SEED:-}; do case "$seed" in
   link) ln -s /nowhere/seeded/mise.toml "$tc/seeded" ;;
   ours) d="$(mktemp -d)"; touch "$d/mise.toml"; ln -s "$d/mise.toml" "$tc/ours" ;;
+  gone) d="$(mktemp -d)"; ln -s "$d/mise.toml" "$tc/gone"; rmdir "$d" ;;
   live) ln -s "$SEED_LIVE" "$tc/live" ;;
   config) git config --local user.name seeded ;;
   branch) git config --local branch.x.remote origin ;;
@@ -105,8 +107,8 @@ FAIL = (
 
 
 def seeded(s: Scratch) -> None:
-    """Clean, then each seed: the clean run and each seed another lane could have made pass; each
-    seed this run leaves fails naming its change, and the item itself passed."""
+    """Clean, then the seeds: the clean run and the seeds another agent could have made pass; the
+    seeds this run leaves fail naming each change, and the item itself passed."""
     st = s.root / "user-mise"
     tc = re.escape(str(st / "tracked-configs"))
     (st / "tracked-configs").mkdir(parents=True)
@@ -122,22 +124,21 @@ def seeded(s: Scratch) -> None:
     )
     ok = gate(s, k, "", 0)
     assert re.search(unchanged, ok.out), ok.out
-    other = gate(s, k, "live branch", 0)  # what another lane may do meanwhile
+    other = gate(s, k, "live link branch", 0)  # what another agent may do meanwhile
     assert re.search(unchanged, other.out), other.out
-    assert re.search(
-        rf"check-tests: not this run's: {tc}/live: added -> {re.escape(str(s.root))}/live/"
-        r"mise\.toml, "
-        r"a live path this run did not create",
-        other.out,
-    ), other.out
-    ours = gate(s, k, "link ours config", None)  # what this run left
-    scr = re.escape(f"{s.root / 'tmp'}/")
+    root = re.escape(str(s.root))
+    for note in (
+        rf"{tc}/live: added -> {root}/live/mise\.toml",
+        rf"{tc}/seeded: added -> /nowhere/seeded/mise\.toml",
+    ):
+        assert re.search(rf"check-tests: not this run's: {note}\n", other.out), other.out
+    ours = gate(s, k, "ours gone config", None)  # what this run left
     assert ours.rc != 0, ours.out
     assert "1 passed" in ours.out, ours.out
+    gt, mk = r"(/\S+/gate\.\w+)", r"tmp\.\w+"  # the run's own TMPDIR (check-tests), a mktemp -d
     want = (
-        rf"  {tc}/ours: added -> {scr}(tmp\.\w+)/mise\.toml, under {scr}\1, "
-        r"which this run created\n"
-        rf"  {tc}/seeded: added -> /nowhere/seeded/mise\.toml, dangling \(its target is gone\)\n"
+        rf"  {tc}/gone: added -> {gt}/{mk}/mise\.toml, under this run's TMPDIR \1\n"
+        rf"  {tc}/ours: added -> \1/{mk}/mise\.toml, under this run's TMPDIR \1\n"
         rf"  {cfg}: changed \(present\): \+user\.name=seeded\n"
     )
     assert re.search(FAIL + want, ours.out), ours.out

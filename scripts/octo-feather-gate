@@ -39,22 +39,22 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
       is left out and named in the map as not passed. An item with no data (not run, or no Python
       measured) is left out of the map too.
-  octo-feather-gate untouched save FILE [--mise-state DIR]
+  octo-feather-gate untouched save FILE [--mise-state DIR] [--run-tmp TMP]
   octo-feather-gate untouched check FILE
       A gate run leaves the caller's mise state and its repo's git config as it found them (owner
-      ruling #584, #587; #664), judged only on what this run could have left, so another lane's
-      work on the box meanwhile never fails it. save, before the run, writes into FILE the content
-      of DIR's tracked-configs and trusted-configs (each entry a link's target, a file's sha256),
-      the current repo's git common dir config (every worktree's) as key/value pairs (`git config
-      --file F --list`), and the entries of the dirs a run makes scratch in (TMPDIR, /tmp, pytest's
-      basetemp root, the git common dir's octo-feather/). check, after it, fails (exit 1) naming
-      each: a pre-existing entry removed or changed; an entry added that is no link, whose target
-      is gone (a scratch removed) or lies under a scratch dir absent at save; a config key/value
-      added or removed, branch.<name>.* aside (push -u, worktree branches). An added link to a live
-      path the run did not create (a new worktree) is printed as not this run's, never a failure.
-      Else one line naming what it found unchanged. Content, never mtimes. DIR empty (no mise):
-      the config alone; outside a git repo, the mise state alone. just check-tests runs both
-      around every outermost gate run.
+      ruling #584, #587; #664), judged only on what this run left, attributed exactly, so another
+      agent's work on the box meanwhile never fails it. save, before the run, writes into FILE the
+      content of DIR's tracked-configs and trusted-configs (each entry a link's target, a file's
+      sha256), the current repo's git common dir config (every worktree's) as key/value pairs
+      (`git config --file F --list`), and TMP, the run's own TMPDIR (its name the run's id).
+      check, after it, fails (exit 1) naming each: a pre-existing entry removed or changed; an
+      entry added whose link target lies under TMP, or under a dir of the git common dir's
+      octo-feather/ whose name carries the run's id; a config key/value added or removed,
+      branch.<name>.* aside (push -u, worktree branches). Every other added entry, dangling or
+      not, is printed as not this run's, never a failure. Else one line naming what it found
+      unchanged. Content, never mtimes. DIR empty (no mise): the config alone; outside a git
+      repo, the mise state alone. just check-tests runs both around every outermost gate run,
+      which it gives its own TMP.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -516,12 +516,15 @@ MISE_DIRS = ("tracked-configs", "trusted-configs")
 class Box(TypedDict):
     """What untouched compares: each watched mise state dir's entries (name: content), the git
     config file's path ("" outside a git repo) and its key/value pairs, branch.<name>.* aside
-    (None when absent), and the entries of each dir a run makes its scratch in (roots)."""
+    (None when absent); and what is this run's: its own TMPDIR (as given and its real path), its
+    id (that dir's name), the git common dir ("" outside a git repo)."""
 
     mise: dict[str, dict[str, str]]
     config: str
     keys: list[list[str]] | None
-    roots: dict[str, list[str]]
+    run_tmp: list[str]
+    run_id: str
+    common: str
 
 
 def entry(p: Path) -> str:
@@ -549,39 +552,26 @@ def config_keys(config: str) -> list[list[str]] | None:
     return [[k, v] for k, _, v in pairs if not re.fullmatch(r"branch\..+\.[^.]+", k)]
 
 
-def scratch_roots(common: str) -> list[str]:
-    """The dirs a gate run makes its scratch in: TMPDIR (items see its real path), /tmp, pytest's
-    basetemp root there, and the git common dir's octo-feather/ (tests/parity/lever.py's copies)."""
-    tmp = os.path.realpath(os.environ.get("TMPDIR") or tempfile.gettempdir())
-    user = os.environ.get("USER") or os.environ.get("LOGNAME") or "unknown"
-    rs = [tmp, "/tmp", f"{tmp}/pytest-of-{user}"]  # noqa: S108 (read only: where a run writes)
-    rs += [f"{common}/octo-feather"] if common else []
-    return list(dict.fromkeys(rs))
+def under(target: str, d: str) -> bool:
+    return target == d or target.startswith(d.rstrip("/") + "/")
 
 
-def names(d: str) -> list[str]:
-    return sorted(e.name for e in Path(d).iterdir()) if Path(d).is_dir() else []
-
-
-def created(target: Path, roots: dict[str, list[str]]) -> str | None:
-    """The dir this run created that TARGET lies under: a root's entry absent when it was saved."""
-    for r, had in roots.items():
-        if target.is_relative_to(r) and target != Path(r):
-            first = target.relative_to(r).parts[0]
-            if first not in had:
-                return f"{r}/{first}"
-    return None
-
-
-def added(link: Path, content: str, roots: dict[str, list[str]]) -> str | None:
-    """Why an entry added during the run is this run's (a failure), None when it is a live path the
-    run did not create: no link, its target gone (a scratch removed), or under a dir it made."""
+def ours(link: Path, was: Box) -> str | None:
+    """Where LINK's target lies if this run made it (a failure), else None: under the run's own
+    TMPDIR, or under a subdir of the git common dir's octo-feather/ whose name carries the run's
+    id. Exact attribution: nothing else is this run's, dangling or not (another agent's scratch)."""
     if not link.is_symlink():
-        return f"added {content}, not a link"
-    made = created(Path(os.path.normpath(link.parent / link.readlink())), roots)
-    if not link.exists():
-        return f"added {content}, dangling (its target is gone)"
-    return f"added {content}, under {made}, which this run created" if made else None
+        return None
+    t = os.path.normpath(link.parent / link.readlink())
+    for d in was["run_tmp"]:
+        if under(t, d):
+            return f"this run's TMPDIR {was['run_tmp'][0]}"
+    base = f"{was['common']}/octo-feather"
+    if was["common"] and was["run_id"] and under(t, base) and t != base:
+        sub = Path(t).relative_to(base).parts[0]
+        if was["run_id"] in sub:
+            return f"{base}/{sub}, named for this run"
+    return None
 
 
 def keys_changed(was: Box) -> list[str]:
@@ -601,8 +591,8 @@ def keys_changed(was: Box) -> list[str]:
 
 def changed(was: Box) -> tuple[list[str], list[str]]:
     """(failures, notes) since WAS. A pre-existing mise entry removed or changed fails; one added
-    fails when it is this run's (added), else it is a note: a live path this run did not make (a
-    new worktree, another agent's). Any config key/value added or removed fails (keys_changed)."""
+    fails when it is this run's (ours), else it is a note (another agent's, dangling or not). Any
+    config key/value added or removed fails (keys_changed)."""
     out: list[str] = []
     notes: list[str] = []
     for d, before in was["mise"].items():
@@ -613,18 +603,18 @@ def changed(was: Box) -> tuple[list[str], list[str]]:
             elif n in before and before[n] != after[n]:
                 out.append(f"{d}/{n}: changed ({before[n]}, now {after[n]})")
             elif n not in before:
-                why = added(Path(d) / n, after[n], was["roots"])
-                if why:
-                    out.append(f"{d}/{n}: {why}")
+                where = ours(Path(d) / n, was)
+                if where:
+                    out.append(f"{d}/{n}: added {after[n]}, under {where}")
                 else:
-                    notes.append(f"{d}/{n}: added {after[n]}, a live path this run did not create")
+                    notes.append(f"{d}/{n}: added {after[n]}")
     return out + keys_changed(was), notes
 
 
-def untouched(action: str, file: Path, mise_state: str) -> int:
+def untouched(action: str, file: Path, mise_state: str, run_tmp: str) -> int:
     """save: FILE holds the caller's mise state (MISE_STATE), this repo's git common dir config's
-    keys and the scratch roots' entries. check: read again from the paths FILE names; each failure
-    printed, exit 1 on any, else one line naming what was unchanged; notes either way."""
+    keys and RUN_TMP, the run's own TMPDIR. check: read again from the paths FILE names; each
+    failure printed, exit 1 on any, else one line naming what was unchanged; notes either way."""
     if action == "save":
         common = git("rev-parse", "--path-format=absolute", "--git-common-dir", check=False).strip()
         config = str(Path(common) / "config") if common else ""  # "": not in a git repo
@@ -633,7 +623,11 @@ def untouched(action: str, file: Path, mise_state: str) -> int:
             "mise": {d: listing(d) for d in dirs},
             "config": config,
             "keys": config_keys(config),
-            "roots": {r: names(r) for r in scratch_roots(common)},
+            "run_tmp": list(
+                dict.fromkeys(p for p in (run_tmp, os.path.realpath(run_tmp)) if run_tmp)
+            ),
+            "run_id": Path(run_tmp).name if run_tmp else "",
+            "common": common,
         }
         file.write_text(json.dumps(box))
         return 0
@@ -682,9 +676,10 @@ def main() -> int:
     u.add_argument("action", choices=("save", "check"))
     u.add_argument("file", type=Path)
     u.add_argument("--mise-state", default="")
+    u.add_argument("--run-tmp", default="")
     a = ap.parse_args()
     if a.cmd == "untouched":
-        return untouched(a.action, a.file, a.mise_state)
+        return untouched(a.action, a.file, a.mise_state, a.run_tmp)
     if a.cmd == "checkpoint":
         tier, why = checkpoint(a.start, full=a.full, fast=not a.no_fast)
         sys.stdout.write(f"{tier}\n{why}\n")
