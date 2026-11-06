@@ -3,7 +3,9 @@
 (skills#acceptance-launch-refuses-unloaded, skills#acceptance-only-listed; #558). Real Pi (the
 kit's pin, pi-version, as installed), started through scripts/pi-role against the fake provider
 (testkit/provider.py), which logs each request; each start settled (testkit.settled): it returns
-only once Pi and every process it left (the extension's detached herdr-say) have exited. Cases:
+only once Pi and every process it left (the extension's detached herdr-say) have exited. One
+start proves every case it can: ok and own copy share one, declared and the three unresolved
+entries another, each skill named with its reason on its own line. Cases:
   ok          (`kit_skills`) the implementer starts in a target declaring a good repo skill: the
               request offers every skill its role file lists (tdd, python, typescript among them)
               and not the declared one; the code-reviewer is offered tdd
@@ -150,13 +152,15 @@ def listed(role: str) -> list[str]:
     return sorted(x.strip().replace("{tracker}", "github-issues") for x in line.group(1).split(","))
 
 
-def refused(what: str, st: Started, skill: str, reason: str = YAML) -> None:
-    """ST exited non-zero naming SKILL and REASON, before any request."""
+def refused(what: str, st: Started, why: dict[str, str]) -> None:
+    """ST exited non-zero before any request, its stderr naming each skill of WHY with its reason
+    on that skill's own line."""
     assert st.rc != 0, f"{TAG}: {what}: pi-role exited 0 with a skill Pi cannot load"
-    assert f"Pi did not load skill {skill} (" in st.err, (
-        f"{TAG}: {what}: stderr lacks {skill}: {st.err}"
-    )
-    assert reason in st.err, f"{TAG}: {what}: stderr lacks the reason {reason}: {st.err}"
+    lines = st.err.splitlines()
+    for skill, reason in why.items():
+        hit = [ln for ln in lines if f"Pi did not load skill {skill} (" in ln]
+        assert hit, f"{TAG}: {what}: stderr does not name {skill}: {st.err}"
+        assert reason in hit[0], f"{TAG}: {what}: {skill} lacks the reason {reason}: {st.err}"
     assert not st.requests, f"{TAG}: {what}: the provider saw {len(st.requests)} request(s)"
 
 
@@ -166,31 +170,29 @@ def started(what: str, st: Started) -> None:
 
 
 def kit_skills(s: Scratch) -> None:
-    """ok, own copy, then listed, from a copy of the kit (kit_copy)."""
+    """ok and own copy on one start each role, then listed, from a copy of the kit (kit_copy)."""
     with ExitStack() as stack:
         w = World(s, stack, kit_copy(s))
-        st = w.start("implementer", "-p", "go")
-        started("ok", st)
-        want = listed("implementer")
-        assert {"tdd", "python", "typescript"} <= set(want), want
-        assert offered(st) == want, f"{TAG}: ok: implementer offered {offered(st)}, lists {want}"
-        st = w.start("code-reviewer", "-p", "go")
-        assert "tdd" in offered(st), f"{TAG}: ok: code-reviewer not offered tdd: {offered(st)}"
-        # own copy: the target holds its own copy of a skill the role lists and declares it (the
-        # kit's own repo, #595): the role starts, offered that skill once, the target's copy.
+        # ok and own copy at once: the target holds its own copy of a skill the role lists and
+        # declares it (the kit's own repo, #595): the role starts, offered exactly its listed
+        # skills (that one once, the target's copy), not the declared repo skill `local`.
         own = w.tgt / ".agents" / "skills" / "python"
         own.mkdir()
         shutil.copy(ROOT / ".agents" / "skills" / "python" / "SKILL.md", own)
         st = w.start("implementer", "-p", "go")
-        started("own copy", st)
-        assert offered(st) == want, f"{TAG}: own copy: offered {offered(st)}, lists {want}"
+        started("ok", st)
+        want = listed("implementer")
+        assert {"tdd", "python", "typescript"} <= set(want), want
+        assert "local" not in want, want
+        assert offered(st) == want, f"{TAG}: ok: implementer offered {offered(st)}, lists {want}"
         path = str(own.resolve() / "SKILL.md")
         assert path in json.dumps(st.requests[0]), f"{TAG}: own copy: python not from {path}"
-        shutil.rmtree(own)
+        st = w.start("code-reviewer", "-p", "go")
+        assert "tdd" in offered(st), f"{TAG}: ok: code-reviewer not offered tdd: {offered(st)}"
         # listed: the kit's tdd broken; both roles listing it refuse.
         (w.kit / ".agents" / "skills" / "tdd" / "SKILL.md").write_text(BAD.format("tdd"))
-        refused("listed (implementer)", w.start("implementer", "-p", "go"), "tdd")
-        refused("listed (code-reviewer)", w.start("code-reviewer", "-p", "go"), "tdd")
+        refused("listed (implementer)", w.start("implementer", "-p", "go"), {"tdd": YAML})
+        refused("listed (code-reviewer)", w.start("code-reviewer", "-p", "go"), {"tdd": YAML})
         w.no_herdr()
 
 
@@ -206,32 +208,27 @@ def kit_copy(s: Scratch) -> Path:
 
 
 def repo_skills(s: Scratch) -> None:
-    """declared, unresolved, parent."""
+    """declared and unresolved on one start, each named with its reason; then parent."""
     with ExitStack() as stack:
         w = World(s, stack)
+        # declared: the target's own declared skill broken. unresolved: a declared name with no
+        # folder anywhere (gone), a dangling link (dangling), a folder with no SKILL.md (bare).
         w.local(BAD.format("local"))
-        refused("declared", w.start("implementer", "-p", "go"), "local")
-        # unresolved: a declared name with no folder anywhere, a dangling link, a folder with no
-        # SKILL.md.
-        w.local(GOOD)
-        (w.tgt / "AGENTS.md").write_text("# target\n\nRepo skills: python, local, nowhere\n")
+        (w.tgt / "AGENTS.md").write_text(
+            "# target\n\nRepo skills: python, local, gone, dangling, bare\n"
+        )
+        skills = w.tgt / ".agents" / "skills"
+        (skills / "dangling").symlink_to(s.root / "nowhere")
+        (skills / "bare").mkdir()
+        (skills / "bare" / "README.txt").write_text("notes\n")
         gone = "skill path does not exist"
-        refused("unresolved (missing)", w.start("implementer", "-p", "go"), "nowhere", gone)
-        nowhere = w.tgt / ".agents" / "skills" / "nowhere"
-        nowhere.symlink_to(s.root / "gone")
-        refused("unresolved (dangling link)", w.start("implementer", "-p", "go"), "nowhere", gone)
-        nowhere.unlink()
-        nowhere.mkdir()
-        (nowhere / "README.txt").write_text("notes\n")
-        st = w.start("implementer", "-p", "go")
-        refused("unresolved (no SKILL.md)", st, "nowhere", "no SKILL.md in it")
-        shutil.rmtree(nowhere)
+        want = {"local": YAML, "gone": gone, "dangling": gone, "bare": "no SKILL.md in it"}
+        refused("declared and unresolved", w.start("implementer", "-p", "go"), want)
         (w.tgt / "AGENTS.md").write_text(DECLARED)
-        w.local(BAD.format("local"))
         w.no_herdr()
         # parent: a pane launch (RPC here: not -p, so pi-role keeps OCTO_FEATHER_PARENT) tells the
         # parent, through the kit's herdr-say, once.
-        refused("parent", w.start("implementer", "--mode", "rpc", parent="w9:p9"), "local")
+        refused("parent", w.start("implementer", "--mode", "rpc", parent="w9:p9"), {"local": YAML})
         told = s.root / "herdr" / "prompts"
         prompts = told.read_text().splitlines() if told.exists() else []
         assert len(prompts) == 1, f"{TAG}: parent: not exactly one prompt: {prompts}"
