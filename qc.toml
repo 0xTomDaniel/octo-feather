@@ -131,7 +131,7 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "tests/gate/conftest.py", "tests/gate/test_gate.py"]
 
-# Proven by tests/qc-carry.sh's tagged cases (the rule: quality #qc-carry).
+# Proven by tests/gate/kit/test_qc_carry.py's tagged items (the rule: quality #qc-carry).
 [demo."quality#acceptance-qc-carry"]
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/octo-feather-evidence", "scripts/octo-feather-gate"]
 
