@@ -18,6 +18,38 @@ MODEL = json.loads((ROOT / "evals" / "judgment-model.json").read_text())["model"
 RID = r"[0-9]{8}T[0-9]{6}Z-[0-9a-f]{8}"  # an evidence record id (octo-feather-evidence --help)
 # Each qc run killed after this many seconds, as the old scripts bounded theirs: a hang fails.
 LIMIT_S = "180"
+# Unset in every qc scenario (clean), as the old qc scripts unset them: a Herdr pane's session, a
+# qc report dir, a sandbox PATH, the stub judge's modes, a claims gate's claims.
+UNSET = (
+    "HERDR_SESSION",
+    "HERDR_SOCKET_PATH",
+    "HERDR_BIN_PATH",
+    "HERDR_ENV",
+    "OCTO_FEATHER_QC_DIR",
+    "OCTO_FEATHER_QC_PATH",
+    "OCTO_FEATHER_QC_CLAIMS",
+    "FAKE_QC_JUDGE",
+    "FAKE_QC_FAIL",
+)
+
+
+def clean(s: Scratch) -> None:
+    """S's env without UNSET."""
+    for k in UNSET:
+        s.env.pop(k, None)
+
+
+def report(r: Ran) -> dict[str, object]:
+    """Qc run R's report: the file its last stdout line names (octo-feather-qc --help, Report)."""
+    return json.loads(Path(r.out.splitlines()[-1].rpartition("; report ")[2]).read_text())
+
+
+def block(out: str, first: str, n: int = 2) -> list[str]:
+    """The result block in qc's stdout OUT whose first line starts FIRST: it and the N lines
+    after it (as grep -A N); empty when none does."""
+    ls = out.splitlines()
+    k = next((i for i, x in enumerate(ls) if x.startswith(first)), None)
+    return [] if k is None else ls[k : k + n + 1]
 
 
 def target(s: Scratch, files: Mapping[str, str] = {}) -> Path:

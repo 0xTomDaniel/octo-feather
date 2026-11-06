@@ -19,24 +19,12 @@ from pathlib import Path
 from typing import Any
 
 from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main, tool_homes
-from testkit.qc import LIMIT_S
+from testkit.qc import LIMIT_S, clean
 
 STATUS = "docs/specs/carry.status.json"
 SPEC = "docs/specs/carry.spec.html"
 IDS = ("a", "b", "c", "e", "f", "g", "h", "i")
 CLAIMS = "carry#acceptance-g carry#acceptance-h"
-# Unset in every scenario, as the old test unset them: a Herdr pane's session, a qc report dir, the
-# stub judge's modes, the gate's claims (each gate run below sets its own).
-UNSET = (
-    "HERDR_SESSION",
-    "HERDR_SOCKET_PATH",
-    "HERDR_BIN_PATH",
-    "HERDR_ENV",
-    "OCTO_FEATHER_QC_DIR",
-    "FAKE_QC_JUDGE",
-    "FAKE_QC_FAIL",
-    "OCTO_FEATHER_QC_CLAIMS",
-)
 JUSTFILE = """set positional-arguments
 export GATE_RECIPES := "check-ok"
 export OCTO_FEATHER_CHECK_RUN := `check-gate-free --run`
@@ -99,8 +87,7 @@ class Target:
     def __init__(self, s: Scratch) -> None:
         self.s = s
         self.repo = s.root / "repo"
-        for k in UNSET:
-            s.env.pop(k, None)
+        clean(s)
         s.env |= {
             "KIT": str(ROOT),
             "OCTO_FEATHER_QC_PATH": str(FIXTURES / "qc-judge"),  # the stub judge for f
