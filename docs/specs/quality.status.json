@@ -261,6 +261,15 @@
     "acceptance-qa-tuning-method": {
       "status": "planned",
       "pr": null
+    },
+    "acceptance-qc-carry": {
+      "status": "built",
+      "pr": 608,
+      "record": "20261105T223910Z-3a741ec0",
+      "commit": "73bdfabb9f837a9b3e0c08dc7f8435dddb2284f7",
+      "tests": [
+        "tests/qc-carry.sh"
+      ]
     }
   }
 }

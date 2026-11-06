@@ -5,8 +5,12 @@
 name = "octo-feather-kit-tests"
 version = "0"
 requires-python = ">=3.10"
-# octo-feather-contract validates qc.toml with jsonschema, re-running itself here (uv run --locked --offline).
-dependencies = ["jsonschema==4.26.0"]
+# octo-feather-contract validates qc.toml with jsonschema, re-running itself here (uv run --locked --offline);
+# the verify-octo-feather template-tiers drive reads a created repo's CI workflow step with PyYAML, the same way.
+dependencies = [
+    "jsonschema==4.26.0",
+    "pyyaml==6.0.3",
+]
 
 [dependency-groups]
 dev = [

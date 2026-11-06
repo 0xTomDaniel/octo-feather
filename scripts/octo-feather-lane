@@ -49,11 +49,20 @@ scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones alr
 a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
 A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
 
-  octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R]
+  octo-feather-lane verdict PR HEAD REPORT|- [--resolution] [--repo O/R]
                                    create, or update in place, the PR's one review verdict
                                    comment (marker, head, verdict, findings); prints its URL
+  octo-feather-lane resolution MERGE
+                                   the code reviewer's brief after a main merge that resolved a conflict or
+                                   changed anything beyond git's automatic merge (when: issue-lifecycle
+                                   #lanes-one-head): its files and what `git show --remerge-diff` prints for it
   octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
                                    check the PR body's `## Merge ask` section; print it on pass
+  octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R]
+                                   CI on the lane's final head (when: issue-lifecycle #lanes-one-head): refuse unless
+                                   the local HEAD is the PR head with a current full gate pass, mark the PR
+                                   ready (gh pr ready), wait (default 120s) until CI's full run on it has
+                                   started (when that is: #acceptance-ci-alongside) and print its jobs
   octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
                                    the kit's judgment model answers it on FILE's text; create, or
                                    update in place, the PR's one comment for QUESTION, labelled a model judgment
@@ -81,6 +90,9 @@ verdict, neither check form, both, a malformed Check line, a class other than ex
 a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
 the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
 of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
+With --resolution, HEAD is such a merge, the review covering what `resolution` prints for it alone: the PR's one
+comment for that merge names it (`Merge:`) and its resolution's files (`Files:`); refused for a commit that is no
+merge or a merge with nothing beyond git's automatic merge.
 
   octo-feather-lane fields REPORT|-   a report's field lines as JSON (the parser verdict uses)
 
@@ -102,7 +114,8 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
 
   ## Merge ask
   Head: <sha>                     the PR's head H' (7+ hex prefix)
-  Checks: <summary>               verified: every check on that head SUCCESS, none pending
+  Checks: <summary>               verified: every check on that head SUCCESS, none pending; a SKIPPED one only
+                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head)
   Judged: <proof>                 = the line the check prints for H to H' (below)
   | criterion | qc verdict | judged | evidence |
   |---|---|---|---|
@@ -142,7 +155,13 @@ A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `F
 criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
 entry built with it; --status is then optional. Its judged head H is the review verdict comment's Head:
 the check needs Head, Checks, the parent line and Review verdict, and `Judged:` only when H is not the
-PR head (the same proof as above). A lane that claims any criterion (a Built or Failed id, a qc commit,
+PR head (the same proof as above).
+
+A review verdict on a head before the judged head (or, building no criterion, before the PR head) holds when the
+same proof carries it there, with each main merge that resolved a conflict or changed anything beyond git's
+automatic merge allowed when a clear `verdict --resolution` comment names it, and only its resolution's files moved
+in the lane diff; the section then needs `Reviewed: <proof>`, the line the check prints, naming the reviewed head,
+each merge, its files and its resolution verdict's URL. Without it the check names the merge. A lane that claims any criterion (a Built or Failed id, a qc commit,
 a status entry built with the PR) with no row is refused naming the criterion table.
 
   octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
@@ -752,6 +771,9 @@ def rollback(created: list[Path], archive: Path) -> None:
 # --- verdict and merge-ask (issue #48, spec issue-lifecycle #acceptance-merge-ask-evidence) ---
 
 MARKER = "<!-- octo-feather-review-verdict -->"
+# One comment per reviewed resolution of a main merge, naming the merge (the rule: issue-lifecycle #lanes-one-head).
+RESOLUTION_MARKER = "<!-- octo-feather-review-resolution: {} -->"
+RESOLUTION_HEAD = re.compile(r"^<!-- octo-feather-review-resolution: ([0-9a-f]{40}) -->")
 SHA = re.compile(r"[0-9a-fA-F]{7,40}")
 COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
 VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
@@ -980,11 +1002,17 @@ def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
     return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
 
 
+def resolution_files(merge: str) -> list[str]:
+    """The files MERGE's resolution changed: what `git show --remerge-diff` prints for it (issue-lifecycle #lanes-one-head)."""
+    return sorted(filter(None, git("show", "--remerge-diff", "--format=", "--name-only", "-z", merge)[1].split("\0")))
+
+
 def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
-               kept: str = "the qc verdict", rerun: str = "") -> tuple[str | None, list[str]]:
+               kept: str = "the qc verdict", rerun: str = "", resolved: dict[str, str] | None = None) -> tuple[str | None, list[str]]:
     """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
-    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical.
-    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass)."""
+    (what may lie between them: spec #lanes-one-head).
+    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass). RESOLVED, for the
+    review verdict only: {merge sha: URL} of each clear resolution verdict, whose merge's resolution files may move."""
     j, h = judged[:12], head[:12]
     if head.lower() == judged.lower():
         return f"{j} is the PR head", []
@@ -1004,6 +1032,7 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str, at: s
             raise Refuse(f"--status {f} is outside this repo ({top}): run merge-ask in the lane worktree, naming its status file")
         status.add(rel)
     why, qc, merges, touched = [], [], [], set()
+    reviewed: dict[str, list[str]] = {}
     for line in git("rev-list", "--reverse", "--parents", head, f"^{judged}", f"^{base}")[1].split("\n"):
         if not line.strip():
             continue
@@ -1025,24 +1054,33 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str, at: s
         else:
             rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
             auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
-            if rc:
-                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over; {rerun}")
+            hint = ("" if resolved is None else f" without a clear resolution verdict naming it (review what `octo-feather-lane "
+                    f"resolution {c[:12]}` prints, then `octo-feather-lane verdict <PR> {c[:12]} <report> --resolution`)")
+            if (rc or auto != tree) and resolved is not None and c.lower() in resolved:
+                reviewed[c] = resolution_files(c)
+            elif rc:
+                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over{hint}; {rerun}")
             elif auto != tree:
                 diff = git("diff", "--name-only", auto, tree)[1].split()
-                why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge: {rerun}")
+                why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge{hint}: {rerun}")
             else:
                 merges.append(c)
     proof = f"{j} to {h}: " + (f"qc status commits {' '.join(c[:12] for c in qc)} change only {', '.join(sorted(touched))}" if qc else "no qc status commit")
-    if merges and not why:
+    if (merges or reviewed) and not why:
         before, after = lane_diff(judged, base, status), lane_diff(head, base, status)
-        moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
+        moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p)
+                       and not any(p in fs for fs in reviewed.values()))
         if moved:
             why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
                        f"or the lane's diff moved): {kept} does not carry over; {rerun}")
-        else:
+        elif merges:
             d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
             proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
-                      f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})")
+                      f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})"
+                      + (" outside the resolved files" if reviewed else ""))
+        if not moved:
+            proof += "".join(f"; resolution of merge {c[:12]} ({', '.join(fs)}) reviewed clear: {(resolved or {})[c.lower()]}"
+                             for c, fs in reviewed.items())
     return (None, why) if why else (proof, [])
 
 
@@ -1153,8 +1191,10 @@ def no_traceback(fn):
 @no_traceback
 def cmd_verdict(args: list[str]) -> int:
     args, repo = take_repo(args)
+    res = "--resolution" in args
+    args = [a for a in args if a != "--resolution"]
     if len(args) != 3:
-        raise Refuse(f"usage: octo-feather-lane verdict PR HEAD REPORT|- [--repo O/R] (got {' '.join(args) or 'nothing'})")
+        raise Refuse(f"usage: octo-feather-lane verdict PR HEAD REPORT|- [--resolution] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(args[0]); want = args[1]
     if not SHA.fullmatch(want):
         raise Refuse(f"HEAD must be a commit sha (7 to 40 hex), got {want!r}")
@@ -1184,10 +1224,46 @@ def cmd_verdict(args: list[str]) -> int:
         raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
                      f"push the reviewed head, or name the head the review judged in full")
     judged = at[0]
+    if res:   # the review of a main merge's resolution alone (issue-lifecycle #lanes-one-head)
+        _, files = merge_resolution(judged)
+        marker = RESOLUTION_MARKER.format(judged.lower())
+        body = (f"{marker}\n## Code review verdict: resolution of a main merge\n\nMerge: {judged}\nFiles: {', '.join(files)}\n"
+                f"PR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n")
+        out, said = post_comment(pr, repo, cast("list[dict[str, object]]", d["comments"]), marker, body, f"resolution verdict for {judged[:12]}")
+        print(f"verdict: {said} ({verdict}, resolution of merge {judged[:12]})", file=sys.stderr)
+        print(out)
+        return 0
     body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n"
     out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
     print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
     print(out)
+    return 0
+
+
+def merge_resolution(merge: str) -> tuple[str, list[str]]:
+    """(MERGE's full sha, the files its resolution changed), refused for a commit that is not a merge or a merge that
+    changes nothing beyond git's automatic merge (no resolution to review)."""
+    if git("cat-file", "-e", f"{merge}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"commit {merge} is not in this repo: run it in the lane worktree after git fetch origin")
+    sha, *parents = git("rev-list", "--parents", "-n", "1", merge)[1].split()
+    if len(parents) < 2:
+        raise Refuse(f"commit {sha[:12]} is not a merge: a resolution review covers a merge of main; any other change needs a full review")
+    files = resolution_files(sha)
+    if not files:
+        raise Refuse(f"merge {sha[:12]} changes nothing beyond git's automatic merge: there is no resolution to review "
+                     "(a clean merge keeps the review verdict by merge-ask's check alone)")
+    return sha, files
+
+
+@no_traceback
+def cmd_resolution(args: list[str]) -> int:
+    if len(args) != 1 or not SHA.fullmatch(args[0]):
+        raise Refuse(f"usage: octo-feather-lane resolution MERGE, MERGE a commit sha (got {' '.join(args) or 'nothing'})")
+    sha, files = merge_resolution(args[0])
+    subject = git("log", "-1", "--format=%s", sha)[1].strip()
+    print(f"Resolution of merge {sha} {subject[:60]!r} (git show --remerge-diff; issue-lifecycle #lanes-one-head):")
+    print(f"Files: {', '.join(files)}")
+    print(git("show", "--remerge-diff", "--format=", sha)[1].strip("\n"))
     return 0
 
 
@@ -1404,6 +1480,155 @@ def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
     return failed, pending
 
 
+def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
+    """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
+    WHAT names the commit in a refusal."""
+    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
+             f"read the check runs of {sha[:12]}, {what} (gh auth status)")
+    try:
+        got = cast("list[object]", json.loads(out)["check_runs"])
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
+    return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+
+
+@no_traceback
+def cmd_ci_start(args: list[str]) -> int:
+    """CI on the lane's final head (when: spec issue-lifecycle #lanes-one-head): refuse unless the local HEAD is the PR's head and has a current full
+    gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for CI's full run on that head to
+    start (ci_full_run), and print its jobs."""
+    args, repo = take_repo(args)
+    files: list[str] = []; rest: list[str] = []; i, base_arg, wait = 0, cast("str | None", None), 120.0
+    while i < len(args):
+        if args[i] in ("--status", "--base", "--wait") and i + 1 < len(args):
+            if args[i] == "--status":
+                files.append(args[i + 1])
+            elif args[i] == "--base":
+                base_arg = args[i + 1]
+            elif re.fullmatch(r"[0-9]+", args[i + 1]):
+                wait = float(args[i + 1])
+            else:
+                raise Refuse(f"--wait needs whole seconds, got {args[i + 1]!r}")
+            i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if len(rest) != 1:
+        raise Refuse(f"usage: octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0])
+    d = cast("dict[str, object]", pr_view(pr, "isDraft,headRefOid,baseRefName,headRefName", repo))
+    head = str(d["headRefOid"]).lower(); h = head[:12]
+    local = git("rev-parse", "HEAD")[1].strip().lower()
+    if local != head:
+        raise Refuse(f"local HEAD {local[:12]} is not PR #{pr}'s head {h}: push it (git push), then rerun in the lane worktree")
+    why = full_pass(head, files, pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
+    if why:
+        raise Refuse("; ".join(why))
+    if d["isDraft"]:
+        gh(["pr", "ready", str(pr), *(["-R", repo] if repo else [])], f"mark PR #{pr} ready for review by hand (gh pr ready {pr})")
+        print(f"PR #{pr} marked ready for review at head {h}")
+    end = time.monotonic() + wait
+    while True:
+        why, jobs = ci_full_run(head, repo)
+        if not why:
+            print(f"CI on {h} (issue-lifecycle #lanes-one-head):")
+            print("\n".join(jobs))
+            return 0
+        left = end - time.monotonic()
+        if left <= 0:
+            raise Refuse(f"CI's full run did not start on {h} within {wait:g}s: {'; '.join(why)}: check PR #{pr} is ready "
+                         "for review and its workflow runs on pull_request ready_for_review, then rerun")
+        time.sleep(min(5.0, left))
+
+
+def workflow_jobs(head: str, path: str) -> int | None:
+    """How many jobs the workflow file PATH defines at HEAD (its `jobs` map), read with PyYAML in the kit's locked
+    environment (the standard library reads no YAML); None when it is unreadable."""
+    rc, text = git("show", f"{head}:{path}", ok=(0, 128))
+    if rc:
+        return None
+    try:
+        count = ("import sys, yaml; w = yaml.safe_load(sys.stdin); j = w.get('jobs') if isinstance(w, dict) else None; "
+                 "print(len(j) if isinstance(j, dict) else '')")
+        p = subprocess.run(["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", count],
+                           input=text, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        raise Refuse("uv not on PATH: it runs the kit's locked environment that reads the workflow (just install-check)")
+    out = p.stdout.strip()
+    return int(out) if p.returncode == 0 and out.isdigit() else None
+
+
+def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
+    """([], a line per job) once CI's full run on HEAD has started, else (why not, []); the rule: issue-lifecycle
+    #acceptance-ci-alongside. Read for each workflow's latest run on HEAD: its jobs (REST), and the count of jobs its
+    workflow file defines at HEAD, since GitHub lists a job that waits on `needs` only once those finish (run
+    42118019970: check created when scope completed)."""
+    api = f"repos/{repo or '{owner}/{repo}'}/actions"
+    def read(path: str, key: str) -> "list[dict[str, object]]":
+        out = gh(["api", f"{api}/{path}"], f"read {path} for {head[:12]} (gh auth status)")
+        try:
+            got = cast("list[object]", json.loads(out)[key])
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh api {path} printed no {key}: check the gh on PATH ({out[:100]!r})")
+        return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+    latest: dict[str, dict[str, object]] = {}
+    for r in read(f"runs?head_sha={head}&per_page=100", "workflow_runs"):
+        w = str(r.get("workflow_id"))
+        if w not in latest or int(str(r.get("id") or 0)) > int(str(latest[w].get("id") or 0)):
+            latest[w] = r
+    if not latest:
+        return ["no workflow run on it yet"], []
+    why: list[str] = []; lines: list[str] = []
+    for r in latest.values():
+        path = str(r.get("path") or "")
+        jobs = read(f"runs/{r.get('id')}/jobs?per_page=100", "jobs")
+        state = {str(j.get("name")): (str(j.get("status") or "").lower(), str(j.get("conclusion") or "").lower()) for j in jobs}
+        # The run's own job list is the fact; the workflow file's job count is only the guard against GitHub creating a
+        # needs-dependent job late (run 42118019970 listed check only after scope completed). Started, none skipped, not
+        # completed: waiting for completion would put CI before qc and review again (issue-lifecycle #lanes-one-head).
+        n = workflow_jobs(head, path)
+        if n is None:
+            why.append(f"{path or 'its workflow'} at {head[:12]} is unreadable: no job count to compare")
+        elif len(jobs) < n:
+            why.append(f"run {r.get('id')} lists {len(jobs)} of the {n} jobs {path} defines (a job waiting on `needs` is not created yet)")
+        why += [f"run {r.get('id')} job {k} {c or s}" for k, (s, c) in state.items()
+                if c == "skipped" or s not in ("queued", "in_progress", "completed")]
+        lines += [f"- {j.get('name')} {j.get('conclusion') or j.get('status')} on {head[:12]}: {j.get('html_url')}" for j in jobs]
+    return why, ([] if why else lines)
+
+
+def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | None, proof: str | None,
+                   repo: str | None) -> tuple[list[str], list[str]]:
+    """(why each check skipped on HEAD fails, a line per one that passes; when a skipped check counts: spec issue-lifecycle
+    #lanes-one-head). PROOF is head_proof's line for JUDGED to HEAD."""
+    skipped = sorted({str(c.get("name") or "?") for c in rollup if c.get("__typename") != "StatusContext" and "conclusion" in c
+                      and str(c.get("conclusion") or "").upper() == "SKIPPED"})
+    h = head[:12]
+    if not skipped:
+        return [], []
+    if not judged or judged == head.lower() or not proof:
+        return [(f"Checks: skipped on head {h}: {', '.join(skipped)}; a skipped check is no pass and no Judged proof carries "
+                 f"a judged head's CI to {h} (issue-lifecycle #lanes-one-head): run `octo-feather-lane ci-start <PR>` on the "
+                 "judged head, wait for its CI, then rerun")], []
+    j = judged[:12]
+    runs = check_runs(judged, repo, "the judged head")
+    why: list[str] = []; ok: list[str] = []
+    for name in skipped:
+        at = f"Checks: {name} skipped on head {h}, carried from the judged head {j} by the Judged proof, and"
+        r = max((r for r in runs if r.get("name") == name), key=lambda r: int(str(r.get("id") or 0)), default=None)
+        status, concl = str((r or {}).get("status") or "").lower(), str((r or {}).get("conclusion") or "").lower()
+        if r is None:
+            why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
+        elif status != "completed":
+            why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
+        elif concl == "skipped":
+            why.append(f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start <PR>` on {j}, then rerun")
+        elif concl not in ("success", "neutral"):
+            why.append(f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never pre-existing)")
+        else:
+            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")
+    return why, ok
+
+
 # GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
 CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
 
@@ -1492,6 +1717,18 @@ def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
             for cid, (why, name) in sorted(latest.items()) if why]
 
 
+def resolution_verdicts(comments: "list[dict[str, object]]") -> dict[str, str]:
+    """{merge sha: URL} of each clear `verdict --resolution` comment among COMMENTS (spec #lanes-one-head)."""
+    out: dict[str, str] = {}
+    for c in comments:
+        body = str(c.get("body") or "")
+        rm = RESOLUTION_HEAD.match(body.lstrip()); hdr = body.split("\n### Findings", 1)[0]
+        vs = verdicts(hdr)
+        if rm and set(vs) == {"clear"} and not check_lines(hdr)[1]:
+            out[rm.group(1)] = str(c.get("url") or "")
+    return out
+
+
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
@@ -1577,9 +1814,17 @@ def cmd_merge_ask(args: list[str]) -> int:
     if judged and specs:
         miss += qc_insufficient(judged, {str(s) for s in specs})
     jl = field(lines, "Judged")
+    resolved = resolution_verdicts(cast("list[dict[str, object]]", d["comments"] or []))
     if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
         judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)
         miss += [why] if why else []
+        try:   # a resolved merge after it: the PR head is judged, the review verdict kept below by its resolution verdict
+            h_, fl = cast("str", head), cast("list[str]", files)
+            if judged and resolved and head_proof(judged, h_, fl, base)[1] and not head_proof(judged, h_, fl, base, resolved=resolved)[1]:
+                judged = h_.lower()
+        except Refuse:
+            pass   # named by the proof below
+    proof: str | None = None
     if judged:
         try:
             proof, why = head_proof(judged, head, files, base)
@@ -1589,9 +1834,16 @@ def cmd_merge_ask(args: list[str]) -> int:
         if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
 
+    try:
+        why, carried = carried_checks(cast("list[dict[str, object]]", rollup), cast("str", head), judged, proof, repo)
+    except Refuse as e:
+        why, carried = [f"Checks: {e}"], []
+    miss += why
+
     miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
 
     review_checks: list[str] = []
+    rproof: str | None = None; rwhy: list[str] = []
     rv = field(lines, "Review verdict")
     url = (rv[1].strip("<>` ") if rv else "")
     m = COMMENT_URL.fullmatch(url)
@@ -1605,13 +1857,22 @@ def cmd_merge_ask(args: list[str]) -> int:
         hdr = cb.split("\n### Findings", 1)[0]   # the helper's own header, never the quoted report
         ch = HEAD_LINE.search(hdr); cvs = verdicts(hdr)
         cv = cvs[-1] if len(set(cvs)) == 1 else None
+        rh = str(ch.group(1)).lower() if ch else None
+        rat: list[str] = [str(oid).lower() for oid, _ in commits if rh and str(oid).lower().startswith(rh)]
+        if judged and cast("str", cb).lstrip().startswith(MARKER) and len(rat) == 1 and rat[0] != judged:   # reviewed before the judged head
+            try:
+                rproof, rwhy = head_proof(rat[0], judged, cast("list[str]", files), base, at="reviewed head", kept="the review verdict", resolved=resolved,
+                                          rerun=f"review {judged[:12]} afresh in full, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
+            except Refuse as e:
+                rproof, rwhy = None, [str(e)]
         if c is None:
             miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
         elif not cb.lstrip().startswith(MARKER):
             miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
-        elif judged and (not ch or not judged.startswith(ch.group(1).lower())):
-            miss.append(f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not the judged head {judged[:12]}; "
-                        f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
+        elif judged and (not ch or not judged.startswith(ch.group(1).lower())) and not rproof:
+            miss += [f"Review verdict: {w}" for w in rwhy] or [(
+                f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not the judged head {judged[:12]}; "
+                f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")]
         elif cv != "clear":
             miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
         else:
@@ -1623,6 +1884,9 @@ def cmd_merge_ask(args: list[str]) -> int:
             elif proxy:
                 miss.append(f"Review verdict: clear with a proxy check ({proxy[0]}): a proxy check blocks (docs/adr/0008); "
                             "delete or replace it, review again, and post the verdict with `octo-feather-lane verdict`")
+    rl = field(lines, "Reviewed")
+    if rproof and (not rl or rl[1].strip("`") != rproof):
+        miss.append(f"Reviewed: {'names ' + repr(rl[1]) if rl else 'missing'}; add the check's proof line `Reviewed: {rproof}`")
 
     built = set()
     b = field(lines, "Built")
@@ -1692,6 +1956,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    if carried:
+        print("\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
     if sources:
         print("\n" + "\n".join(sources))
     if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
@@ -3496,6 +3762,8 @@ COMMANDS = {
     "verdict": cmd_verdict,
     "fields": cmd_fields,
     "merge-ask": cmd_merge_ask,
+    "ci-start": cmd_ci_start,
+    "resolution": cmd_resolution,
     "judge": cmd_judge,
     "tickets": cmd_tickets,
     "done": cmd_done,
