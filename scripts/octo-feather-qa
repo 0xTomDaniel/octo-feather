@@ -1029,11 +1029,7 @@ def fixture_src(evals: Path, fixture: object, scratch: Path) -> Path:
     if not isinstance(fixture, dict):
         return evals / "fixtures" / str(fixture)
     fx = cast("Result", fixture)
-    loader = importlib.machinery.SourceFileLoader("check_evals", str(KIT / "scripts" / "check-evals"))
-    spec = importlib.util.spec_from_loader("check_evals", loader)
-    assert spec is not None
-    mod = importlib.util.module_from_spec(spec)
-    loader.exec_module(mod)
+    mod = importlib.import_module("check_evals")  # check-evals is its launcher
     repo = cast("Path | None", mod.history_repo(fx.get("repo")))
     if repo is None:
         raise RuntimeError(f"history fixture: unknown repo {fx.get('repo')!r}")
