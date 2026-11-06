@@ -419,7 +419,7 @@ extraPaths = ["tests/gate"]
   "T201",
   "TRY003",
 ]
-"scripts/octo-feather-lane" = [
+"scripts/octo_feather_lane.py" = [
   "ANN001",
   "ANN201",
   "ANN202",
@@ -735,7 +735,7 @@ exclude = [
   "scripts/octo-feather-accepted",
   "scripts/octo-feather-contract",
   "scripts/octo-feather-evidence",
-  "scripts/octo-feather-lane",
+  "scripts/octo_feather_lane.py",
   "scripts/octo-feather-qa",
   "scripts/octo-feather-qc",
   "scripts/octo-feather-qc-ghsnap",
