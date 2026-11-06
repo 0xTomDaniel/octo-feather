@@ -23,9 +23,15 @@ NAME, EMAIL = "Ada Lovelace", "ada@example.com"
 IDENT = f"{NAME} <{EMAIL}>"
 # git reads no user config but the scratch repo's (none): no system file, the scratch HOME's global.
 NO_CONFIG = {"GIT_CONFIG_NOSYSTEM": "1"}
-# The stand-in pi (Pi, which the kit does not own): one commit in its working directory, as a
-# role's bash call to git would make it.
-PI = "#!/bin/sh\nexec git -c commit.gpgsign=false commit -q --allow-empty -m role-commit\n"
+# The stand-in pi (Pi, which the kit does not own): launched as a role (pi-role's
+# --octo-feather-role), one commit in its working directory, as a role's bash call to git would
+# make it; any other call (install-check's `pi --version`, run from the kit dir) does nothing,
+# so no commit ever lands outside the scratch repo.
+PI = (
+    "#!/bin/sh\n"
+    'case " $* " in *" --octo-feather-role "*) ;; *) exit 0 ;; esac\n'
+    "exec git -c commit.gpgsign=false commit -q --allow-empty -m role-commit\n"
+)
 
 
 def world(s: Scratch) -> Path:
@@ -77,7 +83,9 @@ def install_check(s: Scratch) -> list[str]:
     """`just install-check` of the kit, its stdout lines; its exit is the box's (its other lines
     judge this box's tools), so not asserted."""
     cmd = ["just", "--justfile", str(ROOT / "justfile"), "install-check", str(ROOT)]
-    p = subprocess.run(cmd, cwd=s.root, env=s.env, capture_output=True, text=True, check=False)
+    path = os.pathsep.join(d for d in s.env["PATH"].split(os.pathsep) if d != str(s.root / "pibin"))
+    env = {**s.env, "PATH": path}  # the box's own pi, never the stand-in, which commits
+    p = subprocess.run(cmd, cwd=s.root, env=env, capture_output=True, text=True, check=False)
     assert "Traceback" not in p.stderr, p.stderr
     return p.stdout.splitlines()
 
