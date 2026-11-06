@@ -4,6 +4,7 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+export XDG_STATE_HOME="$t/state"; "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 mkdir -p "$t/home/.agents/skills/spec-chat-review" "$t/repo"
 echo "# home" > "$t/home/.agents/skills/spec-chat-review/SKILL.md"

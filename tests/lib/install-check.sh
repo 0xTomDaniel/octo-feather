@@ -32,6 +32,7 @@ printf '#!/bin/sh\n[ -e "%s/userns-off" ] && { echo "unshare: write failed /proc
 printf '#!/bin/sh\nexit 0\n' >"$t/bin/ffmpeg"
 # The session state folder (XDG_STATE_HOME) with its lanes/, and the live kit install: a clone of a bare origin, on main.
 mkdir -p "$t/state/octo-feather/lanes"
+XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity (#665), ok in every case
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 g init -q --bare "$t/kit-origin.git"; g clone -q "$t/kit-origin.git" "$t/kitinst" 2>/dev/null
 g -C "$t/kitinst" commit -q --allow-empty -m one; g -C "$t/kitinst" push -q origin main

@@ -55,6 +55,7 @@ open(port_file + ".tmp", "w").write(str(s.server_address[1])); os.replace(port_f
 s.serve_forever()
 EOF
 mkdir -p "$t/home" "$t/agent" "$t/repo"
+XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 git -c init.defaultBranch=main init -q "$t/repo"
 echo '{"retry":{"enabled":false}}' > "$t/agent/settings.json"
 python3 "$t/fake.py" "$t/port" & srv=$!

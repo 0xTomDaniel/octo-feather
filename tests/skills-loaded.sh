@@ -22,6 +22,7 @@ pin="$(tr -d '[:space:]' < "$kit/pi-version")"
 install="npm install -g --ignore-scripts @earendil-works/pi-coding-agent@$pin"
 command -v pi >/dev/null || { echo "skills-loaded test: pi not on PATH; install Pi $pin: $install" >&2; exit 1; }
 t="$(mktemp -d)"; srv=""
+XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 trap '[[ -z "$srv" ]] || kill "$srv" 2>/dev/null || true; rm -rf "$t"' EXIT
 fail() { echo "skills-loaded test: $*" >&2; exit 1; }
 

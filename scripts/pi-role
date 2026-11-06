@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""pi-role [--json] AGENT_FILE [extra pi args...]
+"""pi-role [--json | --print-env] AGENT_FILE [extra pi args...]
+pi-role --set-identity NAME EMAIL
 
 Start Pi under one of this kit's role files (agents/<role>.md, docs/adr/0016):
 the frontmatter's model, thinking and tool allowlist, only the listed skills,
@@ -53,6 +54,23 @@ Pi always gets --extension for the kit's extensions/skills-loaded.ts with
 --octo-feather-skills-loaded: every --skill folder and each other `Repo skills:`
 entry of the target's AGENTS.md (declared_skills), checked, never offered.
 The rule: spec skills#loading-refuse.
+
+Commit identity (#665, owner ruling #587): one factory setting on the box, the
+[identity] table (name, email) of the box onboarding file,
+${XDG_STATE_HOME:-~/.local/state}/octo-feather/onboarding.toml (beside the
+default session's state, octo-feather-state; its [consent] table: the github-pr
+skill). Every launch applies it: the role's environment gets GIT_AUTHOR_NAME,
+GIT_AUTHOR_EMAIL, GIT_COMMITTER_NAME and GIT_COMMITTER_EMAIL from it (a pane
+launch: --print-env's lines, which herdr-spawn and octo-feather-start ask for
+before any tab or workspace, and passes to the tab; --json alone is the launch's
+args, which checks read too), so no repo's .git/config needs one. A role that
+would commit refuses to start without it, naming the setting and how to set it;
+no placeholder, no fallback. Would commit:
+its tools include bash (git runs only through bash; no tools key: Pi's default
+tools, bash among them), unless its contract is read-only (READ_ONLY: the code
+reviewer and the qc judge never commit).
+  --print-env      print the environment the launch applies (KEY=VALUE lines), or refuse
+  --set-identity   write NAME and EMAIL as the [identity] table, other tables kept
 """
 import hashlib, json, os, re, shutil, subprocess, sys, tomllib
 from typing import Any, cast
@@ -76,6 +94,102 @@ WEB_EXTENSION = "web-servers.ts"
 SKILLS_EXTENSION = "skills-loaded.ts"
 SKILLS_FLAG = "--octo-feather-skills-loaded"
 REPO_SKILLS = re.compile(r"^Repo skills:(.*)$", re.M)
+# The commit identity (pi-role --help, Commit identity): the onboarding file's table, and the env each key fills.
+IDENTITY = "identity"
+IDENTITY_ENV = {"GIT_AUTHOR_NAME": "name", "GIT_AUTHOR_EMAIL": "email",
+                "GIT_COMMITTER_NAME": "name", "GIT_COMMITTER_EMAIL": "email"}
+# Roles whose contract never commits (their Never: no edit, no commit); every other role with bash would.
+READ_ONLY = ("code-reviewer", "qc-judge")
+
+
+def onboarding_file() -> str:
+    """The box onboarding file: the default session's state top (scripts/octo-feather-state), whatever HERDR_SESSION."""
+    return os.path.join(os.environ.get("XDG_STATE_HOME") or os.path.expanduser("~/.local/state"), "octo-feather", "onboarding.toml")
+
+
+def set_hint() -> str:
+    return f'{os.path.abspath(__file__)} --set-identity "Your Name" you@example.com (README, Bootstrap a box)'
+
+
+def identity() -> tuple[dict[str, str], str]:
+    """The launch env the commit identity fills, or why there is none."""
+    path = onboarding_file()
+    try:
+        with open(path, "rb") as f:
+            data = tomllib.load(f)
+    except FileNotFoundError:
+        return {}, f"no file {path}"
+    except (OSError, tomllib.TOMLDecodeError) as e:
+        return {}, f"cannot read {path}: {e}"
+    table = data.get(IDENTITY)
+    if not isinstance(table, dict):
+        return {}, f"{path} has no [{IDENTITY}] table"
+    t = cast("dict[str, object]", table)
+    bad = [k for k in ("name", "email") if not isinstance(t.get(k), str) or not str(t.get(k)).strip()
+           or not str(t.get(k)).isprintable()]
+    if bad:
+        return {}, f"[{IDENTITY}] in {path} lacks a non-empty one-line {' and '.join(bad)}"
+    return {k: str(t[v]).strip() for k, v in IDENTITY_ENV.items()}, ""
+
+
+def would_commit(fm: dict[str, Any]) -> bool:
+    return "bash" in fm.get("tools", ["bash"]) and fm.get("name") not in READ_ONLY
+
+
+def launch_env(path: str) -> dict[str, str]:
+    """The env every launch of the role at PATH applies: the commit identity; exits naming the setting when a role that
+    would commit has none."""
+    fm, _ = parse(path)
+    env, why = identity()
+    if not env and would_commit(fm):
+        sys.exit(f"pi-role: {fm.get('name', path)} not started: it would commit, and the factory commit identity is not set "
+                 f"({why}). The setting: [{IDENTITY}] name and email in the box onboarding file {onboarding_file()}. "
+                 f"Set it once per box: {set_hint()}")
+    return env
+
+
+TABLE = re.compile(r"^\s*\[")
+
+
+def set_identity(name: str, email: str) -> None:
+    """Write [identity] name and email into the onboarding file, every other table kept. The kit's scripts stay stdlib-only
+    (AGENTS.md) and tomllib only reads, so the table is written as text: the old [identity] table's lines dropped, the
+    new one appended, its strings JSON-quoted (a TOML basic string), and the result read back with tomllib: it must hold
+    exactly the old data with the new identity, else nothing is written."""
+    name, email = name.strip(), email.strip()
+    if not name or not email or not (name + email).isprintable():
+        sys.exit("pi-role: --set-identity needs a non-empty one-line NAME and EMAIL")
+    path = onboarding_file()
+    try:
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        old = tomllib.loads(text)
+    except FileNotFoundError:
+        text, old = "", {}
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        sys.exit(f"pi-role: cannot read {path}: {e}; fix it by hand, then rerun")
+    keep: list[str] = []
+    skip = False
+    for line in text.splitlines():
+        if TABLE.match(line):
+            skip = re.match(rf"^\s*\[\s*{IDENTITY}\s*\]\s*(#.*)?$", line) is not None
+        if not skip:
+            keep.append(line)
+    body = "\n".join(keep).rstrip("\n")
+    new = (body + "\n\n" if body else "") + f"[{IDENTITY}]\nname = {json.dumps(name)}\nemail = {json.dumps(email)}\n"
+    want = {**old, IDENTITY: {"name": name, "email": email}}
+    try:
+        ok = tomllib.loads(new) == want
+    except tomllib.TOMLDecodeError:
+        ok = False
+    if not ok:
+        sys.exit(f"pi-role: {path} holds [{IDENTITY}] in a form this writer cannot replace (a dotted key or a subtable); "
+                 f"edit its [{IDENTITY}] name and email by hand")
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    with open(path + ".tmp", "w", encoding="utf-8") as f:
+        f.write(new)
+    os.replace(path + ".tmp", path)
+    print(f"pi-role: commit identity {name} <{email}> set in {path}")
 
 
 def web_patterns(kit: str) -> list[str]:
@@ -268,18 +382,31 @@ def mise_shims_first():
         os.environ["PATH"] = path
 
 
-def main(argv):
-    as_json = bool(argv) and argv[0] == "--json"
-    if as_json:
+def main(argv: list[str]):
+    match argv:
+        case ["--set-identity", name, email]:
+            set_identity(name, email)
+            return
+        case ["--set-identity", *_]:
+            sys.exit("usage: pi-role --set-identity NAME EMAIL")
+        case _:
+            pass
+    print_env = argv[:1] == ["--print-env"]
+    as_json = argv[:1] == ["--json"]
+    if as_json or print_env:
         argv = argv[1:]
     if not argv or argv[0] in ("-h", "--help"):
         print(__doc__.strip(), file=sys.stderr)
         sys.exit(64)
+    if print_env:
+        sys.stdout.writelines(f"{k}={v}\n" for k, v in launch_env(argv[0]).items())
+        return
     args = launch(argv[0], to_file=as_json) + argv[1:]
     if as_json:
         path = mise_path()
         print(json.dumps({"args": args, **({"path": path} if path else {})}))
         return
+    os.environ.update(launch_env(argv[0]))
     flags = argv[1:argv.index("--")] if "--" in argv else argv[1:]
     if "-p" in flags or "--print" in flags:
         if os.environ.get("HERDR_WORKSPACE_ID"):

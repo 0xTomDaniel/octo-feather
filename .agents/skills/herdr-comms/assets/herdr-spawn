@@ -75,6 +75,10 @@ contract_file="$root/agents/$role.md"
 [[ -f "$contract_file" ]] || { echo "herdr-spawn: no $role role file at $contract_file" >&2; exit 66; }
 role_json="$(cd "$cwd" && "$root/scripts/pi-role" --json "$contract_file")" || { echo "herdr-spawn: pi-role rejected $contract_file" >&2; exit 65; }
 contract="pi-role"
+# The env every launch applies, one KEY=VALUE line each (the factory commit identity: pi-role --help, Commit
+# identity); pi-role refuses, naming the setting, a role that would commit without it, before any tab exists.
+role_env_out="$(cd "$cwd" && "$root/scripts/pi-role" --print-env "$contract_file")" || { echo "herdr-spawn: pi-role refused to launch $contract_file (reason above)" >&2; exit 65; }
+mapfile -t role_env <<<"$role_env_out"; [[ -n "$role_env_out" ]] || role_env=()
 
 # A known session id makes the agent parkable: herdr-close --park records it
 # and a resume passes it back.
@@ -99,6 +103,7 @@ tab_env=(--env "HOME=$HOME"
   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
   --env "OCTO_FEATHER_PARENT=$parent")
 [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")
+for kv in "${role_env[@]}"; do tab_env+=(--env "$kv"); done
 # The Linear key comes only from the caller's environment (spec remote#host-tracker-key): passed
 # on when set, never written to any file; unset in the caller means unset in the tab.
 [[ -z "${LINEAR_API_KEY:-}" ]] || tab_env+=(--env "LINEAR_API_KEY=$LINEAR_API_KEY")

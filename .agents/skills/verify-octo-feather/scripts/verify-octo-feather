@@ -1062,6 +1062,18 @@ def drive_role_launch(f: Feature) -> None:
         f.obs(name, "agents-diff", agents_diff)
         f.check(name, lambda c, r=role: c.code == 0 and c.o["agents-diff"] == ""
                 and web_ok(c, r, [*servers, "added"], str(kit2)))
+    # The factory commit identity (#665; pi-role --help, Commit identity), in scratch state dirs, never the box's:
+    # unset, a role that would commit refuses naming the setting and its command; set, the launch env carries it.
+    f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state-unset")}
+    f.run("identity-unset", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
+    f.check("identity-unset", lambda c: c.code == 1 and "[identity] name and email in the box onboarding file" in c.err
+            and "--set-identity" in c.err and c.out == "")
+    f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state")}
+    f.run("identity-set", "pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid")
+    f.check("identity-set", lambda c: c.code == 0)
+    f.run("identity-applied", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
+    ident = [f"GIT_{w}_{k}={v}" for w in ("AUTHOR", "COMMITTER") for k, v in (("NAME", "Verify Identity"), ("EMAIL", "verify@octo-feather.invalid"))]
+    f.check("identity-applied", lambda c: c.code == 0 and sorted(c.out.splitlines()) == sorted(ident))
     f.env = {}
     say(f"role-launch evidence: {f.d}")
 
@@ -1096,7 +1108,11 @@ def drive_skill_loading(f: Feature) -> None:
 
     # The parent route emptied: a refusal in a pane tells OCTO_FEATHER_PARENT, and a drive never reaches a live pane.
     route = dict.fromkeys(("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID", "HERDR_SESSION"), "")
-    f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache")}
+    # A scratch state dir holding the commit identity a launch of the implementer needs (pi-role --help, Commit identity).
+    f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache"),
+             "XDG_STATE_HOME": str(sc / "state")}
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     refused = "Pi did not load skill"
     role_line = next(ln for ln in (Path(f.s.repo) / "agents" / "implementer.md").read_text().splitlines() if ln.startswith("skills:"))
     launch("offered", target("offered", "python, local", good), f.s.repo, '{"type":"get_commands"}\n')

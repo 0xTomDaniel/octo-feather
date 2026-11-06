@@ -24,6 +24,7 @@ command -v pi >/dev/null || { echo "web-tools test: pi not on PATH; install Pi $
 v="$(pi --version 2>/dev/null | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1 || true)"
 [[ "$v" == "$pin" ]] || { echo "web-tools test: pi reports ${v:-no version}, the kit pins $pin (pi-version); $install" >&2; exit 1; }
 t="$(mktemp -d)"; srv=""
+XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 trap '[[ -z "$srv" ]] || kill "$srv" 2>/dev/null || true; rm -rf "$t"' EXIT
 fail() { echo "web-tools test: $*" >&2; exit 1; }
 

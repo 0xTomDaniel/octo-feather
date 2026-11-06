@@ -488,6 +488,12 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
             back = "switch main" if os.path.isdir(os.path.join(kit, ".git")) else "switch --detach origin/main"  # a worktree: main is checked out in the main checkout
             print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} {back}"); bad = 1
     sys.exit(bad)' "$root" || bad=1
+    # The factory commit identity every role launch applies, as pi-role reads it (scripts/pi-role --help, Commit identity; #665).
+    python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+    s = u.spec_from_loader("pi_role", m.SourceFileLoader("pi_role", sys.argv[1] + "/scripts/pi-role")); r = u.module_from_spec(s); s.loader.exec_module(r)
+    env, why = r.identity(); f = r.onboarding_file()
+    if env: print("identity ok  " + env["GIT_AUTHOR_NAME"] + " <" + env["GIT_AUTHOR_EMAIL"] + "> ([identity] in " + f + ", applied by every role launch)")
+    else: print(f"identity MISSING ({why}): the factory commit identity, [identity] name and email in the box onboarding file {f}; a role launch that would commit refuses without it; {r.set_hint()}"); sys.exit(1)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
