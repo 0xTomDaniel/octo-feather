@@ -1,0 +1,10 @@
+# The parity lever's case for tests/check-scripts.sh, rewritten as tests/gate/kit/test_check_scripts.py (tests/parity/lever.py --help).
+old = "tests/check-scripts.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): its own copy (it is the copy's one shell file).
+needs = []
+new = "tests/gate/kit/test_check_scripts.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: just reads the justfile to run check-scripts.
+[ran]
+"justfile" = "run just check-scripts"
