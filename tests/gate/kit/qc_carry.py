@@ -204,7 +204,10 @@ def build_h0(p: Scratch) -> None:
     t.write(SPEC, spec("ok"))
     t.git("add", "-A")
     t.git("commit", "-qm", "spec")
-    p.run([kit("octo-feather-spec-status"), "init", SPEC, t.git("rev-parse", "--short", "HEAD")], cwd=r)
+    p.run(
+        [kit("octo-feather-spec-status"), "init", SPEC, t.git("rev-parse", "--short", "HEAD")],
+        cwd=r,
+    )
     for name in ("conftest.py", "test_gate.py"):
         t.write(f"tests/gate/{name}", (ROOT / "tests" / "gate" / name).read_text())
     t.write(".gitignore", ".pytest_cache/\n__pycache__/\n")

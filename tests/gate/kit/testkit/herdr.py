@@ -8,8 +8,9 @@ no agent in Herdr's envelope (as tests/fixtures/lane-report/herdr); any other ca
 {"session": S}.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
-each start is CPU the item pays (#672).
+each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
 """
+# ruff: noqa: PTH103, PTH108, PTH111, PTH113, PTH118, PTH120, PTH123  # os.path, not pathlib: above
 
 import os
 import sys
@@ -37,10 +38,9 @@ if a == ["server"]:
         f.write(session + "\n")
     os.execvp("sleep", ["sleep", "600"])  # noqa: S606, S607
 if a[:2] == ["session", "stop"] and len(a) == 3:
-    try:
-        os.unlink(os.path.join(home, "sessions", a[2], "herdr.sock"))
-    except FileNotFoundError:
-        pass
+    stale = os.path.join(home, "sessions", a[2], "herdr.sock")
+    if os.path.lexists(stale):
+        os.unlink(stale)
     sys.exit(0)
 if a[:2] == ["session", "delete"] and len(a) == 3:
     import shutil
