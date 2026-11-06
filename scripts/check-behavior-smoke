@@ -28,7 +28,7 @@ request), else origin/main, else main. No resolvable base or merge base: skip wi
 note locally, fail in CI ($CI or $GITHUB_ACTIONS set; checkout needs fetch-depth: 0).
 
 Usage: check-behavior-smoke [--base REF] [--head REF] [--repo DIR]
-Run by `just check`, tested by tests/check-behavior-smoke.sh.
+Run by `just check`, tested by tests/gate/kit/test_check_behavior_smoke.py.
 """
 import argparse, os, re, subprocess, sys
 

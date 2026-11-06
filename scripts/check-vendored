@@ -29,7 +29,7 @@ differs per box and is absent in CI).
 
 Cache: ${XDG_CACHE_HOME:-~/.cache}/octo-feather/skillfile/{bin/,git/<owner>/<repo>/<sha>.git}.
 Usage: check-vendored [--repo DIR] [--fetch | --extract NAME DEST]
-Tested by tests/check-vendored.sh.
+Tested by tests/gate/kit/test_check_vendored.py.
 """
 import argparse, difflib, hashlib, json, os, platform, re, shutil, signal, stat, subprocess, sys, tempfile
 
