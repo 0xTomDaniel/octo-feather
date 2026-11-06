@@ -509,6 +509,12 @@ def _demo(top: Path, commit: str, cid: str) -> Entry | None:
     return demos.get(cid)
 
 
+def covered(top: Path, commit: str, cid: str) -> list[str]:
+    """The paths CID's demo at COMMIT covers (_demo): none for the agent fallback's."""
+    demo = _demo(top, commit, cid)
+    return [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
+
+
 def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple[str, str]:
     """(kind, line) for built criterion K with an evidence link: kind current, stale or unknown (quality #qc-stale)."""
     c: str = v["commit"]
@@ -522,7 +528,7 @@ def stale(spec: Path, k: str, v: Entry, top: Path, now: dict[str, str]) -> tuple
         _, by = _changes(top, c, [spec.resolve().relative_to(top).as_posix()])
         why.append(f"criterion text changed since {c12}" + (f" by {'; '.join(by)}" if by else " (uncommitted)"))
     demo = _demo(top, c, f"{spec.name.removesuffix('.spec.html')}#{k}")
-    covers = [str(x) for x in cast("list[object]", demo.get("covers", []))] if demo else []
+    covers = covered(top, c, f"{spec.name.removesuffix('.spec.html')}#{k}")
     for f in _changes(top, c, covers)[0] if covers else []:
         why.append(f"covered path {f} changed since {c12} by {'; '.join(_changes(top, c, [f])[1])}")
     for p in dict.fromkeys(t.split("::", 1)[0] for t in tests):   # each named test's file, a selector by its file

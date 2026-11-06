@@ -23,7 +23,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, cast
 
 import tomllib
 
@@ -2369,7 +2369,8 @@ def drive_template_tiers(f: Feature) -> None:
     `just check` (both test kinds, the shared fixture prepared once with two workers), `just fast` after a one-file
     change (static checks, then only that module's test), a commit through the repo's git hook after a core change
     (the hook's `just fast`: the core's tests, no e2e test), and `just fast` after a justfile change (every
-    integration test). CI's command is observed in its workflow."""
+    integration test). CI's command is observed in its workflow; CI's decision on a status-only and a code push runs
+    the workflow's own pinned filter (ci_scope)."""
     sc = RUN_DIR / "scratch" / "template-tiers"
     shutil.rmtree(sc, ignore_errors=True)
     sc.mkdir(parents=True)
@@ -2442,16 +2443,12 @@ def drive_template_tiers(f: Feature) -> None:
         git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-am", "other: n + n")
 
         # The core changed and committed through the repo's own git hook: the hook's just fast picks the core's
-        # tests and runs no e2e test; the commit lands. CI's command, from its workflow.
+        # tests and runs no e2e test; the commit lands. CI's wiring is proven by GitHub's run of the workflow, not read here.
         (r / core).write_text((r / core).read_text().replace(old, new, 1))
         git("add", core)
         f.run(f"{lang}-hook-core", "git", "-C", str(r), "-c", "core.hooksPath=.githooks", "commit", "-m", "core: collapse inner spaces")
-        f.obs(f"{lang}-hook-core", "hook", (r / ".githooks" / "pre-commit").read_text())
-        f.obs(f"{lang}-hook-core", "ci", "".join(ln.strip() + "\n" for ln in (r / ".github" / "workflows" / "check.yml").read_text().splitlines()
-                                                if ln.strip().startswith("- run:")))
         f.obs(f"{lang}-hook-core", "log", git("log", "-1", "--format=%s"))
         f.check(f"{lang}-hook-core", lambda c, k=k: c.code == 0 and c.o["log"] == "core: collapse inner spaces\n"
-                and "exec just fast" in c.o["hook"] and "- run: just check\n" in c.o["ci"]
                 and k.picks in c.out + c.err and k.cli in c.out + c.err
                 and k.other not in c.out + c.err and k.e2e not in c.out + c.err)
 
@@ -2497,8 +2494,77 @@ def drive_template_tiers(f: Feature) -> None:
                     and all(x in steps for x in c.o["recipes"].split()) and all(x["tier"] == "subset" for x in runs[1:])
                     and block is not None and any(x in block.group(3) for x in c.o["recipes"].split()))
         f.check(f"{lang}-trend", trend_holds)
+        ci_scope(f, lang, r, sc, git)
     f.env = {}
     say(f"template-tiers evidence: {f.d}")
+
+
+# The one workflow expression ci_scope gives a value: the event's previous head (the push's `before`).
+BEFORE = "${{ github.event.before }}"
+
+
+def ci_scope(f: Feature, lang: str, r: Path, sc: Path, git: Callable[..., str]) -> None:
+    """CI's decision on two pushes to the created repo's ready pull request (templates#acceptance-same-gate, spec
+    issue-lifecycle #lanes-one-head): its .github/workflows/check.yml scope job's `diff` step, the pinned
+    dorny/paths-filter, run as a runner would: the step's own `with:` inputs (read with PyYAML from the kit's locked
+    environment) as INPUT_* variables, `before` given, a pull_request synchronize event, the head checked out, the
+    action's dist/index.js at the kit's fetch-only pin (scripts/check-vendored --extract paths-filter), offline.
+    A push of only a status file beside a spec gives code=false; a code push code=true. The jobs' wiring (the check job
+    on the scope job's output) is not read here: GitHub's own run proves it (PR #608 at its final head, issue #589), and
+    octo-feather-lane merge-ask refuses a skipped check no Judged proof carries."""
+    kit = f.s.repo
+    wf = r / ".github" / "workflows" / "check.yml"
+    read = ("import json, sys, yaml; w = yaml.safe_load(open(sys.argv[1])); j = w['jobs']; "
+            "s = [x for x in j['scope']['steps'] if x.get('id') == 'diff']; "
+            "print(json.dumps({'step': s[0] if s else None}))")
+    code, text = output(["uv", "run", "--project", kit, "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", read, str(wf)])
+    pins = [ln.split() for ln in (Path(kit) / "Skillfile").read_text().splitlines() if ln.split()[:4] == ["#fetch-only", "github", "skill", "paths-filter"]]
+    dist = sc / f"paths-filter-{lang}"
+    xc, xt = output([sys.executable, f"{kit}/scripts/check-vendored", "--extract", "paths-filter", str(dist)])
+    for name in ("status-only", "code"):
+        f.obs(f"{lang}-ci-{name}", "workflow", f"read exit {code}: {text}")
+        f.obs(f"{lang}-ci-{name}", "pin", f"Skillfile: {' '.join(pins[0]) if pins else 'none'}; extract exit {xc}: {xt}")
+    got: dict[str, Any] = {}
+    try:
+        got = cast("dict[str, Any]", json.loads(text)) if code == 0 else {}
+    except ValueError:
+        pass
+    step = cast("dict[str, Any]", got.get("step") or {})
+    inputs = {str(k): str(v) for k, v in cast("dict[str, Any]", step.get("with") or {}).items()}
+    pinned = bool(pins) and step.get("uses") == f"dorny/paths-filter@{pins[0][4].split('@', 1)[1]}"
+    status = r / "docs" / "specs" / "app.status.json"
+    pushes = {"status-only": (lambda: status.write_text(status.read_text() + "\n") if status.exists() else status.write_text("{}\n"),
+                              status, "qc: built acceptance-hello-json (judged 0123456789ab)", "false"),
+              "code": (lambda: (r / "AGENTS.md").write_text((r / "AGENTS.md").read_text() + "\nA code push.\n"), r / "AGENTS.md",
+                       "docs: a code push", "true")}
+    for name, (change, path, subject, want) in pushes.items():
+        case = f"{lang}-ci-{name}"
+        before = git("rev-parse", "HEAD").strip()
+        change()
+        git("add", "--", str(path))   # only this push's file: earlier cases leave the tree changed (fast-residual's justfile)
+        git("-c", "core.hooksPath=/dev/null", "commit", "-q", "-m", subject)
+        after = git("rev-parse", "HEAD").strip()
+        event, out = sc / f"{case}.event.json", sc / f"{case}.output"
+        event.write_text(json.dumps({"action": "synchronize", "before": before, "after": after, "number": 1,
+                                     "pull_request": {"number": 1, "draft": False, "base": {"sha": git("rev-list", "--max-parents=0", "HEAD").split()[0]},
+                                                      "head": {"sha": after}}, "repository": {"default_branch": "main"}}))
+        out.write_text("")
+        env = {f"INPUT_{k.upper().replace(' ', '_')}": (before if v == BEFORE else v) for k, v in inputs.items()}
+        git("checkout", "-q", "--detach", after)   # actions/checkout at the PR head, as the step before it
+        f.env = {**f.env, "GITHUB_EVENT_NAME": "pull_request", "GITHUB_EVENT_PATH": str(event), "GITHUB_OUTPUT": str(out),
+                 "GITHUB_WORKSPACE": str(r), "GITHUB_ACTIONS": "true", "RUNNER_TEMP": str(sc)}
+        # The inputs as env(1) arguments, as a runner hands them to node: a shell (the entry's sh) drops a variable
+        # whose name has a hyphen, such as INPUT_PREDICATE-QUANTIFIER.
+        f.run(case, "env", "-C", str(r), *(f"{k}={v}" for k, v in env.items()), "node", str(dist / "dist" / "index.js"))
+        f.env = {k: v for k, v in f.env.items() if not k.startswith(("GITHUB_", "RUNNER_"))}
+        git("checkout", "-q", "-")
+        f.obs(case, "outputs", out.read_text())
+        f.obs(case, "range", f"{before[:12]}..{after[:12]}: {subject}\n")
+
+        def holds(c: Case, want: str = want) -> bool:
+            m = re.search(r"(?m)^code<<(\S+)\n(.*)\n\1$", c.o["outputs"])
+            return c.code == 0 and pinned and xc == 0 and m is not None and m.group(2) == want
+        f.check(case, holds)
 
 
 def drive_starter_acceptance(f: Feature) -> None:
