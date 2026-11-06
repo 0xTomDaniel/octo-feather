@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-# Fake curl for tests/lane-spend.sh: OpenRouter's GET /api/v1/key. Logs argv to $FAKE_CURL_DIR/argv.
+# Fake curl for tests/gate/kit/lane_spend.py: OpenRouter's GET /api/v1/key. Logs argv to $FAKE_CURL_DIR/argv.
 # Reads the Bearer key from the --config on stdin; sk-test-123 gets the usage windows, any other key 401.
 # FAKE_CURL_EXIT set: fails as an unreachable host does, with that exit.
 import os, sys

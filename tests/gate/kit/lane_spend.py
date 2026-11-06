@@ -2,7 +2,7 @@
 (testkit.main): scripts/octo-feather-lane spend (spec spend): totals by lane, purpose, model and
 day, unknown cost apart (rule-cost); the lane (rule-lane); append-only writes (rule-append); an
 unwritable ledger (rule-write-fails); the reconcile per window (acceptance-spend-reconcile),
-against the fake curl tests/fixtures/lane-spend/curl (OpenRouter's GET /api/v1/key, which the kit
+against the testkit's fake curl (testkit/curl.py, OpenRouter's GET /api/v1/key, which the kit
 does not own; its header says what it answers) first on PATH: never the network. Each rule as
 `octo-feather-lane --help` (spend) states it. Rows are read by tests/spend-out, as a command."""
 
@@ -10,11 +10,10 @@ from __future__ import annotations
 
 import datetime as dt
 import json
-import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main
+from testkit import HERE, ROOT, Ran, Scratch, kit, main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -42,9 +41,9 @@ class Spend:
             s.env.pop(k, None)
         s.env |= {
             "XDG_STATE_HOME": str(s.root / "state"),
-            "PATH": f"{FIXTURES / 'lane-spend'}{os.pathsep}{s.env['PATH']}",
             "FAKE_CURL_DIR": str(s.root),
         }
+        (s.bin / "curl").symlink_to(HERE / "curl.py")
         self.state = s.root / "state" / "octo-feather"
         self.ledger = self.state / "spend.jsonl"
 

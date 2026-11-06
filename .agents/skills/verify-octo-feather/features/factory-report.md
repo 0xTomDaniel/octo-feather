@@ -44,5 +44,5 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 ## Gotchas
 
 - Herdr unreachable prints `unread: Herdr` as the report's last line: expected, the drive reaches no Herdr.
-- The lane fields, owner queue and the owner-caught block by class are proven by `tests/lane-report.sh` with a fake gh and herdr; this drive covers the reflection line, the gate budget block, the owner-caught headline and the skill reach block. What counts as offered and as a read: `octo-feather-lane --help` (report).
+- The lane fields, owner queue and the owner-caught block by class are proven by `tests/gate/kit/test_lane_report.py` with the testkit's gh and herdr; this drive covers the reflection line, the gate budget block, the owner-caught headline and the skill reach block. What counts as offered and as a read: `octo-feather-lane --help` (report).
 - Which trend lines count toward the gate budget, and the budget file's form: `octo-feather-lane --help` (report).

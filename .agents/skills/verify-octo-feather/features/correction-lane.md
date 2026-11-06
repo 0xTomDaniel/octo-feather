@@ -32,4 +32,4 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 
 - Two live reflector runs (lane, then director): minutes at thinking high; `OCTO_FEATHER_REFLECT_ARGS="--thinking off"` on the drive makes a cheap smoke, `OCTO_FEATHER_REFLECT_TIMEOUT` bounds it.
 - The reflectors may add findings, and a reflection-missed one files its own issue: the case checks only the class seeded twice.
-- The open, closed-before and closed-after cases, reflection-missed, and the kit-tracker route are proven by `tests/lane-correction.sh` with a stub pi; the drive covers the archive path end to end, the class's findings all in other lanes than the one archived.
+- The open, closed-before and closed-after cases, reflection-missed, and the kit-tracker route are proven by `tests/gate/kit/test_lane_correction.py` with the testkit's Pi stand-in; the drive covers the archive path end to end, the class's findings all in other lanes than the one archived.

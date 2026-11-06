@@ -37,4 +37,4 @@ The drive seeds a scratch state (`XDG_STATE_HOME` under `$VERIFY_OCTO_FEATHER_RU
 
 - The live case takes minutes at thinking high; `OCTO_FEATHER_REFLECT_ARGS="--thinking off"` on the drive makes a cheap smoke (the drive adds `--no-session`), `OCTO_FEATHER_REFLECT_TIMEOUT` bounds it (default 1800).
 - The model's findings vary run to run: the case checks their form and the routed class with its count, never the other findings or wording.
-- The archive and start paths are proven by `tests/director-reflect.sh` with a stub pi; the drive covers the command they both run.
+- The archive and start paths are proven by `tests/gate/kit/test_director_reflect.py` with the testkit's Pi stand-in; the drive covers the command they both run.

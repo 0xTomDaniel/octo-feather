@@ -39,9 +39,10 @@ FAKES = {
     "pi": FIXTURES / "classify-stub" / "pi",
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
-# way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
-# too), gh.py (above) on a PATH of its own, git_refused.py (a git remote refusing credentials,
-# as `git`), and argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls); each
+# way: pi_agent.py (Pi at the agent boundary, an eval case's role run, a reflector's reply;
+# tests/lib/qa.sh copies it too; reflector below), gh.py (above) on a PATH of its own,
+# git_refused.py (a git remote refusing credentials, as `git`), curl.py (OpenRouter's key usage,
+# as `curl`), and argv_recorder.sh (a caller's argv and cwd, as the command it calls); each
 # file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
