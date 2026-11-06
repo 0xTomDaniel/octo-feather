@@ -9,7 +9,7 @@ Drive criterion: `roles#acceptance-shaper-launch`
 ## Sub-features
 
 - `spec-chat-link` `just spec-chat <target>` in a scratch git target: Spec Chat's skills linked into its `.agents/skills`, ignored, `git status` clean.
-- `shape` `just shape` in that target, headless against a fake provider: Pi offers exactly `agents/shaper.md`'s `skills:` (from the kit) and `externalSkills:` (from the target's `.agents/skills`: `spec-chat-shape`, `spec-chat-review`, `repair-specs`), none from the private home's seeded skills folders, and no request leaves for anything but the fake provider.
+- `shape` `just shape` in that target, headless against a fake provider: Pi offers exactly `agents/shaper.md`'s `skills:` (from the kit) and `externalSkills:` (from the target's `.agents/skills`, Spec Chat's `repair-specs` included), none from the private home's seeded skills folders, and no request leaves for anything but the fake provider.
 
 ## How to get to it (user POV)
 
