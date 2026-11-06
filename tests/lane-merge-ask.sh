@@ -16,8 +16,10 @@
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
 # Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
 # Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
+# Skipped checks: #acceptance-ci-status-only (the rule: #lanes-one-head).
 # Run by `just check`.
 # criterion: issue-lifecycle#acceptance-merge-ask-full-proof
+# criterion: issue-lifecycle#acceptance-ci-status-only
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
@@ -54,6 +56,9 @@ if a[0] == "api" and (r := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/(bran
     if v == "plan": die("gh: Upgrade to GitHub Pro or make this repository public to enable this feature. (HTTP 403)")
     print(v or (json.dumps({"name": "main", "protected": False, "protection": {"enabled": False, "required_status_checks":
         {"enforcement_level": "off", "contexts": [], "checks": []}}}) if r[1] == "branches" else "[]")); sys.exit(0)
+if a[0] == "api" and "-X" not in a and (r := re.fullmatch(r"repos/(?:\{owner\}/\{repo\}|o/r)/commits/([0-9a-f]+)/check-runs(\?.*)?", a[1])):
+    p = f"{D}/runs/{r.group(1)}.json"   # a commit's check runs (REST), none when the file is absent
+    print(open(p).read() if os.path.exists(p) else '{"total_count": 0, "check_runs": []}'); sys.exit(0)
 if a[0] == "api":
     m, p = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
     if os.environ.get("FAKE_GH_FAIL") == "write": die("gh: Server Error (HTTP 502)")
@@ -104,7 +109,7 @@ run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; er
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"
   grep -q Traceback <<<"$err" && fail "'$*' printed a traceback: $err"; return 0; }
 comments() { python3 -c 'import json,sys; print(len(json.load(open(sys.argv[1]))["comments"]))' "$FAKE_GH/pr/7.json"; }
-writes() { grep -c '^api .*-X ' "$FAKE_GH_LOG" || true; }   # tree reads (the no-CI fact) are no writes
+writes() { grep -c '^api -X ' "$FAKE_GH_LOG" || true; }   # a write; GETs (git trees, branch policy, check runs) carry no -X
 
 # --- verdict: create once, update in place, refusals write nothing ---
 printf 'Findings: none blocking.\nChecks: none\nVerdict: clear\n' > "$t/report"
@@ -372,6 +377,36 @@ FAKE_GH_NOCI="$H" FAKE_GH_RULES='[{"type": "deletion"}, {"type": "required_statu
 FAKE_GH_NOCI="$H" FAKE_GH_BRANCH=fail bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
 FAKE_GH_NOCI="$H" FAKE_GH_BRANCH='{"protected": true}' bad "but the required checks of base main could not be read (gh api repos/<this repo>/branches/main: no protection.required_status_checks)" "$none"
 FAKE_GH_NOCI="$H" FAKE_GH_RULES=fail bad "but the rulesets of base main could not be read (gh api repos/<this repo>/rules/branches/main: gh: Server Error (HTTP 502)): fix gh auth status or read access, then rerun" "$none"
+# issue-lifecycle#acceptance-ci-status-only (the rule: #lanes-one-head): check SKIPPED on qc's commit H; J's CI carried
+# by the Judged proof, or refused: missing, pending, skipped or red on J, no proof, or H the judged head itself.
+skipped='d["statusCheckRollup"][0]["conclusion"] = "SKIPPED"'
+mkdir -p "$FAKE_GH/runs"
+runs() { # SHA JSON-RUNS: the commit's check runs (REST check-runs API)
+  printf '{"total_count": 1, "check_runs": %s}\n' "$2" > "$FAKE_GH/runs/$1.json"; }
+skip="Checks: check skipped on head ${H:0:12}, carried from the judged head ${J:0:12} by the Judged proof,"
+bad "$skip and ${J:0:12} has no check run" "$skipped"
+runs "$J" '[{"id": 2, "name": "check", "status": "in_progress", "conclusion": null}]'
+bad "$skip and pending on ${J:0:12}: check in_progress" "$skipped"
+runs "$J" '[{"id": 2, "name": "check", "status": "completed", "conclusion": "failure"}]'
+bad "$skip and failing on ${J:0:12}: check failure" "$skipped"
+runs "$J" '[{"id": 2, "name": "check", "status": "completed", "conclusion": "skipped"}]'   # J's own run skipped (a draft PR)
+bad "$skip and skipped on ${J:0:12} too: CI never ran there" "$skipped"
+# the demo: J's latest check run passed (an earlier one skipped while the PR was a draft): passes, naming J
+runs "$J" '[{"id": 3, "name": "check", "status": "completed", "conclusion": "success"}, {"id": 1, "name": "check", "status": "completed", "conclusion": "skipped"}]'
+setpr "$skipped"; run 0 merge-ask 7 "${ST[@]}"
+grep -qxF -- "- check: skipped on ${H:0:12}; success on ${J:0:12}, the judged head" <<<"$out" \
+  || fail "a status-only head did not pass on the judged head's CI, naming it: $out"
+grep -q "api repos/{owner}/{repo}/commits/$J/check-runs" "$FAKE_GH_LOG" || fail "J's check runs not read from GitHub: $(cat "$FAKE_GH_LOG")"
+# a code commit C between J and the status-only head S: no Judged proof, so nothing carries; Judged names C
+C="$(on "$H" sh -c 'echo fix >> app.py; git commit -qam "fix: y"')"
+S="$(on "$C" git commit -q --allow-empty -m "qc: built acceptance-a acceptance-b (judged ${J:0:12})")"
+HEADL="${S:0:12}" bad "Checks: skipped on head ${S:0:12}: check; a skipped check is no pass and no Judged proof carries" \
+  "$skipped; $(pr_head "$C" "fix: y"); $(pr_head "$S" x)"
+grep -q "Judged: commit ${C:0:12} 'fix: y' after the judged head ${J:0:12} changes app.py" <<<"$err" || fail "a code commit before the status-only head: $err"
+# the judged head is the PR head and its check skipped (a draft's run, PR #608 at d0e4381): refused, J's green run aside
+HEADL="${J:0:12}" JUDGEDL="${J:0:12} is the PR head" bad "Checks: skipped on head ${J:0:12}: check; a skipped check is no pass" \
+  "$skipped; d['headRefOid'] = '$J'"
+rm -r "$FAKE_GH/runs"
 ROWS="| demo#acceptance-a | pass | judged $JS | r |" bad "criterion row demo#acceptance-b: missing (it is in Built)"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | |' bad "criterion row demo#acceptance-b: no evidence"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | ok | judged '"$JS"$' | r |' bad "qc verdict 'ok'; write pass or fail"
