@@ -39,6 +39,16 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
       is left out and named in the map as not passed. An item with no data (not run, or no Python
       measured) is left out of the map too.
+  octo-feather-gate untouched save FILE [--mise-state DIR]
+  octo-feather-gate untouched check FILE
+      A gate run leaves the caller's mise state and its repo's git config as it found them (owner
+      ruling #584, #587; #664): save, before the run, writes into FILE the content of DIR's
+      tracked-configs and trusted-configs (each entry a link's target, a file's sha256) and the
+      text of the current repo's git common dir config (every worktree's); check, after it, reads
+      the same paths again and prints each entry added, removed or changed and the config's
+      changed lines, exit 1, else one line naming what it found unchanged. Content, never mtimes.
+      DIR empty (no mise): the config alone; outside a git repo, the mise state alone. just
+      check-tests runs both around every outermost gate run.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -52,6 +62,7 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
+import difflib
 import hashlib
 import json
 import os
@@ -59,6 +70,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
+from typing import TypedDict, cast
 
 LIST = "shared-machinery.txt"
 NOTES = "refs/notes/octo-feather-gate"
@@ -491,6 +503,93 @@ def build_map(data: Path, junit: Path) -> None:
         sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
 
 
+MISE_DIRS = ("tracked-configs", "trusted-configs")
+
+
+class Box(TypedDict):
+    """What untouched compares, by content: each watched mise state dir's entries (name: content),
+    the git config file's path ("" outside a git repo) and its text (None when absent)."""
+
+    mise: dict[str, dict[str, str]]
+    config: str
+    text: str | None
+
+
+def entry(p: Path) -> str:
+    """One mise state dir entry as content: a link by its target, a file by its bytes' sha256."""
+    if p.is_symlink():
+        return f"-> {p.readlink()}"
+    if p.is_dir():
+        return "a directory"
+    return f"sha256 {hashlib.sha256(p.read_bytes()).hexdigest()[:12]}"
+
+
+def listing(d: str) -> dict[str, str]:
+    p = Path(d)
+    return {e.name: entry(e) for e in sorted(p.iterdir())} if p.is_dir() else {}
+
+
+def config_text(config: str) -> str | None:
+    c = Path(config)
+    return c.read_bytes().decode(errors="surrogateescape") if config and c.is_file() else None
+
+
+def sha(text: str | None) -> str:
+    if text is None:
+        return "absent"
+    return hashlib.sha256(text.encode(errors="surrogateescape")).hexdigest()[:12]
+
+
+def changed(was: Box) -> list[str]:
+    """Each change since WAS: a mise state entry added, removed or changed; the config's lines."""
+    out: list[str] = []
+    for d, before in was["mise"].items():
+        after = listing(d)
+        for n in sorted(before.keys() | after.keys()):
+            if n not in after:
+                out.append(f"{d}/{n}: removed (was {before[n]})")
+            elif n not in before:
+                out.append(f"{d}/{n}: added {after[n]}")
+            elif before[n] != after[n]:
+                out.append(f"{d}/{n}: changed ({before[n]}, now {after[n]})")
+    t0, t1 = was["text"], config_text(was["config"])
+    if t0 != t1:
+        lines0, lines1 = (t0 or "").splitlines(), (t1 or "").splitlines()
+        diff = difflib.unified_diff(lines0, lines1, lineterm="", n=0)
+        said = [x for x in diff if x[:1] in "+-" and x[:3] not in ("+++", "---")]
+        out.append(f"{was['config']}: changed (sha256 {sha(t0)} -> {sha(t1)}): {' '.join(said)}")
+    return out
+
+
+def untouched(action: str, file: Path, mise_state: str) -> int:
+    """save: FILE holds the caller's mise state (MISE_STATE) and this repo's git common dir config,
+    by content. check: both read again from the paths FILE names; each change printed, exit 1 on
+    any, else one line naming what was unchanged."""
+    if action == "save":
+        common = git("rev-parse", "--path-format=absolute", "--git-common-dir", check=False).strip()
+        config = str(Path(common) / "config") if common else ""  # "": not in a git repo
+        dirs = [str(Path(mise_state) / d) for d in MISE_DIRS] if mise_state else []
+        box: Box = {
+            "mise": {d: listing(d) for d in dirs},
+            "config": config,
+            "text": config_text(config),
+        }
+        file.write_text(json.dumps(box))
+        return 0
+    was = cast("Box", json.loads(file.read_text()))
+    if changes := changed(was):
+        sys.stderr.write(
+            "check-tests: FAIL the gate changed the caller's mise state or the repo's git config"
+            " (#664):\n" + "".join(f"  {c}\n" for c in changes)
+        )
+        return 1
+    seen = [f"{d} ({len(e)} entries)" for d, e in was["mise"].items()]
+    conf = f"{was['config']} (sha256 {sha(was['text'])})" if was["config"] else "no git repo"
+    found = ", ".join([*(seen or ["no mise state dir (mise not on PATH)"]), conf])
+    sys.stderr.write(f"check-tests: unchanged by the gate: {found}\n")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         prog="octo-feather-gate",
@@ -513,7 +612,13 @@ def main() -> int:
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path, required=True)
+    u = sub.add_parser("untouched")
+    u.add_argument("action", choices=("save", "check"))
+    u.add_argument("file", type=Path)
+    u.add_argument("--mise-state", default="")
     a = ap.parse_args()
+    if a.cmd == "untouched":
+        return untouched(a.action, a.file, a.mise_state)
     if a.cmd == "checkpoint":
         tier, why = checkpoint(a.start, full=a.full, fast=not a.no_fast)
         sys.stdout.write(f"{tier}\n{why}\n")

@@ -9,6 +9,8 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 mkdir -p "$t/bin" "$t/cwd" "$t/cache"
+# mise's state its own, also run bare outside the gate: mise in $t/cwd's mise.toml records it there, never in the caller's (#664).
+export MISE_STATE_DIR="$t/mise-state"
 cp "$kit/tests/fixtures/herdr-spawn/"* "$t/bin/"
 chmod +x "$t/bin/herdr"
 fail() { echo "herdr-spawn test: $*" >&2; exit 1; }
