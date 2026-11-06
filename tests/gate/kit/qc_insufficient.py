@@ -173,7 +173,8 @@ def kit_style(s: Scratch) -> None:
         )
     except AssertionError as e:  # the drive's own output says why it did not stop at the step
         out = [Path(x["dir"]) / "outputs" / "demo.stdout" for x in records(s, r)]
-        raise AssertionError(f"{e}\ndrive output: {out[-1].read_text() if out else 'none'}") from e
+        msg = f"{e}\ndrive output: {out[-1].read_text() if out else 'none'}"
+        raise AssertionError(msg) from e
     b = block(q.out, "INSUFFICIENT EVIDENCE acceptance-b: ", 1)
     want = (
         "  missing: demo did not run to its end (exit 77, a step it needs could not run here): "
