@@ -16,13 +16,12 @@ from __future__ import annotations
 
 import json
 import re
-from typing import TYPE_CHECKING, Any
+from pathlib import Path
+from typing import Any
 
-from testkit import ROOT, Ran, Scratch, asked, main
+from testkit import ROOT, Ran, Scratch, asked, kit, main
 from testkit.qc import RID, STATUS, block, clean, qc, report, target
 
-if TYPE_CHECKING:
-    from pathlib import Path
 
 CONTRACT = """format = 1
 [entry]
@@ -65,6 +64,11 @@ def world(s: Scratch, name: str = "qc-insufficient") -> tuple[Path, str]:
     clean(s)
     r = s.root / "repo"
     return r, s.git(r, "rev-parse", "HEAD")
+
+
+def records(s: Scratch, r: Path) -> list[dict[str, Any]]:
+    cmd = [kit("octo-feather-evidence"), "read", "--repo", ".", "--json"]
+    return json.loads(s.run(cmd, cwd=r).out)
 
 
 def status(r: Path) -> tuple[str, str]:
@@ -164,7 +168,13 @@ def kit_style(s: Scratch) -> None:
     # puts them: a mise shim resolves no version in the scratch target (no mise.toml) and fails.
     for tool in ("just", "uv"):
         (s.bin / tool).symlink_to(asked("mise", "which", tool))
-    q = qc(s, r, "9", "acceptance-b", want=2, env={"SPEC_CHAT_CLONE": str(s.root / "no-spec-chat")})
+    try:
+        q = qc(
+            s, r, "9", "acceptance-b", want=2, env={"SPEC_CHAT_CLONE": str(s.root / "no-spec-chat")}
+        )
+    except AssertionError as e:  # the drive's own output says why it did not stop at the step
+        out = [Path(x["dir"]) / "outputs" / "demo.stdout" for x in records(s, r)]
+        raise AssertionError(f"{e}\ndrive output: {out[-1].read_text() if out else 'none'}") from e
     b = block(q.out, "INSUFFICIENT EVIDENCE acceptance-b: ", 1)
     want = (
         "  missing: demo did not run to its end (exit 77, a step it needs could not run here): "
