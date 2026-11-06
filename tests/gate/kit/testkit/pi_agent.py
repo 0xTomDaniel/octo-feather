@@ -18,6 +18,11 @@ supplies; none there: exit 2 naming it. Else one bash call (`ls`), then:
   STUB-DECL-*     the final message a declaration case grades
 Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001.
 
+Print mode (no --mode json: a headless role's text reply, scripts/octo-feather-reflect's
+reflector): the reply recorded in $STUB_REPLY_DIR, reply.director when the -p prompt is a
+director reflection ("Director reflection"), else reply.lane, printed as is; a missing reply
+fails naming it.
+
 The model's turn between calls is readiness, never a delay, read off the stub's own stdout pipe
 alone (no other process's /proc): each event is written and then waited on until the pipe holds
 no unread byte (FIONREAD, pipe(7)), or its reader is gone (POLLERR). The watcher's pump
@@ -56,6 +61,15 @@ run_k = int((re.search(r"/qa-[0-9a-f]+-[0-9]+r([0-9]+)-", str(Path.cwd())) or [0
 def die(msg: str) -> NoReturn:
     sys.stderr.write(f"stub pi: {msg}\n")
     sys.exit(2)
+
+
+if "--mode" not in a:  # print mode: the recorded reply (module docstring)
+    who = "director" if "Director reflection" in prompt else "lane"
+    reply = Path(os.environ.get("STUB_REPLY_DIR", "."), f"reply.{who}")
+    if not reply.is_file():
+        die(f"no recorded reply {reply} (STUB_REPLY_DIR)")
+    sys.stdout.write(reply.read_text())
+    sys.exit(0)
 
 
 PIPE = stat.S_ISFIFO(os.fstat(1).st_mode)

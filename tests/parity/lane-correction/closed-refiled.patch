@@ -1,0 +1,14 @@
+Seeded defect: a correction lane closed after its class's latest finding is filed again (issue-lifecycle #lanes-correction: refiling).
+diff --git a/scripts/octo-feather-reflect b/scripts/octo-feather-reflect
+index 3d00561..a7535d2 100755
+--- a/scripts/octo-feather-reflect
++++ b/scripts/octo-feather-reflect
+@@ -566,7 +566,7 @@ def still_due(due: Due, issues: list[dict[str, Any]]) -> bool:
+         return True
+     if any(str(i.get("state")).upper() == "OPEN" for i in mine):
+         return False
+-    return due.latest > max(str(i.get("closedAt") or "") for i in mine)
++    return True
+ 
+ 
+ def append(log: Path, lines: list[str]) -> None:
