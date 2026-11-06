@@ -6,7 +6,7 @@ functions imports check_evals, never this file."""
 
 import sys
 
-from check_evals import main
+import check_evals
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    sys.exit(check_evals.main(sys.argv[1:]))

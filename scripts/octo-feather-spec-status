@@ -12,4 +12,6 @@ import octo_feather_spec_status
 
 if __name__ == "__main__":
     sys.exit(octo_feather_spec_status.main(sys.argv[1:]))
-globals().update({k: v for k, v in vars(octo_feather_spec_status).items() if not k.startswith("__")})
+globals().update(
+    {k: v for k, v in vars(octo_feather_spec_status).items() if not k.startswith("__")}
+)

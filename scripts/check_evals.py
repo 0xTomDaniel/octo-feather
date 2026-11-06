@@ -652,7 +652,7 @@ def check_fields(fa, f, errs):
         errs.append(f"{fa}: field every: must be a non-empty object of string lists, keys from {sorted(keys)}")
 
 
-def main(argv):
+def main(argv: list[str]) -> int:
     if argv[:1] in (["-h"], ["--help"]):
         print(__doc__.strip()); return 0
     evals = Path(argv[0]) if argv else KIT / "evals"
