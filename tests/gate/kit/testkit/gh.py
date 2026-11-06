@@ -18,7 +18,8 @@ $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)`
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 `gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
-state); `gh pr edit N --base B` sets the stored PR N's baseRefName. `gh repo view OWNER/NAME|URL
+state); `gh pr edit N --base B` sets the stored PR N's baseRefName, `gh issue close N` the
+stored issue N's state CLOSED. `gh repo view OWNER/NAME|URL
 --json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same way (gh reads
 the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list while
 runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
@@ -110,6 +111,18 @@ def edit(a: list[str]) -> None:
     with open(p, "w") as f:
         f.write(json.dumps(d))
     sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
+
+
+def close(a: list[str]) -> None:
+    """`issue close N`: the stored issue N's state CLOSED; prints what gh prints."""
+    p = at("issue", f"{a[2]}.json")
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to an issue or pull request with the number of {a[2]}.")
+    d = json.loads(read(p))
+    d["state"] = "CLOSED"
+    with open(p, "w") as f:
+        f.write(json.dumps(d))
+    sys.stdout.write(f"\u2713 Closed issue o/r#{a[2]} ({d.get('title', '')})\n")
 
 
 def diff(a: list[str]) -> None:
@@ -236,6 +249,8 @@ def answer(a: list[str]) -> None:
         diff(a)
     elif two == ("pr", "edit") and "--base" in a:
         edit(a)
+    elif two == ("issue", "close"):
+        close(a)
     elif a[:1] == ["api"] and "-X" not in a:
         get(a)
     elif a[:1] == ["api"] and "-X" in a and "--input" in a:
