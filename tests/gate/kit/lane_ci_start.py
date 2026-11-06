@@ -14,7 +14,10 @@ import json
 from testkit import Ran, Scratch, kit, main
 
 API = "api repos/{owner}/{repo}/actions/"
-WORKFLOW = "on: pull_request\njobs:\n  scope:\n    runs-on: x\n  check:\n    needs: scope\n    runs-on: x\n"
+WORKFLOW = (
+    "on: pull_request\njobs:\n  scope:\n    runs-on: x\n"
+    "  check:\n    needs: scope\n    runs-on: x\n"
+)
 
 
 def build(p: Scratch) -> None:
