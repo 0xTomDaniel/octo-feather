@@ -213,7 +213,7 @@ extraPaths = ["tests/gate"]
   "T201",
   "TRY003",
 ]
-"scripts/check-evals" = [
+"scripts/check_evals.py" = [
   "ANN001",
   "ANN201",
   "C901",
@@ -578,7 +578,7 @@ extraPaths = ["tests/gate"]
   "S606",
   "S607",
 ]
-"scripts/octo-feather-spec-status" = [
+"scripts/octo_feather_spec_status.py" = [
   "ANN001",
   "ANN002",
   "ANN202",
@@ -727,7 +727,7 @@ exclude = [
   ".agents/skills/verify-octo-feather/scripts/verify_octo_feather.py",
   "scripts/check-behavior-smoke",
   "scripts/check-decision-log",
-  "scripts/check-evals",
+  "scripts/check_evals.py",
   "scripts/check-gate-free",
   "scripts/check-roles",
   "scripts/check-skills",
@@ -740,7 +740,7 @@ exclude = [
   "scripts/octo-feather-qc",
   "scripts/octo-feather-qc-ghsnap",
   "scripts/octo-feather-shape",
-  "scripts/octo-feather-spec-status",
+  "scripts/octo_feather_spec_status.py",
   "scripts/pi-role",
   "scripts/review-host",
   "tests/fixtures/lane-report/gh",

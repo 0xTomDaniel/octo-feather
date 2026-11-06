@@ -5602,7 +5602,7 @@
                 }
             }
         ],
-        "./scripts/check-evals": [
+        "./scripts/check_evals.py": [
             {
                 "code": "reportUnknownVariableType",
                 "range": {
@@ -32204,7 +32204,7 @@
                 }
             }
         ],
-        "./scripts/octo-feather-spec-status": [
+        "./scripts/octo_feather_spec_status.py": [
             {
                 "code": "reportMissingParameterType",
                 "range": {
