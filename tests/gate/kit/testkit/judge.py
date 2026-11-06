@@ -93,7 +93,7 @@ def m_hang(_h: str, _: list[str]) -> None:
     if lock := os.environ.get("FAKE_QC_LOCK"):
         fd = os.open(lock, os.O_RDONLY)
         fcntl.flock(fd, fcntl.LOCK_SH)
-        os.set_inheritable(fd, True)
+        os.set_inheritable(fd, True)  # noqa: FBT003  # positional only
     if fifo := os.environ.get("FAKE_QC_READY"):
         with Path(fifo).open("w") as f:
             f.write("judge ready\n")

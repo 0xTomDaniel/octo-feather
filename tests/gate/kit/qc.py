@@ -101,8 +101,9 @@ def nested(s: Scratch) -> None:
 def pane(s: Scratch) -> None:
     """A pane the judge spawns through the sandbox herdr runs in the judge's PID namespace (the
     sandbox server started inside it), sees no live Herdr socket and no creds, and dies with the
-    run: its flock on a file this scenario made is released (testkit.qc.let_go). The fake herdr; with QC_TEST_HERDR=real the box's real herdr, a real "live" session under
-    the throwaway HOME, which the run must not hurt."""
+    run: its flock on a file this scenario made is released (testkit.qc.let_go). The fake
+    herdr; with QC_TEST_HERDR=real the box's real herdr, a real "live" session under the
+    throwaway HOME, which the run must not hurt."""
     r = box(s)
     lock = s.home / "pane.lock"  # the pane holds a shared flock on it while it lives
     lock.write_text("")
