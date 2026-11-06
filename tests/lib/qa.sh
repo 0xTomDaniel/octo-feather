@@ -25,7 +25,9 @@ real_uv="$( { command -v mise > /dev/null && mise -C "$kit" which uv; } 2> /dev/
 # Its managed Pythons too, asked before HOME moves: else a fixture copy (no .python-version) syncs with the first
 # python3 on PATH, whose wheels the cache lacks when its minor differs (CI's ubuntu-26.04: cp314; install-check.sh
 # keeps the dir the same way).
-export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" python dir)}" UV_OFFLINE=1
+# --color never: uv colours even a path it prints when FORCE_COLOR is set (as a CI runner may), and a coloured path
+# is no dir.
+export UV_CACHE_DIR="${UV_CACHE_DIR:-$("$real_uv" --color never cache dir)}" UV_PYTHON_INSTALL_DIR="${UV_PYTHON_INSTALL_DIR:-$("$real_uv" --color never python dir)}" UV_OFFLINE=1
 # mise's dirs, as mise reports them before HOME moves (as tests/qc.sh, the kit justfile the same way): the sandbox's
 # proof finds the box's installs whether this test runs bare or through just.
 if command -v mise > /dev/null; then
