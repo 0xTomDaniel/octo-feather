@@ -199,6 +199,18 @@ class Lt:
             "PATH": f"{s.root / 'ghbin'}:{self.sys}",
         }
         self.n = 0
+        self.start = (self.sums(), self.status())
+
+    def read_only(self, refused: str | None = None) -> None:
+        """Every item's guarantee, the old script's for its whole run: no run wrote to the repo or
+        the snapshot, and the offline gh refused nothing (REFUSED: only calls naming it, the
+        ticket an item makes missing on purpose)."""
+        miss = self.s.root / "miss.log"
+        lines = miss.read_text().splitlines() if miss.exists() else []
+        bad = [ln for ln in lines if refused is None or refused not in ln]
+        assert not bad, f"the offline gh refused (a field the snapshot lacks?): {bad}"
+        assert self.sums() == self.start[0], "a run changed files under the repo or snapshot"
+        assert self.status() == self.start[1], f"repo changed: {self.status()}"
 
     def lane(
         self,
@@ -287,10 +299,8 @@ def tickets_github(s: Scratch) -> None:
     fix; each failing class (no criterion, unknown anchor or spec, gate-only demo, demo not last,
     bad Expand-contract, the qc judge's printf, test-script and inline-python drafts, a story
     anchor as criterion, a factory recipe), the judge's persistence-only draft passing the facts;
-    a parent with no sub-issues. The offline gh refused nothing; no run wrote to the repo or the
-    snapshot."""
+    a parent with no sub-issues."""
     lt = Lt(s)
-    start, status = lt.sums(), lt.status()
     out = lt.lane(0, "tickets", "100")
     has(out, *(f"{n}: ok" for n in range(101, 108)), "100: 7 of 7 tickets pass")
     out = lt.lane(0, "tickets", "#70")
@@ -335,10 +345,7 @@ def tickets_github(s: Scratch) -> None:
     hasnt(out, "21: class: layer-only", "41: class: layer-only")
     out = lt.lane(1, "tickets", "30")
     has(out, "30: class: no-sub-issues", "fix: file each lane ticket as a sub-issue of 30")
-    miss = s.root / "miss.log"
-    assert not miss.exists() or not miss.read_text(), f"offline gh refused: {miss.read_text()}"
-    assert lt.sums() == start, "a run changed files under the repo or snapshot"
-    assert lt.status() == status, f"repo changed: {lt.status()}"
+    lt.read_only()
 
 
 def drafts(s: Scratch) -> None:
@@ -369,6 +376,7 @@ def drafts(s: Scratch) -> None:
         "data-acceptance-criterion anchor it serves, e.g. demo#acceptance-a",
     )
     has(lt.lane(0, "ticket", "-", stdin=body("36-judge-persistence.md")), "stdin: ok")
+    lt.read_only()
 
 
 def rt(items: str) -> str:
@@ -469,6 +477,7 @@ def rules(s: Scratch) -> None:
         "octo-feather-lane --help (ticket))",
     )
     hasnt(out, "ADR NNNN")
+    lt.read_only()
 
 
 def d11(cmd: str) -> str:
@@ -523,6 +532,7 @@ def scripts(s: Scratch) -> None:
     (bare / "justfile").write_text("mod sub\n")
     s.git(bare, "add", "-A")
     lt.lane(0, "ticket", str(p), cwd=bare, env={"JUST_UNSTABLE": "1"})
+    lt.read_only()
 
 
 def jd(cmd: str) -> str:
@@ -619,6 +629,7 @@ def just_recipes(s: Scratch) -> None:
     out = lt.lane(2, "ticket", "-", cwd=j, stdin=jd("just demo"))
     has(out, f"cannot read the justfile's recipes ({j}/justfile): just --dump: error:")
     hasnt(out, ": ok")
+    lt.read_only()
 
 
 def scopes(s: Scratch) -> None:
@@ -701,6 +712,7 @@ def scopes(s: Scratch) -> None:
             )
         )
     lt.batch(ds)
+    lt.read_only()
 
 
 def cr(creates: str, demo: str) -> str:
@@ -825,6 +837,7 @@ def creates(s: Scratch) -> None:
     for d in (cr("", "scripts/new-cmd --json"), cr("\nCreates: `just serve`", "just serve")):
         out = lt.lane(1, "ticket", "-", stdin=d)
         assert len(re.findall("^stdin: class: ", out, re.MULTILINE)) == 1, out
+    lt.read_only()
 
 
 def just_demos(s: Scratch) -> None:
@@ -836,7 +849,8 @@ def just_demos(s: Scratch) -> None:
     and rewrites no justfile; a demo naming no recipe runs the repo's default, the gate."""
     lt = Lt(s)
     jfp = lt.repo / "justfile"
-    jfp.write_text(jfp.read_text() + 'new *args:\n    true\n\nrel: check\n    true\n\nv := "1"\n')
+    base = jfp.read_text()
+    jfp.write_text(base + 'new *args:\n    true\n\nrel: check\n    true\n\nv := "1"\n')
     gate = "a gate or factory recipe, not the app"
     surface = "class: layer-only-ticket: demo runs no surface the repo declares"
     oks = (
@@ -891,6 +905,9 @@ def just_demos(s: Scratch) -> None:
     jfp.write_text(before + "mod sub\n")
     out = lt.lane(1, "ticket", "-", env={"JUST_UNSTABLE": "1"}, stdin=cr("", "just sub check"))
     has(out, f"{surface} (`just sub check`: just sub check runs check, {gate})")
+    jfp.write_text(base)
+    (lt.repo / "sub.just").unlink()
+    lt.read_only()
 
 
 def errors(s: Scratch) -> None:
@@ -934,6 +951,7 @@ def errors(s: Scratch) -> None:
     el.mkdir()
     err(f"no spec dir {el}/docs/specs: run this inside the target repo", "tickets", "100", cwd=el)
     err("no spec dir", "ticket", draft("101.md"), cwd=el)
+    lt.read_only(refused="issue #199 not in snapshot")
 
 
 def linear(s: Scratch) -> None:
@@ -978,6 +996,8 @@ def linear(s: Scratch) -> None:
         hasnt(out, ": ok", "tickets pass")
     log = s.root / "gh.log"
     assert not log.exists() or not log.read_text(), f"a Linear target ran gh: {log.read_text()}"
+    (lt.repo / ".octo-feather.toml").unlink()
+    lt.read_only()
 
 
 if __name__ == "__main__":
