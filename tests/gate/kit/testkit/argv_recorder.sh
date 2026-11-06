@@ -2,9 +2,9 @@
 # A stand-in at the justfile recipe boundary only, put first by a scenario itself (testkit's
 # docstring) as a kit command a recipe calls whose real run would launch agents or external
 # systems (octo-feather-shape: a Pi agent; -start: Herdr panes and agents; -qc: a model judge):
-# it records the name it was run as, its physical cwd and its
-# exact argv, each NUL-terminated, to $ARGV_LOG (one call: the file overwritten), and exits 0. It
-# reproduces no logic and never answers as the command.
+# it records the name it was run as, its physical cwd and its exact argv, each NUL-terminated,
+# to $ARGV_LOG (one call: the file overwritten), and exits 0. It reproduces no logic and never
+# answers as the command.
 #
 # Owner ruling (owner, 2026-11-06, lane gh653 #674): argv_recorder is allowed as a NARROW
 # exception: only where the fact under test is the argv a caller passes AND the real callee would

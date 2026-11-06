@@ -6,10 +6,10 @@ the same. Where the command would launch agents or external systems (shape, star
 qc), testkit/argv_recorder.sh stands in and records the exact cwd and argv (the owner's narrow
 exception, its header); spec-chat, integrate and new-repo run for real, each stopped early by its
 own refusal naming what it got, from the cwd only that dir explains (integrate: the lane worktree
-of the invocation dir's repo). Nothing expands (no file an argument would touch appears). Offline, HOME
-redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes run from a copy
-of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the templates' justfiles
-keep the caller's PATH, the recorder first on it.
+of the invocation dir's repo). Nothing expands (no file an argument would touch appears).
+Offline, HOME redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes
+run from a copy of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the
+templates' justfiles keep the caller's PATH, the recorder (and the copy's integrate) first on it.
 """
 
 from __future__ import annotations
