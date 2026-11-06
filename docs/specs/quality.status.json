@@ -21,8 +21,8 @@
     "acceptance-test-cpu-shown": {
       "status": "built",
       "pr": 605,
-      "record": "20261106T002210Z-7eba865d",
-      "commit": "2113a5c4d636f9dc4d098816953531e68d4417b5",
+      "record": "20261106T022737Z-843d278a",
+      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
       "tests": [
         "tests/gate/test_cpu.py"
       ]
@@ -141,8 +141,8 @@
     "acceptance-qc-advisory": {
       "status": "built",
       "pr": 605,
-      "record": "20261106T002652Z-b442d1f6",
-      "commit": "2113a5c4d636f9dc4d098816953531e68d4417b5",
+      "record": "20261106T022927Z-a062f459",
+      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
       "tests": []
     },
     "acceptance-qc-insufficient": {
@@ -236,8 +236,8 @@
     "acceptance-qa-analyst": {
       "status": "built",
       "pr": 605,
-      "record": "20261106T002624Z-3c5394f8",
-      "commit": "2113a5c4d636f9dc4d098816953531e68d4417b5",
+      "record": "20261106T022913Z-ff158d12",
+      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
       "tests": []
     },
     "acceptance-qa-review": {
