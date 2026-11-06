@@ -210,8 +210,10 @@ def tool_homes() -> dict[str, str]:
 
     uv_cmd = shutil.which("uv") or "uv"
 
-    def uv(*a: str) -> str:
-        p = subprocess.run([uv_cmd, *a], capture_output=True, text=True, check=True)
+    def uv(*a: str) -> str:  # never coloured: uv colours a path it prints under FORCE_COLOR
+        p = subprocess.run(
+            [uv_cmd, "--color", "never", *a], capture_output=True, text=True, check=True
+        )
         return p.stdout.strip()
 
     return {
