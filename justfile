@@ -1,6 +1,9 @@
 # octo-feather kit commands. The gate's tiers, `just fast` and `just check`: quality spec #recipes-table (AGENTS.md).
 
-set shell := ["bash", "-euo", "pipefail", "-c"]
+# Backticks run in this shell too, and just passes them no export: each runs mise offline with its auto-installs off
+# (the exports below), so a tool a backtick reaches through a mise shim (check-gate-free's nested just) is never
+# installed, from the network, into MISE_DATA_DIR (#505, #667).
+set shell := ["env", "MISE_OFFLINE=1", "MISE_AUTO_INSTALL=0", "MISE_EXEC_AUTO_INSTALL=0", "MISE_NOT_FOUND_AUTO_INSTALL=0", "bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@"/"$1", never as pasted text (#61).
 set positional-arguments
 
@@ -16,6 +19,11 @@ export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { e
 # Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
 # #boundary-gate); `mise install --locked` fills them, outside the gate.
 export MISE_OFFLINE := "1"
+# Nor installs one on its own: a mise shim or `mise exec` that finds its tool missing fails or falls back to the system's
+# (owner ruling #493, #505); the parse-time line naming each missing tool gives the fix (caller_path below).
+export MISE_AUTO_INSTALL := "0"
+export MISE_EXEC_AUTO_INSTALL := "0"
+export MISE_NOT_FOUND_AUTO_INSTALL := "0"
 # The kit's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, a git hook,
 # CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read for
 # panes, scripts/pi-role), placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin
@@ -414,8 +422,9 @@ check-behavior-smoke:
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
 # (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
 # service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
-# Every gap line names its fix (#461).
-install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
+# Every gap line names its fix (#461). CALLER_MISE: the caller's own mise auto-install settings from its environment,
+# which this justfile's exports (off, for the gate) hide from the recipe.
+install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER_MISE=("MISE_AUTO_INSTALL=" + env_var_or_default('MISE_AUTO_INSTALL', '') + " MISE_EXEC_AUTO_INSTALL=" + env_var_or_default('MISE_EXEC_AUTO_INSTALL', '') + " MISE_NOT_FOUND_AUTO_INSTALL=" + env_var_or_default('MISE_NOT_FOUND_AUTO_INSTALL', '')):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -545,6 +554,20 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     print(f"mise   version {pin} ok (mise-version)")
     shims = json.loads(subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True).stdout or "{}").get("dirs", {}).get("shims", "")
     bad = 0
+    # The caller mise auto-install (#667, #505): just on the caller PATH being the mise shim, with auto_install and
+    # not_found_auto_install on (the mise defaults, asked of mise with the caller own settings, CALLER_MISE), installs
+    # a just not installed from the network before any justfile is read, out of the justfile reach. A WARNING, never
+    # a failure: a default mise setup passes. The kit never edits the user mise config: the line names the command.
+    # Dirs under the mise installs are skipped: a shim runs its tool with them put first on PATH, as when just ran this.
+    inst = os.path.realpath(json.loads(subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True).stdout or "{}").get("dirs", {}).get("data", "/nonexistent") + "/installs") + "/"
+    j = next((p for p in (os.path.join(d, "just") for d in os.environ["CALLER_PATH"].split(":") if d and not (os.path.realpath(d) + "/").startswith(inst)) if os.path.isfile(p) and os.access(p, os.X_OK)), None)
+    if j and (os.path.dirname(j) == shims or os.path.realpath(j) == os.path.realpath(exe)):
+        env = {k: v for k, v in os.environ.items() if k not in ("MISE_AUTO_INSTALL", "MISE_EXEC_AUTO_INSTALL", "MISE_NOT_FOUND_AUTO_INSTALL")} | dict(kv.split("=", 1) for kv in os.environ["CALLER_MISE"].split() if not kv.endswith("="))
+        try: s = json.loads(subprocess.run(["mise", "settings", "ls", "--all", "--json"], capture_output=True, text=True, cwd=top, env=env).stdout or "{}")
+        except ValueError: s = {}
+        if s.get("auto_install") is True and s.get("not_found_auto_install") is True:
+            on = ", ".join(f"{k} {str(s.get(k)).lower()}" for k in ("auto_install", "not_found_auto_install", "exec_auto_install"))
+            print(f"mise   WARNING auto-install on ({on}; mise settings): just on your PATH is mise\x27s shim {j}, so a just whose pinned version is not installed is installed from the network before any justfile is read (the gate\x27s own mise calls never install, #667); the check still passes; to turn it off: mise settings set auto_install false (the kit never edits your mise config)")
     # Tools the kit itself runs from PATH in any target, so at the kit mise.lock version there too: just (the kit
     # recipes, just integrate, check-gate-free and octo-feather-lane read the --dump and --dry-run answers of just).
     # Only the version on PATH is compared: nothing is installed or resolved through mise in the target.
