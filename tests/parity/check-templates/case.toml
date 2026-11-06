@@ -1,0 +1,10 @@
+# The parity lever's case for tests/check-templates.sh, rewritten as tests/gate/kit/test_check_templates.py (tests/parity/lever.py --help).
+old = "tests/check-templates.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none (tests/gate/conftest.py is the kit file it compares, in the copy of every tracked file).
+needs = []
+new = "tests/gate/kit/test_check_templates.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+[ran]
+"scripts/check-templates" = "coverage"

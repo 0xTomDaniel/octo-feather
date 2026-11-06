@@ -1,0 +1,13 @@
+Seeded defect: templates/python's copy of scripts/check-languages is never compared with the kit's (check-templates).
+diff --git a/scripts/check-templates b/scripts/check-templates
+index 293b841..79f156e 100755
+--- a/scripts/check-templates
++++ b/scripts/check-templates
+@@ -36,7 +36,6 @@ import tomllib
+ # templates/python copies this kit file byte for byte (kit path: template path).
+ COPIES = {
+     "tests/gate/conftest.py": "tests/conftest.py",
+-    "scripts/check-languages": "scripts/check-languages",
+ }
+ MISE_FILES = ("mise.toml", "mise.lock", "mise-version")
+ # A `just` first on PATH for the hook run: records each call's argv, exits with RECORD_EXIT.
