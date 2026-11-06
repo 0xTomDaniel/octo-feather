@@ -1766,5 +1766,229 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Is review/rename.diff ok to merge? It renames the Greeting dataclass to Salutation and shortens two test names; nothing else changes. Short verdict."
+  },
+  {
+    "id": "impl-kit-ts-toml-doctor-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-ts-resume-delays-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-check-roles-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-contract-json-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-check-roles-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-py-contract-json-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-toml-doctor-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-resume-delays-a430",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "a430da77962ca266f3746dcb54a414ed5869e0f1"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "impl-kit-ts-toml-doctor-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-ts-resume-delays-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-check-roles-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-ts-near-contract-json-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-check-roles-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "train",
+    "task": "scripts/check-roles lets a role list the same skill twice on its `skills:` line. Make it refuse that, naming the role file and the skill, like its other errors. No commit."
+  },
+  {
+    "id": "impl-kit-py-contract-json-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Give scripts/octo-feather-contract a `--json` option: instead of its lines it prints one JSON object, {file, ok, format, problems: [...]}, with the same exit codes. The default output stays as it is. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-toml-doctor-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "train",
+    "task": "The TypeScript template's verify-app helper (templates/typescript/.agents/skills/verify-app/scripts/verify-app.ts): make `doctor` also print `tracker: <name>`, the `tracker` key of the repo's `.octo-feather.toml`, `github` when the file or the key is absent; a file that cannot be read as TOML fails doctor, naming the file. Keep every other line it prints. No commit."
+  },
+  {
+    "id": "impl-kit-py-near-resume-delays-x153",
+    "role": "implementer",
+    "fixture": {
+      "repo": "kit",
+      "commit": "153a76d60620e30b181390ec83fc8611e938bbdb"
+    },
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "extensions/resume-on-error.ts falls back to its default delays silently when OCTO_FEATHER_RESUME_DELAYS holds a bad value. Make it print one stderr line naming the variable and the value it refused, then use the defaults; also accept the delays as a JSON array of seconds, e.g. [5,10,20], beside today's form. No commit."
+  },
+  {
+    "id": "shaper-repair-multi-name",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner here. I'd like `app hello` to take several names at once, `app hello Ada Grace`, one greeting per name. Shape it into a spec with me. I'm offline for the rest of the day: wherever you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "shaper-repair-lang",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "can we get a --lang flag on app hello so it greets in french or spanish? spec it out. not around today, go with your recommendations."
+  },
+  {
+    "id": "shaper-repair-near-clean-repo",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Owner here. I'd like `app hello` to take a --repeat N option that prints the greeting N times, JSON as a list. Shape it into a spec with me. I'm offline for the rest of the day: wherever you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "shaper-repair-near-clean-version",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Let's spec an `app version` command that prints the app's version, as text and with --json. Unreachable after this, decide open points yourself."
+  },
+  {
+    "id": "shaper-repair-near-question-exit",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "train",
+    "task": "What exit code does app give for a blank name, and which spec anchor says so? Just answer, no changes."
+  },
+  {
+    "id": "shaper-repair-near-question-json",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Quick check before I file something: what do our specs say `app hello Ada --json` prints? Point me at the anchor, nothing else."
   }
 ]

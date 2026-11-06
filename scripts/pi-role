@@ -28,7 +28,10 @@ Frontmatter (one `key: value` per line, lists comma-separated):
                --extension extensions/web-servers.ts with the kit's web-mcp.json,
                and an `mcp__<server>__*` --tools entry per server in it; any
                other role gets --no-mcp
-  skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018);
+  skills       --skill for each, from the kit's .agents/skills/ (docs/adr/0018), or,
+               for one the target's AGENTS.md also declares on its `Repo skills:`
+               line, that declared folder instead, passed once (a declared skill
+               outranks the kit's; two folders of one name make Pi load neither);
                {tracker} is the target's tracker skill: `tracker` in
                .octo-feather.toml at the working directory's checkout top,
                github when the file or key is absent (docs/adr/0004). A tracker
@@ -47,7 +50,7 @@ Pi always gets --extension for the kit's extensions/resume-on-error.ts
 (docs/adr/0023) and extensions/spend-ledger.ts (spec spend#writer-agent), and
 --octo-feather-role <the role file's name> for the latter's purpose.
 Pi always gets --extension for the kit's extensions/skills-loaded.ts with
---octo-feather-skills-loaded: every --skill folder and each `Repo skills:`
+--octo-feather-skills-loaded: every --skill folder and each other `Repo skills:`
 entry of the target's AGENTS.md (declared_skills), checked, never offered.
 The rule: spec skills#loading-refuse.
 """
@@ -182,9 +185,14 @@ def launch(path: str, *, to_file: bool = False):
                  "--octo-feather-web-servers", os.path.join(kit, WEB_LIST)]
     args += ["--octo-feather-role", os.path.splitext(os.path.basename(path))[0]]
     tracker = tracker_skill(roots[0])
+    # pi-role --help, skills
+    declared = declared_skills(roots[0])
+    own = {os.path.basename(d): d for d in declared if os.path.isfile(os.path.join(d, "SKILL.md"))}
     for s in fm.get("skills", []):
         s = tracker if s == TRACKER_SLOT else s
-        for r in roots:
+        if s in own:
+            declared.remove(own[s])
+        for r in [os.path.dirname(own[s])] if s in own else roots:
             if os.path.isfile(os.path.join(r, s, "SKILL.md")):
                 args += ["--skill", os.path.join(r, s)]
                 break
@@ -199,7 +207,7 @@ def launch(path: str, *, to_file: bool = False):
             print(f"pi-role: external skill {s} not installed in {' or '.join(ext)}; skipped", file=sys.stderr)
     listed = [args[i + 1] for i, a in enumerate(args) if a == "--skill"]
     args += ["--extension", os.path.join(kit, "extensions", SKILLS_EXTENSION),
-             SKILLS_FLAG, json.dumps({"role": fm.get("name", ""), "listed": listed, "declared": declared_skills(roots[0])})]
+             SKILLS_FLAG, json.dumps({"role": fm.get("name", ""), "listed": listed, "declared": declared})]
     if body:
         if to_file:
             # A pane launch goes through `herdr agent start`; hand Pi a file,

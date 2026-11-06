@@ -192,6 +192,10 @@ covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
 
+[demo."comms#acceptance-report-skill-reach"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
+covers = ["scripts/octo-feather-lane"]
+
 [demo."skills#acceptance-launch-refuses-unloaded"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
 covers = ["scripts/pi-role", "extensions/skills-loaded.ts"]

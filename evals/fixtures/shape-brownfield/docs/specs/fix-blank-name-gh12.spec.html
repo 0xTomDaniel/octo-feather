@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>Fix blank name (#12)</title></head>
+<body>
+<main>
+<h1>Fix blank name (#12)</h1>
+<p data-anchor="before-after">Before: <code>app hello "  "</code> printed <code>Hello, </code>. After this fix it errors.</p>
+<p data-anchor="hello-empty">A name blank after trimming is an error: exit 2, and with <code>--json</code> <code>{"error": "name must not be empty"}</code>.</p>
+<p data-acceptance-criterion data-anchor="acceptance-blank">Blank names or whitespace names are rejected with exit 2 (see #12, PR #13).</p>
+</main>
+</body>
+</html>

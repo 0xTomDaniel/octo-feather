@@ -28,7 +28,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -242,7 +242,8 @@ def cmd_doctor(tee: Path | None = None) -> int:
         report("ok", f"Spec Chat installer {installer} (new-repo links it)")
     else:
         report("WARN", f"no Spec Chat installer at {installer}: the new-repo drive creates with --no-spec-chat and reports "
-               "the Spec Chat link step unreachable (features/new-repo.md Gotchas)")
+               "the Spec Chat link step unreachable (features/new-repo.md Gotchas); the shape drive reports its launch "
+               "unreachable (features/shape.md)")
     if has_netns():
         report("ok", "unshare -Un: install-check drives without network")
     else:
@@ -869,7 +870,8 @@ def drive_factory_report(f: Feature) -> None:
     dlog = lanes.parent / "director.handoffs.jsonl"
     # No open lane, so no gh call; Herdr points at no server. The director log: a note, no reflection line yet.
     dlog.write_text(json.dumps({"at": "2026-10-27T00:00:00Z", "kind": "note", "text": "status sent"}) + "\n")
-    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock")}
+    f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
+             "PI_CODING_AGENT_DIR": str(sc / "pi")}   # the box's own Pi sessions never read
     f.run("reflection-never", "octo-feather-lane", "report")
     f.check("reflection-never", lambda c: c.code == 0
             and re.findall(r"(?m)^director reflection: .*$", c.out) == ["director reflection: never ran (director.handoffs.jsonl)"])
@@ -927,6 +929,57 @@ def drive_factory_report(f: Feature) -> None:
     f.run("owner-caught-headline", "octo-feather-lane", "report")
     f.check("owner-caught-headline", lambda c: c.code == 0 and c.out.splitlines()[1:2]
             == ["owner-caught (headline, director.handoffs.jsonl): 2 in the last 7 days, 1 in the 7 days before"])
+    # Skill reach (comms #report-skill-reach): scratch Pi session files, each line timestamped, each tool call with its
+    # result as Pi records it (a codemode batch's with nestedCalls). Implementers offered commit and tdd: one reads tdd
+    # inside a codemode batch, one reads commit; one started nine days ago reads commit then (not counted) and tdd today
+    # (counted); one reads none (a sed script naming a/SKILL.md, a batch grepping tdd/SKILL.md, a batch whose source
+    # names tracker/SKILL.md aborted before it); one wholly nine days old is left out. A code reviewer reads tdd, not
+    # offered to it.
+    today = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+    def session(name: str, start: str, role: str, offered: list[str],
+                calls: list[tuple[str, dict[str, str], str, list[tuple[str, dict[str, str], str]] | None]]) -> None:
+        """One session file; each call (tool, args, at, nested calls (tool, args, status) or None) with its result."""
+        skills = "".join(f"<skill><name>{n}</name><description>d</description><location>/kit/.agents/skills/{n}/SKILL.md"
+                         "</location></skill>" for n in offered)
+        lines: list[dict[str, Any]] = [{"type": "session", "version": 3, "id": name, "timestamp": start, "cwd": "/w"},
+                                       {"type": "message", "timestamp": start, "message": {"role": "system", "content": "", "sections": {
+                                           "addendum": f"# {role}\n", "skills": f"<available_skills>{skills}</available_skills>"}}}]
+        for i, (t, a, at, nested) in enumerate(calls):
+            lines.append({"type": "message", "timestamp": at, "message": {"role": "assistant", "content": [
+                {"type": "toolCall", "id": f"c{i}", "name": t, "arguments": a}]}})
+            res: dict[str, Any] = {"role": "toolResult", "toolCallId": f"c{i}", "toolName": t, "content": [], "isError": False}
+            if nested is not None:
+                res["nestedCalls"] = {"complete": True, "calls": [{"id": f"c{i}/{j}", "name": n, "arguments": na, "status": st}
+                                                                  for j, (n, na, st) in enumerate(nested)]}
+                res["isError"] = any(st == "error" for _, _, st in nested)
+            lines.append({"type": "message", "timestamp": at, "message": res})
+        d = sc / "pi" / "sessions" / "--w--"
+        d.mkdir(parents=True, exist_ok=True)
+        (d / f"{name}.jsonl").write_text("".join(json.dumps(x) + "\n" for x in lines))
+    commit, tdd = {"path": "/kit/.agents/skills/commit/SKILL.md"}, {"path": "/kit/.agents/skills/tdd/SKILL.md"}
+    batch = 'await Promise.all(["/kit/.agents/skills/tdd/SKILL.md", "README.md"].map(p => tools.read({path: p})));'
+    mention = ('const p = "/kit/.agents/skills/tdd/SKILL.md"; await tools.grep({pattern: "x", path: p});'
+               ' await tools.read({path: "README.md"});')
+    aborted = 'await tools.read({path: "AGENTS.md"}); await tools.read({path: "nope.md"}); await tools.read({path: ".agents/skills/tracker/SKILL.md"});'
+    sed = "git diff | sed -e 's#^--- .agents/skills/tdd/SKILL.md#--- a/SKILL.md#'"
+    session("impl-1", two_days, "Implementer", ["commit", "tdd"],
+            [("codemode", {"code": batch}, two_days, [("read", tdd, "ok"), ("read", {"path": "README.md"}, "ok")])])
+    session("impl-2", two_days, "Implementer", ["commit", "tdd"], [("read", commit, two_days, None)])
+    session("impl-long", nine_days, "Implementer", ["commit", "tdd"], [("read", commit, nine_days, None), ("read", tdd, today, None)])
+    session("impl-none", two_days, "Implementer", ["commit", "tdd"], [
+        ("bash", {"command": sed}, two_days, None),
+        ("codemode", {"code": mention}, two_days, [("grep", {"pattern": "x", **tdd}, "ok"), ("read", {"path": "README.md"}, "ok")]),
+        ("codemode", {"code": aborted}, two_days, [("read", {"path": "AGENTS.md"}, "ok"), ("read", {"path": "nope.md"}, "error")])])
+    session("impl-old", nine_days, "Implementer", ["tdd"], [("read", tdd, nine_days, None)])
+    session("review-1", two_days, "Code reviewer", ["code-review"], [("read", {"path": ".agents/skills/tdd/SKILL.md"}, two_days, None)])
+    f.obs_cmd("skill-reach", "before", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
+    f.run("skill-reach", "octo-feather-lane", "report")
+    f.obs_cmd("skill-reach", "after", "sh", "-c", f"cd {shlex.quote(str(sc / 'pi'))} && find . -type f -exec sha256sum {{}} + | sort")
+    f.check("skill-reach", lambda c: c.code == 0 and c.o["after"] == c.o["before"] and (
+        "\nskill reach (Pi sessions active in the last 7 days; per role: skill read/offered, sessions):\n"
+        "  code reviewer (1 session): code-review 0/1; read, not offered: tdd 1\n"
+        "  implementer (4 sessions): commit 1/4, tdd 2/4\n") in c.out)
     f.env = {}
     say(f"factory-report evidence: {f.d}")
 def manifest(c: Case) -> dict[str, Any]:
@@ -1056,6 +1109,20 @@ def drive_skill_loading(f: Feature) -> None:
                       for x in c.o["role-skills"].removeprefix("skills:").split(",") if x.strip())
         return c.code == 0 and refused not in c.err and got == want and "local" not in got
     f.check("offered", offered)
+    # own-copy: the target holds and declares its own copy of python, a skill the role lists (the kit's own repo, #595).
+    t = target("own-copy", "python", None)
+    shutil.copytree(Path(f.s.repo) / ".agents" / "skills" / "python", t / ".agents" / "skills" / "python")
+    launch("own-copy", t, f.s.repo, '{"type":"get_commands"}\n')
+    f.obs("own-copy", "role-skills", role_line + "\n")
+    f.obs("own-copy", "target-python", str(t / ".agents" / "skills" / "python" / "SKILL.md") + "\n")
+
+    def own_copy(c: Case) -> bool:
+        if not offered(c):
+            return False
+        resp = next(json.loads(ln) for ln in c.out.splitlines() if '"get_commands"' in ln)
+        py = [x["sourceInfo"]["path"] for x in resp["data"]["commands"] if x["source"] == "skill" and x["name"] == "skill:python"]
+        return [os.path.realpath(p) for p in py] == [os.path.realpath(c.o["target-python"].strip())]
+    f.check("own-copy", own_copy)
     launch("declared-malformed", target("declared-malformed", "python, local", bad.format("local")), f.s.repo)
     f.check("declared-malformed", lambda c: c.code != 0 and f"{refused} local (" in c.err and "Nested mappings are not allowed" in c.err)
     t = target("declared-dangling", "python, ghost", good)
@@ -1087,6 +1154,146 @@ def drive_skill_loading(f: Feature) -> None:
     f.check("gate-clean", lambda c: c.code == 0 and c.out.startswith("skills: ok"))
     f.env = {}
     say(f"skill-loading evidence: {f.d}")
+
+
+# A fake OpenAI-compatible provider (a test double, stdlib, as tests/web-tools.sh's): logs each request body to
+# argv[2], answers "fake-done"; writes argv[1] once it listens, the readiness signal. Hand-written: the helper is
+# stdlib-only (AGENTS.md), and the mock LLM servers searched (mock-llm, fakellm, llm-mock, 2026) are young
+# single-maintainer packages; the drive needs only the logged request Pi sends.
+FAKE_PROVIDER = """import http.server, json, os, sys
+ready, log = sys.argv[1], sys.argv[2]
+class H(http.server.BaseHTTPRequestHandler):
+    def log_message(self, *a): pass
+    def do_POST(self):
+        body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
+        with open(log, "a") as f: f.write(json.dumps(body) + "\\n")
+        self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
+        base = {"id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake"}
+        for d, fin in [({"role": "assistant", "content": "fake-done"}, None), ({}, "stop")]:
+            c = {**base, "choices": [{"index": 0, "delta": d, "finish_reason": fin}]}
+            if fin: c["usage"] = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
+            self.wfile.write(b"data: " + json.dumps(c).encode() + b"\\n\\n")
+        self.wfile.write(b"data: [DONE]\\n\\n")
+s = http.server.HTTPServer(("127.0.0.1", int(sys.argv[3])), H)
+open(ready + ".tmp", "w").write("ready"); os.replace(ready + ".tmp", ready)
+s.serve_forever()
+"""
+
+# The shape case's shell, inside its own network namespace (unshare -Urn: only a loopback, brought up here, so no
+# request leaves it but to the fake provider on 127.0.0.1; $s/links: the interfaces holding an address). The
+# provider starts in its own session, its pid in a file, and is stopped through that file. $1 scratch, $2 target, $3 kit, $4 port, then the private env for env -i.
+SHAPE_SH = r"""s=$1 t=$2 k=$3 port=$4; shift 4
+ip link set lo up || exit 90
+ip -o addr show | awk '{print $2}' | sort -u > "$s/links"
+setsid python3 "$s/fake.py" "$s/ready" "$s/requests.jsonl" "$port" & echo $! > "$s/fake.pid"
+i=0; while [ ! -s "$s/ready" ] && [ $i -lt 100 ]; do sleep 0.1; i=$((i + 1)); done
+cd "$t" && env -i PATH="$PATH" "$@" timeout 300 just --justfile "$k/justfile" shape --model fake/fake --no-session -p go
+rc=$?
+kill -- -"$(cat "$s/fake.pid")" && rm "$s/fake.pid"
+exit $rc
+"""
+
+
+def role_list(role_file: Path, key: str) -> list[str]:
+    """A role file's frontmatter list KEY (`skills`, `externalSkills`), as written, {tracker} as the kit's default
+    tracker skill (pi-role's, with no .octo-feather.toml in the target)."""
+    line = next((ln for ln in role_file.read_text().split("\n---", 1)[0].splitlines() if ln.startswith(f"{key}:")), f"{key}:")
+    return ["github-issues" if x.strip() == "{tracker}" else x.strip() for x in line.removeprefix(f"{key}:").split(",") if x.strip()]
+
+
+def offered_skills(request: dict[str, Any]) -> list[tuple[str, str]]:
+    """The skills Pi offers the model in a request's system prompt: (name, location) each."""
+    m = request["messages"][0]["content"]
+    m = m if isinstance(m, str) else " ".join(p.get("text", "") for p in m)
+    return re.findall(r"<skill>\s*<name>([^<]+)</name>.*?<location>([^<]+)</location>", m, re.DOTALL)
+
+
+def drive_shape(f: Feature) -> None:
+    """`just shape` in a scratch target with Spec Chat's skills linked by `just spec-chat`: the shaper launched
+    headless against a fake provider in a private network namespace, no model call; the skills Pi offers are
+    exactly agents/shaper.md's skills and externalSkills, Spec Chat's from the target, none from the private
+    home's seeded skills folders. features/shape.md."""
+    kit = Path(f.s.repo)
+    sc = RUN_DIR / "scratch" / "shape"
+    shutil.rmtree(sc, ignore_errors=True)
+    home, agent, target = sc / "home", sc / "agent", sc / "target"
+    for p in (home, agent, sc / "cache", sc / "state", sc / "tmp"):
+        p.mkdir(parents=True)
+    subprocess.run(["git", "-c", "init.defaultBranch=main", "init", "-q", str(target)], check=True)
+    role = kit / "agents" / "shaper.md"
+    kit_skills, ext_skills = role_list(role, "skills"), role_list(role, "externalSkills")
+    # Spec Chat's installer writes its onboarding state under XDG_STATE_HOME: a scratch one, never the box's.
+    f.env = {"XDG_STATE_HOME": str(sc / "state")}
+    f.run("spec-chat-link", "just", "--justfile", f"{kit}/justfile", "spec-chat", str(target))
+    installer = spec_chat_installer()
+    if not os.access(installer, os.X_OK):
+        err = (f.d / "spec-chat-link.stderr").read_text()
+        refused = [ln for ln in err.splitlines() if "no Spec Chat installer at" in ln]
+        if int((f.d / "spec-chat-link.exit").read_text()) == 1 and refused:
+            f.unreachable_step("shape", f"Spec Chat installer not at {installer} (SPEC_CHAT_CLONE defaults to ~/src/spec-chat); "
+                               "prerequisite: a Spec Chat clone there or SPEC_CHAT_CLONE set to one; route attempted: "
+                               f"{(f.d / 'spec-chat-link.cmd').read_text().strip()} -> exit 1: {refused[0]}")
+        else:
+            f.summary(f"FAIL spec-chat-link: installer absent at {installer}, but just spec-chat did not refuse it (spec-chat-link.stderr)")
+            f.fails += 1
+        f.env = {}
+        return
+    f.obs("spec-chat-link", "links", "".join(f"{p.name} -> {p.readlink()}\n" for p in sorted((target / ".agents" / "skills").iterdir())
+                                              if p.is_symlink()))
+    f.obs_cmd("spec-chat-link", "status", "git", "-C", str(target), "status", "--porcelain=v1")
+    f.check("spec-chat-link", lambda c: c.code == 0 and all(f"{n} -> " in c.o["links"] for n in ext_skills) and c.o["status"] == "")
+
+    # Decoys in each home skills folder Pi reads: every skill the role lists, under the same names, and one more.
+    for d in (home / ".agents" / "skills", home / ".pi" / "agent" / "skills", agent / "skills"):
+        for n in (*kit_skills, *ext_skills, "home-decoy"):
+            (d / n).mkdir(parents=True)
+            (d / n / "SKILL.md").write_text(f"---\nname: {n}\ndescription: A home decoy; never offered.\n---\nBody.\n")
+    port = "8765"  # the namespace is private: no other listener can hold it
+    (agent / "models.json").write_text(json.dumps({"providers": {"fake": {
+        "baseUrl": f"http://127.0.0.1:{port}/v1", "api": "openai-completions", "apiKey": "x", "models": [{"id": "fake"}]}}}) + "\n")
+    (sc / "fake.py").write_text(FAKE_PROVIDER)
+    private = {"HOME": home, "PI_CODING_AGENT_DIR": agent, "XDG_CACHE_HOME": sc / "cache", "XDG_STATE_HOME": sc / "state",
+               "TMPDIR": sc / "tmp", "PI_OFFLINE": "1", "PI_SKIP_VERSION_CHECK": "1", "PI_TELEMETRY": "0",
+               "OCTO_FEATHER_PARENT": "", "HERDR_PANE_ID": "", "HERDR_SESSION": ""}
+    if shutil.which("mise"):
+        # The kit's `just` is mise-shimmed (mise.toml): its installs from the box's data dir (mise's own answer), its
+        # state (trust) in the scratch; a private HOME would otherwise send mise to install it, offline.
+        dirs = json.loads(output(["mise", "doctor", "--json"])[1] or "{}").get("dirs", {})
+        private |= {"MISE_DATA_DIR": dirs.get("data", ""), "MISE_STATE_DIR": sc / "mise-state"}
+    f.env = {}
+    f.pre = ["unshare", "-Urn"]
+    try:
+        f.run("shape", "sh", "-c", SHAPE_SH, "sh", str(sc), str(target), str(kit), port, *(f"{k}={v}" for k, v in private.items()))
+    finally:
+        f.pre = []
+        pid = sc / "fake.pid"
+        if pid.is_file():  # the case did not stop it: stop it here, through its pid file
+            try:
+                os.killpg(int(pid.read_text()), 15)
+            except (ProcessLookupError, ValueError):
+                pass
+            say(f"fake provider stopped by the drive (pid file {pid})")
+    log = sc / "requests.jsonl"
+    f.obs("shape", "requests", log.read_text() if log.is_file() else "")
+    f.obs("shape", "links", (sc / "links").read_text() if (sc / "links").is_file() else "")
+    f.obs("shape", "fake-stopped", "" if (sc / "fake.pid").exists() else "stopped by its pid file\n")
+    f.obs("shape", "role-skills", f"skills: {', '.join(kit_skills)}\nexternalSkills: {', '.join(ext_skills)}\n")
+    f.obs("shape", "home-decoys", "".join(f"{p}\n" for p in sorted(sc.glob("home/**/SKILL.md")) + sorted(agent.glob("skills/*/SKILL.md"))))
+    want = {**{n: f"{kit}/.agents/skills/{n}/SKILL.md" for n in kit_skills},
+            **{n: f"{target}/.agents/skills/{n}/SKILL.md" for n in ext_skills}}
+
+    def offered_exactly(c: Case) -> bool:
+        reqs = [json.loads(ln) for ln in c.o["requests"].splitlines()]
+        got = offered_skills(reqs[0])
+        f.obs("shape", "offered", "".join(f"{n} {loc}\n" for n, loc in got))
+        print("    offered: " + ", ".join(f"{n} ({loc})" for n, loc in got), flush=True)
+        return (c.code == 0 and "fake-done" in c.out and c.o["links"].split() == ["lo"] and c.o["fake-stopped"] != ""
+                and all(r["model"] == "fake" for r in reqs) and dict(got) == want and len(got) == len(want)
+                and len(c.o["home-decoys"].splitlines()) == 3 * (len(want) + 1)
+                and not any(loc.startswith((str(home), str(agent))) for _, loc in got))
+    f.check("shape", offered_exactly)
+    f.env = {}
+    say(f"shape evidence: {f.d}")
 
 
 def classify_stub(f: Feature, sc: Path) -> str:
@@ -2444,6 +2651,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
     "skill-loading": drive_skill_loading,
+    "shape": drive_shape,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
     "qc-advisory": drive_qc_advisory,

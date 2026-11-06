@@ -113,19 +113,17 @@
     },
     "acceptance-report-gate-budget": {
       "status": "built",
-      "pr": 546,
-      "record": "20261105T172104Z-3e0c7ba2",
-      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "pr": 614,
+      "record": "20261106T061241Z-cbe5c358",
+      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
       "tests": []
     },
     "acceptance-report-owner-caught-headline": {
       "status": "built",
-      "pr": 545,
-      "record": "20261104T220539Z-ad9863e6",
-      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
-      "tests": [
-        "tests/lane-report.sh"
-      ]
+      "pr": 614,
+      "record": "20261106T061245Z-7ec0b3a8",
+      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
+      "tests": []
     },
     "acceptance-correction-intake": {
       "status": "built",
@@ -137,8 +135,11 @@
       ]
     },
     "acceptance-report-skill-reach": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 614,
+      "record": "20261106T061237Z-3def0011",
+      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
+      "tests": []
     }
   }
 }
