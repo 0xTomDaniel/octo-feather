@@ -1,0 +1,14 @@
+Seeded defect: a dirty kit install is fast-forwarded and refreshed instead of stopping (octo-feather-lane --help, post-merge step 3).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..d9b1a56 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -3791,7 +3791,7 @@ def pm_kit(pm: PostMerge) -> str:
+     top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+     if top.returncode:
+         raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
+-    if dirty := pm_git(kit, "status", "--porcelain")[1]:
++    if (dirty := pm_git(kit, "status", "--porcelain")[1]) and not dirty:
+         lines = dirty.splitlines()
+         raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                      "commit, move or drop those changes there, nothing was changed; then rerun")

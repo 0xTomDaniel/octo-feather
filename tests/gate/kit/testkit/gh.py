@@ -17,7 +17,12 @@ branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.githu
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
-Anything else exits 2 naming it.
+`gh repo view OWNER/NAME|URL --json F` answers api/repos/OWNER/NAME.json the same way (gh reads
+the URL itself), an unstored one GitHub's unresolved repository. A call over time (a run list
+while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's exact argv,
+one line as the log writes it, to its recorded answers in order, each its stdout (a string) or
+{"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the count in
+tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming it.
 """
 
 import json
@@ -155,20 +160,54 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def taped(call: str) -> bool:
+    """CALL's next recorded answer replayed, if a tape names it (the module docstring)."""
+    if not os.path.isfile(at("tape.json")):
+        return False
+    tape: dict[str, list[object]] = json.loads(read(at("tape.json")))
+    if call not in tape:
+        return False
+    n_file = at("tape.n.json")
+    n: dict[str, int] = json.loads(read(n_file)) if os.path.isfile(n_file) else {}
+    k = n.get(call, 0)
+    with open(n_file, "w") as f:
+        f.write(json.dumps(n | {call: k + 1}))
+    ans = tape[call][min(k, len(tape[call]) - 1)]
+    d: dict[str, object] = ans if isinstance(ans, dict) else {"out": ans}
+    sys.stdout.write(str(d.get("out", "")))
+    sys.stderr.write(str(d.get("err", "")))
+    sys.exit(int(str(d.get("exit", 0))))
+
+
+def repo_view(a: list[str]) -> None:
+    """`repo view [OWNER/NAME|URL] --json F`: this dir's repo.json, or the named repo's."""
+    if a[2:3] == ["--json"] or len(a) == 2:
+        out(pick(json.loads(read(at("repo.json"))), a))
+        return
+    name = re.sub(r"^https://github\.com/|\.git$|/$", "", a[2])
+    p = at("api", "repos", f"{name}.json")
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a Repository with the name '{name}'. (repository)")
+    out(pick(json.loads(read(p)), a))
+
+
 def main(a: list[str]) -> None:
+    call = " ".join(a)
     with open(at("log"), "a") as f:
-        f.write(" ".join(a) + "\n")
+        f.write(call + "\n")
     if os.path.exists(at("down")):
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
+    if taped(call):
+        return
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
     elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
         listed(a)
     elif two == ("repo", "view"):
-        out(pick(json.loads(read(at("repo.json"))), a))
+        repo_view(a)
     elif two == ("pr", "diff"):
         diff(a)
     elif a[:1] == ["api"] and "-X" not in a:

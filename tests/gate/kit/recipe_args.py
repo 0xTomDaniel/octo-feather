@@ -105,10 +105,11 @@ def integrate(s: Scratch, just: list[str], cwd: Path, w: Path) -> None:
 
 
 def check(s: Scratch, name: str, cmd: str, cwd: Path, *argv: str) -> None:
-    """CMD ran once, in exactly CWD with exactly ARGV."""
+    """CMD ran once, in exactly CWD with exactly ARGV (the recorder's one record: its fields, then
+    a newline)."""
     log = Path(s.env["ARGV_LOG"])
     assert log.is_file(), f"{TAG}: {name}: {cmd} never ran"
-    got = log.read_text().split("\0")
+    got = log.read_text().removesuffix("\n").split("\0")
     want = [cmd, str(cwd), *argv, ""]
     assert got == want, f"{TAG}: {name}: got {got}, want {want}"
     log.unlink()
