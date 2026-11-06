@@ -42,13 +42,19 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
   octo-feather-gate untouched save FILE [--mise-state DIR]
   octo-feather-gate untouched check FILE
       A gate run leaves the caller's mise state and its repo's git config as it found them (owner
-      ruling #584, #587; #664): save, before the run, writes into FILE the content of DIR's
-      tracked-configs and trusted-configs (each entry a link's target, a file's sha256) and the
-      text of the current repo's git common dir config (every worktree's); check, after it, reads
-      the same paths again and prints each entry added, removed or changed and the config's
-      changed lines, exit 1, else one line naming what it found unchanged. Content, never mtimes.
-      DIR empty (no mise): the config alone; outside a git repo, the mise state alone. just
-      check-tests runs both around every outermost gate run.
+      ruling #584, #587; #664), judged only on what this run could have left, so another lane's
+      work on the box meanwhile never fails it. save, before the run, writes into FILE the content
+      of DIR's tracked-configs and trusted-configs (each entry a link's target, a file's sha256),
+      the current repo's git common dir config (every worktree's) as key/value pairs (`git config
+      --file F --list`), and the entries of the dirs a run makes scratch in (TMPDIR, /tmp, pytest's
+      basetemp root, the git common dir's octo-feather/). check, after it, fails (exit 1) naming
+      each: a pre-existing entry removed or changed; an entry added that is no link, whose target
+      is gone (a scratch removed) or lies under a scratch dir absent at save; a config key/value
+      added or removed, branch.<name>.* aside (push -u, worktree branches). An added link to a live
+      path the run did not create (a new worktree) is printed as not this run's, never a failure.
+      Else one line naming what it found unchanged. Content, never mtimes. DIR empty (no mise):
+      the config alone; outside a git repo, the mise state alone. just check-tests runs both
+      around every outermost gate run.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -62,13 +68,14 @@ from __future__ import annotations
 
 import argparse
 import datetime as dt
-import difflib
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
 from typing import TypedDict, cast
 
@@ -507,12 +514,14 @@ MISE_DIRS = ("tracked-configs", "trusted-configs")
 
 
 class Box(TypedDict):
-    """What untouched compares, by content: each watched mise state dir's entries (name: content),
-    the git config file's path ("" outside a git repo) and its text (None when absent)."""
+    """What untouched compares: each watched mise state dir's entries (name: content), the git
+    config file's path ("" outside a git repo) and its key/value pairs, branch.<name>.* aside
+    (None when absent), and the entries of each dir a run makes its scratch in (roots)."""
 
     mise: dict[str, dict[str, str]]
     config: str
-    text: str | None
+    keys: list[list[str]] | None
+    roots: dict[str, list[str]]
 
 
 def entry(p: Path) -> str:
@@ -529,42 +538,93 @@ def listing(d: str) -> dict[str, str]:
     return {e.name: entry(e) for e in sorted(p.iterdir())} if p.is_dir() else {}
 
 
-def config_text(config: str) -> str | None:
-    c = Path(config)
-    return c.read_bytes().decode(errors="surrogateescape") if config and c.is_file() else None
+def config_keys(config: str) -> list[list[str]] | None:
+    """CONFIG's key/value pairs as git reads them (`git config --file F --list`), in file order,
+    without branch.<name>.* (push -u, a worktree's branch: another lane's, never a run's own
+    leak); None when there is no such file."""
+    if not config or not Path(config).is_file():
+        return None
+    out = git("config", "--file", config, "--list", "-z")
+    pairs = [kv.partition("\n") for kv in out.split("\0") if kv]
+    return [[k, v] for k, _, v in pairs if not re.fullmatch(r"branch\..+\.[^.]+", k)]
 
 
-def sha(text: str | None) -> str:
-    if text is None:
-        return "absent"
-    return hashlib.sha256(text.encode(errors="surrogateescape")).hexdigest()[:12]
+def scratch_roots(common: str) -> list[str]:
+    """The dirs a gate run makes its scratch in: TMPDIR (items see its real path), /tmp, pytest's
+    basetemp root there, and the git common dir's octo-feather/ (tests/parity/lever.py's copies)."""
+    tmp = os.path.realpath(os.environ.get("TMPDIR") or tempfile.gettempdir())
+    user = os.environ.get("USER") or os.environ.get("LOGNAME") or "unknown"
+    rs = [tmp, "/tmp", f"{tmp}/pytest-of-{user}"]  # noqa: S108 (read only: where a run writes)
+    rs += [f"{common}/octo-feather"] if common else []
+    return list(dict.fromkeys(rs))
 
 
-def changed(was: Box) -> list[str]:
-    """Each change since WAS: a mise state entry added, removed or changed; the config's lines."""
+def names(d: str) -> list[str]:
+    return sorted(e.name for e in Path(d).iterdir()) if Path(d).is_dir() else []
+
+
+def created(target: Path, roots: dict[str, list[str]]) -> str | None:
+    """The dir this run created that TARGET lies under: a root's entry absent when it was saved."""
+    for r, had in roots.items():
+        if target.is_relative_to(r) and target != Path(r):
+            first = target.relative_to(r).parts[0]
+            if first not in had:
+                return f"{r}/{first}"
+    return None
+
+
+def added(link: Path, content: str, roots: dict[str, list[str]]) -> str | None:
+    """Why an entry added during the run is this run's (a failure), None when it is a live path the
+    run did not create: no link, its target gone (a scratch removed), or under a dir it made."""
+    if not link.is_symlink():
+        return f"added {content}, not a link"
+    made = created(Path(os.path.normpath(link.parent / link.readlink())), roots)
+    if not link.exists():
+        return f"added {content}, dangling (its target is gone)"
+    return f"added {content}, under {made}, which this run created" if made else None
+
+
+def keys_changed(was: Box) -> list[str]:
+    """The config's key/value pairs added or removed since WAS, branch.<name>.* aside."""
+    k0, k1 = was["keys"], config_keys(was["config"])
+    if k0 == k1:
+        return []
+    c0 = Counter(f"{k}={v}" for k, v in k0 or [])
+    c1 = Counter(f"{k}={v}" for k, v in k1 or [])
+    said = [f"-{x}" for x in sorted((c0 - c1).elements())]
+    said += [f"+{x}" for x in sorted((c1 - c0).elements())]
+    if not said and (k0 is None) == (k1 is None):
+        return []  # the same pairs, another order
+    now = "absent" if k1 is None else "present"
+    return [f"{was['config']}: changed ({now}): {' '.join(said)}"]
+
+
+def changed(was: Box) -> tuple[list[str], list[str]]:
+    """(failures, notes) since WAS. A pre-existing mise entry removed or changed fails; one added
+    fails when it is this run's (added), else it is a note: a live path this run did not make (a
+    new worktree, another agent's). Any config key/value added or removed fails (keys_changed)."""
     out: list[str] = []
+    notes: list[str] = []
     for d, before in was["mise"].items():
         after = listing(d)
         for n in sorted(before.keys() | after.keys()):
             if n not in after:
                 out.append(f"{d}/{n}: removed (was {before[n]})")
-            elif n not in before:
-                out.append(f"{d}/{n}: added {after[n]}")
-            elif before[n] != after[n]:
+            elif n in before and before[n] != after[n]:
                 out.append(f"{d}/{n}: changed ({before[n]}, now {after[n]})")
-    t0, t1 = was["text"], config_text(was["config"])
-    if t0 != t1:
-        lines0, lines1 = (t0 or "").splitlines(), (t1 or "").splitlines()
-        diff = difflib.unified_diff(lines0, lines1, lineterm="", n=0)
-        said = [x for x in diff if x[:1] in "+-" and x[:3] not in ("+++", "---")]
-        out.append(f"{was['config']}: changed (sha256 {sha(t0)} -> {sha(t1)}): {' '.join(said)}")
-    return out
+            elif n not in before:
+                why = added(Path(d) / n, after[n], was["roots"])
+                if why:
+                    out.append(f"{d}/{n}: {why}")
+                else:
+                    notes.append(f"{d}/{n}: added {after[n]}, a live path this run did not create")
+    return out + keys_changed(was), notes
 
 
 def untouched(action: str, file: Path, mise_state: str) -> int:
-    """save: FILE holds the caller's mise state (MISE_STATE) and this repo's git common dir config,
-    by content. check: both read again from the paths FILE names; each change printed, exit 1 on
-    any, else one line naming what was unchanged."""
+    """save: FILE holds the caller's mise state (MISE_STATE), this repo's git common dir config's
+    keys and the scratch roots' entries. check: read again from the paths FILE names; each failure
+    printed, exit 1 on any, else one line naming what was unchanged; notes either way."""
     if action == "save":
         common = git("rev-parse", "--path-format=absolute", "--git-common-dir", check=False).strip()
         config = str(Path(common) / "config") if common else ""  # "": not in a git repo
@@ -572,19 +632,25 @@ def untouched(action: str, file: Path, mise_state: str) -> int:
         box: Box = {
             "mise": {d: listing(d) for d in dirs},
             "config": config,
-            "text": config_text(config),
+            "keys": config_keys(config),
+            "roots": {r: names(r) for r in scratch_roots(common)},
         }
         file.write_text(json.dumps(box))
         return 0
     was = cast("Box", json.loads(file.read_text()))
-    if changes := changed(was):
+    changes, notes = changed(was)
+    for n in notes:
+        sys.stderr.write(f"check-tests: not this run's: {n}\n")
+    if changes:
         sys.stderr.write(
             "check-tests: FAIL the gate changed the caller's mise state or the repo's git config"
             " (#664):\n" + "".join(f"  {c}\n" for c in changes)
         )
         return 1
     seen = [f"{d} ({len(e)} entries)" for d, e in was["mise"].items()]
-    conf = f"{was['config']} (sha256 {sha(was['text'])})" if was["config"] else "no git repo"
+    keys = was["keys"]
+    held = "absent" if keys is None else f"{len(keys)} keys"
+    conf = f"{was['config']} ({held}, branch.* aside)" if was["config"] else "no git repo"
     found = ", ".join([*(seen or ["no mise state dir (mise not on PATH)"]), conf])
     sys.stderr.write(f"check-tests: unchanged by the gate: {found}\n")
     return 0

@@ -432,7 +432,8 @@ step 4 tells no lane twice.
                    else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
                    closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
                    list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
-                   git's words); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   git's words), then the user's mise tracked-configs and trusted-configs links whose target is that
+                   worktree or under it pruned (MISE_STATE_DIR, else mise's default; the count named); kept, named, when it is the kit install, the main worktree, or the root of a Spec
                    Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
                    based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
                    deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
@@ -4033,7 +4034,26 @@ def pm_worktree(branch: str) -> str:
             raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
                          "a preview stays, remove it by hand once its review ends")
     pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
-    return f"worktree {path} removed"
+    return f"worktree {path} removed ({pm_mise_prune(path)} mise config links into it pruned)"
+
+
+def pm_mise_prune(path: str) -> int:
+    """Remove the user's mise tracked-configs and trusted-configs links whose target is PATH or under it (the
+    worktree just removed, so each dangles): by the link's own target, nothing else touched (#664). The state dir
+    as mise finds it: MISE_STATE_DIR, else $XDG_STATE_HOME/mise, else ~/.local/state/mise."""
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    state = Path(os.environ.get("MISE_STATE_DIR") or f"{base}/mise")
+    roots = {os.path.normpath(path), os.path.realpath(path)}
+    n = 0
+    for d in (state / "tracked-configs", state / "trusted-configs"):
+        for e in sorted(d.iterdir()) if d.is_dir() else []:
+            if not e.is_symlink():
+                continue
+            t = os.path.normpath(e.parent / e.readlink())
+            if any(t == r or t.startswith(r.rstrip("/") + "/") for r in roots):
+                e.unlink()
+                n += 1
+    return n
 
 
 def pm_teardown(pm: PostMerge) -> str:

@@ -1,29 +1,39 @@
 """A gate run leaves the caller's mise state and its repo's git config as it found them (#664,
-#584, #587; owner ruling 2026-11-05): `just test` in a git copy of the kit, its caller's mise state
-dir a scratch one, with one seeded item. Without a seed the run passes and names what it found
-unchanged; a seeded item that writes a tracked-configs link into the caller's state, or a key into
-the copy's .git/config (the repo's git common dir config), fails the run naming the change, though
-the item itself passes."""
+#584, #587; owner ruling 2026-11-05), judged on what the run could have left: `just test` in a git
+copy of the kit, its caller's mise state dir a scratch one, with one seeded item. Without a seed
+the run passes naming what it found unchanged. It fails naming the change, though the item itself
+passes, when the item leaves in the caller's state a tracked-configs link that dangles, or one into
+a dir the run created and left, or sets a key in the copy's .git/config (the repo's git common dir
+config). What another lane on the box may do meanwhile passes: a link to a live path the run did
+not create (named as not this run's), a branch.<name>.* key (push -u, a worktree's branch)."""
 
 from __future__ import annotations
 
-import os
 import re
 import subprocess
-from pathlib import Path
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Ran, Scratch, main, pnpm_store, tool_homes
 
+if TYPE_CHECKING:
+    from pathlib import Path
+
 ITEM = "tests/gate/test_gate.py::test_script[tests/zz-seed.sh]"
-# The seeded item: as SEED says, a link into the caller's mise state (SEED_STATE: the item sees
-# only the gate's own per-run state dir, so the caller's is handed to it), or a key in its repo's
-# git config; else nothing. It passes either way.
+# The seeded item: as each word of SEED says, a link into the caller's mise state (SEED_STATE:
+# the item sees only the gate's own per-run state dir, so the caller's is handed to it) that
+# dangles, one into a dir it makes and leaves, or one to SEED_LIVE (a path made before the run);
+# a key in its repo's git config, user.name or a branch's remote; else nothing. It passes either
+# way.
 SEED = """#!/usr/bin/env bash
 set -euo pipefail
-case "${SEED:-}" in
-  link) ln -s /nowhere/seeded/mise.toml "$SEED_STATE/tracked-configs/seeded" ;;
-  config) git config --local seed.leak yes ;;
-esac
+tc="${SEED_STATE:-}/tracked-configs"
+for seed in ${SEED:-}; do case "$seed" in
+  link) ln -s /nowhere/seeded/mise.toml "$tc/seeded" ;;
+  ours) d="$(mktemp -d)"; touch "$d/mise.toml"; ln -s "$d/mise.toml" "$tc/ours" ;;
+  live) ln -s "$SEED_LIVE" "$tc/live" ;;
+  config) git config --local user.name seeded ;;
+  branch) git config --local branch.x.remote origin ;;
+esac; done
 """
 # The kit gate's own settings and venv, never the copy's run's.
 GATE = (
@@ -72,6 +82,7 @@ def gate(s: Scratch, k: Path, seed: str, want: int | None) -> Ran:
         "GATE_WORKERS": "1",
         "SEED": seed,
         "SEED_STATE": str(s.root / "user-mise"),
+        "SEED_LIVE": str(s.root / "live" / "mise.toml"),
     }
     p = subprocess.run(
         ["just", "test", ITEM],  # noqa: S607
@@ -87,39 +98,50 @@ def gate(s: Scratch, k: Path, seed: str, want: int | None) -> Ran:
     return Ran(p.returncode, p.stdout, "")
 
 
+FAIL = (
+    "check-tests: FAIL the gate changed the caller's mise state or the repo's git config "
+    "\\(#664\\):\n"
+)
+
+
 def seeded(s: Scratch) -> None:
-    """Clean, then each seed: the clean run passes naming the state and config it found
-    unchanged; each seed fails naming its change, and the item itself passed."""
+    """Clean, then each seed: the clean run and each seed another lane could have made pass; each
+    seed this run leaves fails naming its change, and the item itself passed."""
     st = s.root / "user-mise"
+    tc = re.escape(str(st / "tracked-configs"))
     (st / "tracked-configs").mkdir(parents=True)
     (st / "trusted-configs").mkdir()
     (st / "tracked-configs" / "kept").symlink_to("/nowhere/kept/mise.toml")
+    (s.root / "live").mkdir()
+    (s.root / "live" / "mise.toml").write_text("[tools]\n")
     k = kit_copy(s)
     cfg = re.escape(str(k / ".git" / "config"))
+    unchanged = (
+        rf"check-tests: unchanged by the gate: {tc} \(\d+ entries\), "
+        rf"{re.escape(str(st))}/trusted-configs \(0 entries\), {cfg} \(\d+ keys, branch\.\* aside\)"
+    )
     ok = gate(s, k, "", 0)
+    assert re.search(unchanged, ok.out), ok.out
+    other = gate(s, k, "live branch", 0)  # what another lane may do meanwhile
+    assert re.search(unchanged, other.out), other.out
     assert re.search(
-        rf"check-tests: unchanged by the gate: {re.escape(str(st))}/tracked-configs \(\d+ entries\), "
-        rf"{re.escape(str(st))}/trusted-configs \(0 entries\), {cfg} \(sha256 [0-9a-f]{{12}}\)",
-        ok.out,
-    ), ok.out
-    link = gate(s, k, "link", None)
-    assert link.rc != 0, link.out
-    assert re.search(r"1 passed", link.out), link.out
-    assert re.search(
-        rf"check-tests: FAIL the gate changed the caller's mise state or the repo's git config \(#664\):\n"
-        rf"  {re.escape(str(st))}/tracked-configs/seeded: added -> /nowhere/seeded/mise\.toml\n",
-        link.out,
-    ), link.out
-    (st / "tracked-configs" / "seeded").unlink()
-    conf = gate(s, k, "config", None)
-    assert conf.rc != 0, conf.out
-    assert re.search(r"1 passed", conf.out), conf.out
-    assert re.search(
-        rf"check-tests: FAIL the gate changed the caller's mise state or the repo's git config \(#664\):\n"
-        rf"  {cfg}: changed \(sha256 [0-9a-f]{{12}} -> [0-9a-f]{{12}}\): \+\[seed\] \+\tleak = yes\n",
-        conf.out,
-    ), conf.out
-    assert os.readlink(st / "tracked-configs" / "kept") == "/nowhere/kept/mise.toml"
+        rf"check-tests: not this run's: {tc}/live: added -> {re.escape(str(s.root))}/live/"
+        r"mise\.toml, "
+        r"a live path this run did not create",
+        other.out,
+    ), other.out
+    ours = gate(s, k, "link ours config", None)  # what this run left
+    scr = re.escape(f"{s.root / 'tmp'}/")
+    assert ours.rc != 0, ours.out
+    assert "1 passed" in ours.out, ours.out
+    want = (
+        rf"  {tc}/ours: added -> {scr}(tmp\.\w+)/mise\.toml, under {scr}\1, "
+        r"which this run created\n"
+        rf"  {tc}/seeded: added -> /nowhere/seeded/mise\.toml, dangling \(its target is gone\)\n"
+        rf"  {cfg}: changed \(present\): \+user\.name=seeded\n"
+    )
+    assert re.search(FAIL + want, ours.out), ours.out
+    assert str((st / "tracked-configs" / "kept").readlink()) == "/nowhere/kept/mise.toml"
 
 
 if __name__ == "__main__":
