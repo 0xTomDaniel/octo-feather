@@ -1,0 +1,12 @@
+#!/usr/bin/env python3
+"""verify-octo-feather: the command's launcher. Its code, verify_octo_feather.py beside it, is
+imported, so Python caches its bytecode (__pycache__/ beside it), which it never does for the
+__main__ script; on a read-only tree (the qc sandbox) it compiles the module each run instead. Code
+that needs its functions imports verify_octo_feather, never this file."""
+
+import sys
+
+from verify_octo_feather import main
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
