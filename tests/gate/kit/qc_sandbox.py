@@ -80,7 +80,8 @@ def nested(s: Scratch) -> None:
     its caller's (none shows an entry)."""
     r = repo(s)
     sb = kit("octo-feather-qc-sandbox")
-    repo2 = 'cd "$(mktemp -d)" && git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m x'
+    ident = "-c user.name=t -c user.email=t@t"
+    repo2 = f'cd "$(mktemp -d)" && git init -q && git {ident} commit -q --allow-empty -m x'
     inner = f"{repo2} && {sb} -- echo inner-ran"
     ran = s.run([sb, "--", "sh", "-c", inner], cwd=r, env=tool_homes())
     assert "inner-ran" in ran.out, (ran.out, ran.err)
