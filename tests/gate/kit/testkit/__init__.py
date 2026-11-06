@@ -14,9 +14,11 @@ missing fixture fails naming it.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
@@ -42,7 +44,8 @@ FAKES = {
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
 # too), gh.py (above) on a PATH of its own, git_refused.py (a git remote refusing credentials,
 # as `git`), and argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls); each
-# file's header says what it answers.
+# file's header says what it answers. A model provider is no command: provider.py serves Pi's
+# provider boundary on 127.0.0.1 (started by `provider`, below; its header says what it answers).
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 CLEARED = (
@@ -289,6 +292,35 @@ def pnpm_store() -> str:
     asked; one store for the kit and its test copies, owner ruling #422), for
     npm_config_store_dir."""
     return asked("pnpm", "store", "path")
+
+
+@contextlib.contextmanager
+def provider(*args: str) -> Generator[int]:
+    """The fake model provider (testkit/provider.py, ARGS its own) serving while the block runs: its
+    port, read off its own stdout pipe once it listens (readiness, never a wait); stopped after."""
+    p = subprocess.Popen(
+        [sys.executable, str(HERE / "provider.py"), *args], stdout=subprocess.PIPE, text=True
+    )
+    try:
+        line = p.stdout.readline() if p.stdout else ""
+        assert line.strip().isdigit(), f"testkit: the fake provider did not start: {line!r}"
+        yield int(line)
+    finally:
+        p.kill()
+        p.wait()
+
+
+def real_pi(tag: str) -> str:
+    """The real pi on the caller's PATH (never testkit's stand-in) at the kit's pin (pi-version),
+    else failing naming the install command; its path."""
+    pin = (ROOT / "pi-version").read_text().strip()
+    install = f"npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{pin}"
+    pi = shutil.which("pi", path=os.environ["PATH"])
+    assert pi, f"{tag}: pi not on PATH; install Pi {pin}: {install}"
+    v = subprocess.run([pi, "--version"], capture_output=True, text=True, check=False)
+    got = next(iter(re.findall(r"[0-9]+\.[0-9]+\.[0-9]+", v.stdout + v.stderr)), "no version")
+    assert got == pin, f"{tag}: pi reports {got}, the kit pins {pin} (pi-version); {install}"
+    return pi
 
 
 def main(*scenarios: Callable[..., None]) -> None:
