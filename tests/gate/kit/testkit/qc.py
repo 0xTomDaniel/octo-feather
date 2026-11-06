@@ -37,9 +37,12 @@ UNSET = (
 
 
 def clean(s: Scratch) -> None:
-    """S's env without UNSET."""
+    """S's env without UNSET, with a git identity (as the old qc scripts exported one): a command
+    the judged worktree's demo runs may commit, in a kit checkout with no identity of its own."""
     for k in UNSET:
         s.env.pop(k, None)
+    for who in ("AUTHOR", "COMMITTER"):
+        s.env |= {f"GIT_{who}_NAME": "t", f"GIT_{who}_EMAIL": "t@t"}
 
 
 def report(r: Ran) -> dict[str, Any]:

@@ -22,7 +22,6 @@ from typing import Any
 from testkit import ROOT, Ran, Scratch, asked, kit, main
 from testkit.qc import RID, STATUS, block, clean, qc, report, target
 
-
 CONTRACT = """format = 1
 [entry]
 command = "true"
