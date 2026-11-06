@@ -235,5 +235,11 @@
   "impl-kit-py-check-roles-x153": {"facts": [{"fact": "skill_read_before", "skill": "python", "before": {"edit_under": ["scripts/"]}}]},
   "impl-kit-py-contract-json-x153": {"facts": [{"fact": "skill_read_before", "skill": "python", "before": {"edit_under": ["scripts/"]}}]},
   "impl-kit-py-near-toml-doctor-x153": {"facts": [{"fact": "skill_not_read", "skill": "python"}]},
-  "impl-kit-py-near-resume-delays-x153": {"facts": [{"fact": "skill_not_read", "skill": "python"}]}
+  "impl-kit-py-near-resume-delays-x153": {"facts": [{"fact": "skill_not_read", "skill": "python"}]},
+  "shaper-repair-multi-name": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "shaper-repair-lang": {"facts": [{"fact": "skill_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-clean-repo": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-clean-version": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-question-exit": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]}
 }

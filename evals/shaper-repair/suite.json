@@ -1,0 +1,7 @@
+{
+  "suite": "shaper-repair",
+  "kind": "skill-trigger",
+  "description": "The shaper's Repair moment (agents/shaper.md step 3, roles#acceptance-shaper-repair): does the shaper read repair-specs when a change is asked in a target whose specs and ADRs miss Spec Chat's shaping contract, and not in a conforming target or on a question or atomic correction? Graded only by skill_read / skill_not_read (schema.md, Facts). Apart from skill-triggers for its bound: the shaper reads its step skills, then the repo, before this decision. max_tool_calls 20, from run 20261106T044940Z-3fa81d (skill-triggers shaper-repair-*, head de2a895): repair-specs read at calls 8 to 11 in the passing runs; the failing ones still read the repo at calls 15 and 16 when the 12-call cap stopped them, so the read falls at call 17 at the latest seen; plus 3 calls of margin, the spread of the passing reads (8 to 11). The offer to the owner is a message, no call.",
+  "max_tool_calls": 20,
+  "timeout_s": 600
+}

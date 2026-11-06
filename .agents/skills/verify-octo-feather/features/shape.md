@@ -9,7 +9,7 @@ Drive criterion: `roles#acceptance-shaper-launch`
 ## Sub-features
 
 - `spec-chat-link` `just spec-chat <target>` in a scratch git target: Spec Chat's skills linked into its `.agents/skills`, ignored, `git status` clean.
-- `shape` `just shape` in that target, headless against a fake provider: Pi offers exactly `agents/shaper.md`'s `skills:` (from the kit) and `externalSkills:` (from the target's `.agents/skills`), none from the private home's seeded skills folders, and no request leaves for anything but the fake provider.
+- `shape` `just shape` in that target, headless against a fake provider: Pi offers exactly `agents/shaper.md`'s `skills:` (from the kit) and `externalSkills:` (from the target's `.agents/skills`, Spec Chat's `repair-specs` included), none from the private home's seeded skills folders, and no request leaves for anything but the fake provider.
 
 ## How to get to it (user POV)
 
@@ -32,7 +32,7 @@ Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive shape
 ## Gotchas
 
 - `--model fake/fake` is the one launch change: it follows pi-role's own `--model`, so the role's model, thinking and tools are as `just shape` gives them, and only the provider is fake. That the launch names the role file's model, thinking and tools is tests/shape.sh's (`just shape --json`) and the role-launch drive's `shaper` case.
-- The expected list is read from `agents/shaper.md` on each drive, never written in the helper: a skill added to the role (#607's `repair-specs`) is expected with no drive edit, and fails the drive until the target has it.
+- The expected list is read from `agents/shaper.md` on each drive, never written in the helper: a skill added to the role (as `repair-specs` was, #607) is expected with no drive edit, and fails the drive until the target has it.
 - The shaper lists `web`: its web servers are registered at session start and fail to connect inside the namespace, which the run survives. The namespace, not a stub, keeps every request but the fake provider's from leaving.
 - The kit's `just` is mise-shimmed: under a private HOME mise would try to install it, so the drive passes mise's own data dir (`mise doctor --json`) and a scratch `MISE_STATE_DIR`.
 - A pass proves what Pi offers the model, not that the shaper reads a skill at its step: that is an eval case's (`just qa`).

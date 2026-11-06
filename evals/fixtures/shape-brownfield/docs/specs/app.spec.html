@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><title>app</title></head>
+<body>
+<main>
+<h1>app</h1>
+<p data-anchor="source">Source issue: <a href="https://github.com/acme/app/issues/4">acme/app#4</a>.</p>
+<section data-anchor="status">
+<h2>Status</h2>
+<p data-anchor="status-now">Implemented in v0.1. JSON output landed in PR #9; the old text-only mode is still the default.</p>
+</section>
+<section data-anchor="hello">
+<h2>Greeting</h2>
+<p data-user-story data-anchor="story-greet">As a script author, I greet a name with <code>app hello NAME</code> and read the greeting as JSON, so I never parse text.</p>
+<p data-anchor="hello-text"><code>app hello NAME</code> prints <code>Hello, NAME</code>, the name trimmed. With <code>--json</code> it prints <code>{"name": NAME, "text": "Hello, NAME"}</code> (ADR 0001).</p>
+<p data-acceptance-criterion data-anchor="acceptance-hello-json">JSON output should work and tests/test_cli.py::test_json passes.</p>
+</section>
+<section data-anchor="history">
+<h2>History</h2>
+<ul data-anchor="history-list">
+<li>2026-03-02: spec created for #4.</li>
+<li>2026-03-20: blank names moved to fix-blank-name-gh12.spec.html (#12).</li>
+</ul>
+</section>
+</main>
+</body>
+</html>

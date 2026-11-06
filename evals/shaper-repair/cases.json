@@ -1,0 +1,74 @@
+[
+  {
+    "id": "repair-moment-bye",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Owner here. I'd like an `app bye NAME` command next to hello, printing `Goodbye, NAME`, with --json like the rest. Shape it into a spec with me. I'm away for the rest of the day: wherever you'd ask, take your recommended answer and carry on."
+  },
+  {
+    "id": "repair-moment-verbose",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "train",
+    "task": "We need app to log each greeting to stderr when --verbose is passed. Turn this into a spec please; I'm not around to answer anything, so pick for me and keep going."
+  },
+  {
+    "id": "repair-moment-emoji",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "hey, want `app hello` to take --emoji and add a wave at the end. spec it? offline today, go with whatever you'd recommend."
+  },
+  {
+    "id": "repair-moment-inner-space",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Please shape a specification for collapsing internal whitespace in names, so that `app hello 'Ada   Lovelace'` greets `Ada Lovelace`. I will not be reachable for questions; proceed on your own recommendations."
+  },
+  {
+    "id": "repair-moment-near-clean-from",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Owner here. Shape a spec for a `--from NAME` option, so `app hello Ada --from Bob` prints `Hello, Ada, from Bob`, JSON included. I'm away today: where you'd ask, recommend and continue."
+  },
+  {
+    "id": "repair-moment-near-question-owner",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Which spec owns the blank-name error, and under which anchor? Answer only, change nothing."
+  },
+  {
+    "id": "repair-moment-near-clean-formal",
+    "role": "shaper",
+    "fixture": "shape-mini",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "spec out an `app hello --formal` flag that prints `Good day, NAME` instead. can't answer questions today, go with your call."
+  },
+  {
+    "id": "repair-moment-near-question-adr",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Does ADR 0001 say errors are printed as JSON too when --json is set? Just tell me, no edits."
+  },
+  {
+    "id": "repair-moment-near-typo",
+    "role": "shaper",
+    "fixture": "shape-brownfield",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Typo in docs/specs/app.spec.html: the hello-text paragraph says \"the name trimmed\" and should say \"with the name trimmed\". Fix that one phrase and commit it."
+  }
+]
