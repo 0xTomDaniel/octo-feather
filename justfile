@@ -1,6 +1,9 @@
 # octo-feather kit commands. The gate's tiers, `just fast` and `just check`: quality spec #recipes-table (AGENTS.md).
 
-set shell := ["bash", "-euo", "pipefail", "-c"]
+# Backticks run in this shell too, and just passes them no export: each runs mise offline with its auto-installs off
+# (the exports below), so a tool a backtick reaches through a mise shim (check-gate-free's nested just) is never
+# installed, from the network, into MISE_DATA_DIR (#505, #667).
+set shell := ["env", "MISE_OFFLINE=1", "MISE_AUTO_INSTALL=0", "MISE_EXEC_AUTO_INSTALL=0", "MISE_NOT_FOUND_AUTO_INSTALL=0", "bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@"/"$1", never as pasted text (#61).
 set positional-arguments
 
@@ -16,6 +19,11 @@ export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { e
 # Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
 # #boundary-gate); `mise install --locked` fills them, outside the gate.
 export MISE_OFFLINE := "1"
+# Nor installs one on its own: a mise shim or `mise exec` that finds its tool missing fails or falls back to the system's
+# (owner ruling #493, #505); the parse-time line naming each missing tool gives the fix (caller_path below).
+export MISE_AUTO_INSTALL := "0"
+export MISE_EXEC_AUTO_INSTALL := "0"
+export MISE_NOT_FOUND_AUTO_INSTALL := "0"
 # The kit's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, a git hook,
 # CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read for
 # panes, scripts/pi-role), placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin

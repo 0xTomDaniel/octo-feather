@@ -1,7 +1,8 @@
 # The kit gate in CI: the same `just check` agents and git hooks run
-# (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs; ubuntu-latest ships bash, git and
+# (docs/specs/quality.spec.html#recipe-check). Install only what the gate needs; ubuntu-24.04 ships bash, git and
 # python3. Native tools (node, pnpm, uv, just, shellcheck, scc) come from mise at the kit's mise.toml and mise.lock,
-# the pins the box installs (owner ruling, issue #261).
+# the pins the box installs (owner ruling, issue #261). The runner image is a pin too (ubuntu-24.04, #511), moved
+# only in its own change with a full CI run, as the kit's and both templates' workflows pin it.
 name: check
 on:
   # When: docs/specs/templates.spec.html#acceptance-same-gate.
@@ -15,7 +16,7 @@ jobs:
   # diffs the pushed range, github.event.before to the head, in git; a diff that fails leaves the check job running.
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
@@ -38,7 +39,7 @@ jobs:
   check:
     needs: scope
     if: needs.scope.outputs.code != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
         with:
