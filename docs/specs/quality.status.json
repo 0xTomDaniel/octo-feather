@@ -21,8 +21,8 @@
     "acceptance-test-cpu-shown": {
       "status": "built",
       "pr": 605,
-      "record": "20261106T022737Z-843d278a",
-      "commit": "748792948dea5cb809e4ce80c161aa11bc715ea7",
+      "record": "20261106T031753Z-0cd40989",
+      "commit": "a2512b17aa269eb92148f63f8fce33feeecb4663",
       "tests": [
         "tests/gate/test_cpu.py"
       ]
