@@ -8,7 +8,7 @@ Drive criterion: `quality#acceptance-qc-sandbox-maintained`
 
 ## Sub-features
 
-- `by-hand` the qc sandbox run by hand on a command that tries three escapes: a write to HOME, an umount of the Herdr config mask, a live Herdr session (`herdr --session default`); the proof names the srt sandbox, each attempt fails, and the command's worktree write is discarded, listed only in the run's upper record.
+- `by-hand` the qc sandbox run by hand on a command that tries each escape the criterion names (a mask removed, a credential copied out, a write to the worktree and HOME kept, a process left running, a live Herdr session reached), each outcome observed outside the launcher's own proof.
 
 ## How to get to it (user POV)
 
@@ -25,7 +25,7 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 
 The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-sandbox` and runs the sandbox there.
 
-- **By hand** (`by-hand`). In the scratch repo, run `octo-feather-qc-sandbox -- sh -c 'touch "$HOME/x"; echo "touch $?"; umount "$HOME/.config/herdr"; echo "umount $?"; herdr --session default workspace list; echo w > newfile; echo "wrote $?"'`. Observe exit 0; the proof line `qc sandbox: ok   judge runs in the srt sandbox (@anthropic-ai/sandbox-runtime <version>, ...` and no `qc sandbox: FAIL` line; `touch 1` and `umount 32` in its output (refused); the record line `{"upper": [["new", "newfile"]]}` (the write discarded); afterwards no `$HOME/x` and no `newfile` in the scratch repo, which stays clean.
+- **By hand** (`by-hand`). In the scratch repo, run `octo-feather-qc-sandbox -- sh -c CMD`, CMD (the drive's `drive_qc_sandbox`) trying: `umount` of the Herdr config mask, then listing it; copying `~/.git-credentials`, git's and gh's credential files into the worktree and `/tmp`; `touch $HOME/x`; a worktree write `newfile`; a `setsid sleep`; the real herdr (`$OCTO_FEATHER_QC_HERDR`, past the shim) at `--session default`. Observe exit 0, no `qc sandbox: FAIL` line; in its output `umount` non-zero, the mask showing only the run's `sessions`, `creds 0 bytes`, `touch` non-zero, `live herdr` non-zero; afterwards no `$HOME/x`, no `newfile` or `stolen` in the repo, the repo clean, and no such sleep left (pgrep). No herdr on the box: the herdr step is unreachable (PASS-with-unreachable).
 
 ## Gotchas
 

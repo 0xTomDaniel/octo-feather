@@ -17,7 +17,13 @@ paths as empty tmpfs masks whose writes die with the run, and a network allowlis
 over it (which paths are masked, kept, writable; the shims, the attempt record, the proof and the records) and the
 one isolation srt cannot express, the discard stage (step D). `just qc` and `just qa` start it through
 octo-feather-qc sandboxed(); it also runs by hand (`scripts/octo-feather-qc-sandbox -- CMD` in a repo): every input
-below then has a default (a fresh session, no history, no Pi credentials, no GitHub, the proof and records on stderr).
+below then has a default.
+
+By hand (no QC_SESSION set), the defaults: session qc-hand-<6 hex>; state dir as scripts/octo-feather-state prints it;
+worktree the current dir's git top (else the dir); kit under test this script's kit; uid/gid the caller's; herdr and gh
+as found on PATH; QC_KEEP the paths under /tmp of the worktree, kit, state dirs, HOME and PATH dirs; no history
+(QC_HISTORY=none), no Pi credentials (QC_PI=none: no network host either), GitHub `github: none (run by hand)`; the
+proof and every record on stderr (records prefixed `qc sandbox: record`); CMD's stdin, stdout and stderr the caller's.
 
 Setup (this process, outside the judge's namespaces):
   D. the discard stage: its own user (mapped to the caller's uid), mount and IPC namespace. Kit-made, because srt
@@ -46,7 +52,7 @@ Setup (this process, outside the judge's namespaces):
      read-denied, so they are masks, never the real dirs; allowAllUnixSockets (Herdr talks over a Unix socket; srt's
      default seccomp filter refuses socket(AF_UNIX)); allowNestedUserNamespaces (a qc run inside the sandbox); the
      network: no host at all for a run with no Pi, else the model hosts of Pi's models.json and auth.json and the
-     kit's web-mcp.json (OCTO_FEATHER_QC_NET=open: srt's network policy off, the judge's network as the caller's)
+     kit's web-mcp.json
   6. env scrubbed (gh, git and Linear credentials, the parent route); the herdr shim pins the per-run Herdr session
      (OCTO_FEATHER_QC_HERDR names the real binary, for a nested qc); the pi shim counts agents; MISE_STATE_DIR an
      empty per-run dir (#428); the offline gh first on PATH (serving QC_GHSNAP, or refusing every call with
@@ -720,6 +726,9 @@ def setup(judge: list[str]) -> NoReturn:
     ):
         if m and os.path.exists(m):
             back.append(os.path.realpath(m))
+    # srt's own node_modules (the sandbox's machinery, as the script itself): where it lies inside another repo (a kit
+    # copy linking a checkout's), bound back on that mask, as srt reads its own files back through any deny.
+    back.append(snm)
 
     def canon(s: str) -> list[str]:
         return [os.path.realpath(p) for p in s.split(":") if p]
@@ -980,15 +989,20 @@ def setup(judge: list[str]) -> NoReturn:
     if os.path.isdir(f"{HOME}/.ssh"):
         deny.append(f"{HOME}/.ssh")
         cmask.append(f"{HOME}/.ssh")
+    # Live records masked, each once: a path inside a mask already listed (a named session's state dir RS lies inside
+    # the top's sessions/, as in a nested run, where the outer sandbox's session is the caller's) is hidden by that
+    # mask; denied again, srt would make its mount point inside the outer mask, an entry the proof counts as visible.
     for d in dict.fromkeys((TOP, RS)):
-        for x in ("lanes", "sessions"):
-            if os.path.isdir(f"{d}/{x}"):
-                deny.append(f"{d}/{x}")
-                masked.append(f"{d}/{x}")
-        for x in ("director.toml", "director.handoffs.jsonl"):
-            if os.path.isfile(f"{d}/{x}"):
-                deny.append(f"{d}/{x}")
-                masked.append(f"{d}/{x}")
+        for x, isit in (
+            ("lanes", os.path.isdir),
+            ("sessions", os.path.isdir),
+            ("director.toml", os.path.isfile),
+            ("director.handoffs.jsonl", os.path.isfile),
+        ):
+            m = f"{d}/{x}"
+            if isit(m) and not any(within(m, k) for k in masked):
+                deny.append(m)
+                masked.append(m)
     watch += [("credential", m, []) for m in cmask] + [
         ("lane_state", m, []) for m in masked if os.path.isdir(m)
     ]
@@ -996,14 +1010,15 @@ def setup(judge: list[str]) -> NoReturn:
         if not bs:
             deny.append(r)  # one with paths bound back is masked above
         watch.append(("repo", r, names))
-    # kept /tmp paths read-only, but the worktree (writable, below) and any inside a masked repo: the mask wins there
+    # kept /tmp paths read-only, but the worktree (writable, below) and any inside a mask (a repo, a live record, a
+    # credential dir; nested, the outer run's state dir is the caller's): the mask wins there
     allow_r += [
         p
         for p in E.get("QC_KEEP", "").split("\n")
         if p.startswith("/tmp/")
         and os.path.exists(p)
         and not within(p, wtp)
-        and not any(within(p, r) for r in hid)
+        and not any(within(p, r) for r in hid + masked + cmask)
     ]
     # srt's own temp dir (its proxy bridge sockets): carved back read-only, as its denyRead /tmp would cover the sockets it binds
     allow_r += [f"{SCR}/bin", f"{SCR}/rbin", f"{SCR}/rec", f"{SCR}/srt", *hro]
@@ -1024,7 +1039,6 @@ def setup(judge: list[str]) -> NoReturn:
     deny += [f"{HOME}/.npm/_logs", f"{HOME}/.claude/debug"]
     allow_w += [wtp] + ([UC] if UC else [])
     allow_r += [p for p in ro_binds if any(within(p, d) for d in deny)]
-    net = E.get("OCTO_FEATHER_QC_NET", "")
     hosts = [] if nopi else hosts_for_pi(PI)
     settings: dict[str, Any] = {
         "network": {"allowedDomains": hosts, "deniedDomains": [], "allowAllUnixSockets": True},
@@ -1147,13 +1161,10 @@ def setup(judge: list[str]) -> NoReturn:
         "env": jenv,
         "srt": srtv,
         "hosts": hosts,
-        "net": "open" if net == "open" else "allowlist",
         "bwrap": (run("bwrap", "--version").stdout.strip() or "bwrap ?"),
         "cwd": cwd,
         "hand": OUT["proof"] is None,
     }
-    if net == "open":
-        del settings["network"]["allowedDomains"]  # srt then applies no network policy at all
     json.dump(inner, open(f"{SCR}/bin/run.json", "w"))
     os.chmod(f"{SCR}/bin/run.json", 0o444)
 
@@ -1350,8 +1361,7 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
                     x for x in env[k].split(",") if x not in ("127.0.0.1", "localhost", "::1")
                 )
     # Node's fetch takes the proxy srt sets only when told to (Node >= 22.21)
-    if c["net"] != "open":
-        env.setdefault("NODE_USE_ENV_PROXY", "1")
+    env.setdefault("NODE_USE_ENV_PROXY", "1")
     os.environ.clear()
     os.environ.update(env)
     base = {str(os.getpid())} | {
@@ -1423,12 +1433,8 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     check(
         os.path.basename(pid1) == "bwrap" and os.environ.get("SANDBOX_RUNTIME") == "1",
         f"judge runs in the srt sandbox (@anthropic-ai/sandbox-runtime {c['srt']}, {c['bwrap']}; PID 1 {os.path.basename(pid1)}): own user, mount, PID and network namespaces; "
-        + (
-            "network: srt policy off (OCTO_FEATHER_QC_NET=open)"
-            if c["net"] == "open"
-            else f"network allowlist: {', '.join(c['hosts']) or 'none'}"
-        )
-        + "; kit discard stage (srt and bwrap 0.9 have no overlay): worktree and uv cache overlays, Pi copies, own IPC namespace",
+        f"network allowlist: {', '.join(c['hosts']) or 'none'}"
+        "; kit discard stage (srt and bwrap 0.9 have no overlay): worktree and uv cache overlays, Pi copies, own IPC namespace",
     )
     st = dict(ln.split(":", 1) for ln in open("/proc/self/status") if ":" in ln)
     caps, nnp = st["CapEff"].strip(), st["NoNewPrivs"].strip()
@@ -1849,6 +1855,7 @@ def main(a: list[str]) -> None:
         cfgp, rest = a[1], a[2:]
         inner(cfgp, rest[1:] if rest[:1] == ["--"] else rest)
     if a[:1] in (["-h"], ["--help"]):
+        sys.stdout.write(__doc__ or "")
         return
     if a[:1] == ["--"]:
         a = a[1:]
