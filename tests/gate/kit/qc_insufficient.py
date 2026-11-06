@@ -18,7 +18,7 @@ import json
 import re
 from typing import TYPE_CHECKING, Any
 
-from testkit import ROOT, Ran, Scratch, main
+from testkit import ROOT, Ran, Scratch, asked, main
 from testkit.qc import RID, STATUS, block, clean, qc, report, target
 
 if TYPE_CHECKING:
@@ -160,6 +160,10 @@ def kit_style(s: Scratch) -> None:
     )
     (r / "qc.toml").write_text(CONTRACT.split('[demo."demo#acceptance-a"]', maxsplit=1)[0] + demo)
     s.git(r, "commit", "-qam", "kit-style demo")
+    # The kit's own just and uv (its mise.lock pins) first on PATH, as the kit justfile's `just qc`
+    # puts them: a mise shim resolves no version in the scratch target (no mise.toml) and fails.
+    for tool in ("just", "uv"):
+        (s.bin / tool).symlink_to(asked("mise", "which", tool))
     q = qc(s, r, "9", "acceptance-b", want=2, env={"SPEC_CHAT_CLONE": str(s.root / "no-spec-chat")})
     b = block(q.out, "INSUFFICIENT EVIDENCE acceptance-b: ", 1)
     want = (
