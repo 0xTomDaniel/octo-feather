@@ -5,7 +5,7 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_sandbox import by_hand, network, srt_missing
+from qc_sandbox import by_hand, nested, network, srt_missing
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
@@ -21,3 +21,7 @@ def test_srt_missing(case: Case) -> None:
 
 def test_network(case: Case) -> None:
     case(network)
+
+
+def test_nested(case: Case) -> None:
+    case(nested)

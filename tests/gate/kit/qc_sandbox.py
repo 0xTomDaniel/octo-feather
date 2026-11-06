@@ -4,13 +4,14 @@ repo, every input defaulted, prints its pre-run proof naming srt, and CMD's esca
 write to HOME, an umount of a mask, a live Herdr session through the shim) and leave nothing
 (its worktree write discarded, listed in the upper record); without srt in the kit's
 node_modules (no pnpm install yet), it refuses before any judge, naming the install command; the
-network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a local
-provider, through srt's proxy)."""
+network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a
+local provider, through srt's proxy); run by hand inside a qc sandbox (nested), its proof passes."""
 
 from __future__ import annotations
 
 import http.server
 import json
+import re
 import shutil
 import threading
 from typing import TYPE_CHECKING
@@ -73,6 +74,24 @@ def srt_missing(s: Scratch) -> None:
         assert want in ran.err, (want, ran.err)
 
 
+def nested(s: Scratch) -> None:
+    """The by-hand run inside a qc sandbox (a nested run, as a demo of the kit judging itself runs
+    it): the inner proof passes, its live-record masks holding though the outer run's state dir is
+    its caller's (none shows an entry)."""
+    r = repo(s)
+    sb = kit("octo-feather-qc-sandbox")
+    repo2 = 'cd "$(mktemp -d)" && git init -q && git -c user.name=t -c user.email=t@t commit -q --allow-empty -m x'
+    inner = f"{repo2} && {sb} -- echo inner-ran"
+    ran = s.run([sb, "--", "sh", "-c", inner], cwd=r, env=tool_homes())
+    assert "inner-ran" in ran.out, (ran.out, ran.err)
+    assert "qc sandbox: FAIL" not in ran.err, ran.err
+    masked = re.findall(
+        r"live records masked \((\d+) paths, (\d+) bytes or entries visible\)", ran.err
+    )
+    assert len(masked) == 2, ran.err  # the outer proof's line, then the inner's
+    assert all(v == "0" for _, v in masked), masked
+
+
 class _Ok(http.server.BaseHTTPRequestHandler):
     def do_GET(self) -> None:
         self.send_response(200)
@@ -107,4 +126,4 @@ def network(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(by_hand, srt_missing, network)
+    main(by_hand, srt_missing, network, nested)
