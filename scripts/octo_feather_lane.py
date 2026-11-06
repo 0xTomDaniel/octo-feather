@@ -1,0 +1,4194 @@
+#!/usr/bin/env python3
+"""octo-feather-lane: lane bookkeeping in this Herdr session's state dir (spec comms #lane-record).
+
+  octo-feather-lane archive NAME   close lane NAME: move lanes/NAME.toml and
+                                   lanes/NAME.handoffs.jsonl into lanes/archive/
+
+The state dir is the one `octo-feather-state` prints (XDG_STATE_HOME, HERDR_SESSION).
+Before moving any file `archive` runs the lane reflection, then the director reflection (`reflect`,
+below); when either cannot run, the archive refuses naming the failed reflection, every file left in place.
+`archive` creates lanes/archive/ if missing, moves each file byte-for-byte unchanged
+and prints `archived: <file> sha256=<hex>` per file. A lane with no hand-off log gets one
+from the reflection (its reflection line). It refuses, non-zero with every file left in
+place, when the record is missing or either archive target already exists.
+
+  octo-feather-lane reflect NAME   lane reflection (spec comms #reflection-lane): a fresh headless
+                                   reflector answers the lane questions; appends its lines to the log
+
+`reflect` gathers what the reflector cannot compute without bash: the record and hand-off log paths, the
+director log's lines about the lane (its issue, or a text naming the lane, #N or ghN), the factory report's
+lines for the lane (`report`, below), and the transcript paths of the supervisor, each worker the log names
+with a session, and the director. It starts agents/reflector.md through pi-role with the lane questions of
+reflection/questions.json, parses its labelled reply (form and refusals: scripts/octo-feather-reflect) and
+appends to lanes/NAME.handoffs.jsonl (created when absent) its finding and reflection lines (spec comms
+#reflection-output; fields: #handoff-kind-finding, #handoff-kind-reflection), in one write; prints
+`reflection: ...` and each finding.
+A reflector that cannot run or replies outside the form appends nothing: exit 1 naming the failed reflection.
+
+  octo-feather-lane reflect --director [--due]
+                                   director reflection (spec comms #reflection-director): a fresh
+                                   headless reflector answers the director questions; appends its
+                                   lines to the director log
+
+`reflect --director` gathers the director log's lines since its last reflection line, the factory report
+(`report`, below), the director's transcript path, every lane hand-off log (lanes/ and lanes/archive/) with its
+lane reflection lines, and the finding class counts across those logs by source and frequency (spec comms
+#reflection-writer-route). It runs the same reflector, parser and refusals as `reflect NAME`, with the director
+questions, and appends to director.handoffs.jsonl its finding and reflection lines (spec comms
+#reflection-output; fields: #handoff-director-finding, #handoff-director-reflection). One director reflection
+runs at a time (a lock on the state dir). --due runs it only when one is due at a start (spec comms
+#reflection-director; `octo-feather-start` runs that in the background) and the director log has lines, else
+prints `director reflection: not due ...`, exit 0; also exit 0, nothing run, while another one runs.
+
+After its reflection, `reflect NAME`, `reflect --director` (when it ran) and `archive` (after both, before any file
+moves) file the correction lanes due (spec comms #reflection-correction; the rule: issue-lifecycle #lanes-correction)
+through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
+the lane record's `repository`), the director's in the kit's; each issue's title carries the marker of
+scripts/octo-feather-reflect `MARK`, by which `gh issue list` finds the ones already filed. Prints
+`correction lane: filed <key> in <tracker> for <subject> (...)` per issue, else `correction lanes: none filed`;
+a tracker other than github-issues gets `correction lane: due, not filed: ...` naming the title to file by hand.
+A tracker that cannot be read or written refuses the archive, its reflections' lines undone, every file in place.
+
+  octo-feather-lane verdict PR HEAD REPORT|- [--resolution] [--repo O/R]
+                                   create, or update in place, the PR's one review verdict
+                                   comment (marker, head, verdict, findings); prints its URL
+  octo-feather-lane resolution MERGE
+                                   the code reviewer's brief after a main merge that resolved a conflict or
+                                   changed anything beyond git's automatic merge (when: issue-lifecycle
+                                   #lanes-one-head): its files and what `git show --remerge-diff` prints for it
+  octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R]
+                                   check the PR body's `## Merge ask` section; print it on pass
+  octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R]
+                                   CI on the lane's final head (when: issue-lifecycle #lanes-one-head): refuse unless
+                                   the local HEAD is the PR head with a current full gate pass, mark the PR
+                                   ready (gh pr ready), wait (default 120s) until CI's full run on it has
+                                   started (when that is: #acceptance-ci-alongside) and print its jobs
+  octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R]
+                                   the kit's judgment model answers it on FILE's text; create, or
+                                   update in place, the PR's one comment for QUESTION, labelled a model judgment
+
+`judge` (spec judgment #boundary-advisory-judge) runs beside a code review: it refuses until the PR has
+its verdict comment. QUESTION is a judgment suite's name without `judgment-` (test-quality, exact-or-proxy,
+ticket-slice, call-evidence); every question is asked of the kit's one judgment model, evals/judgment-model.json
+`model` (spec judgment#rule-one-model).
+The caller names the state (a file, or - for stdin), in the question's state_shape (evals/judgment-<id>/question.json);
+nothing is derived from prose. It runs through octo-feather-qa's classify path (the bench's Pi extension command,
+no agent, in the qa sandbox; what it calls: octo-feather-qa --help; refused inside a check run), asking only that model.
+The comment carries `Judgment: model judgment ...`, Question, Model, Answer, Confidence (the chosen label's
+probability), Calibration (the question's held-out accuracy and Brier and its threshold from suite.json `calibration`, proposed or
+accepted, and its status: below accepted threshold, no accepted threshold or meets accepted threshold; spec judgment
+#rule-calibration), PR head, Review head (the verdict comment's), then the question and the state; prints its URL.
+merge-ask, on pass, prints each such comment as one line under `Model judgments` after the section, beside the
+review verdict; no gate reads one (spec judgment #rule-advisory): merge-ask passes or fails the same without it.
+
+`verdict` writes through gh (never under the qc judge). REPORT is the code review's
+report, a file or - for stdin. Its fields (the verdict, the check field, the Owner field) and the
+reader scope: .agents/skills/code-review/SKILL.md step 4, **Report fields**. The last verdict line
+in scope is the verdict, and lines that disagree are refused. What the check field classifies:
+docs/adr/0008, Who builds what. Refused: no
+verdict, neither check form, both, a malformed Check line, a class other than exact or proxy, and
+a `class: proxy` line with `Verdict: clear` (a proxy check blocks). The comment's header carries
+the lines; merge-ask prints them under the section for the owner. HEAD is the head the review judged, H, a commit
+of the PR (7+ hex prefix); the comment names it (`Head:`) and the PR's head when posted (`PR head:`).
+With --resolution, HEAD is such a merge, the review covering what `resolution` prints for it alone: the PR's one
+comment for that merge names it (`Merge:`) and its resolution's files (`Files:`); refused for a commit that is no
+merge or a merge with nothing beyond git's automatic merge.
+
+  octo-feather-lane fields REPORT|-   a report's field lines as JSON (the parser verdict uses)
+
+`fields` reads the lines in `verdict`'s reader scope (Report fields, above) and prints one JSON object:
+"Check" {lines: [{path, rule, owner, reads, class}], none, errors} from the check field (errors:
+`verdict`'s refusals, an absent field included); "Owner" {lines: [{path, rule, restated: [path...]}], none,
+errors} from the Owner field (`:<line>` stripped from every path); "fields" {Name: [value...]} for every
+other `Name: value` line in scope (Name: a capital, then letters or -, in words one space apart: `Prior art`). Exit 0; 1 on an unreadable report.
+The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
+
+`merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
+the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
+defaults to the PR's base branch on origin): the PR's commits and their subjects (BASE..head:
+`gh pr view --json commits` lists at most 100; `verdict` reads them the same way), the judged
+head's qc.toml for a lane with criterion rows, and the history when the PR head is not the judged head. The PR body carries the
+parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
+the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
+on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
+
+  ## Merge ask
+  Head: <sha>                     the PR's head H' (7+ hex prefix)
+  Checks: <summary>               verified: every check on that head SUCCESS, none pending; a SKIPPED one only
+                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head);
+                                  none reported (an empty rollup, never a skipped check)
+                                  passes only when both hold, else fails naming the one that does not or
+                                  could not be read: the no-CI fact for that head (post-merge step 2), and
+                                  the PR base's required-check policy requires no check: `gh api
+                                  repos/<repo>/branches/<base>` protection.required_status_checks empty, and
+                                  `gh api repos/<repo>/rules/branches/<base>` no required_status_checks rule
+                                  (its plan-has-no-rulesets 403 counts as none). Printed after the section
+                                  as `Checks: no CI: ...`, naming each fact and source
+  Judged: <proof>                 = the line the check prints for H to H' (below)
+  | criterion | qc verdict | judged | evidence |
+  |---|---|---|---|
+  | <spec>#<id> | pass | judged <sha> | <report path, command> |   one row per claimed criterion
+  Review verdict: <comment URL>   this PR's verdict comment: head H, verdict clear
+  Built: <id> <id>                = status entries built with this PR, each named by one of its `qc: built` commits
+  Failed: none                    or `Failed:` then one `- <id>: <triage>` line per fail row
+
+Every row names one judged head H (7+ hex), a commit of the PR: the head qc and the code
+review both judged, in parallel (spec #lanes-one-head). H to H' may hold only (a) `qc: built
+... (judged <sha>)` commits changing only the --status files and (b) merges of BASE whose tree
+is git's automatic merge of their parents (no conflict resolved), after which the lane's own
+diff against BASE (BASE's merge base to the head, status files aside) is identical to its diff
+at H: same files, same content. Anything else fails naming the commit and file: run just qc
+and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
+the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
+Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
+`octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
+record is clean and whose gate_config and list are the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
+Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
+says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
+OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
+The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
+`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
+of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
+against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
+head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
+fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
+the items). `Review check classes` lists the comment's
+lines for the owner (send it all with herdr-say --parent). Failure: each missing item
+with its fix on stderr, exit 1.
+
+A lane that builds no criterion (spec #lanes-one-head) says `Built: none` and `Failed: none` with no
+criterion row (no table, or its header alone), and its PR holds no `qc: built` commit and no --status
+entry built with it; --status is then optional. Its judged head H is the review verdict comment's Head:
+the check needs Head, Checks, the parent line and Review verdict, and `Judged:` only when H is not the
+PR head (the same proof as above).
+
+A review verdict on a head before the judged head (or, building no criterion, before the PR head) holds when the
+same proof carries it there, with each main merge that resolved a conflict or changed anything beyond git's
+automatic merge allowed when a clear `verdict --resolution` comment names it, and only its resolution's files moved
+in the lane diff; the section then needs `Reviewed: <proof>`, the line the check prints, naming the reviewed head,
+each merge, its files and its resolution verdict's URL. Without it the check names the merge. A lane that claims any criterion (a Built or Failed id, a qc commit,
+a status entry built with the PR) with no row is refused naming the criterion table.
+
+  octo-feather-lane tickets PARENT check every sub-issue of ticket PARENT as a tracer bullet
+  octo-feather-lane ticket FILE|-  check one ticket draft (a file, or stdin) before publishing
+
+`tickets` and `ticket` (spec issue-lifecycle #acceptance-tracer-tickets) read a ticket's
+`## Acceptance criteria` list. A ticket passes when it names at least one criterion id
+`<spec slug>#<anchor>` whose anchor is the data-anchor of a data-acceptance-criterion
+element in docs/specs/<slug>.spec.html (of the git repo at the current directory; a story,
+section or table anchor is no criterion; <template> content: #121 D17), or, serving none, names the rule it
+serves and that rule's owner (spec #lanes-tickets) in an item `rule: <rule> (<owner>)`, the `<rule> (<owner>)`
+form of the review's Check lines (docs/adr/0008): the rule non-empty, the owner an ADR of the repo
+(`docs/adr/NNNN...` or `ADR NNNN`, naming exactly one docs/adr/NNNN-*.md) or `owner ruling <date and/or issue>`;
+a rule item with no owner, an unknown ADR, an empty rule or another owner fails class unowned-rule, and
+beside a criterion id it is allowed, not required. Its last item is `demo: ` with a backticked command that runs
+the repo's own public surface (ADR 0009): after env assignments and runners (uv run, npx,
+pnpm exec...), a program the repo declares (a tracked executable outside tests/, a justfile
+recipe other than check/check-*/integrate/qc/qa as `just --dump --dump-format json` lists it:
+imports, aliases and `just MOD RECIPE` included, never a header regex; no just or a justfile
+it cannot read is exit 2, #172; the recipes are the ones just itself says it runs, in the repo,
+dependencies included, none a gate or factory recipe: just parses the words beside --completions, and
+unless it objects to more than their recipe words and overrides (a subcommand such as --show, --list or
+--command runs no recipe), dry-runs them with --verbose, naming each recipe; executing nothing,
+evaluating no backtick; every option, parameter and default is just's to read, and anything just refuses,
+-q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's mise.toml is
+the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
+[project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
+or a generic tool (printf, echo). The
+wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
+command the ticket itself creates when the ticket declares it exactly in a line
+``Creates: `<path>` `` (repo-relative, the script or file the demo runs, e.g. scripts/new-cmd or bin/x;
+a leading ./ is dropped), one backticked value, the line repeatable: a demo stage passes when its
+program, after env assignments and runners, is exactly that path (written with a /, e.g. ./run for a
+top-level file, and stands for itself, never an interpreter or HTTP tool by its basename). A declared
+path that already exists still passes. A just recipe is never declared (owner ruling #240, C): an
+existing one is a demo as above, needing no Creates; one the justfile lacks is created in an earlier
+ticket, or the demo runs the path it runs. Class bad-creates: a value not one backticked path, empty,
+`just ...`, absolute, with `..`, not normalized, or under tests/ or a hook dir. Class unused-creates: a declared path no demo stage runs (an
+Expand-contract ticket runs none). A demo of an undeclared command the repo lacks stays
+layer-only-ticket, its fix naming the Creates form. A ticket body
+is read outside column-0 ``` or ~~~ fences and HTML comments `<!--` to `-->`; no lists, indented code
+or code spans; a literal `<!--` in prose opens a comment (#145, #121 D18 D21). Checks are
+structural facts only, never what the prose means: whether the demo shows the behavior What to
+build describes is review's and the qc judge's (docs/adr/0008, #118). Each failure prints
+`<ticket>: class: <class>: <problem>; fix: <fix>`. Exit 0 all pass, 1 a ticket fails,
+2 nothing could be checked (gh, file, specs or justfile error; nothing printed as passed).
+`tickets` reads tickets only through the target's tracker skill's `issue-view` (the parent's
+`children`, then each body; GitHub Issues or Linear, from the .octo-feather.toml of the git repo
+at the current directory; on GitHub it works under the qc judge's offline gh).
+
+  octo-feather-lane done PARENT    the lane's close (spec issue-lifecycle #gates-pr-line): move
+                                   every ticket of PARENT, then PARENT, to done
+
+`done` runs the tracker skill's `issue-done` on each sub-issue `issue-view PARENT` lists, then
+on PARENT, whether or not the tracker already did (one already done stays as it is), reads each
+back with `issue-view` and prints `<key>: done`. A ticket that fails or does not read done is
+named with its reason on stderr, after the others were tried; exit 1, rerun after the fix.
+
+  octo-feather-lane spend          the spend ledger's totals, then the OpenRouter reconcile
+  octo-feather-lane spend record [--lane NAME]
+                                   append the model calls given as JSON lines on stdin to the ledger
+
+`spend` (spec spend) reads the ledger, $(octo-feather-state)/spend.jsonl: append-only JSON lines, one per
+model call, {at, lane, purpose, model, input_tokens, output_tokens, cost_usd}. It prints totals by UTC day,
+lane, purpose, lane and purpose (each role under its lane) and model: dollars, calls, tokens, and calls with
+unknown cost (cost_usd null) counted apart (spec spend#rule-cost). Then the reconcile, per window: OpenRouter's usage for the key, the ledger's dollars
+on openrouter/* models over the same window, and the gap = OpenRouter minus ledger (spec spend#rule-gap). The
+windows are OpenRouter's key usage windows (GET /api/v1/key usage_daily, usage_weekly, usage_monthly,
+openrouter.ai/openapi.json): today = the current UTC day from 00:00Z, this week = the current UTC week starting
+Monday 00:00Z, this month = the current UTC calendar month from day 1 00:00Z. The key is OPENROUTER_API_KEY,
+else `openrouter.key` in ~/.pi/agent/auth.json (a `!command` key runs the command, as Pi does); it is never
+printed: `curl` makes the call, the key on its stdin config, never in argv. No key, or an
+unreachable or failing endpoint, prints the reason in the reconcile section; the totals still print, exit 0.
+No budget: nothing is blocked (spec spend#rule-no-budget).
+
+`spend record` is the ledger's one writer: each call path appends through it. Each stdin line is a JSON object:
+model (provider/id, e.g. openrouter/qwen/qwen3-8b) and purpose (e.g. bench, judge, a role name), strings;
+input_tokens and output_tokens, integers >= 0; cost_usd, the provider's reported cost in USD, or null or absent
+when unreported; at, optional ISO 8601 time of the call (default now, UTC). The lane is --lane NAME (for callers
+that lost the HERDR_* env, e.g. in a sandbox), else the lane record in $(octo-feather-state)/lanes/*.toml whose
+`supervisor` pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, e.g. w37 for supervisor "w37:p2", else
+OCTO_FEATHER_SPEND_SPACE: scripts/pi-role --help, Headless), else
+null: no lane (spec spend#rule-lane). Records only grow (spec spend#rule-append): all lines of one call are
+appended in one locked write, so concurrent writers never interleave. It never fails its caller: a line it
+cannot read, or a ledger it cannot write, prints one stderr line naming the unrecorded spend, and it exits 0
+(spec spend#rule-write-fails).
+
+  octo-feather-lane intake         every open correction-lane issue by class, with the correction-lane rule's
+                                   evidence (spec comms #reflection-correction); reads only, writes nothing
+
+`intake` lists the correction-lane issues (title marker, as `reflect` files them) of the github-issues trackers of
+every lane record's `repository` (lanes/ and lanes/archive/) and the kit's, through the same `gh issue list` call
+as `reflect`; an issue filed in another tracker (Linear) is not found (gh only). Per class of an open one:
+`class <class>: due yes|no; blocking <n> in <m> lane(s) (<lanes>); findings <k>`, under it each open issue
+(`issue <repo>#<n>: <title>`), `duplicates: <n> open issues of class <class>` when two or more, and each finding
+line of the class in the lane logs and the director log (`finding <lane|director> <at> <source> blocking|not
+blocking: <summary>`). Due and what counts: scripts/octo-feather-reflect `corrections`, `counts`. Exit 0; 1 when
+gh cannot list a tracker.
+
+  octo-feather-lane report         every open lane of this session, then the owner queue and owner-caught
+
+What `report` reads and shows, that it writes nothing, and how it treats a source it cannot read:
+docs/specs/comms.spec.html#factory-report. Its output, `report at <now> (<lanes dir>)`, then the headline (spec comms
+#report-owner-caught):
+
+  owner-caught (headline, director.handoffs.jsonl): <N> in the last 7 days, <M> in the 7 days before
+                                                 by each finding's at; `; <K> with no readable at, not counted`
+                                                 when some have none; `log none` with no log, `unread` when unreadable
+
+then per lane:
+
+  lane <record name>: issue <issue> <repository> "<goal>"
+    started: <started_at>                        its age is the lane's wall time
+    pr: #N <state> <draft|ready> head <12 hex> checks: <count> <result>, ...   (`pr: none` with no pr)
+    running: <pane> <name> <Herdr state>, one line per Herdr agent whose workspace is the supervisor
+             pane's prefix; `(supervisor)` marks the supervisor's pane, a supervisor pane not listed is said
+    waits: waiting_on "<value>", last hand-off <last_handoff_at>
+    waits: worker <name> <pane> working          per agent other than the supervisor in state working
+    waits: owner gate <gate> asked <at>
+    waits: check <name> <status> on head <12 hex>
+    review rounds: <N>                           the hand-off log's `"kind": "review"` lines
+    spend: $<dollars> over <N> calls of known cost, <M> calls of unknown cost
+                                                 spend.jsonl lines whose lane is the record name
+                                                 (cost_usd null: unknown; neither a number nor null:
+                                                 unparsable); `none recorded for <lane>`,
+                                                 `no spend recorded (spend.jsonl: none)` with no ledger
+    gate time: lane <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+    gate time: main <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
+                                                 the check-runs.jsonl line with the latest start whose
+                                                 tier is full (a subset run, just fast's, never stands in;
+                                                 a line with no tier, written before the runners recorded
+                                                 one, counts as today) and whose
+                                                 head is a commit of the PR (`gh pr view --json commits`),
+                                                 then of the default branch's last 100 commits (one
+                                                 `gh api repos/<repository>/commits` per repository);
+                                                 `<lane|main> none: <why>` with no such run
+
+After the lanes:
+
+  gate budget <owner/name>: the latest passed full gate run against gate-budget.toml on <owner/name>'s default branch
+    full gate: <s>s, head <12 hex>, started <start>: OVER BUDGET by <s>s (budget <s>s)
+                                                 or `within budget, <s>s to spare (budget <s>s)`, `no budget (<why>)`
+    growth: <+x.y%> over the trend's median <s>s (the <N> passed full runs before it); set share <p>%: GROWN
+                                                 or `within`; `no set share (<why>)` with no budget
+    trend: <s>s <12 hex> <start>, ... (passed full runs, oldest first)
+    slowest: <name> <s>s, ...                    the latest run's 5 slowest items
+                                                 one block per open lane's repository (spec comms
+                                                 #report-field-gate-time): check-runs.jsonl lines with tier full
+                                                 and exit 0 (each runner's trend writer sets tier: the kit's
+                                                 tests/gate/conftest.py and its copy templates/python/tests/
+                                                 conftest.py for pytest, templates/typescript/tests/trend-
+                                                 reporter.ts for Vitest; a line without it is no full run
+                                                 here) whose head is a commit of
+                                                 the default branch (the same 100) or of its open lanes' PRs;
+                                                 the latest is the full gate time, trend_runs before it the
+                                                 trend; `gate budget <repo>: no passed full gate run ...` or
+                                                 `unread: ...` instead. Shown only: no gate reads it
+  owner queue:                                   (`owner queue: none` with none pending)
+    lane <record name> gate <gate> asked <at>    oldest first
+  owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
+    class <class>: count <N>, last seen <at>     by class name
+  director reflection: last ran <at>             the director log's latest reflection line (`never ran (<log>)`
+                                                 with none; `never ran (<log>: none)` with no log)
+  skill reach (Pi sessions active in the last 7 days; per role: skill read/offered, sessions):
+    <role> (<N> sessions): <skill> <read>/<offered>, ...; read, not offered: <skill> <sessions>, ...
+                                                 spec comms #report-skill-reach, one line per role, by name:
+                                                 the Pi session files (PI_CODING_AGENT_DIR, else ~/.pi/agent,
+                                                 then sessions/*/*.jsonl) with a line timestamped in the last 7
+                                                 days, whenever they started (a file last written before that is
+                                                 not opened). Role: the first `# ` heading of the system prompt's
+                                                 appended role prompt (`no role` without one). Offered: its
+                                                 <available_skills> names, whenever that prompt was written.
+                                                 Read: a read or bash call (top level, or one a codemode batch
+                                                 dispatched) whose result is timestamped in the last 7 days and
+                                                 did not fail (top level: its result's isError not true; in a
+                                                 batch: the call's status ok in the result's nestedCalls, as Pi
+                                                 records them) and whose own arguments open <folder>/SKILL.md:
+                                                 the read tool's path; in bash (shell words), a file operand of
+                                                 cat, head, tail, sed, less, more, bat or nl, or a < input (not
+                                                 sed's script text, an option's value, a > target, a heredoc
+                                                 body, sed -i). A codemode batch's source is never read: a batch
+                                                 with no nestedCalls record counts no read. A path in text, a
+                                                 pattern, a grep, a write or edit is no read, and a computed
+                                                 path ($var, ${...}, a glob) is not resolved, so not counted:
+                                                 the count may miss reads, never makes one up. A folder an
+                                                 offered skill's location names counts as
+                                                 that skill (a linked skill by its offered name), any other by
+                                                 the folder. A session counts once per skill; a read of a skill
+                                                 the session was not offered counts apart. `... none` with no
+                                                 session; `skill reach: no Pi session (sessions <dir>: none)`
+                                                 with no folder; an unreadable file or one with no session line
+                                                 first: `  unread: Pi session <dir>/<file>: <reason>`
+  spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
+
+gate-budget.toml, a repository's gate-time budget at its root (read from its default branch, `gh api
+repos/<repository>/contents/gate-budget.toml`; by merge-ask at the PR head), kept by the factory like any repo
+policy: TOML, read with the standard library, a file of its own so a budget change changes no gate configuration
+(octo-feather-gate config) and no qc contract. Keys: budget_seconds (a number > 0), growth_share (a number >= 0:
+GROWN when the run is more than that share over the trend's median), trend_runs (an integer >= 1: that many passed
+full runs before the latest make the trend; 5 shown with no file); optional test_cpu_seconds (a number > 0: the
+per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here). Anything else is
+`unread: gate-budget.toml (<repo>)`.
+
+Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
+read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
+counted and named by line number. The last line is `unread: none` or `unread: <source>, ...`.
+Exit 0; 1 on any argument.
+
+  octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R]
+                                   the director's post-merge routine for lane NAME, its steps in order
+
+`post-merge` is the one command the director runs after a lane merges, at the merge report and at the close
+report (owner ruling 2026-10-29 on issue 206; docs/adr/0008 Duties). Rerun it freely: each step is idempotent, and
+step 4 tells no lane twice.
+  step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
+  step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
+                   for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
+                   lists is completed; ok only when every run concluded success, or cancelled and superseded. A run
+                   cancelled (a later push's concurrency cancel-in-progress) is superseded by the first later push
+                   run of its workflow (`gh run list --branch <base> --event push --workflow <name>`, a higher run
+                   id) whose headSha contains the merge commit (`gh api repos/<repo>/compare/<merge>...<headSha>`
+                   ahead or identical): watched to its end, ok on success naming both runs, red stops; cancelled in
+                   turn, its own successor counts; none within --wait stops as red. The no-CI fact: while gh lists
+                   no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github, then workflows) finds no
+                   .github/workflows/*.yml or *.yaml file; then step 2 is ok at once, `no CI: no workflow file
+                   ...`, with no wait. merge-ask reads the same fact at the PR head
+  step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
+                   `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
+                   PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
+                   --porcelain) or one diverged from the merge commit; after `git fetch origin`, one behind it
+                   fast-forwards (`git merge --ff-only`, a detached HEAD stays detached), one at or past it does
+                   not move. Then in the install, each failure stopping named: `octo-feather-mise-install .` (the
+                   kit's own locked mise tools, never the user's global ones; only with a mise.toml there), `just vendored-fetch`, `uv sync --locked` (env UV_PYTHON_DOWNLOADS=never: a
+                   pinned Python (.python-version) not installed stops, naming `uv python install --no-bin <pin>`),
+                   `pnpm install --frozen-lockfile`, `just install-check <the current repo's top>`. No service
+                   restart; a rerun reruns these
+  step 4 tell supervisors  each open lane record but --lane's, of the PR's repo (every lane when the PR is the kit
+                   install's origin repo: every lane runs kit roles), whose supervisor pane `herdr agent get` finds
+                   gets one herdr-say: "main moved to <merge sha12> (#PR <title>); rule files changed: <list or
+                   none>; re-read the changed ones before your next step." Rule files: what the merge commit
+                   changed against its first parent (git in the current repo, fetched from origin when missing)
+                   under agents/*.md, .agents/skills/, .skillfile/patches/, AGENTS.md, docs/adr/, docs/specs/.
+                   A pane Herdr does not find (agent_not_found, read from stderr or stdout) is never sent to (why:
+                   herdr-comms SKILL.md, herdr-say) and never stops the step: listed `not woken: <lane> <pane>`
+                   (parked) when the lane's latest parked line in <lane>.handoffs.jsonl beside its record names
+                   that pane, else `gone: director to resume or archive: <lane> <pane>`; any other herdr failure
+                   stops the step, named. Each lane told gets one line in
+                   $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
+                   "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
+                   #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
+                   A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
+                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...; gone: director to resume or
+                   archive: ...`
+  step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
+                   moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
+                   close report`; an archived record whose `pr` is not PR stops. In order, each stop keeping the
+                   rest: the lane's own space (the archived `supervisor` pane id's prefix, when no open lane
+                   record's supervisor and not director.toml's `pane` has it) closed with `herdr-close <space>`,
+                   else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
+                   closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
+                   list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
+                   git's words); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
+                   based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
+                   deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
+                   when origin has it. Gone already prints `already`; review rows, spools and records stay
+Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
+a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`. Exit 0 when every step is ok, 1 when one
+stopped (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch
+that failed, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+at the close report), 1 with usage on stderr for bad arguments.
+
+One subcommand per function, listed in COMMANDS; add a subcommand there.
+"""
+import functools, hashlib, importlib.machinery, importlib.util, json, os, re, shlex, subprocess, sys, tempfile, time
+import dataclasses
+import datetime as dtm
+from html.parser import HTMLParser
+from pathlib import Path
+from typing import cast
+
+from handoff_log import read_log
+
+NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
+KIT = Path(__file__).resolve().parent.parent
+
+
+class Refuse(Exception):
+    """A refusal: message names the fix, exit 1, nothing moved."""
+
+
+def lanes_dir() -> Path:
+    state = Path(__file__).resolve().with_name("octo-feather-state")
+    out = subprocess.run([str(state)], capture_output=True, text=True, check=True).stdout
+    return Path(out.strip()) / "lanes"
+
+
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def lane_name(args: list[str], cmd: str = "archive") -> str:
+    if len(args) != 1 or not NAME.fullmatch(args[0]) or args[0].endswith((".toml", ".jsonl")):
+        raise Refuse(f"usage: octo-feather-lane {cmd} NAME (the lane record's name without .toml, e.g. supervisor-gh12; got {' '.join(args) or 'nothing'})")
+    return args[0]
+
+
+def cmd_archive(args: list[str]) -> int:
+    name = lane_name(args)
+    lanes = lanes_dir(); archive = lanes / "archive"
+    record, log = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl"
+    import stat
+    files = []  # regular sources, checked with lstat so a symlink is never followed
+    for f in (record, log):
+        try:
+            mode = os.lstat(f).st_mode
+        except FileNotFoundError:
+            if f == record:
+                raise Refuse(f"no lane record {record}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+            continue
+        except OSError as e:
+            raise Refuse(f"cannot read {f} ({e}): fix its permissions, then rerun") from e
+        if not stat.S_ISREG(mode):
+            raise Refuse(f"not a regular file: {f}; replace it with the real file (a lane's record and hand-off log are plain files), then rerun")
+        files.append(f)
+    for f in (record, log):
+        if (archive / f.name).exists() or (archive / f.name).is_symlink():
+            raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
+    pre = log.stat().st_size if log in files else None   # the log's length before the reflection appends
+    reflect_lane(name, lanes)   # spec comms #reflection-lane: before any file moves
+    dlog = lanes.parent / DIRECTOR_LOG
+    dpre = dlog.stat().st_size if dlog.is_file() else None
+    try:
+        reflect_director(lanes)
+    except Refuse as e:
+        unreflect(log, pre)   # every file left as it was: the lane reflection's lines cut too
+        raise Refuse(f"{e}; the lane reflection's lines undone, every file left in {lanes}") from e
+    try:
+        file_corrections(lanes)   # spec comms #reflection-correction
+    except Refuse as e:
+        unreflect(log, pre)
+        unreflect(dlog, dpre)
+        raise Refuse(f"{e}; the reflections' lines undone, every file left in {lanes}") from e
+    if log not in files and os.path.lexists(log):
+        cast("list[Path]", files).append(log)   # the reflection wrote the lane's first hand-off line
+    try:
+        before = {f.name: sha256(f) for f in files}
+    except OSError as e:
+        raise Refuse(f"cannot read a lane file ({e}): fix its permissions, then rerun") from e
+    made_dir = not archive.is_dir()
+    created = []  # destinations this run linked, recorded before the source is unlinked
+    try:
+        archive.mkdir(exist_ok=True)
+        for f in files:
+            # link then unlink: never overwrites a target that appeared meanwhile.
+            os.link(f, archive / f.name, follow_symlinks=False); created.append(f)
+            got = sha256(archive / f.name)
+            if got != before[f.name]:
+                raise ValueError(f"{f} changed before the move: sha256 {before[f.name]} -> {got}")
+            f.unlink()
+    except Exception as e:
+        rollback(created, archive)
+        unreflect(log, pre)
+        unreflect(dlog, dpre)
+        if made_dir:
+            try:
+                archive.rmdir()
+            except OSError:
+                pass
+        raise Refuse(f"move failed ({e}); nothing archived, every file left in {lanes}: fix the cause, then rerun") from e
+    for f in files:
+        print(f"archived: {archive / f.name} sha256={before[f.name]}")
+    return 0
+
+
+@functools.cache
+def reflect_module():
+    """scripts/octo-feather-reflect: the question list, brief, reflector run, reply parser and log lines."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_reflect", str(KIT / "scripts" / "octo-feather-reflect"))
+    spec = importlib.util.spec_from_loader("octo_feather_reflect", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def reflect_lane(name: str, lanes: Path) -> None:
+    """Run the lane reflection of lane NAME and append its lines to the lane's hand-off log; Refuse when it fails."""
+    import datetime, tomllib
+    r = reflect_module()
+    record, log, state = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl", lanes.parent
+    try:
+        rec = tomllib.loads(record.read_text(encoding="utf-8"))
+        lines = read_log(log)[0] if log.exists() else []
+        dlog = state / "director.handoffs.jsonl"
+        dlines = read_log(dlog)[0] if dlog.exists() else []
+        dl = [json.dumps(d, ensure_ascii=False) for d in dlines if r.about_lane(d, name, rec.get("issue"))]
+        qs = r.questions("lane")
+        now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+        unread: list[str] = []
+        try:
+            agents, why = cast("list[dict[str, object]]", herdr_agents()), None
+        except Refuse as e:
+            agents, why = None, str(e)
+        report = report_lane(record, agents, why, now, unread, [], ReportSources(state, unread))
+        talk = r.lane_transcripts(lines, rec.get("supervisor")) + [r.director_transcript(state)]
+        brief = r.brief(r.LaneRecords(name, record, log, dlog, dl, report, talk), qs)
+        found, ids = r.parse(r.run(brief, Path.cwd()), qs)
+        r.append(log, r.log_lines(found, ids))
+    except r.FailedError as e:
+        raise Refuse(f"lane reflection of {name} failed ({e}); nothing appended, every file left in {lanes}: fix the cause, then rerun") from e
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refuse(f"lane reflection of {name} failed: cannot read its inputs or write its log ({e}); every file left in {lanes}: fix the cause, then rerun") from e
+    print(f"reflection: lane {name}, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {log}")
+    for f in found:
+        print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
+
+
+DIRECTOR_LOG = "director.handoffs.jsonl"
+DAY = 86400   # when a start's director reflection is due: spec comms #reflection-director
+
+
+def reflect_director(lanes: Path, due: bool = False) -> bool:
+    """Run the director reflection and append its lines to the director log; Refuse when it fails. DUE: only when
+    one is due at a start (DAY), and not while another runs. Whether it ran."""
+    import contextlib, datetime, fcntl, io
+    r = reflect_module()
+    state = lanes.parent
+    dlog = state / DIRECTOR_LOG
+    try:
+        state.mkdir(parents=True, exist_ok=True)
+        lock = os.open(state, os.O_RDONLY)   # the state dir's own fd: the lock creates no file
+        try:
+            fcntl.flock(lock, fcntl.LOCK_EX | (fcntl.LOCK_NB if due else 0))
+        except BlockingIOError:
+            os.close(lock)
+            print(f"director reflection: not due, another one is running ({state})")
+            return False
+        try:
+            dlines = read_log(dlog)[0] if dlog.exists() else []
+            now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+            last = r.reflected_at(dlines)
+            if due and (not dlines if last is None else (now - last).total_seconds() <= DAY):
+                print("director reflection: not due, " + (f"last ran {stamp(f'{last:%Y-%m-%dT%H:%M:%SZ}', now)}" if last
+                                                         else f"no director log lines to reflect on ({dlog})"))
+                return False
+            since, recent = r.since_last_reflection(dlines)
+            logs: dict[str, list[dict[str, object]]] = {}
+            listed: list[str] = []
+            for lane, p, lines in lane_logs(lanes):
+                logs[lane] = logs.get(lane, []) + lines
+                listed.append(r.lane_log_line(lane, p, lines))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                cmd_report([])
+            rec = r.DirectorRecords(dlog, since, [json.dumps(d, ensure_ascii=False) for d in recent], buf.getvalue().splitlines(),
+                                    r.director_transcript(state), listed, r.class_counts(logs))
+            qs = r.questions("director")
+            found, ids = r.parse(r.run(r.director_brief(rec, qs), Path.cwd()), qs)
+            r.append(dlog, r.log_lines(found, ids, lane=False))
+        finally:
+            os.close(lock)   # releases the lock
+    except r.FailedError as e:
+        raise Refuse(f"director reflection failed ({e}); nothing appended to {dlog}: fix the cause, then rerun") from e
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"director reflection failed: cannot read its inputs or write {dlog} ({e}): fix the cause, then rerun") from e
+    print(f"reflection: director, {len(found)} finding{'s' if len(found) != 1 else ''}, questions {', '.join(ids)}: appended to {dlog}")
+    for f in found:
+        print(f"  finding {f['class']} ({f['question']}) -> {f['route']}: {f['summary']}")
+    return True
+
+
+def lane_logs(lanes: Path) -> list[tuple[str, Path, list[dict[str, object]]]]:
+    """Every lane hand-off log, archived ones first: (lane, path, its lines)."""
+    return [(p.name.removesuffix(".handoffs.jsonl"), p, read_log(p)[0])
+            for p in sorted(lanes.glob("archive/*.handoffs.jsonl")) + sorted(lanes.glob("*.handoffs.jsonl"))]
+
+
+GITHUB_ISSUES = "github-issues"   # the kit's own tracker skill, and the one tracker whose issues the rule can search (gh)
+
+
+def file_corrections(lanes: Path) -> list[str]:
+    """Spec comms #reflection-correction: file, through the tracker skill's issue-create, every correction lane the
+    rule makes due (scripts/octo-feather-reflect `corrections`, `still_due`), whichever reflection ran, each in its
+    own owner's tracker: a lane name files in its target's tracker (the current directory's tracker skill, the lane
+    record's repository), the director in the kit's. Prints each filed key; Refuse when the tracker cannot be read or written."""
+    import tomllib
+    r = reflect_module()
+    dlog = lanes.parent / DIRECTOR_LOG
+    try:
+        logs: dict[str, list[dict[str, object]]] = {}
+        for lane, _, lines in lane_logs(lanes):
+            logs[lane] = logs.get(lane, []) + lines
+        due = r.corrections(logs, read_log(dlog)[0] if dlog.exists() else [])
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"correction lanes: cannot read the hand-off logs ({e}): fix the cause, then rerun") from e
+    filed: list[str] = []
+    for owner in dict.fromkeys(o for d in due for o in d.owners):
+        mine = [d for d in due if owner in d.owners]
+        if not mine:
+            continue
+        if owner == r.DIRECTOR:
+            skill, repo = GITHUB_ISSUES, r.KIT_REPO
+        else:
+            skill = tracker_skill(Refuse)
+            rec = next((p for p in (lanes / f"{owner}.toml", lanes / "archive" / f"{owner}.toml") if p.is_file()), None)
+            try:
+                repo = tomllib.loads(rec.read_text(encoding="utf-8")).get("repository") if rec else None
+            except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+                raise Refuse(f"correction lanes: cannot read lane record {rec} ({e}): fix it, then rerun") from e
+        where = f"{skill} {repo or 'of the current directory'}"
+        env = {"GH_REPO": str(repo)} if repo else {}
+        if skill != GITHUB_ISSUES:
+            for d in mine:
+                print(f"correction lane: due, not filed: {d.subject}: tracker skill {skill} offers no search for an existing"
+                      f" one; file it by hand through {skill}'s issue-create, title `{d.title()}`, unless one is open")
+            continue
+        issues = correction_issues(str(repo) if repo else None)
+        for d in mine:
+            if not r.still_due(d, issues):
+                continue
+            try:
+                key = tracker("issue-create", "--title", d.title(), "--body-file", "-", err=Refuse, skill=skill, env=env,
+                              stdin=d.body()).strip()
+            except Refuse as e:
+                raise Refuse(f"correction lanes: {e}" + (f" (filed before it: {', '.join(filed)})" if filed else "")) from e
+            filed.append(key)
+            print(f"correction lane: filed {key} in {where} for {d.subject} ({len(d.findings)} finding"
+                  f"{'s' if len(d.findings) != 1 else ''}; route: {d.route()})")
+    if not filed:
+        print("correction lanes: none filed")
+    return filed
+
+
+def correction_issues(repo: str | None) -> list[dict[str, object]]:
+    """Every correction-lane issue, open or closed, of the github-issues tracker REPO (None: the current directory's),
+    found by scripts/octo-feather-reflect `MARK_WORD` in its title: {number, title, state, closedAt, url}."""
+    r = reflect_module()
+    out = gh(["issue", "list", *(["--repo", repo] if repo else []), "--state", "all", "--limit", "1000",
+              "--search", f'"{r.MARK_WORD}" in:title', "--json", "number,title,state,closedAt"],
+             "check gh auth and network, then rerun")
+    try:
+        got = json.loads(out)
+    except ValueError as e:
+        raise Refuse(f"correction lanes: gh issue list printed no JSON ({e}): rerun") from e
+    if not isinstance(got, list):
+        raise Refuse("correction lanes: gh issue list printed no list: rerun")
+    return [cast("dict[str, object]", i) for i in cast("list[object]", got) if isinstance(i, dict)]
+
+
+def cmd_intake(args: list[str]) -> int:
+    """`octo-feather-lane intake` (spec comms #reflection-correction): every open correction-lane issue, grouped by
+    class, with the rule's evidence (scripts/octo-feather-reflect `corrections`, `counts`); reads only."""
+    import tomllib
+    if args:
+        raise Refuse(f"usage: octo-feather-lane intake (got {' '.join(args)})")
+    r = reflect_module()
+    lanes = lanes_dir()
+    dlog = lanes.parent / DIRECTOR_LOG
+    logs: dict[str, list[dict[str, object]]] = {}
+    for lane, _, lines in lane_logs(lanes):
+        logs[lane] = logs.get(lane, []) + lines
+    director = read_log(dlog)[0] if dlog.exists() else []
+    due = {d.subject for d in r.corrections(logs, director)}
+    repos: list[str] = []
+    for rec in sorted(lanes.glob("archive/*.toml")) + sorted(lanes.glob("*.toml")):
+        try:
+            repo = tomllib.loads(rec.read_text(encoding="utf-8")).get("repository")
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError):
+            continue
+        if isinstance(repo, str) and repo and repo not in repos:
+            repos.append(repo)
+    if r.KIT_REPO not in repos:
+        repos.append(r.KIT_REPO)
+    mark = re.compile(r"\[" + re.escape(r.MARK_WORD) + r" ([^\]]+)\]")
+    by: dict[str, list[tuple[str, str, dict[str, object]]]] = {}
+    for repo in repos:
+        for i in correction_issues(repo):
+            m = mark.search(str(i.get("title")))
+            if m and str(i.get("state")).upper() == "OPEN":
+                subject = m.group(1)
+                by.setdefault(subject.split(" ")[0], []).append((repo, subject, i))
+    found = [(log, d) for log, lines in [*logs.items(), (r.DIRECTOR, director)] for d in lines
+             if d.get("kind") == "finding" and isinstance(d.get("class"), str)]
+    print(f"correction intake: {sum(len(v) for v in by.values())} open correction-lane issue(s) in {len(by)} class(es);"
+          f" trackers searched (github-issues): {', '.join(repos)}; rule: issue-lifecycle #lanes-correction")
+    for cls in sorted(by):
+        mine = [(log, d) for log, d in found if d["class"] == cls]
+        counted = [(log, d) for log, d in mine if r.counts(log, d)]
+        lanes_ = sorted({log for log, _ in counted})
+        subjects = {s for _, s, _ in by[cls]}
+        is_due = all(s in due for s in subjects) if cls == r.MISSED else cls in due
+        print(f"class {cls}: due {'yes' if is_due else 'no'}; blocking {len(counted)} in {len(lanes_)} lane(s)"
+              + (f" ({', '.join(lanes_)})" if lanes_ else "") + f"; findings {len(mine)}")
+        for repo, _, i in by[cls]:
+            print(f"  issue {repo}#{i.get('number')}: {i.get('title')}")
+        if len(by[cls]) > 1:
+            print(f"  duplicates: {len(by[cls])} open issues of class {cls}")
+        for log, d in sorted(mine, key=lambda x: str(x[1].get("at") or "")):
+            print(f"  finding {log} {d.get('at')} {d.get('source') or r.DIRECTOR} {'blocking' if d.get('blocking') is True else 'not blocking'}"
+                  f": {' '.join(str(d.get('summary') or '').split())[:200]}")
+    return 0
+
+
+def cmd_reflect(args: list[str]) -> int:
+    if args[:1] == ["--director"]:
+        if args[1:] not in ([], ["--due"]):
+            raise Refuse(f"usage: octo-feather-lane reflect --director [--due] (got {' '.join(args)})")
+        lanes = lanes_dir()
+        if reflect_director(lanes, due=args[1:] == ["--due"]):
+            file_corrections(lanes)
+        return 0
+    name = lane_name(args, "reflect")
+    lanes = lanes_dir()
+    if not (lanes / f"{name}.toml").is_file():
+        raise Refuse(f"no lane record {lanes / f'{name}.toml'}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
+    reflect_lane(name, lanes)
+    file_corrections(lanes)
+    return 0
+
+
+def unreflect(log: Path, pre: int | None) -> None:
+    """Undo this archive's reflection lines after a failed move, so every file is left as it was: the log cut back
+    to its length PRE, or removed when the reflection created it (PRE None)."""
+    try:
+        os.truncate(log, pre) if pre is not None else log.unlink(missing_ok=True)
+    except OSError as e:
+        print(f"could not undo the reflection lines in {log} ({e}): cut them by hand", file=sys.stderr)
+
+
+def rollback(created: list[Path], archive: Path) -> None:
+    """Undo a failed archive: restore each source, then drop each destination this run made.
+    A destination whose source cannot be restored is kept (the only copy) and named."""
+    for f in reversed(created):
+        dest = archive / f.name
+        try:
+            if not os.path.lexists(f):
+                os.link(dest, f, follow_symlinks=False)
+            dest.unlink()
+        except OSError as e:
+            print(f"rollback failed for {dest} ({e}): move it back to {f} by hand", file=sys.stderr)
+
+
+# --- verdict and merge-ask (issue #48, spec issue-lifecycle #acceptance-merge-ask-evidence) ---
+
+MARKER = "<!-- octo-feather-review-verdict -->"
+# One comment per reviewed resolution of a main merge, naming the merge (the rule: issue-lifecycle #lanes-one-head).
+RESOLUTION_MARKER = "<!-- octo-feather-review-resolution: {} -->"
+RESOLUTION_HEAD = re.compile(r"^<!-- octo-feather-review-resolution: ([0-9a-f]{40}) -->")
+SHA = re.compile(r"[0-9a-fA-F]{7,40}")
+COMMENT_URL = re.compile(r"https://github\.com/([^/\s]+/[^/\s]+)/pull/(\d+)#issuecomment-(\d+)")
+VERDICT_LINE = re.compile(r"^Verdict: (clear|blocking)\s*$")
+HEAD_LINE = re.compile(r"^Head:\s*`?([0-9a-fA-F]{7,40})`?\s*$", re.M)
+QC_COMMIT = re.compile(r"^qc: built (.*?)(?: \(judged ([0-9a-f]+)\))?\s*$")
+JUDGED = re.compile(r"`?(?:judged\s+)?`?([0-9a-fA-F]{7,40})`?", re.I)
+
+
+CHECK_LINE = re.compile(r"^Check:[ \t]*(.*?)\s*$")
+CHECK_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*reads:\s*(\S[^|]*?)\s*\|\s*class:\s*(\S+)")
+# The rule ends on its owner in parentheses, non-empty: `<rule> (<owner>)` (docs/adr/0008: the owned rule, never the docstring).
+OWNED = re.compile(r"(\S.*?)\s+\(([^()]*[^()\s][^()]*)\)")
+CHECKS_LINE = re.compile(r"^Checks:[ \t]*(.*?)\s*$")
+CHECK_FORM = ("`Checks: none` when the diff adds or changes nothing to classify (docs/adr/0008, Who builds what), else one line each "
+              "`Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy` (docs/adr/0008)")
+
+
+# The Markdown this script reads, no more. scope: .agents/skills/code-review/SKILL.md (Verdict step) for a verdict
+# report; scope: octo-feather-lane --help (ticket) for a ticket body.
+FENCE = re.compile(r"`{3,}|~{3,}")
+
+
+def markdown(text: str, comments: bool = False) -> list[tuple[str, str]]:
+    """Each line of TEXT with its kind, `fence`, `quote`, `comment` or `text`, in the scope above. With COMMENTS
+    a line holding only comment is `comment` and any other line comes with its comments cut out."""
+    out, fence, quote, cmt = [], None, False, False   # cmt: an HTML comment is open
+    for l in text.replace("\r\n", "\n").split("\n"):
+        if fence:
+            s = l.rstrip(" \t")
+            if len(s) >= len(fence) and s == fence[0] * len(s):
+                fence = None
+            out.append((l, "fence")); continue
+        was, t = cmt, l
+        if comments:
+            t, cmt = cut_comments(l, cmt)
+            if (was or t != l) and not t.strip():
+                out.append((l, "comment")); continue
+        if not was and (f := FENCE.match(t)):
+            fence, quote = f.group(0), False
+            out.append((l, "fence")); continue
+        quote = (quote or (not was and t.startswith(">"))) and bool(t.strip())
+        out.append((t, "quote" if quote else "text"))
+    return out
+
+
+def cut_comments(l: str, open_: bool) -> tuple[str, bool]:
+    """(L with its HTML comments cut, whether one is open at its end), OPEN_ if one is open at its start."""
+    out, i = "", 0
+    while True:
+        if open_:
+            e = l.find("-->", i)
+            if e < 0:
+                return out, True
+            i, open_ = e + 3, False
+        s = l.find("<!--", i)
+        if s < 0:
+            return out + l[i:], False
+        out, i, open_ = out + l[i:s], s + 4, True
+
+
+def outside(text: str) -> list[str]:
+    """The lines markdown() reads as text, in order."""
+    return [l for l, kind in markdown(text) if kind == "text"]
+
+
+def verdicts(text: str) -> list[str]:
+    """Every `Verdict: clear|blocking` line in the verdict reader's scope, in order (scope: .agents/skills/code-review/SKILL.md (Verdict step))."""
+    return [m.group(1) for l in outside(text) if (m := VERDICT_LINE.match(l))]   # column 0: `> Verdict:` never matches
+
+
+def check_lines(text: str) -> tuple[list[str], list[str]]:
+    """(the report's check classification as normalized lines, why it is unusable) (docs/adr/0008)."""
+    checks, nones, why = [], [], []
+    for l in outside(text):
+        if m := CHECKS_LINE.match(l):
+            nones.append(m.group(1))
+        elif m := CHECK_LINE.match(l):
+            s = CHECK_SHAPE.fullmatch(m.group(1))
+            if not s:
+                why.append(f"check line `{l.strip()}` is not `Check: <path>: <rule> (<owner>) | reads: <what it reads> | class: exact|proxy`"); continue
+            path, rule, reads, cls = s.groups()
+            o = OWNED.fullmatch(rule)
+            if not o:
+                why.append(f"check line for {path} names no owner: write its rule as stated where it is owned, then the owner in "
+                           f"parentheses, `<rule> (<spec criterion, ADR or owner ruling>)` (docs/adr/0008)"); continue
+            rule = f"{o.group(1)} ({o.group(2).strip()})"
+            if cls.lower() not in ("exact", "proxy"):
+                why.append(f"check line for {path} has class {cls!r}; write `class: exact` or `class: proxy` (docs/adr/0008)"); continue
+            checks.append((f"Check: {path}: {rule} | reads: {reads} | class: {cls.lower()}", cls.lower()))
+    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
+    if bad_none:
+        why.append(f"`Checks: {bad_none[0]}`; `Checks:` takes only `none`; name each check on its own `Check:` line")
+    if not checks and not nones and not why:
+        why.append(f"report classifies no check: add {CHECK_FORM}")
+    if checks and nones:
+        why.append("report has `Checks: none` and `Check:` lines; keep the `Check:` lines, one per added or changed check")
+    lines = [c for c, _ in checks] or (["Checks: none"] if nones and not bad_none else [])
+    return lines, why
+
+
+OWNER_LINE = re.compile(r"^Owner:[ \t]*(.*?)\s*$")
+OWNER_SHAPE = re.compile(r"`?([^`\s|]+?)`?:\s+(\S[^|]*?)\s*\|\s*restated:\s*(\S[^|]*?)")
+OWNERS_LINE = re.compile(r"^Owners:[ \t]*(.*?)\s*$")
+FIELD_LINE = re.compile(r"^([A-Z][A-Za-z-]*(?: [A-Za-z-]+)*):[ \t]*(.*?)\s*$")
+AT_LINE = re.compile(r":\d+$")   # `<path>:<line>`: the path alone
+
+
+def owner_lines(text: str) -> tuple[list[dict], bool, list[str]]:
+    """(Owner lines as {path, rule, restated}, `Owners: none` given, why unusable) (code-review skill, Verdict step)."""
+    owners, nones, why = [], [], []
+    for l in outside(text):
+        if m := OWNERS_LINE.match(l):
+            nones.append(m.group(1))
+        elif m := OWNER_LINE.match(l):
+            s = OWNER_SHAPE.fullmatch(m.group(1))
+            rest = [AT_LINE.sub("", x.strip().strip("`")) for x in s.group(3).split(",")] if s else []
+            if not s or not all(rest):
+                why.append(f"owner line `{l.strip()}` is not `Owner: <path>: <rule> | restated: none|<path>:<line>[, <path>:<line>...]`"); continue
+            owners.append({"path": AT_LINE.sub("", s.group(1)), "rule": s.group(2),
+                           "restated": [] if rest == ["none"] else list(dict.fromkeys(rest))})
+    bad_none = [v for v in nones if v.strip("`").lower() != "none"]
+    if bad_none:
+        why.append(f"`Owners: {bad_none[0]}`; `Owners:` takes only `none`; name each owned rule on its own `Owner:` line")
+    if not owners and not nones and not why:
+        why.append("report names no owned rule: add `Owners: none`, or one `Owner:` line per owned rule the diff writes or changes")
+    if owners and nones:
+        why.append("report has `Owners: none` and `Owner:` lines; keep the `Owner:` lines")
+    return owners, bool(nones) and not bad_none and not owners, why
+
+
+def cmd_fields(args: list[str]) -> int:
+    if len(args) != 1:
+        raise Refuse(f"usage: octo-feather-lane fields REPORT|- (got {' '.join(args) or 'nothing'})")
+    try:
+        report = sys.stdin.read() if args[0] == "-" else Path(args[0]).read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read report {args[0]} ({e}): pass a report file, or - for stdin")
+    cls, cwhy = check_lines(report)
+    checks = []
+    for c in cls if cls != ["Checks: none"] else []:
+        path, rule, reads, kind = CHECK_SHAPE.fullmatch(c[len("Check: "):]).groups()
+        o = OWNED.fullmatch(rule)
+        checks.append({"path": path, "rule": o.group(1), "owner": o.group(2).strip(), "reads": reads, "class": kind})
+    owners, onone, owhy = owner_lines(report)
+    other = {}
+    for l in outside(report):
+        m = FIELD_LINE.match(l)
+        if m and m.group(1) not in ("Check", "Checks", "Owner", "Owners"):
+            other.setdefault(m.group(1), []).append(m.group(2))
+    print(json.dumps({"Check": {"lines": checks, "none": cls == ["Checks: none"] and not cwhy, "errors": cwhy},
+                      "Owner": {"lines": owners, "none": onone and not owhy, "errors": owhy}, "fields": other}))
+    return 0
+
+
+def gh(args: list[str], fix: str) -> str:
+    try:
+        p = subprocess.run(["gh", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"gh {' '.join(args[:3])} failed ({err[-1][:300] if err else f'exit {p.returncode}'}): {fix}")
+    return p.stdout
+
+
+def pr_view(pr: int, fields: str, repo: str | None) -> dict:
+    out = gh(["pr", "view", str(pr), "--json", fields, *(["-R", repo] if repo else [])],
+             f"check PR #{pr} exists in {repo or 'this repo'}, and gh auth status")
+    try:
+        d = json.loads(out)
+    except ValueError:
+        raise Refuse(f"gh pr view {pr} printed no JSON: check the gh on PATH ({out[:100]!r})")
+    if not isinstance(d, dict) or any(f not in d for f in fields.split(",")):
+        raise Refuse(f"gh pr view {pr} lacks fields {fields}: update gh (2.40 or later)")
+    return d
+
+
+def pr_number(s: str) -> int:
+    if not re.fullmatch(r"[1-9][0-9]*", s or ""):
+        raise Refuse(f"PR must be a positive integer, got {s!r}")
+    return int(s)
+
+
+def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
+    """The no-CI fact (rule: --help, post-merge step 2): the workflow files at commit SHA and the source as printed."""
+    name = repo or "{owner}/{repo}"   # gh fills the placeholders from this directory's repo
+    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
+    tree = sha
+    for part in (".github", "workflows", None):
+        out = gh(["api", f"repos/{name}/git/trees/{tree}"], f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun")
+        try:
+            entries = [(str(e["path"]), str(e["type"]), str(e["sha"])) for e in json.loads(out)["tree"]]
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): check the gh on PATH")
+        if part is None:
+            return [f".github/workflows/{p}" for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))], src
+        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
+        if not tree:
+            return [], src
+    return [], src   # unreachable: the loop returns at its last part
+
+
+# GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
+# repo, free plan; 0xTomDaniel/exosurface read 2026-11-05): no ruleset can be in force.
+NO_RULESETS = "Upgrade to GitHub Pro or make this repository public to enable this feature."
+
+
+def required_none(repo: str | None, base: str) -> str:
+    """The base branch's required-check policy, read from GitHub, when it requires no check: the line naming both
+    sources. Refuse naming the required checks, or the source that could not be read (fail closed)."""
+    name = repo or "{owner}/{repo}"
+    shown = f"repos/{repo or '<this repo>'}"
+    def read(path: str) -> tuple[object, str]:
+        try:
+            p = subprocess.run(["gh", "api", f"repos/{name}/{path}"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
+        err = (p.stderr or p.stdout).strip().splitlines()
+        if p.returncode:
+            return None, err[-1][:200] if err else f"exit {p.returncode}"
+        try:
+            return json.loads(p.stdout), ""
+        except ValueError:
+            return None, f"no JSON ({p.stdout[:80]!r})"
+    br, why = read(f"branches/{base}")
+    try:
+        prot = cast("dict[str, object]", cast("dict[str, object]", br)["protection"])
+        rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
+        req = sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
+    except (KeyError, TypeError):
+        raise Refuse(f"the required checks of base {base} could not be read (gh api {shown}/branches/{base}: "
+                     f"{why or 'no protection.required_status_checks'}): fix gh auth status or read access, then rerun")
+    rules, why = read(f"rules/branches/{base}")
+    if why == f"gh: {NO_RULESETS} (HTTP 403)":
+        rsrc = f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, none in force"
+    elif isinstance(rules, list):
+        try:
+            for r in cast("list[dict[str, object]]", rules):
+                if r["type"] == "required_status_checks":
+                    params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
+                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
+        except (KeyError, TypeError):
+            raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                         "a required_status_checks rule with no contexts): check the gh on PATH, then rerun")
+        rsrc = f"gh api {shown}/rules/branches/{base}: no required_status_checks rule"
+    else:
+        raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                     f"{why or 'no rule list'}): fix gh auth status or read access, then rerun")
+    if req:
+        raise Refuse(f"base {base} requires checks {', '.join(dict.fromkeys(req))} (gh api {shown}/branches/{base}, "
+                     f"{shown}/rules/branches/{base}): push the head and wait for them")
+    return (f"base {base} requires no check (gh api {shown}/branches/{base}: no required status check; {rsrc}), "
+            "so required checks are none")
+
+
+def take_repo(args: list[str]) -> tuple[list[str], str | None]:
+    if "--repo" not in args:
+        return args, None
+    i = args.index("--repo")
+    if i + 1 >= len(args) or not re.fullmatch(r"[\w.-]+/[\w.-]+", args[i + 1]):
+        raise Refuse("--repo needs OWNER/NAME")
+    return args[:i] + args[i + 2:], args[i + 1]
+
+
+def head_matches(named: str, head: str) -> bool:
+    return bool(SHA.fullmatch(named)) and head.lower().startswith(named.lower())
+
+
+def judged_sha(cell: str, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
+    """(the PR commit a row's judged cell names, None) or (None, why)."""
+    m = JUDGED.fullmatch(cell.strip())
+    if not m:
+        return None, f"judged {cell or 'empty'!r}; write `judged <sha>`, the head qc and the review judged (7+ hex)"
+    sha = m.group(1).lower()
+    at = [oid for oid, _ in commits if oid.lower().startswith(sha)]
+    if len(at) != 1:
+        return None, (f"judged {sha} is {'ambiguous among' if at else 'not a commit of'} PR #{pr}; "
+                      f"name the head qc and the review judged (the sha in its `qc: built ... (judged <sha>)` commit, or the PR head {head[:12]})")
+    return at[0].lower(), None
+
+
+def git(*args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    try:
+        p = subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("git not on PATH: install git")
+    if p.returncode not in ok:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git {' '.join(args[:2])} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     "run merge-ask in the lane worktree with the PR head and the base fetched (git fetch origin)")
+    return p.returncode, p.stdout
+
+
+def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
+    """{path: raw diff line} of X's own diff against BASE (from their merge base), status files aside."""
+    mb = git("merge-base", x, base)[1].strip()
+    out = git("diff", "--raw", "--no-renames", "--no-abbrev", "-z", mb, x)[1].split("\0")
+    return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
+
+
+def resolution_files(merge: str) -> list[str]:
+    """The files MERGE's resolution changed: what `git show --remerge-diff` prints for it (issue-lifecycle #lanes-one-head)."""
+    return sorted(filter(None, git("show", "--remerge-diff", "--format=", "--name-only", "-z", merge)[1].split("\0")))
+
+
+def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
+               kept: str = "the qc verdict", rerun: str = "", resolved: dict[str, str] | None = None) -> tuple[str | None, list[str]]:
+    """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
+    (what may lie between them: spec #lanes-one-head).
+    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass). RESOLVED, for the
+    review verdict only: {merge sha: URL} of each clear resolution verdict, whose merge's resolution files may move."""
+    j, h = judged[:12], head[:12]
+    if head.lower() == judged.lower():
+        return f"{j} is the PR head", []
+    rerun = rerun or f"run just qc and the review again, in parallel, on {h}"
+    for sha in (judged, head):
+        if git("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0]:
+            raise Refuse(f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
+    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
+    if git("merge-base", "--is-ancestor", judged, head, ok=(0, 1))[0]:
+        return None, [f"{at} {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
+    top = os.path.realpath(git("rev-parse", "--show-toplevel")[1].strip())
+    status = set()
+    for f in status_files:
+        rel = os.path.relpath(os.path.realpath(f), top)
+        if rel.startswith(".."):
+            raise Refuse(f"--status {f} is outside this repo ({top}): run merge-ask in the lane worktree, naming its status file")
+        status.add(rel)
+    why, qc, merges, touched = [], [], [], set()
+    reviewed: dict[str, list[str]] = {}
+    for line in git("rev-list", "--reverse", "--parents", head, f"^{judged}", f"^{base}")[1].split("\n"):
+        if not line.strip():
+            continue
+        c, *parents = line.split(); s = git("log", "-1", "--format=%s", c)[1].strip()
+        if len(parents) == 1:
+            files = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)[1].split("\0")))
+            other = sorted(files - status)
+            if other:
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, not only the status "
+                           f"file{'s' * (len(status) > 1)} qc writes ({', '.join(sorted(status))}): {rerun}")
+            elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} is not a `qc: built ... (judged <sha>)` commit: "
+                           f"only just qc writes the status file; drop it, then {rerun}")
+            else:
+                qc.append(c); touched |= files
+        elif len(parents) != 2 or not any(git("merge-base", "--is-ancestor", p, base, ok=(0, 1))[0] == 0 for p in parents[1:]):
+            why.append(f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, not {base}: "
+                       f"only a merge of main keeps {kept}; {rerun}")
+        else:
+            rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
+            auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
+            hint = ("" if resolved is None else f" without a clear resolution verdict naming it (review what `octo-feather-lane "
+                    f"resolution {c[:12]}` prints, then `octo-feather-lane verdict <PR> {c[:12]} <report> --resolution`)")
+            if (rc or auto != tree) and resolved is not None and c.lower() in resolved:
+                reviewed[c] = resolution_files(c)
+            elif rc:
+                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over{hint}; {rerun}")
+            elif auto != tree:
+                diff = git("diff", "--name-only", auto, tree)[1].split()
+                why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge{hint}: {rerun}")
+            else:
+                merges.append(c)
+    proof = f"{j} to {h}: " + (f"qc status commits {' '.join(c[:12] for c in qc)} change only {', '.join(sorted(touched))}" if qc else "no qc status commit")
+    if (merges or reviewed) and not why:
+        before, after = lane_diff(judged, base, status), lane_diff(head, base, status)
+        moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p)
+                       and not any(p in fs for fs in reviewed.values()))
+        if moved:
+            why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
+                       f"or the lane's diff moved): {kept} does not carry over; {rerun}")
+        elif merges:
+            d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
+            proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
+                      f"lane diff identical ({len(before)} file{'s' * (len(before) != 1)}, sha256 {d[:12]})"
+                      + (" outside the resolved files" if reviewed else ""))
+        if not moved:
+            proof += "".join(f"; resolution of merge {c[:12]} ({', '.join(fs)}) reviewed clear: {(resolved or {})[c.lower()]}"
+                             for c, fs in reviewed.items())
+    return (None, why) if why else (proof, [])
+
+
+@functools.cache
+def gate_module():
+    """scripts/octo-feather-gate: it owns the full pass record and the gate configuration."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_gate", str(KIT / "scripts" / "octo-feather-gate"))
+    spec = importlib.util.spec_from_loader("octo_feather_gate", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def gate(cmd: str, rev: str) -> tuple[int, str]:
+    """`octo-feather-gate config|passed REV`'s exit code and stdout, answered in-process by the gate's own code."""
+    g = gate_module()
+    c = g.commit_of(rev)
+    if not c:
+        return 1, ""
+    if cmd == "config":
+        return 0, json.dumps(g.identity(c)) + "\n"
+    note = g.recorded(c)
+    return (0, note) if note else (1, "")
+
+
+def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
+    """[] when HEAD has a current recorded full gate pass, else why not. The rule: issue-lifecycle #lanes-checkpoints.
+    Current: recorded (octo-feather-gate passed) on a clean tree at HEAD, or at a lane commit head_proof proves HEAD
+    stands for, with the identity fields of HEAD itself (octo-feather-gate config: gate_config, list)."""
+    h = head[:12]
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        return [f"commit {h} is not in this repo: run merge-ask in the lane worktree after git fetch origin"]
+    fix = (f"run the full gate, just check, on {h} and record its pass (octo-feather-integrate --full records it; "
+           "octo-feather-gate --help)")
+    rc, out = gate("config", head)
+    try:
+        ident = cast("dict[str, object]", json.loads(out)) if rc == 0 else {}
+    except ValueError:
+        ident = {}
+    if not ident:
+        return [f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} exit {rc}): {fix}"]
+    revs = git("rev-list", "--topo-order", head, f"^{base}")[1].split()
+    why: list[str] = []
+    for c in [head] + [r for r in revs if r.lower() != head.lower()]:
+        rc, out = gate("passed", c)
+        try:
+            raw = json.loads(out) if rc == 0 else None
+        except ValueError:
+            raw = None
+        rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
+        if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+            continue
+        if rec.get("clean") is not True:
+            no = [f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it proves nothing; {fix}"]
+        else:
+            try:
+                _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
+            except Refuse as e:
+                no = [str(e)]
+        no = no or [(f"its {k} {str(rec.get(k))[:12]} is not the head's current {str(v)[:12]} (octo-feather-gate config {h}): "
+                     f"stale; {fix}") for k, v in ident.items() if rec.get(k) != v]
+        if not no:
+            return []
+        why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
+    return [f"head {h} has no current recorded full gate pass for that head and its gate configuration"
+            + (f"; {'; '.join(why)}" if why else f" (none recorded on {h} or the lane commits before it): {fix}")]
+
+
+def merge_ask_gate_time(head: str, base: str) -> list[str]:
+    """The full gate's wall time on the final head against gate-budget.toml at that head, with its trend and slowest
+    items (spec issue-lifecycle #lanes-checkpoints). Shown only: the code reviewer judges it, no gate reads it, and
+    merge-ask passes or fails the same without it."""
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    h = head[:12]
+    title = (f"Gate time (the full gate on the final head against {BUDGET} at {h}; the code reviewer judges it, "
+             "no gate reads it: issue-lifecycle #lanes-checkpoints):")
+    path = state_dir() / ReportSources.TREND
+    try:
+        got = cast("tuple[list[tuple[int, Run]], list[int]] | None", numbered_jsonl(path))
+        if got is None:
+            return [title, f"  no gate run recorded ({path}: none)"]
+        lane = [head] + [r for r in git("rev-list", "--topo-order", head, f"^{base}")[1].split() if r != head]
+        runs = passed_full(got[0], set(git("rev-list", "--max-count=1000", head)[1].split()))
+        last = next((r for c in lane for r in reversed(runs) if r.get("head") == c), None)
+        if last is None:
+            return [title, f"  no passed full gate run recorded on {h} or the lane commits before it ({path})"]
+        rc, text = git("show", f"{head}:{BUDGET}", ok=(0, 128))
+    except (OSError, UnicodeDecodeError, Refuse) as e:
+        return [title, f"  unread: {e}"]
+    budget, why = budget_parse(text if rc == 0 else None)
+    return [title, *budget_lines(last, runs[:runs.index(last)], budget, why, now, "  ")]
+
+
+def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
+    """PR's commits, (sha, subject) each, newest first, read from this directory's repo: `git log BASE..HEAD`, HEAD the
+    PR's head (gh's headRefOid), BASE its base branch on origin or --base; never `gh pr view --json commits`, which
+    lists at most 100. Refused when either is not a commit here: the lane worktree with both fetched."""
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"PR #{pr}'s head {head[:12]} is not a commit in this repo: run it in the lane worktree after "
+                     "git fetch origin (the PR's commits are read from git)")
+    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
+    out = git("log", "--format=%H%x00%s", f"{base}..{head}")[1]
+    return [cast("tuple[str, str]", tuple(l.split("\0", 1))) for l in out.split("\n") if "\0" in l]
+
+
+def pr_base(ref: str, base: str | None) -> str:
+    """The base a PR's commits are read against: BASE (--base) when given, else REF, its base branch, on origin."""
+    return base or f"origin/{ref or 'main'}"
+
+
+def no_traceback(fn):
+    """Malformed PR data from gh is a refusal naming the fix, never a traceback."""
+    def run(args: list[str]) -> int:
+        try:
+            return fn(args)
+        except (KeyError, TypeError, AttributeError, ValueError, IndexError) as e:
+            raise Refuse(f"unexpected PR data from gh ({type(e).__name__}: {e}): check the gh on PATH (gh --version), then rerun") from e
+    return run
+
+
+@no_traceback
+def cmd_verdict(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    res = "--resolution" in args
+    args = [a for a in args if a != "--resolution"]
+    if len(args) != 3:
+        raise Refuse(f"usage: octo-feather-lane verdict PR HEAD REPORT|- [--resolution] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(args[0]); want = args[1]
+    if not SHA.fullmatch(want):
+        raise Refuse(f"HEAD must be a commit sha (7 to 40 hex), got {want!r}")
+    try:
+        report = sys.stdin.read() if args[2] == "-" else Path(args[2]).read_text()
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read report {args[2]} ({e}): pass the code review's report file, or - for stdin")
+    if not report.strip():
+        raise Refuse(f"report {args[2]} is empty: pass the code review's report")
+    vs = verdicts(report)
+    if not vs:
+        raise Refuse("report names no verdict: add a line `Verdict: clear` or `Verdict: blocking` in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step))")
+    if len(set(vs)) > 1:
+        raise Refuse(f"report gives verdicts that disagree ({', '.join(vs)}): keep one `Verdict:` line in the verdict reader's scope (scope: .agents/skills/code-review/SKILL.md (Verdict step)), the reviewer's final verdict, then rerun")
+    verdict = vs[-1]
+    cls, why = check_lines(report)
+    if why:
+        raise Refuse("; ".join(why) + "; fix the report, then rerun")
+    proxy = [c for c in cls if c.endswith("| class: proxy")]
+    if proxy and verdict == "clear":
+        raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
+                     "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
+    d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
+    head = cast("str", d["headRefOid"])
+    at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
+    if len(at) != 1:
+        raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
+                     f"push the reviewed head, or name the head the review judged in full")
+    judged = at[0]
+    if res:   # the review of a main merge's resolution alone (issue-lifecycle #lanes-one-head)
+        _, files = merge_resolution(judged)
+        marker = RESOLUTION_MARKER.format(judged.lower())
+        body = (f"{marker}\n## Code review verdict: resolution of a main merge\n\nMerge: {judged}\nFiles: {', '.join(files)}\n"
+                f"PR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n")
+        out, said = post_comment(pr, repo, cast("list[dict[str, object]]", d["comments"]), marker, body, f"resolution verdict for {judged[:12]}")
+        print(f"verdict: {said} ({verdict}, resolution of merge {judged[:12]})", file=sys.stderr)
+        print(out)
+        return 0
+    body = f"{MARKER}\n## Code review verdict\n\nHead: {judged}\nPR head: {head}\nVerdict: {verdict}\n" + "".join(f"{c}\n" for c in cls) + f"\n### Findings\n\n{report.strip()}\n"
+    out, said = post_comment(pr, repo, d["comments"], MARKER, body, "verdict")
+    print(f"verdict: {said} ({verdict}, head {judged[:12]})", file=sys.stderr)
+    print(out)
+    return 0
+
+
+def merge_resolution(merge: str) -> tuple[str, list[str]]:
+    """(MERGE's full sha, the files its resolution changed), refused for a commit that is not a merge or a merge that
+    changes nothing beyond git's automatic merge (no resolution to review)."""
+    if git("cat-file", "-e", f"{merge}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"commit {merge} is not in this repo: run it in the lane worktree after git fetch origin")
+    sha, *parents = git("rev-list", "--parents", "-n", "1", merge)[1].split()
+    if len(parents) < 2:
+        raise Refuse(f"commit {sha[:12]} is not a merge: a resolution review covers a merge of main; any other change needs a full review")
+    files = resolution_files(sha)
+    if not files:
+        raise Refuse(f"merge {sha[:12]} changes nothing beyond git's automatic merge: there is no resolution to review "
+                     "(a clean merge keeps the review verdict by merge-ask's check alone)")
+    return sha, files
+
+
+@no_traceback
+def cmd_resolution(args: list[str]) -> int:
+    if len(args) != 1 or not SHA.fullmatch(args[0]):
+        raise Refuse(f"usage: octo-feather-lane resolution MERGE, MERGE a commit sha (got {' '.join(args) or 'nothing'})")
+    sha, files = merge_resolution(args[0])
+    subject = git("log", "-1", "--format=%s", sha)[1].strip()
+    print(f"Resolution of merge {sha} {subject[:60]!r} (git show --remerge-diff; issue-lifecycle #lanes-one-head):")
+    print(f"Files: {', '.join(files)}")
+    print(git("show", "--remerge-diff", "--format=", sha)[1].strip("\n"))
+    return 0
+
+
+def post_comment(pr: int, repo: str | None, comments: list, marker: str, body: str, what: str) -> tuple[str, str]:
+    """Create, or update in place, PR's one comment starting with MARKER (a WHAT comment): (its URL, created|updated|unchanged)."""
+    mine = [c for c in comments or [] if (c.get("body") or "").lstrip().startswith(marker)]
+    if len(mine) > 1:
+        raise Refuse(f"PR #{pr} has {len(mine)} {what} comments ({' '.join(c.get('url') or '?' for c in mine)}): delete all but one, then rerun")
+    api = f"repos/{repo or '{owner}/{repo}'}"
+    if mine:
+        m = COMMENT_URL.fullmatch(mine[0].get("url") or "")
+        if not m:
+            raise Refuse(f"{what} comment has no issuecomment URL ({mine[0].get('url')!r}): delete it, then rerun")
+        if mine[0]["body"].strip() == body.strip():
+            return mine[0]["url"], "unchanged"
+        call, said = ["-X", "PATCH", f"{api}/issues/comments/{m.group(3)}"], "updated"
+    else:
+        call, said = ["-X", "POST", f"{api}/issues/{pr}/comments"], "created"
+    with tempfile.NamedTemporaryFile("w", suffix=".json") as f:
+        json.dump({"body": body}, f); f.flush()
+        out = gh(["api", *call, "--input", f.name, "--jq", ".html_url"],
+                 f"the {what} comment was not {said}; fix the cause (gh auth status, network), then rerun").strip()
+    if not COMMENT_URL.fullmatch(out):
+        raise Refuse(f"comment {said} but gh printed no comment URL ({out[:100]!r}): rerun to print it")
+    return out, said
+
+
+# --- the advisory judge (spec judgment #boundary-advisory-judge, #rule-advisory, issue #156) ---
+
+EVALS = KIT / "evals"
+JUDGMENT_MARKER = "<!-- octo-feather-model-judgment: {} -->"
+JUDGMENT_FIELDS = ("Judgment", "Question", "Model", "Answer", "Confidence", "Calibration", "PR head", "Review head")
+STATE_MAX = 20000   # state characters quoted in the comment (GitHub caps a comment at 65536)
+
+
+def qa_module():
+    """scripts/octo-feather-qa, whose classify() is the one classify path (the bench's): one mechanism, not a second."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("octo_feather_qa", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def calibration(cal: dict, qid: str) -> str:
+    """The question's calibration status (spec judgment#rule-calibration) from its suite.json calibration: the kit model's
+    held-out accuracy and Brier against its threshold, proposed or accepted. Display only: no gate reads it (#rule-advisory)."""
+    ho, th = cal.get("held_out"), cal.get("threshold")
+    try:
+        acc, brier = float(ho["accuracy"]), float(ho["brier"])
+        amin, bmax, accepted = float(th["accuracy_min"]), float(th["brier_max"]), th["accepted"]
+    except (TypeError, KeyError, ValueError):
+        raise Refuse(f"question {qid} has no calibration record: copy its bench's held-out accuracy and Brier and its threshold "
+                     f"into evals/judgment-{qid}/suite.json calibration (shape: scripts/check-evals --help)")
+    if accepted is not True:
+        status = "no accepted threshold"
+    elif acc >= amin and brier <= bmax:
+        status = "meets accepted threshold"
+    else:
+        status = "below accepted threshold"
+    return (f"{status} (held-out accuracy {acc:.3f}, Brier {brier:.3f}; threshold held-out accuracy >= {amin:.3f} and "
+            f"Brier <= {bmax:.3f}, {'accepted' if accepted is True else 'proposed, not accepted'})")
+
+
+@no_traceback
+def cmd_judge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    state_file = None
+    if "--state" in args and args.index("--state") + 1 < len(args):
+        i = args.index("--state"); state_file = args[i + 1]; args = args[:i] + args[i + 2:]
+    if len(args) != 2 or state_file is None:
+        raise Refuse(f"usage: octo-feather-lane judge PR QUESTION --state FILE|- [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(args[0]); qid = args[1]
+    suites = {p.parent.name[len("judgment-"):]: json.loads(p.read_text()) for p in sorted(EVALS.glob("judgment-*/suite.json"))}
+    suites = {k: s for k, s in suites.items() if s.get("kind") == "judgment"}
+    if qid not in suites:
+        raise Refuse(f"no judgment question {qid!r}: name one of {', '.join(sorted(suites))} (evals/judgment-<question>/)")
+    suite = suites[qid]
+    try:
+        model = qa_module().judgment_model(EVALS)   # the one reader of the one record (spec judgment#rule-one-model)
+    except (OSError, ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"no kit judgment model ({e}): record it in evals/judgment-model.json (shape: scripts/check-evals --help)")
+    if not isinstance(suite.get("calibration"), dict):
+        raise Refuse(f"question {qid} has no calibration of the kit's model {model}: bench it (just qa --suite judgment-{qid}) "
+                     f"and record `calibration` in evals/judgment-{qid}/suite.json (shape: scripts/check-evals --help)")
+    cal = calibration(suite["calibration"], qid)
+    q = json.loads((EVALS / f"judgment-{qid}" / "question.json").read_text())
+    try:
+        state = sys.stdin.read() if state_file == "-" else Path(state_file).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read state {state_file} ({e}): pass the file holding what the question is asked about "
+                     f"(its shape: {q['state_shape']}), or - for stdin")
+    if not state.strip():
+        raise Refuse(f"state {state_file} is empty: pass what the question is asked about (its shape: {q['state_shape']})")
+    d = pr_view(pr, "headRefOid,comments", repo)
+    head = d["headRefOid"]
+    review = [c for c in d["comments"] or [] if (c.get("body") or "").lstrip().startswith(MARKER)]
+    rh = HEAD_LINE.search((review[0].get("body") or "").split("\n### Findings", 1)[0]) if len(review) == 1 else None
+    if not rh:
+        raise Refuse(f"no code review verdict comment on PR #{pr}: the judge answers beside the review; post it first with "
+                     f"`octo-feather-lane verdict {pr} <head> <report>`" + (f" (found {len(review)}, keep one)" if review else ""))
+    gate = subprocess.run([str(KIT / "scripts" / "check-gate-free"), "--refuse", "the advisory judge (octo-feather-lane judge)"],
+                          stdout=subprocess.PIPE, text=True)
+    if gate.stdout.strip() != "gate-free: ok":
+        raise Refuse("refused inside just check, which stays deterministic and free (message above)")
+    qa = qa_module()
+    inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},
+           "cases": [{"id": "state", "state": state}], "classifiers": [model]}
+    bench, _, _, problem = qa.classify(qa.qc_sandbox(), inp, int(suite.get("timeout_s", qa.DEFAULT_TIMEOUT)), f"judge-{pr}-{qid}",
+                                      purpose="judge")
+    if problem:
+        raise Refuse(f"the classify run failed ({problem}): fix the cause, then rerun")
+    if model not in (bench.get("benched") or []):
+        why = "a moving alias, never called" if model in (bench.get("skipped") or []) else "not an available classifier"
+        raise Refuse(f"the kit's judgment model {model} is {why} (available: {', '.join(bench.get('available') or []) or 'none'}): "
+                     f"check Pi's models and auth, or rebench and record another in evals/judgment-model.json")
+    rows = bench.get("rows") or []
+    _, _, choice, probs, _, ei = rows[0] if rows else (None, None, None, None, None, None)
+    if choice not in q["labels"]:
+        err = (bench.get("errors") or [])[ei] if ei is not None else f"answer {choice!r} is not one of {q['labels']}"
+        raise Refuse(f"{model} gave no answer ({err}): rerun, or check the provider")
+    conf = (probs or [None] * len(q["labels"]))[q["labels"].index(choice)]
+    conf_s = f"{conf:.3f}" if isinstance(conf, (int, float)) else "unreported"
+    fence = "`" * max(3, 1 + max((len(m) for m in re.findall(r"`+", state)), default=0))
+    quoted = state if len(state) <= STATE_MAX else state[:STATE_MAX] + f"\n[... {len(state) - STATE_MAX} more characters]"
+    marker = JUDGMENT_MARKER.format(qid)
+    body = (f"{marker}\n## Model judgment: {qid}\n\nJudgment: {qa.JUDGMENT}\nQuestion: {qid}\nModel: {model}\nAnswer: {choice}\n"
+            f"Confidence: {conf_s}\nCalibration: {cal}\nPR head: {head}\nReview head: {rh.group(1)}\n"
+            f"State: {Path(state_file).name if state_file != '-' else 'stdin'} (sha256 {hashlib.sha256(state.encode()).hexdigest()[:12]}, "
+            f"{len(state)} characters)\nModel record: evals/judgment-model.json\n"
+            f"Calibrated by: {suite['calibration'].get('evidence', f'evals/judgment-{qid}/suite.json')}\n\n"
+            f"### Question\n\n{q['question']}\n\n### State\n\n{fence}text\n{quoted.rstrip()}\n{fence}\n")
+    out, said = post_comment(pr, repo, d["comments"], marker, body, f"{qid} judgment")
+    print(f"judge: {said} ({qid}: {choice}, confidence {conf_s}, model judgment by {model}; calibration: {cal})", file=sys.stderr)
+    print(out)
+    return 0
+
+
+def judgment_lines(comments: list) -> list[str]:
+    """One line per judgment comment on the PR, for the owner beside the review verdict. Read for display only:
+    no gate reads a judge's answer (spec judgment#rule-advisory)."""
+    out = []
+    for c in comments or []:
+        b = (c.get("body") or "").lstrip()
+        m = re.match(r"<!-- octo-feather-model-judgment: ([\w.-]+) -->", b)
+        if not m:
+            continue
+        hdr = b.split("\n### ", 1)[0].split("\n")
+        f = {k: v.strip() for k, v in (l.split(":", 1) for l in hdr if ":" in l) if k in JUDGMENT_FIELDS}
+        if any(k not in f for k in JUDGMENT_FIELDS) or not f["Judgment"].startswith("model judgment"):
+            out.append(f"- {m.group(1)}: unreadable judgment comment, ignored (rerun octo-feather-lane judge): {c.get('url') or '?'}"); continue
+        out.append(f"- {f['Question']}: {f['Answer']}, confidence {f['Confidence']} (model judgment by {f['Model']}, advisory: no gate reads it; "
+                   f"calibration: {f['Calibration']}; PR head {f['PR head'][:12]}, review head {f['Review head'][:12]}): {c.get('url') or '?'}")
+    return out
+
+
+def load_specs(files: list[str]) -> dict[str, dict]:
+    """{spec slug: criteria} from each --status file."""
+    if not files:
+        raise Refuse("name the lane's status file: --status docs/specs/<slug>.status.json (once per spec)")
+    specs = {}
+    for f in files:
+        try:
+            d = json.loads(Path(f).read_text())
+            slug = re.sub(r"\.spec\.html$", "", Path(d["spec"]).name); crit = d["criteria"]
+            assert isinstance(crit, dict) and all(isinstance(v, dict) for v in crit.values())
+        except (OSError, ValueError, KeyError, TypeError, AssertionError) as e:
+            raise Refuse(f"--status {f} is not a readable status file ({type(e).__name__}: {e}): name docs/specs/<slug>.status.json")
+        specs[slug] = crit
+    return specs
+
+
+def resolve(tok: str, specs: dict[str, dict]) -> tuple[str | None, str | None]:
+    """(spec#id, None) or (None, why)."""
+    tok = tok.strip().strip("`*")
+    if "#" in tok:
+        slug, cid = tok.split("#", 1); slug = re.sub(r"\.spec\.html$", "", slug.split("/")[-1])
+        if slug not in specs:
+            return None, f"{tok}: spec {slug} has no --status file (pass --status docs/specs/{slug}.status.json)"
+        return (f"{slug}#{cid}", None) if cid in specs[slug] else (None, f"{tok}: no criterion {cid} in {slug}'s status file")
+    hits = [s for s in specs if tok in specs[s]]
+    if len(hits) == 1:
+        return f"{hits[0]}#{tok}", None
+    return None, (f"{tok}: in {' and '.join(hits)}; write <spec>#{tok}" if hits else f"{tok}: no such criterion in the --status files")
+
+
+def section(body: str) -> list[str] | None:
+    lines = (body or "").replace("\r\n", "\n").split("\n")
+    for i, l in enumerate(lines):
+        if re.fullmatch(r"##\s+merge ask\s*", l.strip(), re.I):
+            end = next((j for j in range(i + 1, len(lines)) if re.match(r"#{1,2}\s", lines[j])), len(lines))
+            return [x.rstrip() for x in lines[i:end]]
+    return None
+
+
+def field(lines: list[str], name: str) -> tuple[int, str] | None:
+    for i, l in enumerate(lines):
+        m = re.match(rf"\s*{name}:\s*(.*)$", l, re.I)
+        if m:
+            return i, m.group(1).strip()
+    return None
+
+
+def bad_checks(rollup: list[dict]) -> tuple[list[str], list[str]]:
+    failed, pending = [], []
+    for c in rollup:
+        name = c.get("name") or c.get("context") or "?"
+        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
+            s = (c.get("state") or "").upper()
+            (pending if s in ("PENDING", "EXPECTED", "") else failed if s != "SUCCESS" else []).append(f"{name} {s.lower() or 'pending'}")
+        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+            pending.append(f"{name} {(c.get('status') or 'pending').lower()}")
+        elif c["conclusion"].upper() not in ("SUCCESS", "NEUTRAL", "SKIPPED"):
+            failed.append(f"{name} {c['conclusion'].lower()}")
+    return failed, pending
+
+
+def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]]":
+    """GitHub's check runs on commit SHA (REST check-runs, the latest of each), each {id, name, status, conclusion, html_url}.
+    WHAT names the commit in a refusal."""
+    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
+             f"read the check runs of {sha[:12]}, {what} (gh auth status)")
+    try:
+        got = cast("list[object]", json.loads(out)["check_runs"])
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
+    return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+
+
+@no_traceback
+def cmd_ci_start(args: list[str]) -> int:
+    """CI on the lane's final head (when: spec issue-lifecycle #lanes-one-head): refuse unless the local HEAD is the PR's head and has a current full
+    gate pass, mark a draft PR ready (gh pr ready), then wait at most --wait seconds for CI's full run on that head to
+    start (ci_full_run), and print its jobs."""
+    args, repo = take_repo(args)
+    files: list[str] = []; rest: list[str] = []; i, base_arg, wait = 0, cast("str | None", None), 120.0
+    while i < len(args):
+        if args[i] in ("--status", "--base", "--wait") and i + 1 < len(args):
+            if args[i] == "--status":
+                files.append(args[i + 1])
+            elif args[i] == "--base":
+                base_arg = args[i + 1]
+            elif re.fullmatch(r"[0-9]+", args[i + 1]):
+                wait = float(args[i + 1])
+            else:
+                raise Refuse(f"--wait needs whole seconds, got {args[i + 1]!r}")
+            i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if len(rest) != 1:
+        raise Refuse(f"usage: octo-feather-lane ci-start PR [--status FILE...] [--base REF] [--wait SECONDS] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0])
+    d = cast("dict[str, object]", pr_view(pr, "isDraft,headRefOid,baseRefName,headRefName", repo))
+    head = str(d["headRefOid"]).lower(); h = head[:12]
+    local = git("rev-parse", "HEAD")[1].strip().lower()
+    if local != head:
+        raise Refuse(f"local HEAD {local[:12]} is not PR #{pr}'s head {h}: push it (git push), then rerun in the lane worktree")
+    why = full_pass(head, files, pr_base(cast("str | None", d["baseRefName"]) or "", base_arg))
+    if why:
+        raise Refuse("; ".join(why))
+    if d["isDraft"]:
+        gh(["pr", "ready", str(pr), *(["-R", repo] if repo else [])], f"mark PR #{pr} ready for review by hand (gh pr ready {pr})")
+        print(f"PR #{pr} marked ready for review at head {h}")
+    end = time.monotonic() + wait
+    while True:
+        why, jobs = ci_full_run(head, repo)
+        if not why:
+            print(f"CI on {h} (issue-lifecycle #lanes-one-head):")
+            print("\n".join(jobs))
+            return 0
+        left = end - time.monotonic()
+        if left <= 0:
+            raise Refuse(f"CI's full run did not start on {h} within {wait:g}s: {'; '.join(why)}: check PR #{pr} is ready "
+                         "for review and its workflow runs on pull_request ready_for_review, then rerun")
+        time.sleep(min(5.0, left))
+
+
+def workflow_jobs(head: str, path: str) -> int | None:
+    """How many jobs the workflow file PATH defines at HEAD (its `jobs` map), read with PyYAML in the kit's locked
+    environment (the standard library reads no YAML); None when it is unreadable."""
+    rc, text = git("show", f"{head}:{path}", ok=(0, 128))
+    if rc:
+        return None
+    try:
+        count = ("import sys, yaml; w = yaml.safe_load(sys.stdin); j = w.get('jobs') if isinstance(w, dict) else None; "
+                 "print(len(j) if isinstance(j, dict) else '')")
+        p = subprocess.run(["uv", "run", "--project", str(KIT), "--locked", "--offline", "--no-dev", "--quiet", "python", "-c", count],
+                           input=text, capture_output=True, text=True, check=False)
+    except FileNotFoundError:
+        raise Refuse("uv not on PATH: it runs the kit's locked environment that reads the workflow (just install-check)")
+    out = p.stdout.strip()
+    return int(out) if p.returncode == 0 and out.isdigit() else None
+
+
+def ci_full_run(head: str, repo: str | None) -> tuple[list[str], list[str]]:
+    """([], a line per job) once CI's full run on HEAD has started, else (why not, []); the rule: issue-lifecycle
+    #acceptance-ci-alongside. Read for each workflow's latest run on HEAD: its jobs (REST), and the count of jobs its
+    workflow file defines at HEAD, since GitHub lists a job that waits on `needs` only once those finish (run
+    42118019970: check created when scope completed)."""
+    api = f"repos/{repo or '{owner}/{repo}'}/actions"
+    def read(path: str, key: str) -> "list[dict[str, object]]":
+        out = gh(["api", f"{api}/{path}"], f"read {path} for {head[:12]} (gh auth status)")
+        try:
+            got = cast("list[object]", json.loads(out)[key])
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh api {path} printed no {key}: check the gh on PATH ({out[:100]!r})")
+        return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+    latest: dict[str, dict[str, object]] = {}
+    for r in read(f"runs?head_sha={head}&per_page=100", "workflow_runs"):
+        w = str(r.get("workflow_id"))
+        if w not in latest or int(str(r.get("id") or 0)) > int(str(latest[w].get("id") or 0)):
+            latest[w] = r
+    if not latest:
+        return ["no workflow run on it yet"], []
+    why: list[str] = []; lines: list[str] = []
+    for r in latest.values():
+        path = str(r.get("path") or "")
+        jobs = read(f"runs/{r.get('id')}/jobs?per_page=100", "jobs")
+        state = {str(j.get("name")): (str(j.get("status") or "").lower(), str(j.get("conclusion") or "").lower()) for j in jobs}
+        # The run's own job list is the fact; the workflow file's job count is only the guard against GitHub creating a
+        # needs-dependent job late (run 42118019970 listed check only after scope completed). Started, none skipped, not
+        # completed: waiting for completion would put CI before qc and review again (issue-lifecycle #lanes-one-head).
+        n = workflow_jobs(head, path)
+        if n is None:
+            why.append(f"{path or 'its workflow'} at {head[:12]} is unreadable: no job count to compare")
+        elif len(jobs) < n:
+            why.append(f"run {r.get('id')} lists {len(jobs)} of the {n} jobs {path} defines (a job waiting on `needs` is not created yet)")
+        why += [f"run {r.get('id')} job {k} {c or s}" for k, (s, c) in state.items()
+                if c == "skipped" or s not in ("queued", "in_progress", "completed")]
+        lines += [f"- {j.get('name')} {j.get('conclusion') or j.get('status')} on {head[:12]}: {j.get('html_url')}" for j in jobs]
+    return why, ([] if why else lines)
+
+
+def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | None, proof: str | None,
+                   repo: str | None) -> tuple[list[str], list[str]]:
+    """(why each check skipped on HEAD fails, a line per one that passes; when a skipped check counts: spec issue-lifecycle
+    #lanes-one-head). PROOF is head_proof's line for JUDGED to HEAD."""
+    skipped = sorted({str(c.get("name") or "?") for c in rollup if c.get("__typename") != "StatusContext" and "conclusion" in c
+                      and str(c.get("conclusion") or "").upper() == "SKIPPED"})
+    h = head[:12]
+    if not skipped:
+        return [], []
+    if not judged or judged == head.lower() or not proof:
+        return [(f"Checks: skipped on head {h}: {', '.join(skipped)}; a skipped check is no pass and no Judged proof carries "
+                 f"a judged head's CI to {h} (issue-lifecycle #lanes-one-head): run `octo-feather-lane ci-start <PR>` on the "
+                 "judged head, wait for its CI, then rerun")], []
+    j = judged[:12]
+    runs = check_runs(judged, repo, "the judged head")
+    why: list[str] = []; ok: list[str] = []
+    for name in skipped:
+        at = f"Checks: {name} skipped on head {h}, carried from the judged head {j} by the Judged proof, and"
+        r = max((r for r in runs if r.get("name") == name), key=lambda r: int(str(r.get("id") or 0)), default=None)
+        status, concl = str((r or {}).get("status") or "").lower(), str((r or {}).get("conclusion") or "").lower()
+        if r is None:
+            why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
+        elif status != "completed":
+            why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
+        elif concl == "skipped":
+            why.append(f"{at} skipped on {j} too: CI never ran there; run `octo-feather-lane ci-start <PR>` on {j}, then rerun")
+        elif concl not in ("success", "neutral"):
+            why.append(f"{at} failing on {j}: {name} {concl or 'none'}; fix it (a red check is never pre-existing)")
+        else:
+            ok.append(f"- {name}: skipped on {h}; {concl} on {j}, the judged head")
+    return why, ok
+
+
+# GitHub's closing keywords: a PR body line with one closes that GitHub issue at merge (#N, owner/repo#N or the issue URL).
+CLOSES = re.compile(r"\b(?:close[sd]?|fix(?:e[sd])?|resolve[sd]?)\b:?\s+(?:[\w.-]+/[\w.-]+#|https?://(?:www\.)?github\.com/[\w.-]+/[\w.-]+/issues/|#)(\d+)\b", re.I)
+
+
+def parent_line(body: str, branch: str) -> list[str]:
+    """Spec #gates-pr-line: the body carries the tracker skill's pr-line for the lane's parent (the key its
+    key-from-branch reads from the PR branch), and closes no other GitHub issue."""
+    try:
+        key = tracker("key-from-branch", branch, err=Refuse).strip()
+        want = tracker("pr-line", key, err=Refuse).strip()
+    except Refuse as e:
+        return [f"parent line: cannot name it for branch {branch!r} ({e}); push the lane from its lane branch (docs/adr/0011)"]
+    lines = [l.strip() for l in body.splitlines()]
+    got = [l for l in lines if l == want or (l.startswith(want) and not re.match(r"[\w-]", l[len(want):len(want) + 1]))]
+    out = [] if got else [f"parent line: missing; add the line `{want}` (the tracker skill's pr-line {key}) to the PR body"]
+    for l in lines:
+        for m in CLOSES.finditer(l):
+            if l in got and m.end() <= len(want):
+                continue  # the parent line's own closing link (GitHub: Closes #<parent>), never the rest of its line
+            out.append(f"parent line: `{l[:80]}` closes GitHub issue #{m.group(1)}, not the lane's parent line `{want}`; "
+                       "remove it (the supervisor's close moves each ticket to done with the tracker skill's issue-done)")
+    return out
+
+
+def no_criterion(lines: list[str], commits: list[tuple[str, str]], specs: dict[str, dict[str, dict[str, object]]], pr: int) -> bool:
+    """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
+    no `qc: built` commit on the PR and no status entry built with it."""
+    b, f = field(lines, "Built"), field(lines, "Failed")
+    if not b or b[1].strip("`").lower() != "none" or not f or f[1].strip("`").lower() != "none":
+        return False
+    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|.*\|", l.strip(), re.I)), None)
+    for l in lines[t + 1:] if t is not None else []:
+        if not l.strip().startswith("|"):
+            break
+        if not all(re.fullmatch(r":?-+:?", c.strip()) for c in l.strip().strip("|").split("|")):
+            return False
+    if any(QC_COMMIT.match(s) for _, s in commits):
+        return False
+    return not any(v.get("status") == "built" and v.get("pr") == pr for cr in specs.values() for v in cr.values())
+
+
+def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]], head: str, pr: int) -> tuple[str | None, str | None]:
+    """(the PR commit the linked review verdict comment names as its Head, None), or (None, why); (None, None)
+    when there is no such comment to read (the Review verdict check names that)."""
+    rv = field(lines, "Review verdict")
+    m = COMMENT_URL.fullmatch(rv[1].strip("<>` ")) if rv else None
+    c = next((c for c in comments if m and (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
+    cb = (c or {}).get("body") or ""
+    if not cb.lstrip().startswith(MARKER):
+        return None, None
+    ch = HEAD_LINE.search(cb.split("\n### Findings", 1)[0])
+    at = [oid for oid, _ in commits if ch and oid.lower().startswith(ch.group(1).lower())]
+    if len(at) != 1:
+        return None, (f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not one commit of PR #{pr}: "
+                      f"review the PR head {head[:12]}, then `octo-feather-lane verdict {pr} {head[:12]} <report>`")
+    return at[0].lower(), None
+
+
+def qc_latest(judged: str) -> dict[str, tuple[dict[str, object], str]]:
+    """Each criterion's (<spec>#<id>) latest result in the qc reports at the JUDGED head, with its report's name
+    (reports: octo-feather-qc --help, Report; OCTO_FEATHER_QC_DIR as there)."""
+    d = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc")
+    latest: dict[str, tuple[dict[str, object], str]] = {}
+    for p in sorted(d.glob(f"{judged.lower()}-*.json"), key=lambda p: (p.name.split("-")[1], p.stat().st_mtime_ns)):
+        try:   # <head>-<UTC stamp>-<runid>.json, oldest first: a rerun's result replaces the earlier one
+            rep = json.loads(p.read_text(encoding="utf-8"))
+            spec, results = str(rep.get("spec")), list(rep.get("results") or [])
+        except (OSError, ValueError, AttributeError, TypeError):
+            continue
+        for r in results:
+            if isinstance(r, dict) and "id" in r:
+                latest[f"{spec}#{r['id']}"] = (cast("dict[str, object]", r), p.name)
+    return latest
+
+
+def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
+    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
+    (quality spec #qc-results), named with what is missing and its report (qc_latest)."""
+    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    for cid, (r, name) in qc_latest(judged).items():
+        if cid.split("#", 1)[0] in specs:
+            short = r.get("verdict") == "insufficient evidence"
+            latest[cid] = (("; ".join(map(str, cast("list[object]", r.get("missing") or []))) or "evidence incomplete") if short else "", name)
+    return [f"criterion {cid}: insufficient evidence at the judged head {judged[:12]} ({why}; qc report {name}): never triaged; "
+            "make what is missing available, then rerun just qc on it until it gives pass or fail"
+            for cid, (why, name) in sorted(latest.items()) if why]
+
+
+def resolution_verdicts(comments: "list[dict[str, object]]") -> dict[str, str]:
+    """{merge sha: URL} of each clear `verdict --resolution` comment among COMMENTS (spec #lanes-one-head)."""
+    out: dict[str, str] = {}
+    for c in comments:
+        body = str(c.get("body") or "")
+        rm = RESOLUTION_HEAD.match(body.lstrip()); hdr = body.split("\n### Findings", 1)[0]
+        vs = verdicts(hdr)
+        if rm and set(vs) == {"clear"} and not check_lines(hdr)[1]:
+            out[rm.group(1)] = str(c.get("url") or "")
+    return out
+
+
+@no_traceback
+def cmd_merge_ask(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    files, rest, i, base_arg = [], [], 0, None
+    while i < len(args):
+        if args[i] == "--status" and i + 1 < len(args):
+            files.append(args[i + 1]); i += 2
+        elif args[i] == "--base" and i + 1 < len(args):
+            base_arg = args[i + 1]; i += 2
+        else:
+            rest.append(args[i]); i += 1
+    if len(rest) != 1:
+        raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
+    pr = pr_number(rest[0]); specs = load_specs(files) if files else {}
+    d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
+    head = d["headRefOid"]; miss: list[str] = []
+    base = pr_base(cast("str | None", d["baseRefName"]) or "", base_arg)
+    try:
+        commits = pr_commits(pr, cast("str", head), base)
+    except Refuse as e:   # named with the other gaps; no commit of the PR is read
+        commits = []; miss.append(f"PR commits: {e}")
+    miss += parent_line(d["body"] or "", d["headRefName"] or "")
+    sec = section(d["body"])
+    if sec is None:
+        miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
+    lines = sec or []
+    no_crit = no_criterion(lines, commits, cast("dict[str, dict[str, dict[str, object]]]", specs), pr)
+    if not files and not no_crit:
+        load_specs(files)   # a lane that claims a criterion names its status files
+
+    h = field(lines, "Head")
+    if not h or not h[1]:
+        miss.append(f"Head: missing; add `Head: {head}`")
+    elif not head_matches(h[1].strip("`"), head):
+        miss.append(f"Head: names {h[1]}, the PR's head is {head[:12]} (stale): judge {head[:12]} (qc, review) and rewrite the section for it")
+
+    if not field(lines, "Checks"):
+        miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
+    rollup = d["statusCheckRollup"] or []
+    failed, pending = bad_checks(rollup)
+    no_ci = ""
+    if not rollup:   # the rule: --help, merge-ask Checks line
+        try:   # an unreadable no-CI fact is this one item failing closed, never an abort of the whole check
+            wf, src = ci_workflows(repo, cast("str", head))
+        except Refuse as e:
+            wf, src = None, str(e)
+        if wf is None:
+            miss.append(f"Checks: none reported on head {head[:12]}, and the no-CI fact could not be read ({src})")
+        elif wf:
+            miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
+        else:
+            try:
+                no_ci = (f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}); "
+                         + required_none(repo, cast("str", pr_view(pr, "baseRefName", repo)["baseRefName"])))
+            except Refuse as e:
+                miss.append(f"Checks: none reported on head {head[:12]}, no workflow file there ({src}), but {e}")
+    if failed:
+        miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
+    if pending:
+        miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
+
+    rows: dict[str, str] = {}; judged_at: set[str] = set()
+    t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
+    if t is None:
+        old = any(re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*evidence\s*\|", l.strip(), re.I) for l in lines)
+        if not no_crit: miss.append(f"criterion table: {'no judged column' if old else 'missing'}; add `| criterion | qc verdict | judged | evidence |` "
+                    "with one row per claimed criterion, judged naming the head just qc judged")
+    else:
+        for l in lines[t + 1:]:
+            if not l.strip().startswith("|"):
+                break
+            cells = [c.strip() for c in l.strip().strip("|").split("|")]
+            if all(re.fullmatch(r":?-+:?", c) for c in cells):
+                continue
+            if len(cells) != 4:
+                miss.append(f"criterion row `{l.strip()}`: needs 4 cells, criterion | qc verdict | judged <sha> | evidence"); continue
+            cid, why = resolve(cells[0], specs); v = cells[1].strip("`*").lower()
+            if not cid:
+                miss.append(f"criterion row: {why}"); continue
+            if cid in rows:
+                miss.append(f"criterion row {cid}: listed twice; keep one")
+            if v == "insufficient evidence":   # a result, never a failure to triage (quality spec #qc-results)
+                miss.append(f"criterion row {cid}: insufficient evidence is never triaged; rerun just qc on it until it gives pass or fail")
+            elif v not in ("pass", "fail"):
+                miss.append(f"criterion row {cid}: qc verdict {cells[1]!r}; write pass or fail, as the qc report says")
+            if not cells[3]:
+                miss.append(f"criterion row {cid}: no evidence; name the qc report and the command it ran")
+            sha, why = judged_sha(cells[2], commits, head, pr)
+            (judged_at.add(sha) if sha else miss.append(f"criterion row {cid}: {why}"))
+            rows[cid] = v
+        if not rows and not no_crit:
+            miss.append("criterion table: no rows; add one per claimed criterion")
+    judged = next(iter(judged_at)) if len(judged_at) == 1 else None
+    if len(judged_at) > 1:
+        miss.append(f"criterion table: rows name {len(judged_at)} judged heads ({', '.join(sorted(s[:12] for s in judged_at))}); "
+                    "qc and the review judge one head: run just qc, naming every criterion the lane builds, and the review on one integrated head")
+    if judged and specs:
+        miss += qc_insufficient(judged, {str(s) for s in specs})
+    jl = field(lines, "Judged")
+    resolved = resolution_verdicts(cast("list[dict[str, object]]", d["comments"] or []))
+    if no_crit:   # no qc: the review verdict's head is the judged head (spec #lanes-one-head)
+        judged, why = verdict_head(lines, d["comments"] or [], commits, head, pr)
+        miss += [why] if why else []
+        try:   # a resolved merge after it: the PR head is judged, the review verdict kept below by its resolution verdict
+            h_, fl = cast("str", head), cast("list[str]", files)
+            if judged and resolved and head_proof(judged, h_, fl, base)[1] and not head_proof(judged, h_, fl, base, resolved=resolved)[1]:
+                judged = h_.lower()
+        except Refuse:
+            pass   # named by the proof below
+    proof: str | None = None
+    if judged:
+        try:
+            proof, why = head_proof(judged, head, files, base)
+        except Refuse as e:
+            proof, why = None, [str(e)]
+        miss += [f"Judged: {w}" for w in why]
+        if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
+            miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
+
+    try:
+        why, carried = carried_checks(cast("list[dict[str, object]]", rollup), cast("str", head), judged, proof, repo)
+    except Refuse as e:
+        why, carried = [f"Checks: {e}"], []
+    miss += why
+
+    miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
+
+    review_checks: list[str] = []
+    rproof: str | None = None; rwhy: list[str] = []
+    rv = field(lines, "Review verdict")
+    url = (rv[1].strip("<>` ") if rv else "")
+    m = COMMENT_URL.fullmatch(url)
+    if not rv:
+        miss.append(f"Review verdict: missing; run `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>` and add `Review verdict: <the URL it prints>`")
+    elif not m or int(m.group(2)) != pr:
+        miss.append(f"Review verdict: {url or 'empty'} is not a comment on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
+    else:
+        c = next((c for c in d["comments"] or [] if (c.get("url") or "").endswith(f"#issuecomment-{m.group(3)}")), None)
+        cb = (c or {}).get("body") or ""
+        hdr = cb.split("\n### Findings", 1)[0]   # the helper's own header, never the quoted report
+        ch = HEAD_LINE.search(hdr); cvs = verdicts(hdr)
+        cv = cvs[-1] if len(set(cvs)) == 1 else None
+        rh = str(ch.group(1)).lower() if ch else None
+        rat: list[str] = [str(oid).lower() for oid, _ in commits if rh and str(oid).lower().startswith(rh)]
+        if judged and cast("str", cb).lstrip().startswith(MARKER) and len(rat) == 1 and rat[0] != judged:   # reviewed before the judged head
+            try:
+                rproof, rwhy = head_proof(rat[0], judged, cast("list[str]", files), base, at="reviewed head", kept="the review verdict", resolved=resolved,
+                                          rerun=f"review {judged[:12]} afresh in full, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")
+            except Refuse as e:
+                rproof, rwhy = None, [str(e)]
+        if c is None:
+            miss.append(f"Review verdict: comment {m.group(3)} not on PR #{pr}; link the URL `octo-feather-lane verdict` printed")
+        elif not cb.lstrip().startswith(MARKER):
+            miss.append(f"Review verdict: {url} is not a verdict comment (no marker); post it with `octo-feather-lane verdict`")
+        elif judged and (not ch or not judged.startswith(ch.group(1).lower())) and not rproof:
+            miss += [f"Review verdict: {w}" for w in rwhy] or [(
+                f"Review verdict: the comment names head {ch.group(1) if ch else 'none'}, not the judged head {judged[:12]}; "
+                f"review {judged[:12]}, then `octo-feather-lane verdict {pr} {judged[:12]} <report>`")]
+        elif cv != "clear":
+            miss.append(f"Review verdict: {cv or 'none or conflicting'}, not clear; fix the blocking findings, qc and review again")
+        else:
+            review_checks, why = check_lines(hdr)
+            proxy = [c for c in review_checks if c.endswith("| class: proxy")]
+            if why:
+                miss.append(f"Review verdict: the comment carries no usable check classification ({why[0]}): have the review report "
+                            f"hold {CHECK_FORM}, then `octo-feather-lane verdict {pr} {(judged or head)[:12]} <report>`")
+            elif proxy:
+                miss.append(f"Review verdict: clear with a proxy check ({proxy[0]}): a proxy check blocks (docs/adr/0008); "
+                            "delete or replace it, review again, and post the verdict with `octo-feather-lane verdict`")
+    rl = field(lines, "Reviewed")
+    if rproof and (not rl or rl[1].strip("`") != rproof):
+        miss.append(f"Reviewed: {'names ' + repr(rl[1]) if rl else 'missing'}; add the check's proof line `Reviewed: {rproof}`")
+
+    built = set()
+    b = field(lines, "Built")
+    if not b:
+        miss.append("Built: missing; add `Built: <ids qc flipped to built>` (or `Built: none`)")
+    elif b[1].strip("`").lower() != "none":
+        for tok in filter(None, re.split(r"[\s,]+", b[1])):
+            cid, why = resolve(tok, specs)
+            (built.add(cid) if cid else miss.append(f"Built: {why}"))
+    status = {f"{s}#{k}" for s, cr in specs.items() for k, v in cr.items() if v.get("status") == "built" and v.get("pr") == pr}
+    if b and built != status:
+        miss.append(f"Built: lists {' '.join(sorted(built)) or 'none'}, the status files hold built with PR #{pr}: "
+                    f"{' '.join(sorted(status)) or 'none'}; list exactly those (never edit the status file by hand)")
+    qc = [QC_COMMIT.match(s) for _, s in commits]
+    qc_ids = {x for q in qc if q for x in q.group(1).split() if x != "(none)"}
+    unpassed = sorted(c for c in built if c.split("#", 1)[1] not in qc_ids)
+    if no_crit:
+        pass   # builds no criterion: no qc run, no qc commit
+    elif not any(qc):
+        miss.append(f"Built: no `qc: built` commit on PR #{pr}; run just qc on the lane head (docs/adr/0022)")
+    elif unpassed:   # a subset: a later qc run may reset an earlier pass to planned
+        miss.append(f"Built: {' '.join(unpassed)} in no `qc: built` commit of PR #{pr} (they passed "
+                    f"{' '.join(sorted(qc_ids)) or 'none'}); built only by just qc: run just qc on the head for them, never edit the status file by hand")
+
+    fails: dict[str, str] = {}
+    f = field(lines, "Failed")
+    if not f:
+        miss.append("Failed: missing; add `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
+    elif f[1].lower() not in ("none", ""):
+        miss.append(f"Failed: {f[1]!r}; write `Failed: none`, or `Failed:` then one `- <id>: <triage>` line per failed criterion")
+    elif f[1] == "":
+        for l in lines[f[0] + 1:]:
+            fm = re.match(r"\s*[-*]\s+([^:\s]+):?\s*(.*)$", l)
+            if not fm:
+                break
+            cid, why = resolve(fm.group(1), specs)
+            if not cid:
+                miss.append(f"Failed: {why}"); continue
+            fails[cid] = fm.group(2).strip()
+            if not fails[cid]:
+                miss.append(f"Failed: {cid} has no triage; add `- {cid}: <repair ticket, judging fix, or outside the lane and why>` (spec #delivery-qa-triage)")
+        if not fails:
+            miss.append("Failed: empty list; write `Failed: none` or one `- <id>: <triage>` line per failed criterion")
+
+    if t is not None:
+        for cid in sorted(built - rows.keys()):
+            miss.append(f"criterion row {cid}: missing (it is in Built); add `| {cid} | pass | judged <sha> | <evidence> |`")
+        for cid in sorted(fails.keys() - rows.keys()):
+            miss.append(f"criterion row {cid}: missing (it is in Failed); add `| {cid} | fail | judged <sha> | <evidence> |`")
+        for cid, v in sorted(rows.items()):
+            if v == "pass" and cid not in built:
+                miss.append(f"criterion row {cid}: pass but not in Built; qc flips each pass to built, so rerun just qc or correct the row")
+            if v == "fail" and cid not in fails:
+                miss.append(f"criterion row {cid}: fail with no triage; add `- {cid}: <triage>` under Failed (spec #delivery-qa-triage)")
+            if v == "fail" and cid in built:
+                miss.append(f"criterion row {cid}: fail but in Built; rerun just qc on it")
+
+    sources: list[str] = []
+    if rows and judged:
+        latest = qc_latest(judged)
+        sources = [f"Decision sources (the latest qc result at the judged head {judged[:12]}; quality spec #qc-results):",
+                   *(f"- {cid}: {latest[cid][0].get('decision') or 'none named'}" if cid in latest
+                     else f"- {cid}: no qc result at the judged head" for cid in sorted(rows))]
+    gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
+    if miss:
+        print("\n".join(gate_time), file=sys.stderr)
+        raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
+                     + "\n".join(f"  - {x}" for x in miss))
+    print("\n".join(lines).strip())
+    if no_ci:
+        print(f"\nChecks: {no_ci}")
+    if carried:
+        print("\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
+    if sources:
+        print("\n" + "\n".join(sources))
+    if judged_lines := judgment_lines(d["comments"]):   # shown only, after the pass was decided above
+        print("\nModel judgments (advisory, spec judgment#rule-advisory: no gate reads them; this merge ask is ready or not without them):")
+        print("\n".join(judged_lines))
+    print("\nReview check classes (from the verdict comment, docs/adr/0008):")
+    print("\n".join(f"- {c}" for c in review_checks))
+    print("\n" + "\n".join(gate_time))
+    return 0
+
+
+class Unchecked(Refuse):
+    """Nothing could be checked (gh, file or specs error): exit 2, no ticket reported as passed."""
+
+
+GATE = re.compile(r"just\s+check(-[a-z-]+)?")
+ITEM = re.compile(r"^\s*[-*+]\s+(?:\[[ xX]\]\s+)?(.*)$")
+CRITERION = re.compile(r"^`?([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9_-]*)`?(?=[:\s]|$)")
+EXPAND = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Expand-contract:\**\s*(\S*)", re.M | re.I)
+CREATES = re.compile(r"^\s*(?:[-*+]\s+(?:\[[ xX]\]\s+)?)?\**Creates:\**[ \t]*(.*?)\s*$", re.M | re.I)
+# The fix text for a Creates line (scope: --help (ticket)).
+CREATES_FORM = "`Creates: `<path>``, form: octo-feather-lane --help (ticket)"
+# The fix for a `Creates: `just ...`` line (scope: --help (ticket)).
+CREATES_JUST_FIX = ("an existing recipe needs no Creates; an absent recipe cannot be declared: create it in an earlier ticket, "
+                    "or demo through the path it runs, declared as " + CREATES_FORM)
+DEMO = re.compile(r"^\**demo:\**\s*", re.I)
+RULE = re.compile(r"^\**rule:\**\s*(.*)$", re.I)
+ADR_OWNER = re.compile(r"(docs/adr/(\d{4})[^\s,;()]*)|ADR\s+(\d{4})")
+RULING = re.compile(r"owner ruling\s+\S.*", re.I)
+# The fix text for a rule item (scope: --help (ticket)).
+RULE_FORM = "`rule: <rule> (<owner>)`, owner kinds: octo-feather-lane --help (ticket)"
+
+
+def rule_why_not(rest: str, adr: Path) -> str | None:
+    """Why the rule item `rule: REST` names no owned rule, None if it does; ADR: the repo's docs/adr."""
+    o = OWNED.fullmatch(rest)   # the review's Check-line form, `<rule> (<owner>)`
+    if not o:
+        return ("empty rule" if re.fullmatch(r"(\([^()]*\))?", rest) else f"`rule: {rest[:80]}` names no owner in parentheses")
+    owner = o.group(2).strip()
+    if RULING.fullmatch(owner):
+        return None
+    a = ADR_OWNER.fullmatch(owner)
+    if not a:
+        return f"owner `{owner}` is neither an ADR nor an owner ruling"
+    hits = sorted(adr.glob(f"{a.group(2) or a.group(3)}-*.md")) if adr.is_dir() else []
+    if a.group(1):
+        hits = [h for h in hits if f"docs/adr/{h.name}".startswith(a.group(1))]
+    if len(hits) != 1:
+        return f"owner `{owner}` names {'no' if not hits else len(hits)} ADR file{'s' if len(hits) > 1 else ''} in {adr}"
+    return None
+
+
+class Anchors(HTMLParser):
+    def __init__(self):
+        super().__init__(); self.ids = set(); self.criteria = set(); self.inert = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "template":   # an inert <template>'s content is no element of the page
+            self.inert += 1
+        if self.inert:
+            return
+        self.ids.update(v for k, v in attrs if k in ("id", "data-anchor") and v)
+        a = dict(attrs)
+        if "data-acceptance-criterion" in a and a.get("data-anchor"):
+            self.criteria.add(a["data-anchor"])   # a criterion id: the data-anchor of a criterion element
+
+    def handle_endtag(self, tag):
+        if tag == "template" and self.inert:
+            self.inert -= 1
+
+
+def specs_dir() -> Path:
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    root = Path(top.stdout.strip()) if top.returncode == 0 else Path.cwd()
+    d = root / "docs" / "specs"
+    if not d.is_dir():
+        raise Unchecked(f"no spec dir {d}: run this inside the target repo, whose docs/specs/<slug>.spec.html the criterion ids name")
+    return d
+
+
+def spec_anchors(specs: Path, slug: str, cache: dict) -> "Anchors | None":
+    if slug not in cache:
+        f = specs / f"{slug}.spec.html"
+        if not f.is_file():
+            cache[slug] = None
+        else:
+            p = Anchors()
+            try:
+                p.feed(f.read_text(encoding="utf-8")); p.close()
+            except (OSError, UnicodeDecodeError) as e:
+                raise Unchecked(f"cannot read spec {f} ({e}): fix or restore the file, then rerun") from e
+            cache[slug] = p
+    return cache[slug]
+
+
+def criteria_items(body: str) -> list[str] | None:
+    """The `## Acceptance criteria` list items (continuation lines joined); None if no such section."""
+    lines, items, inside = structure(body), [], False
+    found = False
+    for line in lines:
+        if re.match(r"^#{1,6}\s", line):
+            inside = bool(re.match(r"^#{1,6}\s+acceptance criteria\s*$", line.strip(), re.I)); found |= inside
+            continue
+        if not inside or not line.strip():
+            continue
+        m = ITEM.match(line)
+        if m and len(line) - len(line.lstrip()) < 2:
+            items.append(m.group(1).strip())
+        elif items:
+            items[-1] += " " + line.strip()
+    return items if found else None
+
+
+def structure(body: str) -> list[str]:
+    """BODY's lines that carry the ticket's Markdown structure (scope: octo-feather-lane --help (ticket))."""
+    return [l for l, kind in markdown(body, comments=True) if kind not in ("fence", "comment")]
+
+
+def check_body(name: str, body: str, specs: Path, cache: dict) -> list[str]:
+    """Failures of one ticket body, each `<name>: class: <class>: <problem>; fix: <fix>`."""
+    out = []
+    fail = lambda cls, problem, fix: out.append(f"{name}: class: {cls}: {problem}; fix: {fix}")
+    items = criteria_items(body); section = items is not None
+    if not section:
+        fail("no-criterion", "no `## Acceptance criteria` section",
+             "add the to-tickets issue template's `## Acceptance criteria` list, items starting with `<spec slug>#<anchor>:` "
+             f"(or, serving no criterion, an item {RULE_FORM}) and the last `demo: ` with a backticked command")
+        items = []
+    ids = list(dict.fromkeys((m.group(1), m.group(2)) for m in (CRITERION.match(i) for i in items) if m))
+    rules = [(r.group(1).strip(), rule_why_not(r.group(1).strip(), specs.parent / "adr")) for r in (RULE.match(i) for i in items) if r]
+    for rest, why in rules:
+        if why:
+            fail("unowned-rule", why, f"write the rule item as {RULE_FORM}")
+    if section and not ids and not rules:
+        fail("no-criterion", "no acceptance item names a criterion id",
+             "start each item with the criterion it serves, `<spec slug>#<anchor>: ...`, the anchor from docs/specs/<slug>.spec.html; "
+             f"or, serving no criterion, add an item {RULE_FORM}")
+    crit, other = [], []
+    for slug, anchor in ids:
+        have = spec_anchors(specs, slug, cache)
+        if have is None:
+            fail("unknown-criterion", f"{slug}#{anchor}: no spec {specs / (slug + '.spec.html')}",
+                 f"use a spec slug from {specs} (file stem before .spec.html)")
+        elif anchor not in have.ids:
+            fail("unknown-criterion", f"{slug}#{anchor}: no anchor {anchor} in {specs / (slug + '.spec.html')}",
+                 f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}, or get the spec changed first")
+        elif anchor in have.criteria:
+            crit.append(f"{slug}#{anchor}")
+        else:
+            other.append((slug, anchor, have))
+    if ids and not crit and other:   # only section, story or table anchors: no criterion served
+        slug, _, have = other[0]
+        fail("no-criterion", "no acceptance item names an acceptance criterion: "
+             + ", ".join(f"{s}#{a}" for s, a, _ in other) + " " + ("is not a data-acceptance-criterion anchor" if len(other) == 1 else "are not data-acceptance-criterion anchors"),
+             f"name the data-acceptance-criterion anchor it serves, e.g. {slug}#{next(iter(sorted(have.criteria)), 'acceptance-...')}")
+    creates, used = {}, set()   # each declared path -> as written
+    for v in dict.fromkeys(CREATES.findall("\n".join(structure(body)))):
+        d, why = creates_why_not(v)
+        if why:
+            fail("bad-creates", f"Creates {why}", CREATES_JUST_FIX if d == "just" else "declare a repo-relative path outside tests/, as " + CREATES_FORM)
+        else:
+            creates.setdefault(d, v)
+    unused = lambda: [fail("unused-creates", f"Creates `{d}` but no demo command runs it",
+                           f"make the demo's program exactly the declared path, or drop the line; {CREATES_FORM}")
+                      for d in creates if d not in used]
+    ec = EXPAND.search("\n".join(structure(body)))
+    if ec and ec.group(1).lower().strip("*`.,;") in ("expand", "migrate", "contract"):
+        unused()
+        return out
+    if ec:
+        fail("layer-only-ticket", f"Expand-contract line names `{ec.group(1)}`",
+             "write `Expand-contract: expand`, `migrate` or `contract` (the wide refactor's step), or drop it and end on a demo")
+        unused()
+        return out
+    last = items[-1] if items else ""
+    fix = ("end the acceptance list on `demo: ` with a backticked command that shows the behavior through the app's CLI, HTTP or UI "
+           "(e.g. demo: `app cmd ARGS` prints X), not the gate alone; or, for one step of a wide refactor, add the line "
+           "`Expand-contract: expand|migrate|contract`")
+    if not DEMO.match(last):
+        fail("layer-only-ticket", "last acceptance item is not a `demo: ` line", fix)
+    else:
+        cmds = re.findall(r"`([^`]+)`", last)
+        if not cmds:
+            fail("layer-only-ticket", f"demo names no backticked command ({last[:80]})", fix)
+        elif all(GATE.fullmatch(" ".join(c.split())) for c in cmds):
+            fail("layer-only-ticket", f"demo is the gate alone (`{cmds[0]}`)", fix)
+        else:
+            surf = cache.setdefault(("surface",), Surface(specs.parent.parent))
+            runs = [surf.runs(c, creates, used) for c in cmds]
+            invs = [i for r in runs for i in r[0]]
+            if not invs:
+                fail("layer-only-ticket", f"demo runs no surface the repo declares ({'; '.join(f'`{c}`: {r[1]}' for c, r in zip(cmds, runs))})", SURFACE_FIX)
+    unused()
+    return out
+
+
+def q(v: str) -> str:
+    """V as a Markdown code span."""
+    return f"`` {v} ``" if "`" in v else f"`{v}`"
+
+
+def creates_why_not(v: str) -> tuple[str, str | None]:
+    """(the path a `Creates:` value V declares, why V declares none, None if it does; "just" for a just recipe)."""
+    m = re.fullmatch(r"`([^`]*)`", v)
+    if not m:
+        return "", f"value {q(v)} is not one backticked path"
+    d = m.group(1).strip()
+    if d == "":
+        return "", f"{q(m.group(1))} has an empty value"
+    if d.split()[0] == "just":
+        return "just", f"`{d}` declares a just recipe, not a path (owner ruling #240, C)"
+    if re.search(r"\s", d):
+        return "", f"`{d}` is not one path (no arguments or spaces)"
+    if os.path.isabs(d) or ".." in d.split("/"):
+        return "", f"`{d}` is not repo-relative (no leading /, no ..)"
+    rel = d[2:] if d.startswith("./") else d
+    if os.path.normpath(rel) != rel:
+        return "", f"`{d}` is not a normalized path (no //, /./ or trailing /)"
+    if TEST_DIR.search(rel):
+        return "", f"`{d}` is under a test or hook directory, not the app's surface"
+    return rel, None
+
+
+@functools.cache
+def gate_free_module():
+    """scripts/check-gate-free, whose just_runs() is the one source of what a just command line runs (with the gate's marker)."""
+    loader = importlib.machinery.SourceFileLoader("check_gate_free", str(KIT / "scripts" / "check-gate-free"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("check_gate_free", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def created(words: list[str], creates) -> str | None:
+    """The declared path of CREATES that a stage's program WORDS (env and runners dropped) runs exactly, None if none."""
+    if not words:
+        return None
+    prog = words[0]
+    rel = prog[2:] if prog.startswith("./") else prog
+    return rel if "/" in prog and rel in creates else None
+
+
+# A demo goes through the repo's own public surface (ADR 0009): a program the repo declares,
+# an HTTP request, or a UI driver run. Generic tools and builtins (printf, echo, cat) are not one.
+SURFACE_FIX = ("make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo "
+               "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
+               "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
+               "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
+               "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
+               "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
+               + ", the demo running that path; or, for one step of a wide refactor, add the line "
+               "`Expand-contract: expand|migrate|contract`")
+
+
+RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), ("yarn", "exec"), ("bundle", "exec"),
+           ("npx",), ("pnpx",), ("bunx",), ("pnpm",), ("yarn",), ("env",), ("exec",), ("command",), ("time",), ("sudo",)}
+# A target with no CLI, HTTP or UI demos through its runnable script (ADR 0002), e.g. `python harness.py`.
+INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno", "bun", "Rscript"}
+HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
+NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
+
+
+def not_demo(recipe: str) -> bool:
+    """RECIPE (`MOD RECIPE` or `MOD::RECIPE` too) is a gate or factory recipe: its own name, whatever module path names it."""
+    return bool(NOT_DEMO_RECIPES.fullmatch(re.split(r"\s+|::", recipe)[-1]))
+TEST_DIR = re.compile(r"(^|/)(tests?|spec|__tests__|\.githooks)/")
+
+
+class Surface:
+    """What the repo at ROOT declares as runnable: tracked executables, justfile recipes,
+    package.json bin and pyproject [project.scripts] names."""
+
+    def __init__(self, root: Path):
+        self.root, self.exec_paths, self.exec_names, self._recipes, self.bins = root, set(), set(), None, set()
+        self.justfile, self._just = None, {}
+        self.files = set()  # every tracked file outside tests: a runnable script run by its interpreter
+        ls = subprocess.run(["git", "-C", str(root), "ls-files", "-s"], capture_output=True, text=True)
+        for line in ls.stdout.splitlines():
+            meta, _, path = line.partition("\t")
+            if not TEST_DIR.search(path):
+                self.files.add(path)
+            # A test or hook is the gate's, not the app's surface.
+            if meta.startswith("100755") and not TEST_DIR.search(path):
+                self.exec_paths.add(path); self.exec_names.add(path.rsplit("/", 1)[-1])
+        try:
+            b = json.loads((root / "package.json").read_text(encoding="utf-8"))
+            binv = b.get("bin") if isinstance(b, dict) else None
+            if isinstance(binv, dict):
+                self.bins |= set(binv)
+            elif isinstance(binv, str) and isinstance(b.get("name"), str):
+                self.bins.add(b["name"].rsplit("/", 1)[-1])
+        except (OSError, ValueError):
+            pass
+        try:
+            import tomllib
+            p = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
+            self.bins |= set(((p.get("project") or {}).get("scripts") or {}))
+        except (OSError, ValueError, ImportError):
+            pass
+
+    @property
+    def recipes(self) -> dict[str, str]:
+        """Each name `just` runs in ROOT (recipe, alias, `MOD RECIPE`) -> the recipe it runs, as
+        `just --dump --dump-format json` declares them: the call octo-feather-integrate's recipe_names
+        makes (#121 D12), on ROOT's own justfile; none without one. Read only when a demo needs it.
+        Fails closed (Unchecked, exit 2, the reason named) when just is missing or cannot read it."""
+        if self._recipes is None:
+            self._recipes, self.modules = {}, set()
+            c = sorted(p.name for p in self.root.iterdir() if p.name.lower() in ("justfile", ".justfile"))
+            if not c:
+                return self._recipes
+            f = self.justfile = self.root / c[0]
+            why = lambda w: Unchecked(f"cannot read the justfile's recipes ({f}): {w}, then rerun")
+            if len(c) > 1:
+                raise why(f"justfile is ambiguous, just refuses to pick one of: {' '.join(c)}; keep one")
+            try:
+                p = subprocess.run(["just", "--justfile", str(f), "--working-directory", str(self.root),
+                                    "--dump", "--dump-format", "json"], capture_output=True, text=True)
+            except OSError as e:
+                raise why("just is not on PATH; install just" if isinstance(e, FileNotFoundError)
+                          else f"cannot run just ({e}); fix that") from e
+            if p.returncode:
+                raise why(f"just --dump: {(p.stderr.strip().splitlines() or ['exit ' + str(p.returncode)])[0]}; fix the justfile")
+            try:
+                def walk(d: dict, pre: str):
+                    for n in d["recipes"]:
+                        self._recipes[pre + n] = pre + n
+                    for n, a in d.get("aliases", {}).items():
+                        self._recipes[pre + n] = pre + a["target"]
+                    for n, m in d.get("modules", {}).items():
+                        self.modules.add(pre + n); walk(m, f"{pre}{n} ")
+                walk(json.loads(p.stdout), "")
+            except (ValueError, KeyError, TypeError, AttributeError) as e:
+                raise why(f"unexpected just --dump JSON ({type(e).__name__}: {e}); check the just version") from e
+        return self._recipes
+
+    def program(self) -> str:
+        """A program the repo declares (an executable, a recipe other than the gate's, a bin), '' if none."""
+        recipes = sorted(f"just {r}" for r, to in self.recipes.items() if not not_demo(to))
+        return next(iter(recipes + sorted(self.bins) + sorted(self.exec_paths)), "")
+
+    def runs(self, cmd: str, creates=(), used: set | None = None) -> tuple[list[str], str]:
+        """(the surface invocation of each stage of CMD on the repo's surface, why the others are not).
+        A stage whose program is exactly a path of CREATES (the ticket's `Creates:` lines) is on it
+        too, and that path goes into USED."""
+        invs, whys = [], []
+        for stage in re.split(r"\|\||&&|[|;]", strip_subst(cmd)):
+            why, words = self.stage_why_not(stage)
+            if (d := created(words, creates)) is not None:
+                if used is not None:
+                    used.add(d)
+                invs.append(d)   # a created path stands for itself, never read by its basename
+            elif why is None:
+                invs.append(invocation(words))
+            else:
+                whys.append(why)
+        return invs, "; ".join(dict.fromkeys(whys)) or "empty command"
+
+    def just_why(self, args: list[str]) -> str | None:
+        """Why `just ARGS` is no demo, None if it is one, as just itself answers in ROOT (check-gate-free
+        just_runs, the one source): the recipes it runs, dependencies included, none a gate or factory recipe."""
+        key = tuple(args)
+        if key in self._just:
+            return self._just[key]
+        self.recipes   # no just or an unreadable justfile: exit 2, before any run
+        cmd = " ".join(["just", *args])
+        if not self.justfile:
+            res = f"no justfile in {self.root}"
+        else:
+            try:
+                names, why = gate_free_module().just_runs(args, self.root)
+            except subprocess.TimeoutExpired:
+                names, why = None, "just did not answer in 60s"
+            g = next((n for n in names or () if NOT_DEMO_RECIPES.fullmatch(n)), None)
+            res = (f"just answers: {why}" if names is None else
+                   f"{cmd} runs {g}, a gate or factory recipe, not the app" if g else None)
+        self._just[key] = res
+        return res
+
+    def stage_why_not(self, stage: str) -> tuple[str | None, list[str]]:
+        words = program_words(stage)
+        return self.word_why_not(words), words
+
+    def word_why_not(self, words: list[str]) -> str | None:
+        if not words:
+            return "no program"
+        prog, args = words[0], words[1:]
+        if prog.rsplit("/", 1)[-1] in INTERPRETERS:
+            script = script_arg(words)
+            if not script:
+                return f"{prog} runs no script"
+            rel = os.path.normpath(script[2:] if script.startswith("./") else script)
+            if TEST_DIR.search(rel):
+                return f"{script} is a test or hook, not the app's surface"
+            if declared := (rel if rel in self.exec_paths else self.program()):   # ADR 0002 fallback, read as: program() finds none
+                return f"the repo declares a program ({declared}), so the demo runs it, not a script by its interpreter (ADR 0002)"
+            return None if rel in self.files else f"{script} is not a script the repo tracks"
+        if prog in HTTP:
+            return None if any(re.match(r"https?://", a) for a in args) else f"{prog} without an http(s) URL"
+        if prog == "playwright" or prog.endswith("/playwright"):
+            return None
+        if prog == "just":
+            return self.just_why(args)
+        if "/" in prog:
+            rel = os.path.normpath(prog[2:] if prog.startswith("./") else prog)
+            if os.path.isabs(prog):
+                try:
+                    rel = str(Path(prog).resolve().relative_to(self.root.resolve()))
+                except ValueError:
+                    return f"{prog} is outside the repo"
+            if TEST_DIR.search(rel):
+                return f"{prog} is a test or hook, not the app's surface"
+            return None if rel in self.exec_paths else f"{prog} is not an executable the repo tracks"
+        if prog in self.exec_names or prog in self.bins:
+            return None
+        return f"{prog} is not a program the repo declares"
+
+
+def program_words(stage: str) -> list[str]:
+    """STAGE's words from its program on: env assignments and runners (uv run, npx...) dropped."""
+    try:
+        words = shlex.split(stage)
+    except ValueError:
+        words = stage.split()
+    while words and re.fullmatch(r"[A-Za-z_]\w*=.*", words[0]):
+        words = words[1:]
+    changed = True
+    while changed and words:
+        changed = False
+        for r in sorted(RUNNERS, key=len, reverse=True):
+            if tuple(words[:len(r)]) == r and len(words) > len(r):
+                words = words[len(r):]
+                while words and (words[0].startswith("-") or re.fullmatch(r"[A-Za-z_]\w*=.*", words[0])):
+                    words = words[1:]
+                changed = True; break
+    return words
+
+
+def script_arg(words: list[str]) -> str:
+    """The script an interpreter runs: its first argument after flags (`deno run`/`bun run` skip `run`)."""
+    if any(w in ("-c", "-m", "-e", "--eval") for w in words[1:]):
+        return ""   # inline code or a module, not a script file
+    args = [a for a in words[1:] if not a.startswith("-")]
+    if args and args[0] == "run" and words[0].rsplit("/", 1)[-1] in ("deno", "bun"):
+        args = args[1:]
+    return args[0] if args else ""
+
+
+def invocation(words: list[str]) -> str:
+    """The behavior a demo stage runs: program (basename) plus its first subcommand word;
+    for curl/http the URL path; for playwright its first test file."""
+    if words[0].rsplit("/", 1)[-1] in INTERPRETERS:   # the script stands for the program
+        words = words[words.index(script_arg(words)):]
+    prog, args = words[0], [a for a in words[1:] if not a.startswith("-")]
+    name = prog.rsplit("/", 1)[-1]
+    if prog in HTTP:   # as word_why_not reads it: a bare name, never a path's basename
+        url = next(a for a in args if re.match(r"https?://", a))
+        return re.sub(r"^https?://[^/]*", "", url).split("?")[0].split("#")[0] or "/"
+    if name == "playwright":
+        f = next((a for a in args if a != "test"), "")
+        return f.rsplit("/", 1)[-1] or "playwright"
+    sub = args[0] if args and re.fullmatch(r"[A-Za-z][\w-]*", args[0]) else ""
+    return f"{name} {sub}".strip()
+
+
+def strip_subst(cmd: str) -> str:
+    """Replace $(...) and backquote-free substitutions with a placeholder word, so env values never split."""
+    out, depth = [], 0
+    i = 0
+    while i < len(cmd):
+        if cmd.startswith("$(", i):
+            depth += 1; i += 2
+            if depth == 1:
+                out.append("X")
+            continue
+        if depth and cmd[i] == "(":
+            depth += 1
+        elif depth and cmd[i] == ")":
+            depth -= 1
+        elif not depth:
+            out.append(cmd[i])
+        i += 1
+    return "".join(out)
+
+
+def tracker_skill(err: type = Unchecked) -> str:
+    """The target's tracker skill: scripts/pi-role's tracker_skill resolves it from the .octo-feather.toml of the git
+    repo at the current directory, docs/adr/0004."""
+    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
+    pr = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+    loader.exec_module(pr)
+    try:
+        return pr.tracker_skill(str(KIT / ".agents" / "skills"))
+    except SystemExit as e:
+        raise err(f"{e.code}: set `tracker` in the target's .octo-feather.toml to a tracker the kit has, then rerun") from e
+
+
+def tracker(script: str, *args: str, err: type = Unchecked, skill: str | None = None, env: dict[str, str] | None = None,
+            stdin: str | None = None) -> str:
+    """Run SCRIPT of SKILL, by default the target's tracker skill (tracker_skill); its stdout. ENV is added to the
+    script's environment, STDIN its input. A failure raises ERR naming the script and its reason."""
+    skill = skill or tracker_skill(err)
+    path = KIT / ".agents" / "skills" / skill / "scripts" / script
+    try:
+        p = subprocess.run([str(path), *args], capture_output=True, text=True, timeout=120, env={**os.environ, **(env or {})},
+                           input=stdin, stdin=subprocess.DEVNULL if stdin is None else None)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise err(f"tracker script {skill}/{script} {' '.join(args)} did not run ({e}): check the tracker CLI and network, then rerun") from e
+    if p.returncode:
+        why = " ".join((p.stderr or p.stdout).split())[:400] or f"exit {p.returncode}"
+        raise err(f"tracker script {skill}/{script} {' '.join(args)} failed ({why}): fix the cause it names, then rerun")
+    return p.stdout
+
+
+def issue_view(key: str, err: type = Unchecked) -> dict:
+    """The tracker skill's issue-view of KEY: {key, ..., state, children}, children a list of key strings."""
+    out = tracker("issue-view", key, err=err)
+    try:
+        d = json.loads(out)
+        if not isinstance(d, dict) or not isinstance(d.get("key"), str) or not isinstance(d.get("children"), list) \
+                or not all(isinstance(k, str) for k in d["children"]):
+            raise ValueError("no key or children list of key strings")
+    except ValueError as e:
+        raise err(f"issue-view {key} printed unreadable JSON ({e}): the tracker skill's issue-view must print key and children, then rerun") from e
+    return d
+
+
+def key_order(k: str) -> tuple:
+    """Keys in tracker order: the prefix, then the trailing number (101 before 110, ENG-9 before ENG-10)."""
+    m = re.fullmatch(r"(.*?)(\d+)", k)
+    return (m.group(1), int(m.group(2))) if m else (k, 0)
+
+
+def cmd_tickets(args: list[str]) -> int:
+    if len(args) != 1 or not args[0].strip():
+        raise Unchecked(f"usage: octo-feather-lane tickets PARENT (PARENT the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
+    specs = specs_dir()
+    d = issue_view(args[0])
+    parent = d["key"]
+    kids = sorted(set(d["children"]), key=key_order)
+    if not kids:
+        print(f"{parent}: class: no-sub-issues: the parent lists no sub-issues; fix: file each lane ticket as a sub-issue of {parent} (to-tickets publish step, spec issue-lifecycle #acceptance-sub-issues)")
+        return 1
+    bodies = []   # read every ticket first: a tracker failure midway reports nothing as passed
+    for k in kids:
+        t = issue_view(k)
+        if not isinstance(t.get("body"), str):
+            raise Unchecked(f"issue-view {k} printed no body: the tracker skill's issue-view must print body, then rerun")
+        bodies.append((t["key"], t["body"]))
+    cache, bad = {}, 0
+    for k, body in bodies:
+        fails = check_body(k, body, specs, cache)
+        print("\n".join(fails) if fails else f"{k}: ok")
+        bad += bool(fails)
+    print(f"{parent}: {len(bodies) - bad} of {len(bodies)} tickets pass" + (f", {bad} fail" if bad else ""))
+    return 1 if bad else 0
+
+
+def cmd_done(args: list[str]) -> int:
+    if len(args) != 1 or not args[0].strip():
+        raise Refuse(f"usage: octo-feather-lane done PARENT (the lane's parent ticket key, e.g. 40 or ENG-123; got {' '.join(args) or 'nothing'})")
+    d = issue_view(args[0], err=Refuse)
+    parent = d["key"]
+    keys = sorted(set(d["children"]), key=key_order) + [parent]   # the parent last: it is done when its tickets are
+    failed = []
+    for k in keys:
+        try:
+            tracker("issue-done", k, err=Refuse)
+            state = issue_view(k, err=Refuse).get("state")   # read back: the move landed
+            if state != "done":
+                raise Refuse(f"{k} reads {state!r} after issue-done, not done: move it by hand in the tracker, then rerun")
+            print(f"{k}: done")
+        except Refuse as e:
+            failed.append(f"  - {k}: {e}")
+    if failed:
+        raise Refuse(f"{parent}: {len(failed)} of {len(keys)} not done:\n" + "\n".join(failed) + "\nrerun `octo-feather-lane done " + parent + "` after the fix (issue-done leaves a done ticket as it is)")
+    print(f"{parent}: parent and {len(keys) - 1} tickets done")
+    return 0
+
+
+def cmd_ticket(args: list[str]) -> int:
+    if len(args) != 1:
+        raise Unchecked(f"usage: octo-feather-lane ticket FILE|- (a ticket draft in the to-tickets issue template; - reads stdin; got {' '.join(args) or 'nothing'})")
+    src = args[0]
+    specs = specs_dir()
+    try:
+        body = sys.stdin.read() if src == "-" else Path(src).read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError) as e:
+        raise Unchecked(f"cannot read draft {src} ({e}): pass a readable UTF-8 file, or - with the draft on stdin") from e
+    if not body.strip():
+        raise Unchecked(f"draft {src} is empty: pass the drafted ticket body (the to-tickets issue template)")
+    name = "stdin" if src == "-" else src
+    fails = check_body(name, body, specs, {})
+    print("\n".join(fails) if fails else f"{name}: ok")
+    return 1 if fails else 0
+
+
+# --- spend (spec spend, issue #185) ---
+
+SPEND_INT = ("input_tokens", "output_tokens")
+
+
+def state_dir() -> Path:
+    return lanes_dir().parent
+
+
+def spend_lane(lanes: Path) -> str | None:
+    """The lane whose supervisor pane is in the caller's Herdr space (spec spend#rule-lane), else None."""
+    space = os.environ.get("HERDR_WORKSPACE_ID") or os.environ.get("OCTO_FEATHER_SPEND_SPACE", "")
+    if not space:
+        return None
+    import tomllib
+    for rec in sorted(lanes.glob("*.toml")):
+        try:
+            sup = tomllib.loads(rec.read_text(encoding="utf-8")).get("supervisor")
+        except (OSError, ValueError):
+            continue
+        if isinstance(sup, str) and sup.split(":", 1)[0] == space:
+            return rec.stem
+    return None
+
+
+def spend_line(raw: str, lane: str | None) -> dict:
+    """One ledger record from one stdin line; ValueError names what is wrong."""
+    import datetime as dt
+    o = json.loads(raw)
+    if not isinstance(o, dict):
+        raise ValueError("not a JSON object")
+    for k in ("model", "purpose"):
+        if not isinstance(o.get(k), str) or not o[k].strip():
+            raise ValueError(f"{k} must be a non-empty string")
+    if "/" not in o["model"]:
+        raise ValueError("model must be provider/id")
+    for k in SPEND_INT:
+        if type(o.get(k)) is not int or o[k] < 0:
+            raise ValueError(f"{k} must be an integer >= 0")
+    cost = o.get("cost_usd")
+    if cost is not None and (type(cost) not in (int, float) or cost < 0 or cost != cost):
+        raise ValueError("cost_usd must be a number >= 0 or null")
+    at = o.get("at")
+    if at is None:
+        at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    elif not isinstance(at, str) or spend_time(at) is None:
+        raise ValueError("at must be an ISO 8601 time")
+    return {"at": at, "lane": lane, "purpose": o["purpose"], "model": o["model"],
+            "input_tokens": o["input_tokens"], "output_tokens": o["output_tokens"], "cost_usd": cost}
+
+
+def spend_time(at: str):
+    """AT as an aware UTC datetime (naive counts as UTC), or None."""
+    import datetime as dt
+    try:
+        t = dt.datetime.fromisoformat(at.replace("Z", "+00:00") if at.endswith("Z") else at)
+    except ValueError:
+        return None
+    return (t if t.tzinfo else t.replace(tzinfo=dt.timezone.utc)).astimezone(dt.timezone.utc)
+
+
+def spend_record(args: list[str]) -> int:
+    def unrecorded(why: str, recs: list[dict]) -> None:
+        known = sum(r["cost_usd"] for r in recs if r["cost_usd"] is not None)
+        unknown = sum(r["cost_usd"] is None for r in recs)
+        what = f"{len(recs)} call(s), ${known:.6f}" + (f" + {unknown} of unknown cost" if unknown else "") if recs else "the call(s) on stdin"
+        print(f"octo-feather-lane spend record: spend unrecorded ({what}): {why}", file=sys.stderr)
+    recs: list[dict] = []
+    ledger = "the ledger"
+    try:
+        if args[:1] == ["--lane"] and len(args) == 2 and NAME.fullmatch(args[1]):
+            lane = args[1]
+        elif not args:
+            lane = None
+        else:
+            unrecorded(f"usage: octo-feather-lane spend record [--lane NAME] (got {' '.join(args)})", [])
+            return 0
+        ledger = state_dir() / "spend.jsonl"
+        if lane is None:
+            lane = spend_lane(ledger.parent / "lanes")
+        bad = []
+        for n, raw in enumerate(sys.stdin.read().splitlines(), 1):
+            if not raw.strip():
+                continue
+            try:
+                recs.append(spend_line(raw, lane))
+            except ValueError as e:   # JSONDecodeError included
+                bad.append(f"line {n}: {e}")
+        if bad:
+            unrecorded(f"{len(bad)} unreadable stdin line(s) skipped ({'; '.join(bad)})", [])
+        if not recs:
+            return 0
+        data = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in recs).encode()
+        import fcntl
+        ledger.parent.mkdir(parents=True, exist_ok=True)
+        fd = os.open(ledger, os.O_WRONLY | os.O_APPEND | os.O_CREAT, 0o644)
+        try:
+            fcntl.flock(fd, fcntl.LOCK_EX)
+            view = memoryview(data)
+            while view:
+                view = view[os.write(fd, view):]
+        finally:
+            os.close(fd)
+    except Exception as e:
+        unrecorded(f"cannot write {ledger} ({e})", recs)
+    return 0
+
+
+def openrouter_key() -> str:
+    key = os.environ.get("OPENROUTER_API_KEY", "").strip()
+    if key:
+        return key
+    auth = Path.home() / ".pi" / "agent" / "auth.json"
+    try:
+        key = json.loads(auth.read_text(encoding="utf-8")).get("openrouter", {}).get("key", "")
+    except FileNotFoundError:
+        raise Refuse(f"no OpenRouter key: OPENROUTER_API_KEY is unset and {auth} does not exist")
+    except (OSError, ValueError, AttributeError) as e:
+        raise Refuse(f"cannot read {auth} ({type(e).__name__})")
+    if isinstance(key, str) and key.startswith("!"):
+        try:
+            key = subprocess.run(key[1:], shell=True, capture_output=True, text=True, timeout=30, check=True).stdout
+        except (OSError, subprocess.SubprocessError) as e:
+            raise Refuse(f"the `!` key command in {auth} failed ({type(e).__name__})")
+    if not isinstance(key, str) or not key.strip():
+        raise Refuse(f"no OpenRouter key: OPENROUTER_API_KEY is unset and {auth} has no openrouter.key")
+    return key.strip()
+
+
+def openrouter_usage() -> dict:
+    """{daily, weekly, monthly} USD from GET /api/v1/key; Refuse with the reason (never the key)."""
+    key = openrouter_key()
+    url = "https://openrouter.ai/api/v1/key"
+    auth = key.replace("\\", "\\\\").replace('"', '\\"')
+    try:
+        r = subprocess.run(["curl", "-sS", "--max-time", "20", "--config", "-", "-w", "\n%{http_code}", url],
+                           input=f'header = "Authorization: Bearer {auth}"\n', capture_output=True, text=True, timeout=30)
+    except (OSError, subprocess.SubprocessError) as e:
+        raise Refuse(f"GET {url}: curl failed ({type(e).__name__})")
+    if r.returncode != 0:
+        why = (r.stderr.strip().splitlines() or [f"curl exit {r.returncode}"])[-1]
+        raise Refuse(f"GET {url}: unreachable ({why})")
+    text, _, code = r.stdout.rpartition("\n")
+    if code != "200":
+        raise Refuse(f"GET {url}: HTTP {code}")
+    try:
+        body = json.loads(text)
+    except ValueError as e:
+        raise Refuse(f"GET {url}: not JSON ({e})")
+    data = body.get("data") if isinstance(body, dict) else None
+    out = {}
+    for w in ("daily", "weekly", "monthly"):
+        v = data.get(f"usage_{w}") if isinstance(data, dict) else None
+        if type(v) not in (int, float):
+            raise Refuse(f"GET {url}: no numeric data.usage_{w} in the reply")
+        out[w] = float(v)
+    return out
+
+
+def cmd_spend(args: list[str]) -> int:
+    if args[:1] == ["record"]:
+        return spend_record(args[1:])
+    if args:
+        raise Refuse(f"usage: octo-feather-lane spend | spend record [--lane NAME] (got {' '.join(args)})")
+    import datetime as dt
+    ledger = state_dir() / "spend.jsonl"
+    recs, skipped = [], 0
+    try:
+        lines = ledger.read_text(encoding="utf-8").splitlines()
+    except FileNotFoundError:
+        lines = []
+    except (OSError, UnicodeDecodeError) as e:
+        raise Refuse(f"cannot read the ledger {ledger} ({e}): fix its permissions, then rerun")
+    for raw in lines:
+        try:
+            r = json.loads(raw)
+            r["_t"] = spend_time(r["at"])
+            if r["_t"] is None or not isinstance(r.get("model"), str):
+                raise ValueError
+            recs.append(r)
+        except (ValueError, TypeError, KeyError):
+            skipped += 1
+
+    def money(v: float) -> str:
+        return f"-${-v:.6f}" if v < 0 else f"${v:.6f}"
+
+    def table(title: str, key) -> None:
+        print(f"\nBy {title}:")
+        groups: dict = {}
+        for r in recs:
+            g = groups.setdefault(key(r), [0.0, 0, 0, 0, 0])
+            if r.get("cost_usd") is None:
+                g[2] += 1
+            else:
+                g[0] += float(r["cost_usd"])
+            g[1] += 1; g[3] += int(r.get("input_tokens") or 0); g[4] += int(r.get("output_tokens") or 0)
+        if not groups:
+            print("  (none)")
+        for k in sorted(groups, key=str):
+            usd, n, unk, i, o = groups[k]
+            print(f"  {k:<32} {money(usd):>12}  calls {n:>5}  unknown cost {unk:>4}  tokens in {i} out {o}")
+
+    print(f"Spend ledger: {ledger} ({len(recs)} calls" + (f", {skipped} unreadable lines skipped" if skipped else "") + ")")
+    table("day (UTC)", lambda r: r["_t"].date().isoformat())
+    table("lane", lambda r: r.get("lane") or "(no lane)")
+    table("purpose", lambda r: r.get("purpose") or "(none)")
+    table("lane and purpose", lambda r: f"{r.get('lane') or '(no lane)'} {r.get('purpose') or '(none)'}")
+    table("model", lambda r: r["model"])
+
+    now = dt.datetime.now(dt.timezone.utc)
+    day = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    starts = {"daily": ("today", day), "weekly": ("this week", day - dt.timedelta(days=day.weekday())),
+              "monthly": ("this month", day.replace(day=1))}
+    print("\nOpenRouter reconcile (windows and gap: `octo-feather-lane --help`, spend):")
+    try:
+        usage = openrouter_usage()
+    except Refuse as e:
+        usage = None
+        print(f"  OpenRouter unavailable: {e}")
+    print(f"  {'window':<11} {'openrouter':>12} {'ledger':>12} {'gap':>12}")
+    for w, (label, start) in starts.items():
+        mine = [r for r in recs if r["model"].startswith("openrouter/") and start <= r["_t"] <= now]
+        led = sum(float(r["cost_usd"]) for r in mine if r.get("cost_usd") is not None)
+        unk = sum(r.get("cost_usd") is None for r in mine)
+        theirs = money(usage[w]) if usage else "n/a"
+        gap = money(usage[w] - led) if usage else "n/a"
+        print(f"  {label:<11} {theirs:>12} {money(led):>12} {gap:>12}" + (f"  ({unk} ledger calls of unknown cost)" if unk else ""))
+    return 0
+
+
+# --- the factory report (spec comms #factory-report, issue #248) ---
+
+RUNNING = "working"   # the Herdr agent_status of an agent at work
+
+
+def utc(s: object) -> "datetime.datetime | None":
+    """S as a UTC instant: an ISO 8601 date and time with Z or an offset, fractional seconds allowed
+    (2026-10-29T14:06:08Z, 2026-10-29T14:06:08.770516+00:00); None for anything else, a time with no zone included."""
+    import datetime
+    if not isinstance(s, str) or "T" not in s:
+        return None
+    try:
+        t = datetime.datetime.fromisoformat(s[:-1] + "+00:00" if s.endswith("Z") else s)
+    except ValueError:
+        return None
+    return None if t.tzinfo is None else t.astimezone(datetime.timezone.utc)
+
+
+def stamp(s: object, now) -> str:
+    t = utc(s)
+    if t is None:
+        return f"{s!r} (not a UTC instant)" if s not in (None, "") else "(not recorded)"
+    secs = int((now - t).total_seconds())
+    sign, secs = ("", secs) if secs >= 0 else ("-", -secs)
+    d, h, m = secs // 86400, secs // 3600 % 24, secs // 60 % 60
+    age = (f"{d}d" if d else "") + (f"{h}h" if d or h else "") + f"{m}m"
+    return f"{t:%Y-%m-%dT%H:%M:%SZ} ({sign}{age} ago)"
+
+
+def herdr_agents() -> list[dict]:
+    try:
+        p = subprocess.run(["herdr", "agent", "list"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"herdr agent list failed ({err[-1][:300] if err else f'exit {p.returncode}'})")
+    try:
+        agents = json.loads(p.stdout)["result"]["agents"]
+        if not isinstance(agents, list) or not all(isinstance(a, dict) for a in agents):
+            raise TypeError("agents is not a list of objects")
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"herdr agent list printed no agent list ({type(e).__name__}: {e})")
+    return agents
+
+
+def pending_gates(lines: list[dict]) -> list[tuple[str, object]]:
+    """Each pending owner gate (spec comms #report-owner-queue), with its asked time."""
+    latest: dict[str, dict] = {}
+    for d in lines:
+        if d.get("kind") == "gate" and isinstance(d.get("gate"), str) and d.get("event") in ("asked", "answered"):
+            latest[d["gate"]] = d
+    return [(g, d.get("at")) for g, d in latest.items() if d["event"] == "asked"]
+
+
+def check_results(rollup: list[dict]) -> str:
+    counts: dict[str, int] = {}
+    for c in rollup:
+        if c.get("__typename") == "StatusContext" or "state" in c and "conclusion" not in c:
+            r = (c.get("state") or "pending").lower()
+        elif (c.get("status") or "COMPLETED").upper() != "COMPLETED" or not c.get("conclusion"):
+            r = (c.get("status") or "pending").lower()
+        else:
+            r = c["conclusion"].lower()
+        counts[r] = counts.get(r, 0) + 1
+    return ", ".join(f"{n} {r}" for r, n in sorted(counts.items())) or "none"
+
+
+def owner_caught(state: Path, now, unread: list[str]) -> tuple[str, list[str]]:
+    """The director log's owner-caught findings (spec comms #report-owner-caught): the headline, the count for the
+    last seven days beside the seven before, and the block by class."""
+    import datetime
+    log = state / "director.handoffs.jsonl"
+    head = f"owner-caught (headline, {log.name}):"
+    if not log.exists():
+        return f"{head} log none", [f"owner-caught: log {log.name}: none"]
+    try:
+        lines, bad = read_log(log)
+    except (OSError, UnicodeDecodeError) as e:
+        unread.append(f"log {log.name}")
+        return f"{head} unread", [f"owner-caught: unread: log {log.name}: {e}"]
+    seen: dict[str, list] = {}
+    week = datetime.timedelta(days=7)
+    weeks, undated = [0, 0], 0
+    for d in lines:
+        c = d.get("class")
+        if d.get("kind") == "finding" and isinstance(c, str) and c.startswith("owner-caught-"):
+            s = seen.setdefault(c, [0, None])
+            s[0] += 1
+            t = utc(d.get("at"))
+            if s[1] is None or t is not None and (utc(s[1]) is None or t > utc(s[1])):
+                s[1] = d.get("at")
+            if t is None:
+                undated += 1
+            elif t > now - week:
+                weeks[0] += 1
+            elif t > now - 2 * week:
+                weeks[1] += 1
+    head += f" {weeks[0]} in the last 7 days, {weeks[1]} in the 7 days before" + (
+        f"; {undated} with no readable at, not counted" if undated else "")
+    out = [f"owner-caught ({log.name}):" if seen else f"owner-caught ({log.name}): none"]
+    out += [f"  class {c}: count {n}, last seen {stamp(at, now)}" for c, (n, at) in sorted(seen.items())]
+    if bad:
+        out.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+    return head, out
+
+
+def director_reflection(state: Path, now: object, unread: list[str]) -> str:
+    """When the director reflection last ran (spec comms #report-reflection)."""
+    log = state / DIRECTOR_LOG
+    if not log.exists():
+        return f"director reflection: never ran ({log.name}: none)"
+    try:
+        lines = read_log(log)[0]
+    except (OSError, UnicodeDecodeError) as e:
+        if f"log {log.name}" not in unread:
+            unread.append(f"log {log.name}")
+        return f"director reflection: unread: log {log.name}: {e}"
+    at, _ = reflect_module().since_last_reflection(lines)
+    return f"director reflection: never ran ({log.name})" if at is None else f"director reflection: last ran {stamp(at, now)}"
+
+
+# Skill reach (spec comms #report-skill-reach), from the agents' Pi session files: offered = the session's system
+# prompt <available_skills> list, read = a tool call reading <skill>/SKILL.md. Rules: octo-feather-lane --help (report).
+SKILL_PATH = re.compile(r"(?:^|.*/)([A-Za-z0-9_.-]+)/SKILL\.md")   # a whole operand naming a SKILL.md, its folder
+OFFERED = re.compile(r"<skill>\s*<name>([^<]+)</name>.*?<location>([^<]+)</location>", re.S)
+READERS = {"cat", "head", "tail", "sed", "less", "more", "bat", "nl"}
+VALUED = {"head": {"-n", "-c"}, "tail": {"-n", "-c"}, "sed": {"-l"}, "nl": {"-b", "-d", "-f", "-h", "-i", "-l", "-n", "-s", "-v", "-w"}}
+SHELL_STOP = {"|", "||", "&", "&&", ";", ";;", "(", ")", "\n"}
+SHELL_LEAD = {"{", "}", "!", "then", "do", "else", "time", "if", "while", "until", "exec", "command"}
+HEREDOC = re.compile(r"<<-?\s*(['\"]?)(\w+)\1[^\n]*\n.*?^\s*\2\s*$", re.S | re.M)
+STAMP = re.compile(r'"timestamp":\s*"([^"]+)"')
+
+def sessions_dir() -> Path:
+    """Pi's session folder: PI_CODING_AGENT_DIR (else ~/.pi/agent)/sessions, as Pi and octo-feather-qc read it."""
+    return Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent") / "sessions"
+
+
+def skill_operand(word: str) -> str | None:
+    """The skill folder of a file operand that is exactly a SKILL.md path; None for a computed one (--help, report)."""
+    m = SKILL_PATH.fullmatch(word)
+    return m.group(1) if m and not re.search(r"[$*?\[{`]", word) else None
+
+
+def shell_reads(cmd: str) -> list[str]:
+    """The skill folders whose SKILL.md a shell command CMD opens as a reader's file operand (rules: --help, report)."""
+    try:
+        lex = shlex.shlex(HEREDOC.sub("", cmd), posix=True, punctuation_chars=";&|()<>\n")
+        lex.whitespace = " \t\r"
+        lex.whitespace_split = True
+        words = list(lex)
+    except ValueError:
+        return []   # unbalanced quotes: nothing resolved, nothing counted
+    out: list[str] = []
+    cmds: list[list[str]] = [[]]
+    for w in words:
+        if w in SHELL_STOP:
+            cmds.append([])
+        else:
+            cmds[-1].append(w)
+    for words_of in cmds:
+        lead = 0
+        while lead < len(words_of) and (words_of[lead] in SHELL_LEAD or re.fullmatch(r"[A-Za-z_]\w*=.*", words_of[lead])):
+            lead += 1
+        c = words_of[lead:]
+        prog = Path(c[0]).name if c else ""
+        if prog not in READERS:
+            continue
+        operands: list[str] = []
+        script = prog == "sed"
+        i = 1
+        while i < len(c):
+            w = c[i]
+            if w in (">", ">>", ">|", "<<", "<<<") or re.fullmatch(r"\d?>&?", w):
+                i += 2   # a write target, a heredoc delimiter or here-string: no read
+                continue
+            if w == "<":
+                operands.append(c[i + 1] if i + 1 < len(c) else "")
+                i += 2
+                continue
+            if prog == "sed" and w in ("-e", "-f", "--expression", "--file"):
+                script = False   # the script is this option's value; every later operand is a file
+                i += 2
+                continue
+            if prog == "sed" and w in ("-i", "--in-place") or w.startswith("-i") and prog == "sed":
+                operands = []
+                break   # sed -i edits, it is no read
+            if w.startswith("-") and w != "-":
+                i += 2 if w in VALUED.get(prog, set()) else 1
+                continue
+            if script:
+                script = False   # sed's first operand is its script text, never a file
+            else:
+                operands.append(w)
+            i += 1
+        out += [f for f in map(skill_operand, operands) if f]
+    return out
+
+
+def tool_reads(name: object, args: object) -> list[str]:
+    """The skill folders whose SKILL.md one read or bash call with arguments ARGS opens (rules: --help, report)."""
+    key = {"read": "path", "bash": "command"}.get(str(name))
+    arg = cast("dict[str, object]", args).get(key) if isinstance(args, dict) and key else None
+    if not isinstance(arg, str):
+        return []
+    if name == "read":
+        f = skill_operand(arg.strip())
+        return [f] if f else []
+    return shell_reads(arg)
+
+
+@dataclasses.dataclass(frozen=True)
+class SessionReach:
+    """One Pi session's role, the skills it was offered ({name: folder}) and the skills it read (by offered name)."""
+    role: str
+    offered: dict[str, str]
+    read: set[str]
+
+
+def session_reach(path: Path, since: dtm.datetime) -> SessionReach | None:
+    """One Pi session file's role, offered skills and read skills (what counts and when: --help, report); None when it
+    has no activity after SINCE. OSError or ValueError when unreadable."""
+    role: str | None = None
+    offered: dict[str, str] = {}
+    folders: set[str] = set()
+    pending: dict[str, list[str]] = {}   # a read or bash call's id: the skill folders it would read, until its result
+    with path.open(encoding="utf-8", errors="replace") as fh:
+        head: object = json.loads(fh.readline() or "null")
+        hd = cast("dict[str, object]", head) if isinstance(head, dict) else {}
+        start = cast("dtm.datetime | None", utc(hd.get("timestamp"))) if hd.get("type") == "session" else None   # utc names its return type as a string
+        if start is None:
+            raise ValueError("no session line with a timestamp first")
+        active = start > since
+        for line in fh:
+            if not active and (t := STAMP.search(line[:300])):
+                active = (cast("dtm.datetime | None", utc(t.group(1))) or since) > since
+            if "SKILL.md" not in line and '"system"' not in line and not any(i in line[:1000] for i in pending):
+                continue   # no system prompt, no call naming a SKILL.md, no result of one: not parsed
+            try:
+                d: object = json.loads(line)
+            except ValueError:
+                continue   # a line Pi left partial
+            e = cast("dict[str, object]", d) if isinstance(d, dict) else {}
+            m = e.get("message")
+            if not isinstance(m, dict):
+                continue
+            m = cast("dict[str, object]", m)
+            if m.get("role") == "system" and isinstance(sec := m.get("sections"), dict):
+                sec = cast("dict[str, object]", sec)
+                h = re.search(r"^#\s+(.+?)\s*$", str(sec.get("addendum") or ""), re.M)
+                role = role or (h.group(1).lower() if h else None)
+                offered |= {n.strip(): Path(loc.strip()).parent.name for n, loc in OFFERED.findall(str(sec.get("skills") or ""))}
+            elif m.get("role") == "assistant" and isinstance(content := m.get("content"), list):
+                for x in cast("list[object]", content):
+                    c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+                    if c.get("type") == "toolCall" and (got := tool_reads(c.get("name"), c.get("arguments"))):
+                        pending[str(c.get("id"))] = got
+            elif m.get("role") == "toolResult":
+                did = pending.pop(str(m.get("toolCallId")), [])
+                at = cast("dtm.datetime | None", utc(e.get("timestamp")))
+                if at is None or at <= since:
+                    continue   # a result before the window, or at no readable time: no read counted
+                if m.get("isError") is not True:
+                    folders |= set(did)
+                nested = m.get("nestedCalls")
+                calls = cast("dict[str, object]", nested).get("calls") if isinstance(nested, dict) else None
+                for x in cast("list[object]", calls) if isinstance(calls, list) else []:
+                    c = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+                    if c.get("status") == "ok":
+                        folders |= set(tool_reads(c.get("name"), c.get("arguments")))
+    if not active:
+        return None
+    by_folder = {f: n for n, f in offered.items()}
+    return SessionReach(role or "no role", offered, {by_folder.get(f, f) for f in folders})
+
+
+@dataclasses.dataclass
+class RoleReach:
+    """One role's sessions in the window, per offered skill [read, offered] sessions, per skill not offered its reads."""
+    sessions: int = 0
+    cells: dict[str, list[int]] = dataclasses.field(default_factory=dict)
+    apart: dict[str, int] = dataclasses.field(default_factory=dict)
+
+
+def skill_reach(now: dtm.datetime, unread: list[str]) -> list[str]:
+    """The skill reach block (spec comms #report-skill-reach; its lines and rules: --help, report)."""
+    root = sessions_dir()
+    since = now - dtm.timedelta(days=7)
+    head = "skill reach (Pi sessions active in the last 7 days; per role: skill read/offered, sessions):"
+    if not root.is_dir():
+        return [f"skill reach: no Pi session (sessions {root}: none)"]
+    roles: dict[str, RoleReach] = {}
+    bad: list[str] = []
+    for f in sorted(root.glob("*/*.jsonl")):
+        try:
+            if f.stat().st_mtime <= since.timestamp():
+                continue   # last written before the window: no activity in it
+            got = session_reach(f, since)
+        except (OSError, ValueError) as e:
+            bad.append(f"  unread: Pi session {f.relative_to(root)}: {e}")
+            unread.append(f"Pi session {f.relative_to(root)}")
+            continue
+        if got is None:
+            continue
+        r = roles.setdefault(got.role, RoleReach())
+        r.sessions += 1
+        for s in got.offered:
+            r.cells.setdefault(s, [0, 0])[1] += 1
+        for s in got.read:
+            if s in got.offered:
+                r.cells[s][0] += 1
+            else:
+                r.apart[s] = r.apart.get(s, 0) + 1
+    out = [head if roles else f"{head} none"]
+    for role, r in sorted(roles.items()):
+        n = r.sessions
+        line = f"  {role} ({n} session{'s' if n != 1 else ''}): " + (
+            ", ".join(f"{s} {rd}/{off}" for s, (rd, off) in sorted(r.cells.items())) or "none offered")
+        out.append(line + ("; read, not offered: " + ", ".join(f"{s} {k}" for s, k in sorted(r.apart.items())) if r.apart else ""))
+    return out + bad
+
+
+def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | None:
+    """A JSON lines file's object lines with their numbers, and the numbers of the lines that are not one; None with no file."""
+    if not path.exists():
+        return None
+    rows, bad = [], []
+    for i, l in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+        if not l.strip():
+            continue
+        try:
+            d = json.loads(l)
+        except ValueError:
+            d = None
+        (rows.append((i, d)) if isinstance(d, dict) else bad.append(i))
+    return rows, bad
+
+
+BUDGET = "gate-budget.toml"   # the repo root's gate-time budget, kept by the factory (form: budget_text)
+BUDGET_TREND = 5                # trend runs shown when the repo has no budget file to set trend_runs
+SLOWEST = 5                     # slowest items shown
+
+
+Budget = dict[str, float]   # budget_seconds, growth_share, trend_runs (an int)
+Run = dict[str, object]     # one check-runs.jsonl line
+
+
+def budget_parse(text: str | None) -> tuple[Budget | None, str]:
+    """gate-budget.toml's three numbers, or None and why: absent (text None) or invalid. budget_seconds: the
+    full gate's wall-time budget; growth_share: the share of growth over the trend's median that is flagged;
+    trend_runs: how many passed full runs before the latest make the trend. Stdlib tomllib: the kit's scripts
+    stay stdlib-only (AGENTS.md)."""
+    import tomllib
+    if text is None:
+        return None, f"{BUDGET}: none"
+    try:
+        d: dict[str, object] = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return None, f"{BUDGET}: {e}"
+    least = {"budget_seconds": 0.0, "growth_share": 0.0, "trend_runs": 1.0}
+    ok: Budget = {}
+    for k, low in least.items():
+        v = d.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and (v > low if k == "budget_seconds" else v >= low) \
+                and (k != "trend_runs" or isinstance(v, int)):
+            ok[k] = v
+    bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
+    cpu = d.get("test_cpu_seconds")   # the per-test CPU budget, optional: the gate's own (tests/gate/conftest.py) reads it
+    if cpu is not None and (isinstance(cpu, bool) or not isinstance(cpu, (int, float)) or cpu <= 0):
+        bad.append(f"test_cpu_seconds {cpu!r} is not a number of the right range")
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"})]
+    return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
+
+
+def total(d: Run) -> float:
+    t = d.get("total_s")
+    return float(t) if isinstance(t, (int, float)) else 0.0
+
+
+def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
+    """check-runs.jsonl lines of passed full gate runs (tier full, exit 0, the runner's own fields) on HEADS, oldest first."""
+    runs = [d for _, d in rows if d.get("tier") == "full" and d.get("exit") == 0 and d.get("head") in heads
+            and utc(d.get("start")) is not None and isinstance(d.get("total_s"), (int, float))]
+    return sorted(runs, key=lambda d: str(d.get("start")))   # UTC instants of one form: text order is time order
+
+
+def secs(x: float) -> str:
+    return f"{round(x, 3):g}s"
+
+
+def budget_lines(last: Run, before: list[Run], budget: Budget | None, why: str, now: object, pad: str) -> list[str]:
+    """The full gate run LAST against BUDGET, with the trend (passed full runs BEFORE it, oldest first) and its
+    slowest items; flags OVER BUDGET and GROWN. Display only: no gate reads it (issue-lifecycle #lanes-checkpoints)."""
+    import statistics
+    t = total(last)
+    run = f"{pad}full gate: {secs(t)}, head {str(last.get('head'))[:12]}, started {stamp(last.get('start'), now)}"
+    if budget is None:
+        out = [f"{run}: no budget ({why})"]
+    else:
+        b = float(budget["budget_seconds"])
+        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t > b else f"within budget, {secs(b - t)} to spare")
+               + f" (budget {secs(b)})"]
+    base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND):]
+    if not base:
+        out.append(f"{pad}growth: no passed full run before it to compare")
+    else:
+        med = statistics.median(total(d) for d in base)
+        grow = (t - med) / med if med else 0.0
+        g = f"{pad}growth: {grow:+.1%} over the trend's median {secs(med)} (the {len(base)} passed full run{'s' * (len(base) > 1)} before it)"
+        if budget is None:
+            out.append(f"{g}; no set share ({why})")
+        else:
+            share = float(budget["growth_share"])
+            out.append(f"{g}; set share {share * 100:g}%: " + ("GROWN" if grow > share else "within"))
+    out.append(f"{pad}trend: " + ", ".join(f"{secs(total(d))} {str(d.get('head'))[:12]} {d.get('start')}" for d in [*base, last])
+               + " (passed full runs, oldest first)")
+    raw = last.get("steps")
+    steps: list[tuple[float, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else []:
+        st = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+        sec = st.get("seconds")
+        if isinstance(sec, (int, float)):
+            steps.append((float(sec), str(st.get("name"))))
+    top = sorted(steps, key=lambda s: (-s[0], s[1]))[:SLOWEST]
+    out.append(f"{pad}slowest: " + (", ".join(f"{name} {secs(sec)}" for sec, name in top) or "no items recorded"))
+    return out
+
+
+class ReportSources:
+    """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
+    LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
+
+    def __init__(self, state: Path, unread: list[str]):
+        self.unread, self.main = unread, {}
+        self.repo_heads: dict[str, set[str]] = {}   # each open lane's repository: its lanes' PR commits
+        self.ledger, self.ledger_why = self.load(state / self.LEDGER)
+        self.trend, self.trend_why = self.load(state / self.TREND)
+        if self.ledger:   # a cost neither dollars nor null (unknown) makes the line unreadable
+            rows, bad = self.ledger
+            odd = [i for i, d in rows if d.get("cost_usd", "") is not None and not self.dollars(d.get("cost_usd", ""))]
+            self.ledger = [r for r in rows if r[0] not in odd], sorted(bad + odd)
+
+    @staticmethod
+    def dollars(c: object) -> bool:
+        return isinstance(c, (int, float)) and not isinstance(c, bool)
+
+    def load(self, path: Path):
+        try:
+            return numbered_jsonl(path), None
+        except (OSError, UnicodeDecodeError) as e:
+            self.unread.append(path.name)
+            return None, str(e)
+
+    def notes(self) -> list[str]:
+        return [f"{n}: {len(r[1])} unparsable line{'s' if len(r[1]) > 1 else ''} ({', '.join(map(str, r[1]))})"
+                for n, r in ((self.LEDGER, self.ledger), (self.TREND, self.trend)) if r and r[1]]
+
+    def spend(self, name: str) -> str:
+        if self.ledger_why:
+            return f"  spend: unread: {self.LEDGER}: {self.ledger_why}"
+        if self.ledger is None:
+            return f"  spend: no spend recorded ({self.LEDGER}: none)"
+        costs = [d.get("cost_usd") for _, d in self.ledger[0] if d.get("lane") == name]
+        known = [c for c in costs if self.dollars(c)]
+        if not costs:
+            return f"  spend: none recorded for {name}"
+        unknown = len(costs) - len(known)
+        return (f"  spend: ${sum(known):.4f} over {len(known)} call{'s' if len(known) != 1 else ''} of known cost, "
+                f"{unknown} call{'s' if unknown != 1 else ''} of unknown cost")
+
+    def last_run(self, heads: set[str]) -> dict | None:
+        """The latest gate run on HEADS: a full line, or one with no tier (written before the runners recorded one)."""
+        runs = [(utc(d.get("start")) is not None, str(utc(d.get("start")) or ""), i, d)
+                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads and ("tier" not in d or d["tier"] == "full")]
+        return max(runs, key=lambda r: r[:3])[3] if runs else None
+
+    def main_heads(self, repo: object) -> set[str] | str:
+        """The default branch's last 100 commits of repo, or why they are unread."""
+        if not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+            return f"unread: the record needs repository owner/name (repository {repo!r})"
+        if repo not in self.main:
+            try:
+                out = json.loads(gh(["api", f"repos/{repo}/commits?per_page=100"], f"check {repo} exists, and gh auth status"))
+                self.main[repo] = {c["sha"] for c in out}
+            except (Refuse, ValueError, KeyError, TypeError) as e:
+                self.unread.append(f"GitHub ({repo} default branch)")
+                self.main[repo] = f"unread: GitHub: {e}"
+        return self.main[repo]
+
+    def gate(self, pr: object, pr_heads: set[str] | None, repo: object, now) -> list[str]:
+        if self.trend_why:
+            return [f"  gate time: unread: {self.TREND}: {self.trend_why}"]
+        if self.trend is None:
+            return [f"  gate time: no gate run recorded ({self.TREND}: none)"]
+
+        def run(who: str, d: dict | None, none: str) -> str:
+            if d is None:
+                return f"  gate time: {who} none: {none}"
+            steps = d.get("steps")
+            n = len(steps) if isinstance(steps, list) else steps
+            return (f"  gate time: {who} {d.get('total_s')}s exit {d.get('exit')}, {n} steps, head {str(d.get('head'))[:12]}, "
+                    f"started {stamp(d.get('start'), now)}")
+        if pr is None:
+            lane = "  gate time: lane none: no pr"
+        elif pr_heads is None:
+            lane = f"  gate time: lane unread: GitHub (PR #{pr})"
+        else:
+            lane = run("lane", self.last_run(pr_heads), f"no full gate run on a commit of PR #{pr}")
+        main = self.main_heads(repo)
+        if isinstance(main, str):
+            return [lane, f"  gate time: main {main}"]
+        return [lane, run("main", self.last_run(main), f"no full gate run on a commit of {repo}'s default branch")]
+
+    def budget_text(self, repo: str) -> str | None:
+        """gate-budget.toml on repo's default branch (None: no such file); Refuse when GitHub cannot say."""
+        try:
+            return gh(["api", f"repos/{repo}/contents/{BUDGET}", "-H", "Accept: application/vnd.github.raw"],
+                      f"check {repo} exists, and gh auth status")
+        except Refuse as e:
+            if "HTTP 404" in str(e):
+                return None
+            raise
+
+    def budgets(self, now: object) -> list[str]:
+        """Per open lane's repository, its latest passed full gate run on a commit of its default branch or of
+        its lanes' PRs, against its gate-time budget (spec comms #report-field-gate-time)."""
+        out: list[str] = []
+        trend = cast("tuple[list[tuple[int, Run]], list[int]] | None", self.trend)
+        for repo in sorted(self.repo_heads):
+            head = f"gate budget {repo}:"
+            if self.trend_why:
+                out.append(f"{head} unread: {self.TREND}: {self.trend_why}"); continue
+            if trend is None:
+                out.append(f"{head} no gate run recorded ({self.TREND}: none)"); continue
+            main = self.main_heads(repo)
+            if isinstance(main, str):
+                out.append(f"{head} {main}"); continue
+            runs = passed_full(trend[0], main | self.repo_heads[repo])
+            if not runs:
+                out.append(f"{head} no passed full gate run on a commit of {repo}'s default branch or its open lanes' PRs"); continue
+            try:
+                text = self.budget_text(repo)
+                budget, why = budget_parse(text)
+                if text is not None and budget is None:
+                    self.unread.append(f"{BUDGET} ({repo})")
+            except Refuse as e:
+                self.unread.append(f"GitHub ({repo} {BUDGET})")
+                budget, why = None, f"unread: GitHub: {e}"
+            out += [f"{head} the latest passed full gate run against {BUDGET} on {repo}'s default branch",
+                    *budget_lines(runs[-1], runs[:-1], budget, why, now, "  ")]
+        return out
+
+
+def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list,
+                src: ReportSources) -> list[str]:
+    import tomllib
+    name = rec_path.stem
+    try:
+        rec = tomllib.loads(rec_path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        unread.append(f"record {rec_path.name}")
+        return [f"lane {name}", f"  unread: record {rec_path.name}: {e}"]
+    repo = rec.get("repository")
+    if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        src.repo_heads.setdefault(repo, set())
+    out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
+           f"  started: {stamp(rec.get('started_at'), now)}"]
+    check_waits, pr_heads = [], None
+    pr = rec.get("pr")
+    if pr is None:
+        out.append("  pr: none")
+    elif not isinstance(pr, int) or isinstance(pr, bool) or not isinstance(repo, str) or not re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        unread.append(f"GitHub ({name})")
+        out.append(f"  pr: {pr!r} unread: GitHub: the record needs pr a number and repository owner/name (repository {repo!r})")
+    else:
+        try:
+            d = pr_view(pr, "state,isDraft,headRefOid,statusCheckRollup,commits", repo)
+            rollup = [c for c in d["statusCheckRollup"] or [] if isinstance(c, dict)]
+            head = str(d["headRefOid"])[:12]
+            out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
+            check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
+            pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
+            src.repo_heads[repo] |= pr_heads
+        except (Refuse, KeyError, TypeError, AttributeError) as e:
+            unread.append(f"GitHub ({name})")
+            out.append(f"  pr: #{pr} unread: GitHub: {e}")
+    sup = rec.get("supervisor")
+    workers = []
+    if agents is None:
+        out.append(f"  running: unread: Herdr: {herdr_why}")
+    elif not isinstance(sup, str) or ":" not in sup:
+        out.append(f"  running: the record's supervisor {sup!r} is no pane id")
+    else:
+        ws = sup.split(":", 1)[0]
+        mine = sorted((a for a in agents if a.get("workspace_id") == ws), key=lambda a: str(a.get("pane_id")))
+        for a in mine:
+            is_sup = a.get("pane_id") == sup
+            out.append(f"  running: {a.get('pane_id')} {a.get('name') or '(no name)'} {a.get('agent_status')}" + (" (supervisor)" if is_sup else ""))
+            if not is_sup and a.get("agent_status") == RUNNING:
+                workers.append(f"  waits: worker {a.get('name') or '(no name)'} {a.get('pane_id')} {RUNNING}")
+        if not any(a.get("pane_id") == sup for a in mine):
+            out.append(f"  running: supervisor pane {sup} not in herdr agent list")
+    out.append(f"  waits: waiting_on {json.dumps(rec.get('waiting_on', ''))}, last hand-off {stamp(rec.get('last_handoff_at'), now)}")
+    out += workers
+    log, notes = rec_path.with_name(f"{name}.handoffs.jsonl"), []
+    rounds = "  review rounds: 0"
+    if log.exists():
+        try:
+            lines, bad = read_log(log)
+            rounds = f"  review rounds: {sum(1 for d in lines if d.get('kind') == 'review')}"
+            pending = pending_gates(lines)
+            out += [f"  waits: owner gate {g} asked {stamp(at, now)}" for g, at in pending]
+            queue += [(name, g, at) for g, at in pending]
+            if bad:
+                notes.append(f"  log {log.name}: {len(bad)} unparsable line{'s' if len(bad) > 1 else ''} ({', '.join(map(str, bad))})")
+        except (OSError, UnicodeDecodeError) as e:
+            unread.append(f"log {log.name}")
+            notes.append(f"  unread: log {log.name}: {e}")
+            rounds = f"  review rounds: unread (log {log.name})"
+    else:
+        notes.append(f"  log {log.name}: none")
+    numbers = [rounds, src.spend(name), *src.gate(pr, pr_heads, repo, now)]
+    return out + check_waits + numbers + notes
+
+
+def cmd_report(args: list[str]) -> int:
+    import datetime
+    if args:
+        raise Refuse(f"usage: octo-feather-lane report (takes no arguments; got {' '.join(args)})")
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    lanes = lanes_dir()
+    print(f"report at {now:%Y-%m-%dT%H:%M:%SZ} ({lanes})")
+    unread: list[str] = []
+    headline, caught = owner_caught(lanes.parent, now, unread)
+    print(headline)
+    try:
+        agents, herdr_why = herdr_agents(), None
+    except Refuse as e:
+        agents, herdr_why = None, str(e)
+        unread.append("Herdr")
+    try:
+        records = sorted(lanes.glob("*.toml"))
+    except OSError as e:
+        records = []
+        unread.append(f"lanes {lanes}")
+        print(f"unread: lanes {lanes}: {e}")
+    if not records:
+        print("no open lane")
+    queue: list = []
+    src = ReportSources(lanes.parent, unread)
+    for r in records:
+        print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue, src)))
+    for line in src.budgets(now):
+        print(line)
+    queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
+    print("owner queue:" if queue else "owner queue: none")
+    for name, g, at in queue:
+        print(f"  lane {name} gate {g} asked {stamp(at, now)}")
+    print("\n".join(caught))
+    print(director_reflection(lanes.parent, now, unread))
+    print("\n".join(skill_reach(now, unread)))
+    for n in src.notes():
+        print(n)
+    print(f"unread: {', '.join(unread) or 'none'}")
+    return 0
+
+
+# --- post-merge (owner ruling 2026-10-29 on issue 206; steps 1-2: issue 396) ---
+
+PM_FIELDS = "databaseId,status,conclusion,workflowName,url"
+PM_POLL = 10   # seconds between run lists while no run has appeared, or a watched run still reads unfinished
+
+
+class PostMerge:
+    """One post-merge run: its arguments, and what each step learns for the next."""
+
+    def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
+        self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
+        self.merge, self.base = "", ""
+
+    def r(self) -> list[str]:
+        return ["-R", self.repo] if self.repo else []
+
+
+def pm_merged(pm: PostMerge) -> str:
+    """Step 1: the PR merged at the pinned head; read its merge commit."""
+    d = cast("dict[str, object]", pr_view(pm.pr, "state,headRefOid,mergeCommit,baseRefName,headRefName", pm.repo))
+    oid = str(d["headRefOid"])
+    if d["state"] != "MERGED":
+        raise Refuse(f"PR #{pm.pr} is {d['state']}, not merged: merge it at {pm.head} first (gh pr merge --match-head-commit), then rerun")
+    if not head_matches(pm.head, oid):
+        raise Refuse(f"PR #{pm.pr} merged at head {oid[:12]}, not at the pinned head {pm.head}: "
+                     "what merged is not what was judged; tell the owner, nothing after this step runs")
+    mc = d["mergeCommit"]
+    merge = str(cast("dict[str, object]", mc).get("oid") or "") if isinstance(mc, dict) else ""
+    if not SHA.fullmatch(merge):
+        raise Refuse(f"PR #{pm.pr} reads MERGED with no merge commit ({d['mergeCommit']!r}): check it on GitHub, then rerun")
+    pm.merge, pm.base = merge, str(d["baseRefName"])
+    return f"PR #{pm.pr} ({d['headRefName']}) merged into {pm.base} at head {oid[:12]}, merge commit {merge[:12]}"
+
+
+def pm_runs(pm: PostMerge) -> list[dict[str, str]]:
+    """The merge commit's push runs as gh lists them, each field as text (a null conclusion as "")."""
+    out = gh(["run", "list", "--commit", pm.merge, "--event", "push", "--json", PM_FIELDS, *pm.r()],
+             f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+    raw: object = json.loads(out)
+    fields = PM_FIELDS.split(",")
+    runs: list[dict[str, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else [None]:
+        if not isinstance(x, dict) or any(f not in x for f in fields):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        r = cast("dict[str, object]", x)
+        runs.append({f: "" if r[f] is None else str(r[f]) for f in fields})
+    return runs
+
+
+def pm_ci(pm: PostMerge) -> str:
+    """Step 2: wait for main CI on the merge commit; ok only when every push run concluded success."""
+    m, deadline = pm.merge[:12], time.monotonic() + pm.wait
+    runs, wf = pm_runs(pm), list[str]()
+    if not runs:   # the no-CI fact (--help, post-merge step 2)
+        wf, src = ci_workflows(pm.repo, pm.merge)
+        if not wf:
+            return (f"no CI: no workflow file under .github/workflows at merge commit {m} ({src}), "
+                    "so no push run can appear; nothing to wait for")
+    while not runs:
+        left = deadline - time.monotonic()
+        if left <= 0:
+            raise Refuse(f"no push run on merge commit {m} within {pm.wait}s, its workflows {', '.join(wf)}: check the ones "
+                         f"that run on push to {pm.base} (gh run list --commit {pm.merge}), then rerun")
+        time.sleep(min(PM_POLL, left)); runs = pm_runs(pm)
+    while pending := [x for x in runs if x["status"] != "completed"]:
+        failed: dict[str, str] = {}
+        for x in pending:
+            p = subprocess.run(["gh", "run", "watch", x["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            if p.returncode:
+                failed[x["databaseId"]] = ((p.stderr or p.stdout).strip().splitlines() or [f"exit {p.returncode}"])[-1][:200]
+        runs = pm_runs(pm)
+        for x in runs:   # a failed watch is the run's red end, or gh's own failure while the run goes on
+            if x["databaseId"] in failed and x["status"] != "completed":
+                raise Refuse(f"gh run watch {x['databaseId']} failed ({failed[x['databaseId']]}) while {x['workflowName']} "
+                             f"reads {x['status']}: {x['url']}; check gh auth status, then rerun")
+        if not failed and any(x["status"] != "completed" for x in runs):
+            time.sleep(PM_POLL)
+    red = [x for x in runs if x["conclusion"] not in ("success", "cancelled")]
+    if red:
+        raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
+                     + f"; fix {pm.base} first, nothing after this step runs")
+    # a run cancelled by a newer push (concurrency cancel-in-progress) defers to that push's run (--help, step 2)
+    shown = [f"{x['workflowName']} {x['url']}" if x["conclusion"] != "cancelled" else pm_superseded(pm, x) for x in runs]
+    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: " + ", ".join(shown))
+
+
+PM_BASE_FIELDS = PM_FIELDS + ",headSha"
+
+
+def pm_contains(pm: PostMerge, sha: str, seen: dict[str, bool]) -> bool:
+    """Whether commit SHA has the merge commit as ancestor: `gh api repos/<repo>/compare/<merge>...<sha>` ahead or identical."""
+    if sha not in seen:
+        out = gh(["api", f"repos/{pm.repo or '{owner}/{repo}'}/compare/{pm.merge}...{sha}", "--jq", ".status"],
+                 f"check gh auth status and that {sha[:12]} is in the repo of PR #{pm.pr}, then rerun")
+        seen[sha] = out.strip() in ("ahead", "identical")
+    return seen[sha]
+
+
+def pm_superseded(pm: PostMerge, gone: dict[str, str]) -> str:
+    """A cancelled push run on the merge commit: the run that superseded it, waited for (rule: --help, post-merge step 2)."""
+    m, deadline, seen, first, failed = pm.merge[:12], time.monotonic() + pm.wait, dict[str, bool](), gone, ""
+    while True:
+        out = gh(["run", "list", "--branch", pm.base, "--event", "push", "--workflow", gone["workflowName"], "--limit", "20",
+                  "--json", PM_BASE_FIELDS, *pm.r()], f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+        try:
+            later = [{f: "" if r[f] is None else str(r[f]) for f in PM_BASE_FIELDS.split(",")} for r in json.loads(out)]
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        later = [r for r in later if r["workflowName"] == gone["workflowName"] and int(r["databaseId"]) > int(gone["databaseId"])
+                 and r["headSha"] != pm.merge and pm_contains(pm, r["headSha"], seen)]
+        if not later:
+            if time.monotonic() >= deadline:
+                raise Refuse(f"main CI red on {m}: {gone['workflowName']} cancelled {gone['url']}, and no later push run of "
+                             f"{gone['workflowName']} on {pm.base} containing {m} within {pm.wait}s; check {pm.base}'s runs "
+                             "(gh run list --branch), then rerun")
+            time.sleep(PM_POLL); continue
+        new = min(later, key=lambda r: int(r["databaseId"]))   # the push that cancelled it, or the next
+        if new["status"] != "completed":
+            if failed == new["databaseId"]:   # its watch failed and it still runs: gh's own failure
+                raise Refuse(f"gh run watch {failed} failed while {new['workflowName']} reads {new['status']}: {new['url']}; "
+                             "check gh auth status, then rerun")
+            p = subprocess.run(["gh", "run", "watch", new["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            failed = new["databaseId"] if p.returncode else ""
+            continue   # re-list: its conclusion, or a newer run that cancelled it
+        via = f"{first['workflowName']} {first['url']} cancelled, superseded by {new['url']} on {new['headSha'][:12]} (contains {m})"
+        if new["conclusion"] == "cancelled":
+            gone = new; deadline = time.monotonic() + pm.wait; continue
+        if new["conclusion"] != "success":
+            raise Refuse(f"main CI red on {m}: {via}, {new['conclusion'] or 'no conclusion'}; fix {pm.base} first, "
+                         "nothing after this step runs")
+        return via
+
+
+# Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos
+# name a throwaway clone). Never a branch checkout there: live install clones stay on main, detached or not.
+# The kit's own locked mise tools only (octo-feather-mise-install, beside this script, run on the install: #493 AC5).
+PM_REFRESH = (("octo-feather-mise-install", "."), ("just", "vendored-fetch"), ("uv", "sync", "--locked"),
+              ("pnpm", "install", "--frozen-lockfile"))
+
+
+def kit_install() -> Path:
+    """The live kit install, the one rule for which dir it is: just install-check asks this too (#422)."""
+    return Path(os.environ.get("OCTO_FEATHER_KIT_INSTALL") or KIT)
+
+
+def pm_git(kit: Path, *args: str, ok: tuple[int, ...] = (0,)) -> tuple[int, str]:
+    p = subprocess.run(["git", "-C", str(kit), *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if p.returncode not in ok:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git {' '.join(args[:2])} in the kit install {kit} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     "fix the install clone, then rerun")
+    return p.returncode, p.stdout.strip()
+
+
+def pm_repo(target: str | None, what: str) -> str:
+    """OWNER/NAME of TARGET (a repo, a URL, or None for this directory's repo) as gh names it."""
+    out = gh(["repo", "view", *([target] if target else []), "--json", "nameWithOwner"], f"check {what} and gh auth status, then rerun")
+    try:
+        name = json.loads(out)["nameWithOwner"]
+    except (ValueError, KeyError, TypeError):
+        raise Refuse(f"gh repo view printed no nameWithOwner for {what} ({out[:100]!r}): check the gh on PATH")
+    return str(name)
+
+
+def pm_kit(pm: PostMerge) -> str:
+    """Step 3: fast-forward the live kit install to the merge commit, then refresh its tools; any failure stops."""
+    kit = kit_install()
+    if not (kit / ".git").exists():
+        raise Refuse(f"kit install {kit} is not a git clone: set OCTO_FEATHER_KIT_INSTALL to the install clone, then rerun")
+    origin = pm_git(kit, "config", "--get", "remote.origin.url", ok=(0, 1))[1]
+    if not origin:
+        raise Refuse(f"kit install {kit} has no origin remote: add it (git remote add origin <url>), then rerun")
+    pr_repo, kit_repo = pm_repo(pm.repo, f"the repo of PR #{pm.pr}"), pm_repo(origin, f"the kit install's origin {origin}")
+    if pr_repo.lower() != kit_repo.lower():
+        return f"kit install unchanged: PR in {pr_repo}, install is {kit_repo}"
+    top = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    if top.returncode:
+        raise Refuse("the current directory is in no git repo: run post-merge in the target repo (just install-check checks it), then rerun")
+    if dirty := pm_git(kit, "status", "--porcelain")[1]:
+        lines = dirty.splitlines()
+        raise Refuse(f"kit install {kit} is dirty ({', '.join(x.strip() for x in lines[:3])}{', ...' if len(lines) > 3 else ''}): "
+                     "commit, move or drop those changes there, nothing was changed; then rerun")
+    pm_git(kit, "fetch", "origin")
+    if pm_git(kit, "cat-file", "-e", f"{pm.merge}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"merge commit {pm.merge[:12]} is not in the kit install {kit} after git fetch origin: "
+                     f"check its origin {origin}, then rerun")
+    head, m = pm_git(kit, "rev-parse", "HEAD")[1], pm.merge[:12]
+    if head == pm.merge or not pm_git(kit, "merge-base", "--is-ancestor", pm.merge, head, ok=(0, 1))[0]:
+        moved = f"kit install {kit} at {head[:12]}, at or past {m}: no move"
+    elif not pm_git(kit, "merge-base", "--is-ancestor", head, pm.merge, ok=(0, 1))[0]:
+        pm_git(kit, "merge", "--ff-only", pm.merge)
+        moved = f"kit install {kit} fast-forwarded {head[:12]}..{m}"
+    else:
+        raise Refuse(f"kit install {kit} at {head[:12]} has diverged from merge commit {m}: nothing was changed; "
+                     f"put the install back on {pm.base} (git -C {kit} log {m}..HEAD names the commits), then rerun")
+    done: list[str] = []
+    cmds = [c for c in PM_REFRESH if c[0] != "octo-feather-mise-install" or (kit / "mise.toml").exists()]
+    for cmd in [*cmds, ("just", "install-check", top.stdout.strip())]:
+        shown = " ".join(cmd)
+        try:
+            p = subprocess.run([str(Path(__file__).resolve().parent / cmd[0]) if cmd[0] == "octo-feather-mise-install" else cmd[0], *cmd[1:]], cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                               env={**os.environ, "UV_PYTHON_DOWNLOADS": "never"} if cmd[0] == "uv" else None)
+            rc, err = p.returncode, (p.stderr.strip() or p.stdout).strip().splitlines()
+        except FileNotFoundError:
+            rc, err = 127, [f"{cmd[0]} not on PATH"]
+        if rc and cmd[0] == "uv" and (pin := pm_python_missing(kit)):
+            raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
+                         f"the kit's pinned Python {pin} (.python-version) is not installed and post-merge never downloads one: "
+                         f"run `uv python install --no-bin {pin}` in {kit}, then rerun")
+        if rc:
+            raise Refuse(f"{moved}; {'; '.join(done + [''])}{shown} failed (exit {rc}: {err[-1][:200] if err else 'no output'}): "
+                         f"fix it in {kit}, then rerun")
+        done.append(f"{shown} ok")
+    return f"{moved}; {'; '.join(done)}" + ("" if cmds[0][0] == "octo-feather-mise-install" else " (no mise.toml: mise install skipped)")
+
+
+def pm_python_missing(kit: Path) -> str | None:
+    """The kit's .python-version pin when uv finds no such Python installed (uv sync ran with UV_PYTHON_DOWNLOADS=never)."""
+    try:
+        pin = (kit / ".python-version").read_text().strip()
+    except OSError:
+        return None
+    p = subprocess.run(["uv", "python", "find", pin], cwd=kit, capture_output=True, text=True, stdin=subprocess.DEVNULL,
+                       env={**os.environ, "UV_PYTHON_DOWNLOADS": "never"})
+    return pin if pin and p.returncode else None
+
+
+# --- post-merge step 4: tell running supervisors main moved (issue 398) ---
+
+# The rule files a supervisor re-reads when main moves: role files, skills, skill patches, AGENTS.md, ADRs, specs.
+PM_RULES = re.compile(r"agents/[^/]+\.md|\.agents/skills/.+|\.skillfile/patches/.+|AGENTS\.md|docs/adr/.+|docs/specs/.+")
+GH_REPO_URL = re.compile(r"(?:https://|ssh://git@|git@)github\.com[:/]([\w.-]+/[\w.-]+?)(?:\.git)?/?")
+
+
+def pm_git_here(*args: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return subprocess.run(["git", *args], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("git not on PATH: install git")
+
+
+def pm_rule_files(pm: PostMerge) -> list[str]:
+    """The rule files the merge commit changed against its first parent, from git in the current repo."""
+    if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+        pm_git_here("fetch", "--quiet", "origin", pm.merge)
+    p = pm_git_here("diff", "--name-only", "--no-renames", f"{pm.merge}^1", pm.merge)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"git diff of merge commit {pm.merge[:12]} failed ({err[-1][:200] if err else f'exit {p.returncode}'}): "
+                     f"run post-merge in a clone of PR #{pm.pr}'s repo (git fetch origin), then rerun")
+    return sorted(f for f in p.stdout.splitlines() if PM_RULES.fullmatch(f))
+
+
+def pm_kit_repo() -> str | None:
+    """OWNER/NAME of the kit install's origin (step 3's install: OCTO_FEATHER_KIT_INSTALL or KIT), None when not on GitHub."""
+    p = pm_git_here("-C", str(kit_install()), "config", "--get", "remote.origin.url")
+    m = GH_REPO_URL.fullmatch(p.stdout.strip()) if not p.returncode else None
+    return m.group(1).lower() if m else None
+
+
+def pm_herdr_get(what: str, target: str) -> tuple[subprocess.CompletedProcess[str], dict[str, object], str | None]:
+    """`herdr WHAT get TARGET`: the run, its stdout JSON object ({} when none), and the code of the error JSON it
+    printed; real Herdr (0.9.5) prints a not-found error on stderr with empty stdout, exit 1, so both are read."""
+    try:
+        p = subprocess.run(["herdr", what, "get", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr not on PATH")
+    found: list[dict[str, object]] = []
+    for text in (p.stdout, p.stderr):
+        try:
+            d: object = json.loads(text)
+        except ValueError:
+            d = None
+        found.append(cast("dict[str, object]", d) if isinstance(d, dict) else {})
+    errs = [cast("dict[str, object]", e).get("code") for e in (x.get("error") for x in reversed(found)) if isinstance(e, dict)]
+    return p, found[0], str(errs[0]) if p.returncode and errs else None
+
+
+def pm_live(pane: str) -> bool:
+    """Whether Herdr finds PANE (`herdr agent get`); agent_not_found is a parked or gone pane. Refuse otherwise."""
+    p, d, code = pm_herdr_get("agent", pane)
+    if not p.returncode and isinstance(d.get("result"), dict):
+        return True
+    if code == "agent_not_found":
+        return False
+    out = (p.stderr or p.stdout).strip().splitlines()
+    raise Refuse(f"herdr agent get {pane} failed ({out[-1][:200] if out else f'exit {p.returncode}'})")
+
+
+def pm_tell(pm: PostMerge) -> str:
+    """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
+    which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
+    Herdr does not find is listed, never sent to (why: herdr-comms SKILL.md, herdr-say)."""
+    import datetime, tomllib
+    from handoff_log import encode
+    lanes = lanes_dir()
+    recs = [p for p in sorted(lanes.glob("*.toml")) if p.stem != pm.lane]
+    if not recs:
+        return f"no other open lane in {lanes} to tell"
+    d = cast("dict[str, object]", pr_view(pm.pr, "title,url", pm.repo))
+    m = re.match(r"https://github\.com/([\w.-]+/[\w.-]+)/pull/", str(d["url"]))
+    if not m:
+        raise Refuse(f"gh pr view {pm.pr} printed url {d['url']!r}, no GitHub PR url: check the gh on PATH, then rerun")
+    repo, kit = m.group(1), pm_kit_repo()
+    dlog = lanes.parent / DIRECTOR_LOG
+    try:
+        dlines = read_log(dlog)[0] if dlog.exists() else []
+    except OSError as e:
+        raise Refuse(f"cannot read the director log {dlog} ({e}): fix it, then rerun")
+    mark = f"post-merge {pm.merge} #{pm.pr}: "
+    told: list[str] = []
+    already: list[str] = []
+    parked: list[str] = []
+    gone: list[str] = []
+    failed: list[str] = []
+    due: list[tuple[str, str, object]] = []
+    for rec_path in recs:
+        name = rec_path.stem
+        try:
+            rec: dict[str, object] = tomllib.loads(rec_path.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            failed.append(f"record {rec_path.name} unread ({e})"); continue
+        if repo.lower() != kit and str(rec.get("repository", "")).lower() != repo.lower():
+            continue
+        issue, sup = rec.get("issue"), rec.get("supervisor")
+        if any(x.get("kind") == "prod" and x.get("issue") == issue and str(x.get("note", "")).startswith(mark)
+               and f" told {name} to " in str(x.get("note")) for x in dlines):
+            already.append(name); continue
+        if not isinstance(sup, str) or ":" not in sup:
+            failed.append(f"{name}: the record's supervisor {sup!r} is no pane id"); continue
+        due.append((name, sup, issue))
+    files = pm_rule_files(pm) if due else []
+    listed = ", ".join(files) or "none"
+    msg = (f"main moved to {pm.merge[:12]} (#{pm.pr} {d['title']}); rule files changed: {listed}; "
+           "re-read the changed ones before your next step.")
+    for name, sup, issue in due:
+        try:
+            live = pm_live(sup)
+        except Refuse as e:
+            failed.append(f"{name} {sup}: {e}"); continue
+        if not live:
+            # Parked when the lane's latest parked line (its hand-off log, read as octo-feather-handoff parked
+            # does) names this pane; else gone, for the director to resume or archive (owner ruling #206, step 4).
+            log = lanes / f"{name}.handoffs.jsonl"
+            try:
+                marks = [x for x in (read_log(log)[0] if log.exists() else []) if x.get("kind") == "parked"]
+            except OSError as e:
+                failed.append(f"{name} {sup}: hand-off log {log} unread ({e})"); continue
+            marks.sort(key=lambda x: str(x.get("at") or ""))
+            (parked if marks and marks[-1].get("pane") == sup else gone).append(f"{name} {sup}"); continue
+        try:
+            p = subprocess.run(["herdr-say", sup, msg], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        except FileNotFoundError:
+            failed.append(f"herdr-say failed: {name} {sup}: herdr-say not on PATH"); continue
+        if p.returncode:
+            err = (p.stderr or p.stdout).strip().splitlines()
+            failed.append(f"herdr-say failed: {name} {sup} exit {p.returncode}" + (f" ({err[-1][:200]})" if err else "")); continue
+        at = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        line: dict[str, object] = {"at": at, "kind": "prod", "issue": issue, "note": f"{mark}main moved, told {name} to re-read {listed}"}
+        try:
+            with dlog.open("a", encoding="utf-8") as f:
+                f.write(encode(line) + "\n")
+        except OSError as e:
+            failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})"); continue
+        told.append(f"{name} {sup}")
+    who = (f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; told: {', '.join(told) or 'none'}; "
+           f"already told: {', '.join(already) or 'none'}; not woken: {', '.join(parked) or 'none'}; "
+           f"gone: director to resume or archive: {', '.join(gone) or 'none'}")
+    if failed:
+        raise Refuse(f"{'; '.join(failed)}; no prod line for these: fix each, then rerun (a rerun skips lanes told); {who}")
+    return who
+
+
+# --- post-merge step 5: tear down the closed lane (issue 399) ---
+
+class Pending(Exception):
+    """A step not due yet: its message names when to rerun; exit 3."""
+
+
+def pm_herdr_gone(what: str, target: str, code: str) -> bool:
+    """Whether Herdr reports TARGET gone: `herdr WHAT get TARGET` fails with error CODE (pm_herdr_get)."""
+    return pm_herdr_get(what, target)[2] == code
+
+
+def pm_close(target: str, space: str, shared: bool) -> str:
+    """`herdr-close TARGET` (the lane's own space, or its supervisor pane, which herdr-close maps to its tab). On a
+    failed close, Herdr is asked whether TARGET is gone: then it was closed already."""
+    what = f"tab of {target}" if shared else f"space {target}"
+    try:
+        p = subprocess.run(["herdr-close", target], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+    except FileNotFoundError:
+        raise Refuse("herdr-close not on PATH: put the kit's scripts on PATH (herdr-comms skill), then rerun")
+    if not p.returncode:
+        return f"{what} closed" + (f" in shared space {space}" if shared else "")
+    if pm_herdr_gone(*(("agent", target, "agent_not_found") if shared else ("workspace", target, "workspace_not_found"))):
+        return f"{what} already closed"
+    out = (p.stderr or p.stdout).strip().splitlines()
+    raise Refuse(f"herdr-close {target} failed (exit {p.returncode}: {out[-1][:200] if out else 'no output'}): "
+                 "close it by hand (herdr-comms skill), then rerun")
+
+
+def pm_review_roots() -> list[tuple[str, str, str]]:
+    """(real root, row slug, registry) of every Spec Chat review row, its registries read as octo-feather-accepted
+    reads them; an unreadable registry stops, as it may name the worktree as a preview."""
+    import tomllib
+    base = os.environ.get("XDG_STATE_HOME")
+    state = (Path(base) if base else Path.home() / ".local" / "state") / "spec-chat"
+    roots: list[tuple[str, str, str]] = []
+    for reg in sorted(state.glob("hosting/*/registry.toml")):
+        try:
+            data = tomllib.loads(reg.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read Spec Chat registry {reg} ({e}): fix it, then rerun (a review row's root stays)")
+        rows = [cast("dict[str, object]", r) for r in cast("list[object]", data.get("resource", [])) if isinstance(r, dict)]
+        roots.extend((os.path.realpath(str(r["root"])), str(r.get("slug", "?")), str(reg)) for r in rows if r.get("root"))
+    return roots
+
+
+def pm_git_ok(what: str, *args: str) -> str:
+    """git ARGS in the current repo; its stdout, or Refuse naming WHAT with git's own words."""
+    p = pm_git_here(*args)
+    if p.returncode:
+        err = (p.stderr or p.stdout).strip().splitlines()
+        raise Refuse(f"{what} ({err[-1][:200] if err else f'exit {p.returncode}'})")
+    return p.stdout
+
+
+def pm_worktree(branch: str) -> str:
+    """Remove the clean worktree on BRANCH; the kit install, the main worktree and a review row's root are kept."""
+    listing = pm_git_ok("git worktree list failed", "worktree", "list", "--porcelain").strip().split("\n\n")
+    entries = [{k: v for k, _, v in (x.partition(" ") for x in e.splitlines())} for e in listing]
+    hit = [i for i, e in enumerate(entries) if e.get("branch") == f"refs/heads/{branch}"]
+    if not hit:
+        return f"worktree of {branch} already removed"
+    path = entries[hit[0]]["worktree"]
+    real = os.path.realpath(path)
+    if real == os.path.realpath(kit_install()):
+        raise Refuse(f"worktree {path} kept: it is the kit install; put the install back on main by hand")
+    if hit[0] == 0:
+        raise Refuse(f"worktree {path} kept: it is the main worktree; check out another branch there, then rerun")
+    for root, slug, reg in pm_review_roots():
+        if root == real:
+            raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
+                         "a preview stays, remove it by hand once its review ends")
+    pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
+    return f"worktree {path} removed"
+
+
+def pm_teardown(pm: PostMerge) -> str:
+    """Step 5: once the lane's record is archived for this PR (its close report), close its own space (or only its
+    supervisor tab in a shared one), remove its worktree, retarget PRs based on its branch, delete the branch locally
+    (merged only) and on origin. Any refusal stops the step, what ran before named."""
+    import tomllib
+    lanes = lanes_dir()
+    path = lanes / "archive" / f"{pm.lane}.toml"
+    if not path.exists():
+        raise Pending(f"lane {pm.lane} not archived; rerun on its close report")
+    try:
+        rec: dict[str, object] = tomllib.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+        raise Refuse(f"cannot read archived record {path} ({e}): fix it, then rerun; nothing torn down")
+    if rec.get("pr") != pm.pr:
+        raise Refuse(f"archived lane {pm.lane} names PR #{rec.get('pr')}, not #{pm.pr}: name the lane's own PR, then rerun; nothing torn down")
+    sup = rec.get("supervisor")
+    if not isinstance(sup, str) or ":" not in sup:
+        raise Refuse(f"archived lane {pm.lane}'s supervisor {sup!r} is no pane id: nothing torn down")
+    space = sup.split(":", 1)[0]
+    others: list[object] = []
+    for p in [*sorted(lanes.glob("*.toml")), lanes.parent / "director.toml"]:
+        try:
+            d = tomllib.loads(p.read_text(encoding="utf-8"))
+        except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
+            raise Refuse(f"cannot read {p} ({e}): fix it, then rerun (it may share space {space}); nothing torn down")
+        others.append(d.get("pane" if p.name == "director.toml" else "supervisor"))
+    shared = any(isinstance(x, str) and x.split(":", 1)[0] == space for x in others)
+    done: list[str] = []
+    try:
+        done.append(pm_close(sup if shared else space, space, shared))
+        branch = tracker("lane-key", str(rec.get("issue")), err=Refuse).strip()
+        done.append(pm_worktree(branch))
+        out = gh(["pr", "list", "--base", branch, "--state", "open", "--json", "number", *pm.r()],
+                 "check gh auth status, then rerun")
+        try:
+            based = [int(str(cast("dict[str, object]", x)["number"])) for x in cast("list[object]", json.loads(out))]
+        except (ValueError, TypeError, KeyError) as e:
+            raise Refuse(f"gh pr list --base {branch} printed no PR list ({out[:100]!r}, {e}): check the gh on PATH")
+        for n in based:
+            gh(["pr", "edit", str(n), "--base", pm.base, *pm.r()], f"retarget PR #{n} to {pm.base} by hand, then rerun")
+            done.append(f"PR #{n} retargeted from {branch} to {pm.base}")
+        if not based:
+            done.append(f"no open PR based on {branch}")
+        if pm_git_here("rev-parse", "-q", "--verify", f"refs/heads/{branch}").returncode:
+            done.append(f"local branch {branch} already deleted")
+        else:
+            if pm_git_here("cat-file", "-e", f"{pm.merge}^{{commit}}").returncode:
+                pm_git_here("fetch", "--quiet", "origin", pm.merge)
+            if pm_git_here("merge-base", "--is-ancestor", f"refs/heads/{branch}", pm.merge).returncode:
+                raise Refuse(f"local branch {branch} kept: it is not an ancestor of merge commit {pm.merge[:12]} "
+                             f"(git log {pm.merge[:12]}..{branch} names what did not merge)")
+            pm_git_ok(f"local branch {branch} not deleted", "branch", "-D", branch)
+            done.append(f"local branch {branch} deleted")
+        if pm_git_ok(f"git ls-remote origin {branch} failed", "ls-remote", "--heads", "origin", branch).strip():
+            pm_git_ok(f"remote branch {branch} not deleted", "push", "--quiet", "origin", "--delete", branch)
+            done.append(f"remote branch {branch} deleted from origin")
+        else:
+            done.append(f"remote branch {branch} already deleted from origin")
+    except Refuse as e:
+        raise Refuse("; ".join([*done, f"{e}; nothing after it ran: fix it, then rerun"]))
+    return "; ".join(done)
+
+
+# The routine's steps in order; later tickets append theirs (#397 kit refresh, #398 tell supervisors, #399 teardown).
+POST_MERGE_STEPS = (("merged", pm_merged), ("main CI", pm_ci), ("kit refresh", pm_kit),
+                    ("tell supervisors", pm_tell), ("teardown", pm_teardown))
+
+
+def take_opt(args: list[str], flag: str) -> tuple[list[str], str | None]:
+    if flag not in args:
+        return args, None
+    i = args.index(flag)
+    if i + 1 >= len(args):
+        raise Refuse(f"{flag} needs a value")
+    return args[:i] + args[i + 2:], args[i + 1]
+
+
+def cmd_post_merge(args: list[str]) -> int:
+    args, repo = take_repo(args)
+    args, lane = take_opt(args, "--lane")
+    args, wait = take_opt(args, "--wait")
+    if len(args) != 2 or not lane or not NAME.fullmatch(lane):
+        raise Refuse("usage: octo-feather-lane post-merge PR HEAD --lane NAME [--wait SECONDS] [--repo O/R] "
+                     f"(the merged PR, the head it was merged at, the lane's name; got {' '.join(args) or 'nothing'})")
+    if not SHA.fullmatch(args[1]):
+        raise Refuse(f"HEAD must be the pinned head the PR merged at, 7 to 40 hex, got {args[1]!r}")
+    if wait is not None and not wait.isdigit():
+        raise Refuse(f"--wait needs whole seconds, got {wait!r}")
+    pm = PostMerge(pr_number(args[0]), args[1].lower(), lane, int(wait or 300), repo)
+    outcomes: list[str] = []
+    for n, (name, step) in enumerate(POST_MERGE_STEPS, 1):
+        if all(o.endswith(" ok") for o in outcomes):
+            try:
+                line, outcome = f"ok: {step(pm)}", "ok"
+            except Refuse as e:
+                line, outcome = f"stopped: {e}", "stopped"
+            except Pending as e:
+                line, outcome = f"pending: {e}", "pending"
+            except (KeyError, TypeError, AttributeError, ValueError) as e:
+                line, outcome = f"stopped: unexpected data from gh ({type(e).__name__}: {e}): check the gh on PATH, then rerun", "stopped"
+            print(f"step {n} {name}: {line}", flush=True)
+            outcomes.append(f"step {n} {name} {outcome}")
+        else:
+            outcomes.append(f"step {n} {name} not run")
+    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}", flush=True)
+    if all(o.endswith((" ok", " pending")) for o in outcomes):
+        return 0 if all(o.endswith(" ok") for o in outcomes) else 3
+    return 1
+
+
+COMMANDS = {
+    "archive": cmd_archive,
+    "reflect": cmd_reflect,
+    "verdict": cmd_verdict,
+    "fields": cmd_fields,
+    "merge-ask": cmd_merge_ask,
+    "ci-start": cmd_ci_start,
+    "resolution": cmd_resolution,
+    "judge": cmd_judge,
+    "tickets": cmd_tickets,
+    "done": cmd_done,
+    "ticket": cmd_ticket,
+    "spend": cmd_spend,
+    "report": cmd_report,
+    "intake": cmd_intake,
+    "post-merge": cmd_post_merge,
+}
+
+
+def main(argv: list[str]) -> int:
+    if not argv or argv[0] not in COMMANDS:
+        print(__doc__.strip(), file=sys.stderr); return 64
+    try:
+        return COMMANDS[argv[0]](argv[1:])
+    except Refuse as e:
+        print(f"octo-feather-lane {argv[0]}: {e}", file=sys.stderr); return 2 if isinstance(e, Unchecked) else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

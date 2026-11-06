@@ -15938,7 +15938,7 @@
                 }
             }
         ],
-        "./scripts/octo-feather-lane": [
+        "./scripts/octo_feather_lane.py": [
             {
                 "code": "reportUnknownMemberType",
                 "range": {

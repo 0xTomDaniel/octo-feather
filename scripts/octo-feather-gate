@@ -210,9 +210,19 @@ def record(reason: str, seconds: float) -> None:
     sys.stdout.write(f"recorded: full pass of {head[:12]} ({NOTES})\n")
 
 
+def commit_of(rev: str) -> str:
+    """REV's commit id, or "" when REV names no commit (octo-feather-lane imports it)."""
+    return git("rev-parse", "--verify", "-q", f"{rev}^{{commit}}", check=False).strip()
+
+
+def recorded(commit: str) -> str:
+    """COMMIT's recorded full pass, its note's JSON text, or "" (octo-feather-lane imports it)."""
+    return git("notes", f"--ref={NOTES}", "show", commit, check=False)
+
+
 def passed(rev: str) -> int:
     commit = git("rev-parse", "--verify", f"{rev}^{{commit}}").strip()
-    note = git("notes", f"--ref={NOTES}", "show", commit, check=False)
+    note = recorded(commit)
     if not note:
         sys.stderr.write(f"octo-feather-gate: no full pass recorded for {commit[:12]}\n")
         return 1
