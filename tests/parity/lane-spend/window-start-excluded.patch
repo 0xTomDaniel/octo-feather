@@ -1,0 +1,14 @@
+Seeded defect: a call at a reconcile window's first second falls outside the window (octo-feather-lane --help, spend; spec spend#acceptance-spend-reconcile).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..561a3cc 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -2933,7 +2933,7 @@ def cmd_spend(args: list[str]) -> int:
+         print(f"  OpenRouter unavailable: {e}")
+     print(f"  {'window':<11} {'openrouter':>12} {'ledger':>12} {'gap':>12}")
+     for w, (label, start) in starts.items():
+-        mine = [r for r in recs if r["model"].startswith("openrouter/") and start <= r["_t"] <= now]
++        mine = [r for r in recs if r["model"].startswith("openrouter/") and start < r["_t"] <= now]
+         led = sum(float(r["cost_usd"]) for r in mine if r.get("cost_usd") is not None)
+         unk = sum(r.get("cost_usd") is None for r in mine)
+         theirs = money(usage[w]) if usage else "n/a"
