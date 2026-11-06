@@ -1,0 +1,14 @@
+Seeded defect: a tagged test's pass is carried though the gate configuration moved since (quality spec #qc-carry).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index b9e93f1..e46c329 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -823,7 +823,7 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str,
+                 now_gate: dict[str, Any] = gate or json.loads(subprocess.run([str(KIT / "scripts" / "octo-feather-gate"), "config", head],
+                                                                              capture_output=True, text=True, check=True).stdout)
+                 gate = now_gate
+-                moved += [f"gate configuration moved since {at[:12]}"] if any(was.get(k) != v for k, v in now_gate.items()) else []
++                moved += [f"gate configuration moved since {at[:12]}"] if any(was.get(k) != v for k, v in now_gate.items()) and not was else []
+             why = "; ".join(moved) if found else f"record {row['record']} not in the evidence store"
+         if why:
+             print(f"qc: judging {cid} again: {why}", file=sys.stderr)
