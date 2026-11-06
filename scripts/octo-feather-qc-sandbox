@@ -1001,14 +1001,15 @@ def setup(judge: list[str]) -> NoReturn:
         if not bs:
             deny.append(r)  # one with paths bound back is masked above
         watch.append(("repo", r, names))
-    # kept /tmp paths read-only, but the worktree (writable, below) and any inside a masked repo: the mask wins there
+    # kept /tmp paths read-only, but the worktree (writable, below) and any inside a mask (a repo, a live record, a
+    # credential dir; nested, the outer run's state dir is the caller's): the mask wins there
     allow_r += [
         p
         for p in E.get("QC_KEEP", "").split("\n")
         if p.startswith("/tmp/")
         and os.path.exists(p)
         and not within(p, wtp)
-        and not any(within(p, r) for r in hid)
+        and not any(within(p, r) for r in hid + masked + cmask)
     ]
     # srt's own temp dir (its proxy bridge sockets): carved back read-only, as its denyRead /tmp would cover the sockets it binds
     allow_r += [f"{SCR}/bin", f"{SCR}/rbin", f"{SCR}/rec", f"{SCR}/srt", *hro]
