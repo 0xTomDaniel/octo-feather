@@ -1,0 +1,14 @@
+Seeded defect: just shape passes its arguments unquoted, so the shell splits and expands them (#61).
+diff --git a/justfile b/justfile
+index bfed447..8cbcfb3 100644
+--- a/justfile
++++ b/justfile
+@@ -356,7 +356,7 @@ vendored-fetch:
+ # Owner shaping chat in the target repo: the shaper role (agents/shaper.md) through pi-role, outside the factory (docs/adr/0021).
+ [no-cd]
+ shape *args:
+-    octo-feather-shape "$@"
++    octo-feather-shape $@
+ 
+ # Spec Chat's skills into REPO/.agents/skills as git-ignored links into $SPEC_CHAT_CLONE (default ~/src/spec-chat); no provider links (docs/adr/0001).
+ [no-cd]

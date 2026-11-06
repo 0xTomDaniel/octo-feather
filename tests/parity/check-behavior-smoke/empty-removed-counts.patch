@@ -1,0 +1,14 @@
+Seeded defect: an empty Removed: line satisfies the pruning habit (check-behavior-smoke, #67).
+diff --git a/scripts/check-behavior-smoke b/scripts/check-behavior-smoke
+index 1666d5d..582539b 100755
+--- a/scripts/check-behavior-smoke
++++ b/scripts/check-behavior-smoke
+@@ -38,7 +38,7 @@ OWED = re.compile(r"^docs/owed-evals/[^/]+\.md$")
+ OWED_FIX = "docs/owed-evals/<issue>.md"
+ TRAILER = re.compile(r"^Behaviour-neutral:[ \t]*(\S.*)$", re.M)
+ PRUNE = re.compile(r"^(agents/[^/]+\.md|\.skillfile/patches/.+)$")
+-REMOVED = re.compile(r"^Removed:[ \t]*\S", re.M)
++REMOVED = re.compile(r"^Removed:", re.M)
+ SMOKE = re.compile(r"^Smoke:[ \t]*(.*)$", re.M)
+ TAG = "check-behavior-smoke"
+ 

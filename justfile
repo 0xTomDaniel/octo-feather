@@ -179,6 +179,7 @@ check-refs:
           # Spec Chat names the owner side of a spool (its directory and event actor) so on disk: the one SPOOL_SIDE value per file.
           "scripts/octo-feather-accepted" => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
           "tests/accepted.sh"             => [qr{^SPOOL_SIDE=[h]uman(?=;)}],
+          "tests/gate/kit/accepted.py"    => [qr{^SPOOL_SIDE = "[h]uman"(?=\s)}],
         ) }
         my ($f, $s) = /^(.*?):\d+:(.*)$/s;
         $s =~ s/$_//g for @{ $ok{$f} || [] };

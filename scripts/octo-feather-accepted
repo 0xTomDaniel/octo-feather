@@ -6,7 +6,7 @@ an exact commit?
 
 Reads Spec Chat's review-host registries, one per Herdr session, in the state
 dir Spec Chat itself uses (${XDG_STATE_HOME:-~/.local/state}/spec-chat, then
-hosting/*/registry.toml; tests/accepted.sh crosses it with pinned Spec Chat),
+hosting/*/registry.toml; tests/gate/kit/accepted.py crosses it with pinned Spec Chat),
 for the rows of that spec path. SPEC_PATH may be absolute, ./-prefixed, or
 relative to a cwd inside the repo; it is compared, relative to the --repo top,
 with each row's spec relative to the row's root. For each row it reads the hand-offs the review
@@ -36,7 +36,7 @@ from pathlib import Path
 # Spec Chat's served page (skill/review-spec/assets/review-serve.py, _share_meta and
 # _spec_page): the file with any missing description and Open Graph meta added
 # before </head>. Its SHA-256 is the version a review event records. Pinned by
-# tests/accepted.sh against a hash Spec Chat itself computed.
+# tests/gate/kit/accepted.py against a hash Spec Chat itself computed.
 HEAD_END_RE = re.compile(rb"</head\s*>", re.IGNORECASE)
 SPOOL_SIDE = "human"  # Spec Chat's name for the owner's side of a spool: its directory and event actor
 SHARE_META = (("name", "description"), ("property", "og:type"), ("property", "og:title"), ("property", "og:description"))

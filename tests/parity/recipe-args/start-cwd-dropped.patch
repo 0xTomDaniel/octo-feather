@@ -1,0 +1,14 @@
+Seeded defect: just start names the recipe's own dir, not its cwd argument (#61).
+diff --git a/justfile b/justfile
+index bfed447..51d4571 100644
+--- a/justfile
++++ b/justfile
+@@ -800,7 +800,7 @@ install-check-models:
+ 
+ # Start the director in Herdr workspace `director` (docs/adr/0011).
+ start cwd=invocation_directory():
+-    octo-feather-start --director --cwd "$1"
++    octo-feather-start --director --cwd "$PWD"
+ 
+ # Start one supervisor for a ticket as the tracker writes it (12, ENG-123) in workspace named by its lane key (gh12, eng-123), tab `supervisor`.
+ supervise issue cwd=invocation_directory():
