@@ -213,7 +213,7 @@ check-dashes:
       echo "check-dashes: replace the em/en dashes above with a colon, comma or parentheses" >&2; exit 1; fi
     echo "dashes: ok (${#files[@]} files)"
 
-# Every skill opens with a --- frontmatter block with non-empty name and description; every role file exists.
+# The gate's side of skills spec #loading-refuse (scripts/check-skills); every role file exists.
 check-skills:
     @python3 "$root/scripts/check-skills"
 

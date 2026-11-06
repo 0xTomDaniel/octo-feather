@@ -41,6 +41,7 @@ Each feature file has an H1 title, its criteria links, then exactly four H2s in 
 - [correction-intake](./correction-intake.md) covers which findings make a correction lane due and the read-only intake report of the open ones (`octo-feather-lane intake`).
 - [factory-report](./factory-report.md) covers the factory report (`octo-feather-lane report`): its director reflection line, its owner-caught headline and a repository's full gate time against its gate-time budget.
 - [role-launch](./role-launch.md) covers each role's launch as Pi gets it (`pi-role --json`): tools, MCP and the web list.
+- [skill-loading](./skill-loading.md) covers which skills Pi loads for a role: a launch refused naming each skill Pi did not load, the listed skills offered exactly, and the gate's `check-skills` (criteria: skills#acceptance-launch-refuses-unloaded, skills#acceptance-only-listed, skills#acceptance-skill-frontmatter).
 - [qc-capture](./qc-capture.md) covers `just qc` capturing each declared demo into the evidence store and deciding from its checks.
 - [qc-insufficient](./qc-insufficient.md) covers `just qc` giving insufficient evidence when a declared demo cannot run to its end, and `octo-feather-lane merge-ask` failing naming it.
 - [qc-browser](./qc-browser.md) covers `just qc` running a declared browser demo in the qc sandbox and storing its screenshots in the record.

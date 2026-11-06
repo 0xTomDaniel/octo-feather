@@ -28,7 +28,7 @@ from typing import Any, NoReturn
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1011,6 +1011,82 @@ def drive_role_launch(f: Feature) -> None:
                 and web_ok(c, r, [*servers, "added"], str(kit2)))
     f.env = {}
     say(f"role-launch evidence: {f.d}")
+
+
+def drive_skill_loading(f: Feature) -> None:
+    """Which skills Pi loads for a role, asked of Pi: a role launch (Pi in RPC mode, no prompt: no model turn) from
+    scratch targets, refused naming each skill Pi did not load, started with exactly its listed skills otherwise;
+    and the gate (check-skills) on a scratch kit copy. features/skill-loading.md."""
+    sc = RUN_DIR / "scratch" / "skill-loading"
+    shutil.rmtree(sc, ignore_errors=True)
+    home, agent = sc / "home", sc / "agent"
+    for p in (home, agent):
+        p.mkdir(parents=True)
+    good = '---\nname: local\ndescription: "A local skill: fine when quoted."\n---\nBody.\n'
+    bad = "---\nname: {}\ndescription: A broken skill: a plain value holding a colon.\n---\nBody.\n"
+
+    def target(name: str, declared: str, local: str | None) -> Path:
+        t = sc / "targets" / name
+        (t / ".agents" / "skills").mkdir(parents=True)
+        subprocess.run(["git", "-c", "init.defaultBranch=main", "init", "-q", str(t)], check=True)
+        (t / "AGENTS.md").write_text(f"# target\n\nRepo skills: {declared}\n")
+        if local is not None:
+            (t / ".agents" / "skills" / "local").mkdir()
+            (t / ".agents" / "skills" / "local" / "SKILL.md").write_text(local)
+        return t
+
+    def launch(name: str, t: Path, kit: str, stdin: str = "") -> None:
+        # pi-role's own launch, Pi in RPC mode: Pi starts, runs its session start, answers STDIN's RPC commands and
+        # exits at end of input. --no-mcp: the web roles' servers stay unconnected (no network).
+        f.run(name, "sh", "-c", 'cd "$1" && printf "%s" "$3" | "$2/scripts/pi-role" "$2/agents/implementer.md" '
+              "--mode rpc --offline --no-session --no-mcp", "sh", str(t), kit, stdin)
+
+    # The parent route emptied: a refusal in a pane tells OCTO_FEATHER_PARENT, and a drive never reaches a live pane.
+    route = dict.fromkeys(("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID", "HERDR_SESSION"), "")
+    f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache")}
+    refused = "Pi did not load skill"
+    role_line = next(ln for ln in (Path(f.s.repo) / "agents" / "implementer.md").read_text().splitlines() if ln.startswith("skills:"))
+    launch("offered", target("offered", "python, local", good), f.s.repo, '{"type":"get_commands"}\n')
+    f.obs("offered", "role-skills", role_line + "\n")
+
+    def offered(c: Case) -> bool:
+        resp = next(json.loads(ln) for ln in c.out.splitlines() if '"get_commands"' in ln)
+        got = sorted(x["name"].removeprefix("skill:") for x in resp["data"]["commands"] if x["source"] == "skill")
+        want = sorted("github-issues" if x.strip() == "{tracker}" else x.strip()
+                      for x in c.o["role-skills"].removeprefix("skills:").split(",") if x.strip())
+        return c.code == 0 and refused not in c.err and got == want and "local" not in got
+    f.check("offered", offered)
+    launch("declared-malformed", target("declared-malformed", "python, local", bad.format("local")), f.s.repo)
+    f.check("declared-malformed", lambda c: c.code != 0 and f"{refused} local (" in c.err and "Nested mappings are not allowed" in c.err)
+    t = target("declared-dangling", "python, ghost", good)
+    (t / ".agents" / "skills" / "ghost").symlink_to(sc / "gone")
+    launch("declared-dangling", t, f.s.repo)
+    f.check("declared-dangling", lambda c: c.code != 0 and f"{refused} ghost (" in c.err and "skill path does not exist" in c.err)
+    # A scratch copy of the kit: its tdd, listed by the implementer, broken; then the gate on it.
+    kit2 = sc / "kit"
+    for d in ("scripts", "agents", "extensions"):
+        shutil.copytree(Path(f.s.repo) / d, kit2 / d, symlinks=True)
+    shutil.copy(Path(f.s.repo) / "web-mcp.json", kit2 / "web-mcp.json")
+    shutil.copytree(Path(f.s.repo) / ".agents" / "skills", kit2 / ".agents" / "skills", symlinks=True)
+    tdd = kit2 / ".agents" / "skills" / "tdd" / "SKILL.md"
+    keep = tdd.read_text()
+    tdd.write_text(bad.format("tdd"))
+    launch("listed-malformed", target("listed-malformed", "python", None), str(kit2))
+    f.check("listed-malformed", lambda c: c.code != 0 and f"{refused} tdd (" in c.err and "Nested mappings are not allowed" in c.err)
+    f.run("gate-refused", f"{kit2}/scripts/check-skills")
+    f.check("gate-refused", lambda c: c.code != 0 and ".agents/skills/tdd/SKILL.md: Pi does not load it:" in c.err
+            and "role implementer (agents/implementer.md): Pi does not offer its skill tdd" in c.err
+            and "role code-reviewer (agents/code-reviewer.md): Pi does not offer its skill tdd" in c.err)
+    tdd.write_text(keep)
+    (kit2 / ".agents" / "skills" / "noname").mkdir()
+    (kit2 / ".agents" / "skills" / "noname" / "SKILL.md").write_text("---\ndescription: Does a thing.\n---\nBody.\n")
+    f.run("gate-no-name", f"{kit2}/scripts/check-skills")
+    f.check("gate-no-name", lambda c: c.code != 0 and ".agents/skills/noname/SKILL.md: no name in its frontmatter" in c.err)
+    shutil.rmtree(kit2 / ".agents" / "skills" / "noname")
+    f.run("gate-clean", f"{kit2}/scripts/check-skills")
+    f.check("gate-clean", lambda c: c.code == 0 and c.out.startswith("skills: ok"))
+    f.env = {}
+    say(f"skill-loading evidence: {f.d}")
 
 
 def classify_stub(f: Feature, sc: Path) -> str:
@@ -2301,6 +2377,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "correction-intake": drive_correction_intake,
     "factory-report": drive_factory_report,
     "role-launch": drive_role_launch,
+    "skill-loading": drive_skill_loading,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
     "qc-advisory": drive_qc_advisory,

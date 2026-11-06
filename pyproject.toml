@@ -282,18 +282,12 @@ extraPaths = ["tests/gate"]
   "T201",
 ]
 "scripts/check-skills" = [
-  "ANN001",
   "ANN201",
-  "ANN202",
   "BLE001",
-  "C901",
   "E401",
   "E501",
-  "EM101",
   "EM102",
-  "FURB188",
   "I001",
-  "PLR0912",
   "PTH100",
   "PTH113",
   "PTH118",
