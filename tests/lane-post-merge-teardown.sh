@@ -7,7 +7,7 @@
 # live kit) of another repo, so step 3 leaves it unchanged. Not archived: steps 1-4 run, step 5 pending, exit 3.
 # Archived: the lane's own space is closed (only its supervisor pane's tab when shared), its worktree removed, PRs
 # based on its branch retargeted before the remote branch is deleted, the local branch deleted; a rerun prints
-# already for each. A dirty worktree, the kit install, the main worktree and a review row's root are kept, exit 1.
+# already for each, on a repo with no workflow as with a green run. A dirty worktree, the kit install, the main worktree and a review row's root are kept, exit 1.
 # Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
@@ -21,7 +21,8 @@ unset GH_REPO GH_TOKEN HERDR_SESSION OCTO_FEATHER_ROLE
 mkdir -p "$HOME" "$t/bin"
 st="$t/state/octo-feather" lanes="$t/state/octo-feather/lanes" reg="$t/state/spec-chat/hosting/s1"
 
-# Fake gh: pr view 12, repo view, a green run list, pr list --base <b> --state open (from .based), pr edit N --base B
+# Fake gh: pr view 12, repo view, a green run list (with NO_CI set: no run, and the merge commit's tree has no .github,
+# the no-CI fact), pr list --base <b> --state open (from .based), pr edit N --base B
 # (logs whether gh12 is still on origin at that moment, then drops N from .based); anything else is refused.
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
@@ -33,6 +34,10 @@ if a[:3] == ["pr", "view", "12"]:
     print(json.dumps({k: db["pr"][k] for k in opt("--json").split(",")})); sys.exit(0)
 if a[:2] == ["repo", "view"] and opt("--json") == "nameWithOwner":
     print(json.dumps({"nameWithOwner": a[2].removeprefix("https://github.com/").removesuffix(".git")})); sys.exit(0)
+if a[:2] == ["run", "list"] and os.environ.get("NO_CI"):
+    print("[]"); sys.exit(0)
+if a[:2] == ["api", f"repos/o/r/git/trees/{db['pr']['mergeCommit']['oid']}"] and os.environ.get("NO_CI"):
+    log(" ".join(a)); print(json.dumps({"tree": [{"path": "a", "type": "blob", "sha": "x"}]})); sys.exit(0)
 if a[:2] == ["run", "list"]:
     print(json.dumps([{"databaseId": 1, "status": "completed", "conclusion": "success", "workflowName": "check",
                        "url": "https://github.com/o/r/actions/runs/1"}])); sys.exit(0)
@@ -141,6 +146,16 @@ grep -qx "pr edit 13 --base main (gh12 on origin: yes)" "$GH_LOG" || fail "retar
 run 0
 [[ "$s5" == "step 5 teardown: ok: space w5 already closed; worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already deleted; remote branch gh12 already deleted from origin" ]] || fail "rerun: $s5"
 
+# The no-CI fact (rule: octo-feather-lane --help, post-merge step 2; exosurface, gh33): the same teardown runs; a rerun
+# prints already for each.
+fresh; lane "$lanes/archive/gh12.toml" w5:p1 12
+NO_CI=1 run 0
+grep -qxF "step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit ${M:0:12} (gh api repos/o/r/git/trees/${M:0:12}), so no push run can appear; nothing to wait for" <<<"$out" || fail "no CI step 2: $out"
+[[ "$s5" == "step 5 teardown: ok: space w5 closed; worktree $t/wt removed; PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin" && "$last" == "$s4; step 5 teardown ok" ]] || fail "no CI teardown: $out"
+grep -qx "api repos/o/r/git/trees/$M" "$GH_LOG" || fail "no CI fact not read at the merge commit: $(cat "$GH_LOG")"
+NO_CI=1 run 0
+[[ "$s5" == "step 5 teardown: ok: space w5 already closed; worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already deleted; remote branch gh12 already deleted from origin" && "$last" == "$s4; step 5 teardown ok" ]] || fail "no CI rerun: $out"
+
 # Shared space: another open lane's supervisor, or the director's pane, has the prefix: only the supervisor's tab.
 fresh; lane "$lanes/archive/gh12.toml" w6:p1 12; lane "$lanes/other.toml" w6:p3 14
 run 0; [[ "$(cat "$CLOSE_LOG")" == w6:p1 && "$s5" == "step 5 teardown: ok: tab of w6:p1 closed in shared space w6; "* ]] || fail "shared lane: $(cat "$CLOSE_LOG") $s5"
@@ -168,5 +183,5 @@ fresh; lane "$lanes/archive/gh12.toml" w5:p1 12; git -C "$t/wt" commit -q --allo
 run 1; [[ "$s5" == "step 5 teardown: stopped: "*"local branch gh12 kept: it is not an ancestor of merge commit ${M:0:12}"* ]] || fail "unmerged: $s5"
 kept unmerged
 echo "lane-post-merge-teardown: ok (not archived pending exit 3; other PR stops; own space closed, shared only the tab;" \
-  "worktree removed, PRs retargeted before the remote delete, branches deleted; rerun already; dirty, review root," \
+  "worktree removed, PRs retargeted before the remote delete, branches deleted; rerun already; the same on a no-CI repo; dirty, review root," \
   "kit install, main worktree, unmerged branch kept, exit 1)"

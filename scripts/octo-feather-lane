@@ -115,7 +115,15 @@ on Linear), and no other line closes a GitHub issue. The section, up to the next
   ## Merge ask
   Head: <sha>                     the PR's head H' (7+ hex prefix)
   Checks: <summary>               verified: every check on that head SUCCESS, none pending; a SKIPPED one only
-                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head)
+                                  as the judged head's green run, carried by the Judged proof (#lanes-one-head);
+                                  none reported (an empty rollup, never a skipped check)
+                                  passes only when both hold, else fails naming the one that does not or
+                                  could not be read: the no-CI fact for that head (post-merge step 2), and
+                                  the PR base's required-check policy requires no check: `gh api
+                                  repos/<repo>/branches/<base>` protection.required_status_checks empty, and
+                                  `gh api repos/<repo>/rules/branches/<base>` no required_status_checks rule
+                                  (its plan-has-no-rulesets 403 counts as none). Printed after the section
+                                  as `Checks: no CI: ...`, naming each fact and source
   Judged: <proof>                 = the line the check prints for H to H' (below)
   | criterion | qc verdict | judged | evidence |
   |---|---|---|---|
@@ -349,7 +357,15 @@ step 4 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
-                   lists is completed; ok only when every run concluded success
+                   lists is completed; ok only when every run concluded success, or cancelled and superseded. A run
+                   cancelled (a later push's concurrency cancel-in-progress) is superseded by the first later push
+                   run of its workflow (`gh run list --branch <base> --event push --workflow <name>`, a higher run
+                   id) whose headSha contains the merge commit (`gh api repos/<repo>/compare/<merge>...<headSha>`
+                   ahead or identical): watched to its end, ok on success naming both runs, red stops; cancelled in
+                   turn, its own successor counts; none within --wait stops as red. The no-CI fact: while gh lists
+                   no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github, then workflows) finds no
+                   .github/workflows/*.yml or *.yaml file; then step 2 is ok at once, `no CI: no workflow file
+                   ...`, with no wait. merge-ask reads the same fact at the PR head
   step 3 kit refresh  the live kit install (this script's kit dir, or env OCTO_FEATHER_KIT_INSTALL): only when
                    `gh repo view` names the PR's repo and the install's origin alike, else `kit install unchanged:
                    PR in <repo>, install is <repo>`. Stops, nothing changed, on a dirty install (git status
@@ -953,6 +969,78 @@ def pr_number(s: str) -> int:
     if not re.fullmatch(r"[1-9][0-9]*", s or ""):
         raise Refuse(f"PR must be a positive integer, got {s!r}")
     return int(s)
+
+
+def ci_workflows(repo: str | None, sha: str) -> tuple[list[str], str]:
+    """The no-CI fact (rule: --help, post-merge step 2): the workflow files at commit SHA and the source as printed."""
+    name = repo or "{owner}/{repo}"   # gh fills the placeholders from this directory's repo
+    src = f"gh api repos/{repo or '<this repo>'}/git/trees/{sha[:12]}"
+    tree = sha
+    for part in (".github", "workflows", None):
+        out = gh(["api", f"repos/{name}/git/trees/{tree}"], f"check gh auth status and that {sha[:12]} is in {repo or 'this repo'}, then rerun")
+        try:
+            entries = [(str(e["path"]), str(e["type"]), str(e["sha"])) for e in json.loads(out)["tree"]]
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh api git/trees/{tree[:12]} printed no tree ({out[:100]!r}): check the gh on PATH")
+        if part is None:
+            return [f".github/workflows/{p}" for p, t, _ in entries if t == "blob" and p.endswith((".yml", ".yaml"))], src
+        tree = next((s for p, t, s in entries if p == part and t == "tree"), "")
+        if not tree:
+            return [], src
+    return [], src   # unreachable: the loop returns at its last part
+
+
+# GitHub's answer to rules/branches on a plan without rulesets, as gh prints it on stderr `gh: <it> (HTTP 403)` (private
+# repo, free plan; 0xTomDaniel/exosurface read 2026-11-05): no ruleset can be in force.
+NO_RULESETS = "Upgrade to GitHub Pro or make this repository public to enable this feature."
+
+
+def required_none(repo: str | None, base: str) -> str:
+    """The base branch's required-check policy, read from GitHub, when it requires no check: the line naming both
+    sources. Refuse naming the required checks, or the source that could not be read (fail closed)."""
+    name = repo or "{owner}/{repo}"
+    shown = f"repos/{repo or '<this repo>'}"
+    def read(path: str) -> tuple[object, str]:
+        try:
+            p = subprocess.run(["gh", "api", f"repos/{name}/{path}"], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+        except FileNotFoundError:
+            raise Refuse("gh not on PATH: install the GitHub CLI and log in (just install-check)")
+        err = (p.stderr or p.stdout).strip().splitlines()
+        if p.returncode:
+            return None, err[-1][:200] if err else f"exit {p.returncode}"
+        try:
+            return json.loads(p.stdout), ""
+        except ValueError:
+            return None, f"no JSON ({p.stdout[:80]!r})"
+    br, why = read(f"branches/{base}")
+    try:
+        prot = cast("dict[str, object]", cast("dict[str, object]", br)["protection"])
+        rsc = cast("dict[str, list[dict[str, object]]]", prot["required_status_checks"])
+        req = sorted({str(c) for c in rsc["contexts"]} | {str(c["context"]) for c in rsc["checks"]})
+    except (KeyError, TypeError):
+        raise Refuse(f"the required checks of base {base} could not be read (gh api {shown}/branches/{base}: "
+                     f"{why or 'no protection.required_status_checks'}): fix gh auth status or read access, then rerun")
+    rules, why = read(f"rules/branches/{base}")
+    if why == f"gh: {NO_RULESETS} (HTTP 403)":
+        rsrc = f"gh api {shown}/rules/branches/{base}: rulesets unavailable on this plan, none in force"
+    elif isinstance(rules, list):
+        try:
+            for r in cast("list[dict[str, object]]", rules):
+                if r["type"] == "required_status_checks":
+                    params = cast("dict[str, list[dict[str, object]]]", r["parameters"])
+                    req += sorted(str(c["context"]) for c in params["required_status_checks"])
+        except (KeyError, TypeError):
+            raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                         "a required_status_checks rule with no contexts): check the gh on PATH, then rerun")
+        rsrc = f"gh api {shown}/rules/branches/{base}: no required_status_checks rule"
+    else:
+        raise Refuse(f"the rulesets of base {base} could not be read (gh api {shown}/rules/branches/{base}: "
+                     f"{why or 'no rule list'}): fix gh auth status or read access, then rerun")
+    if req:
+        raise Refuse(f"base {base} requires checks {', '.join(dict.fromkeys(req))} (gh api {shown}/branches/{base}, "
+                     f"{shown}/rules/branches/{base}): push the head and wait for them")
+    return (f"base {base} requires no check (gh api {shown}/branches/{base}: no required status check; {rsrc}), "
+            "so required checks are none")
 
 
 def take_repo(args: list[str]) -> tuple[list[str], str | None]:
@@ -1767,8 +1855,22 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
     rollup = d["statusCheckRollup"] or []
     failed, pending = bad_checks(rollup)
-    if not rollup:
-        miss.append(f"Checks: none reported on head {head[:12]}; push the head and wait for CI")
+    no_ci = ""
+    if not rollup:   # the rule: --help, merge-ask Checks line
+        try:   # an unreadable no-CI fact is this one item failing closed, never an abort of the whole check
+            wf, src = ci_workflows(repo, cast("str", head))
+        except Refuse as e:
+            wf, src = None, str(e)
+        if wf is None:
+            miss.append(f"Checks: none reported on head {head[:12]}, and the no-CI fact could not be read ({src})")
+        elif wf:
+            miss.append(f"Checks: none reported on head {head[:12]}, its workflows {', '.join(wf)}; push the head and wait for CI")
+        else:
+            try:
+                no_ci = (f"no CI: no workflow file under .github/workflows at head {head[:12]} ({src}); "
+                         + required_none(repo, cast("str", pr_view(pr, "baseRefName", repo)["baseRefName"])))
+            except Refuse as e:
+                miss.append(f"Checks: none reported on head {head[:12]}, no workflow file there ({src}), but {e}")
     if failed:
         miss.append(f"Checks: failing on head {head[:12]}: {', '.join(failed)}; fix them (a red check is never pre-existing)")
     if pending:
@@ -1954,6 +2056,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
+    if no_ci:
+        print(f"\nChecks: {no_ci}")
     if carried:
         print("\nChecks carried from the judged head (issue-lifecycle #lanes-one-head):\n" + "\n".join(carried))
     if sources:
@@ -3297,12 +3401,17 @@ def pm_runs(pm: PostMerge) -> list[dict[str, str]]:
 def pm_ci(pm: PostMerge) -> str:
     """Step 2: wait for main CI on the merge commit; ok only when every push run concluded success."""
     m, deadline = pm.merge[:12], time.monotonic() + pm.wait
-    runs = pm_runs(pm)
+    runs, wf = pm_runs(pm), list[str]()
+    if not runs:   # the no-CI fact (--help, post-merge step 2)
+        wf, src = ci_workflows(pm.repo, pm.merge)
+        if not wf:
+            return (f"no CI: no workflow file under .github/workflows at merge commit {m} ({src}), "
+                    "so no push run can appear; nothing to wait for")
     while not runs:
         left = deadline - time.monotonic()
         if left <= 0:
-            raise Refuse(f"no push run on merge commit {m} within {pm.wait}s: check the workflows that run on push to "
-                         f"{pm.base} (gh run list --commit {pm.merge}), then rerun")
+            raise Refuse(f"no push run on merge commit {m} within {pm.wait}s, its workflows {', '.join(wf)}: check the ones "
+                         f"that run on push to {pm.base} (gh run list --commit {pm.merge}), then rerun")
         time.sleep(min(PM_POLL, left)); runs = pm_runs(pm)
     while pending := [x for x in runs if x["status"] != "completed"]:
         failed: dict[str, str] = {}
@@ -3318,12 +3427,61 @@ def pm_ci(pm: PostMerge) -> str:
                              f"reads {x['status']}: {x['url']}; check gh auth status, then rerun")
         if not failed and any(x["status"] != "completed" for x in runs):
             time.sleep(PM_POLL)
-    red = [x for x in runs if x["conclusion"] != "success"]
+    red = [x for x in runs if x["conclusion"] not in ("success", "cancelled")]
     if red:
         raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
                      + f"; fix {pm.base} first, nothing after this step runs")
-    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: "
-            + ", ".join(f"{x['workflowName']} {x['url']}" for x in runs))
+    # a run cancelled by a newer push (concurrency cancel-in-progress) defers to that push's run (--help, step 2)
+    shown = [f"{x['workflowName']} {x['url']}" if x["conclusion"] != "cancelled" else pm_superseded(pm, x) for x in runs]
+    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: " + ", ".join(shown))
+
+
+PM_BASE_FIELDS = PM_FIELDS + ",headSha"
+
+
+def pm_contains(pm: PostMerge, sha: str, seen: dict[str, bool]) -> bool:
+    """Whether commit SHA has the merge commit as ancestor: `gh api repos/<repo>/compare/<merge>...<sha>` ahead or identical."""
+    if sha not in seen:
+        out = gh(["api", f"repos/{pm.repo or '{owner}/{repo}'}/compare/{pm.merge}...{sha}", "--jq", ".status"],
+                 f"check gh auth status and that {sha[:12]} is in the repo of PR #{pm.pr}, then rerun")
+        seen[sha] = out.strip() in ("ahead", "identical")
+    return seen[sha]
+
+
+def pm_superseded(pm: PostMerge, gone: dict[str, str]) -> str:
+    """A cancelled push run on the merge commit: the run that superseded it, waited for (rule: --help, post-merge step 2)."""
+    m, deadline, seen, first, failed = pm.merge[:12], time.monotonic() + pm.wait, dict[str, bool](), gone, ""
+    while True:
+        out = gh(["run", "list", "--branch", pm.base, "--event", "push", "--workflow", gone["workflowName"], "--limit", "20",
+                  "--json", PM_BASE_FIELDS, *pm.r()], f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+        try:
+            later = [{f: "" if r[f] is None else str(r[f]) for f in PM_BASE_FIELDS.split(",")} for r in json.loads(out)]
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        later = [r for r in later if r["workflowName"] == gone["workflowName"] and int(r["databaseId"]) > int(gone["databaseId"])
+                 and r["headSha"] != pm.merge and pm_contains(pm, r["headSha"], seen)]
+        if not later:
+            if time.monotonic() >= deadline:
+                raise Refuse(f"main CI red on {m}: {gone['workflowName']} cancelled {gone['url']}, and no later push run of "
+                             f"{gone['workflowName']} on {pm.base} containing {m} within {pm.wait}s; check {pm.base}'s runs "
+                             "(gh run list --branch), then rerun")
+            time.sleep(PM_POLL); continue
+        new = min(later, key=lambda r: int(r["databaseId"]))   # the push that cancelled it, or the next
+        if new["status"] != "completed":
+            if failed == new["databaseId"]:   # its watch failed and it still runs: gh's own failure
+                raise Refuse(f"gh run watch {failed} failed while {new['workflowName']} reads {new['status']}: {new['url']}; "
+                             "check gh auth status, then rerun")
+            p = subprocess.run(["gh", "run", "watch", new["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            failed = new["databaseId"] if p.returncode else ""
+            continue   # re-list: its conclusion, or a newer run that cancelled it
+        via = f"{first['workflowName']} {first['url']} cancelled, superseded by {new['url']} on {new['headSha'][:12]} (contains {m})"
+        if new["conclusion"] == "cancelled":
+            gone = new; deadline = time.monotonic() + pm.wait; continue
+        if new["conclusion"] != "success":
+            raise Refuse(f"main CI red on {m}: {via}, {new['conclusion'] or 'no conclusion'}; fix {pm.base} first, "
+                         "nothing after this step runs")
+        return via
 
 
 # Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos

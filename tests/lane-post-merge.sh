@@ -21,15 +21,27 @@ mkdir -p "$HOME" "$t/bin" "$t/target"
 git -C "$t/target" init -q   # the director's target repo, the current directory of every run
 cd "$t/target"
 # Fake gh: pr view from .pr; run list (only --commit <full merge sha> --event push) answers its Nth call with
-# .lists[N] (the last one repeated); run watch exits .watch[id] (default 0); anything else is refused.
+# .lists[N] (the last one repeated); run watch exits .watch[id] (default 0); api repos/<repo>/git/trees/<sha> (the no-CI
+# fact) answers from .trees; run list --branch main --event push --workflow W (the base's later runs, for a cancelled run)
+# answers its Nth call with .base[N] filtered to W; api repos/<repo>/compare/<merge>...<sha> --jq .status answers
+# .compare[sha] (default diverged); anything else is refused.
 cat > "$t/bin/gh" <<'EOF'
 #!/usr/bin/env python3
-import json, os, sys
+import json, os, re, sys
 a = sys.argv[1:]; open(os.environ["GH_LOG"], "a").write(" ".join(a) + "\n")
 db = json.load(open(os.environ["GH_STORE"]))
 def opt(f): return a[a.index(f) + 1] if f in a else None
 if a[:3] == ["pr", "view", "7"]:
     print(json.dumps({k: db["pr"][k] for k in opt("--json").split(",")})); sys.exit(0)
+if a[:2] == ["run", "list"] and opt("--branch"):
+    n = len(open(os.environ["GH_LISTS"] + ".base").read()) if os.path.exists(os.environ["GH_LISTS"] + ".base") else 0
+    open(os.environ["GH_LISTS"] + ".base", "a").write("x")
+    ok = opt("--branch") == "main" and opt("--event") == "push"
+    runs = [r for r in db["base"][min(n, len(db["base"]) - 1)] if r["workflowName"] == opt("--workflow")] if ok else []
+    print(json.dumps([{k: r[k] for k in opt("--json").split(",")} for r in runs])); sys.exit(0)
+if a[0] == "api" and (m := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/compare/(\w+)\.\.\.(\w+)", a[1])) and a[2:] == ["--jq", ".status"]:
+    if m[1] != db["pr"]["mergeCommit"]["oid"]: sys.exit(1)
+    print(db["compare"].get(m[2], "diverged")); sys.exit(0)
 if a[:2] == ["run", "list"]:
     n = len(open(os.environ["GH_LISTS"]).read()) if os.path.exists(os.environ["GH_LISTS"]) else 0
     open(os.environ["GH_LISTS"], "a").write("x")
@@ -39,6 +51,8 @@ if a[:2] == ["run", "list"]:
 if a[:2] == ["repo", "view"] and opt("--json") == "nameWithOwner":   # no repo: this directory's, o/r
     r = a[2] if a[2] != "--json" else "o/r"
     print(json.dumps({"nameWithOwner": r.removeprefix("https://github.com/").removesuffix(".git")})); sys.exit(0)
+if a[0] == "api" and (m := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/git/trees/(\w+)", a[1])) and m[1] in db["trees"]:
+    print(json.dumps({"sha": m[1], "tree": [dict(zip(("path", "type", "sha"), x)) for x in db["trees"][m[1]]]})); sys.exit(0)
 if a[:2] == ["run", "watch"] and "--exit-status" in a:
     rc = db.get("watch", {}).get(a[2], 0)
     print(f"Run {a[2]} watched", file=sys.stderr if rc else sys.stdout); sys.exit(rc)
@@ -74,15 +88,21 @@ install() { # AT [REPO]: a fresh install clone detached at AT, origin https://gi
 }
 install "$B" o/kit   # steps 1-2 below: the PR's repo is not the install's, step 3 leaves it unchanged
 H=1234567890abcdef1234567890abcdef12345678
-store() { # STATE HEAD LISTS-JSON [WATCH-JSON]
-  jq -n --arg s "$1" --arg h "$2" --arg m "$M" --argjson l "$3" --argjson w "${4:-{\}}" \
+store() { # STATE HEAD LISTS-JSON [WATCH-JSON]; env WF: the merge commit's .github/workflows entries, JSON
+  # [[name, type]...] (default a check.yml), or null for no .github at all, or "none" for no tree gh can read;
+  # env BASE: the base's later push runs per call (default [[]]); env CMP: {sha: compare status}
+  jq -n --arg s "$1" --arg h "$2" --arg m "$M" --argjson l "$3" --argjson w "${4:-{\}}" --argjson wf "${WF-[[\"check.yml\", \"blob\"]]}" \
+    --argjson base "${BASE-[[]]}" --argjson cmp "${CMP-{\}}" \
     '{pr: {state: $s, headRefOid: $h, mergeCommit: (if $s == "MERGED" then {oid: $m} else null end),
-           baseRefName: "main", headRefName: "gh7"}, lists: $l, watch: $w}' > "$GH_STORE"
-  rm -f "$GH_LISTS"; : > "$GH_LOG"
+           baseRefName: "main", headRefName: "gh7"}, lists: $l, watch: $w, base: $base, compare: $cmp,
+      trees: (if $wf == "none" then {} elif $wf == null then {($m): [["README.md", "blob", "r"]]}
+              else {($m): [["README.md", "blob", "r"], [".github", "tree", "g"]], g: [["workflows", "tree", "w"]],
+                    w: [$wf[] | . + ["b"]]} end)}' > "$GH_STORE"
+  rm -f "$GH_LISTS" "$GH_LISTS.base"; : > "$GH_LOG"
 }
-run1() { # name status conclusion id
-  jq -nc --arg n "$1" --arg s "$2" --arg c "$3" --argjson i "$4" \
-    '{databaseId: $i, status: $s, conclusion: $c, workflowName: $n, url: "https://github.com/o/r/actions/runs/\($i)"}'
+run1() { # name status conclusion id [head sha, default the merge commit]
+  jq -nc --arg n "$1" --arg s "$2" --arg c "$3" --argjson i "$4" --arg h "${5:-$M}" \
+    '{databaseId: $i, status: $s, conclusion: $c, workflowName: $n, headSha: $h, url: "https://github.com/o/r/actions/runs/\($i)"}'
 }
 run() { # WANT ARGS...: octo-feather-lane with the fake gh first on PATH
   local want="$1" rc; shift
@@ -90,7 +110,7 @@ run() { # WANT ARGS...: octo-feather-lane with the fake gh first on PATH
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"
   ! grep -q Traceback <<<"$err" || fail "'$*' printed a traceback: $err"
   last="$(tail -n1 <<<"$out")"
-  ! grep -qv '^\(pr view\|run list\|run watch\|repo view\) ' "$GH_LOG" || fail "'$*' ran a gh write: $(cat "$GH_LOG")"
+  ! grep -qv '^\(pr view\|run list\|run watch\|repo view\|api repos/[^ ]*/git/trees/[^ ]*$\|api repos/[^ ]*/compare/[^ ]* --jq .status$\)' "$GH_LOG" || fail "'$*' ran a gh write: $(cat "$GH_LOG")"
 }
 green="$(run1 check completed success 11)" lint="$(run1 lint completed success 12)"
 red="$(run1 check completed failure 13)" busy="$(run1 check in_progress '' 11)"
@@ -140,8 +160,64 @@ run 1 post-merge 7 "$H" --lane gh7
 # No run within the bound: stop naming it.
 store MERGED "$H" "[[]]"
 run 1 post-merge 7 "$H" --lane gh7 --wait 0
-[[ "$out" == *"step 2 main CI: stopped: no push run on merge commit ${M:0:12} within 0s"* ]] || fail "no run: $out"
+[[ "$out" == *"step 2 main CI: stopped: no push run on merge commit ${M:0:12} within 0s, its workflows .github/workflows/check.yml"* ]] || fail "no run: $out"
 [[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI stopped; step 3 kit refresh not run; step 4 tell supervisors not run; step 5 teardown not run" ]] || fail "no run summary: $last"
+# A tree gh cannot read is no no-CI fact: stop naming the read.
+WF='"none"' store MERGED "$H" "[[]]"
+run 1 post-merge 7 "$H" --lane gh7 --wait 0
+[[ "$out" == *"step 2 main CI: stopped: gh api repos/{owner}/{repo}/git/trees/$M failed (fake gh: refused api repos/{owner}/{repo}/git/trees/$M)"* ]] || fail "unreadable tree: $out"
+
+# A run cancelled by a later push (concurrency cancel-in-progress; rule: octo-feather-lane --help, post-merge step 2)
+# defers to the first later push run of its workflow on main whose head contains the merge commit (gh compare ahead):
+# ok only on its success, naming both. SN contains M, as does SP; SO does not (diverged), so its run never counts.
+SN="$(printf 'a%.0s' {1..40})" SO="$(printf 'b%.0s' {1..40})" SP="$(printf 'c%.0s' {1..40})"
+gone="$(run1 check completed cancelled 21)" old="$(run1 check completed success 20 "$SO")"
+via="check https://github.com/o/r/actions/runs/21 cancelled, superseded by https://github.com/o/r/actions/runs/22 on ${SN:0:12} (contains ${M:0:12})"
+export CMP="{\"$SN\": \"ahead\", \"$SP\": \"identical\", \"$SO\": \"diverged\"}"
+BASE="[[$old, $(run1 check completed failure 26 "$SP"), $(run1 check completed success 22 "$SN"), $(run1 check completed success 23 "$SO"), $(run1 lint completed failure 24 "$SN")]]" \
+  store MERGED "$H" "[[$gone, $lint]]"
+run 3 post-merge 7 "$H" --lane gh7 --wait 0
+grep -qxF "step 2 main CI: ok: 2 push runs on ${M:0:12} concluded success: $via, lint https://github.com/o/r/actions/runs/12" <<<"$out" || fail "superseded: $out"
+grep -qx "run list --branch main --event push --workflow check --limit 20 --json databaseId,status,conclusion,workflowName,url,headSha" "$GH_LOG" \
+  && grep -qx "api repos/{owner}/{repo}/compare/$M...$SN --jq .status" "$GH_LOG" || fail "superseded reads: $(cat "$GH_LOG")"
+# The later run still running is watched to its end.
+BASE="[[$(run1 check in_progress '' 22 "$SN")], [$(run1 check completed success 22 "$SN")]]" store MERGED "$H" "[[$gone]]"
+run 3 post-merge 7 "$H" --lane gh7 --wait 0
+grep -qxF "step 2 main CI: ok: 1 push run on ${M:0:12} concluded success: $via" <<<"$out" && grep -qx "run watch 22 --exit-status" "$GH_LOG" || fail "superseded watched: $out"
+# The later run cancelled in turn defers again (P, identical counts as containing).
+BASE="[[$(run1 check completed cancelled 22 "$SN")], [$(run1 check completed cancelled 22 "$SN"), $(run1 check completed success 25 "$SP")]]" store MERGED "$H" "[[$gone]]"
+run 3 post-merge 7 "$H" --lane gh7 --wait 0
+grep -qxF "step 2 main CI: ok: 1 push run on ${M:0:12} concluded success: check https://github.com/o/r/actions/runs/21 cancelled, superseded by https://github.com/o/r/actions/runs/25 on ${SP:0:12} (contains ${M:0:12})" <<<"$out" || fail "superseded twice: $out"
+# The later run red: stop naming both.
+BASE="[[$(run1 check completed failure 22 "$SN")]]" store MERGED "$H" "[[$gone]]"
+run 1 post-merge 7 "$H" --lane gh7 --wait 0
+grep -qxF "step 2 main CI: stopped: main CI red on ${M:0:12}: $via, failure; fix main first, nothing after this step runs" <<<"$out" || fail "superseded red: $out"
+# No later run containing M within the bound (only an older one, and one on a diverged head): stop as red.
+BASE="[[$old, $(run1 check completed success 23 "$SO")]]" store MERGED "$H" "[[$gone]]"
+run 1 post-merge 7 "$H" --lane gh7 --wait 0
+grep -qxF "step 2 main CI: stopped: main CI red on ${M:0:12}: check cancelled https://github.com/o/r/actions/runs/21, and no later push run of check on main containing ${M:0:12} within 0s; check main's runs (gh run list --branch), then rerun" <<<"$out" || fail "no superseding run: $out"
+# Another run red beside a cancelled one: red stops first, no later-run read.
+BASE="[[$(run1 check completed success 22 "$SN")]]" store MERGED "$H" "[[$gone, $(run1 lint completed failure 12)]]"
+run 1 post-merge 7 "$H" --lane gh7 --wait 0
+[[ "$out" == *"step 2 main CI: stopped: main CI red on ${M:0:12}: lint failure https://github.com/o/r/actions/runs/12;"* ]] && ! grep -q -- '--branch' "$GH_LOG" || fail "red beside cancelled: $out"
+unset CMP SN SO SP
+
+# A workflow file of either suffix, beside other files, still means CI: no run within the bound stops.
+WF='[["deploy.yaml", "blob"], ["README.md", "blob"], ["ci", "tree"]]' store MERGED "$H" "[[]]"
+run 1 post-merge 7 "$H" --lane gh7 --wait 0 --repo o/r
+[[ "$out" == *"stopped: no push run on merge commit ${M:0:12} within 0s, its workflows .github/workflows/deploy.yaml:"* ]] || fail "yaml workflow: $out"
+grep -qx "api repos/o/r/git/trees/$M" "$GH_LOG" || fail "--repo tree read: $(cat "$GH_LOG")"
+
+# The no-CI fact (rule: octo-feather-lane --help, post-merge step 2): no .github, and .github/workflows with no .yml or
+# .yaml file; one run list and no wait (a --wait bound that would stop a CI repo), steps 3-5 run; a rerun the same.
+noci="step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit ${M:0:12} (gh api repos/<this repo>/git/trees/${M:0:12}), so no push run can appear; nothing to wait for"
+for wf in null '[["README.md", "blob"], ["ci.yml.off", "blob"], ["old.yml", "tree"]]' null; do
+  WF="$wf" store MERGED "$H" "[[]]"
+  run 3 post-merge 7 "$H" --lane gh7 --wait 1
+  grep -qxF "$noci" <<<"$out" || fail "no CI ($wf): $out"
+  [[ "$last" == "post-merge gh7 PR #7: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 tell supervisors ok; step 5 teardown pending" ]] || fail "no CI summary: $out"
+  [[ "$(grep -c '^run ' "$GH_LOG")" == 1 ]] || fail "no CI listed runs again or watched: $(cat "$GH_LOG")"
+done
 
 # Step 3, the PR's repo is the install's (o/r). Behind: fetch, fast-forward to M, still detached; no mise.toml at M,
 # so no mise; each refresh command runs in the install, install-check for the target repo.
@@ -188,6 +264,9 @@ install "$B"; touch "$t/kit/d"; k add d; k commit -qm d; D="$(k rev-parse HEAD)"
 run 1 post-merge 7 "$H"; [[ "$err" == *"usage: octo-feather-lane post-merge PR HEAD --lane NAME"* ]] || fail "usage: $err"
 run 1 post-merge 7 nothex --lane gh7; [[ "$err" == *"HEAD must be"* ]] || fail "bad head: $err"
 echo "lane-post-merge: ok (step 1 stops on not merged, other head, gh failure; step 2 watches to the end, green passes," \
-  "red names the run URL, failed watch and no run in bound stop; step 3 fast-forwards a behind install, no move at or" \
+  "red names the run URL, failed watch and no run in bound stop (naming its workflows), an unreadable tree stops; a" \
+  "cancelled run defers to the first later push run of its workflow on main containing the merge commit (watched, ok on" \
+  "success naming both, red or none in bound stops, cancelled again defers again); no workflow file (no .github, or" \
+  "none in .github/workflows) is the no-CI fact: step 2 ok naming it, no wait, steps 3-5 run, rerun the same; step 3 fast-forwards a behind install, no move at or" \
   "past, mise only with mise.toml, stops on dirty, diverged, a failing refresh, a missing pinned Python (no download," \
   "names uv python install --no-bin <pin>); other repo unchanged; summary last)"
