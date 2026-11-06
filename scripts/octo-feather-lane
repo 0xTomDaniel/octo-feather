@@ -337,7 +337,12 @@ step 4 tells no lane twice.
   step 1 merged    `gh pr view PR`: the PR is MERGED, its head is HEAD (7+ hex prefix), and it has a merge commit
   step 2 main CI   `gh run list --commit <merge commit> --event push`: waits up to --wait SECONDS (default 300)
                    for a run to appear, then `gh run watch <id> --exit-status` on each run until every run gh
-                   lists is completed; ok only when every run concluded success. The no-CI fact: while gh lists
+                   lists is completed; ok only when every run concluded success, or cancelled and superseded. A run
+                   cancelled (a later push's concurrency cancel-in-progress) is superseded by the first later push
+                   run of its workflow (`gh run list --branch <base> --event push --workflow <name>`, a higher run
+                   id) whose headSha contains the merge commit (`gh api repos/<repo>/compare/<merge>...<headSha>`
+                   ahead or identical): watched to its end, ok on success naming both runs, red stops; cancelled in
+                   turn, its own successor counts; none within --wait stops as red. The no-CI fact: while gh lists
                    no run, `gh api repos/<repo>/git/trees/<merge commit>` (then .github, then workflows) finds no
                    .github/workflows/*.yml or *.yaml file; then step 2 is ok at once, `no CI: no workflow file
                    ...`, with no wait. merge-ask reads the same fact at the PR head
@@ -3150,12 +3155,61 @@ def pm_ci(pm: PostMerge) -> str:
                              f"reads {x['status']}: {x['url']}; check gh auth status, then rerun")
         if not failed and any(x["status"] != "completed" for x in runs):
             time.sleep(PM_POLL)
-    red = [x for x in runs if x["conclusion"] != "success"]
+    red = [x for x in runs if x["conclusion"] not in ("success", "cancelled")]
     if red:
         raise Refuse(f"main CI red on {m}: " + ", ".join(f"{x['workflowName']} {x['conclusion'] or 'no conclusion'} {x['url']}" for x in red)
                      + f"; fix {pm.base} first, nothing after this step runs")
-    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: "
-            + ", ".join(f"{x['workflowName']} {x['url']}" for x in runs))
+    # a run cancelled by a newer push (concurrency cancel-in-progress) defers to that push's run (--help, step 2)
+    shown = [f"{x['workflowName']} {x['url']}" if x["conclusion"] != "cancelled" else pm_superseded(pm, x) for x in runs]
+    return (f"{len(runs)} push run{'s' * (len(runs) != 1)} on {m} concluded success: " + ", ".join(shown))
+
+
+PM_BASE_FIELDS = PM_FIELDS + ",headSha"
+
+
+def pm_contains(pm: PostMerge, sha: str, seen: dict[str, bool]) -> bool:
+    """Whether commit SHA has the merge commit as ancestor: `gh api repos/<repo>/compare/<merge>...<sha>` ahead or identical."""
+    if sha not in seen:
+        out = gh(["api", f"repos/{pm.repo or '{owner}/{repo}'}/compare/{pm.merge}...{sha}", "--jq", ".status"],
+                 f"check gh auth status and that {sha[:12]} is in the repo of PR #{pm.pr}, then rerun")
+        seen[sha] = out.strip() in ("ahead", "identical")
+    return seen[sha]
+
+
+def pm_superseded(pm: PostMerge, gone: dict[str, str]) -> str:
+    """A cancelled push run on the merge commit: the run that superseded it, waited for (rule: --help, post-merge step 2)."""
+    m, deadline, seen, first, failed = pm.merge[:12], time.monotonic() + pm.wait, dict[str, bool](), gone, ""
+    while True:
+        out = gh(["run", "list", "--branch", pm.base, "--event", "push", "--workflow", gone["workflowName"], "--limit", "20",
+                  "--json", PM_BASE_FIELDS, *pm.r()], f"check gh auth status and the repo of PR #{pm.pr}, then rerun")
+        try:
+            later = [{f: "" if r[f] is None else str(r[f]) for f in PM_BASE_FIELDS.split(",")} for r in json.loads(out)]
+        except (ValueError, KeyError, TypeError):
+            raise Refuse(f"gh run list printed no run list ({out[:100]!r}): check the gh on PATH (gh --version)")
+        later = [r for r in later if r["workflowName"] == gone["workflowName"] and int(r["databaseId"]) > int(gone["databaseId"])
+                 and r["headSha"] != pm.merge and pm_contains(pm, r["headSha"], seen)]
+        if not later:
+            if time.monotonic() >= deadline:
+                raise Refuse(f"main CI red on {m}: {gone['workflowName']} cancelled {gone['url']}, and no later push run of "
+                             f"{gone['workflowName']} on {pm.base} containing {m} within {pm.wait}s; check {pm.base}'s runs "
+                             "(gh run list --branch), then rerun")
+            time.sleep(PM_POLL); continue
+        new = min(later, key=lambda r: int(r["databaseId"]))   # the push that cancelled it, or the next
+        if new["status"] != "completed":
+            if failed == new["databaseId"]:   # its watch failed and it still runs: gh's own failure
+                raise Refuse(f"gh run watch {failed} failed while {new['workflowName']} reads {new['status']}: {new['url']}; "
+                             "check gh auth status, then rerun")
+            p = subprocess.run(["gh", "run", "watch", new["databaseId"], "--exit-status", *pm.r()],
+                               capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            failed = new["databaseId"] if p.returncode else ""
+            continue   # re-list: its conclusion, or a newer run that cancelled it
+        via = f"{first['workflowName']} {first['url']} cancelled, superseded by {new['url']} on {new['headSha'][:12]} (contains {m})"
+        if new["conclusion"] == "cancelled":
+            gone = new; deadline = time.monotonic() + pm.wait; continue
+        if new["conclusion"] != "success":
+            raise Refuse(f"main CI red on {m}: {via}, {new['conclusion'] or 'no conclusion'}; fix {pm.base} first, "
+                         "nothing after this step runs")
+        return via
 
 
 # Step 3 (issue 397): the live kit install, the kit dir this script runs from, or OCTO_FEATHER_KIT_INSTALL (tests and demos
