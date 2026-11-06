@@ -17,7 +17,7 @@ import os
 from testkit import ROOT, Ran, Scratch, kit, main
 
 LINEAR = ROOT / ".agents" / "skills" / "linear" / "scripts"
-STORE = {
+STORE: dict[str, object] = {
     "workspace": "acme",
     "issues": {
         k: {"title": title, "description": "t", "state": state, "parent": parent, "blocked_by": []}

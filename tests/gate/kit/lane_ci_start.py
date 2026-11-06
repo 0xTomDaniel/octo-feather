@@ -67,7 +67,7 @@ class Lane:
             {"name": n, "status": "completed", "conclusion": "skipped", "html_url": "u1"}
             for n in ("scope", "check")
         ]
-        empty = {"total_count": 0, "workflow_runs": []}
+        empty: dict[str, object] = {"total_count": 0, "workflow_runs": []}
         self.s.gh.tape(
             {
                 f"{API}runs?head_sha={head}&per_page=100": [
