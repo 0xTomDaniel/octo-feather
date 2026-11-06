@@ -1,0 +1,14 @@
+Seeded defect: the criterion-evidence state omits the evidence output: the model judges the criterion and command alone (quality spec #qc-judgment).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 89cc21f..79c0012 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -484,7 +484,7 @@ def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str,
+     loader.exec_module(qa)
+     base: dict[str, Any] = {"judgment": qa.JUDGMENT, "question": ADVICE, "model": None}
+     try:   # every error here is the advice's, never the result's: shown as unavailable
+-        got, why = ask(qa, base, ids, [f"Criterion {stem}#{i}: {text[i]}\nCommand: {done[i]['command']}\nOutput:\n{done[i]['output']}"
++        got, why = ask(qa, base, ids, [f"Criterion {stem}#{i}: {text[i]}\nCommand: {done[i]['command']}"
+                                        for i in ids], f"qc-{head[:12]}-{runid}-advice")
+     except (OSError, ValueError, KeyError, TypeError, IndexError, subprocess.SubprocessError) as e:
+         got, why = {}, f"{type(e).__name__}: {e}"

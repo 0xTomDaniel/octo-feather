@@ -39,8 +39,8 @@ FAKES = {
     "pi": FIXTURES / "classify-stub" / "pi",
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
-# way: pi_agent.py (Pi at the agent boundary, an eval case's role run) and github.py (GitHub's
-# issues, for octo-feather-qc-ghsnap to snapshot); each file's header says what it answers.
+# way: pi_agent.py (Pi at the agent boundary, an eval case's role run), and gh.py (above) on a
+# PATH of its own; each file's header says what it answers.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 CLEARED = (
@@ -92,6 +92,13 @@ class Gh:
     def put(self, n: int, d: Mapping[str, object]) -> None:
         (self.dir / "pr" / f"{n}.json").write_text(json.dumps(d))
 
+    def store(self, rel: str, d: object) -> None:
+        """The store's REL (testkit/gh.py: issue/N.json, run/N.json, repo.json, api/PATH.json,
+        pr/N.diff) holding D, JSON unless a str."""
+        p = self.dir / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(d if isinstance(d, str) else json.dumps(d))
+
     def log(self) -> list[str]:
         return (self.dir / "log").read_text().splitlines()
 
@@ -117,6 +124,7 @@ class Scratch:
             "TMPDIR": str(root / "tmp"),
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_GH": str(self.gh.dir),
+            "GH_TOKEN": "testkit-token",  # the caller's gh auth, as the fake gh asks for it
         }
         self.env = env
 

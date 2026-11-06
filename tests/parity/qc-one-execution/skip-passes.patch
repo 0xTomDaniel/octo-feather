@@ -1,0 +1,14 @@
+Seeded defect: a tagged case that skipped is recorded as passed: its criterion judged from a test that never ran (quality spec #acceptance-one-execution-incomplete).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 89cc21f..a4bf0f7 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -589,7 +589,7 @@ def case_outcome(rep: dict[str, Any] | None, note: dict[str, Any] | None) -> tup
+     skipped = next((w for w in ("setup", "call") if out.get(w) == "skipped"), "")
+     for bad, outcome, because in (
+         (note is not None and not note.get("ran"), "not captured", str((note or {}).get("why", "did not run in the qc sandbox"))),
+-        (bool(skipped), "skipped", str((note or {}).get("said") or (why.get(skipped, "").splitlines() or ["skipped"])[-1])),
++        (bool(skipped), "passed", str((note or {}).get("said") or (why.get(skipped, "").splitlines() or ["skipped"])[-1])),
+         (out.get("setup") == "failed", "error", f"setup failed: {why.get('setup', '')[-300:]}"),
+         ("call" not in out, "missing", "its test body never reported"),
+         (out.get("teardown") == "failed", "error", f"teardown failed: {why.get('teardown', '')[-300:]}"),

@@ -1,0 +1,16 @@
+Seeded defect: a failed GitHub snapshot fetch does not abort: the judge starts without its evidence (octo-feather-qc --help, exit 67).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 89cc21f..e17e75b 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -156,8 +156,8 @@ def github_snapshot(skip, runid):
+     try:   # killed mid-fetch (SIGTERM, see main): the partial snapshot goes too
+         p = subprocess.run([str(KIT / "scripts" / "octo-feather-qc-ghsnap"), m.group(1), str(snap)], capture_output=True, text=True)
+         if p.returncode:
+-            die(67, f"GitHub snapshot of {m.group(1)} failed; judge not started (rerun with --no-github to judge without it): "
+-                    f"{p.stderr.strip() or p.stdout.strip()}")
++            return {"off": f"github: snapshot of {m.group(1)} failed ({p.stderr.strip() or p.stdout.strip()}); "
++                           "the offline gh refuses every call"}
+         subprocess.run(["chmod", "-R", "a-w", str(snap)], check=True)
+         meta = json.loads((snap / "meta.json").read_text())
+     except BaseException:

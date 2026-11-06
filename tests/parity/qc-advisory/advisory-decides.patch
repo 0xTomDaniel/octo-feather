@@ -1,0 +1,14 @@
+Seeded defect: a model answer of does-not-show fails the criterion: the advisory decides the result (judgment spec #rule-advisory).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index 89cc21f..4e88e58 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -490,6 +490,8 @@ def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str,
+         got, why = {}, f"{type(e).__name__}: {e}"
+     for i in ids:
+         done[i]["advisory"] = base | got.get(i, {"unavailable": why})
++        if got.get(i, {}).get("answer") == "does-not-show":
++            done[i]["verdict"] = "fail"
+ 
+ 
+ def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list[str], session: str) -> tuple[dict[str, dict[str, Any]], str]:
