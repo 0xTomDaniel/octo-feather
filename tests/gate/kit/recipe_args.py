@@ -6,10 +6,10 @@ the same. Where the command would launch agents or external systems (shape, star
 qc), testkit/argv_recorder.sh stands in and records the exact cwd and argv (the owner's narrow
 exception, its header); spec-chat, integrate and new-repo run for real, from the cwd only that
 dir explains (integrate: the lane worktree of the invocation dir's repo), each stopped early by
-its own refusal naming what it got (integrate: after every REF before the last integrated, in
-order: REFS). Nothing expands (no file an argument would touch appears).
-Offline, HOME redirected. The kit justfile puts its own scripts/ first on PATH, so its recipes
-run from a copy of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the
+its own refusal naming what it got; integrate also integrates every REF of REFS, in order, onto
+the lane, as the lane branch's history shows. Nothing expands (no file an argument would touch
+appears). Offline, HOME redirected. The kit justfile puts its own scripts/ first on PATH, so its
+recipes run from a copy of it (testkit.kit_repo) whose scripts/ holds the recorder for those; the
 templates' justfiles keep the caller's PATH, the recorder (and the copy's integrate) first on it.
 """
 
@@ -57,11 +57,16 @@ def world(s: Scratch) -> tuple[Path, Path]:
 
 # integrate's REFs: three commits named through branches whose names hold `$y`, `$(...)` and
 # backticks, each found by a message holding a space (git's <rev>^{/<text>}); each changes f from
-# the one before it (1, 2, 3), so they cherry-pick cleanly only all present and in this order
-# (one dropped, mangled or moved: refused by name or a conflict). The last REF, quotes and a
-# space, names no commit: refused by name, before any gate.
+# the one before it (1, 2, 3), so they cherry-pick cleanly only all present and in this order. A
+# run of all three succeeds and the lane branch then holds MSGS, in order (one dropped, mangled or
+# moved: a refusal by name, a conflict, or a message missing). LAST, quotes and a space, names no
+# commit: a run of it alone is refused by name, before any gate.
 REFS = ("x$y^{/one a}", "$(touch${IFS}pwned)^{/two b}", "`touch${IFS}pwned2`^{/three c}")
 LAST = "q'r\"s z"
+MSGS = ["one a", "two b", "three c"]
+# The lane repo's own gate, which a successful integrate runs (its recipes are the target's, so
+# trivial here: integrate does not care what they check).
+GATE = "fast:\n    @true\n\ncheck:\n    @true\n"
 
 
 def lane(s: Scratch, w: Path, wt: Path) -> None:
@@ -70,10 +75,12 @@ def lane(s: Scratch, w: Path, wt: Path) -> None:
     s.git(w, "init", "-q", "-b", "main")
     for key, v in (("user.name", "t"), ("user.email", "t@example.com")):
         s.git(w, "config", key, v)
-    s.git(w, "commit", "-q", "--allow-empty", "-m", "base")
+    (w / "justfile").write_text(GATE)
+    s.git(w, "add", "justfile")
+    s.git(w, "commit", "-q", "-m", "base")
     s.git(w, "worktree", "add", "-q", "-b", "gh59", str(wt))
     s.git(w, "checkout", "-q", "-b", "side")
-    for n, msg in enumerate(("one a", "two b", "three c"), 1):
+    for n, msg in enumerate(MSGS, 1):
         (w / "f").write_text(f"{n}\n")
         s.git(w, "add", "f")
         s.git(w, "commit", "-q", "-m", msg)
@@ -82,16 +89,19 @@ def lane(s: Scratch, w: Path, wt: Path) -> None:
     s.git(w, "checkout", "-q", "main")
 
 
-def integrate(s: Scratch, just: list[str], cwd: Path) -> None:
-    """integrate, for real, from CWD: TICKET 59 finds its lane worktree (branch gh59), each REF
-    integrates in order, and the last is refused by name before any gate."""
-    r = s.run([*just, "integrate", "59", *REFS, LAST], cwd=cwd, want=64)
-    for want in (
-        f"octo-feather-integrate: {LAST} is not a branch or commit",
-        "octo-feather-integrate: gh59 reset to",
-    ):
-        assert want in r.err, f"{TAG}: integrate from {cwd}: {r.err}"
-    assert "conflict:" not in r.err, f"{TAG}: integrate from {cwd}: REFs out of order: {r.err}"
+def integrate(s: Scratch, just: list[str], cwd: Path, w: Path) -> None:
+    """integrate, for real, from CWD (in W's repo): TICKET 59 finds its lane worktree (branch
+    gh59); REFS integrate, the lane's history then holding MSGS in order; LAST alone is refused by
+    name before any gate. The lane back at the base after."""
+    base = s.git(w, "rev-parse", "main")
+    r = s.run([*just, "integrate", "59", *REFS], cwd=cwd)
+    assert "integrated=3 branch=gh59 " in r.out, f"{TAG}: integrate from {cwd}: {r.out}\n{r.err}"
+    got = s.git(w, "log", "--reverse", "--format=%s", f"{base}..gh59").splitlines()
+    assert got == MSGS, f"{TAG}: integrate from {cwd}: lane history {got}, want {MSGS}"
+    s.git(s.root.resolve() / "lane-gh59", "reset", "-q", "--hard", base)
+    r = s.run([*just, "integrate", "59", LAST], cwd=cwd, want=64)
+    want = f"octo-feather-integrate: {LAST} is not a branch or commit"
+    assert want in r.err, f"{TAG}: integrate from {cwd}: {r.err}"
 
 
 def check(s: Scratch, name: str, cmd: str, cwd: Path, *argv: str) -> None:
@@ -129,7 +139,7 @@ def args(s: Scratch) -> None:
     )
     want = f"octo-feather-spec-chat: no Spec Chat installer at {clone}/scripts/install-spec-chat"
     assert want in r.err, f"{TAG}: spec-chat: {r.err}"
-    integrate(s, ["just", "--justfile", str(k / "justfile")], w)
+    integrate(s, ["just", "--justfile", str(k / "justfile")], w, w)
     kj("start")
     check(s, "start (default cwd)", "octo-feather-start", k, "--director", "--cwd", str(w))
     kj("start", f"{A4} {A2}")
@@ -156,7 +166,7 @@ def args(s: Scratch) -> None:
         r = w / lang
         r.mkdir()
         (r / "justfile").write_bytes((ROOT / "templates" / lang / "justfile").read_bytes())
-        integrate(s, ["just"], r)
+        integrate(s, ["just"], r, w)
         s.run(["just", "qc", A4, "7", A1, A5, A3], cwd=r)
         check(s, f"{lang} qc", "octo-feather-qc", r, A4, "7", A1, A5, A3)
     found = [
