@@ -14,6 +14,7 @@ kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 export HOME="$t/home" XDG_STATE_HOME="$t/state" HERDR_SESSION="" STUB_DIR="$t"
+"$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
 fail() { echo "director-reflect test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$HOME"

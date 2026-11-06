@@ -371,7 +371,8 @@ policy: TOML, read with the standard library, a file of its own so a budget chan
 (octo-feather-gate config) and no qc contract. Keys: budget_seconds (a number > 0), growth_share (a number >= 0:
 GROWN when the run is more than that share over the trend's median), trend_runs (an integer >= 1: that many passed
 full runs before the latest make the trend; 5 shown with no file); optional test_cpu_seconds (a number > 0: the
-per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here). Anything else is
+per-test CPU budget the gate's runner reads, tests/gate/conftest.py; not read here); optional heavy_items,
+heavy_slots, eval_slots (the box's run slots: octo-feather-slot --help; not read here). Anything else is
 `unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
@@ -421,8 +422,13 @@ step 4 tells no lane twice.
                    $(octo-feather-state)/director.handoffs.jsonl, {"at", "kind": "prod", "issue", "note":
                    "post-merge <merge sha> #PR: main moved, told <lane> to re-read <files|none>"} (spec comms
                    #handoff-director-prod); a rerun skips a lane whose prod line names that merge (`already told`).
-                   A failed send (exit 75 blocked, or other) is named and writes no prod line; the step stops
-                   after trying the rest. Its line: `told: ...; already told: ...; not woken: ...; gone: director to resume or
+                   Each send is bounded (#619, #666): `herdr-say --timeout 20`, Herdr's own wait bound (herdr-say
+                   exit 124 past it); a herdr-say still running 15 s past it is killed. A failed send (timed out,
+                   exit 75 blocked, or other) is loud (director rule #619): that supervisor is NOT told, named
+                   with its lane, pane, why (a timeout: `NOT told: <lane> <pane>: send timed out after 20s`) and
+                   the command that re-sends it by hand (`re-send by hand: herdr-say <pane> '<message>'`); it
+                   writes no prod line; the step goes on to the other supervisors, then stops. Its line:
+                   `NOT told: ...; told: ...; already told: ...; not woken: ...; gone: director to resume or
                    archive: ...`
   step 5 teardown  only once $(octo-feather-state)/lanes/archive/<lane>.toml exists (`octo-feather-lane archive`
                    moves it there before the close report), else `pending: lane <lane> not archived; rerun on its
@@ -432,16 +438,17 @@ step 4 tells no lane twice.
                    else only its tab with `herdr-close <supervisor pane>`; one Herdr no longer finds is `already
                    closed`. The worktree on branch `lane-key <record issue>` (tracker skill), from `git worktree
                    list --porcelain` in the current repo, removed with `git worktree remove` (a dirty one refused in
-                   git's words); kept, named, when it is the kit install, the main worktree, or the root of a Spec
+                   git's words), then the user's mise tracked-configs and trusted-configs links whose target is that
+                   worktree or under it pruned (MISE_STATE_DIR, else mise's default; the count named); kept, named, when it is the kit install, the main worktree, or the root of a Spec
                    Chat review row (${XDG_STATE_HOME:-~/.local/state}/spec-chat/hosting/*/registry.toml). Each open PR
                    based on the branch retargeted to the merged PR's base (`gh pr edit N --base`); the local branch
                    deleted only when it is an ancestor of the merge commit; then `git push origin --delete <branch>`
                    when origin has it. Gone already prints `already`; review rows, spools and records stay
 Each step prints one line as it finishes, `step <n> <name>: ok: <what>` or `step <n> <name>: stopped: <why>`;
 a stopped step runs no later step. The last line is the summary, each step's outcome (ok, stopped, not run):
-`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`. Exit 0 when every step is ok, 1 when one
-stopped (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch
-that failed, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
+`post-merge <lane> PR #<n>: step 1 merged ok; step 2 main CI ok`, ending `; NOT told: <lane> <pane>, ... (step 4
+names each re-send)` when step 4 failed a send. Exit 0 when every step is ok, 1 when one (not merged, merged at another head, a red run named by its URL, no run within the bound, a watch that failed,
+a supervisor not told, a teardown refusal), 3 when steps 1-4 are ok and step 5 is pending (the merge report run; rerun
 at the close report), 1 with usage on stderr for bad arguments.
 
 One subcommand per function, listed in COMMANDS; add a subcommand there.
@@ -3305,7 +3312,8 @@ def budget_parse(text: str | None) -> tuple[Budget | None, str]:
     cpu = d.get("test_cpu_seconds")   # the per-test CPU budget, optional: the gate's own (tests/gate/conftest.py) reads it
     if cpu is not None and (isinstance(cpu, bool) or not isinstance(cpu, (int, float)) or cpu <= 0):
         bad.append(f"test_cpu_seconds {cpu!r} is not a number of the right range")
-    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"})]
+    slots = {"heavy_items", "heavy_slots", "eval_slots"}   # octo-feather-slot reads and checks them
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least) - {"test_cpu_seconds"} - slots)]
     return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
 
 
@@ -3614,6 +3622,7 @@ class PostMerge:
     def __init__(self, pr: int, head: str, lane: str, wait: int, repo: str | None) -> None:
         self.pr, self.head, self.lane, self.wait, self.repo = pr, head, lane, wait, repo
         self.merge, self.base = "", ""
+        self.not_told: list[str] = []   # step 4: each live supervisor whose send failed, "<lane> <pane>"
 
     def r(self) -> list[str]:
         return ["-R", self.repo] if self.repo else []
@@ -3893,6 +3902,25 @@ def pm_live(pane: str) -> bool:
     raise Refuse(f"herdr agent get {pane} failed ({out[-1][:200] if out else f'exit {p.returncode}'})")
 
 
+# One send's bound (#619, #666; owner load rule: every run bounded): herdr-say --timeout, Herdr's own wait bound; a
+# herdr-say still running PM_TELL_GRACE seconds past it is killed with its process group.
+PM_TELL_BOUND = 20
+PM_TELL_GRACE = 15
+
+
+def pm_say(pane: str, msg: str) -> subprocess.CompletedProcess[str] | None:
+    """`herdr-say --timeout PM_TELL_BOUND PANE MSG`; None when it outlives the bound and its grace (killed)."""
+    with subprocess.Popen(["herdr-say", "--timeout", str(PM_TELL_BOUND), pane, msg], stdout=subprocess.PIPE,
+                          stderr=subprocess.PIPE, stdin=subprocess.DEVNULL, text=True, start_new_session=True) as p:
+        try:
+            out, err = p.communicate(timeout=PM_TELL_BOUND + PM_TELL_GRACE)
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, 9)
+            p.communicate()
+            return None
+        return subprocess.CompletedProcess(p.args, p.returncode, out, err)
+
+
 def pm_tell(pm: PostMerge) -> str:
     """Step 4: tell each live supervisor of the PR's repo (every lane on a kit PR), but --lane's, that main moved and
     which rule files changed; one prod line per lane told in the director log, which a rerun reads to skip it. A pane
@@ -3954,13 +3982,25 @@ def pm_tell(pm: PostMerge) -> str:
                 failed.append(f"{name} {sup}: hand-off log {log} unread ({e})"); continue
             marks.sort(key=lambda x: str(x.get("at") or ""))
             (parked if marks and marks[-1].get("pane") == sup else gone).append(f"{name} {sup}"); continue
+        # A failed send is loud (director rule #619): NOT told, named with the command that re-sends it by hand.
+        again = f"re-send by hand: herdr-say {shlex.quote(sup)} {shlex.quote(msg)}"
         try:
-            p = subprocess.run(["herdr-say", sup, msg], capture_output=True, text=True, stdin=subprocess.DEVNULL)
+            p = pm_say(sup, msg)
         except FileNotFoundError:
-            failed.append(f"herdr-say failed: {name} {sup}: herdr-say not on PATH"); continue
+            pm.not_told.append(f"{name} {sup}")
+            failed.append(f"herdr-say failed: {name} {sup}: herdr-say not on PATH; {again}"); continue
+        if p is None or p.returncode == 124:
+            err = (p.stderr or p.stdout).strip().splitlines() if p else []
+            why = f"no state change within the {PM_TELL_BOUND}s bound" if p else \
+                f"herdr-say gave no answer within {PM_TELL_BOUND + PM_TELL_GRACE}s, killed"
+            pm.not_told.append(f"{name} {sup}")
+            failed.append(f"NOT told: {name} {sup}: send timed out after {PM_TELL_BOUND}s ({err[-1][:200] if err else why}); {again}")
+            continue
         if p.returncode:
             err = (p.stderr or p.stdout).strip().splitlines()
-            failed.append(f"herdr-say failed: {name} {sup} exit {p.returncode}" + (f" ({err[-1][:200]})" if err else "")); continue
+            pm.not_told.append(f"{name} {sup}")
+            failed.append(f"herdr-say failed: {name} {sup} exit {p.returncode}" + (f" ({err[-1][:200]})" if err else "") + f"; {again}")
+            continue
         at = datetime.datetime.now(datetime.timezone.utc).isoformat()
         line: dict[str, object] = {"at": at, "kind": "prod", "issue": issue, "note": f"{mark}main moved, told {name} to re-read {listed}"}
         try:
@@ -3969,7 +4009,8 @@ def pm_tell(pm: PostMerge) -> str:
         except OSError as e:
             failed.append(f"{name} {sup} told, but its prod line not written to {dlog} ({e})"); continue
         told.append(f"{name} {sup}")
-    who = (f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; told: {', '.join(told) or 'none'}; "
+    who = (f"merge {pm.merge[:12]} of {repo}, rule files: {listed}; NOT told: {', '.join(pm.not_told) or 'none'}; "
+           f"told: {', '.join(told) or 'none'}; "
            f"already told: {', '.join(already) or 'none'}; not woken: {', '.join(parked) or 'none'}; "
            f"gone: director to resume or archive: {', '.join(gone) or 'none'}")
     if failed:
@@ -4049,7 +4090,26 @@ def pm_worktree(branch: str) -> str:
             raise Refuse(f"worktree {path} kept: it is the root of Spec Chat review row {slug} in {reg}; "
                          "a preview stays, remove it by hand once its review ends")
     pm_git_ok(f"worktree {path} not removed", "worktree", "remove", path)
-    return f"worktree {path} removed"
+    return f"worktree {path} removed ({pm_mise_prune(path)} mise config links into it pruned)"
+
+
+def pm_mise_prune(path: str) -> int:
+    """Remove the user's mise tracked-configs and trusted-configs links whose target is PATH or under it (the
+    worktree just removed, so each dangles): by the link's own target, nothing else touched (#664). The state dir
+    as mise finds it: MISE_STATE_DIR, else $XDG_STATE_HOME/mise, else ~/.local/state/mise."""
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    state = Path(os.environ.get("MISE_STATE_DIR") or f"{base}/mise")
+    roots = {os.path.normpath(path), os.path.realpath(path)}
+    n = 0
+    for d in (state / "tracked-configs", state / "trusted-configs"):
+        for e in sorted(d.iterdir()) if d.is_dir() else []:
+            if not e.is_symlink():
+                continue
+            t = os.path.normpath(e.parent / e.readlink())
+            if any(t == r or t.startswith(r.rstrip("/") + "/") for r in roots):
+                e.unlink()
+                n += 1
+    return n
 
 
 def pm_teardown(pm: PostMerge) -> str:
@@ -4156,7 +4216,8 @@ def cmd_post_merge(args: list[str]) -> int:
             outcomes.append(f"step {n} {name} {outcome}")
         else:
             outcomes.append(f"step {n} {name} not run")
-    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}", flush=True)
+    told = f"; NOT told: {', '.join(pm.not_told)} (step 4 names each re-send)" if pm.not_told else ""
+    print(f"post-merge {lane} PR #{pm.pr}: {'; '.join(outcomes)}{told}", flush=True)
     if all(o.endswith((" ok", " pending")) for o in outcomes):
         return 0 if all(o.endswith(" ok") for o in outcomes) else 3
     return 1
