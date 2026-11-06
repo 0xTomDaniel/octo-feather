@@ -35,13 +35,23 @@ case "${USER_MISE_STAGE:-0}" in
     d() { jq -r --arg k "$1" '.dirs[$k] // empty' <<<"$md"; }
     USER_MISE_RDATA="$(d data)"; USER_MISE_RCACHE="$(d cache)"; USER_MISE_RCONFIG="$(d config)"; USER_MISE_RSTATE="$(d state)"
     [[ -d "$USER_MISE_RDATA/installs" ]] || fail "mise's data dir has no installs ($USER_MISE_RDATA): run mise install --locked in the kit"
-    USER_MISE_MISE="$(realpath "$(command -v mise)")"; USER_MISE_UVPY="$(uv python dir)"; USER_MISE_UVCACHE="$(uv cache dir)"
+    USER_MISE_MISE="$(realpath "$(command -v mise)")"; USER_MISE_UVPY="$(uv python dir --color never)"; USER_MISE_UVCACHE="$(uv cache dir --color never)"
     USER_MISE_PY="$(cd "$kit" && uv python find --system)"; USER_MISE_PNPM="$(cd "$kit" && pnpm store path)"
     USER_MISE_VC="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"; USER_MISE_PI="$(command -v pi || true)"
     USER_MISE_UID="$(id -u)"; USER_MISE_GID="$(id -g)"; USER_MISE_NAME="$(id -un)"; USER_MISE_HOME="$(cd "$HOME" && pwd -P)";
     export USER_MISE_HOME USER_MISE_RDATA USER_MISE_RCACHE USER_MISE_RCONFIG USER_MISE_RSTATE USER_MISE_MISE USER_MISE_UVPY USER_MISE_UVCACHE USER_MISE_PY \
       USER_MISE_PNPM USER_MISE_VC USER_MISE_PI USER_MISE_UID USER_MISE_GID USER_MISE_NAME
     unshare -rmn true 2>/dev/null || fail "unshare -rmn failed: the fixture runs in a user+mount+network namespace (enable unprivileged user namespaces)"
+    # --gate in the fixture's pane: this run, in the caller's env and lane, holds the heavy slot for its items (#668;
+    # octo-feather-slot --help, hold); the gate in the fixture's pane runs nested under it, the box's slots dir bound in.
+    if [[ "${1:-}" == --gate && "${USER_MISE_HERDR:-fixture}" == fixture ]]; then
+      n="$(cd "$kit" && just test --collect-only -q "${@:2}" 2>/dev/null | grep -c '::')" || true
+      coproc "$kit/scripts/octo-feather-slot" hold --kind heavy --items "${n:-0}"
+      read -r said <&"${COPROC[0]}" || true
+      [[ "$said" == @(held|free|nested):* ]] || { { printf '%s\n' "$said"; cat <&"${COPROC[0]}"; } >&2; exit 75; }
+      echo "user-mise: heavy slot: $said" >&2
+      USER_MISE_SLOTS="${XDG_STATE_HOME:-$HOME/.local/state}/octo-feather/slots"; export USER_MISE_SLOTS
+    fi
     set +e; USER_MISE_STAGE=1 timeout -k 10 "${USER_MISE_TIMEOUT:-1200}" unshare -rmn "$0" "$@"; rc=$?; set -e
     [[ "$rc" != 124 && "$rc" != 137 ]] || echo "user-mise: timed out after ${USER_MISE_TIMEOUT:-1200} s (USER_MISE_TIMEOUT), killed" >&2
     exit "$rc" ;;
@@ -67,6 +77,7 @@ case "${USER_MISE_STAGE:-0}" in
     mkdir -p "$F/.local/share/uv/python" "$F/.cache/uv" "$F/.local/share/pnpm/store"
     ro "$USER_MISE_UVPY" "$F/.local/share/uv/python" && mount --bind "$USER_MISE_UVCACHE" "$F/.cache/uv" \
       && mount --bind "$(dirname "$USER_MISE_PNPM")" "$F/.local/share/pnpm/store" || fail "bind uv's and pnpm's dirs"
+    if [[ -n "${USER_MISE_SLOTS:-}" ]]; then mkdir -p "$F/.local/state/octo-feather/slots"; ro "$USER_MISE_SLOTS" "$F/.local/state/octo-feather/slots" || fail "bind the box's slots"; fi
     if [[ -d "$USER_MISE_VC" ]]; then mkdir -p "$F/.cache/octo-feather/skillfile"; ro "$USER_MISE_VC" "$F/.cache/octo-feather/skillfile"; fi
     # The box's pi, read-only where it sits under HOME: the command on PATH, what it resolves to, Pi's install dir.
     for p in "$USER_MISE_PI" "$(realpath -m -- "${USER_MISE_PI:-/}")" "$RH/.local/pi"; do

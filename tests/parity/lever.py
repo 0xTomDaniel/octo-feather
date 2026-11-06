@@ -43,7 +43,8 @@ file it sources (a failed `source` lets a test carry on without its library, pri
 line and exit 0).
 
 The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
-octo-feather/, removed after; each run's output: in the log dir printed last, kept.
+octo-feather/, removed after, as is the runs' own mise state dir (the caller's is never
+written); each run's output: in the log dir printed last, kept.
 """
 
 import json
@@ -393,7 +394,14 @@ def main() -> int:
     # kit under /tmp holding a test's own kit copy under /tmp is a setup the real kit never has.
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.decode().strip()
     (Path(common) / "octo-feather").mkdir(exist_ok=True)
-    with tempfile.TemporaryDirectory(prefix="parity-kit-", dir=Path(common) / "octo-feather") as t:
+    with (
+        tempfile.TemporaryDirectory(prefix="parity-kit-", dir=Path(common) / "octo-feather") as t,
+        tempfile.TemporaryDirectory(prefix="parity-mise-state-") as ms,
+    ):
+        # mise's state dir one per lever run, removed after it: the `just` shim each run starts in
+        # the copy records the copy's mise.toml there (tracked-configs), never in the caller's,
+        # where the link dangles once the copy goes (#664).
+        os.environ["MISE_STATE_DIR"] = ms
         k = Path(t)
         try:
             how = facts(case, defects)

@@ -63,6 +63,7 @@ extend-include = [
   "scripts/octo-feather-qc-ghsnap",
   "scripts/octo-feather-reflect",
   "scripts/octo-feather-shape",
+  "scripts/octo-feather-slot",
   "scripts/octo-feather-spec-status",
   "scripts/pi-role",
   "scripts/review-host",

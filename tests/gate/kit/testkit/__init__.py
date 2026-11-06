@@ -188,6 +188,30 @@ class Scratch:
         assert "Traceback" not in p.stderr, f"a traceback: {said}"
         return Ran(p.returncode, p.stdout.rstrip("\n"), p.stderr.rstrip("\n"))
 
+    def without(self, *names: str) -> None:
+        """This scratch's PATH with no program NAMES reachable, whatever the box installed
+        globally (a CI image's tsc in /usr/local/bin): each PATH dir holding one is replaced by a
+        scratch dir linking every other entry of it, so the dir's other tools stay found. A tool's
+        own PATH additions (a justfile's mise dirs) are the scenario's premise to assert."""
+        dirs: list[str] = []
+        for i, d in enumerate(self.env["PATH"].split(os.pathsep)):
+            if not d or not any(os.access(Path(d, n), os.X_OK) for n in names):
+                dirs.append(d)
+                continue
+            mask = self.root / "masked" / str(i)
+            mask.mkdir(parents=True)
+            for e in os.scandir(d):
+                if e.name not in names:
+                    (mask / e.name).symlink_to(Path(d, e.name))
+            dirs.append(str(mask))
+        self.env["PATH"] = os.pathsep.join(dirs)
+
+    def identity(self, name: str = "t", email: str = "t@t") -> None:
+        """The factory commit identity set in the scratch HOME's state, through the kit's command
+        (`pi-role --set-identity`): a launch of a role that would commit refuses without it
+        (scripts/pi-role --help, Commit identity)."""
+        self.run([kit("pi-role"), "--set-identity", name, email])
+
     def git(self, repo: Path, *args: str) -> str:
         """git ARGS in REPO with a scratch identity; its stdout."""
         ident = [

@@ -55,12 +55,36 @@ check_languages := "TypeScript:tsc:check-ts:ts-files TypeScript:eslint:check-ts:
 
 # tsc's own file list: add a path to tsconfig.json include (a dot path or dotfile by name)
 ts-files:
-    @pnpm exec tsc --showConfig | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const f of JSON.parse(s).files ?? []) console.log(f); })'
+    #!/usr/bin/env node
+    // tsc failing, absent (pnpm prints "Command tsc not found" on stdout, exit 254) or answering no JSON fails naming the
+    // command, its exit code, stderr and stdout, never a parse error (octo-feather #548, #663).
+    const cmd = ["pnpm", "exec", "tsc", "--showConfig"];
+    const r = process.getBuiltinModule("node:child_process").spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    let files;
+    try { files = r.status === 0 ? JSON.parse(r.stdout).files ?? [] : undefined; } catch { files = undefined; }
+    if (!Array.isArray(files)) {
+      const why = r.status === 0 ? " but printed no JSON config" : "";
+      process.stderr.write(`ts-files: ${cmd.join(" ")} exited ${r.status ?? r.error?.message}${why}; stderr: ${r.stderr?.trim() || "(empty)"}; stdout: ${r.stdout?.trim() || "(empty)"}\n`);
+      process.exit(1);
+    }
+    for (const f of files) console.log(f);
 
 # Its JSON report of `eslint .`, as check-ts runs it.
 # The files eslint lints: lint the file in eslint.config.js (out of its ignores)
 eslint-files:
-    @{ pnpm exec eslint --format json . || true; } | node -e 'let s = ""; process.stdin.on("data", (d) => (s += d)).on("end", () => { for (const r of JSON.parse(s)) console.log(r.filePath); })'
+    #!/usr/bin/env node
+    // Exit 1 is eslint's findings, its JSON report still whole; any other failure, or no JSON report, fails naming the
+    // command, its exit code, stderr and stdout, never a parse error (octo-feather #548, #663).
+    const cmd = ["pnpm", "exec", "eslint", "--format", "json", "."];
+    const r = process.getBuiltinModule("node:child_process").spawnSync(cmd[0], cmd.slice(1), { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
+    let report;
+    try { report = r.status === 0 || r.status === 1 ? JSON.parse(r.stdout) : undefined; } catch { report = undefined; }
+    if (!Array.isArray(report)) {
+      const why = r.status === 0 || r.status === 1 ? " but printed no JSON report" : "";
+      process.stderr.write(`eslint-files: ${cmd.join(" ")} exited ${r.status ?? r.error?.message}${why}; stderr: ${r.stderr?.trim() || "(empty)"}; stdout: ${r.stdout?.trim() || "(empty)"}\n`);
+      process.exit(1);
+    }
+    for (const f of report) console.log(f.filePath);
 
 # ShellCheck's file list: give a file the `shell` attribute in .gitattributes
 shell-files:
