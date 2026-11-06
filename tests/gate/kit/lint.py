@@ -134,7 +134,9 @@ def sub(node: object, *keys: str) -> object:
 
 def ruff_entries(text: str) -> Counter[str]:
     data = tomllib.loads(text) if text else {}
-    lint_t = cast("dict[str, list[str]]", sub(data, "tool", "ruff", "lint", "extend-per-file-ignores"))
+    lint_t = cast(
+        "dict[str, list[str]]", sub(data, "tool", "ruff", "lint", "extend-per-file-ignores")
+    )
     fmt = cast("list[str]", sub(data, "tool", "ruff", "format", "exclude") or [])
     found = Counter(f"ruff check {p} {c}" for p, codes in lint_t.items() for c in codes)
     found.update(f"ruff format {p}" for p in fmt)
@@ -144,7 +146,9 @@ def ruff_entries(text: str) -> Counter[str]:
 def pyright_entries(text: str) -> Counter[str]:
     files = cast("dict[str, list[object]]", sub(json.loads(text) if text else {}, "files"))
     return Counter(
-        f"basedpyright {p} {json.dumps(e, sort_keys=True)}" for p, errs in files.items() for e in errs
+        f"basedpyright {p} {json.dumps(e, sort_keys=True)}"
+        for p, errs in files.items()
+        for e in errs
     )
 
 
@@ -200,7 +204,9 @@ def stale(s: Scratch) -> None:
     t = baselined(s)
     write(t / "pyproject.toml", '\n[tool.unrelated]\n"extra" = [\n]\n', mode="a")
     s.git(t, "commit", "-qam", "unrelated")
-    write(t / TOOL, '#!/usr/bin/env python3\nimport sys\n\nN: int = 1\nsys.stdout.write(f"{N}\\n")\n')
+    write(
+        t / TOOL, '#!/usr/bin/env python3\nimport sys\n\nN: int = 1\nsys.stdout.write(f"{N}\\n")\n'
+    )
     says(lint(s, t, "lint", want=1), "T201 no longer fires in bin/tool", "octo-feather-lint shrink")
     says(lint(s, t, "types", want=1), "no longer occur", "octo-feather-lint shrink")
     before = (t / "pyproject.toml").read_text()
