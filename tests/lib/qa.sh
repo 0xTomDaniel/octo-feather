@@ -38,6 +38,7 @@ export HOME="$t/home" OCTO_FEATHER_QA_DIR="$t/out"
 # No HERDR_WORKSPACE_ID: every bench is outside any lane (spec spend#rule-lane); no OpenRouter key: `spend` asks no network.
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV HERDR_WORKSPACE_ID OPENROUTER_API_KEY
 mkdir -p "$HOME" "$t/bin" "$t/evals/trig/reference" "$t/evals/fixtures/fx"
+"$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 # The stub pi: the testkit's, the kit tests' one (its header says what it answers). An extension command (a
 # judgment bench, no agent) runs pi-extension beside it, this suite's classifier stub:
 cp "$kit/tests/gate/kit/testkit/pi_agent.py" "$t/bin/pi"

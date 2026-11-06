@@ -6,6 +6,8 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
+ident() { XDG_STATE_HOME="$1" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null; }   # the commit identity a role launch needs (#665)
+export XDG_STATE_HOME="$t/state"; ident "$t/state"
 fail() { echo "start test: $*" >&2; exit 1; }
 mkdir -p "$t/bin"
 cat > "$t/bin/herdr" <<'EOF'
@@ -46,7 +48,7 @@ mkdir -p "$t/lbin"; cp "$kit/tests/fixtures/herdr-say/herdr" "$t/lbin/"; chmod +
 cp "$kit/tests/fixtures/start-nohup" "$t/lbin/nohup"; chmod +x "$t/lbin/nohup"
 g init -q "$t/lin"; echo 'tracker = "linear"' > "$t/lin/.octo-feather.toml"; g init -q "$t/ghr"
 lane() { # $1: case, $2: ticket, $3: target
-  c="$t/case-$1"; mkdir -p "$c"; mkfifo "$c/completion"; set +e
+  c="$t/case-$1"; mkdir -p "$c"; mkfifo "$c/completion"; ident "$c/state"; set +e
   out="$(env -u HERDR_SESSION -u HERDR_PANE_ID -u HERDR_WORKSPACE_ID -u OCTO_FEATHER_PARENT -u OCTO_FEATHER_ROLE \
     PATH="$t/lbin:$PATH" FAKE_HERDR_DIR="$c" START_COMPLETION="$c/completion" XDG_STATE_HOME="$c/state" XDG_CACHE_HOME="$t/cache" HERDR_SPAWN_READY_RETRIES=2 \
     "$S" --issue "$2" --cwd "$3" 2>"$c/err")"; rc=$?; set -e

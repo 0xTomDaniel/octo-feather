@@ -30,11 +30,12 @@ Setup (this process, outside the judge's namespaces):
      2. the run tmpfs ($SCR/ov, under the private /tmp: srt masks /tmp from the judge): the worktree becomes an
         overlay whose upper and work dirs sit there (userxattr, #395: in a user namespace overlayfs cannot write
         trusted.overlay.* on a tmpfs upper, so removing a directory the lower holds failed with EIO; needs kernel
-        >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv cache dir` names it) the same
+        >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv --color never cache dir` names it) the same
         overlay, so an offline `uv sync` finds the box's packages and nothing reaches the real cache; Pi's
         auth.json and models.json per-run copies there, bound over the real files (never written back; none with
         QC_PI=none, a run with no Pi such as a declared demo); the caller's archived lanes and director log bound
-        at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history)
+        at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), and the box
+        onboarding file (the commit identity a role launch applies) at its top
   S. srt's policy (one settings file on the private /tmp): denyRead /tmp (the judge's own empty /tmp), the Herdr and
      gh config dirs, ~/.ssh, git credential files, live lanes/, sessions/, director.toml and director log, every
      other repo (#182: each git repo up to 3 levels below HOME, dot-dirs aside, but the kit under test QC_KIT and
@@ -784,12 +785,17 @@ def setup(judge: list[str]) -> NoReturn:
         return out
 
     jpath, jpre = swap(cpath), swap(cpre)
-    ucr = run("uv", "cache", "dir") if shutil.which("uv") else None
-    UC = (
-        ucr.stdout.strip()
-        if ucr and ucr.returncode == 0 and os.path.isdir(ucr.stdout.strip())
-        else ""
-    )
+    # uv's cache, asked of uv itself, uncoloured (#637: under FORCE_COLOR uv colours even a path). A path that is not
+    # absolute, or names no dir, fails naming what uv printed; an absolute one not there yet (uv never ran under this
+    # HOME) is named in the proof, nothing bound.
+    ucr = run("uv", "--color", "never", "cache", "dir") if shutil.which("uv") else None
+    UC, ucn = "", ""
+    if ucr and ucr.returncode == 0:
+        got = ucr.stdout.rstrip("\n")
+        absent = not os.path.lexists(got)
+        if not got.startswith("/") or any(ch < " " or ch == "\x7f" for ch in got) or not (os.path.isdir(got) or absent):
+            die(f"uv --color never cache dir printed {got!r}: not a directory")
+        UC, ucn = ("", got) if absent else (got, "")
     shimless = ":".join(p for p in E.get("PATH", "").split(":") if p and p != f"{SCR}/bin")
     realpi = shutil.which("pi", path=shimless) or ""
     if realpi and os.path.realpath(realpi).startswith(f"{SCR}/bin/"):
@@ -935,8 +941,16 @@ def setup(judge: list[str]) -> NoReturn:
             mount(f"{RS}/director.handoffs.jsonl", f"{SB}/director.handoffs.jsonl", None, MS_BIND)
             hist += 1
             hro.append(f"{SB}/director.handoffs.jsonl")
+        # The box onboarding file read-only at the scratch state dir's top, where a role launch inside (pi-role, under
+        # this XDG_STATE_HOME) reads the factory commit identity it applies (scripts/pi-role --help, Commit identity).
+        # A bind at another path: srt cannot (its schema binds a path only at itself).
+        if os.path.isfile(f"{TOP}/onboarding.toml"):
+            ob = f"{SCR}/state/octo-feather/onboarding.toml"
+            open(ob, "w").close()
+            mount(f"{TOP}/onboarding.toml", ob, None, MS_BIND)
+            hro.append(ob)
     except OSError as e:
-        die(f"history ({e})")
+        die(f"history or onboarding file ({e})")
 
     # A repo mask with paths bound back on it (a --kit-ref run's head-kit machinery): made here, a tmpfs with each path
     # bound back through an fd held on the repo, so srt's read-only root covers mask and binds alike. srt cannot: its
@@ -1132,6 +1146,7 @@ def setup(judge: list[str]) -> NoReturn:
         "OV": f"{OV}/u",
         "UC": UC,
         "UCU": f"{OV}/uvu" if UC else "",
+        "UCN": ucn,
         "VC": VC if VC in allow_r else "",
         "PI": PI,
         "nopi": nopi,
@@ -1502,8 +1517,10 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
             ucl and touchable(f"{uc}/.qc-w-{S}") and not os.path.exists(ucu),
             f"uv cache {uc} is an overlay, upper dir {ucu} on the run tmpfs and hidden from the judge (writable; its writes discarded with the run)",
         )
+    elif c["UCN"]:
+        say(f"ok   uv cache: {c['UCN']} (uv --color never cache dir) absent, nothing bound")
     else:
-        say("ok   uv cache: none on the box (no uv, or uv cache dir absent), nothing bound")
+        say("ok   uv cache: none on the box (no uv, or uv cache dir exits non-zero), nothing bound")
     if unreach:
         say(
             f"ok   {unreach} writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run, or below the old /proc)"

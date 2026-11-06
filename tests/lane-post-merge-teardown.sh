@@ -2,10 +2,11 @@
 # Integration test for octo-feather-lane post-merge step 5, teardown (owner ruling 2026-10-29 on issue 206; issue
 # 399), offline: a throwaway target repo with a bare origin holds lane branch gh12, its worktree and its merge
 # commit; a fake gh holds PR #12 merged there with a green push run and PR #13 based on gh12; a fake herdr-close and
-# a fake herdr stand for Herdr (HERDR_SESSION unset); a throwaway state dir (XDG_STATE_HOME) holds the lane records,
+# a fake herdr stand for Herdr (HERDR_SESSION unset); a throwaway mise state dir (MISE_STATE_DIR); a throwaway state dir (XDG_STATE_HOME) holds the lane records,
 # director.toml and the Spec Chat registries; a throwaway kit install clone (OCTO_FEATHER_KIT_INSTALL, never the
 # live kit) of another repo, so step 3 leaves it unchanged. Not archived: steps 1-4 run, step 5 pending, exit 3.
-# Archived: the lane's own space is closed (only its supervisor pane's tab when shared), its worktree removed, PRs
+# Archived: the lane's own space is closed (only its supervisor pane's tab when shared), its worktree removed and the
+# mise links into it pruned (one into the live repo kept), PRs
 # based on its branch retargeted before the remote branch is deleted, the local branch deleted; a rerun prints
 # already for each, on a repo with no workflow as with a green run. A dirty worktree, the kit install, the main worktree and a review row's root are kept, exit 1.
 # Run by `just check`.
@@ -16,7 +17,7 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-post-merge-teardown test: $*" >&2; exit 1; }
 export HOME="$t/home" XDG_STATE_HOME="$t/state" OCTO_FEATHER_KIT_INSTALL="$t/kit" GH_STORE="$t/gh.json" GH_LOG="$t/gh.log" \
   CLOSE_LOG="$t/close.log" HERDR_PANES="$t/panes" HERDR_SPACES="$t/spaces" ORIGIN="$t/origin.git" \
-  GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+  GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t MISE_STATE_DIR="$t/mise"
 unset GH_REPO GH_TOKEN HERDR_SESSION OCTO_FEATHER_ROLE
 mkdir -p "$HOME" "$t/bin"
 st="$t/state/octo-feather" lanes="$t/state/octo-feather/lanes" reg="$t/state/spec-chat/hosting/s1"
@@ -136,9 +137,13 @@ run 1
 # Archived, its own space: the space closed, worktree removed, #13 retargeted while gh12 is still on origin, then the
 # local and remote branch deleted; exit 0. A rerun prints already for each and changes nothing.
 fresh; lane "$lanes/archive/gh12.toml" w5:p1 12; lane "$lanes/other.toml" w6:p1 14
+# mise links into the worktree (pruned once it is removed, #664) and into the live repo (kept).
+mkdir -p "$t/mise/tracked-configs" "$t/mise/trusted-configs"; ln -s "$t/r/mise.toml" "$t/mise/tracked-configs/r"
+ln -s "$t/wt/mise.toml" "$t/mise/tracked-configs/wt"; ln -s "$t/wt" "$t/mise/trusted-configs/wt"
 run 0
+[[ ! -L "$t/mise/tracked-configs/wt" && ! -L "$t/mise/trusted-configs/wt" && -L "$t/mise/tracked-configs/r" ]] || fail "mise links: $(ls -R "$t/mise")"
 [[ "$(cat "$CLOSE_LOG")" == w5 ]] || fail "own space: closed $(cat "$CLOSE_LOG")"
-[[ "$s5" == "step 5 teardown: ok: space w5 closed; worktree $t/wt removed; PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin" ]] || fail "teardown line: $s5"
+[[ "$s5" == "step 5 teardown: ok: space w5 closed; worktree $t/wt removed (2 mise config links into it pruned); PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin" ]] || fail "teardown line: $s5"
 [[ "$last" == "$s4; step 5 teardown ok" && ! -d "$t/wt" ]] || fail "teardown: $out"
 ! git rev-parse -q --verify refs/heads/gh12 >/dev/null || fail "local branch kept"
 ! git --git-dir "$ORIGIN" rev-parse -q --verify refs/heads/gh12 >/dev/null || fail "remote branch kept"
@@ -151,7 +156,7 @@ run 0
 fresh; lane "$lanes/archive/gh12.toml" w5:p1 12
 NO_CI=1 run 0
 grep -qxF "step 2 main CI: ok: no CI: no workflow file under .github/workflows at merge commit ${M:0:12} (gh api repos/o/r/git/trees/${M:0:12}), so no push run can appear; nothing to wait for" <<<"$out" || fail "no CI step 2: $out"
-[[ "$s5" == "step 5 teardown: ok: space w5 closed; worktree $t/wt removed; PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin" && "$last" == "$s4; step 5 teardown ok" ]] || fail "no CI teardown: $out"
+[[ "$s5" == "step 5 teardown: ok: space w5 closed; worktree $t/wt removed (0 mise config links into it pruned); PR #13 retargeted from gh12 to main; local branch gh12 deleted; remote branch gh12 deleted from origin" && "$last" == "$s4; step 5 teardown ok" ]] || fail "no CI teardown: $out"
 grep -qx "api repos/o/r/git/trees/$M" "$GH_LOG" || fail "no CI fact not read at the merge commit: $(cat "$GH_LOG")"
 NO_CI=1 run 0
 [[ "$s5" == "step 5 teardown: ok: space w5 already closed; worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already deleted; remote branch gh12 already deleted from origin" && "$last" == "$s4; step 5 teardown ok" ]] || fail "no CI rerun: $out"

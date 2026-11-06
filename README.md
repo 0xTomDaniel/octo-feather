@@ -15,6 +15,7 @@ echo 'export PATH="$HOME/.local/bin:$PATH"; eval "$(~/.local/bin/mise activate b
 scripts/octo-feather-mise-install   # node, pnpm, uv, just, shellcheck, scc at mise.lock: only the kit's tools, never your global mise tools
 uv python install --no-bin     # the gate's Python at .python-version (--no-bin: nothing in ~/.local/bin)
 gh auth login && gh auth setup-git   # GitHub sign-in (interactive); git fetches private pins through gh
+scripts/pi-role --set-identity "Your Name" you@example.com   # the factory commit identity: every role launch applies it, none starts a committing role without it (pi-role --help)
 just vendored-fetch            # offline caches the gate reads: vendored skills at their Skillfile pins,
 uv sync --locked               # the gate's Python packages, then each eval fixture's and the Python template's:
 v="$(mktemp -d)"; for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$v" uv sync --locked --quiet --project "${l%/uv.lock}"; done; rm -rf "$v"
