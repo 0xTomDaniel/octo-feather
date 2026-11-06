@@ -2,6 +2,8 @@
 
 Every escalation moves one level up the org chart, never straight to the owner: worker (implementer, code reviewer, corrector) to supervisor, supervisor to director, director to owner. Each level first tries to solve the problem within its own authority. Every escalation names what is blocked, what was tried, and the options or what is needed. Only the director talks to the owner. That includes owner gates: a spec review link for a behavior change (ADR 0021), a QA evidence review and a merge ask go from the supervisor to the director, and the director relays them. Decided by Tom, 2026-10-18.
 
+Exception, the shaper: roles spec `#roles-shaper` (owner ruling 2026-11-04, #520).
+
 ## How it is held
 
 - Structure: `herdr-spawn` records the spawning pane in the new tab as `OCTO_FEATHER_PARENT`, keeps it across park and resume, and `herdr-say --parent` sends there, so a brief need not name a pane. A headless run (`pi-role -p`, ADR 0016) has no message channel: its stdout returns to the agent that ran it.

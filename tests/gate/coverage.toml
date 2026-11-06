@@ -1,0 +1,7 @@
+# coverage.py configuration of the mapping run, `just fast-map` (COVERAGE_PROCESS_START names this file): each
+# Python process of the kit venv a gate item starts writes its data under the item's own dir, GATE_ITEM, which
+# tests/gate/test_gate.py sets per item and a nested gate inherits. Not `patch = subprocess`: coverage would hand
+# the pytest parent's resolved data file to every child, so every item would write to one dir.
+[tool.coverage.run]
+data_file = "${COV_MAP_DIR}/${GATE_ITEM}/cov"
+parallel = true

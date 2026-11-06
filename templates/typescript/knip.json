@@ -1,7 +1,7 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
-  "entry": [".agents/skills/verify-app/scripts/verify-app.ts", "scripts/check-languages.ts", "scripts/own-tool-paths.ts"],
+  "entry": [".agents/skills/verify-app/scripts/verify-app.ts", "scripts/check-languages.ts", "scripts/own-tool-paths.ts", "scripts/fast-select.ts", "tests/qc-tags.ts"],
   "project": ["src/**/*.ts", "tests/**/*.ts", ".agents/skills/verify-app/scripts/*.ts", "scripts/*.ts"],
   "ignoreDependencies": ["dependency-cruiser"],
-  "ignoreBinaries": ["octo-feather-evidence", "mise"]
+  "ignoreBinaries": ["octo-feather-evidence", "octo-feather-qc", "mise", "just"]
 }

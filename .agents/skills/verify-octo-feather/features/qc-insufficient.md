@@ -13,7 +13,7 @@ Drive criterion: `quality#acceptance-qc-insufficient`
 
 ## How to get to it (user POV)
 
-- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head, then `octo-feather-lane merge-ask <PR> --status <status file>`. A demo whose exit status says it did not run to its end (`schemas/qc.v1.schema.json`, demo `command`) leaves its criterion insufficient evidence; `octo-feather-qc` and `octo-feather-lane` with no arguments print their usage, which owns the rest.
+- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head, then `octo-feather-lane merge-ask <PR> --status <status file>`. A demo whose exit status says it did not run to its end (`schemas/qc.v2.schema.json`, demo `command`) leaves its criterion insufficient evidence; `octo-feather-qc` and `octo-feather-lane` with no arguments print their usage, which owns the rest.
 
 ## Driving it with verify-octo-feather
 

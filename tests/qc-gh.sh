@@ -48,6 +48,10 @@ trap stop EXIT; trap 'trap "" TERM; exit 143' TERM   # timeout signals twice (ch
 export TMPDIR="$t/tmp"; mkdir "$TMPDIR"   # qc's scratch (snapshots) lives under $t: a killed test leaves nothing
 lim="${QC_TEST_RUN_TIMEOUT:-90}"
 export GIT_AUTHOR_NAME=t GIT_AUTHOR_EMAIL=t@t GIT_COMMITTER_NAME=t GIT_COMMITTER_EMAIL=t@t
+# The box's uv Pythons, uv cache and pnpm store, kept while HOME moves (as tests/lib/qa.sh): the kit copy below is a
+# pytest gate, and octo-feather-qc collects its tagged tests offline through its just check-tests.
+UV_CACHE_DIR="$(uv cache dir)"; UV_PYTHON_INSTALL_DIR="$(uv python dir)"; npm_config_store_dir="$(pnpm store path)"
+export UV_CACHE_DIR UV_PYTHON_INSTALL_DIR npm_config_store_dir
 export HOME="$t/home" OCTO_FEATHER_QC_DIR="$t/reports" GH_TOKEN=SECRET-token FAKE_GH_LOG="$t/gh.log"
 unset XDG_CONFIG_HOME XDG_STATE_HOME XDG_CACHE_HOME GH_CONFIG_DIR HERDR_SESSION OCTO_FEATHER_PARENT HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID \
   HERDR_SOCKET_PATH HERDR_BIN_PATH HERDR_ENV

@@ -1,0 +1,52 @@
+#!/usr/bin/env python3
+"""The fast tier's test step (`just fast`, after its static checks; the tier: octo-feather
+quality spec #recipe-fast).
+
+Prints its choice on one line, then runs `just check-tests` on the integration tests (-m "not
+e2e", the gate's static items left out): the ones pytest-testmon picks from its recorded
+coverage (--testmon-forceselect), or every one (--testmon-noselect) when this branch has no
+merge base with main, or when a path shared-machinery.txt names changed since that base (a git
+pathspec per line, glob magic; coverage cannot see it). Its own arguments go to pytest after
+those. Exits with that run's status.
+"""
+
+from __future__ import annotations
+
+import os
+import re
+import subprocess
+import sys
+from pathlib import Path
+
+
+def git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["git", *args], capture_output=True, text=True, check=False)  # noqa: S607
+
+
+def choice() -> tuple[str, str]:
+    """(the line printed, the pytest-testmon flag)."""
+    base = git("merge-base", "HEAD", "main")
+    if base.returncode:
+        why = "no merge base with main to compare shared-machinery.txt against"
+        return f"fast: every integration test: {why}", "--testmon-noselect"
+    lines = Path("shared-machinery.txt").read_text(encoding="utf-8").splitlines()
+    specs = [f":(glob){ln}" for ln in lines if not re.match(r"^\s*(#|$)", ln)]
+    changed = git("diff", "--name-only", base.stdout.strip(), "--", *specs).stdout.split("\n")
+    new = git("ls-files", "-o", "--exclude-standard", "--", *specs).stdout.split("\n")
+    hit = " ".join(sorted({p for p in changed + new if p}))
+    if hit:
+        why = f"{hit} changed since main, on shared-machinery.txt (coverage cannot see it)"
+        return f"fast: every integration test: {why}", "--testmon-noselect"
+    picks = "the integration tests pytest-testmon picks from its recorded coverage"
+    return f"fast: {picks}", "--testmon-forceselect"
+
+
+def main() -> None:
+    line, sel = choice()
+    print(line, flush=True)  # noqa: T201
+    tests = ["check-tests", sel, "-m", "not e2e", "--ignore", "tests/test_gate.py", *sys.argv[1:]]
+    os.execvp("just", ["just", *tests])  # noqa: S606, S607
+
+
+if __name__ == "__main__":
+    main()

@@ -1,6 +1,6 @@
 ---
 name: python
-description: Python stack policy for implementer work. Use whenever durable repo signals (pyproject.toml, uv.lock, a `Repo skills: python` line) show a Python project and work touches Python code, packaging, virtual environments, type checking, testing, linting, or command execution.
+description: "Python stack policy for implementer work. Use whenever durable repo signals (pyproject.toml, uv.lock, a `Repo skills: python` line) show a Python project and work touches Python code, packaging, virtual environments, type checking, testing, linting, or command execution."
 ---
 
 # Python
@@ -42,5 +42,5 @@ The project's own tooling wins. A project on pip and `requirements*.txt` stays o
 ## Workflow Notes
 
 - Keep environment setup reproducible in the repo, not in ad hoc shell state.
-- Separate linting, formatting, tests, and type checking into explicit commands; `just check` runs them all (in `templates/python`: ruff check, ruff format, basedpyright, import-linter, pytest), and `just setup` installs the environment.
+- Separate linting, formatting, tests, and type checking into explicit commands; the gate's tiers, `just fast` and `just check`, run them (which runs what and when: quality spec `#recipes-table`; the full tier in `templates/python`: ruff check, ruff format, basedpyright, import-linter, pytest), and `just setup` installs the environment.
 - If a repo has multiple implementation languages, apply each relevant language policy before making cross-language changes.

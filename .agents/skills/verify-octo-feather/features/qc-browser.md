@@ -13,7 +13,7 @@ Drive criterion: `quality#acceptance-qc-capture-browser`
 
 ## How to get to it (user POV)
 
-- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. A claimed criterion whose `[demo."<spec>#<id>"]` has `browser = true` runs as a browser demo. Keys: `schemas/qc.v1.schema.json`; what a browser demo gets and what its record stores: `octo-feather-qc` with no arguments.
+- A supervisor runs `just qc docs/specs/<slug>.status.json <PR> <id>...` on the lane's integrated head. A claimed criterion whose `[demo."<spec>#<id>"]` has `browser = true` runs as a browser demo. Keys: `schemas/qc.v2.schema.json`; what a browser demo gets and what its record stores: `octo-feather-qc` with no arguments.
 
 ## Driving it with verify-octo-feather
 

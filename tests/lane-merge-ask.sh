@@ -4,7 +4,7 @@
 # every call. `verdict` creates the one marker comment, updates it in place on rerun, and refuses a
 # wrong head, a report with no verdict or no check classes (docs/adr/0008), a proxy check with a clear verdict
 # and a failed write, leaving no comment behind. `merge-ask`
-# passes a complete section and prints it, then labels each row demo checks or agent fallback from qc.toml at the judged
+# passes a complete section and prints it, then labels each row with its latest qc result's decision source at the judged
 # head (quality#acceptance-qc-fallback) (also through the qc judge's offline gh, github-pr/scripts/gh),
 # fails PR #16's real body (fixture) naming each missing item, and fails each single gap: no parent line
 # (the tracker skill's pr-line for the PR branch: Closes #6 on GitHub; a Linear target's lane passes with
@@ -14,13 +14,17 @@
 # #acceptance-one-head), on a real git lane: review on J plus qc's status commit H passes with the
 # check's proof line; a non-status file after J fails naming it; a clean main merge keeps the qc
 # verdict and prints its proof; a main merge touching a lane file or resolving a conflict fails.
+# Full pass (#acceptance-merge-ask-full-proof): every merge ask needs a current recorded full gate pass.
+# Gate time (#acceptance-merge-ask-gate-budget): the final head's full run against the budget, shown, never decided on.
 # Run by `just check`.
+# criterion: issue-lifecycle#acceptance-merge-ask-full-proof
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "lane-merge-ask test: $*" >&2; exit 1; }
-export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log"
+export HOME="$t/home" FAKE_GH="$t/gh" FAKE_GH_LOG="$t/gh.log" XDG_STATE_HOME="$t/xdg"   # the state dir's check-runs.jsonl
+unset HERDR_SESSION
 export OCTO_FEATHER_QC_DIR="$t/qc"   # the qc reports merge-ask reads (octo-feather-qc --help, Report)
 mkdir -p "$HOME" "$t/bin" "$FAKE_GH/pr"
 cat > "$t/bin/gh" <<'EOF'
@@ -80,10 +84,12 @@ status() { # A_B_STATUS A_B_PR
   printf '{"spec": "demo.spec.html", "accepted_commit": "0123abc", "criteria": {\n  "acceptance-a": {"status": "%s", "pr": %s}, "acceptance-b": {"status": "%s", "pr": %s},\n  "acceptance-c": {"status": "planned", "pr": null}, "acceptance-d": {"status": "built", "pr": 3}}}\n' "$1" "$2" "$1" "$2" > docs/specs/demo.status.json; }
 commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
 status planned null; seq 1 20 > app.py; echo notes > notes.txt
+printf 'budget_seconds = 150\ngrowth_share = 0.25\ntrend_runs = 3\n' > gate-budget.toml   # the repo's gate-time budget
 printf '[demo."demo#acceptance-a"]\ncommand = "true"\n' > qc.toml   # the contract: a demo for acceptance-a only
 echo '{"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": {"acceptance-x": {"status": "built", "pr": 7}}}' > docs/specs/other.status.json
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
+G="$kit/scripts/octo-feather-gate"; "$G" record --reason "lane final head" --seconds 1 >/dev/null   # J's full gate pass
 status built 7; H="$(commit "qc: built acceptance-a acceptance-b (judged ${J:0:12})")"
 JS="${J:0:7}"
 OTHER="$(printf 'ffee%.0s' 1 2 3 4 5 6 7 8 9 10)"
@@ -91,7 +97,7 @@ ST=(--status docs/specs/demo.status.json)
 check_ok='[{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}, {"__typename": "StatusContext", "context": "ci/x", "state": "SUCCESS"}]'
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
   {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a acceptance-b (judged ${J:0:12})\", \"messageBody\": \"\"}]"
-printf '{"number": 7, "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
+printf '{"number": 7, "baseRefName": "main", "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": %s, "comments": [], "commits": %s}\n' "$H" "$check_ok" "$commits" > "$FAKE_GH/pr/7.json"
 PROOF="${J:0:12} to ${H:0:12}: qc status commits ${H:0:12} change only docs/specs/demo.status.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
@@ -230,15 +236,57 @@ bad() { # WANT_PATTERN [PY]: merge-ask exits 1 naming it
   [[ -z "$out" ]] || fail "a failing merge ask printed to stdout: $out"
 }
 
+on() { # PARENT CMD...: run CMD on a detached checkout of PARENT, print the new HEAD, back on the lane
+  git checkout -q --detach "$1"; shift; "$@" >/dev/null; git rev-parse HEAD; git checkout -q -f lane; }
+pr_head() { # SHA SUBJECT: python making SHA the PR head, a commit of the PR
+  echo "d['headRefOid'] = '$1'; d['commits'].append({'oid': '$1', 'messageHeadline': '$2', 'messageBody': ''})"; }
 setpr; run 0 merge-ask 7 "${ST[@]}"
 [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] && grep -qx "Failed: none" <<<"$out" || fail "pass did not print the section: $out"
-[[ "$(tail -2 <<<"$out")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
+w="$(sed '/^Gate time (/,$d' <<<"$out")"   # the gate time block comes last (below)
+[[ "$(tail -2 <<<"$w")" == $'Review check classes (from the verdict comment, docs/adr/0008):\n- Checks: none' ]] || fail "pass did not list the check classes: $out"
 grep -q "Review verdict: $url" <<<"$out" && ! grep -q "Notes\|Summary" <<<"$out" || fail "printed more or less than the section: $out"
-# quality#acceptance-qc-fallback: each row labelled by the contract at the judged head, as just qc decides it.
-[[ "$(grep -xF -A2 "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):" <<<"$out")" == \
-   "Decision sources (qc.toml at the judged head ${J:0:12}; quality spec #qc-results):"$'\n- demo#acceptance-a: demo checks\n- demo#acceptance-b: agent fallback' ]] \
-  || fail "pass did not label each row's decision source: $out"
+# quality#acceptance-qc-fallback: each row labelled with the decision source of its latest qc result at the judged head,
+# never from qc.toml (which declares a demo for acceptance-a): none yet, then a report's tagged test and agent fallback.
+src="Decision sources (the latest qc result at the judged head ${J:0:12}; quality spec #qc-results):"
+[[ "$(grep -xF -A2 "$src" <<<"$out")" == "$src"$'\n- demo#acceptance-a: no qc result at the judged head\n- demo#acceptance-b: no qc result at the judged head' ]] \
+  || fail "pass without a qc report did not say each row has no qc result: $out"
+mkdir -p "$t/qc"; python3 - "$t/qc/$J-20261029T090000Z-src123.json" "$J" <<'EOF'
+import json, sys; p, head = sys.argv[1:]
+res = lambda i, d: {"id": i, "verdict": "pass", "evidence": "complete", "decision": d, "record": "r", "head": head}
+json.dump({"head": head, "spec": "demo", "results": [res("acceptance-a", "tagged test assertions"), res("acceptance-b", "agent fallback")]}, open(p, "w"))
+EOF
+run 0 merge-ask 7 "${ST[@]}"
+[[ "$(grep -xF -A2 "$src" <<<"$out")" == "$src"$'\n- demo#acceptance-a: tagged test assertions\n- demo#acceptance-b: agent fallback' ]] \
+  || fail "pass did not label each row's decision source from the qc report: $out"
 [[ "$(writes)" == "$n" ]] || fail "merge-ask wrote"
+# issue-lifecycle#acceptance-merge-ask-gate-budget: the full gate's wall time on the final head (J's full run: H adds
+# only qc's status commit) against gate-budget.toml at the head, flagged over the budget and grown past the share, beside
+# the trend (passed full runs on the head's history: B's three; a subset run on H and a red full run on J stay out) and
+# the slowest items. No gate on timing: the ask passes, or fails with the same items, as with no run recorded.
+trend="$XDG_STATE_HOME/octo-feather/check-runs.jsonl"
+gate_block() { sed -n '/^Gate time (/,/^$/p' <<<"$1" | sed -E 's/\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)/(AGE ago)/'; }
+without() { sed '/^Gate time (/,/^$/d' <<<"$1"; }
+none_out="$out"
+[[ "$(gate_block "$out")" == "Gate time (the full gate on the final head against gate-budget.toml at ${H:0:12}; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):"$'\n'"  no gate run recorded ($trend: none)" ]] \
+  || fail "no trend file: $(gate_block "$out")"
+mkdir -p "$(dirname "$trend")"
+run_line() { # START HEAD TOTAL EXIT TIER
+  printf '{"start":"%s","repo":"%s","head":"%s","total_s":%s,"exit":%s,"tier":"%s","steps":[{"name":"tests/a.sh","seconds":%s,"result":"ok"},{"name":"tests/b.sh","seconds":20.5,"result":"ok"},{"name":"check-lint","seconds":1.0,"result":"ok"}]}\n' "$1" "$R" "$2" "$3" "$4" "$5" "$(( ${3%.*} - 30 ))" >> "$trend"; }
+run_line 2026-10-01T10:00:00Z "$B" 100 0 full; run_line 2026-10-02T10:00:00Z "$B" 120 0 full; run_line 2026-10-03T10:00:00Z "$B" 110 0 full
+run_line 2026-10-04T10:00:00Z "$J" 90 1 full; run_line 2026-10-04T11:00:00Z "$J" 200.5 0 full; run_line 2026-10-04T12:00:00Z "$H" 5 0 subset
+run 0 merge-ask 7 "${ST[@]}"
+[[ "$(gate_block "$out")" == "Gate time (the full gate on the final head against gate-budget.toml at ${H:0:12}; the code reviewer judges it, no gate reads it: issue-lifecycle #lanes-checkpoints):
+  full gate: 200.5s, head ${J:0:12}, started 2026-10-04T11:00:00Z (AGE ago): OVER BUDGET by 50.5s (budget 150s)
+  growth: +82.3% over the trend's median 110s (the 3 passed full runs before it); set share 25%: GROWN
+  trend: 100s ${B:0:12} 2026-10-01T10:00:00Z, 120s ${B:0:12} 2026-10-02T10:00:00Z, 110s ${B:0:12} 2026-10-03T10:00:00Z, 200.5s ${J:0:12} 2026-10-04T11:00:00Z (passed full runs, oldest first)
+  slowest: tests/a.sh 170s, tests/b.sh 20.5s, check-lint 1s" ]] || fail "over budget: $(gate_block "$out")"
+[[ "$(without "$out")" == "$(without "$none_out")" ]] || fail "the gate time changed the merge ask: $out"
+# a refusal: the same items with or without the run, the gate time on stderr only
+setpr 'd["statusCheckRollup"][0]["conclusion"] = "FAILURE"'; run 1 merge-ask 7 "${ST[@]}"
+[[ -z "$out" ]] && grep -qF "  full gate: 200.5s, head ${J:0:12}" <<<"$err" || fail "refusal over budget: $out $err"
+over_err="$(sed -n '/merge ask incomplete/,$p' <<<"$err")"; mv "$trend" "$trend.keep"
+run 1 merge-ask 7 "${ST[@]}"; [[ "$(sed -n '/merge ask incomplete/,$p' <<<"$err")" == "$over_err" ]] || fail "the gate time changed the refusal: $err"
+mv "$trend.keep" "$trend"; setpr
 # the same PR through the qc judge's offline gh (snapshot layout of octo-feather-qc-ghsnap)
 snap="$t/snap"; mkdir -p "$snap/pr"; echo '{"repo": "o/r", "counts": {}, "capped": []}' > "$snap/meta.json"; echo x > "$snap/fetched_at"
 cp "$FAKE_GH/pr/7.json" "$snap/pr/7.json"
@@ -290,7 +338,7 @@ rm .octo-feather.toml
 # PR #16's real body: no section, each item named
 cp "$kit/tests/fixtures/lane-merge-ask/pr16.json" "$FAKE_GH/pr/16.json"
 run 1 merge-ask 16 --status "$kit/docs/specs/overview.status.json"
-for item in '`## Merge ask` section' 'Head: missing' 'Checks: missing' 'criterion table: missing' 'Review verdict: missing' 'Built: missing' 'Failed: missing'; do
+for item in "PR commits: PR #16's head f5f90b85a488 is not a commit in this repo: run it in the lane worktree after git fetch origin" '`## Merge ask` section' 'Head: missing' 'Checks: missing' 'criterion table: missing' 'Review verdict: missing' 'Built: missing' 'Failed: missing'; do
   grep -qF -- "  - $item" <<<"$err" || fail "PR #16: '$item' not named: $err"
 done
 
@@ -329,16 +377,19 @@ ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b |
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | ok | judged '"$JS"$' | r |' bad "qc verdict 'ok'; write pass or fail"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-zz | pass | judged '"$JS"$' | r |' bad "acceptance-zz: no criterion"
 BUILT='demo#acceptance-a' bad "Built: lists demo#acceptance-a, the status files hold built with PR #7: demo#acceptance-a demo#acceptance-b"
-# a Built id the status file holds but no qc: built commit names fails
-bad "Built: demo#acceptance-b in no .qc: built. commit of PR #7 (they passed acceptance-a); built only by just qc" \
-  'd["commits"][1]["messageHeadline"] = "qc: built acceptance-a (judged 0123456789ab)"'
+# The PR's commits and their subjects come from git (BASE..head), so each case below is a real lane head.
+# a Built id the status file holds but no qc: built commit names fails: qc's commit H, subject naming acceptance-a only
+QA="$(on "$H" git commit -q --amend -m "qc: built acceptance-a (judged ${J:0:12})")"
+HEADL="${QA:0:12}" JUDGEDL="${J:0:12} to ${QA:0:12}: qc status commits ${QA:0:12} change only docs/specs/demo.status.json" \
+  bad "Built: demo#acceptance-b in no .qc: built. commit of PR #7 (they passed acceptance-a); built only by just qc" "$(pr_head "$QA" x)"
 # built by an earlier qc run, reset to planned by a later one (PR #49: ac060f9, a56de61): not demanded, passes
-setpr 'd["commits"].insert(1, {"oid": "c0ffee0000000000000000000000000000000000", "messageHeadline": "qc: built acceptance-a acceptance-c (judged 0123456789ab)", "messageBody": ""})'
+Q1="$(on "$J" git commit -q --allow-empty -m "qc: built acceptance-a acceptance-c (judged 0123456789ab)")"
+Q2="$(on "$Q1" sh -c "git checkout -q $H -- docs/specs/demo.status.json && git commit -qm 'qc: built acceptance-a acceptance-b (judged ${J:0:12})'")"
+HEADL="${Q2:0:12}" JUDGEDL="${J:0:12} to ${Q2:0:12}: qc status commits ${Q1:0:12} ${Q2:0:12} change only docs/specs/demo.status.json" \
+  setpr "$(pr_head "$Q2" x)"
 run 0 merge-ask 7 "${ST[@]}"
-bad "no .qc: built. commit on PR #7" 'd["commits"] = d["commits"][:1]'
-# a headline GitHub cut with an ellipsis still counts as one qc commit
-setpr 'd["commits"][1].update(messageHeadline="qc: built acceptance-a acceptance-\u2026", messageBody="\u2026b (judged 0123456789ab)")'
-run 0 merge-ask 7 "${ST[@]}"
+QN="$(on "$H" git commit -q --amend -m "chore: status")"
+HEADL="${QN:0:12}" bad "no .qc: built. commit on PR #7" "$(pr_head "$QN" x)"
 REVIEW="" bad "Review verdict: empty is not a comment on PR #7"
 REVIEW="https://github.com/o/r/pull/8#issuecomment-1001" bad "is not a comment on PR #7"
 REVIEW="${url%1001}4242" bad "comment 4242 not on PR #7"
@@ -347,7 +398,7 @@ bad "Review verdict: blocking, not clear" "d['comments'][0]['body'] = d['comment
 bad "Review verdict: the comment carries no usable check classification (report classifies no check" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('\\nChecks: none\\n', '\\n')"
 bad "Review verdict: clear with a proxy check (Check: scripts/x: r (ADR 1) | reads: y | class: proxy): a proxy check blocks" "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: proxy')"
 setpr "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Checks: none', 'Check: scripts/x: r (ADR 1) | reads: y | class: exact')"
-run 0 merge-ask 7 "${ST[@]}"; [[ "$(tail -1 <<<"$out")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
+run 0 merge-ask 7 "${ST[@]}"; w="$(sed '/^Gate time (/,$d' <<<"$out")"; [[ "$(tail -1 <<<"$w")" == "- Check: scripts/x: r (ADR 1) | reads: y | class: exact" ]] || fail "exact check not listed: $out"
 bad "is not a verdict comment (no marker)" "d['comments'][0]['body'] = 'Verdict: clear'"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-c: fail with no triage"
 FAILED=$'Failed:\n- acceptance-c:' ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| demo#acceptance-c | fail | judged '"$JS"$' | r |' \
@@ -359,11 +410,8 @@ FAILED='Failed: some' bad "Failed: 'some'; write"
 setpr; run 0 merge-ask 7 "${ST[@]}"; grep -qF "Judged: $PROOF" <<<"$out" || fail "pass did not print the proof: $out"
 JUDGEDL="" bad "Judged: names ''; add the check's proof line \`Judged: $PROOF\`"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"${H:0:7}"$' | r |' bad "rows name 2 judged heads"
-on() { # PARENT CMD...: run CMD on a detached checkout of PARENT, print the new HEAD, back on the lane
-  git checkout -q --detach "$1"; shift; "$@" >/dev/null; git rev-parse HEAD; git checkout -q -f lane; }
-pr_head() { # SHA SUBJECT: python making SHA the PR head, a commit of the PR
-  echo "d['headRefOid'] = '$1'; d['commits'].append({'oid': '$1', 'messageHeadline': '$2', 'messageBody': ''})"; }
 F="$(on "$H" sh -c 'echo two >> app.py; git commit -qam "feat: after qc"')"
+on "$F" "$G" record --reason "lane final head" --seconds 1 >/dev/null
 HEADL="${F:0:12}" bad "Judged: commit ${F:0:12} 'feat: after qc' after the judged head ${J:0:12} changes app.py, not only the status file qc writes (docs/specs/demo.status.json): run just qc and the review again, in parallel, on ${F:0:12}" "$(pr_head "$F" "feat: after qc")"
 # qc's own commit carrying a non-status file fails, naming the file
 Q="$(on "$J" sh -c 'sed -i "s/\"planned\", \"pr\": null}, \"acceptance-b/\"built\", \"pr\": 7}, \"acceptance-b/" docs/specs/demo.status.json; echo x > stray.txt; git add -A; git commit -qm "qc: built acceptance-a (judged '"${J:0:12}"')"')"
@@ -392,6 +440,29 @@ git update-ref refs/remotes/origin/main "$M1"
 X="$(on "$B" sh -c 'echo side > side.txt; git add side.txt; git commit -qm side')"
 R4="$(on "$H" git merge -q --no-edit "$X")"
 HEADL="${R4:0:12}" bad "Judged: merge ${R4:0:12} .* brings in ${X:0:12}, not origin/main: only a merge of main keeps the qc verdict" "$(pr_head "$R4" "Merge side")"
+# issue-lifecycle#acceptance-merge-ask-full-proof (rule: #lanes-checkpoints): the passes above stand on J's recorded full
+# pass (H adds only qc's status commit). A head with no recorded full pass refuses, naming it and the missing pass, the
+# section otherwise complete; a pass whose gate configuration is not the head's (main brought a justfile) is stale.
+E="$(on "$H" sh -c 'echo e >> app.py; git commit -qam "feat: no full pass"')"
+HEADL="${E:0:12}" JUDGEDL="${E:0:12} is the PR head" ROWS=$'| demo#acceptance-a | pass | judged '"${E:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${E:0:9}"' | r |' \
+  setpr "$(pr_head "$E" "feat: no full pass"); d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $E')"
+run 1 merge-ask 7 "${ST[@]}"
+[[ "$err" == *"(1 item), head ${E:0:12}:"$'\n'"  - Full pass: head ${E:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${J:0:12} does not carry over: commit ${E:0:12} 'feat: no full pass' after the full pass ${J:0:12} changes app.py"* ]] \
+  || fail "a head with no full pass: $err"
+M4="$(on "$M1" sh -c 'printf "check:\n    true\n" > justfile; git add justfile; git commit -qm "main: a gate"')"; git update-ref refs/remotes/origin/main "$M4"
+R5="$(on "$H" git merge -q --no-edit "$M4")"
+HEADL="${R5:0:12}" bad "Full pass: head ${R5:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${J:0:12} does not carry over: its gate_config [0-9a-f]\{12\} is not the head's current [0-9a-f]\{12\} (octo-feather-gate config ${R5:0:12}): stale" "$(pr_head "$R5" "Merge main")"
+M5="$(on "$M1" sh -c 'echo machinery > shared-machinery.txt; git add shared-machinery.txt; git commit -qm "main: a shared-machinery list"')"; git update-ref refs/remotes/origin/main "$M5"
+R6="$(on "$H" git merge -q --no-edit "$M5")"   # a checkpoint: the list changed, J's pass was recorded against none
+HEADL="${R6:0:12}" bad "Full pass: head ${R6:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${J:0:12} does not carry over: its list absent is not the head's current [0-9a-f]\{12\} (octo-feather-gate config ${R6:0:12}): stale" "$(pr_head "$R6" "Merge main")"
+git update-ref refs/remotes/origin/main "$M1"
+# a pass recorded on a dirty tree (an untracked file beside the gate) proves nothing
+D="$(on "$H" sh -c 'echo d >> app.py; git commit -qam "feat: dirty pass"; echo x > dirt; "$0" record --reason dirty --seconds 1 >/dev/null; rm dirt' "$G")"
+HEADL="${D:0:12}" JUDGEDL="${D:0:12} is the PR head" ROWS=$'| demo#acceptance-a | pass | judged '"${D:0:9}"$' | r |\n| demo#acceptance-b | pass | judged '"${D:0:9}"' | r |' \
+  setpr "$(pr_head "$D" "feat: dirty pass"); d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $J', 'Head: $D')"
+run 1 merge-ask 7 "${ST[@]}"
+[[ "$err" == *"(1 item), head ${D:0:12}:"$'\n'"  - Full pass: head ${D:0:12} has no current recorded full gate pass for that head and its gate configuration; the full pass recorded at ${D:0:12} does not carry over: it was recorded on a dirty tree (clean false): it proves nothing"* ]] \
+  || fail "a pass recorded on a dirty tree: $err"
 ROWS=$'| demo#acceptance-a | pass | judged deadbee | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "criterion row demo#acceptance-a: judged deadbee is not a commit of PR #7; name the head qc and the review judged"
 ROWS=$'| demo#acceptance-a | pass | yesterday | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |' bad "judged 'yesterday'; write .judged <sha>."
 python3 - "$t/pr7.keep" "$(body)" <<'PY' > "$t/old.body"
@@ -399,12 +470,12 @@ import sys; print(sys.argv[2].replace("| criterion | qc verdict | judged | evide
 PY
 bad "criterion table: no judged column" "d['body'] = open('$t/old.body').read()"
 # multi-spec lane: --status once per spec; a qc id outside the --status files is not demanded
-python3 - "$t/pr7.keep" <<'EOF'
-import json, sys; d = json.load(open(sys.argv[1])); d["commits"].append({"oid": "3333333333333333333333333333333333333333", "messageHeadline": "qc: built acceptance-x (judged 0123456789ab)", "messageBody": ""})
-json.dump(d, open(sys.argv[1], "w"))
-EOF
-setpr; run 0 merge-ask 7 "${ST[@]}"
-ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| other#acceptance-x | pass | judged '"$JS"$' | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' setpr
+QX="$(on "$H" git commit -q --allow-empty -m "qc: built acceptance-x (judged 0123456789ab)")"
+HEADL="${QX:0:12}" JUDGEDL="${J:0:12} to ${QX:0:12}: qc status commits ${H:0:12} ${QX:0:12} change only docs/specs/demo.status.json" \
+  setpr "$(pr_head "$QX" x)"; run 0 merge-ask 7 "${ST[@]}"
+ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | r |\n| other#acceptance-x | pass | judged '"$JS"$' | r |' BUILT='acceptance-a acceptance-b other#acceptance-x' \
+  HEADL="${QX:0:12}" JUDGEDL="${J:0:12} to ${QX:0:12}: qc status commits ${H:0:12} ${QX:0:12} change only docs/specs/demo.status.json" \
+  setpr "$(pr_head "$QX" x)"
 run 0 merge-ask 7 "${ST[@]}" --status docs/specs/other.status.json
 # usage and execution failures
 run 1 merge-ask 7; grep -q "name the lane's status file" <<<"$err" || fail "no --status: $err"
@@ -420,11 +491,12 @@ grep -q "has 2 verdict comments.*delete all but one" <<<"$err" || fail "two mark
 # off main, no qc commit; Built: none, Failed: none, no rows: passes on head, checks, parent line and the
 # review verdict alone, --status optional; the verdict's head is the judged head
 N="$(on "$B" sh -c 'sed -i 2s/.*/two/ app.py; git commit -qam "fix: a rule"')"
+on "$N" "$G" record --reason "lane final head" --seconds 1 >/dev/null
 pr8() { # HEAD EXTRA_COMMITS_JSON BODY [PY]
   python3 - "$FAKE_GH/pr/8.json" "$t/pr8.keep" "$1" "$2" "$3" "$check_ok" "$N" "${4:-}" <<'EOF'
 import json, os, sys; p, keep, head, extra, body, checks, n, py = sys.argv[1:]
 d = json.load(open(keep)) if os.path.exists(keep) else {"comments": []}
-d.update(number=8, headRefName="gh6", headRefOid=head, body=body, statusCheckRollup=json.loads(checks),
+d.update(number=8, baseRefName="main", headRefName="gh6", headRefOid=head, body=body, statusCheckRollup=json.loads(checks),
          commits=[{"oid": n, "messageHeadline": "fix: a rule", "messageBody": ""}] + json.loads(extra or "[]"))
 exec(py); json.dump(d, open(p, "w"))
 EOF
@@ -471,20 +543,38 @@ run 1 merge-ask 8; grep -q "Judged: missing; add the check's proof line .Judged:
 proof8="$(sed -n 's/.*add the check.s proof line `Judged: \(.*\)`$/\1/p' <<<"$err")"
 HEADL="${NM:0:12}" pr8 "$NM" "[{\"oid\": \"$NM\", \"messageHeadline\": \"Merge main\", \"messageBody\": \"\"}]" "$(HEADL="${NM:0:12}" JUDGEDL="Judged: $proof8" nbody)"
 run 0 merge-ask 8; grep -qF "Judged: $proof8" <<<"$out" || fail "no-criterion clean merge with proof: $out"
+# a lane building no criterion is checked the same: its head without a recorded full pass refuses
+N2="$(on "$N" sh -c 'echo four >> app.py; git commit -qam "fix: no full pass"')"
+HEADL="${N2:0:12}" pr8 "$N2" "[{\"oid\": \"$N2\", \"messageHeadline\": \"fix: no full pass\", \"messageBody\": \"\"}]" "$(HEADL="${N2:0:12}" nbody)" \
+  "d['comments'][0]['body'] = d['comments'][0]['body'].replace('Head: $N', 'Head: $N2')"
+run 1 merge-ask 8; [[ "$err" == *"(1 item), head ${N2:0:12}:"$'\n'"  - Full pass: head ${N2:0:12} has no current recorded full gate pass"* ]] || fail "no-criterion lane without a full pass: $err"
 # a lane that claims a criterion with no rows is still refused naming the table (#acceptance-merge-ask-evidence)
-qc8='[{"oid": "4444444444444444444444444444444444444444", "messageHeadline": "qc: built acceptance-a (judged 0123456789ab)", "messageBody": ""}]'
+NQ="$(on "$N" git commit -q --allow-empty -m "qc: built acceptance-a (judged 0123456789ab)")"   # a qc commit on the lane
 for tbl in "" "$HDR"; do
   want="criterion table: $([[ -z "$tbl" ]] && echo missing || echo 'no rows')"
-  pr8 "$N" "$qc8" "$(TABLE="$tbl" nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "qc commit, no rows ('$want'): $err"
+  HEADL="${NQ:0:12}" pr8 "$NQ" "" "$(HEADL="${NQ:0:12}" TABLE="$tbl" nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "qc commit, no rows ('$want'): $err"
   pr8 "$N" "" "$(TABLE="$tbl" BUILT=demo#acceptance-a nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "Built id, no rows ('$want'): $err"
   pr8 "$N" "" "$(TABLE="$tbl" FAILED=$'Failed:\n- acceptance-c: repair ticket #9' nbody)"; run 1 merge-ask 8 "${ST[@]}"; grep -q "$want" <<<"$err" || fail "Failed id, no rows ('$want'): $err"
   sed 's/"planned", "pr": null/"built", "pr": 8/' docs/specs/demo.status.json > "$t/s8.json"
   pr8 "$N" "" "$(TABLE="$tbl" nbody)"; run 1 merge-ask 8 --status "$t/s8.json"; grep -q "$want" <<<"$err" || fail "status entry built with the PR, no rows ('$want'): $err"
 done
 pr8 "$N" "" "$(BUILT=acceptance-a nbody)"; run 1 merge-ask 8; grep -q "name the lane's status file" <<<"$err" || fail "criterion lane with no --status: $err"
+# More than 100 commits: `gh pr view --json commits` lists at most 100, so the PR's commits are read from git
+# (BASE..head). PR #8's head NL is the 101st commit off main; the fake gh lists only the first 100, as GitHub does.
+# verdict accepts NL and merge-ask passes on it.
+NL="$(on "$B" sh -c 'for i in $(seq 1 101); do echo "$i" > many.txt; git add many.txt; git commit -qm "chore: step $i"; done')"
+on "$NL" "$G" record --reason "lane final head" --seconds 1 >/dev/null
+CAP="$(git rev-list --reverse "$B..$NL" | head -100 | python3 -c 'import json, sys; print(json.dumps([{"oid": l.strip(), "messageHeadline": "chore", "messageBody": ""} for l in sys.stdin]))')"
+export CAP
+HEADL="${NL:0:12}" pr8 "$NL" "" "$(HEADL="${NL:0:12}" nbody)" "d['commits'] = json.loads(os.environ['CAP'])"
+[[ "$(python3 -c 'import json, sys; d = json.load(open(sys.argv[1])); print(len(d["commits"]), d["headRefOid"] in {c["oid"] for c in d["commits"]})' "$FAKE_GH/pr/8.json")" == "100 False" ]] \
+  || fail "the 101-commit PR fixture does not cap its commits at 100 without its head"
+run 0 verdict 8 "$NL" "$t/report"; grep -q "(clear, head ${NL:0:12})" <<<"$err" || fail "verdict on the 101st commit of a PR: $err"
+run 0 merge-ask 8; [[ "$(head -1 <<<"$out")" == "## Merge ask" ]] || fail "merge-ask on a PR of 101 commits did not pass: $out"
+unset CAP
 # fields: a label of words one space apart is a field (Prior art: code-review step 4, Report fields); two spaces is not.
 printf 'Checks: none\nPrior art: PyYAML 6.0.2 | license: MIT\nPrior  art: x\n' > "$t/fields"
 run 0 fields "$t/fields"
 python3 -c 'import json, sys; f = json.loads(sys.argv[1])["fields"]; assert f == {"Prior art": ["PyYAML 6.0.2 | license: MIT"]}, f' "$out" \
   || fail "fields: Prior art not read as one field: $out"
-echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (demo checks or agent fallback, from the judged head's qc.toml), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks (none reported passes only with no workflow file at the head and a base requiring no check, by protection or ruleset, the no-ruleset plan counting as none; required checks or an unreadable policy fail naming it), rows, Built = status and named by a qc commit (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table)"
+echo "lane-merge-ask: ok (fields reads a two-word label; verdict create, update in place, unchanged, refusals and failed writes leave no comment; merge-ask pass prints the section and each row's decision source (the latest qc result at the judged head, none without one), offline gh, PR #16 names each item, parent line (GitHub Closes #6 required, a prefix, another closing line, a closing link after it on its line or an issue URL fails; a Linear lane passes on Tracks ENG-123, fails without it or with a Closes line, own or on its line), stale head, failing/pending/no checks (none reported passes only with no workflow file at the head and a base requiring no check, by protection or ruleset, the no-ruleset plan counting as none; required checks or an unreadable policy fail naming it), rows, Built = status and named by a qc commit, read from git (built-then-reset passes), verdict link head/blocking/marker, untriaged fail, multi-spec; verdict ignores fenced and quoted lines (#144 cases), disagreeing verdicts refused; check classes: proxy posts only as blocking, missing, malformed, no owner, other class, Checks: other, none plus lines refused, merge-ask lists them and refuses an unclassified or clear-with-proxy comment; one judged head: rows on two heads, a code commit after qc, a qc commit with a non-status file, a hand status edit, a sha not in the PR and an old table fail; exact-head rerun passes; a clean main merge passes with its proof line; a main merge touching a lane file, a resolved conflict or another branch fails; a no-criterion lane passes with no table or a header, with or without --status, on its verdict's head or a proven clean merge, and fails a code commit after it or a merge without the proof line; a criterion lane (qc commit, Built or Failed id, status entry built with the PR) with no rows is refused naming the table; full pass: a head with none refuses naming it, one before qc's status commit or a clean main merge keeps it, a main merge changing the gate configuration or the shared-machinery list makes it stale, one recorded on a dirty tree refuses, a no-criterion lane alike; gate time: the final head's full run over its budget and grown past the share, with trend and slowest items, the ask passing or failing the same without it; a PR of 101 commits (gh lists 100): verdict on its head, merge-ask passes)"

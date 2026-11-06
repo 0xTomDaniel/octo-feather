@@ -1,54 +1,26 @@
 #!/usr/bin/env python3
 """octo-feather-shape [--json] [pi args...]   (`just shape`, docs/adr/0021)
 
-Start Pi in the target repo as the owner's shaping chat: no role file, no
-factory skills, only the shaping skills. From the kit: grill-with-docs,
-improve-codebase-architecture, sharpen, and the grilling, domain-modeling and
-codebase-design skills they call. From the target repo's .agents/skills (never
-home, as pi-role looks up externalSkills): spec-chat-shape, skipped with a
-warning until Spec Chat is installed there. --json prints the pi args.
+Start the shaper role in the target repo: `pi-role agents/shaper.md` from the
+kit, run from the working directory, so its listed kit skills load and its
+externalSkills (Spec Chat's) come from the target repo's .agents/skills, never
+home (pi-role --help). --json prints pi-role's launch (pi-role --json).
 """
-import importlib.machinery, importlib.util, json, os, subprocess, sys
+import os, subprocess, sys
 from pathlib import Path
 
 KIT = Path(__file__).resolve().parent.parent
-KIT_SKILLS = ["grill-with-docs", "grilling", "domain-modeling", "improve-codebase-architecture", "codebase-design", "sharpen"]
-REPO_SKILLS = ["spec-chat-shape"]
-PROMPT = ("This is the owner's shaping chat (docs/adr/0021 in the octo-feather kit). Turn what the owner wants into an accepted spec "
-          "with your skills: sharpen the ask, grill it, shape it with spec-chat-shape. Do not implement: changes to code, "
-          "scripts or config are built by the factory after the owner accepts the spec.")
-
-
-def pi_role():
-    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
-    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
-    loader.exec_module(mod)
-    return mod
 
 
 def main(argv):
-    as_json = bool(argv) and argv[0] == "--json"
-    argv = argv[1:] if as_json else argv
-    args = ["--no-mcp", "--no-skills", "--append-system-prompt", PROMPT]
-    for s in KIT_SKILLS:
-        d = KIT / ".agents" / "skills" / s
-        if not (d / "SKILL.md").is_file():
-            sys.exit(f"octo-feather-shape: kit skill {s} missing at {d}")
-        args += ["--skill", str(d)]
     # Review state never lands in the target's tracked tree (octo-feather-exclude).
     if subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], capture_output=True).returncode == 0:
         subprocess.run([str(KIT / "scripts" / "octo-feather-exclude")], stdout=sys.stderr, check=False)
-    roots = pi_role().repo_skill_roots()
-    for s in REPO_SKILLS:
-        hit = [os.path.join(r, s) for r in roots if os.path.isfile(os.path.join(r, s, "SKILL.md"))]
-        if hit:
-            args += ["--skill", hit[0]]
-        else:
-            print(f"octo-feather-shape: {s} is not installed in {' or '.join(roots)}; shaping without it", file=sys.stderr)
-    if as_json:
-        print(json.dumps({"args": args + argv})); return 0
-    os.execvp("pi", ["pi", *args, *argv])
+    as_json = argv[:1] == ["--json"]
+    pi_role = str(KIT / "scripts" / "pi-role")
+    role = str(KIT / "agents" / "shaper.md")
+    os.execv(pi_role, [pi_role, *(["--json"] if as_json else []), role, *argv[as_json:]])
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    main(sys.argv[1:])

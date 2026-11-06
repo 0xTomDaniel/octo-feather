@@ -93,8 +93,9 @@ The factory evals' field_lines fact runs it (scripts/octo-feather-qa).
 
 `merge-ask` reads through `gh pr view --json` (also under the qc judge's offline gh) and
 the git repo of the current directory (the lane worktree, PR head and BASE fetched; BASE
-defaults to origin/main): the judged head's qc.toml for a lane with criterion rows, and the
-history when the PR head is not the judged head. The PR body carries the
+defaults to the PR's base branch on origin): the PR's commits and their subjects (BASE..head:
+`gh pr view --json commits` lists at most 100; `verdict` reads them the same way), the judged
+head's qc.toml for a lane with criterion rows, and the history when the PR head is not the judged head. The PR body carries the
 parent line (spec issue-lifecycle #gates-pr-line): the target's tracker skill's `pr-line` for
 the key its `key-from-branch` reads from the PR's branch (Closes #82 on GitHub, Tracks ENG-123
 on Linear), and no other line closes a GitHub issue. The section, up to the next `## ` heading:
@@ -126,13 +127,21 @@ at H: same files, same content. Anything else fails naming the commit and file: 
 and the review again. `Judged:` is the proof: `<H12> is the PR head`, or `<H12> to <H'12>:`
 the qc commits and files, and per main merge `lane diff identical (N files, sha256 <12 hex>)`.
 Ids are <spec slug>#<id> or a bare id one --status file names; pass --status once per spec.
+Every lane's PR head needs a current recorded full gate pass (the rule: spec #lanes-checkpoints): the record
+`octo-feather-gate passed` prints for it, or for a lane commit it stands for by the same H to H' check, whose
+record is clean and whose gate_config and list are the head's own (`octo-feather-gate config`); else `Full pass:` fails naming the head.
 Insufficient evidence (quality spec #qc-results) is never triaged: the check fails naming each criterion whose row
 says it, or whose latest result in the qc reports at the judged head says it (octo-feather-qc --help, Report;
 OCTO_FEATHER_QC_DIR as there), with what is missing, until a rerun of just qc gives it pass or fail.
 The verdict comment must also carry its check classes (`Checks: none` or `Check:` lines, no
-`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: `demo checks`
-when qc.toml at H (this directory's repo) declares a demo for the criterion, else `agent fallback`, the
-rule just qc decides by (quality spec #qc-results); then `Review check classes` listing the comment's
+`class: proxy`). Pass: the section on stdout, then `Decision sources`, one line per row: the decision source
+of the criterion's latest result in the qc reports at the judged head (as for insufficient evidence, above), or
+`no qc result at the judged head`, shown only (quality spec #qc-results); `Review check classes` (below); last, `Gate time`, the full gate on the final head (the passed
+full run, check-runs.jsonl in the state dir, on the PR head or the latest lane commit before it that has one)
+against gate-budget.toml at the PR head, in the report's lines (report, above; the trend: passed full runs on the
+head's history), flagged and shown only: the code reviewer judges it, no gate reads it, and the ask passes or
+fails the same without it (spec issue-lifecycle #lanes-checkpoints; on a failure the block goes to stderr before
+the items). `Review check classes` lists the comment's
 lines for the owner (send it all with herdr-say --parent). Failure: each missing item
 with its fix on stderr, exit 1.
 
@@ -271,6 +280,9 @@ then per lane:
     gate time: lane <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
     gate time: main <total_s>s exit <exit>, <N> steps, head <12 hex>, started <start>
                                                  the check-runs.jsonl line with the latest start whose
+                                                 tier is full (a subset run, just fast's, never stands in;
+                                                 a line with no tier, written before the runners recorded
+                                                 one, counts as today) and whose
                                                  head is a commit of the PR (`gh pr view --json commits`),
                                                  then of the default branch's last 100 commits (one
                                                  `gh api repos/<repository>/commits` per repository);
@@ -278,6 +290,24 @@ then per lane:
 
 After the lanes:
 
+  gate budget <owner/name>: the latest passed full gate run against gate-budget.toml on <owner/name>'s default branch
+    full gate: <s>s, head <12 hex>, started <start>: OVER BUDGET by <s>s (budget <s>s)
+                                                 or `within budget, <s>s to spare (budget <s>s)`, `no budget (<why>)`
+    growth: <+x.y%> over the trend's median <s>s (the <N> passed full runs before it); set share <p>%: GROWN
+                                                 or `within`; `no set share (<why>)` with no budget
+    trend: <s>s <12 hex> <start>, ... (passed full runs, oldest first)
+    slowest: <name> <s>s, ...                    the latest run's 5 slowest items
+                                                 one block per open lane's repository (spec comms
+                                                 #report-field-gate-time): check-runs.jsonl lines with tier full
+                                                 and exit 0 (each runner's trend writer sets tier: the kit's
+                                                 tests/gate/conftest.py and its copy templates/python/tests/
+                                                 conftest.py for pytest, templates/typescript/tests/trend-
+                                                 reporter.ts for Vitest; a line without it is no full run
+                                                 here) whose head is a commit of
+                                                 the default branch (the same 100) or of its open lanes' PRs;
+                                                 the latest is the full gate time, trend_runs before it the
+                                                 trend; `gate budget <repo>: no passed full gate run ...` or
+                                                 `unread: ...` instead. Shown only: no gate reads it
   owner queue:                                   (`owner queue: none` with none pending)
     lane <record name> gate <gate> asked <at>    oldest first
   owner-caught (director.handoffs.jsonl):        (`: none` with no such finding; `owner-caught: log ...: none` with no log)
@@ -285,6 +315,13 @@ After the lanes:
   director reflection: last ran <at>             the director log's latest reflection line (`never ran (<log>)`
                                                  with none; `never ran (<log>: none)` with no log)
   spend.jsonl: <N> unparsable line(s) (<line numbers>)       when it has any; likewise check-runs.jsonl
+
+gate-budget.toml, a repository's gate-time budget at its root (read from its default branch, `gh api
+repos/<repository>/contents/gate-budget.toml`; by merge-ask at the PR head), kept by the factory like any repo
+policy: TOML, read with the standard library, a file of its own so a budget change changes no gate configuration
+(octo-feather-gate config) and no qc contract. Keys: budget_seconds (a number > 0), growth_share (a number >= 0:
+GROWN when the run is more than that share over the trend's median), trend_runs (an integer >= 1: that many passed
+full runs before the latest make the trend; 5 shown with no file). Anything else is `unread: gate-budget.toml (<repo>)`.
 
 Every time prints as its UTC instant and `(<age> ago)` at the report's instant. A source it cannot
 read prints as `unread: <source>: <reason>` where its facts would be; a log's unparsable lines are
@@ -1023,20 +1060,22 @@ def lane_diff(x: str, base: str, status: set[str]) -> dict[str, str]:
     return {p: meta for meta, p in zip(out[0::2], out[1::2]) if p and p not in status}
 
 
-def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tuple[str | None, list[str]]:
+def head_proof(judged: str, head: str, status_files: list[str], base: str, at: str = "judged head",
+               kept: str = "the qc verdict", rerun: str = "") -> tuple[str | None, list[str]]:
     """(proof line, []) when the PR HEAD stands for the JUDGED head, else (None, why each part does not)
-    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical."""
+    (spec #lanes-one-head): only qc status commits and clean merges of BASE that leave the lane diff identical.
+    AT names what JUDGED is, KEPT what carries over, RERUN the fix (a full gate pass: full_pass)."""
     j, h = judged[:12], head[:12]
     if head.lower() == judged.lower():
         return f"{j} is the PR head", []
-    rerun = f"run just qc and the review again, in parallel, on {h}"
+    rerun = rerun or f"run just qc and the review again, in parallel, on {h}"
     for sha in (judged, head):
         if git("cat-file", "-e", f"{sha}^{{commit}}", ok=(0, 1, 128))[0]:
             raise Refuse(f"commit {sha[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
     if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
         raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
     if git("merge-base", "--is-ancestor", judged, head, ok=(0, 1))[0]:
-        return None, [f"judged head {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
+        return None, [f"{at} {j} is not an ancestor of the PR head {h} (rebased or reset): {rerun}"]
     top = os.path.realpath(git("rev-parse", "--show-toplevel")[1].strip())
     status = set()
     for f in status_files:
@@ -1053,21 +1092,21 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tu
             files = set(filter(None, git("diff-tree", "--no-commit-id", "--name-only", "-r", "-z", c)[1].split("\0")))
             other = sorted(files - status)
             if other:
-                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} changes {', '.join(other)}, not only the status "
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} changes {', '.join(other)}, not only the status "
                            f"file{'s' * (len(status) > 1)} qc writes ({', '.join(sorted(status))}): {rerun}")
             elif not ((q := QC_COMMIT.match(s)) and q.group(2)):
-                why.append(f"commit {c[:12]} {s[:60]!r} after the judged head {j} is not a `qc: built ... (judged <sha>)` commit: "
+                why.append(f"commit {c[:12]} {s[:60]!r} after the {at} {j} is not a `qc: built ... (judged <sha>)` commit: "
                            f"only just qc writes the status file; drop it, then {rerun}")
             else:
                 qc.append(c); touched |= files
         elif len(parents) != 2 or not any(git("merge-base", "--is-ancestor", p, base, ok=(0, 1))[0] == 0 for p in parents[1:]):
             why.append(f"merge {c[:12]} {s[:60]!r} brings in {', '.join(p[:12] for p in parents[1:])}, not {base}: "
-                       f"only a merge of main keeps the qc verdict; {rerun}")
+                       f"only a merge of main keeps {kept}; {rerun}")
         else:
             rc, out = git("merge-tree", "--write-tree", "--no-messages", *parents, ok=(0, 1))
             auto, tree = out.split("\n", 1)[0].strip(), git("rev-parse", f"{c}^{{tree}}")[1].strip()
             if rc:
-                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: the qc verdict does not carry over; {rerun}")
+                why.append(f"merge {c[:12]} {s[:60]!r} resolved a conflict with {base}: {kept} does not carry over; {rerun}")
             elif auto != tree:
                 diff = git("diff", "--name-only", auto, tree)[1].split()
                 why.append(f"merge {c[:12]} {s[:60]!r} changes {', '.join(diff)} beyond git's automatic merge: {rerun}")
@@ -1079,7 +1118,7 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tu
         moved = sorted(p for p in before.keys() | after.keys() if before.get(p) != after.get(p))
         if moved:
             why.append(f"after merging {base}, the lane's own diff changed in {', '.join(moved)} (main touched a lane file, "
-                       f"or the lane's diff moved): the qc verdict does not carry over; {rerun}")
+                       f"or the lane's diff moved): {kept} does not carry over; {rerun}")
         else:
             d = hashlib.sha256("\n".join(f"{p} {before[p]}" for p in sorted(before)).encode()).hexdigest()
             proof += (f"; clean merge{'s' * (len(merges) > 1)} of main {' '.join(c[:12] for c in merges)}: "
@@ -1087,12 +1126,98 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str) -> tu
     return (None, why) if why else (proof, [])
 
 
-def subject(c: dict) -> str:
-    """A commit's full subject: GitHub cuts messageHeadline at ~70 chars with an ellipsis and starts messageBody with the rest."""
-    h, body = c.get("messageHeadline") or "", c.get("messageBody") or ""
-    if h.endswith("\u2026") and body.startswith("\u2026"):
-        return h[:-1] + body[1:].split("\n", 1)[0]
-    return h
+def gate(*args: str) -> tuple[int, str]:
+    """scripts/octo-feather-gate's exit code and stdout (it owns the full pass record and the gate configuration)."""
+    p = subprocess.run([sys.executable, str(KIT / "scripts" / "octo-feather-gate"), *args], capture_output=True, text=True,
+                       stdin=subprocess.DEVNULL, check=False)
+    return p.returncode, p.stdout
+
+
+def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
+    """[] when HEAD has a current recorded full gate pass, else why not. The rule: issue-lifecycle #lanes-checkpoints.
+    Current: recorded (octo-feather-gate passed) on a clean tree at HEAD, or at a lane commit head_proof proves HEAD
+    stands for, with the identity fields of HEAD itself (octo-feather-gate config: gate_config, list)."""
+    h = head[:12]
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        return [f"commit {h} is not in this repo: run merge-ask in the lane worktree after git fetch origin"]
+    fix = (f"run the full gate, just check, on {h} and record its pass (octo-feather-integrate --full records it; "
+           "octo-feather-gate --help)")
+    rc, out = gate("config", head)
+    try:
+        ident = cast("dict[str, object]", json.loads(out)) if rc == 0 else {}
+    except ValueError:
+        ident = {}
+    if not ident:
+        return [f"head {h}: its gate configuration is unreadable (octo-feather-gate config {h} exit {rc}): {fix}"]
+    revs = git("rev-list", "--topo-order", head, f"^{base}")[1].split()
+    why: list[str] = []
+    for c in [head] + [r for r in revs if r.lower() != head.lower()]:
+        rc, out = gate("passed", c)
+        try:
+            raw = json.loads(out) if rc == 0 else None
+        except ValueError:
+            raw = None
+        rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
+        if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
+            continue
+        if rec.get("clean") is not True:
+            no = [f"it was recorded on a dirty tree (clean {json.dumps(rec.get('clean'))}): it proves nothing; {fix}"]
+        else:
+            try:
+                _, no = head_proof(c, head, status_files, base, at="full pass", kept="the full pass", rerun=fix)
+            except Refuse as e:
+                no = [str(e)]
+        no = no or [(f"its {k} {str(rec.get(k))[:12]} is not the head's current {str(v)[:12]} (octo-feather-gate config {h}): "
+                     f"stale; {fix}") for k, v in ident.items() if rec.get(k) != v]
+        if not no:
+            return []
+        why = why or [f"the full pass recorded at {c[:12]} does not carry over: {w}" for w in no]
+    return [f"head {h} has no current recorded full gate pass for that head and its gate configuration"
+            + (f"; {'; '.join(why)}" if why else f" (none recorded on {h} or the lane commits before it): {fix}")]
+
+
+def merge_ask_gate_time(head: str, base: str) -> list[str]:
+    """The full gate's wall time on the final head against gate-budget.toml at that head, with its trend and slowest
+    items (spec issue-lifecycle #lanes-checkpoints). Shown only: the code reviewer judges it, no gate reads it, and
+    merge-ask passes or fails the same without it."""
+    import datetime
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    h = head[:12]
+    title = (f"Gate time (the full gate on the final head against {BUDGET} at {h}; the code reviewer judges it, "
+             "no gate reads it: issue-lifecycle #lanes-checkpoints):")
+    path = state_dir() / ReportSources.TREND
+    try:
+        got = cast("tuple[list[tuple[int, Run]], list[int]] | None", numbered_jsonl(path))
+        if got is None:
+            return [title, f"  no gate run recorded ({path}: none)"]
+        lane = [head] + [r for r in git("rev-list", "--topo-order", head, f"^{base}")[1].split() if r != head]
+        runs = passed_full(got[0], set(git("rev-list", "--max-count=1000", head)[1].split()))
+        last = next((r for c in lane for r in reversed(runs) if r.get("head") == c), None)
+        if last is None:
+            return [title, f"  no passed full gate run recorded on {h} or the lane commits before it ({path})"]
+        rc, text = git("show", f"{head}:{BUDGET}", ok=(0, 128))
+    except (OSError, UnicodeDecodeError, Refuse) as e:
+        return [title, f"  unread: {e}"]
+    budget, why = budget_parse(text if rc == 0 else None)
+    return [title, *budget_lines(last, runs[:runs.index(last)], budget, why, now, "  ")]
+
+
+def pr_commits(pr: int, head: str, base: str) -> list[tuple[str, str]]:
+    """PR's commits, (sha, subject) each, newest first, read from this directory's repo: `git log BASE..HEAD`, HEAD the
+    PR's head (gh's headRefOid), BASE its base branch on origin or --base; never `gh pr view --json commits`, which
+    lists at most 100. Refused when either is not a commit here: the lane worktree with both fetched."""
+    if git("cat-file", "-e", f"{head}^{{commit}}", ok=(0, 1, 128))[0]:
+        raise Refuse(f"PR #{pr}'s head {head[:12]} is not a commit in this repo: run it in the lane worktree after "
+                     "git fetch origin (the PR's commits are read from git)")
+    if git("rev-parse", "--verify", "-q", f"{base}^{{commit}}", ok=(0, 1))[0]:
+        raise Refuse(f"base {base} is not a commit here: git fetch origin, or pass --base REF (the PR's base branch)")
+    out = git("log", "--format=%H%x00%s", f"{base}..{head}")[1]
+    return [cast("tuple[str, str]", tuple(l.split("\0", 1))) for l in out.split("\n") if "\0" in l]
+
+
+def pr_base(ref: str, base: str | None) -> str:
+    """The base a PR's commits are read against: BASE (--base) when given, else REF, its base branch, on origin."""
+    return base or f"origin/{ref or 'main'}"
 
 
 def no_traceback(fn):
@@ -1132,9 +1257,9 @@ def cmd_verdict(args: list[str]) -> int:
     if proxy and verdict == "clear":
         raise Refuse(f"report says `Verdict: clear` with a proxy check ({proxy[0]}): a proxy check blocks "
                      "(docs/adr/0008); make it a blocking finding and `Verdict: blocking`, then rerun")
-    d = pr_view(pr, "headRefOid,comments,commits", repo)
-    head = d["headRefOid"]
-    at = [c.get("oid") or "" for c in d["commits"] or [] if head_matches(want, c.get("oid") or "")]
+    d = pr_view(pr, "headRefOid,baseRefName,comments", repo)
+    head = cast("str", d["headRefOid"])
+    at = [oid for oid, _ in pr_commits(pr, head, pr_base(cast("str | None", d["baseRefName"]) or "", None)) if head_matches(want, oid)]
     if len(at) != 1:
         raise Refuse(f"HEAD {want} is {'ambiguous among the commits' if at else 'not a commit'} of PR #{pr} (head {head[:12]}): "
                      f"push the reviewed head, or name the head the review judged in full")
@@ -1383,7 +1508,7 @@ def parent_line(body: str, branch: str) -> list[str]:
     return out
 
 
-def no_criterion(lines: list[str], commits: list[dict], specs: dict[str, dict], pr: int) -> bool:
+def no_criterion(lines: list[str], commits: list[tuple[str, str]], specs: dict[str, dict[str, dict[str, object]]], pr: int) -> bool:
     """The lane builds no criterion (spec #lanes-one-head): `Built: none`, `Failed: none`, no criterion row,
     no `qc: built` commit on the PR and no status entry built with it."""
     b, f = field(lines, "Built"), field(lines, "Failed")
@@ -1395,7 +1520,7 @@ def no_criterion(lines: list[str], commits: list[dict], specs: dict[str, dict], 
             break
         if not all(re.fullmatch(r":?-+:?", c.strip()) for c in l.strip().strip("|").split("|")):
             return False
-    if any(QC_COMMIT.match(subject(c)) for c in commits):
+    if any(QC_COMMIT.match(s) for _, s in commits):
         return False
     return not any(v.get("status") == "built" and v.get("pr") == pr for cr in specs.values() for v in cr.values())
 
@@ -1417,23 +1542,31 @@ def verdict_head(lines: list[str], comments: list, commits: list[tuple[str, str]
     return at[0].lower(), None
 
 
-def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
-    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
-    (quality spec #qc-results), named with what is missing and its report; reports: octo-feather-qc --help."""
+def qc_latest(judged: str) -> dict[str, tuple[dict[str, object], str]]:
+    """Each criterion's (<spec>#<id>) latest result in the qc reports at the JUDGED head, with its report's name
+    (reports: octo-feather-qc --help, Report; OCTO_FEATHER_QC_DIR as there)."""
     d = Path(os.environ.get("OCTO_FEATHER_QC_DIR") or state_dir() / "qc")
-    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    latest: dict[str, tuple[dict[str, object], str]] = {}
     for p in sorted(d.glob(f"{judged.lower()}-*.json"), key=lambda p: (p.name.split("-")[1], p.stat().st_mtime_ns)):
         try:   # <head>-<UTC stamp>-<runid>.json, oldest first: a rerun's result replaces the earlier one
             rep = json.loads(p.read_text(encoding="utf-8"))
             spec, results = str(rep.get("spec")), list(rep.get("results") or [])
         except (OSError, ValueError, AttributeError, TypeError):
             continue
-        for r in results if spec in specs else []:
-            try:
-                short = r.get("verdict") == "insufficient evidence"
-                latest[f"{spec}#{r['id']}"] = (("; ".join(map(str, r.get("missing") or [])) or "evidence incomplete") if short else "", p.name)
-            except (AttributeError, KeyError, TypeError):
-                continue
+        for r in results:
+            if isinstance(r, dict) and "id" in r:
+                latest[f"{spec}#{r['id']}"] = (cast("dict[str, object]", r), p.name)
+    return latest
+
+
+def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
+    """Each criterion of the SPECS (slugs) whose latest result in the qc reports at the JUDGED head is insufficient evidence
+    (quality spec #qc-results), named with what is missing and its report (qc_latest)."""
+    latest: dict[str, tuple[str, str]] = {}   # <spec>#<id>: (what is missing, report), or ("", report) for pass or fail
+    for cid, (r, name) in qc_latest(judged).items():
+        if cid.split("#", 1)[0] in specs:
+            short = r.get("verdict") == "insufficient evidence"
+            latest[cid] = (("; ".join(map(str, cast("list[object]", r.get("missing") or []))) or "evidence incomplete") if short else "", name)
     return [f"criterion {cid}: insufficient evidence at the judged head {judged[:12]} ({why}; qc report {name}): never triaged; "
             "make what is missing available, then rerun just qc on it until it gives pass or fail"
             for cid, (why, name) in sorted(latest.items()) if why]
@@ -1442,25 +1575,30 @@ def qc_insufficient(judged: str, specs: set[str]) -> list[str]:
 @no_traceback
 def cmd_merge_ask(args: list[str]) -> int:
     args, repo = take_repo(args)
-    files, rest, i, base = [], [], 0, "origin/main"
+    files, rest, i, base_arg = [], [], 0, None
     while i < len(args):
         if args[i] == "--status" and i + 1 < len(args):
             files.append(args[i + 1]); i += 2
         elif args[i] == "--base" and i + 1 < len(args):
-            base = args[i + 1]; i += 2
+            base_arg = args[i + 1]; i += 2
         else:
             rest.append(args[i]); i += 1
     if len(rest) != 1:
         raise Refuse(f"usage: octo-feather-lane merge-ask PR [--status FILE...] [--base REF] [--repo O/R] (got {' '.join(args) or 'nothing'})")
     pr = pr_number(rest[0]); specs = load_specs(files) if files else {}
-    d = pr_view(pr, "body,headRefName,headRefOid,statusCheckRollup,comments,commits", repo)
+    d = pr_view(pr, "body,baseRefName,headRefName,headRefOid,statusCheckRollup,comments", repo)
     head = d["headRefOid"]; miss: list[str] = []
+    base = pr_base(cast("str | None", d["baseRefName"]) or "", base_arg)
+    try:
+        commits = pr_commits(pr, cast("str", head), base)
+    except Refuse as e:   # named with the other gaps; no commit of the PR is read
+        commits = []; miss.append(f"PR commits: {e}")
     miss += parent_line(d["body"] or "", d["headRefName"] or "")
     sec = section(d["body"])
     if sec is None:
         miss.append("`## Merge ask` section: none in the PR body; add it (format: octo-feather-lane with no arguments)")
     lines = sec or []
-    no_crit = no_criterion(lines, d["commits"] or [], specs, pr)
+    no_crit = no_criterion(lines, commits, cast("dict[str, dict[str, dict[str, object]]]", specs), pr)
     if not files and not no_crit:
         load_specs(files)   # a lane that claims a criterion names its status files
 
@@ -1490,7 +1628,6 @@ def cmd_merge_ask(args: list[str]) -> int:
     if pending:
         miss.append(f"Checks: pending on head {head[:12]}: {', '.join(pending)}; wait for them to finish, then rerun")
 
-    commits = [(c.get("oid") or "", subject(c)) for c in d["commits"] or []]
     rows: dict[str, str] = {}; judged_at: set[str] = set()
     t = next((i for i, l in enumerate(lines) if re.fullmatch(r"\|\s*criterion\s*\|\s*qc verdict\s*\|\s*judged\s*\|\s*evidence\s*\|", l.strip(), re.I)), None)
     if t is None:
@@ -1540,6 +1677,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         miss += [f"Judged: {w}" for w in why]
         if proof and (not no_crit or jl or judged != head.lower()) and (not jl or jl[1].strip("`") != proof):
             miss.append(f"Judged: {'names ' + repr(jl[1]) if jl else 'missing'}; add the check's proof line `Judged: {proof}`")
+
+    miss += [f"Full pass: {w}" for w in full_pass(cast("str", head), cast("list[str]", files), base)]   # every lane, one building no criterion too
 
     review_checks: list[str] = []
     rv = field(lines, "Review verdict")
@@ -1632,13 +1771,13 @@ def cmd_merge_ask(args: list[str]) -> int:
 
     sources: list[str] = []
     if rows and judged:
-        try:
-            demos = declared_demos(judged)
-            sources = [f"Decision sources (qc.toml at the judged head {judged[:12]}; quality spec #qc-results):",
-                       *(f"- {cid}: {'demo checks' if cid in demos else 'agent fallback'}" for cid in sorted(rows))]
-        except Refuse as e:
-            miss.append(f"Decision sources: {e}")
+        latest = qc_latest(judged)
+        sources = [f"Decision sources (the latest qc result at the judged head {judged[:12]}; quality spec #qc-results):",
+                   *(f"- {cid}: {latest[cid][0].get('decision') or 'none named'}" if cid in latest
+                     else f"- {cid}: no qc result at the judged head" for cid in sorted(rows))]
+    gate_time = merge_ask_gate_time(cast("str", head), base)   # after the pass or fail was decided above
     if miss:
+        print("\n".join(gate_time), file=sys.stderr)
         raise Refuse(f"PR #{pr} merge ask incomplete ({len(miss)} item{'s' * (len(miss) > 1)}), head {head[:12]}:\n"
                      + "\n".join(f"  - {x}" for x in miss))
     print("\n".join(lines).strip())
@@ -1651,22 +1790,8 @@ def cmd_merge_ask(args: list[str]) -> int:
         print("\n".join(judged_lines))
     print("\nReview check classes (from the verdict comment, docs/adr/0008):")
     print("\n".join(f"- {c}" for c in review_checks))
+    print("\n" + "\n".join(gate_time))
     return 0
-
-
-def declared_demos(rev: str) -> set[str]:
-    """The criterion ids (<spec>#<anchor>) the app-driver contract, qc.toml at REV in this directory's repo, declares a demo
-    for (quality spec #qc-contract); none when REV has no qc.toml. just qc gives each other criterion the agent fallback."""
-    import tomllib
-    if git("cat-file", "-e", f"{rev}^{{commit}}", ok=(0, 1, 128))[0]:
-        raise Refuse(f"commit {rev[:12]} is not in this repo: run merge-ask in the lane worktree after git fetch origin")
-    if git("cat-file", "-e", f"{rev}:qc.toml", ok=(0, 1, 128))[0]:
-        return set()
-    try:
-        demo = tomllib.loads(git("show", f"{rev}:qc.toml")[1]).get("demo", {})
-    except tomllib.TOMLDecodeError as e:
-        raise Refuse(f"qc.toml at {rev[:12]} is not TOML ({e}): just qc refuses it too; fix the contract, run just qc again")
-    return {str(k) for k in cast("dict[str, object]", demo)} if isinstance(demo, dict) else set()
 
 
 class Unchecked(Refuse):
@@ -2622,12 +2747,100 @@ def numbered_jsonl(path: Path) -> tuple[list[tuple[int, dict]], list[int]] | Non
     return rows, bad
 
 
+BUDGET = "gate-budget.toml"   # the repo root's gate-time budget, kept by the factory (form: budget_text)
+BUDGET_TREND = 5                # trend runs shown when the repo has no budget file to set trend_runs
+SLOWEST = 5                     # slowest items shown
+
+
+Budget = dict[str, float]   # budget_seconds, growth_share, trend_runs (an int)
+Run = dict[str, object]     # one check-runs.jsonl line
+
+
+def budget_parse(text: str | None) -> tuple[Budget | None, str]:
+    """gate-budget.toml's three numbers, or None and why: absent (text None) or invalid. budget_seconds: the
+    full gate's wall-time budget; growth_share: the share of growth over the trend's median that is flagged;
+    trend_runs: how many passed full runs before the latest make the trend. Stdlib tomllib: the kit's scripts
+    stay stdlib-only (AGENTS.md)."""
+    import tomllib
+    if text is None:
+        return None, f"{BUDGET}: none"
+    try:
+        d: dict[str, object] = tomllib.loads(text)
+    except tomllib.TOMLDecodeError as e:
+        return None, f"{BUDGET}: {e}"
+    least = {"budget_seconds": 0.0, "growth_share": 0.0, "trend_runs": 1.0}
+    ok: Budget = {}
+    for k, low in least.items():
+        v = d.get(k)
+        if isinstance(v, (int, float)) and not isinstance(v, bool) and (v > low if k == "budget_seconds" else v >= low) \
+                and (k != "trend_runs" or isinstance(v, int)):
+            ok[k] = v
+    bad = [f"{k} {d.get(k)!r} is not a number of the right range" for k in least if k not in ok]
+    bad += [f"unknown key {k}" for k in sorted(set(d) - set(least))]
+    return (None, f"{BUDGET}: " + "; ".join(bad)) if bad else (ok, "")
+
+
+def total(d: Run) -> float:
+    t = d.get("total_s")
+    return float(t) if isinstance(t, (int, float)) else 0.0
+
+
+def passed_full(rows: list[tuple[int, Run]], heads: set[str]) -> list[Run]:
+    """check-runs.jsonl lines of passed full gate runs (tier full, exit 0, the runner's own fields) on HEADS, oldest first."""
+    runs = [d for _, d in rows if d.get("tier") == "full" and d.get("exit") == 0 and d.get("head") in heads
+            and utc(d.get("start")) is not None and isinstance(d.get("total_s"), (int, float))]
+    return sorted(runs, key=lambda d: str(d.get("start")))   # UTC instants of one form: text order is time order
+
+
+def secs(x: float) -> str:
+    return f"{round(x, 3):g}s"
+
+
+def budget_lines(last: Run, before: list[Run], budget: Budget | None, why: str, now: object, pad: str) -> list[str]:
+    """The full gate run LAST against BUDGET, with the trend (passed full runs BEFORE it, oldest first) and its
+    slowest items; flags OVER BUDGET and GROWN. Display only: no gate reads it (issue-lifecycle #lanes-checkpoints)."""
+    import statistics
+    t = total(last)
+    run = f"{pad}full gate: {secs(t)}, head {str(last.get('head'))[:12]}, started {stamp(last.get('start'), now)}"
+    if budget is None:
+        out = [f"{run}: no budget ({why})"]
+    else:
+        b = float(budget["budget_seconds"])
+        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t > b else f"within budget, {secs(b - t)} to spare")
+               + f" (budget {secs(b)})"]
+    base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND):]
+    if not base:
+        out.append(f"{pad}growth: no passed full run before it to compare")
+    else:
+        med = statistics.median(total(d) for d in base)
+        grow = (t - med) / med if med else 0.0
+        g = f"{pad}growth: {grow:+.1%} over the trend's median {secs(med)} (the {len(base)} passed full run{'s' * (len(base) > 1)} before it)"
+        if budget is None:
+            out.append(f"{g}; no set share ({why})")
+        else:
+            share = float(budget["growth_share"])
+            out.append(f"{g}; set share {share * 100:g}%: " + ("GROWN" if grow > share else "within"))
+    out.append(f"{pad}trend: " + ", ".join(f"{secs(total(d))} {str(d.get('head'))[:12]} {d.get('start')}" for d in [*base, last])
+               + " (passed full runs, oldest first)")
+    raw = last.get("steps")
+    steps: list[tuple[float, str]] = []
+    for x in cast("list[object]", raw) if isinstance(raw, list) else []:
+        st = cast("dict[str, object]", x) if isinstance(x, dict) else {}
+        sec = st.get("seconds")
+        if isinstance(sec, (int, float)):
+            steps.append((float(sec), str(st.get("name"))))
+    top = sorted(steps, key=lambda s: (-s[0], s[1]))[:SLOWEST]
+    out.append(f"{pad}slowest: " + (", ".join(f"{name} {secs(sec)}" for sec, name in top) or "no items recorded"))
+    return out
+
+
 class ReportSources:
     """The state dir's spend ledger and gate run trend, read once, and each repository's default-branch commits, read once."""
     LEDGER, TREND = "spend.jsonl", "check-runs.jsonl"
 
     def __init__(self, state: Path, unread: list[str]):
         self.unread, self.main = unread, {}
+        self.repo_heads: dict[str, set[str]] = {}   # each open lane's repository: its lanes' PR commits
         self.ledger, self.ledger_why = self.load(state / self.LEDGER)
         self.trend, self.trend_why = self.load(state / self.TREND)
         if self.ledger:   # a cost neither dollars nor null (unknown) makes the line unreadable
@@ -2664,8 +2877,9 @@ class ReportSources:
                 f"{unknown} call{'s' if unknown != 1 else ''} of unknown cost")
 
     def last_run(self, heads: set[str]) -> dict | None:
+        """The latest gate run on HEADS: a full line, or one with no tier (written before the runners recorded one)."""
         runs = [(utc(d.get("start")) is not None, str(utc(d.get("start")) or ""), i, d)
-                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads]
+                for i, d in (self.trend or ([], []))[0] if d.get("head") in heads and ("tier" not in d or d["tier"] == "full")]
         return max(runs, key=lambda r: r[:3])[3] if runs else None
 
     def main_heads(self, repo: object) -> set[str] | str:
@@ -2699,11 +2913,50 @@ class ReportSources:
         elif pr_heads is None:
             lane = f"  gate time: lane unread: GitHub (PR #{pr})"
         else:
-            lane = run("lane", self.last_run(pr_heads), f"no gate run on a commit of PR #{pr}")
+            lane = run("lane", self.last_run(pr_heads), f"no full gate run on a commit of PR #{pr}")
         main = self.main_heads(repo)
         if isinstance(main, str):
             return [lane, f"  gate time: main {main}"]
-        return [lane, run("main", self.last_run(main), f"no gate run on a commit of {repo}'s default branch")]
+        return [lane, run("main", self.last_run(main), f"no full gate run on a commit of {repo}'s default branch")]
+
+    def budget_text(self, repo: str) -> str | None:
+        """gate-budget.toml on repo's default branch (None: no such file); Refuse when GitHub cannot say."""
+        try:
+            return gh(["api", f"repos/{repo}/contents/{BUDGET}", "-H", "Accept: application/vnd.github.raw"],
+                      f"check {repo} exists, and gh auth status")
+        except Refuse as e:
+            if "HTTP 404" in str(e):
+                return None
+            raise
+
+    def budgets(self, now: object) -> list[str]:
+        """Per open lane's repository, its latest passed full gate run on a commit of its default branch or of
+        its lanes' PRs, against its gate-time budget (spec comms #report-field-gate-time)."""
+        out: list[str] = []
+        trend = cast("tuple[list[tuple[int, Run]], list[int]] | None", self.trend)
+        for repo in sorted(self.repo_heads):
+            head = f"gate budget {repo}:"
+            if self.trend_why:
+                out.append(f"{head} unread: {self.TREND}: {self.trend_why}"); continue
+            if trend is None:
+                out.append(f"{head} no gate run recorded ({self.TREND}: none)"); continue
+            main = self.main_heads(repo)
+            if isinstance(main, str):
+                out.append(f"{head} {main}"); continue
+            runs = passed_full(trend[0], main | self.repo_heads[repo])
+            if not runs:
+                out.append(f"{head} no passed full gate run on a commit of {repo}'s default branch or its open lanes' PRs"); continue
+            try:
+                text = self.budget_text(repo)
+                budget, why = budget_parse(text)
+                if text is not None and budget is None:
+                    self.unread.append(f"{BUDGET} ({repo})")
+            except Refuse as e:
+                self.unread.append(f"GitHub ({repo} {BUDGET})")
+                budget, why = None, f"unread: GitHub: {e}"
+            out += [f"{head} the latest passed full gate run against {BUDGET} on {repo}'s default branch",
+                    *budget_lines(runs[-1], runs[:-1], budget, why, now, "  ")]
+        return out
 
 
 def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None, now, unread: list[str], queue: list,
@@ -2716,6 +2969,8 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
         unread.append(f"record {rec_path.name}")
         return [f"lane {name}", f"  unread: record {rec_path.name}: {e}"]
     repo = rec.get("repository")
+    if isinstance(repo, str) and re.fullmatch(r"[\w.-]+/[\w.-]+", repo):
+        src.repo_heads.setdefault(repo, set())
     out = [f"lane {name}: issue {rec.get('issue', '(no issue)')} {repo or '(no repository)'} {json.dumps(rec.get('goal', ''))}",
            f"  started: {stamp(rec.get('started_at'), now)}"]
     check_waits, pr_heads = [], None
@@ -2733,6 +2988,7 @@ def report_lane(rec_path: Path, agents: list[dict] | None, herdr_why: str | None
             out.append(f"  pr: #{pr} {d['state']} {'draft' if d['isDraft'] else 'ready'} head {head} checks: {check_results(rollup)}")
             check_waits = [f"  waits: check {c} on head {head}" for c in bad_checks(rollup)[1]]
             pr_heads = {c["oid"] for c in d["commits"] or [] if isinstance(c, dict) and "oid" in c}
+            src.repo_heads[repo] |= pr_heads
         except (Refuse, KeyError, TypeError, AttributeError) as e:
             unread.append(f"GitHub ({name})")
             out.append(f"  pr: #{pr} unread: GitHub: {e}")
@@ -2802,6 +3058,8 @@ def cmd_report(args: list[str]) -> int:
     src = ReportSources(lanes.parent, unread)
     for r in records:
         print("\n".join(report_lane(r, agents, herdr_why, now, unread, queue, src)))
+    for line in src.budgets(now):
+        print(line)
     queue.sort(key=lambda q: (utc(q[2]) is None, utc(q[2]) or now, q[0], q[1]))   # oldest first, unparsable times last
     print("owner queue:" if queue else "owner queue: none")
     for name, g, at in queue:

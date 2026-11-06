@@ -8,7 +8,15 @@ dependencies = []
 app = "app.cli:main"
 
 [dependency-groups]
-dev = ["basedpyright", "import-linter", "pytest", "pytest-xdist", "ruff"]
+dev = [
+    "basedpyright",
+    "filelock>=4.2.9",
+    "import-linter",
+    "pytest",
+    "pytest-testmon>=2.3.0",
+    "pytest-xdist",
+    "ruff",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -21,6 +29,7 @@ extend-include = [
   ".agents/skills/verify-app/scripts/verify-app",
   "scripts/check-languages",
   "scripts/own-tool-paths",
+  "scripts/fast-select",
 ]
 # The octo-feather kit's trend hook (tests/gate/conftest.py), copied byte for byte; the kit owns it and
 # does not lint it, so it is outside this repo's lint, format and type checks.
@@ -43,7 +52,7 @@ ignore = [
 typeCheckingMode = "strict"
 # Extensionless scripts by path (skipped unless named). The Python under .agents/ is its own project
 # (.agents/pyrightconfig.json): basedpyright's CLI skips dot directories.
-include = ["src", "tests", "scripts/check-languages", "scripts/own-tool-paths"]
+include = ["src", "tests", "scripts/check-languages", "scripts/own-tool-paths", "scripts/fast-select"]
 exclude = ["tests/conftest.py"]  # the kit's trend hook, copied byte for byte (see [tool.ruff])
 
 [tool.importlinter]
@@ -56,5 +65,7 @@ layers = ["app.cli", "app.core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-# Every item's duration, failures with their output at the end, junit xml for the trend line (tests/conftest.py).
-addopts = "--strict-markers --durations=0 --durations-min=0 --junitxml=.pytest_cache/junit.xml"
+# Every item's duration, every item's outcome and captured output (-rA: the static checks' reports, the shared
+# fixture's preparation), failures with their output at the end, junit xml for the trend line (tests/conftest.py).
+addopts = "--strict-markers -rA --durations=0 --durations-min=0 --junitxml=.pytest_cache/junit.xml"
+markers = ["e2e: an end-to-end test, run by just check only (tests/e2e/conftest.py marks it)"]

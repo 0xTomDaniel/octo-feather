@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The #493 regression fixture's install-check section (#508; the fixture, its namespace and the other sections:
 # tests/user-mise.sh): (1) `just test -k 'install-check and not install-check-box'` (every install-check gate item
 # but tests/install-check-box.sh, which tests/user-mise-ic-box.sh runs: two items, each under 40 s) passes in the kit

@@ -111,6 +111,13 @@
         "tests/lane-correction.sh"
       ]
     },
+    "acceptance-report-gate-budget": {
+      "status": "built",
+      "pr": 546,
+      "record": "20261105T172104Z-3e0c7ba2",
+      "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
+      "tests": []
+    },
     "acceptance-report-owner-caught-headline": {
       "status": "built",
       "pr": 545,
@@ -128,6 +135,10 @@
       "tests": [
         "tests/lane-intake.sh"
       ]
+    },
+    "acceptance-report-skill-reach": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

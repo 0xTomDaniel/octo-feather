@@ -125,11 +125,17 @@ commit() { git add -A; git commit -q -m "$1"; git rev-parse HEAD; }
 status planned null; seq 1 5 > app.py
 B="$(commit base)"; git update-ref refs/remotes/origin/main "$B"; git checkout -q -b lane
 sed -i 1s/.*/one/ app.py; J="$(commit "feat: x")"
+"$kit/scripts/octo-feather-gate" record --reason "lane final head" --seconds 1 >/dev/null   # J's full gate pass: merge-ask needs one (issue-lifecycle #lanes-checkpoints)
 status built 7; H="$(commit "qc: built acceptance-a (judged ${J:0:12})")"
+# That qc run's report at J, where octo-feather-qc writes it ($(octo-feather-state)/qc; octo-feather-qc --help, Report):
+# acceptance-a passed by the agent fallback (no qc.toml here). merge-ask reads its decision source from it.
+q="$("$kit/scripts/octo-feather-state")/qc"; mkdir -p "$q"
+printf '{"head": "%s", "spec": "demo", "results": [{"id": "acceptance-a", "verdict": "pass", "evidence": "complete", "decision": "agent fallback", "record": "r", "head": "%s"}]}\n' \
+  "$J" "$J" > "$q/$J-20261029T100000Z-abc123.json"
 ST=(--status docs/specs/demo.status.json)
 commits="[{\"oid\": \"$J\", \"messageHeadline\": \"feat: x\", \"messageBody\": \"\"},
   {\"oid\": \"$H\", \"messageHeadline\": \"qc: built acceptance-a (judged ${J:0:12})\", \"messageBody\": \"\"}]"
-printf '{"number": 7, "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}], "comments": [], "commits": %s}\n' "$H" "$commits" > "$FAKE_GH/pr/7.json"
+printf '{"number": 7, "baseRefName": "main", "headRefName": "gh6", "headRefOid": "%s", "body": "", "statusCheckRollup": [{"__typename": "CheckRun", "name": "check", "status": "COMPLETED", "conclusion": "SUCCESS"}], "comments": [], "commits": %s}\n' "$H" "$commits" > "$FAKE_GH/pr/7.json"
 
 run() { local want="$1"; shift; set +e; out="$("$L" "$@" 2>"$t/err")"; rc=$?; err="$(cat "$t/err")"; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out $err"

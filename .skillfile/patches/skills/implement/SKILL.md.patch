@@ -1,4 +1,4 @@
-# reason: ADR 0012 model-invoked; AGENTS.md gate `just check`; ADR 0007 no self-review (a fresh code-reviewer pane reviews); issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; description triggers on starting a ticket
+# reason: ADR 0012 model-invoked; the hand-off gate is the target's, which tier quality spec #acceptance-gate-green names (issue #537); ADR 0007 no self-review (a fresh code-reviewer pane reviews); issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; description triggers on starting a ticket
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,17 +1,14 @@
@@ -19,6 +19,6 @@
 -Run typechecking regularly, single test files regularly, and the full test suite once at the end.
 -
 -Once done, call the Skill tool with "code-review" to review the work.
-+Run typechecking regularly, single test files regularly, and `just check` once at the end; report only when it is green.
++Run typechecking regularly, single test files regularly, and the hand-off gate once at the end (quality spec `#acceptance-gate-green`); report only when it is green.
  
  Commit your work to the current branch.
