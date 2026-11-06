@@ -14,12 +14,13 @@ from that same ungranted agent runs."""
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from testkit import ROOT, Scratch, kit, main, tool_homes
+from testkit import ROOT, Scratch, kit, main, pnpm_store, tool_homes
 from testkit.qc import qc, target
 
 SLOT = kit("octo-feather-slot")
@@ -55,11 +56,16 @@ def gate(workers: int) -> list[str]:
     return [sys.executable, "-m", "pytest", "-q", "-p", "tests.gate.heavy_slot", "-n", str(workers)]
 
 
-def suite(s: Scratch, name: str, n: int, extra: str = "") -> Path:
-    """S's suite NAME: N trivial items, plus EXTRA as one more test file."""
+def suite(s: Scratch, name: str, n: int, extra: str = "", *, trend: bool = False) -> Path:
+    """S's suite NAME: N trivial items, plus EXTRA as one more test file; with TREND, the gate's
+    runner (tests/gate/conftest.py, copyable unchanged) and its junit xml, so a run that reaches
+    its session's end writes its trend line."""
     d = s.root / name
     d.mkdir()
-    (d / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
+    junit = " --junitxml=junit.xml" if trend else ""
+    (d / "pytest.ini").write_text(f"[pytest]\naddopts = -p no:cacheprovider{junit}\n")
+    if trend:
+        shutil.copy(ROOT / "tests" / "gate" / "conftest.py", d)
     many = f"import pytest\n@pytest.mark.parametrize('n', range({n}))\ndef test_n(n): pass\n"
     (d / "test_many.py").write_text(many)
     if extra:
@@ -87,7 +93,8 @@ def refused(s: Scratch) -> None:
     no = s.run([SLOT, "grant", "gh7", "--kind", "heavy"], want=77, env=AGENT)
     assert "grant is the director's" in no.err, no.err
     s.run([SLOT, "grant", "gh8", "--kind", "heavy"], env=DIRECTOR)
-    big = suite(s, "big", 31)
+    big = suite(s, "big", 31, trend=True)
+    trend = s.root / "state" / "octo-feather" / "check-runs.jsonl"
     for workers in (0, 2):
         out = run_gate(s, big, want=REFUSED, env=AGENT, workers=workers)
         for want in (
@@ -97,7 +104,10 @@ def refused(s: Scratch) -> None:
         ):
             assert want in out, out
         assert "passed" not in out, out
+        assert not trend.exists(), "a refused run wrote a trend line"
+        assert not (big / "junit.xml").exists(), "a refused run wrote its junit xml"
     assert "31 passed" in run_gate(s, big, want=0, env={})  # outside a Herdr agent
+    assert len(trend.read_text().splitlines()) == 1, "the run that ran wrote no trend line"
     small = run_gate(s, suite(s, "small", 30), want=0, env=AGENT)
     assert "heavy slot: free: 30 items" in small, small
     assert "30 passed" in small, small
@@ -144,6 +154,27 @@ def granted(s: Scratch) -> None:
     assert "run holding it now: none" in s.run([SLOT, "status"]).out
 
 
+def user_mise_gate(s: Scratch) -> None:
+    """`just check-user-mise` (tests/user-mise.sh --gate) in the fixture's pane: the run takes the
+    heavy slot in the caller's env and lane, so it is refused without gh7's grant, naming it; with
+    it, it holds the slot and the gate in the fixture's pane runs nested under it."""
+    world(s)
+    s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}
+    big = str(suite(s, "big", 31))
+    cmd = [str(ROOT / "tests" / "user-mise.sh"), "--gate", big]
+    no = s.run(cmd, want=REFUSED, env=AGENT)
+    assert "ask the director: octo-feather-slot grant gh7 --kind heavy" in no.err, no.err
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    ran = s.run(cmd, env=AGENT)
+    out = ran.out + ran.err
+    for want in (
+        "user-mise: heavy slot: held: the heavy slot for lane gh7, run pid ",
+        "heavy slot: nested: under the heavy run pid ",
+        "31 passed",
+    ):
+        assert want in out, out
+
+
 QC_TOML = """format = 1
 [entry]
 command = "true"
@@ -173,4 +204,4 @@ def sandboxed(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(refused, granted, sandboxed)
+    main(refused, granted, sandboxed, user_mise_gate)

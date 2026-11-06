@@ -15,7 +15,8 @@
       run holds it now (the run's pid, lane, since, items).
   octo-feather-slot hold --kind heavy|eval [--items N]
       Run by the heavy run's own process (the gate's pytest plugin, tests/gate/heavy_slot.py;
-      octo-feather-qa for eval), never by hand. Prints one line on stdout: `free: ...` (exit 0, no
+      octo-feather-qa for eval; tests/lib/user-mise.sh for `just check-user-mise` in its
+      fixture's pane), never by hand. Prints one line on stdout: `free: ...` (exit 0, no
       slot needed), `nested: ...` (exit 0, an ancestor process holds this kind's slot), or
       `held: ...` (the lock is taken; the command then stays, holding it, until its stdin closes:
       the caller keeps the pipe open for its life, and its exit or crash closes it, so the lock
@@ -222,7 +223,7 @@ def held_run(lock: Path, rec: Path) -> Run | None:
     """The run holding LOCK now (its record REC), or None when no process holds it."""
     if not lock.exists():
         return None
-    with lock.open("a") as f:
+    with lock.open() as f:  # read-only: a slots dir bound read-only (a fixture's) is read too
         try:
             fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
         except BlockingIOError:
