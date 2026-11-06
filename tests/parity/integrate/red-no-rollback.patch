@@ -1,0 +1,13 @@
+Seeded defect: a red gate leaves the lane at the integrated head: no rollback (docs/adr/0017, all or nothing).
+diff --git a/scripts/octo-feather-integrate b/scripts/octo-feather-integrate
+index c4b0464..1eedf68 100755
+--- a/scripts/octo-feather-integrate
++++ b/scripts/octo-feather-integrate
+@@ -114,7 +114,6 @@ log="$(mktemp)"; rc=0
+ just "$gate" 2> >(tee "$log" >&2) || rc=$?
+ wait "$!" 2>/dev/null || true   # tee has written the whole log
+ if ((rc)); then
+-  rollback
+   refusal="$(grep -m1 '^octo-feather-slot: refused, nothing ran: ' "$log" || true)"; rm -f "$log"
+   if ((rc == 75)) && [[ -n "$refusal" ]]; then
+     echo "refused: no heavy slot, nothing ran: just $gate, the $tier tier ($why), integrating $*: $refusal" >&2
