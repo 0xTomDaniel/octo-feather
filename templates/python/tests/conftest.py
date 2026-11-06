@@ -11,8 +11,26 @@ ran its configured testpaths, and no -k, -m, --lf, --sw, --deselect, --ignore or
 the gate's static steps ran: when the root's justfile declares GATE_RECIPES (each a test item), the
 run's GATE_RECIPES is that value, so a bare pytest, which skips them, is no full run; else `subset`),
 steps (name, seconds, result: ok, FAIL, ERROR or skipped, cpu_s: below), one per junit
-testcase (under xdist their seconds overlap, so their sum exceeds total_s). A missing junit file or an unwritable state dir is a
+testcase (under xdist their seconds overlap, so their sum exceeds total_s), load1_start and load1_end (the box's
+1-minute load average when the session starts and when it ends, null where the OS has none: a slow run told apart from
+a heavy one). A missing junit file or an unwritable state dir is a
 warning on stderr, never a failure: the trend line never changes the run's exit status.
+
+Also copyable unchanged: longest items first (#618; gate-time discipline: quality spec #test-kinds). The run reads
+this repo's trend lines (repo the same git top level) once, on the controller, before any item runs: each item's
+wall seconds on the last line that has its name (the junit testcase name, pytest's item name). Items with a
+record are reordered among their own places, longest first (ties keep collection order); an item with none keeps
+its place; no history at all leaves collection order. xdist workers get the controller's read (pytest_configure_node),
+so every worker collects the same order. Under xdist's --dist load (the default with -n) the run deals the order out
+one item per worker per round, two rounds, then one item to each worker as it finishes one (xdist runs an item once
+it holds the next, so each worker holds two): the longest items start first, on different workers. Why not prior
+art: xdist 3.8.0 hands items out in collection order; its load mode sends each worker a run of consecutive items
+first (two, or a quarter of its share), so a sort alone would queue the longest items on one worker; worksteal
+first splits the whole order into one consecutive block per worker and steals only from a queue's tail, so neither
+alone ends the tail. pytest-slow-first 1.0.3 (2024) and pytest-slowest-first 0.2.0 sort from their own duration
+file and leave the dealing to xdist; pytest-timing 0.4.0 (--timing-schedule) plans from its own JSON and puts
+unknown items at the mean. Each is a second duration store beside the trend file, none matches on repo, and none
+keeps an unknown item's place: so a sort here and a scheduler on xdist's own pytest_xdist_make_scheduler hook.
 
 Also copyable unchanged: each item's CPU seconds (what the run must show: quality spec #acceptance-test-cpu-shown), cpu_s:
 user and system CPU of the process running the item (an xdist worker, or pytest itself) and of every process it started
@@ -48,10 +66,13 @@ except ImportError:   # before Python 3.11: no per-test CPU budget read
     tomllib = None
 from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 import xml.etree.ElementTree as ET
 
 import pytest
+
+if TYPE_CHECKING:
+    from xdist.remote import Producer  # pyright: ignore[reportMissingTypeStubs]
 
 TREND = "check-runs.jsonl"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
@@ -61,6 +82,9 @@ ITEMS = "OCTO_FEATHER_GATE_ITEMS"
 CPU = "cpu_s"
 BUDGET, BUDGET_KEY = "gate-budget.toml", "test_cpu_seconds"
 CLAIM = re.compile(r"^([a-z0-9][a-z0-9._-]*)#([A-Za-z0-9][A-Za-z0-9._-]*)$")
+LAST = "octo_feather_last_seconds"   # the controller's read, in each xdist worker's workerinput
+_LAST = pytest.StashKey[dict[str, float]]()
+_LOAD_START = pytest.StashKey["float | None"]()
 
 
 def _git(*args):
@@ -119,6 +143,83 @@ def _entry(xml_path, status, tier: str):
                       for c in suite.iter("testcase")]}
 
 
+def _load1() -> float | None:
+    try:
+        return round(os.getloadavg()[0], 2)
+    except (OSError, AttributeError):   # no load average on this OS
+        return None
+
+
+def _last_seconds() -> dict[str, float]:
+    """Each item's wall seconds on the last trend line of this repo that names it ({} without history)."""
+    repo = _git("rev-parse", "--show-toplevel") or os.getcwd()
+    mark = '"repo":' + json.dumps(repo)   # as _entry writes it: lines of other repos skip the parse
+    last: dict[str, float] = {}
+    try:
+        with open(os.path.join(_state_dir(), TREND)) as f:
+            for line in f:
+                if mark not in line:
+                    continue
+                try:   # a line not of the runner's form: skipped from its first bad field
+                    d: Any = json.loads(line)
+                    if d["repo"] == repo:
+                        for s in d["steps"]:
+                            last[str(s["name"])] = float(s["seconds"])
+                except (ValueError, KeyError, TypeError):
+                    continue
+    except OSError:
+        return {}
+    return last
+
+
+def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:
+    places = [n for n, i in enumerate(items) if i.name in last]
+    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -last[i.name]), strict=True):
+        items[n] = i
+
+
+class _Node(Protocol):   # what pytest_configure_node reads of xdist's WorkerController
+    workerinput: dict[str, object]
+    config: pytest.Config
+
+
+@pytest.hookimpl(optionalhook=True)   # xdist's: each worker sorts from the controller's read
+def pytest_configure_node(node: _Node) -> None:
+    node.workerinput[LAST] = node.config.stash.get(_LAST, None) or {}
+
+
+@pytest.hookimpl(optionalhook=True)
+def pytest_xdist_make_scheduler(config: pytest.Config, log: "Producer | None") -> object:
+    """--dist load, dealt out one item per worker per round (this file's docstring); any other mode: xdist's own."""
+    if config.getoption("dist") != "load":
+        return None
+    from xdist.scheduler import LoadScheduling  # noqa: PLC0415  # pyright: ignore[reportMissingTypeStubs]  # xdist only here: the file runs without it
+
+    class Dealt(LoadScheduling):
+        def __init__(self, config: pytest.Config, log: "Producer | None") -> None:
+            super().__init__(config, log)
+            self.maxschedchunk = self.maxschedchunk or 1   # after the deal, one item at a time
+
+        def schedule(self) -> None:
+            if self.collection is not None or not self._check_nodes_have_same_collection():
+                return super().schedule()
+            self.collection = next(iter(self.node2collection.values()))
+            self.pending[:] = range(len(self.collection))
+            for _ in range(2):
+                for node in self.nodes:
+                    self._send_tests(node, 1)
+            if not self.pending:
+                for node in self.nodes:
+                    node.shutdown()
+            return None
+
+    return Dealt(config, log)
+
+
+def pytest_sessionstart(session: pytest.Session) -> None:
+    session.config.stash[_LOAD_START] = _load1()
+
+
 def _cpu_s(case: ET.Element) -> dict[str, float]:
     p = case.find(f"properties/property[@name='{CPU}']")
     return {} if p is None else {CPU: float(p.get("value") or 0)}
@@ -145,6 +246,8 @@ def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "e2e: an end-to-end test (its CPU: this file's docstring)")
     if not hasattr(config, "workerinput") and not _COLLECT_ONLY:
         config.pluginmanager.register(_CpuShown(config.rootpath), "cpu-shown")
+    if not hasattr(config, "workerinput"):
+        config.stash[_LAST] = _last_seconds()
     if not _claims() or hasattr(config, "workerinput"):
         return
     # Arranged before execution: every claim names a criterion of its spec, else nothing runs.
@@ -176,6 +279,8 @@ def _source(item: pytest.Item) -> str:
 
 
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    given: dict[str, Any] = getattr(config, "workerinput", {})   # an xdist worker's: the controller's read
+    _longest_first(items, given.get(LAST) or config.stash.get(_LAST, None) or {})
     if tags := os.environ.get(TAGS):
         Path(tags).write_text(json.dumps({i.nodeid: _tags(i) for i in items if _tags(i)}))
     if listed := os.environ.get(ITEMS):
@@ -339,7 +444,9 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int):
     try:
         if not xml_path:
             raise OSError("no --junitxml for this run")
-        line = json.dumps(_entry(xml_path, exitstatus, _tier(session.config)), separators=(",", ":"))
+        entry = _entry(xml_path, exitstatus, _tier(session.config))
+        entry |= {"load1_start": config.stash.get(_LOAD_START, None), "load1_end": _load1()}
+        line = json.dumps(entry, separators=(",", ":"))
         d = _state_dir()
         os.makedirs(d, exist_ok=True)
         with open(os.path.join(d, TREND), "a") as f:
