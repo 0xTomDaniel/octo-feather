@@ -1,7 +1,7 @@
 """The scenarios of tests/gate/kit/test_web_tools.py (its items), this file their command
 (testkit.main): a role's `web` tool (issue #262; spec roles#launch-web, roles#roles-web,
 roles#fm-tools). Real Pi, at the kit's pin (pi-version), launched headless through a copy of the
-kit's scripts/pi-role whose web-mcp.json names stub stdio MCP servers (testkit/mcp_stub.py: the
+kit whose web-mcp.json names stub stdio MCP servers (testkit/mcp_stub.py: the
 hosted search servers' stand-in, no network) and one unreachable server, against testkit's fake
 model provider (testkit/provider.py) on 127.0.0.1. The provider logs each request and answers the
 first with one codemode call listing ALL_TOOLS, so a run reads both the tools declared to the
@@ -20,8 +20,9 @@ model and the tools a codemode script reaches. The user Pi config and the target
   check      check-roles accepts `web` and still rejects an unknown tool
 
 Each Pi launch is most of an item's CPU, so the roles are split in three items. The fixture kit
-(the real scripts, roles and extensions, the real skills linked, the stub list) is prepared once
-per gate run (Scratch.prepare). Never skips: without pi at the pin it fails naming the install
+(the real pi-role and check-roles, roles and extensions, the real skills linked, the stub list;
+pi-role takes the kit from the role file's dir) is prepared once per gate run (Scratch.prepare),
+the pin checked there. Never skips: without pi at the pin it fails naming the install
 command.
 """
 
@@ -64,15 +65,20 @@ def servers(**entries: dict[str, object]) -> str:
 
 
 def build(p: Scratch) -> None:
-    """P/kit: the kit's scripts, agents and extensions, its skills linked, the web list naming
+    """The real pi at the pin, else fail naming the install (once per gate run). P/kit: the kit's
+    pi-role and check-roles, its agents and extensions, its skills linked, the web list naming
     webstub, second and an unreachable server; P/repo, a git repo whose .pi/mcp.json names
     projonly; P/agent, Pi's user dir whose mcp.json names useronly; the commit identity set."""
     import shutil  # noqa: PLC0415 (only the build copies)
 
+    pi_at_pin()
     k = p.root / "kit"
     (k / ".agents").mkdir(parents=True)
-    for d in ("scripts", "agents", "extensions"):
+    (k / "scripts").mkdir()
+    for d in ("agents", "extensions"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
+    for f in ("pi-role", "check-roles"):  # check-roles asks its own dir's pi-role
+        shutil.copy2(ROOT / "scripts" / f, k / "scripts" / f)
     (k / ".agents" / "skills").symlink_to(ROOT / ".agents" / "skills")
     dead: dict[str, object] = {"url": "http://127.0.0.1:9/mcp"}
     (k / "web-mcp.json").write_text(
@@ -104,7 +110,6 @@ class World:
     """The prepared fixture in a scratch and the fake provider serving it."""
 
     def __init__(self, s: Scratch) -> None:
-        pi_at_pin()
         s.prepare("web-tools", build)
         self.s, self.log = s, s.root / "provider.log"
         self.p = subprocess.Popen(
