@@ -215,20 +215,21 @@ if [[ "$cleared" != 1 ]]; then
   esac
 fi
 
-# The dialog clearing does not mean the agent can accept a prompt yet: it may
-# still be booting, and a prompt fired into that window is never reacted to.
-# Herdr reports `agent_prompt_stalled` and the message is lost. Wait until the
-# agent reports its own status before calling the spawn done.
-agent_status=""
-for _ in $(seq 1 "${HERDR_SPAWN_READY_RETRIES:-20}"); do
-  info="$(herdr agent get "$name" 2>/dev/null || true)"
-  agent_status="$(jq -r '.result.agent.agent_status // empty' <<<"$info" 2>/dev/null || true)"
-  [[ -n "$agent_status" ]] && break
-  sleep 1
-done
-if [[ -z "$agent_status" ]]; then
-  echo "herdr-spawn: agent never reported a status; it is not ready for prompts" >&2
+# Readiness (#585, #666): idle on Herdr's own `herdr agent wait`, then found by
+# name and by pane; why and the bound: herdr-comms SKILL.md, Spawn an agent.
+ready_s="${HERDR_SPAWN_READY_TIMEOUT:-120}"
+if ! err="$(herdr agent wait "$pane" --until idle --timeout "$((ready_s * 1000))" 2>&1 >/dev/null)"; then
+  [[ -n "$err" ]] && printf '%s\n' "$err" >&2
+  state="$(herdr agent get "$pane" 2>/dev/null | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)"
+  echo "herdr-spawn: agent $name (pane $pane) not idle within ${ready_s}s (herdr agent wait; state ${state:-unknown}); not ready for prompts; closing tab $tab" >&2
   close_orphan_tab; exit 69
 fi
+for t in "$name" "$pane"; do
+  found="$(herdr agent get "$t" 2>&1)" || true
+  if [[ "$(jq -r '.result.agent.pane_id // empty' <<<"$found" 2>/dev/null || true)" != "$pane" ]]; then
+    echo "herdr-spawn: herdr agent get $t does not find pane $pane ($(tail -1 <<<"$found")); closing tab $tab" >&2
+    close_orphan_tab; exit 69
+  fi
+done
 
 echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"
