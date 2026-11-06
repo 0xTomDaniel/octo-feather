@@ -14,17 +14,8 @@ from __future__ import annotations
 import json
 import re
 
-from testkit import HERE, Ran, Scratch, kit, main
+from testkit import Ran, Scratch, kit, main, reflector
 
-DQ = (
-    "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, "
-    "outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, "
-    "director-reflection-missed"
-)
-LQ = (
-    "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, "
-    "mechanical-step, writer-mistake, reflection-missed"
-)
 KIT_REPO = "0xTomDaniel/octo-feather"
 
 
@@ -41,13 +32,8 @@ class Corr:
         self.s = s
         for k in ("HERDR_PANE_ID", "PI_SESSION_FILE", "OCTO_FEATHER_REFLECT_ARGS", "GH_REPO"):
             s.env.pop(k, None)
-        (s.bin / "pi").unlink()
-        (s.bin / "pi").symlink_to(HERE / "pi_agent.py")
-        s.env |= {
-            "XDG_STATE_HOME": str(s.root / "state"),
-            "HERDR_SESSION": "",
-            "STUB_REPLY_DIR": str(s.root),
-        }
+        s.env |= {"XDG_STATE_HOME": str(s.root / "state"), "HERDR_SESSION": ""}
+        self.says: dict[str, tuple[str, ...]] = {"lane": (), "director": ()}
         self.lanes = s.root / "state" / "octo-feather" / "lanes"
         self.dlog = self.lanes.parent / "director.handoffs.jsonl"
         (self.lanes / "archive").mkdir(parents=True)
@@ -55,15 +41,13 @@ class Corr:
         self.none()
 
     def reply(self, who: str, *findings: str) -> None:
-        """The reflector's reply for WHO (lane, director): its question line, then FINDINGS, or
-        none."""
-        q = DQ if who == "director" else LQ
-        body = "\n".join(findings) if findings else "Findings: none"
-        (self.s.root / f"reply.{who}").write_text(f"{q}\n{body}\n")
+        """The reflector's reply for WHO (lane, director): FINDINGS, or none (testkit.reflector)."""
+        self.says[who] = findings
+        reflector(self.s, self.says["lane"], self.says["director"])
 
     def none(self) -> None:
-        self.reply("lane")
-        self.reply("director")
+        self.says = {"lane": (), "director": ()}
+        reflector(self.s)
 
     def lane(self, name: str, *lines: str, archived: bool = False) -> None:
         """An open (or ARCHIVED) lane on target o/t, its log LINES."""

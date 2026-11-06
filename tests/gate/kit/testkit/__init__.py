@@ -232,6 +232,32 @@ class Scratch:
         return self.run(["git", "-C", str(repo), *ident, *args]).out
 
 
+# The reflector's question lines (reflection/questions.json's ids, as agents/reflector.md answers).
+LANE_QUESTIONS = (
+    "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, "
+    "mechanical-step, writer-mistake, reflection-missed"
+)
+DIRECTOR_QUESTIONS = (
+    "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, "
+    "outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, "
+    "director-reflection-missed"
+)
+
+
+def reflector(s: Scratch, lane: Sequence[str] = (), director: Sequence[str] = ()) -> None:
+    """S's Pi the testkit's agent stand-in (pi_agent.py, print mode) first on PATH, its reflector
+    replies recorded in S: the lane's FindingS lines (or `Findings: none`), the director's."""
+    (s.bin / "pi").unlink(missing_ok=True)
+    (s.bin / "pi").symlink_to(HERE / "pi_agent.py")
+    s.env["STUB_REPLY_DIR"] = str(s.root)
+    for who, q, found in (
+        ("lane", LANE_QUESTIONS, lane),
+        ("director", DIRECTOR_QUESTIONS, director),
+    ):
+        body = "\n".join(found) if found else "Findings: none"
+        (s.root / f"reply.{who}").write_text(f"{q}\n{body}\n")
+
+
 def build_kit_repo(p: Scratch) -> None:
     """The kit's tracked files (their worktree content; a tracked file deleted there skipped) in
     P/kit, a git repo of one commit."""
