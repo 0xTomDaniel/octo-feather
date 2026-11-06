@@ -7,6 +7,7 @@ NAME-TOOL-result, `ping` {}; any other request method-not-found; notifications g
 
 import json
 import sys
+from typing import Any
 
 name, tools = sys.argv[1], sys.argv[2:]
 
@@ -16,9 +17,9 @@ def send(o: object) -> None:
     sys.stdout.flush()
 
 
-def answer(m: dict[str, object]) -> dict[str, object]:
-    meth, i, params = m.get("method"), m["id"], m.get("params") or {}
-    assert isinstance(params, dict)
+def answer(m: dict[str, Any]) -> dict[str, object]:
+    meth, i = m.get("method"), m["id"]
+    params: dict[str, Any] = m.get("params") or {}
     if meth == "initialize":
         result: object = {
             "protocolVersion": params.get("protocolVersion", "2025-06-18"),
@@ -28,7 +29,9 @@ def answer(m: dict[str, object]) -> dict[str, object]:
     elif meth == "tools/list":
         schema = {"type": "object", "properties": {"q": {"type": "string"}}}
         result = {
-            "tools": [{"name": t, "description": f"{name} {t}", "inputSchema": schema} for t in tools]
+            "tools": [
+                {"name": t, "description": f"{name} {t}", "inputSchema": schema} for t in tools
+            ]
         }
     elif meth == "tools/call":
         result = {"content": [{"type": "text", "text": f"{name}-{params['name']}-result"}]}
@@ -41,8 +44,8 @@ def answer(m: dict[str, object]) -> dict[str, object]:
 
 for line in sys.stdin:
     try:
-        m = json.loads(line)
+        m: dict[str, Any] = json.loads(line)
     except ValueError:
         continue
-    if isinstance(m, dict) and "id" in m:
+    if "id" in m:
         send(answer(m))

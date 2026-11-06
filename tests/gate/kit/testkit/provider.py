@@ -18,13 +18,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: object) -> None:  # noqa: A002 (the base's name)
         pass
 
-    def do_POST(self) -> None:  # noqa: N802 (the base's name)
+    def do_POST(self) -> None:
         body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
         with open(log, "a") as f:  # noqa: PTH123 (os-level start: -S)
             f.write(json.dumps(body) + "\n")
         self.send_response(200)
         self.send_header("content-type", "text/event-stream")
         self.end_headers()
+        deltas: list[tuple[dict[str, object], str | None]]
         if any(m.get("role") == "tool" for m in body["messages"]):
             deltas = [({"role": "assistant", "content": "fake-done"}, None), ({}, "stop")]
         else:
@@ -32,7 +33,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
             call = {"index": 0, "id": "call_1", "type": "function", "function": fn}
             deltas = [({"role": "assistant", "tool_calls": [call]}, None), ({}, "tool_calls")]
         for d, fin in deltas:
-            c: dict[str, object] = {**BASE, "choices": [{"index": 0, "delta": d, "finish_reason": fin}]}
+            c: dict[str, object] = {
+                **BASE,
+                "choices": [{"index": 0, "delta": d, "finish_reason": fin}],
+            }
             if fin:
                 c["usage"] = {"prompt_tokens": 1, "completion_tokens": 1, "total_tokens": 2}
             self.wfile.write(b"data: " + json.dumps(c).encode() + b"\n\n")

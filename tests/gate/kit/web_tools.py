@@ -74,7 +74,7 @@ def build(p: Scratch) -> None:
     for d in ("scripts", "agents", "extensions"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
     (k / ".agents" / "skills").symlink_to(ROOT / ".agents" / "skills")
-    dead = {"url": "http://127.0.0.1:9/mcp"}
+    dead: dict[str, object] = {"url": "http://127.0.0.1:9/mcp"}
     (k / "web-mcp.json").write_text(
         servers(webstub=stub("webstub"), second=stub("second"), dead=dead)
     )
@@ -96,9 +96,8 @@ def pi_at_pin() -> None:
         env=os.environ,
     )
     got = re.search(r"\d+\.\d+\.\d+", v.stdout + v.stderr)
-    assert got and got.group() == PIN, (
-        f"pi reports {got.group() if got else 'no version'}, the kit pins {PIN} (pi-version); {INSTALL}"
-    )
+    said = got.group() if got else "no version"
+    assert said == PIN, f"pi reports {said}, the kit pins {PIN} (pi-version); {INSTALL}"
 
 
 class World:
@@ -174,9 +173,8 @@ def roles(s: Scratch, *names: str) -> None:
     w = World(s)
     try:
         cmp = filecmp.dircmp(ROOT / "agents", s.root / "kit" / "agents")
-        assert not (cmp.diff_files or cmp.left_only or cmp.right_only), (
-            "list-once: the fixture's role files differ from the kit's"
-        )
+        differ = [*cmp.diff_files, *cmp.left_only, *cmp.right_only]
+        assert not differ, f"list-once: the fixture's role files differ from the kit's: {differ}"
         for role in names:
             tools, web = ROLES[role]
             want = sorted((*tools, *(WEB if web else ())))

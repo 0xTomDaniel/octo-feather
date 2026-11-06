@@ -32,7 +32,7 @@ import sys
 
 # A process per gh call: it starts light (no site, -S above; os.path, not pathlib or typing, each
 # ~5 ms of import on every call).
-# ruff: noqa: PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
+# ruff: noqa: PTH103, PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
 STORE = os.environ["FAKE_GH"]
 RAW = ["-H", "Accept: application/vnd.github.raw"]
 
@@ -176,6 +176,11 @@ def issues() -> dict[int, dict[str, object]]:
     return {int(f[:-5]): json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")}
 
 
+def count(x: object) -> int:
+    """The length of X, a stored list, else 0."""
+    return len(x) if isinstance(x, list) else 0
+
+
 def issue_write(a: list[str]) -> None:
     """`issue create|comment|close` (the module docstring)."""
     held = issues()
@@ -198,10 +203,11 @@ def issue_write(a: list[str]) -> None:
             sys.stderr.write(f"\u2713 Closed issue {title}\n")
             url = ""
         else:
-            cid = 1001 + sum(len(x.get("comments") or []) for x in held.values())  # pyright: ignore[reportArgumentType]
+            cid = 1001 + sum(count(x.get("comments")) for x in held.values())
             url = f"https://github.com/o/r/issues/{n}#issuecomment-{cid}"
-            comments = d.setdefault("comments", [])
-            comments.append({"author": {"login": "sup"}, "body": body(a), "url": url})  # pyright: ignore[reportAttributeAccessIssue]
+            had = d.get("comments")
+            mine = {"author": {"login": "sup"}, "body": body(a), "url": url}
+            d["comments"] = [*(had if isinstance(had, list) else []), mine]
     os.makedirs(at("issue"), exist_ok=True)
     with open(at("issue", f"{n}.json"), "w") as f:
         f.write(json.dumps(d))

@@ -183,11 +183,17 @@ def snapshot(s: Scratch) -> Path:
     5), 8 closed, and 9 whose sub-issue list gh pages (2 of 3 returned)."""
     sn = s.root / "snap"
     (sn / "issue").mkdir(parents=True)
-    meta = {"repo": "o/r", "fetched_at": "2026-10-22T00:00:00Z", "counts": {}, "capped": []}
+    meta: dict[str, object] = {
+        "repo": "o/r",
+        "fetched_at": "2026-10-22T00:00:00Z",
+        "counts": {},
+        "capped": [],
+    }
     (sn / "meta.json").write_text(json.dumps(meta))
 
     def issue(  # noqa: PLR0913 (one issue's fields)
         n: int,
+        *,
         parent: object = None,
         blockers: tuple[int, ...] = (),
         state: str = "OPEN",
@@ -284,7 +290,14 @@ def github(s: Scratch) -> None:
 
 def writes(s: Scratch, t: Path, body: Path) -> None:
     """The writes against testkit's fake gh, holding issues 3 to 7 (6 closed) and 11, the last."""
-    for n, state in ((3, "OPEN"), (4, "OPEN"), (5, "OPEN"), (6, "CLOSED"), (7, "OPEN"), (11, "OPEN")):
+    for n, state in (
+        (3, "OPEN"),
+        (4, "OPEN"),
+        (5, "OPEN"),
+        (6, "CLOSED"),
+        (7, "OPEN"),
+        (11, "OPEN"),
+    ):
         s.gh.store(f"issue/{n}.json", {"number": n, "title": f"Issue {n}", "state": state})
 
     def gi(script: str, *a: str, stdin: str | None = None) -> Ran:
@@ -315,7 +328,7 @@ def writes(s: Scratch, t: Path, body: Path) -> None:
     assert s.gh.log()[-1] == "issue close 6", s.gh.log()
 
 
-STORE = {
+STORE: dict[str, object] = {
     "workspace": "acme",
     "issues": {
         "ENG-3": {
@@ -325,8 +338,20 @@ STORE = {
             "parent": None,
             "blocked_by": [],
         },
-        "ENG-4": {"title": "B4", "description": "b", "state": "Todo", "parent": None, "blocked_by": []},
-        "ENG-5": {"title": "B5", "description": "b", "state": "Todo", "parent": None, "blocked_by": []},
+        "ENG-4": {
+            "title": "B4",
+            "description": "b",
+            "state": "Todo",
+            "parent": None,
+            "blocked_by": [],
+        },
+        "ENG-5": {
+            "title": "B5",
+            "description": "b",
+            "state": "Todo",
+            "parent": None,
+            "blocked_by": [],
+        },
         "ENG-7": {
             "title": "Issue 7",
             "description": "body 7",
@@ -399,7 +424,13 @@ def linear(s: Scratch) -> None:
     r = li(1, "lane-key", "82")
     assert r.out == "", r.out
     assert "not a Linear issue key" in r.err, r.err
-    for b in ("eng-123", "lanes/eng-123", "eng-123-fix", "implementer-eng-123", "code-reviewer-eng-123"):
+    for b in (
+        "eng-123",
+        "lanes/eng-123",
+        "eng-123-fix",
+        "implementer-eng-123",
+        "code-reviewer-eng-123",
+    ):
         assert li(0, "key-from-branch", b).out == "ENG-123", f"linear key-from-branch {b}"
     assert "names no Linear issue" in li(1, "key-from-branch", "main").err
     assert li(0, "pr-line", "eng-123").out == "Tracks ENG-123"
@@ -407,7 +438,9 @@ def linear(s: Scratch) -> None:
     body = s.root / "body"
     body.write_text("hi\n")
     new = ("--title", "New one", "--body-file", str(body), "--parent", "eng-3")
-    assert li(0, "issue-create", *new, "--blocked-by", "ENG-4", "--blocked-by", "ENG-5").out == "ENG-9"
+    assert (
+        li(0, "issue-create", *new, "--blocked-by", "ENG-4", "--blocked-by", "ENG-5").out == "ENG-9"
+    )
     d = json.loads(li(0, "issue-view", "ENG-9").out)
     assert [d["title"], d["body"], d["state"], d["parent"], d["blocked_by"]] == [
         "New one",
@@ -419,7 +452,18 @@ def linear(s: Scratch) -> None:
     r = li(1, "issue-create", "--title", "T", "--body-file", str(body))
     assert r.out == "", r.out
     assert "No team given" in r.err, r.err
-    r = li(1, "issue-create", "--title", "T", "--body-file", str(body), "--parent", "ENG-3", "--blocked-by", "ENG-99")
+    r = li(
+        1,
+        "issue-create",
+        "--title",
+        "T",
+        "--body-file",
+        str(body),
+        "--parent",
+        "ENG-3",
+        "--blocked-by",
+        "ENG-99",
+    )
     assert r.out == "", r.out
     assert "filed ENG-10, but marking it blocked by ENG-99 failed" in r.err, r.err
     r = li(0, "issue-comment", "ENG-7", stdin="a note\n")
@@ -474,7 +518,10 @@ def api(s: Scratch, env: dict[str, str]) -> None:
             }
         }
     }, "fake linear api, nested and aliased selection"
-    doc = '{ issue(id: "ENG-3") { children(first: 1) { nodes { identifier } pageInfo { hasNextPage } } } }'
+    doc = (
+        '{ issue(id: "ENG-3") { children(first: 1) '
+        "{ nodes { identifier } pageInfo { hasNextPage } } } }"
+    )
     assert json.loads(fapi(0, doc))["data"]["issue"]["children"] == {
         "nodes": [{"identifier": "ENG-7"}],
         "pageInfo": {"hasNextPage": True},
