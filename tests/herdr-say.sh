@@ -17,6 +17,7 @@ fail() { echo "herdr-say test: $*" >&2; exit 1; }
 setup() { # $1: case
   c="$t/$1"; mkdir -p "$c/state/octo-feather/lanes"
   echo "gh2 w5" >"$c/spaces"; echo "gh2 w5:p1" >"$c/agents"
+  XDG_STATE_HOME="$c/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 }
 park() { # $1: lane, $2: pane, $3: name, $4: parent, $5: session
   printf '{"at":"2026-10-20T00:00:00Z","kind":"parked","pane":"%s","name":"%s","label":"%s","role":"implementer","parent":"%s","cwd":"%s","session":"%s"}\n' \

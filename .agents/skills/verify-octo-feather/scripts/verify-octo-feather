@@ -28,7 +28,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1062,6 +1062,18 @@ def drive_role_launch(f: Feature) -> None:
         f.obs(name, "agents-diff", agents_diff)
         f.check(name, lambda c, r=role: c.code == 0 and c.o["agents-diff"] == ""
                 and web_ok(c, r, [*servers, "added"], str(kit2)))
+    # The factory commit identity (#665; pi-role --help, Commit identity), in scratch state dirs, never the box's:
+    # unset, a role that would commit refuses naming the setting and its command; set, the launch env carries it.
+    f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state-unset")}
+    f.run("identity-unset", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
+    f.check("identity-unset", lambda c: c.code == 1 and "[identity] name and email in the box onboarding file" in c.err
+            and "--set-identity" in c.err and c.out == "")
+    f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state")}
+    f.run("identity-set", "pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid")
+    f.check("identity-set", lambda c: c.code == 0)
+    f.run("identity-applied", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
+    ident = [f"GIT_{w}_{k}={v}" for w in ("AUTHOR", "COMMITTER") for k, v in (("NAME", "Verify Identity"), ("EMAIL", "verify@octo-feather.invalid"))]
+    f.check("identity-applied", lambda c: c.code == 0 and sorted(c.out.splitlines()) == sorted(ident))
     f.env = {}
     say(f"role-launch evidence: {f.d}")
 
@@ -1096,7 +1108,11 @@ def drive_skill_loading(f: Feature) -> None:
 
     # The parent route emptied: a refusal in a pane tells OCTO_FEATHER_PARENT, and a drive never reaches a live pane.
     route = dict.fromkeys(("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID", "HERDR_SESSION"), "")
-    f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache")}
+    # A scratch state dir holding the commit identity a launch of the implementer needs (pi-role --help, Commit identity).
+    f.env = {**route, "HOME": str(home), "PI_CODING_AGENT_DIR": str(agent), "XDG_CACHE_HOME": str(sc / "cache"),
+             "XDG_STATE_HOME": str(sc / "state")}
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     refused = "Pi did not load skill"
     role_line = next(ln for ln in (Path(f.s.repo) / "agents" / "implementer.md").read_text().splitlines() if ln.startswith("skills:"))
     launch("offered", target("offered", "python, local", good), f.s.repo, '{"type":"get_commands"}\n')
@@ -2639,6 +2655,45 @@ def drive_starter_acceptance(f: Feature) -> None:
     say(f"starter-acceptance evidence: {f.d}")
 
 
+def drive_run_slots(f: Feature) -> None:
+    """The box's heavy-run slot (octo-feather-slot --help) as a lane's implementer and the director meet it, in
+    scratch box state: a lane gh7 whose implementer's `just test` over a 31-item scratch suite is refused before any
+    item runs, naming the grant to ask for; the implementer's own grant refused; the director's grant; status naming
+    the holder; the same run then holding the slot and passing; the lock released after it. Cases: features/run-slots.md."""
+    sc = RUN_DIR / "scratch" / "run-slots"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "state" / "octo-feather" / "lanes").mkdir(parents=True)
+    (sc / "state" / "octo-feather" / "lanes" / "gh7.toml").write_text('supervisor = "w9:p1"\n')
+    (sc / "suite").mkdir()
+    (sc / "suite" / "pytest.ini").write_text("[pytest]\naddopts = -p no:cacheprovider\n")
+    (sc / "suite" / "test_many.py").write_text("import pytest\n@pytest.mark.parametrize('n', range(31))\ndef test_n(n): pass\n")
+    box = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "default"}   # scratch slots and lane records
+    agent = {**box, "OCTO_FEATHER_ROLE": "implementer", "HERDR_PANE_ID": "w9:p3", "OCTO_FEATHER_PARENT": "w9:p1",
+             "HERDR_WORKSPACE_ID": "w9"}
+    director = {**box, "OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w1:p1"}
+    gate = ("just", "--justfile", f"{f.s.repo}/justfile", "test", str(sc / "suite"))
+    f.env = agent
+    f.run("grant-not-director", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
+    f.check("grant-not-director", lambda c: c.code == 77 and "grant is the director's" in c.err)
+    f.run("refused", *gate)
+    f.check("refused", lambda c: c.code == 75 and "passed" not in c.out and (
+        "octo-feather-slot: refused, nothing ran: this heavy run selects 31 items, over heavy_items 30 (gate-budget.toml), "
+        "and lane gh7 holds no heavy grant; current holder: none; ask the director: octo-feather-slot grant gh7 --kind heavy"
+    ) in c.err)
+    f.env = director
+    f.run("grant", "octo-feather-slot", "grant", "gh7", "--kind", "heavy")
+    f.check("grant", lambda c: c.code == 0 and c.out.startswith("granted: heavy slot to lane gh7 (granted ") and "by w1:p1, expires " in c.out)
+    f.run("status", "octo-feather-slot", "status")
+    f.check("status", lambda c: c.code == 0 and "  holder: gh7 (granted " in c.out and "eval (1 slot(s)" in c.out)
+    f.env = agent
+    f.run("granted", *gate)
+    f.check("granted", lambda c: c.code == 0 and "heavy slot: held: the heavy slot for lane gh7, run pid " in c.out and "31 passed" in c.out)
+    f.run("released", "octo-feather-slot", "status")
+    f.check("released", lambda c: c.code == 0 and c.out.count("run holding it now: none") == 2)
+    f.env = {}
+    say(f"run-slots evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -2669,6 +2724,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-analyst": drive_qa_analyst,
     "qa-review": drive_qa_review,
     "qa-history": drive_qa_history,
+    "run-slots": drive_run_slots,
 }
 
 

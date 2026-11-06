@@ -27,7 +27,8 @@ case "$1 $2" in
     shift 2; while (($#)) && [[ "$1" != -- ]]; do shift; done; shift
     printf '%s\n' "$@" >"$d/start-argv"
     if dialog_open; then echo '{"error":{"code":"agent_not_ready"}}' >&2; exit 1; fi ;;
-  "agent get") echo '{"result":{"agent":{"agent_status":"idle"}}}' ;;
+  "agent get") echo '{"result":{"agent":{"agent_status":"idle","pane_id":"w9:p1"}}}' ;;
+  "agent wait") echo '{"result":{"agent_status":"idle"}}' ;;
   "pane read")
     echo x >>"$d/reads"
     if [[ -n "${FAKE_HERDR_READS_OK:-}" ]] && (($(wc -l <"$d/reads") > FAKE_HERDR_READS_OK)); then echo x >>"$d/failed-reads"; exit 42; fi

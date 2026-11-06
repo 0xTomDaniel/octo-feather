@@ -1,6 +1,9 @@
 # octo-feather kit commands. The gate's tiers, `just fast` and `just check`: quality spec #recipes-table (AGENTS.md).
 
-set shell := ["bash", "-euo", "pipefail", "-c"]
+# Backticks run in this shell too, and just passes them no export: each runs mise offline with its auto-installs off
+# (the exports below), so a tool a backtick reaches through a mise shim (check-gate-free's nested just) is never
+# installed, from the network, into MISE_DATA_DIR (#505, #667).
+set shell := ["env", "MISE_OFFLINE=1", "MISE_AUTO_INSTALL=0", "MISE_EXEC_AUTO_INSTALL=0", "MISE_NOT_FOUND_AUTO_INSTALL=0", "bash", "-euo", "pipefail", "-c"]
 # Recipe arguments reach the shell as "$@"/"$1", never as pasted text (#61).
 set positional-arguments
 
@@ -16,6 +19,11 @@ export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { e
 # Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
 # #boundary-gate); `mise install --locked` fills them, outside the gate.
 export MISE_OFFLINE := "1"
+# Nor installs one on its own: a mise shim or `mise exec` that finds its tool missing fails or falls back to the system's
+# (owner ruling #493, #505); the parse-time line naming each missing tool gives the fix (caller_path below).
+export MISE_AUTO_INSTALL := "0"
+export MISE_EXEC_AUTO_INSTALL := "0"
+export MISE_NOT_FOUND_AUTO_INSTALL := "0"
 # The kit's tools (mise.toml at mise.lock versions) on PATH for every recipe, from any caller (a shell, a git hook,
 # CI, an agent pane): mise's own answer for this repo's config (`mise bin-paths`, the config its shims read for
 # panes, scripts/pi-role), placed just before the caller PATH's first system dir (/usr/local/sbin /usr/local/bin
@@ -71,7 +79,21 @@ python-files:
 
 # tsc's own file list, which eslint gets whole (check-ts): add a path to tsconfig.json include (dot paths by name)
 ts-files:
-    @pnpm exec tsc --showConfig | python3 -c 'import json, sys; print(*json.load(sys.stdin).get("files", []), sep="\n")'
+    #!/usr/bin/env python3
+    # tsc failing, absent (pnpm prints "Command tsc not found" on stdout, exit 254) or answering no JSON fails naming
+    # the command, its exit code, stderr and stdout, never a parse error (#548, #663).
+    import json, subprocess, sys
+    cmd = ["pnpm", "exec", "tsc", "--showConfig"]
+    r = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        files = json.loads(r.stdout).get("files", []) if r.returncode == 0 else None
+    except (ValueError, AttributeError):
+        files = None
+    if files is None:
+        out, err = r.stdout.strip(), r.stderr.strip()
+        why = "" if r.returncode else " but printed no JSON config"
+        sys.exit(f"ts-files: {' '.join(cmd)} exited {r.returncode}{why}; stderr: {err or '(empty)'}; stdout: {out or '(empty)'}")
+    print(*files, sep="\n")
 
 # Minus the trees with their own gate (templates/) or frozen data (evals/, evidence/).
 # ShellCheck's file list: give a file the `shell` attribute in .gitattributes
@@ -246,11 +268,14 @@ check-types:
 # shrinks: a rule over its count fails (eslint then lists every occurrence of it in that file), an unused entry fails
 # until pruned. tsc has no baseline: its errors are fixed in place.
 # One recipe, not two: two gate items installing node_modules at once would race.
+# Installs only when pnpm's own check (verify-deps-before-run, which writes nothing) says node_modules is not current:
+# even an up-to-date pnpm install unlinks and rewrites node_modules/.bin/tsc, so under the gate, where check-tests
+# installed first, an install here made a concurrent check-languages' pnpm exec tsc find no tsc (#548, #663).
 check-ts:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
-    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+    pnpm --config.verify-deps-before-run=error exec true >/dev/null 2>&1 || err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
     cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
     mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
@@ -292,15 +317,25 @@ check-tests *args:
     err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
     # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
-    # runs, and two installs at once would race (check-ts's own install is then a no-op).
+    # runs, and two installs at once would race. check-ts then installs nothing (pnpm finds node_modules current), as
+    # any pnpm install, even an up-to-date one, rewrites node_modules/.bin under a concurrent pnpm exec (#548, #663).
     err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
     # mise's state dir one empty dir per gate run, removed after it, inherited by every item and nested run: each
     # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
     # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
     # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
-    if [[ -z "${GATE_NESTED:-}" ]]; then MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR; trap 'rm -rf "$MISE_STATE_DIR"' EXIT; fi
-    GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
+    [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
+    # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
+    # as it found them, by content, failing and naming each change this run made (owner ruling #584, #587; attribution:
+    # octo-feather-gate untouched).
+    # Its own TMPDIR, short (unix socket paths under it stay short), removed after: what is this run's is exact.
+    box="$(mktemp)"; gtmp="$(mktemp -d /tmp/gate.XXXXXX)"
+    python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR" --run-tmp "$gtmp"
+    MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR TMPDIR="$gtmp"; trap 'rm -rf "$MISE_STATE_DIR" "$box" "$gtmp"' EXIT
+    rc=0; GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@" || rc=$?
+    python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
+    exit "$rc"
 
 # The fast tier (quality #recipe-fast; when it suffices: issue-lifecycle #lanes-checkpoints): the gate items
 # scripts/octo-feather-gate select chooses, each named with why, through check-tests.
@@ -390,8 +425,9 @@ check-behavior-smoke:
 # a target whose qc.toml declares [browser] checks Playwright's headless Chromium shell at its pin; the box facts
 # (kernel, user namespaces, state folder, kit install, agent-browser's browser, optional ffmpeg), Spec Chat's review
 # service (else its installer run), the one manual step, and one line naming just install-check-models (no model call).
-# Every gap line names its fix (#461).
-install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
+# Every gap line names its fix (#461). CALLER_MISE: the caller's own mise auto-install settings from its environment,
+# which this justfile's exports (off, for the gate) hide from the recipe.
+install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER_MISE=("MISE_AUTO_INSTALL=" + env_var_or_default('MISE_AUTO_INSTALL', '') + " MISE_EXEC_AUTO_INSTALL=" + env_var_or_default('MISE_EXEC_AUTO_INSTALL', '') + " MISE_NOT_FOUND_AUTO_INSTALL=" + env_var_or_default('MISE_NOT_FOUND_AUTO_INSTALL', '')):
     #!/usr/bin/env bash
     set -uo pipefail
     bad=0
@@ -490,6 +526,12 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
             back = "switch main" if os.path.isdir(os.path.join(kit, ".git")) else "switch --detach origin/main"  # a worktree: main is checked out in the main checkout
             print(f"kit    NOT ON MAIN {kit} is on {at} {why}; live install clones stay on main (work in a git worktree): git -C {kit} {back}"); bad = 1
     sys.exit(bad)' "$root" || bad=1
+    # The factory commit identity every role launch applies, as pi-role reads it (scripts/pi-role --help, Commit identity; #665).
+    python3 -c 'import importlib.machinery as m, importlib.util as u, sys
+    s = u.spec_from_loader("pi_role", m.SourceFileLoader("pi_role", sys.argv[1] + "/scripts/pi-role")); r = u.module_from_spec(s); s.loader.exec_module(r)
+    env, why = r.identity(); f = r.onboarding_file()
+    if env: print("identity ok  " + env["GIT_AUTHOR_NAME"] + " <" + env["GIT_AUTHOR_EMAIL"] + "> ([identity] in " + f + ", applied by every role launch)")
+    else: print(f"identity MISSING ({why}): the factory commit identity, [identity] name and email in the box onboarding file {f}; a role launch that would commit refuses without it; {r.set_hint()}"); sys.exit(1)' "$root" || bad=1
     # Pi at the pin in pi-version (docs/adr/0023 Consequences).
     pin="$(tr -d '[:space:]' <"$root/pi-version")"
     if p="$(command -v pi)"; then
@@ -515,6 +557,20 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH'):
     print(f"mise   version {pin} ok (mise-version)")
     shims = json.loads(subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True).stdout or "{}").get("dirs", {}).get("shims", "")
     bad = 0
+    # The caller mise auto-install (#667, #505): just on the caller PATH being the mise shim, with auto_install and
+    # not_found_auto_install on (the mise defaults, asked of mise with the caller own settings, CALLER_MISE), installs
+    # a just not installed from the network before any justfile is read, out of the justfile reach. A WARNING, never
+    # a failure: a default mise setup passes. The kit never edits the user mise config: the line names the command.
+    # Dirs under the mise installs are skipped: a shim runs its tool with them put first on PATH, as when just ran this.
+    inst = os.path.realpath(json.loads(subprocess.run(["mise", "doctor", "--json"], capture_output=True, text=True).stdout or "{}").get("dirs", {}).get("data", "/nonexistent") + "/installs") + "/"
+    j = next((p for p in (os.path.join(d, "just") for d in os.environ["CALLER_PATH"].split(":") if d and not (os.path.realpath(d) + "/").startswith(inst)) if os.path.isfile(p) and os.access(p, os.X_OK)), None)
+    if j and (os.path.dirname(j) == shims or os.path.realpath(j) == os.path.realpath(exe)):
+        env = {k: v for k, v in os.environ.items() if k not in ("MISE_AUTO_INSTALL", "MISE_EXEC_AUTO_INSTALL", "MISE_NOT_FOUND_AUTO_INSTALL")} | dict(kv.split("=", 1) for kv in os.environ["CALLER_MISE"].split() if not kv.endswith("="))
+        try: s = json.loads(subprocess.run(["mise", "settings", "ls", "--all", "--json"], capture_output=True, text=True, cwd=top, env=env).stdout or "{}")
+        except ValueError: s = {}
+        if s.get("auto_install") is True and s.get("not_found_auto_install") is True:
+            on = ", ".join(f"{k} {str(s.get(k)).lower()}" for k in ("auto_install", "not_found_auto_install", "exec_auto_install"))
+            print(f"mise   WARNING auto-install on ({on}; mise settings): just on your PATH is mise\x27s shim {j}, so a just whose pinned version is not installed is installed from the network before any justfile is read (the gate\x27s own mise calls never install, #667); the check still passes; to turn it off: mise settings set auto_install false (the kit never edits your mise config)")
     # Tools the kit itself runs from PATH in any target, so at the kit mise.lock version there too: just (the kit
     # recipes, just integrate, check-gate-free and octo-feather-lane read the --dump and --dry-run answers of just).
     # Only the version on PATH is compared: nothing is installed or resolved through mise in the target.
