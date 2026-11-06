@@ -178,7 +178,7 @@ def issues() -> dict[int, dict[str, object]]:
 
 def count(x: object) -> int:
     """The length of X, a stored list, else 0."""
-    return len(x) if isinstance(x, list) else 0
+    return len(x) if isinstance(x, list) else 0  # pyright: ignore[reportUnknownArgumentType]
 
 
 def issue_write(a: list[str]) -> None:

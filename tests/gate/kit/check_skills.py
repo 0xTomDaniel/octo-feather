@@ -8,8 +8,8 @@ recipe itself where it is the surface, a broken python3.
 Each check-skills run starts Pi, the cost floor (#558), so the content cases are judged together:
 case N plants its SKILL.md as .agents/skills/qc-bad-N or qc-good-N, its own name spelled with -N
 so no two share a name. The good skills alone keep the copy green (so the clean copy too), its ok
-line naming both trackers; then with every bad skill beside them, one run fails naming each bad SKILL.md and no good one: a
-missing, body-only or empty name or description, adversarial forms, a description Pi cannot read
+line naming both trackers; then with every bad skill beside them, one run fails naming each bad
+SKILL.md and no good one: a missing, body-only or empty name or description, adversarial forms, a description Pi cannot read
 (and a role listing it, named with it), an unreadable (dangling) SKILL.md; one bad skill's exact
 message. A broken python3 or pi fails closed, never skills: ok. That `just check` runs it:
 tests/gate/kit/check_refs.py in_gate (one gate run for three recipes).
