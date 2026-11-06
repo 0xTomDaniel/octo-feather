@@ -12,6 +12,7 @@ below: each mode what that judge tries, then its report).
 """
 
 import contextlib
+import fcntl
 import json
 import os
 import re
@@ -86,7 +87,17 @@ def m_argv(h: str, argv: list[str]) -> None:
 
 
 def m_hang(_h: str, _: list[str]) -> None:
-    os.execvp("sleep", ["sleep", f"3040{os.environ.get('FAKE_QC_TOK', '')}"])  # noqa: S606, S607
+    """A judge that never ends: it holds a shared flock on FAKE_QC_LOCK across its exec (the
+    scenario's proof it ended: testkit.qc.let_go), says ready on the FAKE_QC_READY pipe, then
+    sleeps."""
+    if lock := os.environ.get("FAKE_QC_LOCK"):
+        fd = os.open(lock, os.O_RDONLY)
+        fcntl.flock(fd, fcntl.LOCK_SH)
+        os.set_inheritable(fd, True)  # noqa: FBT003  # positional only
+    if fifo := os.environ.get("FAKE_QC_READY"):
+        with Path(fifo).open("w") as f:
+            f.write("judge ready\n")
+    os.execvp("sleep", ["sleep", "3600"])  # noqa: S606, S607
 
 
 def m_writes(_h: str, _: list[str]) -> None:
@@ -179,8 +190,9 @@ def shell(script: str, *args: str) -> str:
 
 def m_pane(h: str, _: list[str]) -> None:
     """A pane spawned through the sandbox herdr (judge-pane.sh) reports what it sees and tries to
-    outlive the run."""
-    say(shell("judge-pane.sh", os.environ.get("FAKE_QC_TOK", "")))
+    outlive the run, holding a shared flock on $HOME/pane.lock while it lives (the scenario's proof
+    it died with the run: testkit.qc.let_go)."""
+    say(shell("judge-pane.sh"))
     ok(h)
 
 
@@ -196,7 +208,7 @@ MODES = {n.removeprefix("m_"): f for n, f in list(globals().items()) if n.starts
 
 def qc_mode(mode: str, argv: list[str]) -> None:
     """The qc judge as tests/lib/qc.sh's fake pi answers under FAKE_QC=MODE: what it tries, then
-    its report on the brief's head; FAKE_QC_TOK marks its sleeps."""
+    its report on the brief's head."""
     if os.environ.get("LINEAR_API_KEY") is not None:
         say("LINEAR KEY IN JUDGE ENV")  # remote#acceptance-linear-key-qc
     m = re.search(r"head ([0-9a-f]{40})", " ".join(argv))

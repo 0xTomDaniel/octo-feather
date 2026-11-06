@@ -19,7 +19,7 @@ import time
 from pathlib import Path
 
 from testkit import ROOT, Scratch, main
-from testkit.qc import LIMIT_S, STATUS, box, gone, judged, latest
+from testkit.qc import LIMIT_S, STATUS, box, judged, latest, let_go
 
 
 def unchanged(s: Scratch, head: str, *flags: str) -> None:
@@ -101,9 +101,12 @@ def nested(s: Scratch) -> None:
 def pane(s: Scratch) -> None:
     """A pane the judge spawns through the sandbox herdr runs in the judge's PID namespace (the
     sandbox server started inside it), sees no live Herdr socket and no creds, and dies with the
-    run. The fake herdr; with QC_TEST_HERDR=real the box's real herdr, a real "live" session under
-    the throwaway HOME, which the run must not hurt."""
+    run: its flock on a file this scenario made is released (testkit.qc.let_go). The fake
+    herdr; with QC_TEST_HERDR=real the box's real herdr, a real "live" session under the
+    throwaway HOME, which the run must not hurt."""
     r = box(s)
+    lock = s.home / "pane.lock"  # the pane holds a shared flock on it while it lives
+    lock.write_text("")
     mode = os.environ.get("QC_TEST_HERDR", "fake")
     assert mode in ("fake", "real"), f"QC_TEST_HERDR must be fake or real, got '{mode}'"
     live = None
@@ -146,12 +149,13 @@ def pane(s: Scratch) -> None:
         assert "ESCAPE" not in j, f"sandbox pane escape ({mode} herdr): {j}"
         assert "MISSING" not in j, f"sandbox pane missing ({mode} herdr): {j}"
         assert "PANE done" in j, f"pane never ran ({mode} herdr): {j}"
+        assert "PANE locked" in j, f"pane never took its lock ({mode} herdr): {j}"
         ns = {ln.split()[0]: ln.split()[2] for ln in j.splitlines() if " pidns " in ln}
         assert ns["judge"] == ns["pane"] != str(Path("/proc/self/ns/pid").readlink()), (
             f"pane not in the judge's PID namespace ({mode} herdr): {j}"
         )
         assert rep["fallback"]["acceptance-a"]["sandbox"]["herdr_panes"] == 1, rep
-        assert gone(f"303031{s.env['FAKE_QC_TOK']}"), f"judge's pane survived the run ({mode})"
+        assert let_go(lock), f"judge's pane survived the run ({mode} herdr)"
         if live:
             s.run([str(s.bin / "herdr"), "--session", "qclive", "workspace", "list"])
             left = [p.name for p in (s.home / ".config" / "herdr" / "sessions").iterdir()]

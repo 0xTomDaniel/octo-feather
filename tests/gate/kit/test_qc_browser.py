@@ -11,6 +11,8 @@ Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
 
 
+# e2e (quality#test-kinds): it drives the box's real installed headless browser when one is there.
+@pytest.mark.e2e
 def test_qc_browser_screenshot(case: Case) -> None:
     case(screenshot)
 
