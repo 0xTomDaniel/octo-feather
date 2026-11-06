@@ -79,7 +79,7 @@ EXPECT = [
     # set it.
     ("docs/x.md", f'SPOOL_SIDE = "{HU}"', WORDS),
     ("agents/x.md", f"SPOOL_SIDE={HU}", WORDS),
-    ("tests/accepted.sh", f"SPOOL_SIDE={HU} # SPOOL_SIDE: the {HU} approves", WORDS),
+    ("tests/gate/kit/accepted.py", f'SPOOL_SIDE = "{HU}"  # SPOOL_SIDE: the {HU} approves', WORDS),
     ("scripts/octo-feather-accepted", f'SPOOL_SIDE = "{HU}"  # the {HU} approves', WORDS),
     ("scripts/octo-feather-accepted", f"# SPOOL_SIDE ... the {HU} approves", WORDS),
     # The lane branch default: a role restating it fails.
@@ -116,7 +116,7 @@ FILES = [(CL, PI), (CX, PI)]
 # (FILE, LINE): appended, keeps check-refs green.
 ALLOW = [
     ("scripts/octo-feather-accepted", f'SPOOL_SIDE = "{HU}"  # Spec Chat\'s owner side'),
-    ("tests/accepted.sh", f"SPOOL_SIDE={HU}; spool=x"),
+    ("tests/gate/kit/accepted.py", f'SPOOL_SIDE = "{HU}"  # Spec Chat\'s owner side of the spool'),
     (
         "docs/adr/0011-herdr-layout.md",
         f"Rejected: `octo-feather/{GH}<issue>-<slug>` and {GH}<N>-<slug>.",
