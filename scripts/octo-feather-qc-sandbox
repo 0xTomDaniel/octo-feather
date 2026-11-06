@@ -13,7 +13,7 @@
 #      paragraph): each a tmpfs; QC_KIT the kit under test, default this script's kit
 #   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
 #   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
-#      authenticated against each pin, bound back read-only; uv's cache, as `uv cache dir` names it, bound back as an
+#      authenticated against each pin, bound back read-only; uv's cache, as `uv --color never cache dir` names it, bound back as an
 #      overlay like the worktree's below, so an offline `uv sync` finds the box's packages, locks and writes, and
 #      nothing reaches the real cache or outlives the run), /dev/shm and the Pi agent dir (its entries
 #      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
@@ -226,10 +226,16 @@ if [[ "$phase" == setup ]]; then
   VC="$CACHE/octo-feather/skillfile"; : > "$SCR/vcache"   # `just check` in the sandbox reads it; read-only
   vc=0; if [[ -d "$VC" ]]; then exec 10<"$VC" && vc=1; fi
   # uv's cache (step 5, header), asked of uv itself: its real dir bound on the run tmpfs as the overlay's lower, below.
+  # Asked uncoloured (#637: under FORCE_COLOR uv colours even a path). A path that is not absolute, or names no dir,
+  # fails naming what uv printed; an absolute one not there yet (uv never ran under this HOME) is named in the proof.
   UC=""; : > "$SCR/uvcache"
-  if command -v uv > /dev/null && UC=$(uv cache dir 2> /dev/null) && [[ -d "$UC" ]]; then
-    [[ "$UC" != *[,:]* ]] || die "uv cache dir $UC holds , or : (overlay options)"
-    mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" && mount --bind "$UC" "$OV/uvl" && remount ro "$OV/uvl" || die "uv cache lower $UC"
+  if command -v uv > /dev/null && UC=$(uv --color never cache dir 2> /dev/null); then
+    [[ "$UC" == /* && "$UC" != *[[:cntrl:]]* ]] && { [[ -d "$UC" ]] || [[ ! -e "$UC" && ! -L "$UC" ]]; } \
+      || die "uv --color never cache dir printed ${UC@Q}: not a directory"
+    if [[ -d "$UC" ]]; then
+      [[ "$UC" != *[,:]* ]] || die "uv cache dir $UC holds , or : (overlay options)"
+      mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" && mount --bind "$UC" "$OV/uvl" && remount ro "$OV/uvl" || die "uv cache lower $UC"
+    else printf '\n\n%s\n' "$UC" > "$SCR/uvcache"; UC=""; fi
   else UC=""; fi
   if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi
   if ((vc)); then
@@ -668,7 +674,7 @@ check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only${kitn:+; $kitn
 # Every writable mount, by its own flags: tmpfs and /proc die with the run, the worktree overlay's
 # upper dir is on the run tmpfs; anything else is persistent (Pi's auth.json and models.json are binds of run tmpfs files).
 ov=$(cat "$SCR/ovupper"); wt=$(git rev-parse --show-toplevel 2>/dev/null)
-{ read -r uc; read -r ucu; } < "$SCR/uvcache"
+{ read -r uc; read -r ucu; read -r ucn; } < "$SCR/uvcache"
 mapfile -t pers < <(awk -v ov="upperdir=$ov," -v uv="upperdir=${ucu:-/nonexistent}," '
   { for (i = 7; $i != "-"; i++); fs = $(i+1); so = $(i+3) ","; mp = $5; gsub(/\\040/, " ", mp); w[mp] = ""
     if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && (index(so, ov) || index(so, uv))))) w[mp] = $1 " " mp }
@@ -685,8 +691,10 @@ if [[ -n "$uc" ]]; then   # uv's cache: an overlay whose upper is on the hidden 
     mp == m && $(i+1) == "overlay" && index($(i+3) ",", u) { n++ } END { print n + 0 }' /proc/self/mountinfo)
   w=0; touch "$uc/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$uc/.qc-w-$S"; }
   check "$(t test "$ucl" -ge 1 -a "$w" = 1 -a ! -e "$ucu")" "uv cache $uc is an overlay, upper dir $ucu on the run tmpfs and hidden from the judge (writable; its writes discarded with the run)"
+elif [[ -n "$ucn" ]]; then
+  say "ok   uv cache: $ucn (uv --color never cache dir) absent, nothing bound"
 else
-  say "ok   uv cache: none on the box (no uv, or uv cache dir absent), nothing bound"
+  say "ok   uv cache: none on the box (no uv, or uv cache dir exits non-zero), nothing bound"
 fi
 ((unreach == 0)) || say "ok   $unreach writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run)"
 vc=$(cat "$SCR/vcache")
