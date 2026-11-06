@@ -34,6 +34,7 @@ CL = "CLA" + "UDE.md"
 CX = ".co" + "dex/AGENTS.md"
 GH = "gh"
 LB = f"Cut branch {GH}<N>-<slug> for the lane."
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
 WORDS = "use director for the top agent and owner for the person"
 ADR = "docs/adr/0011"
 PI = "Pi is the only runtime"
@@ -149,7 +150,8 @@ def just(
     s: Scratch, k: Path, *args: str, env: dict[str, str] | None = None, unset: tuple[str, ...] = ()
 ) -> tuple[int, str]:
     """`just ARGS` in the copy K, the tools' homes the caller's (testkit.tool_homes), ENV set and
-    UNSET unset: its exit and its stdout and stderr as one stream."""
+    UNSET unset: its exit and its stdout and stderr as one stream, uncoloured (a CI's FORCE_COLOR
+    colours pytest's lines)."""
     full = {**s.env, **tool_homes(), **(env or {})}
     for key in unset:
         full.pop(key, None)
@@ -162,7 +164,7 @@ def just(
         text=True,
         check=False,
     )
-    return p.returncode, p.stdout
+    return p.returncode, ANSI.sub("", p.stdout)
 
 
 def planted(s: Scratch) -> None:
