@@ -621,11 +621,11 @@ def hosts_for_pi(pi_dir: str) -> list[str]:
     return sorted(hs)
 
 
-def srt_cmd(data: str) -> tuple[list[str], str]:
-    """srt as the kit pins it (package.json, exact, locked in pnpm-lock.yaml) from the kit's node_modules, run with the
-    node of the kit's mise.toml pin (in mise's data dir DATA), else the first node on PATH. Missing, or at another
-    version than the pin: exit 66 naming the install command."""
-    fix = f"pnpm install --frozen-lockfile --dir {SK}"
+def srt_js() -> tuple[str, str, str]:
+    """srt as the kit pins it (package.json, exact, locked in pnpm-lock.yaml): its cli in the kit's node_modules, its
+    version, and the node_modules dir it loads from (read on the host, before any namespace: a kit's node_modules may
+    live under /tmp, which the discard stage makes private, so that dir is kept). Missing, or at another version
+    than the pin: exit 66 naming the install command."""
     try:
         dev: dict[str, Any] = json.load(open(f"{SK}/package.json")).get("devDependencies", {})
     except (OSError, ValueError):
@@ -638,8 +638,13 @@ def srt_cmd(data: str) -> tuple[list[str], str]:
     if not pin or got != pin or not os.path.isfile(js):
         die(
             f"srt ({SRT_PKG} {pin or 'unpinned'}, the kit's package.json and pnpm-lock.yaml) not installed in "
-            f"{SK}/node_modules (found: {got or 'none'}): run {fix}"
+            f"{SK}/node_modules (found: {got or 'none'}): run pnpm install --frozen-lockfile --dir {SK}"
         )
+    return js, got, os.path.realpath(f"{SK}/node_modules")
+
+
+def srt_node(data: str) -> str:
+    """The node srt runs on: the kit's mise.toml pin in mise's data dir DATA, else the first on PATH."""
     try:
         nv = tomllib.load(open(f"{SK}/mise.toml", "rb")).get("tools", {}).get("node")
     except (OSError, ValueError):
@@ -650,7 +655,7 @@ def srt_cmd(data: str) -> tuple[list[str], str]:
         die(
             f"node (the kit's mise.toml pin {nv}) not installed: run {SK}/scripts/octo-feather-mise-install {SK}"
         )
-    return [node, js], got
+    return node
 
 
 def setup(judge: list[str]) -> NoReturn:
@@ -688,6 +693,9 @@ def setup(judge: list[str]) -> NoReturn:
         E["QC_KEEP"] = "\n".join(p for p in keep if p.startswith("/tmp/"))
 
     # Host facts, read before any namespace or mask.
+    sjs, srtv, snm = srt_js()
+    if snm.startswith("/tmp/"):  # srt's node_modules, bound back on the private /tmp (step 1)
+        E["QC_KEEP"] = "\n".join([*E.get("QC_KEEP", "").split("\n"), snm]).strip("\n")
     os.makedirs(HC, exist_ok=True)
     try:
         KUT = os.path.realpath(E.get("QC_KIT") or SK, strict=True)
@@ -861,7 +869,7 @@ def setup(judge: list[str]) -> NoReturn:
                     f"mise doctor --json (exit {r.returncode}) printed no dirs.{d}: mise's dirs unknown"
                 )
             menv[f"MISE_{d.upper()}_DIR"] = E.get(f"MISE_{d.upper()}_DIR") or x
-    srt, srtv = srt_cmd(menv.get("MISE_DATA_DIR", ""))
+    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), sjs]
     # 2. the run tmpfs: overlay upper and work dirs, Pi copies.
     for c in (",", ":"):
         if c in WT:
