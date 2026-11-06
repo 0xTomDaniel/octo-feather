@@ -1,0 +1,12 @@
+# The parity lever's case for tests/review-host.sh, rewritten as tests/gate/kit/test_review_host.py (tests/parity/lever.py --help).
+old = "tests/review-host.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/herdr-spawn/herdr",
+]
+new = "tests/gate/kit/test_review_host.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the kit command run as a program.
+[ran]
+"scripts/review-host" = "exec scripts/review-host"
