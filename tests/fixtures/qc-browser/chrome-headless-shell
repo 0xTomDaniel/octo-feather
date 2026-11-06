@@ -1,6 +1,5 @@
-#!/usr/bin/env python3
-# Planted shell (no browser on this runner): writes a 1x1 PNG where --screenshot says.
-import base64, sys
-out = next(a.split("=", 1)[1] for a in sys.argv if a.startswith("--screenshot="))
-open(out, "wb").write(base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC"))
-print(f"{len(open(out, 'rb').read())} bytes written to file {out}")
+#!/bin/sh
+# Planted shell (tests/gate/kit/qc_browser.py, a runner with no browser): writes a 1x1 PNG where --screenshot says.
+for a; do case "$a" in --screenshot=*) out="${a#--screenshot=}";; esac; done
+echo iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGNgYPgPAAEDAQAIicLsAAAAAElFTkSuQmCC | base64 -d > "$out"
+echo "$(wc -c < "$out") bytes written to file $out"
