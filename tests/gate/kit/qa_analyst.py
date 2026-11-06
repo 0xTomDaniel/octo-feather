@@ -85,6 +85,7 @@ class Qa:
         for k in [k for k in s.env if k.startswith("HERDR_")]:
             del s.env[k]
         s.env["OCTO_FEATHER_QA_DIR"] = str(s.root / "out")
+        s.identity()
         s.env["PATH"] = f"{s.bin}:{self.kit / 'scripts'}:{s.env['PATH']}"
         self.evals = s.root / "an"
         (self.evals / "fixtures" / "fx").mkdir(parents=True)

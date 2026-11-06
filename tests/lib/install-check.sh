@@ -32,6 +32,7 @@ printf '#!/bin/sh\n[ -e "%s/userns-off" ] && { echo "unshare: write failed /proc
 printf '#!/bin/sh\nexit 0\n' >"$t/bin/ffmpeg"
 # The session state folder (XDG_STATE_HOME) with its lanes/, and the live kit install: a clone of a bare origin, on main.
 mkdir -p "$t/state/octo-feather/lanes"
+XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity (#665), ok in every case
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 g init -q --bare "$t/kit-origin.git"; g clone -q "$t/kit-origin.git" "$t/kitinst" 2>/dev/null
 g -C "$t/kitinst" commit -q --allow-empty -m one; g -C "$t/kitinst" push -q origin main
@@ -41,7 +42,7 @@ printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* 
 # resolves to mise's install, so install-check's PATH rule holds.
 ln -s "$(mise which just)" "$t/bin/just"
 export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
-UV_PYTHON_INSTALL_DIR="$(uv python dir)"; export UV_PYTHON_INSTALL_DIR
+UV_PYTHON_INSTALL_DIR="$(uv python dir --color never)"; export UV_PYTHON_INSTALL_DIR
 ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"; real_unshare="$(command -v unshare)"
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 mpin="$(tr -d '[:space:]' <"$kit/mise-version")"

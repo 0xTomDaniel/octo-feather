@@ -12,6 +12,8 @@ Fails, naming each file and its fix: 1. scc calls a tracked file Unknown;
 language; 4. a tool's gate recipe is not in the gate; 5. a file scc does not list starts with `#!`
 (scc drops `env -S` shebangs); 6. mise.toml pins pnpm and package.json has `packageManager`.
 Passes by design: a file scc does not list that does not start with `#!` (no language found).
+A tool call that fails or answers nothing usable (empty, not JSON) fails naming the command, its
+exit code, stderr and stdout, never a bare parse error (owner ruling #548 2026-11-04, #660).
 """
 
 import json
@@ -50,16 +52,39 @@ def missing_tool(tool: str) -> str:
     return f"{tool} is not installed: octo-feather-mise-install (mise.toml, mise.lock)"
 
 
-def ask(*cmd: str) -> str:
+def answer(*cmd: str) -> tuple[str, str]:
+    """CMD's stdout and stderr, once it exits 0; else it fails naming the command, exit and both."""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
         msg = f"cannot run {cmd[0]}: {e}; {missing_tool(cmd[0])}"
         raise UnansweredError(msg) from e
     if r.returncode != 0:
-        msg = f"{' '.join(cmd)} exited {r.returncode}: {r.stderr.strip()}"
+        msg = f"{' '.join(cmd)} exited {r.returncode}: {said(r.stdout, r.stderr)}"
         raise UnansweredError(msg)
-    return r.stdout
+    return r.stdout, r.stderr
+
+
+def ask(*cmd: str) -> str:
+    return answer(*cmd)[0]
+
+
+def said(stdout: str, stderr: str) -> str:
+    """What a tool printed, both streams named (pnpm prints its own errors on stdout)."""
+    out, err = stdout.strip(), stderr.strip()
+    return f"stderr: {err or '(empty)'}" + (f"; stdout: {out[:2000]}" if out else "")
+
+
+def ask_json(*cmd: str) -> str:
+    """CMD's stdout, which parses as JSON; output that does not (empty, not JSON) fails naming the
+    command, its exit code and what it printed, never a parse error alone."""
+    out, err = answer(*cmd)
+    try:
+        json.loads(out)
+    except ValueError as e:
+        msg = f"{' '.join(cmd)} exited 0 but printed no JSON: {said(out, err)}"
+        raise UnansweredError(msg) from e
+    return out
 
 
 def relative(line: str) -> str:
@@ -76,7 +101,9 @@ def scanned() -> set[str]:
 
 def scc_languages(files: set[str]) -> dict[str, str]:
     # scc walks the directory: named on its command line, a file under a dot dir loses its shebang.
-    out = ask("scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", ".")
+    out = ask_json(
+        "scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", "."
+    )
     found: dict[str, str] = {}
     langs: list[dict[str, Any]] = json.loads(out)
     for lang in langs:
@@ -89,7 +116,7 @@ def scc_languages(files: set[str]) -> dict[str, str]:
 
 def justfile() -> tuple[list[list[str]], set[str], dict[str, Any]]:
     dump: dict[str, Any] = json.loads(
-        ask("just", "--justfile", "justfile", "--dump", "--dump-format", "json")
+        ask_json("just", "--justfile", "justfile", "--dump", "--dump-format", "json")
     )
     rows = [e.split(":") for e in dump["assignments"]["check_languages"]["value"].split()]
     gate = set(dump["assignments"].get("GATE_RECIPES", {}).get("value", "").split())
@@ -146,7 +173,7 @@ def unreadable_shebangs(unlisted: set[str]) -> list[str]:
 
 
 def both_pnpm_pins() -> list[str]:
-    pins = json.loads(ask("mise", "ls", "--local", "--json"))
+    pins = json.loads(ask_json("mise", "ls", "--local", "--json"))
     package = Path("package.json")
     manifest: dict[str, Any] = (
         json.loads(package.read_text(encoding="utf-8")) if package.is_file() else {}

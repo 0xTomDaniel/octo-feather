@@ -39,6 +39,22 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       the run's pytest junit xml: only an item it reports passed is mapped; a failed or skipped one
       is left out and named in the map as not passed. An item with no data (not run, or no Python
       measured) is left out of the map too.
+  octo-feather-gate untouched save FILE [--mise-state DIR] [--run-tmp TMP]
+  octo-feather-gate untouched check FILE
+      A gate run leaves the caller's mise state and its repo's git config as it found them (owner
+      ruling #584, #587; #664), judged only on what this run left, attributed exactly, so another
+      agent's work on the box meanwhile never fails it. save, before the run, writes into FILE the
+      content of DIR's tracked-configs and trusted-configs (each entry a link's target, a file's
+      sha256), the current repo's git common dir config (every worktree's) as key/value pairs
+      (`git config --file F --list`), and TMP, the run's own TMPDIR (its name the run's id).
+      check, after it, fails (exit 1) naming each: an entry added, removed or changed whose link
+      target, saved or new, lies under TMP, or under a dir of the git common dir's octo-feather/
+      whose name carries the run's id; a config key/value added or removed, branch.<name>.* aside
+      (push -u, worktree branches). Every other entry change, dangling or not (a peer lane's
+      post-merge prune meanwhile), is printed as not this run's, never a failure. Else one line
+      naming what it found unchanged. Content, never mtimes. DIR empty (no mise): the config
+      alone; outside a git repo, the mise state alone. just check-tests runs both around every
+      outermost gate run, which it gives its own TMP.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -55,10 +71,13 @@ import datetime as dt
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
+from collections import Counter
 from pathlib import Path
+from typing import TypedDict, cast
 
 LIST = "shared-machinery.txt"
 NOTES = "refs/notes/octo-feather-gate"
@@ -501,6 +520,153 @@ def build_map(data: Path, junit: Path) -> None:
         sys.stdout.write(f"fast-map: {i} did not pass: left out of the map, always selected\n")
 
 
+MISE_DIRS = ("tracked-configs", "trusted-configs")
+
+
+class Box(TypedDict):
+    """What untouched compares: each watched mise state dir's entries (name: content), the git
+    config file's path ("" outside a git repo) and its key/value pairs, branch.<name>.* aside
+    (None when absent); and what is this run's: its own TMPDIR (as given and its real path), its
+    id (that dir's name), the git common dir ("" outside a git repo)."""
+
+    mise: dict[str, dict[str, str]]
+    config: str
+    keys: list[list[str]] | None
+    run_tmp: list[str]
+    run_id: str
+    common: str
+
+
+def entry(p: Path) -> str:
+    """One mise state dir entry as content: a link by its target, a file by its bytes' sha256."""
+    if p.is_symlink():
+        return f"-> {p.readlink()}"
+    if p.is_dir():
+        return "a directory"
+    return f"sha256 {hashlib.sha256(p.read_bytes()).hexdigest()[:12]}"
+
+
+def listing(d: str) -> dict[str, str]:
+    p = Path(d)
+    return {e.name: entry(e) for e in sorted(p.iterdir())} if p.is_dir() else {}
+
+
+def config_keys(config: str) -> list[list[str]] | None:
+    """CONFIG's key/value pairs as git reads them (`git config --file F --list`), in file order,
+    without branch.<name>.* (push -u, a worktree's branch: another lane's, never a run's own
+    leak); None when there is no such file."""
+    if not config or not Path(config).is_file():
+        return None
+    out = git("config", "--file", config, "--list", "-z")
+    pairs = [kv.partition("\n") for kv in out.split("\0") if kv]
+    return [[k, v] for k, _, v in pairs if not re.fullmatch(r"branch\..+\.[^.]+", k)]
+
+
+def under(target: str, d: str) -> bool:
+    return target == d or target.startswith(d.rstrip("/") + "/")
+
+
+def ours(state: str, content: str | None, was: Box) -> str | None:
+    """Where the target of a link in mise state dir STATE, its entry CONTENT (entry(): "-> TARGET"),
+    lies if this run made it (a failure), else None: under the run's own TMPDIR, or under a subdir
+    of the git common dir's octo-feather/ whose name carries the run's id. Exact attribution:
+    nothing else is this run's, dangling or not (another agent's scratch); a file (no target) never
+    is."""
+    if not content or not content.startswith("-> "):
+        return None
+    t = os.path.normpath(Path(state) / content.removeprefix("-> "))
+    for d in was["run_tmp"]:
+        if under(t, d):
+            return f"this run's TMPDIR {was['run_tmp'][0]}"
+    base = f"{was['common']}/octo-feather"
+    if was["common"] and was["run_id"] and under(t, base) and t != base:
+        sub = Path(t).relative_to(base).parts[0]
+        if was["run_id"] in sub:
+            return f"{base}/{sub}, named for this run"
+    return None
+
+
+def keys_changed(was: Box) -> list[str]:
+    """The config's key/value pairs added or removed since WAS, branch.<name>.* aside."""
+    k0, k1 = was["keys"], config_keys(was["config"])
+    if k0 == k1:
+        return []
+    c0 = Counter(f"{k}={v}" for k, v in k0 or [])
+    c1 = Counter(f"{k}={v}" for k, v in k1 or [])
+    said = [f"-{x}" for x in sorted((c0 - c1).elements())]
+    said += [f"+{x}" for x in sorted((c1 - c0).elements())]
+    if not said and (k0 is None) == (k1 is None):
+        return []  # the same pairs, another order
+    now = "absent" if k1 is None else "present"
+    return [f"{was['config']}: changed ({now}): {' '.join(said)}"]
+
+
+def changed(was: Box) -> tuple[list[str], list[str]]:
+    """(failures, notes) since WAS. A mise entry added, removed or changed fails when it is this
+    run's (ours: its saved target or its new one), else it is a note: another agent's, such as a
+    peer lane's post-merge prune removing its worktree's links meanwhile (#664 director ruling).
+    Any config key/value added or removed fails (keys_changed)."""
+    out: list[str] = []
+    notes: list[str] = []
+    for d, before in was["mise"].items():
+        after = listing(d)
+        for n in sorted(before.keys() | after.keys()):
+            b, a = before.get(n), after.get(n)
+            if b == a:
+                continue
+            if a is None:
+                what = f"{d}/{n}: removed (was {b})"
+            elif b is None:
+                what = f"{d}/{n}: added {a}"
+            else:
+                what = f"{d}/{n}: changed ({b}, now {a})"
+            where = ours(d, b, was) or ours(d, a, was)
+            if where:
+                out.append(f"{what}, under {where}")
+            else:
+                notes.append(what)
+    return out + keys_changed(was), notes
+
+
+def untouched(action: str, file: Path, mise_state: str, run_tmp: str) -> int:
+    """save: FILE holds the caller's mise state (MISE_STATE), this repo's git common dir config's
+    keys and RUN_TMP, the run's own TMPDIR. check: read again from the paths FILE names; each
+    failure printed, exit 1 on any, else one line naming what was unchanged; notes either way."""
+    if action == "save":
+        common = git("rev-parse", "--path-format=absolute", "--git-common-dir", check=False).strip()
+        config = str(Path(common) / "config") if common else ""  # "": not in a git repo
+        dirs = [str(Path(mise_state) / d) for d in MISE_DIRS] if mise_state else []
+        box: Box = {
+            "mise": {d: listing(d) for d in dirs},
+            "config": config,
+            "keys": config_keys(config),
+            "run_tmp": list(
+                dict.fromkeys(p for p in (run_tmp, os.path.realpath(run_tmp)) if run_tmp)
+            ),
+            "run_id": Path(run_tmp).name if run_tmp else "",
+            "common": common,
+        }
+        file.write_text(json.dumps(box))
+        return 0
+    was = cast("Box", json.loads(file.read_text()))
+    changes, notes = changed(was)
+    for n in notes:
+        sys.stderr.write(f"check-tests: not this run's: {n}\n")
+    if changes:
+        sys.stderr.write(
+            "check-tests: FAIL the gate changed the caller's mise state or the repo's git config"
+            " (#664):\n" + "".join(f"  {c}\n" for c in changes)
+        )
+        return 1
+    seen = [f"{d} ({len(e)} entries)" for d, e in was["mise"].items()]
+    keys = was["keys"]
+    held = "absent" if keys is None else f"{len(keys)} keys"
+    conf = f"{was['config']} ({held}, branch.* aside)" if was["config"] else "no git repo"
+    found = ", ".join([*(seen or ["no mise state dir (mise not on PATH)"]), conf])
+    sys.stderr.write(f"check-tests: unchanged by the gate: {found}\n")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(
         prog="octo-feather-gate",
@@ -523,7 +689,14 @@ def main() -> int:
     m = sub.add_parser("map")
     m.add_argument("data", type=Path)
     m.add_argument("--junit", type=Path, required=True)
+    u = sub.add_parser("untouched")
+    u.add_argument("action", choices=("save", "check"))
+    u.add_argument("file", type=Path)
+    u.add_argument("--mise-state", default="")
+    u.add_argument("--run-tmp", default="")
     a = ap.parse_args()
+    if a.cmd == "untouched":
+        return untouched(a.action, a.file, a.mise_state, a.run_tmp)
     if a.cmd == "checkpoint":
         tier, why = checkpoint(a.start, full=a.full, fast=not a.no_fast)
         sys.stdout.write(f"{tier}\n{why}\n")

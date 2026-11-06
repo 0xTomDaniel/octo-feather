@@ -1,3 +1,4 @@
+# The runner image is pinned (ubuntu-24.04, octo-feather #511), moved only in its own change with a full CI run.
 name: check
 on:
   pull_request:
@@ -10,7 +11,7 @@ jobs:
   # token diffs the pushed range, github.event.before to the head, in git; a diff that fails leaves the check job running.
   scope:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       code: ${{ steps.diff.outputs.code }}
     steps:
@@ -33,7 +34,7 @@ jobs:
   check:
     needs: scope
     if: needs.scope.outputs.code != 'false'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1 (no moving tag)
       # Native tools from mise.toml and mise.lock, the pins `just setup` installs (octo-feather-mise-install, the
