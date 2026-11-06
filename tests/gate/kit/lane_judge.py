@@ -20,7 +20,7 @@ import shutil
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, cast
 
-from testkit import FAKES, ROOT, Ran, Scratch, fixture, kit, main
+from testkit import FAKES, ROOT, Ran, Scratch, fixture, kit, kit_deps, main
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -469,10 +469,7 @@ def threshold(s: Scratch, which: str) -> None:
     for d in ("scripts", "agents", ".agents"):
         shutil.copytree(ROOT / d, k / d, symlinks=True)
     (k / "evidence").symlink_to(ROOT / "evidence")
-    # The qc sandbox's srt, as the kit pins and installs it (package.json, node_modules): read and
-    # started outside the sandbox, so links out of the copy serve.
-    for f in ("package.json", "node_modules"):
-        (k / f).symlink_to(ROOT / f)
+    kit_deps(k)
     for f in {src.relative_to(ROOT).parent for src in FAKES.values()}:
         shutil.copytree(ROOT / f, k / f, symlinks=True)
     s.link_fakes(k)

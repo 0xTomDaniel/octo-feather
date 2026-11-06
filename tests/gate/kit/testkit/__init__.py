@@ -222,6 +222,22 @@ class Scratch:
         return self.run(["git", "-C", str(repo), *ident, *args]).out
 
 
+def kit_deps(k: Path) -> None:
+    """A kit copy K given the kit's installed JavaScript packages, as a scenario's copy of the kit
+    needs them where it runs that copy's scripts: the qc sandbox runs srt from the running kit's
+    node_modules at its package.json pin (scripts/octo-feather-qc-sandbox --help), read outside the
+    sandbox, so links to this kit's serve. K's package.json linked when the copy has none; in a git
+    repo K, both kept out of its status (.git/info/exclude)."""
+    names = [n for n in ("package.json", "node_modules") if not (k / n).exists()]
+    for n in names:
+        (k / n).symlink_to(ROOT / n)
+    if (k / ".git").is_dir() and names:
+        ex = k / ".git" / "info" / "exclude"
+        ex.parent.mkdir(parents=True, exist_ok=True)
+        with ex.open("a") as f:
+            f.write("".join(f"/{n}\n" for n in names))
+
+
 def asked(*cmd: str) -> str:
     """CMD's answer, a path it prints (stdout, stripped), asked from the kit's dir with the
     caller's HOME, uncoloured: NO_COLOR, no FORCE_COLOR, and uv's own --color never, as uv
