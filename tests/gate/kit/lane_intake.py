@@ -99,9 +99,8 @@ def intake(s: Scratch) -> None:
     out = (r.out + ("\n" + r.err if r.err else "")).strip("\n")
     assert out == WANT, f"intake report: want\n{WANT}\ngot\n{out}"
     log = s.gh.log()
-    assert log and all(x.startswith("issue list ") for x in log), (
-        f"intake wrote to the tracker: {log}"
-    )
+    assert log, "intake searched no tracker"
+    assert all(x.startswith("issue list ") for x in log), f"intake wrote to the tracker: {log}"
     s.run([kit("octo-feather-lane"), "intake", "extra"], want=1)
 
 
