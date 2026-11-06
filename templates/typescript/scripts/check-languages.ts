@@ -35,12 +35,17 @@ function missingTool(tool: string): string {
   return `${tool} is not installed: octo-feather-mise-install (mise.toml, mise.lock)`;
 }
 
-function ask(...cmd: string[]): string {
+/** CMD's stdout and stderr, once it exits 0; else it fails naming the command, exit and both. */
+function answer(...cmd: string[]): { stdout: string; stderr: string } {
   const [program = "", ...args] = cmd;
   const r = spawnSync(program, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (r.error !== undefined) throw new UnansweredError(`cannot run ${program}: ${r.error.message}; ${missingTool(program)}`);
   if (r.status !== 0) throw new UnansweredError(`${cmd.join(" ")} exited ${String(r.status)}: ${said(r.stdout, r.stderr)}`);
-  return r.stdout;
+  return { stdout: r.stdout, stderr: r.stderr };
+}
+
+function ask(...cmd: string[]): string {
+  return answer(...cmd).stdout;
 }
 
 /** What a tool printed, both streams named (pnpm prints its own errors on stdout). */
@@ -52,11 +57,11 @@ function said(stdout: string, stderr: string): string {
 /** CMD's stdout parsed as JSON; output that is none (empty, not JSON) fails naming the command, its exit code and
  * what it printed, never a parse error alone. */
 function askJson(...cmd: string[]): unknown {
-  const out = ask(...cmd);
+  const { stdout: out, stderr: err } = answer(...cmd);
   try {
     return JSON.parse(out);
   } catch {
-    throw new UnansweredError(`${cmd.join(" ")} exited 0 but printed no JSON: ${said(out, "")}`);
+    throw new UnansweredError(`${cmd.join(" ")} exited 0 but printed no JSON: ${said(out, err)}`);
   }
 }
 

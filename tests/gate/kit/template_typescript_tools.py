@@ -4,9 +4,10 @@ template's repo (testkit/template.py, its own copy of the run's one package inst
 
 tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs) exiting 0 with empty stdout,
 or no tsc at all (the real pnpm prints "Command tsc not found" on stdout, exit 254), eslint a
-stand-in crashing (exit 2, its own stderr), scc a stand-in first on PATH printing nothing: each is
-named with the command, its exit code and what it printed, never a JSON parse error. The
-template's check-ts installs nothing, so the kit's install race (#548) has no counterpart here.
+stand-in crashing (exit 2, its own stderr), scc a stand-in first on PATH printing no JSON, only
+its own stderr: each is named with the command, its exit code and what it printed, never a JSON
+parse error. The template's check-ts installs nothing, so the kit's install race (#548) has no
+counterpart here.
 """
 
 from __future__ import annotations
@@ -62,9 +63,13 @@ def eslint_crash(s: Scratch) -> None:
 
 def scc_silent(s: Scratch) -> None:
     r = Repo(s, "typescript")
-    (s.bin / "scc").write_text("#!/bin/sh\nexit 0\n")
+    (s.bin / "scc").write_text("#!/bin/sh\necho 'scc: fixture permission denied' >&2\nexit 0\n")
     (s.bin / "scc").chmod(0o755)
-    languages(r, "scc --by-file --format json", "exited 0 but printed no JSON: stderr: (empty)")
+    languages(
+        r,
+        "scc --by-file --format json",
+        "exited 0 but printed no JSON: stderr: scc: fixture permission denied",
+    )
 
 
 if __name__ == "__main__":

@@ -5,7 +5,7 @@ the kit's uv environment and pnpm store.
 
 tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs): exiting 0 with empty stdout,
 or failing with its own stderr, check-languages names the command, its exit code and what it
-printed, never a JSON parse error; so for any tool it asks (scc printing nothing). No tsc in
+printed, never a JSON parse error; so for any tool it asks (scc printing only its stderr). No tsc in
 node_modules at all (the state a concurrent pnpm install leaves for a moment: it unlinks and
 rewrites node_modules/.bin/tsc, #548), the real pnpm's exit and its stdout message are named.
 And `just check-ts` on a current node_modules writes nothing there: its tsc launcher is the same
@@ -73,15 +73,15 @@ def tsc_absent(s: Scratch) -> None:
 
 
 def scc_silent(s: Scratch) -> None:
-    """Any tool, not only tsc: scc (a stand-in first on PATH) exits 0 printing nothing: named."""
+    """Any tool, not only tsc: scc (a stand-in first on PATH) exits 0 printing no JSON, only its
+    own stderr: named, that stderr kept through the JSON check (review2 finding 2)."""
     c = copy(s)
-    (s.bin / "scc").write_text("#!/bin/sh\nexit 0\n")
+    (s.bin / "scc").write_text("#!/bin/sh\necho 'scc: fixture permission denied' >&2\nexit 0\n")
     (s.bin / "scc").chmod(0o755)
     named(
         languages(c),
         "scc --by-file --format json",
-        "exited 0 but printed no JSON",
-        "stderr: (empty)",
+        "exited 0 but printed no JSON: stderr: scc: fixture permission denied",
     )
 
 
