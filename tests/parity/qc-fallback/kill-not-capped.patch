@@ -1,0 +1,14 @@
+Seeded defect: a judge stopped by timeout's KILL (137) is not taken as stopped by the cap (quality spec #qc-fallback).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index b9e93f1..ccf09f8 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -87,7 +87,7 @@ EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
+ CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
+ DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
+ FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
+-CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
++CAPPED = (124,)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
+ 
+ 
+ def die(code: int, msg: str) -> NoReturn:

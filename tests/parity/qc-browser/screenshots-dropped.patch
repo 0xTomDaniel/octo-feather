@@ -1,0 +1,14 @@
+Seeded defect: a browser demo's screenshots never reach its evidence record (quality spec #qc-capture).
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+index b9e93f1..1c72073 100755
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -408,7 +408,7 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
+             if "fixtures" in demos[i] or "artifacts" in demos[i]:
+                 Path(d, EXPECT).write_text(json.dumps({"fixtures": demos[i].get("fixtures", []),
+                                                        "artifacts": left(wrote(upper), demos[i].get("artifacts", []))}, indent=2) + "\n")
+-            for name, b64 in shots:
++            for name, b64 in shots[:0]:
+                 Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
+                 Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
+             p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
