@@ -11,8 +11,12 @@ exit 2, the lane reset as before."""
 from __future__ import annotations
 
 import sys
+from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, kit, main
+
+if TYPE_CHECKING:
+    from pathlib import Path
 
 AGENT = {
     "OCTO_FEATHER_ROLE": "implementer",
@@ -34,7 +38,7 @@ SLOT_REFUSAL = (
 )
 
 
-def world(s: Scratch) -> tuple[str, str]:
+def world(s: Scratch) -> tuple[Path, Path]:
     """S's box (lane gh7's record, scratch state) and target: main with the gate and its suite, the
     lane worktree gh7, worker branch w1 (one more file) and w2 (a failing test). Returns the repo
     and the lane worktree paths."""
@@ -58,10 +62,10 @@ def world(s: Scratch) -> tuple[str, str]:
         (s.root / w / f).write_text(text)
         s.git(s.root / w, "add", "-A")
         s.git(s.root / w, "commit", "-qm", w)
-    return str(r), str(lane)
+    return r, lane
 
 
-def integrate(s: Scratch, repo: str, ref: str, want: int) -> str:
+def integrate(s: Scratch, repo: Path, ref: str, want: int) -> str:
     env = {
         **AGENT,
         **{
@@ -76,25 +80,25 @@ def integrate(s: Scratch, repo: str, ref: str, want: int) -> str:
 
 def refused(s: Scratch) -> None:
     repo, lane = world(s)
-    start = s.git(s.root / "lane", "rev-parse", "HEAD")
+    start = s.git(lane, "rev-parse", "HEAD")
     out = integrate(s, repo, "w1", REFUSED)
     want = "refused: no heavy slot, nothing ran: just check, the full tier "
     lines = [ln for ln in out.splitlines() if ln.startswith(want)]
     assert lines, out
     assert lines[0].endswith(SLOT_REFUSAL), out
     assert "red:" not in out, out
-    assert s.git(s.root / "lane", "rev-parse", "HEAD") == start, f"{lane} not reset"
+    assert s.git(lane, "rev-parse", "HEAD") == start, f"{lane} not reset"
 
 
 def red(s: Scratch) -> None:
     repo, lane = world(s)
     s.run([kit("octo-feather-slot"), "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
-    start = s.git(s.root / "lane", "rev-parse", "HEAD")
+    start = s.git(lane, "rev-parse", "HEAD")
     out = integrate(s, repo, "w2", 2)
     assert "red: just check, the full tier " in out, out
     assert "refused:" not in out, out
     assert "heavy slot: held: the heavy slot for lane gh7" in out, out
-    assert s.git(s.root / "lane", "rev-parse", "HEAD") == start, f"{lane} not reset"
+    assert s.git(lane, "rev-parse", "HEAD") == start, f"{lane} not reset"
 
 
 if __name__ == "__main__":
