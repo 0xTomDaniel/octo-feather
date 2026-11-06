@@ -17,6 +17,7 @@
 #   75  not delivered now because the target is blocked on interactive input;
 #       the caller should retry once the target is free
 #   69  the up-chain guard's `herdr agent get` lookup failed (named on stderr)
+#   124 not confirmed within --timeout (named on stderr)
 #   >0  anything else
 #
 # A send never hangs or fails silently (#666; owner rulings #585, #619): the
@@ -137,6 +138,7 @@ case "$(code)" in
     state="$(jq -r '.result.agent.agent_status // empty' <<<"$info" 2>/dev/null || true)"
     if [[ "$(code)" == timeout ]]; then
       echo "herdr-say: $target (pane ${pane:-unknown}) still ${state:-unknown} after ${bound}s: Herdr saw the prompt neither start nor finish a turn; delivery not confirmed" >&2
+      exit 124
     else
       echo "herdr-say: prompt to $target (pane ${pane:-unknown}, state ${state:-unknown}) stalled: typed but never seen to land (agent_prompt_stalled); it may sit unsent in that pane" >&2
     fi

@@ -156,8 +156,8 @@ Wraps `herdr agent prompt TARGET TEXT --wait --until working --until idle
 --timeout MS`. A send never hangs or fails silently (#666): the wait is bounded
 by `--timeout` (default 900 s); a prompt Herdr reports stalled
 (`agent_prompt_stalled`: typed, never seen to land) or still unconfirmed at the
-bound (a busy target that stays `working`) exits 1, Herdr's error kept, the last
-line naming the target's pane and its state.
+bound (a busy target that stays `working`) exits 1 or 124, Herdr's error kept,
+the last line naming the target's pane and its state.
 
 Exit codes are the contract:
 
@@ -165,6 +165,7 @@ Exit codes are the contract:
 |---|---|
 | 0 | delivered, and Herdr observed the agent change state |
 | 75 | target is blocked on interactive input; retry when it frees |
+| 124 | not confirmed within `--timeout` (still not seen to start or finish a turn); named |
 | 69 | the up-chain guard's `herdr agent get TARGET` lookup failed; named, nothing sent (one answering `agent_not_found` is an answer: 77, the lookup named) |
 | other | anything else |
 

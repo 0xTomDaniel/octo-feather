@@ -5,7 +5,8 @@ an agent that turns ready late is not returned early, and a herdr-say right afte
 delivered; a herdr-say whose `herdr agent get` lookup fails names that lookup (not the up-chain
 refusal, 77); a prompt Herdr reports stalled exits non-zero naming the pane and its state; and
 `octo-feather-lane post-merge` step 4 to a busy (working) supervisor returns within its bound,
-its step 4 line naming the lane, the pane and the state."""
+its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send command) and going
+on to tell the others (director rule #619)."""
 
 from __future__ import annotations
 
@@ -121,10 +122,12 @@ def merged_repo(s: Scratch) -> tuple[Path, str]:
 
 
 def post_merge_busy(s: Scratch) -> None:
-    """post-merge after PR 7 merged, lane live1's supervisor w1:p1 busy (working the whole run):
-    step 4 returns within its bound, its line naming live1, w1:p1 and working; exit 1, no prod
-    line for it."""
-    herdr_world(s, {"w1:p1": agent("w1:p1", "live1", "working")})
+    """post-merge after PR 7 merged, lane live1's supervisor w1:p1 busy (working the whole run),
+    lane live2's w2:p1 idle: step 4 returns within its bound; live2 told (its prod line), live1
+    NOT told, named with its pane, the timeout, its state and the herdr-say that re-sends it by
+    hand, no prod line; the summary names live1 NOT told; exit 1."""
+    busy = agent("w1:p1", "live1", "working")
+    d = herdr_world(s, {"w1:p1": busy, "w2:p1": agent("w2:p1", "live2", "idle")})
     r, head = merged_repo(s)
     merge = s.git(r, "rev-parse", "HEAD")
     url = "https://github.com/o/r/pull/7"
@@ -158,10 +161,11 @@ def post_merge_busy(s: Scratch) -> None:
     s.git(kit_clone, "remote", "set-url", "origin", "https://github.com/o/kit.git")
     lanes = s.home / ".local" / "state" / "octo-feather" / "lanes"
     lanes.mkdir(parents=True)
-    (lanes / "live1.toml").write_text(
-        'supervisor = "w1:p1"\nrepository = "o/r"\nissue = 11\ngoal = "g"\n'
-        'started_at = "2026-11-06T00:00:00Z"\n'
-    )
+    for n, issue in ((1, 11), (2, 12)):
+        (lanes / f"live{n}.toml").write_text(
+            f'supervisor = "w{n}:p1"\nrepository = "o/r"\nissue = {issue}\ngoal = "g"\n'
+            'started_at = "2026-11-06T00:00:00Z"\n'
+        )
     env = s.env | {
         "PATH": f"{gh}{os.pathsep}{ASSETS}{os.pathsep}{s.env['PATH']}",
         "OCTO_FEATHER_KIT_INSTALL": str(kit_clone),
@@ -182,10 +186,17 @@ def post_merge_busy(s: Scratch) -> None:
     assert p.returncode == 1, said
     assert took < TELL_BOUND + 20, said
     tell = next((x for x in p.stdout.splitlines() if x.startswith("step 4 ")), "")
-    assert tell.startswith("step 4 tell supervisors: stopped: "), said
-    assert "live1 w1:p1" in tell, said
-    assert "working" in tell, said
-    assert not (lanes.parent / "director.handoffs.jsonl").exists(), said
+    assert tell.startswith("step 4 tell supervisors: stopped: NOT told: live1 w1:p1: "), said
+    assert f"send timed out after {TELL_BOUND}s" in tell, said
+    assert f"w1:p1 (pane w1:p1) still working after {TELL_BOUND}s" in tell, said
+    assert "re-send by hand: herdr-say w1:p1 'main moved to " in tell, said
+    assert "; NOT told: live1 w1:p1; told: live2 w2:p1;" in tell, said
+    last = p.stdout.splitlines()[-1]
+    want = "step 5 teardown not run; NOT told: live1 w1:p1 (step 4 names each re-send)"
+    assert last.endswith(f"step 4 tell supervisors stopped; {want}"), said
+    assert [x.split("\t")[0] for x in lines(d / "prompts")] == ["w1:p1", "w2:p1"], said
+    prods = [json.loads(x) for x in lines(lanes.parent / "director.handoffs.jsonl")]
+    assert [x["issue"] for x in prods] == [12], said
 
 
 if __name__ == "__main__":
