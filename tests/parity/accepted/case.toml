@@ -1,0 +1,12 @@
+# The parity lever's case for tests/accepted.sh, rewritten as tests/gate/kit/test_accepted.py (tests/parity/lever.py --help).
+old = "tests/accepted.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/accepted",
+]
+new = "tests/gate/kit/test_accepted.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+[ran]
+"scripts/octo-feather-accepted" = "coverage"
