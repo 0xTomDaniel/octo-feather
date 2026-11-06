@@ -47,6 +47,12 @@ url = "https://nodejs.org/dist/v22.23.3/node-v22.23.3-linux-x64.tar.gz"
 checksum = "sha256:23b25245dcfb9af7262f8ff142e9e2e0af025368117329e7a7458a51e5922f53"
 url = "https://nodejs.org/dist/v22.23.3/node-v22.23.3-darwin-arm64.tar.gz"
 
+[[tools."npm:@anthropic-ai/sandbox-runtime"]]
+version = "0.0.81"
+aube = { path = ".mise/locks/npm-anthropic-ai-sandbox-runtime/0.0.81", digest = "sha256:b408b4a7cf6908cbb65c3993cbb0c4f939a944804d32ad430001eef71ffc1a0c" }
+backend = "npm:@anthropic-ai/sandbox-runtime"
+specifiers = ["0.0.81"]
+
 [[tools.pnpm]]
 version = "10.7.0"
 backend = "aqua:pnpm/pnpm"

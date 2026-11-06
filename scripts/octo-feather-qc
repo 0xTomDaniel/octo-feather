@@ -34,7 +34,7 @@ PR (through octo-feather-spec-status built: its record, the commit that record w
 demo declares, none for an agent fallback result) and each failed one to planned, and commits only the status file. The judge
 model's family (the part before "/") must differ from the implementer's.
 
-The judge runs in a sandbox (`unshare -rm` scripts/octo-feather-qc-sandbox,
+The judge runs in a sandbox (scripts/octo-feather-qc-sandbox, on anthropics/sandbox-runtime,
 which documents its mounts and checks): a pre-run proof is printed and any
 failed check aborts before the judge starts; after it exits, leftovers are
 killed and the agents it started are counted; its agents' model spend is recorded
@@ -212,7 +212,7 @@ def oauth_warning():
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
               kit: Path | None = None, browser: str | None = None,
               shots: bool = False, pi: bool = True) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
-    """Run JUDGE inside `unshare -rm` octo-feather-qc-sandbox; return (run, sandbox record), run None if it never started.
+    """Run JUDGE inside octo-feather-qc-sandbox (srt, its own namespaces); return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
     Playwright browsers folder, bound read-only (a browser demo); shots: a $QC_SCREENSHOTS dir whose files come back as
@@ -260,7 +260,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     threads = [threading.Thread(target=drain, args=(n,), daemon=True) for n in names]
     for th in threads:
         th.start()
-    p = subprocess.Popen([unshare, "-rm", str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
+    p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
                          pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
     for n in names:
