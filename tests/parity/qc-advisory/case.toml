@@ -1,4 +1,10 @@
 # The parity lever's case for tests/qc-advisory.sh, rewritten as tests/gate/kit/test_qc_advisory.py (tests/parity/lever.py --help).
 old = "tests/qc-advisory.sh"
 old_at = "3e8c414"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/classify-stub/pi",
+    "tests/fixtures/qc-advisory/check.py",
+    "tests/fixtures/spec-status/good/demo.spec.html",
+]
 new = "tests/gate/kit/test_qc_advisory.py"

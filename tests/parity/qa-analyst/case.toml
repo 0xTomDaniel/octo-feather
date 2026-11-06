@@ -1,4 +1,8 @@
 # The parity lever's case for tests/qa-analyst.sh, rewritten as tests/gate/kit/test_qa_analyst.py (tests/parity/lever.py --help).
 old = "tests/qa-analyst.sh"
 old_at = "3e8c414"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/lib/qa.sh",
+]
 new = "tests/gate/kit/test_qa_analyst.py"

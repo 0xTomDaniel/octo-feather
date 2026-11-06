@@ -1,4 +1,10 @@
 # The parity lever's case for tests/template-languages.sh, rewritten as tests/gate/kit/test_template_languages.py (tests/parity/lever.py --help).
 old = "tests/template-languages.sh"
 old_at = "3e8c414"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/lib/template-languages.sh",
+    "tests/lib/prepared.py",
+    "tests/fixtures/classify-stub/pi",
+]
 new = "tests/gate/kit/test_template_languages.py"

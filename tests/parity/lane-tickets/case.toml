@@ -1,4 +1,9 @@
 # The parity lever's case for tests/lane-tickets.sh, rewritten as tests/gate/kit/test_lane_tickets.py (tests/parity/lever.py --help).
 old = "tests/lane-tickets.sh"
 old_at = "3e8c414"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/lane-tickets/bodies",
+    "tests/fixtures/spec-status/good/demo.spec.html",
+]
 new = "tests/gate/kit/test_lane_tickets.py"
