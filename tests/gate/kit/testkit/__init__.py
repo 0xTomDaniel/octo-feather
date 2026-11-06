@@ -225,6 +225,16 @@ def tool_homes() -> dict[str, str]:
     }
 
 
+def pnpm_store() -> str:
+    """pnpm's store as the caller's HOME and the kit's dir find it (`pnpm store path`; one store
+    for the kit and its test copies, owner ruling #422), for npm_config_store_dir."""
+    pnpm = shutil.which("pnpm") or "pnpm"
+    p = subprocess.run(
+        [pnpm, "store", "path"], cwd=ROOT, capture_output=True, text=True, check=True
+    )
+    return p.stdout.strip()
+
+
 def main(*scenarios: Callable[..., None]) -> None:
     """A test file's own command: `python3 FILE NAME [ARG...]` runs scenario NAME(scratch, *ARGS)
     in a fresh Scratch."""

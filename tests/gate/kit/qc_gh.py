@@ -25,7 +25,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from testkit import ROOT, Ran, Scratch, kit, main
+from testkit import ROOT, Ran, Scratch, kit, main, pnpm_store, tool_homes
 from testkit.qc import LIMIT_S, STATUS, target
 
 OFFLINE_GH = ROOT / ".agents" / "skills" / "github-pr" / "scripts" / "gh"
@@ -429,12 +429,7 @@ def kit_on_kit(s: Scratch) -> None:
     kc = s.root / "kc"
     # The box's uv Pythons, uv cache and pnpm store, kept while HOME moves: octo-feather-qc collects
     # the copy's tagged tests offline through its just check-tests.
-    for k, ask in (
-        ("UV_CACHE_DIR", ["uv", "cache", "dir"]),
-        ("UV_PYTHON_INSTALL_DIR", ["uv", "python", "dir"]),
-        ("npm_config_store_dir", ["pnpm", "store", "path"]),
-    ):
-        s.env[k] = subprocess.run(ask, capture_output=True, text=True, check=True).stdout.strip()
+    s.env |= tool_homes() | {"npm_config_store_dir": pnpm_store()}
     files = subprocess.run(
         ["git", "ls-files", "-z", "--cached", "--others", "--exclude-standard"],  # noqa: S607
         cwd=ROOT,

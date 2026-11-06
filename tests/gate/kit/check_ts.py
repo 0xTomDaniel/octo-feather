@@ -22,7 +22,7 @@ import sys
 import tempfile
 from pathlib import Path
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, main, tool_homes
+from testkit import FIXTURES, ROOT, Ran, Scratch, main, pnpm_store, tool_homes
 from testkit.template import uncoloured
 
 EXT = "extensions/resume-on-error.ts"
@@ -54,9 +54,7 @@ class Copy:
             check=False,
         ).stdout
         subprocess.run([tool("tar"), "-xf", "-"], cwd=self.dir, input=tar, check=True)
-        self.store = subprocess.run(  # the caller's HOME finds it, never the scratch HOME
-            [tool("pnpm"), "store", "path"], cwd=ROOT, capture_output=True, text=True, check=True
-        ).stdout.strip()
+        self.store = pnpm_store()  # the caller's HOME finds it, never the scratch HOME
         s.env |= tool_homes() | {"npm_config_store_dir": self.store}
         uncoloured(s)  # eslint's stylish rows and tsc's lines read here
 
