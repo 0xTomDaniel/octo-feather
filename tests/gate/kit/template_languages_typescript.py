@@ -180,20 +180,25 @@ CHANGES: dict[str, tuple[Callable[[Repo], None], str | None]] = {
 def fast(s: Scratch, which: str) -> None:
     """just fast after a one-file change runs only that module's test; after a justfile change
     (on its shared-machinery.txt), or one to only its selector script (listed too), every
-    integration test, naming it; never an e2e test."""
+    integration test, naming it; never an e2e test. Each run appends one trend line: tier subset,
+    passed, on the repo's head."""
     r = Repo(s, "typescript")
     r.gate_recipes("check-scripts")
+    head = r.git("rev-parse", "HEAD")
+    before = r.trend()
     change, why = CHANGES[which]
     change(r)
     out = r.run("just", "fast", "--no-color").out
-    assert OTHER_T in out, out
-    assert E2E not in out, out
+    runs = [(x["tier"], x["exit"], x["head"]) for x in r.trend()]
+    assert runs == [*((x["tier"], x["exit"], x["head"]) for x in before), ("subset", 0, head)], runs
     if why is None:
         assert INTEG not in out, f"a one-file change ran more than its test: {out}"
     else:
         named = f"fast: every integration test: {why} changed since main, on shared-machinery.txt"
         assert named in out, out
         assert INTEG in out, out
+    assert OTHER_T in out, out
+    assert E2E not in out, out
     r.no_python()
 
 
