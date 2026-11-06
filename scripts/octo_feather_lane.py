@@ -1203,11 +1203,27 @@ def head_proof(judged: str, head: str, status_files: list[str], base: str, at: s
     return (None, why) if why else (proof, [])
 
 
-def gate(*args: str) -> tuple[int, str]:
-    """scripts/octo-feather-gate's exit code and stdout (it owns the full pass record and the gate configuration)."""
-    p = subprocess.run([sys.executable, str(KIT / "scripts" / "octo-feather-gate"), *args], capture_output=True, text=True,
-                       stdin=subprocess.DEVNULL, check=False)
-    return p.returncode, p.stdout
+@functools.cache
+def gate_module():
+    """scripts/octo-feather-gate: it owns the full pass record and the gate configuration."""
+    loader = importlib.machinery.SourceFileLoader("octo_feather_gate", str(KIT / "scripts" / "octo-feather-gate"))
+    spec = importlib.util.spec_from_loader("octo_feather_gate", loader)
+    assert spec is not None, "a SourceFileLoader always yields a spec"
+    mod = importlib.util.module_from_spec(spec)
+    loader.exec_module(mod)
+    return mod
+
+
+def gate(cmd: str, rev: str) -> tuple[int, str]:
+    """`octo-feather-gate config|passed REV`'s exit code and stdout, answered in-process by the gate's own code."""
+    g = gate_module()
+    c = g.commit_of(rev)
+    if not c:
+        return 1, ""
+    if cmd == "config":
+        return 0, json.dumps(g.identity(c)) + "\n"
+    note = g.recorded(c)
+    return (0, note) if note else (1, "")
 
 
 def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
