@@ -138,8 +138,8 @@ def shows(s: Scratch) -> None:
 
 def unavailable(s: Scratch) -> None:
     """The classifier fails on every call: both show unavailable, the results as decided."""
-    q = Run(s, IDS[:1])
-    for i in IDS[:1]:
+    q = Run(s)
+    for i in IDS:
         assert q.adv(i) == NONE.format(MODEL, "stub: provider error"), q.out
         assert q.advisory(i)["unavailable"] == "stub: provider error"
 
@@ -186,13 +186,13 @@ def no_pi(s: Scratch, how: str) -> None:
         (loop / "pi").write_text('#!/bin/sh\nexec pi "$@"\n')
         (loop / "pi").chmod(0o755)
         path = f"{loop}{os.pathsep}{path}"
-    q = Run(s, IDS[:1], path)
+    q = Run(s, IDS, path)
     assert q.seconds < LIMIT_S, f"{how}: qc took {q.seconds:.0f} s (limit {LIMIT_S})"
     refused = (
         rf"  advisory model judgment unavailable \(criterion-evidence by {re.escape(MODEL)}\): "
         r".*pi exit 127.*; the result stands as decided"
     )
-    for i in IDS[:1]:
+    for i in IDS:
         assert re.fullmatch(refused, q.adv(i)), (
             f"{how}: {i}: no advisory unavailable naming pi exit 127: {q.out}"
         )
