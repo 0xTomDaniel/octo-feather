@@ -11,6 +11,8 @@
 // language; 4. a tool's gate recipe is not in the gate; 5. a file scc does not list starts with `#!`
 // (scc drops `env -S` shebangs); 6. mise.toml pins pnpm and package.json has `packageManager`.
 // Passes by design: a file scc does not list that does not start with `#!` (no language found).
+// A tool call that fails or answers nothing usable (empty, not JSON) fails naming the command, its exit code,
+// stderr and stdout, never a bare parse error (owner ruling octo-feather #548 2026-11-04, #660).
 import { spawnSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -37,8 +39,25 @@ function ask(...cmd: string[]): string {
   const [program = "", ...args] = cmd;
   const r = spawnSync(program, args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
   if (r.error !== undefined) throw new UnansweredError(`cannot run ${program}: ${r.error.message}; ${missingTool(program)}`);
-  if (r.status !== 0) throw new UnansweredError(`${cmd.join(" ")} exited ${String(r.status)}: ${r.stderr.trim()}`);
+  if (r.status !== 0) throw new UnansweredError(`${cmd.join(" ")} exited ${String(r.status)}: ${said(r.stdout, r.stderr)}`);
   return r.stdout;
+}
+
+/** What a tool printed, both streams named (pnpm prints its own errors on stdout). */
+function said(stdout: string, stderr: string): string {
+  const out = stdout.trim();
+  return `stderr: ${stderr.trim() || "(empty)"}` + (out === "" ? "" : `; stdout: ${out.slice(0, 2000)}`);
+}
+
+/** CMD's stdout parsed as JSON; output that is none (empty, not JSON) fails naming the command, its exit code and
+ * what it printed, never a parse error alone. */
+function askJson(...cmd: string[]): unknown {
+  const out = ask(...cmd);
+  try {
+    return JSON.parse(out);
+  } catch {
+    throw new UnansweredError(`${cmd.join(" ")} exited 0 but printed no JSON: ${said(out, "")}`);
+  }
 }
 
 function relative(line: string): string {
@@ -52,9 +71,9 @@ function scanned(): Set<string> {
 
 function sccLanguages(files: Set<string>): Map<string, string> {
   // scc walks the directory: named on its command line, a file under a dot dir loses its shebang.
-  const out = ask("scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", ".");
+  const out = askJson("scc", "--by-file", "--format", "json", "--count-unsupported", "--no-config", ".");
   const found = new Map<string, string>();
-  const langs = JSON.parse(out) as { Name: string; Files: { Location: string }[] | null }[];
+  const langs = out as { Name: string; Files: { Location: string }[] | null }[];
   for (const lang of langs) {
     for (const f of lang.Files ?? []) {
       if (files.has(relative(f.Location))) found.set(relative(f.Location), lang.Name);
@@ -64,7 +83,7 @@ function sccLanguages(files: Set<string>): Map<string, string> {
 }
 
 function justfile(): [string[][], Set<string>, Dump] {
-  const dump = JSON.parse(ask("just", "--justfile", "justfile", "--dump", "--dump-format", "json")) as Dump;
+  const dump = askJson("just", "--justfile", "justfile", "--dump", "--dump-format", "json") as Dump;
   const rows = (dump.assignments["check_languages"]?.value ?? "").split(/\s+/u).filter(Boolean).map((e) => e.split(":"));
   const gate = new Set((dump.assignments["GATE_RECIPES"]?.value ?? "").split(/\s+/u).filter(Boolean));
   const todo = ["check"];
@@ -128,7 +147,7 @@ function unreadableShebangs(unlisted: string[]): string[] {
 }
 
 function bothPnpmPins(): string[] {
-  const pins = JSON.parse(ask("mise", "ls", "--local", "--json")) as Record<string, unknown>;
+  const pins = askJson("mise", "ls", "--local", "--json") as Record<string, unknown>;
   const manifest = fs.existsSync("package.json")
     ? (JSON.parse(fs.readFileSync("package.json", "utf8")) as Record<string, unknown>)
     : {};

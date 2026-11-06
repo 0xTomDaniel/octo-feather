@@ -1,0 +1,413 @@
+#!/usr/bin/env python3
+"""octo-feather-slot: the box's heavy-run and eval slots, granted by the director to a lane (#668).
+
+  octo-feather-slot grant LANE --kind heavy|eval [--hours H]
+      The director only (OCTO_FEATHER_ROLE=director; anyone else exits 77): KIND's slot to lane
+      LANE (a lane record of the caller's Herdr session, $(octo-feather-state)/lanes/LANE.toml, or
+      `director`), for H hours (default 2). A kind holds at most its count of grants (below); a
+      full kind refuses, naming its holder and the revoke. A lane granted again gets a fresh
+      expiry. Expired grants are gone.
+  octo-feather-slot revoke LANE --kind heavy|eval
+      The director only: LANE's grant of KIND, if any, removed. A run holding it keeps its lock
+      until it ends.
+  octo-feather-slot status
+      Each kind: its count, every grant (holder lane, since, expiry, granted by), and whether a
+      run holds it now (the run's pid, lane, since, items).
+  octo-feather-slot hold --kind heavy|eval [--items N]
+      Run by the heavy run's own process (the gate's pytest plugin, tests/gate/heavy_slot.py;
+      octo-feather-qa for eval; tests/lib/user-mise.sh for `just check-user-mise` in its
+      fixture's pane), never by hand. Prints one line on stdout: `free: ...` (exit 0, no
+      slot needed), `nested: ...` (exit 0, an ancestor process holds this kind's slot), or
+      `held: ...` (the lock is taken; the command then stays, holding it, until its stdin closes:
+      the caller keeps the pipe open for its life, and its exit or crash closes it, so the lock
+      goes with the caller); else the refusal (exit 75), nothing run.
+
+The rule (owner ruling #660 2026-11-06, director design, #668). Two independent kinds, each with
+its own grants and locks; they may run together:
+  heavy  a gate run selecting more than heavy_items items (fast-map and timing are full runs).
+  eval   model evals through octo-feather-qa.
+Counts: heavy_slots, eval_slots and heavy_items in the kit's gate-budget.toml (defaults 1, 1 and
+30). A run needs a slot only inside a Herdr agent (HERDR_PANE_ID or OCTO_FEATHER_ROLE set): CI and
+the owner's shell are free, and so are a gate item's processes (the gate clears both:
+tests/gate/test_gate.py) and anything in the qc or qa sandbox (scripts/octo-feather-qc-sandbox,
+step 6, unsets them). A run under a process that holds its kind's slot (qc's capture inside a
+granted integrate) is nested: it takes no second slot. Else the run's lane must hold a grant of
+its kind, and one of the kind's locks must be free.
+
+The caller's lane: the lane record whose `supervisor` is HERDR_PANE_ID, else OCTO_FEATHER_PARENT,
+else the one whose supervisor pane is in the caller's Herdr space (HERDR_WORKSPACE_ID, or
+OCTO_FEATHER_SPEND_SPACE for a headless run: a lane's agents run in their supervisor's space, as
+spec spend#rule-lane finds a lane), else `director` for the director.
+
+Files: box-wide, never per Herdr session, in ${XDG_STATE_HOME:-~/.local/state}/octo-feather/slots/:
+KIND.json (the grants), KIND-I.lock (lock I of the kind's count, an flock(2) the holder keeps for
+the run's life, released by the kernel when it exits or crashes) and KIND-I.run.json (the run that
+took it). Prior art: flock(2) through fcntl, as the testkit's prepared scratch locks; a held lock
+is told from a stale run record by trying it (LOCK_NB).
+"""
+
+from __future__ import annotations
+
+import argparse
+import datetime as dt
+import fcntl
+import json
+import os
+import signal
+import subprocess
+import sys
+from dataclasses import asdict, dataclass
+from pathlib import Path
+from typing import IO, TYPE_CHECKING, cast
+
+import tomllib
+
+if TYPE_CHECKING:
+    from collections.abc import Iterator
+
+KIT = Path(__file__).resolve().parent.parent
+BUDGET = KIT / "gate-budget.toml"
+KINDS = ("heavy", "eval")
+LEAST = {"heavy_items": 0, "heavy_slots": 1, "eval_slots": 1}
+DEFAULTS = {"heavy_items": 30, "heavy_slots": 1, "eval_slots": 1}
+REFUSED, NOT_DIRECTOR, USAGE = 75, 77, 64
+WHAT = {
+    "heavy": "gate runs over heavy_items items, fast-map, timing",
+    "eval": "model evals through octo-feather-qa",
+}
+
+
+class RefusedError(Exception):
+    def __init__(self, code: int, msg: str) -> None:
+        super().__init__(msg)
+        self.code = code
+
+
+def say(line: str) -> None:
+    sys.stdout.write(line + "\n")
+    sys.stdout.flush()
+
+
+def now() -> dt.datetime:
+    return dt.datetime.now(dt.UTC).replace(microsecond=0)
+
+
+def stamp(t: dt.datetime) -> str:
+    return t.strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def parse_stamp(s: str) -> dt.datetime:
+    return dt.datetime.strptime(s, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=dt.UTC)
+
+
+def budget() -> dict[str, int]:
+    """heavy_items, heavy_slots, eval_slots: the kit's gate-budget.toml, a default when absent."""
+    try:
+        got = tomllib.loads(BUDGET.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        got = {}
+    out: dict[str, int] = {}
+    for k, default in DEFAULTS.items():
+        v = got.get(k, default)
+        if isinstance(v, bool) or not isinstance(v, int) or v < LEAST[k]:
+            msg = f"{BUDGET}: {k} {v!r} is not a whole number >= {LEAST[k]}"
+            raise RefusedError(USAGE, msg)
+        out[k] = v
+    return out
+
+
+def slots_dir() -> Path:
+    base = os.environ.get("XDG_STATE_HOME") or str(Path.home() / ".local" / "state")
+    d = Path(base) / "octo-feather" / "slots"
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def lanes_dir() -> Path:
+    """The caller's Herdr session's lanes dir (octo-feather-state)."""
+    state = KIT / "scripts" / "octo-feather-state"
+    out = subprocess.run([str(state)], capture_output=True, text=True, check=True).stdout
+    return Path(out.strip()) / "lanes"
+
+
+def supervisors() -> dict[str, str]:
+    """Each lane record's supervisor pane, by lane."""
+    out: dict[str, str] = {}
+    for rec in sorted(lanes_dir().glob("*.toml")):
+        try:
+            sup = tomllib.loads(rec.read_text(encoding="utf-8")).get("supervisor")
+        except (OSError, ValueError):
+            continue
+        if isinstance(sup, str) and sup:
+            out[rec.stem] = sup
+    return out
+
+
+def caller_lane() -> str | None:
+    """The caller's lane (this file's docstring), or None."""
+    sups = supervisors()
+    for var in ("HERDR_PANE_ID", "OCTO_FEATHER_PARENT"):
+        pane = os.environ.get(var, "")
+        for lane, sup in sups.items():
+            if pane and sup == pane:
+                return lane
+    space = os.environ.get("HERDR_WORKSPACE_ID") or os.environ.get("OCTO_FEATHER_SPEND_SPACE", "")
+    for lane, sup in sups.items():
+        if space and sup.split(":", 1)[0] == space:
+            return lane
+    return "director" if os.environ.get("OCTO_FEATHER_ROLE") == "director" else None
+
+
+def in_agent() -> bool:
+    return bool(os.environ.get("HERDR_PANE_ID") or os.environ.get("OCTO_FEATHER_ROLE"))
+
+
+@dataclass(frozen=True)
+class Grant:
+    lane: str
+    since: str
+    expires: str
+    by: str
+
+    def live(self, t: dt.datetime) -> bool:
+        return parse_stamp(self.expires) > t
+
+    def show(self) -> str:
+        return f"{self.lane} (granted {self.since} by {self.by}, expires {self.expires})"
+
+
+def grants(kind: str) -> list[Grant]:
+    """KIND's unexpired grants."""
+    p = slots_dir() / f"{kind}.json"
+    try:
+        raw = cast("dict[str, list[dict[str, str]]]", json.loads(p.read_text(encoding="utf-8")))
+        gs = [Grant(**g) for g in raw["grants"]]
+    except FileNotFoundError:
+        return []
+    except (ValueError, KeyError, TypeError) as e:
+        msg = f"{p}: not a grants file ({type(e).__name__}: {e})"
+        raise RefusedError(USAGE, msg) from e
+    t = now()
+    return [g for g in gs if g.live(t)]
+
+
+def write_grants(kind: str, gs: list[Grant]) -> None:
+    p = slots_dir() / f"{kind}.json"
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps({"grants": [asdict(g) for g in gs]}, indent=2) + "\n", "utf-8")
+    tmp.replace(p)
+
+
+def holders(kind: str) -> str:
+    return "; ".join(g.show() for g in grants(kind)) or "none"
+
+
+@dataclass(frozen=True)
+class Run:
+    pid: int
+    lane: str
+    since: str
+    items: int | None
+
+    def show(self) -> str:
+        items = f", {self.items} items" if self.items is not None else ""
+        return f"pid {self.pid} of lane {self.lane} since {self.since}{items}"
+
+
+def lock_paths(kind: str) -> Iterator[tuple[Path, Path]]:
+    for i in range(budget()[f"{kind}_slots"]):
+        yield slots_dir() / f"{kind}-{i}.lock", slots_dir() / f"{kind}-{i}.run.json"
+
+
+def held_run(lock: Path, rec: Path) -> Run | None:
+    """The run holding LOCK now (its record REC), or None when no process holds it."""
+    if not lock.exists():
+        return None
+    with lock.open() as f:  # read-only: a slots dir bound read-only (a fixture's) is read too
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            pass
+        else:
+            fcntl.flock(f, fcntl.LOCK_UN)
+            return None
+    try:
+        return Run(**json.loads(rec.read_text(encoding="utf-8")))
+    except (OSError, ValueError, TypeError):
+        return Run(0, "unknown", "unknown", None)
+
+
+def runs(kind: str) -> list[Run]:
+    return [r for lk, rec in lock_paths(kind) if (r := held_run(lk, rec))]
+
+
+def ancestors() -> Iterator[int]:
+    """The caller's ancestors, its parent first (ps: Linux and macOS both answer it)."""
+    pid = os.getppid()
+    seen: set[int] = set()
+    while pid > 1 and pid not in seen:
+        seen.add(pid)
+        yield pid
+        ps = ["ps", "-o", "ppid=", "-p", str(pid)]
+        out = subprocess.run(ps, capture_output=True, text=True, check=False)
+        try:
+            pid = int(out.stdout.strip())
+        except ValueError:
+            return
+
+
+def ask(lane: str | None, kind: str) -> str:
+    if lane:
+        return f"ask the director: octo-feather-slot grant {lane} --kind {kind}"
+    return (
+        f"ask the director: octo-feather-slot grant <lane> --kind {kind} (no lane resolved for "
+        "this agent: no lane record names its pane, parent or space)"
+    )
+
+
+def hold(kind: str, items: int | None) -> int:
+    b = budget()
+    if not in_agent():
+        say(f"free: outside a Herdr agent (no HERDR_PANE_ID or OCTO_FEATHER_ROLE), no {kind} slot")
+        return 0
+    if kind == "heavy":
+        if items is None:
+            raise RefusedError(USAGE, "hold --kind heavy needs --items N")
+        if items <= b["heavy_items"]:
+            say(f"free: {items} items, heavy_items {b['heavy_items']}: no heavy slot needed")
+            return 0
+    mine = set(ancestors())
+    for r in runs(kind):
+        if r.pid in mine:
+            say(f"nested: under the {kind} run {r.show()}, which holds the slot")
+            return 0
+    lane = caller_lane()
+    what = (
+        f"this heavy run selects {items} items, over heavy_items {b['heavy_items']} ({BUDGET.name})"
+        if kind == "heavy"
+        else "this eval run (octo-feather-qa) runs model evals"
+    )
+    if lane not in {g.lane for g in grants(kind)}:
+        say(
+            f"octo-feather-slot: refused, nothing ran: {what}, and lane {lane or 'none'} holds no "
+            f"{kind} grant; current holder: {holders(kind)}; {ask(lane, kind)}"
+        )
+        return REFUSED
+    for lk, rec in lock_paths(kind):
+        f = lk.open("a")
+        try:
+            fcntl.flock(f, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            f.close()
+            continue
+        return keep(f, rec, Run(os.getppid(), lane or "", stamp(now()), items), kind)
+    busy = "; ".join(r.show() for r in runs(kind)) or "a run now ending"
+    say(
+        f"octo-feather-slot: refused, nothing ran: {what}; lane {lane} holds the {kind} grant, but "
+        f"every {kind} slot is held now by a run: {busy}; wait for it to end, or {ask(lane, kind)} "
+        f"for another slot ({kind}_slots in {BUDGET.name})"
+    )
+    return REFUSED
+
+
+def keep(f: IO[str], rec: Path, r: Run, kind: str) -> int:
+    """Hold F's lock, recorded in REC, until stdin closes (the caller's life)."""
+    rec.write_text(json.dumps(asdict(r)) + "\n", encoding="utf-8")
+    say(f"held: the {kind} slot for lane {r.lane}, run {r.show()}")
+    signal.signal(signal.SIGINT, signal.SIG_IGN)  # the caller's Ctrl-C ends it by closing the pipe
+    sys.stdout.close()
+    while sys.stdin.buffer.read(65536):
+        pass
+    rec.unlink(missing_ok=True)
+    f.close()
+    return 0
+
+
+def director_only(what: str) -> None:
+    role = os.environ.get("OCTO_FEATHER_ROLE", "")
+    if role != "director":
+        msg = (
+            f"octo-feather-slot: {what} is the director's (OCTO_FEATHER_ROLE=director), not "
+            f"{role or 'this shell'}'s, nothing changed; ask the director: octo-feather-slot "
+            f"{what} ..."
+        )
+        raise RefusedError(NOT_DIRECTOR, msg)
+
+
+def grant(lane: str, kind: str, hours: float) -> int:
+    director_only("grant")
+    known = set(supervisors())
+    if lane != "director" and lane not in known:
+        have = " ".join(sorted(known)) or "none"
+        msg = f"octo-feather-slot: no lane {lane} in {lanes_dir()} (have: {have})"
+        raise RefusedError(USAGE, msg)
+    count = budget()[f"{kind}_slots"]
+    gs = [g for g in grants(kind) if g.lane != lane]
+    if len(gs) >= count:
+        msg = (
+            f"octo-feather-slot: the {kind} slot is full ({kind}_slots {count}): held by "
+            f"{'; '.join(g.show() for g in gs)}; revoke one first: octo-feather-slot revoke "
+            f"{gs[0].lane} --kind {kind}"
+        )
+        raise RefusedError(REFUSED, msg)
+    t = now()
+    by = os.environ.get("HERDR_PANE_ID") or "director"
+    g = Grant(lane, stamp(t), stamp(t + dt.timedelta(hours=hours)), by)
+    write_grants(kind, [*gs, g])
+    say(f"granted: {kind} slot to lane {g.show()}")
+    return 0
+
+
+def revoke(lane: str, kind: str) -> int:
+    director_only("revoke")
+    gs = grants(kind)
+    write_grants(kind, [g for g in gs if g.lane != lane])
+    had = any(g.lane == lane for g in gs)
+    say(f"revoked: {kind} slot of lane {lane}" if had else f"{lane} held no {kind} grant")
+    return 0
+
+
+def status() -> int:
+    b = budget()
+    for kind in KINDS:
+        over = f", over heavy_items {b['heavy_items']} items" if kind == "heavy" else ""
+        say(f"{kind} ({b[f'{kind}_slots']} slot(s){over}; {WHAT[kind]}):")
+        say(f"  holder: {holders(kind)}")
+        rs = runs(kind)
+        say(f"  run holding it now: {'; '.join(r.show() for r in rs) if rs else 'none'}")
+    return 0
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        say(__doc__ or "")
+        return 0
+    p = argparse.ArgumentParser(prog="octo-feather-slot", add_help=False)
+    sub = p.add_subparsers(dest="cmd", required=True)
+    for name in ("grant", "revoke"):
+        s = sub.add_parser(name)
+        s.add_argument("lane")
+        s.add_argument("--kind", choices=KINDS, required=True)
+        if name == "grant":
+            s.add_argument("--hours", type=float, default=2.0)
+    sub.add_parser("status")
+    h = sub.add_parser("hold")
+    h.add_argument("--kind", choices=KINDS, required=True)
+    h.add_argument("--items", type=int)
+    a = p.parse_args(argv)
+    cmd, kind = cast("str", a.cmd), cast("str", getattr(a, "kind", ""))
+    try:
+        if cmd == "grant":
+            return grant(cast("str", a.lane), kind, cast("float", a.hours))
+        if cmd == "revoke":
+            return revoke(cast("str", a.lane), kind)
+        if cmd == "status":
+            return status()
+        return hold(kind, cast("int | None", a.items))
+    except RefusedError as e:
+        (sys.stdout if cmd == "hold" else sys.stderr).write(f"{e}\n")
+        return e.code
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))

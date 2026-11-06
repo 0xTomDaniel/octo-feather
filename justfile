@@ -69,7 +69,21 @@ python-files:
 
 # tsc's own file list, which eslint gets whole (check-ts): add a path to tsconfig.json include (dot paths by name)
 ts-files:
-    @pnpm exec tsc --showConfig | python3 -c 'import json, sys; print(*json.load(sys.stdin).get("files", []), sep="\n")'
+    #!/usr/bin/env python3
+    # tsc failing, absent (pnpm prints "Command tsc not found" on stdout, exit 254) or answering no JSON fails naming
+    # the command, its exit code, stderr and stdout, never a parse error (#548, #663).
+    import json, subprocess, sys
+    cmd = ["pnpm", "exec", "tsc", "--showConfig"]
+    r = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    try:
+        files = json.loads(r.stdout).get("files", []) if r.returncode == 0 else None
+    except (ValueError, AttributeError):
+        files = None
+    if files is None:
+        out, err = r.stdout.strip(), r.stderr.strip()
+        why = "" if r.returncode else " but printed no JSON config"
+        sys.exit(f"ts-files: {' '.join(cmd)} exited {r.returncode}{why}; stderr: {err or '(empty)'}; stdout: {out or '(empty)'}")
+    print(*files, sep="\n")
 
 # Minus the trees with their own gate (templates/) or frozen data (evals/, evidence/).
 # ShellCheck's file list: give a file the `shell` attribute in .gitattributes
@@ -244,11 +258,14 @@ check-types:
 # shrinks: a rule over its count fails (eslint then lists every occurrence of it in that file), an unused entry fails
 # until pruned. tsc has no baseline: its errors are fixed in place.
 # One recipe, not two: two gate items installing node_modules at once would race.
+# Installs only when pnpm's own check (verify-deps-before-run, which writes nothing) says node_modules is not current:
+# even an up-to-date pnpm install unlinks and rewrites node_modules/.bin/tsc, so under the gate, where check-tests
+# installed first, an install here made a concurrent check-languages' pnpm exec tsc find no tsc (#548, #663).
 check-ts:
     #!/usr/bin/env bash
     set -euo pipefail
     cd "$root"
-    err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
+    pnpm --config.verify-deps-before-run=error exec true >/dev/null 2>&1 || err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-ts: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
     cfg="$(pnpm exec tsc --showConfig)" || { printf '%s\n' "$cfg" >&2; echo "check-ts: tsc cannot read tsconfig.json (error above)" >&2; exit 1; }
     mapfile -t files < <(python3 -c 'import json, sys; sys.stdout.writelines(f + "\n" for f in json.load(sys.stdin).get("files", []))' <<<"$cfg")
@@ -290,21 +307,22 @@ check-tests *args:
     err="$(uv sync --locked --offline --quiet 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: pytest and pytest-xdist (uv.lock) are not in the uv cache; fetch them once, with network: uv sync --locked --project $root" >&2; exit 1; }
     # tsc and eslint into node_modules before the items fan out: check-languages reads tsc's file list while check-ts
-    # runs, and two installs at once would race (check-ts's own install is then a no-op).
+    # runs, and two installs at once would race. check-ts then installs nothing (pnpm finds node_modules current), as
+    # any pnpm install, even an up-to-date one, rewrites node_modules/.bin under a concurrent pnpm exec (#548, #663).
     err="$(pnpm install --offline --frozen-lockfile 2>&1)" || { printf '%s\n' "$err" >&2
       echo "check-tests: tsc and eslint (pnpm-lock.yaml) are not in the pnpm store; fetch them once, with network: pnpm install --frozen-lockfile --dir $root" >&2; exit 1; }
     # mise's state dir one empty dir per gate run, removed after it, inherited by every item and nested run: each
     # `mise` an item runs in a temp repo records it there (tracked-configs), never in the user's, where the link
     # dangles once the repo goes (#493 AC7). Nothing the gate runs needs the user's trust entries: the kit's and the
     # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
-    [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@"
+    [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
     # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
     # as it found them, by content, failing and naming each change (owner ruling #584, #587; octo-feather-gate untouched).
     # Its own TMPDIR, short (unix socket paths under it stay short), removed after: what is this run's is exact.
     box="$(mktemp)"; gtmp="$(mktemp -d /tmp/gate.XXXXXX)"
     python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR" --run-tmp "$gtmp"
     MISE_STATE_DIR="$(mktemp -d)"; export MISE_STATE_DIR TMPDIR="$gtmp"; trap 'rm -rf "$MISE_STATE_DIR" "$box" "$gtmp"' EXIT
-    rc=0; GATE_NESTED=1 uv run --locked --offline --no-sync pytest "$@" || rc=$?
+    rc=0; GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@" || rc=$?
     python3 "$root/scripts/octo-feather-gate" untouched check "$box" || { [[ "$rc" != 0 ]] || rc=1; }
     exit "$rc"
 
