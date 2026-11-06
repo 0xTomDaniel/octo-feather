@@ -48,7 +48,7 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts
 
 [demo."quality#acceptance-qc-insufficient"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-insufficient"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
 
 [demo."quality#acceptance-qc-same-verdict"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-capture"
@@ -65,15 +65,15 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-
 
 [demo."quality#acceptance-qc-fallback"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-fallback"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "tests/fixtures/qc-judge/pi"]
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence", "scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "tests/fixtures/qc-judge/pi"]
 
 [demo."quality#acceptance-built-links"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status"]
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/octo_feather_spec_status.py"]
 
 [demo."quality#acceptance-evidence-stale"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qc-stale"
-covers = ["scripts/octo-feather-spec-status"]
+covers = ["scripts/octo-feather-spec-status", "scripts/octo_feather_spec_status.py"]
 
 [demo."quality#acceptance-fast-affected"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 gate-tiers"
@@ -109,20 +109,20 @@ command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --
 covers = ["templates/python/tests", "templates/typescript/tests", "templates/python/qc.toml", "templates/typescript/qc.toml", "templates/typescript/vitest.config.ts", "scripts/octo-feather-qc", "tests/gate/conftest.py"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-full-proof"]
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "scripts/octo-feather-gate", "scripts/octo-feather-integrate"]
 
 # Proven by tests/gate/kit/test_lane_merge_ask.py's tagged cases (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-ci-status-only"]
-covers = ["scripts/octo-feather-lane", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", ".github/workflows/check.yml", "templates/python/.github/workflows/check.yml", "templates/typescript/.github/workflows/check.yml"]
 
 # Proven by tests/gate/kit/test_lane_review_resolution.py's tagged cases (the rule: issue-lifecycle #lanes-one-head).
 [demo."issue-lifecycle#acceptance-review-resolution"]
-covers = ["scripts/octo-feather-lane", "agents/code-reviewer.md", "agents/supervisor.md"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "agents/code-reviewer.md", "agents/supervisor.md"]
 
 # Proven by tests/gate/kit/test_lane_ci_start.py's tagged cases (the rule: issue-lifecycle #lanes-one-head); the role naming the
 # command: owed eval docs/owed-evals/589.md.
 [demo."issue-lifecycle#acceptance-ci-alongside"]
-covers = ["scripts/octo-feather-lane", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "agents/supervisor.md", ".skillfile/patches/skills/implement-spec/SKILL.md.patch", ".agents/skills/implement-spec/SKILL.md"]
 
 [demo."issue-lifecycle#acceptance-brownfield-full"]
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-gate"]
@@ -133,7 +133,7 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts
 
 # Proven by tests/gate/kit/test_qc_carry.py's tagged items (the rule: quality #qc-carry).
 [demo."quality#acceptance-qc-carry"]
-covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/octo-feather-evidence", "scripts/octo-feather-gate"]
+covers = ["scripts/octo-feather-qc", "scripts/octo-feather-spec-status", "scripts/octo_feather_spec_status.py", "scripts/octo-feather-evidence", "scripts/octo-feather-gate"]
 
 [demo."quality#acceptance-one-execution-incomplete"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 one-execution-incomplete"
@@ -141,11 +141,11 @@ covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts
 
 [demo."comms#acceptance-report-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 factory-report"
-covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "tests/gate/conftest.py", "gate-budget.toml"]
 
 [demo."issue-lifecycle#acceptance-merge-ask-gate-budget"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
-covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "tests/gate/conftest.py", "gate-budget.toml"]
 
 [demo."roles#acceptance-shaper-launch"]
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
@@ -169,32 +169,32 @@ covers = ["scripts/octo-feather-qa"]
 
 [demo."quality#acceptance-qa-review"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-review"
-covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+covers = ["scripts/octo-feather-qa", "scripts/check-evals", "scripts/check_evals.py"]
 
 [demo."quality#acceptance-qa-history"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run qa-history"
-covers = ["scripts/octo-feather-qa", "scripts/check-evals"]
+covers = ["scripts/octo-feather-qa", "scripts/check-evals", "scripts/check_evals.py"]
 
 # Reflectors stubbed, tracker faked: no model call, no tracker write.
 [demo."comms#acceptance-reflect-files-correction"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "scripts/octo_feather_lane.py"]
 
 [demo."issue-lifecycle#acceptance-writer-route-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane", "scripts/octo_feather_lane.py"]
 
 [demo."comms#acceptance-correction-intake"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
-covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py", "scripts/octo-feather-reflect"]
 
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
-covers = ["scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py"]
 
 [demo."comms#acceptance-report-skill-reach"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
-covers = ["scripts/octo-feather-lane"]
+covers = ["scripts/octo-feather-lane", "scripts/octo_feather_lane.py"]
 
 [demo."skills#acceptance-launch-refuses-unloaded"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
