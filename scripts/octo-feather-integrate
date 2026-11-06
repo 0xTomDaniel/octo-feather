@@ -9,7 +9,7 @@
 # Run from anywhere in the target repo. A branch REF is merged (--no-ff); any
 # other REF is a commit and is cherry-picked (-x), in the order given.
 #
-# All or nothing: on a conflict or a red gate the lane branch is reset to where
+# All or nothing: on a conflict, a red gate or a refused one the lane branch is reset to where
 # it started, and the supervisor hands the problem to an implementer.
 #
 # The hand-in stays clean: a worker commit that adds Spec Chat review state
@@ -22,7 +22,8 @@
 # TICKET is the lane's parent ticket as the target's tracker writes it (12, ENG-123);
 # the lane key is that tracker skill's lane-key of it (gh12, eng-123; roles spec #lane-key).
 #
-# Exit: 0 integrated and green; 1 conflict; 2 the gate (either tier) red; 3 adds review
+# Exit: 0 integrated and green; 1 conflict; 2 the gate (either tier) red; 75 the gate refused before running
+#       anything, its lane holding no heavy slot (octo-feather-slot --help): not red, nothing ran; 3 adds review
 #       state or factory recipes, or a justfile just cannot read; 64 usage, or TICKET has no lane key;
 #       65 lane worktree not clean; 66 no single lane worktree for the lane key.
 # Does not push.
@@ -107,11 +108,22 @@ why="${tier#*$'\n'}"; tier="${tier%%$'\n'*}"
 gate=fast; [[ "$tier" == fast ]] || gate=check
 echo "tier: $tier ($why)"
 SECONDS=0
-if ! just "$gate"; then
+# The gate's stderr also kept in a file: a heavy-slot refusal (octo-feather-slot --help) is told from a red gate
+# by both its exit status, 75, and the slot's own refusal line, never by either alone.
+log="$(mktemp)"; rc=0
+just "$gate" 2> >(tee "$log" >&2) || rc=$?
+wait "$!" 2>/dev/null || true   # tee has written the whole log
+if ((rc)); then
   rollback
+  refusal="$(grep -m1 '^octo-feather-slot: refused, nothing ran: ' "$log" || true)"; rm -f "$log"
+  if ((rc == 75)) && [[ -n "$refusal" ]]; then
+    echo "refused: no heavy slot, nothing ran: just $gate, the $tier tier ($why), integrating $*: $refusal" >&2
+    exit 75
+  fi
   echo "red: just $gate, the $tier tier ($why), failed after integrating $*" >&2
   exit 2
 fi
+rm -f "$log"
 [[ "$tier" == fast ]] || python3 "$root/scripts/octo-feather-gate" record --reason "$why" --seconds "$SECONDS" >&2 \
   || echo "octo-feather-integrate: warning: the full pass is not recorded (above); the next integration runs the full gate again" >&2
 echo "integrated=$# branch=$branch head=$(git rev-parse --short=12 HEAD) tier=$tier"

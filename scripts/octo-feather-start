@@ -48,7 +48,8 @@ root="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/.." && pwd -P)"
 cwd="$(cd "$cwd" && pwd -P)"
 # The role must start in the target at --cwd: pi-role resolves its {tracker} skill there, and an unknown
 # tracker refuses here, before any workspace exists (spec skills#acceptance-tracker-unknown).
-(cd "$cwd" && "$root/scripts/pi-role" --json "$root/agents/$role.md" >/dev/null) \
+# Its launch env too: a role that would commit refuses here without the factory commit identity (pi-role --help).
+(cd "$cwd" && "$root/scripts/pi-role" --json "$root/agents/$role.md" >/dev/null && "$root/scripts/pi-role" --print-env "$root/agents/$role.md" >/dev/null) \
   || { echo "octo-feather-start: $role not started: pi-role refused its role file in $cwd (reason above)" >&2; exit 65; }
 # The lane key comes from the tracker pi-role resolved above (one mechanism: its tracker_skill), via that
 # tracker skill's lane-key (docs/adr/0011).

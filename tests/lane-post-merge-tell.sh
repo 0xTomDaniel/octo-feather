@@ -71,8 +71,10 @@ EOF
 # Fake herdr-close (step 5): its target is gone already, as herdr-close reports a space it cannot close.
 printf '#!/bin/sh\necho "space=$1 space_close_rc=1 killed=0"; exit 1\n' > "$t/bin/herdr-close"
 # Fake herdr-say: logs "PANE<TAB>MESSAGE"; exits the code $SAY_RC names for the pane ("PANE RC" lines), else 0.
+# Step 4 bounds each send (--timeout SECONDS, #666): refused without it.
 cat > "$t/bin/herdr-say" <<'EOF'
 #!/usr/bin/env bash
+[[ "$1" == --timeout && "$2" =~ ^[0-9]+$ ]] || { echo "fake herdr-say: no --timeout: $*" >&2; exit 2; }; shift 2
 printf '%s\t%s\n' "$1" "$2" >> "$SAY_LOG"
 rc="$(awk -v p="$1" '$1 == p {print $2}' "$SAY_RC" 2>/dev/null)"
 [[ "${rc:-0}" == 0 ]] || echo "herdr-say: $1 is blocked on interactive input; not delivered" >&2
