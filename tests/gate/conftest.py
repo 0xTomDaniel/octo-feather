@@ -66,10 +66,13 @@ except ImportError:   # before Python 3.11: no per-test CPU budget read
     tomllib = None
 from collections.abc import Callable, Generator
 from pathlib import Path
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, Protocol, cast
 import xml.etree.ElementTree as ET
 
 import pytest
+
+if TYPE_CHECKING:
+    from xdist.remote import Producer  # pyright: ignore[reportMissingTypeStubs]
 
 TREND = "check-runs.jsonl"
 CLAIMS = "OCTO_FEATHER_QC_CLAIMS"
@@ -171,24 +174,29 @@ def _last_seconds() -> dict[str, float]:
 
 def _longest_first(items: list[pytest.Item], last: dict[str, float]) -> None:
     places = [n for n, i in enumerate(items) if i.name in last]
-    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -last[i.name])):
+    for n, i in zip(places, sorted((items[n] for n in places), key=lambda i: -last[i.name]), strict=True):
         items[n] = i
 
 
+class _Node(Protocol):   # what pytest_configure_node reads of xdist's WorkerController
+    workerinput: dict[str, object]
+    config: pytest.Config
+
+
 @pytest.hookimpl(optionalhook=True)   # xdist's: each worker sorts from the controller's read
-def pytest_configure_node(node: Any) -> None:
-    node.workerinput[LAST] = node.config.stash.get(_LAST, {})
+def pytest_configure_node(node: _Node) -> None:
+    node.workerinput[LAST] = node.config.stash.get(_LAST, None) or {}
 
 
 @pytest.hookimpl(optionalhook=True)
-def pytest_xdist_make_scheduler(config: pytest.Config, log: Any) -> Any:
+def pytest_xdist_make_scheduler(config: pytest.Config, log: "Producer | None") -> object:
     """--dist load, dealt out one item per worker per round (this file's docstring); any other mode: xdist's own."""
     if config.getoption("dist") != "load":
         return None
-    from xdist.scheduler import LoadScheduling  # pyright: ignore[reportMissingTypeStubs]
+    from xdist.scheduler import LoadScheduling  # noqa: PLC0415  # pyright: ignore[reportMissingTypeStubs]  # xdist only here: the file runs without it
 
     class Dealt(LoadScheduling):
-        def __init__(self, config: pytest.Config, log: Any) -> None:
+        def __init__(self, config: pytest.Config, log: "Producer | None") -> None:
             super().__init__(config, log)
             self.maxschedchunk = self.maxschedchunk or 1   # after the deal, one item at a time
 
