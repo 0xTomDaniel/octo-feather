@@ -47,14 +47,14 @@ issue-lifecycle #lanes-checkpoints. What the fast tier runs: quality #recipe-fas
       content of DIR's tracked-configs and trusted-configs (each entry a link's target, a file's
       sha256), the current repo's git common dir config (every worktree's) as key/value pairs
       (`git config --file F --list`), and TMP, the run's own TMPDIR (its name the run's id).
-      check, after it, fails (exit 1) naming each: a pre-existing entry removed or changed; an
-      entry added whose link target lies under TMP, or under a dir of the git common dir's
-      octo-feather/ whose name carries the run's id; a config key/value added or removed,
-      branch.<name>.* aside (push -u, worktree branches). Every other added entry, dangling or
-      not, is printed as not this run's, never a failure. Else one line naming what it found
-      unchanged. Content, never mtimes. DIR empty (no mise): the config alone; outside a git
-      repo, the mise state alone. just check-tests runs both around every outermost gate run,
-      which it gives its own TMP.
+      check, after it, fails (exit 1) naming each: an entry added, removed or changed whose link
+      target, saved or new, lies under TMP, or under a dir of the git common dir's octo-feather/
+      whose name carries the run's id; a config key/value added or removed, branch.<name>.* aside
+      (push -u, worktree branches). Every other entry change, dangling or not (a peer lane's
+      post-merge prune meanwhile), is printed as not this run's, never a failure. Else one line
+      naming what it found unchanged. Content, never mtimes. DIR empty (no mise): the config
+      alone; outside a git repo, the mise state alone. just check-tests runs both around every
+      outermost gate run, which it gives its own TMP.
 
 The list is the repo root's shared-machinery.txt: one git pathspec per line, glob magic, `#`
 comment lines; git itself matches it. Maps live in the repo's git common dir,
@@ -556,13 +556,15 @@ def under(target: str, d: str) -> bool:
     return target == d or target.startswith(d.rstrip("/") + "/")
 
 
-def ours(link: Path, was: Box) -> str | None:
-    """Where LINK's target lies if this run made it (a failure), else None: under the run's own
-    TMPDIR, or under a subdir of the git common dir's octo-feather/ whose name carries the run's
-    id. Exact attribution: nothing else is this run's, dangling or not (another agent's scratch)."""
-    if not link.is_symlink():
+def ours(state: str, content: str | None, was: Box) -> str | None:
+    """Where the target of a link in mise state dir STATE, its entry CONTENT (entry(): "-> TARGET"),
+    lies if this run made it (a failure), else None: under the run's own TMPDIR, or under a subdir
+    of the git common dir's octo-feather/ whose name carries the run's id. Exact attribution:
+    nothing else is this run's, dangling or not (another agent's scratch); a file (no target) never
+    is."""
+    if not content or not content.startswith("-> "):
         return None
-    t = os.path.normpath(link.parent / link.readlink())
+    t = os.path.normpath(Path(state) / content.removeprefix("-> "))
     for d in was["run_tmp"]:
         if under(t, d):
             return f"this run's TMPDIR {was['run_tmp'][0]}"
@@ -590,24 +592,29 @@ def keys_changed(was: Box) -> list[str]:
 
 
 def changed(was: Box) -> tuple[list[str], list[str]]:
-    """(failures, notes) since WAS. A pre-existing mise entry removed or changed fails; one added
-    fails when it is this run's (ours), else it is a note (another agent's, dangling or not). Any
-    config key/value added or removed fails (keys_changed)."""
+    """(failures, notes) since WAS. A mise entry added, removed or changed fails when it is this
+    run's (ours: its saved target or its new one), else it is a note: another agent's, such as a
+    peer lane's post-merge prune removing its worktree's links meanwhile (#664 director ruling).
+    Any config key/value added or removed fails (keys_changed)."""
     out: list[str] = []
     notes: list[str] = []
     for d, before in was["mise"].items():
         after = listing(d)
         for n in sorted(before.keys() | after.keys()):
-            if n not in after:
-                out.append(f"{d}/{n}: removed (was {before[n]})")
-            elif n in before and before[n] != after[n]:
-                out.append(f"{d}/{n}: changed ({before[n]}, now {after[n]})")
-            elif n not in before:
-                where = ours(Path(d) / n, was)
-                if where:
-                    out.append(f"{d}/{n}: added {after[n]}, under {where}")
-                else:
-                    notes.append(f"{d}/{n}: added {after[n]}")
+            b, a = before.get(n), after.get(n)
+            if b == a:
+                continue
+            if a is None:
+                what = f"{d}/{n}: removed (was {b})"
+            elif b is None:
+                what = f"{d}/{n}: added {a}"
+            else:
+                what = f"{d}/{n}: changed ({b}, now {a})"
+            where = ours(d, b, was) or ours(d, a, was)
+            if where:
+                out.append(f"{what}, under {where}")
+            else:
+                notes.append(what)
     return out + keys_changed(was), notes
 
 

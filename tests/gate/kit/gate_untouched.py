@@ -5,8 +5,8 @@ item. Without a seed the run passes naming what it found unchanged. It fails nam
 though the item itself passes, when the item leaves in the caller's state a link into the run's
 own TMPDIR (check-tests gives it one), live or dangling, or sets a key in the copy's .git/config
 (the repo's git common dir config). What another agent on the box may do meanwhile passes, named
-as not this run's: a link elsewhere, live or dangling; a branch.<name>.* key (push -u, a
-worktree's branch)."""
+as not this run's: a link elsewhere, live or dangling, added, removed or replaced (concurrent:
+through untouched save and check); a branch.<name>.* key (push -u, a worktree's branch)."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ import re
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import ROOT, Ran, Scratch, main, pnpm_store, tool_homes
+from testkit import ROOT, Ran, Scratch, kit, main, pnpm_store, tool_homes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -145,5 +145,58 @@ def seeded(s: Scratch) -> None:
     assert str((st / "tracked-configs" / "kept").readlink()) == "/nowhere/kept/mise.toml"
 
 
+def concurrent(s: Scratch) -> None:
+    """Through `octo-feather-gate untouched save` and `check`, around a run whose TMPDIR is RUN:
+    another agent removing one pre-existing link and replacing another meanwhile (a peer lane's
+    post-merge prune) passes, each named not this run's (#664 director ruling); a pre-existing
+    link into RUN removed, one replaced by a link into RUN, and a git config key set each still
+    fail, named."""
+    repo = s.root / "repo"
+    s.git(repo.parent, "init", "-q", "-b", "main", str(repo))
+    st = s.root / "state"
+    tc = st / "tracked-configs"
+    tc.mkdir(parents=True)
+    run = s.root / "tmp" / "gate.run1"
+    (run / "x").mkdir(parents=True)
+    links = {
+        "peer": "/other/lane/mise.toml",
+        "swap": "/other/a/mise.toml",
+        "mine": f"{run}/x/mise.toml",
+        "into": "/other/c/mise.toml",
+    }
+    for n, t in links.items():
+        (tc / n).symlink_to(t)
+    box = s.root / "box.json"
+    gate = kit("octo-feather-gate")
+    save = [gate, "untouched", "save", str(box), "--mise-state", str(st), "--run-tmp", str(run)]
+    s.run(save, cwd=repo)
+    (tc / "peer").unlink()
+    (tc / "swap").unlink()
+    (tc / "swap").symlink_to("/other/b/mise.toml")
+    ok = s.run([gate, "untouched", "check", str(box)], cwd=repo)
+    t = re.escape(str(tc))
+    for note in (
+        rf"{t}/peer: removed \(was -> /other/lane/mise\.toml\)",
+        rf"{t}/swap: changed \(-> /other/a/mise\.toml, now -> /other/b/mise\.toml\)",
+    ):
+        assert re.search(rf"^check-tests: not this run's: {note}$", ok.err, re.MULTILINE), ok.err
+    assert "check-tests: unchanged by the gate: " in ok.err, ok.err
+    s.run(save, cwd=repo)
+    (tc / "mine").unlink()
+    (tc / "into").unlink()
+    (tc / "into").symlink_to(f"{run}/y/mise.toml")
+    s.git(repo, "config", "--local", "user.name", "leaked")
+    bad = s.run([gate, "untouched", "check", str(box)], want=1, cwd=repo)
+    r = re.escape(str(run))
+    cfg = re.escape(str(repo / ".git" / "config"))
+    want = (
+        rf"  {t}/into: changed \(-> /other/c/mise\.toml, now -> {r}/y/mise\.toml\), "
+        rf"under this run's TMPDIR {r}\n"
+        rf"  {t}/mine: removed \(was -> {r}/x/mise\.toml\), under this run's TMPDIR {r}\n"
+        rf"  {cfg}: changed \(present\): \+user\.name=leaked\n"
+    )
+    assert re.search(FAIL + want, bad.err + "\n"), bad.err
+
+
 if __name__ == "__main__":
-    main(seeded)
+    main(seeded, concurrent)

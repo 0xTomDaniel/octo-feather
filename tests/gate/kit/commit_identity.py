@@ -134,10 +134,12 @@ def unset(s: Scratch) -> None:
 
 def read_only(s: Scratch) -> None:
     """No setting: the launch of a role whose contract never commits (the code reviewer) is not
-    refused, and applies no identity."""
+    refused, and applies no identity: its launch env (`pi-role --print-env`) is empty."""
     repo = world(s)
-    ran = s.run([kit("pi-role"), "--json", str(ROOT / "agents" / "code-reviewer.md")], cwd=repo)
-    assert '"env"' not in ran.out, ran.out
+    ran = s.run(
+        [kit("pi-role"), "--print-env", str(ROOT / "agents" / "code-reviewer.md")], cwd=repo
+    )
+    assert ran.out == "", ran.out
 
 
 if __name__ == "__main__":

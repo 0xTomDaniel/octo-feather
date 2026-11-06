@@ -52,7 +52,8 @@ def missing_tool(tool: str) -> str:
     return f"{tool} is not installed: octo-feather-mise-install (mise.toml, mise.lock)"
 
 
-def ask(*cmd: str) -> str:
+def answer(*cmd: str) -> tuple[str, str]:
+    """CMD's stdout and stderr, once it exits 0; else it fails naming the command, exit and both."""
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, check=False)
     except OSError as e:
@@ -61,7 +62,11 @@ def ask(*cmd: str) -> str:
     if r.returncode != 0:
         msg = f"{' '.join(cmd)} exited {r.returncode}: {said(r.stdout, r.stderr)}"
         raise UnansweredError(msg)
-    return r.stdout
+    return r.stdout, r.stderr
+
+
+def ask(*cmd: str) -> str:
+    return answer(*cmd)[0]
 
 
 def said(stdout: str, stderr: str) -> str:
@@ -73,11 +78,11 @@ def said(stdout: str, stderr: str) -> str:
 def ask_json(*cmd: str) -> str:
     """CMD's stdout, which parses as JSON; output that does not (empty, not JSON) fails naming the
     command, its exit code and what it printed, never a parse error alone."""
-    out = ask(*cmd)
+    out, err = answer(*cmd)
     try:
         json.loads(out)
     except ValueError as e:
-        msg = f"{' '.join(cmd)} exited 0 but printed no JSON: {said(out, '')}"
+        msg = f"{' '.join(cmd)} exited 0 but printed no JSON: {said(out, err)}"
         raise UnansweredError(msg) from e
     return out
 

@@ -325,7 +325,8 @@ check-tests *args:
     # templates' mise.toml are [tools] only. As the qc sandbox's per-run state dir (scripts/octo-feather-qc-sandbox, step 6).
     [[ -z "${GATE_NESTED:-}" ]] || exec env GATE_NESTED=1 uv run --locked --offline --no-sync python -m pytest -p tests.gate.heavy_slot "$@"
     # The outermost run leaves the caller's mise state (tracked-configs, trusted-configs) and this repo's git config
-    # as it found them, by content, failing and naming each change (owner ruling #584, #587; octo-feather-gate untouched).
+    # as it found them, by content, failing and naming each change this run made (owner ruling #584, #587; attribution:
+    # octo-feather-gate untouched).
     # Its own TMPDIR, short (unix socket paths under it stay short), removed after: what is this run's is exact.
     box="$(mktemp)"; gtmp="$(mktemp -d /tmp/gate.XXXXXX)"
     python3 "$root/scripts/octo-feather-gate" untouched save "$box" --mise-state "$MISE_STATE_DIR" --run-tmp "$gtmp"
