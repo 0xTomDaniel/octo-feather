@@ -5,6 +5,6 @@ old_at = "02348e4"
 needs = []
 new = "tests/gate/kit/test_check_templates.py"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the old test runs the script of its throwaway copy, outside the kit dir coverage maps.
 [ran]
-"scripts/check-templates" = "coverage"
+"scripts/check-templates" = "exec scripts/check-templates"

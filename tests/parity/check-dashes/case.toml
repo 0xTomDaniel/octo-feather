@@ -1,0 +1,10 @@
+# The parity lever's case for tests/check-dashes.sh, rewritten as tests/gate/kit/test_check_dashes.py (tests/parity/lever.py --help).
+old = "tests/check-dashes.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_dashes.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: just reads the justfile to run check-dashes.
+[ran]
+"justfile" = "run just check-dashes"

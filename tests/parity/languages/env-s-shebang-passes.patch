@@ -1,0 +1,14 @@
+Seeded defect: a shebang scc cannot read (env -S) passes unnamed (check-languages rule 5).
+diff --git a/scripts/check-languages b/scripts/check-languages
+index c6cee03..4e16e2c 100755
+--- a/scripts/check-languages
++++ b/scripts/check-languages
+@@ -141,7 +141,7 @@ def unreadable_shebangs(unlisted: set[str]) -> list[str]:
+         f"{f}: scc cannot name the language of its shebang (it drops `env -S` forms); start it"
+         " with #!/usr/bin/env <interpreter> or give it an extension"
+         for f in sorted(unlisted)
+-        if Path(f).read_bytes()[:2] == b"#!"
++        if Path(f).read_bytes()[:3] == b"#!!"
+     ]
+ 
+ 

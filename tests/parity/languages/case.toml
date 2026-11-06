@@ -1,0 +1,10 @@
+# The parity lever's case for tests/languages.sh, rewritten as tests/gate/kit/test_check_languages.py (tests/parity/lever.py --help).
+old = "tests/languages.sh"
+old_at = "02348e4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_check_languages.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the old test runs the script of its throwaway copy, outside the kit dir coverage maps.
+[ran]
+"scripts/check-languages" = "exec scripts/check-languages"
