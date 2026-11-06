@@ -146,12 +146,13 @@ def append(k: Path, rel: str, line: str) -> int:
 
 
 def just(
-    s: Scratch, k: Path, *args: str, env: dict[str, str] | None = None, unset: str = ""
+    s: Scratch, k: Path, *args: str, env: dict[str, str] | None = None, unset: tuple[str, ...] = ()
 ) -> tuple[int, str]:
     """`just ARGS` in the copy K, the tools' homes the caller's (testkit.tool_homes), ENV set and
     UNSET unset: its exit and its stdout and stderr as one stream."""
     full = {**s.env, **tool_homes(), **(env or {})}
-    full.pop(unset, None)
+    for key in unset:
+        full.pop(key, None)
     p = subprocess.run(
         ["just", *args],  # noqa: S607
         cwd=k,
@@ -262,8 +263,11 @@ def in_gate(s: Scratch) -> None:
         "PYTEST_ADDOPTS": f"-k 'test_recipe and ({' or '.join(IN_GATE)})'",
         "npm_config_store_dir": pnpm_store(),  # the caller's, never the scratch HOME's
         "PATH": os.environ["PATH"],  # the real pi check-skills asks, not testkit's stand-in
+        "GATE_WORKERS": "0",  # one process, as a nested gate runs
     }
-    rc, out = just(s, k, "check", env=env, unset="CI")
+    # A top-level gate run, never nested (GATE_NESTED adds -x: the first failed item would stop
+    # the other two).
+    rc, out = just(s, k, "check", env=env, unset=("CI", "GATE_NESTED"))
     assert rc != 0, f"the planted faults passed just check:\n{out}"
     for recipe, (_, _, said) in IN_GATE.items():
         for x in said:
