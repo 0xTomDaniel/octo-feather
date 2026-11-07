@@ -186,6 +186,9 @@ class World:
         sys.stdout.write("\n".join(rows + [f"{n} running /s /s.sock" for n in names]) + "\n")
         return 0
 
+    def session_list(self, _: list[str]) -> int:
+        return self.sessions()
+
     def agent_list(self, _: list[str]) -> int:
         shown = [{k: v for k, v in g.items() if k != "ready_at"} for g in self.agents.values()]
         sys.stdout.write(json.dumps({"id": "1", "result": {"agents": shown}}) + "\n")
@@ -208,7 +211,7 @@ class World:
         if two in (("pane", "send-keys"), ("pane", "send-text")):
             return 0
         verbs = {
-            ("session", "list"): lambda _: self.sessions(),
+            ("session", "list"): self.session_list,
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
             ("workspace", "get"): self.workspace_get,
