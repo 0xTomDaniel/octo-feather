@@ -1,0 +1,14 @@
+Seeded defect: a rerun no longer finds the prod line naming its merge, so it tells every lane again (post-merge step 4).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..7a4d056 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -3958,7 +3958,7 @@ def pm_tell(pm: PostMerge) -> str:
+             continue
+         issue, sup = rec.get("issue"), rec.get("supervisor")
+         if any(x.get("kind") == "prod" and x.get("issue") == issue and str(x.get("note", "")).startswith(mark)
+-               and f" told {name} to " in str(x.get("note")) for x in dlines):
++               and f" told {name} too " in str(x.get("note")) for x in dlines):
+             already.append(name); continue
+         if not isinstance(sup, str) or ":" not in sup:
+             failed.append(f"{name}: the record's supervisor {sup!r} is no pane id"); continue

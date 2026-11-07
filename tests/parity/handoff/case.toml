@@ -1,0 +1,10 @@
+# The parity lever's case for tests/handoff.sh, rewritten as tests/gate/kit/test_handoff.py (tests/parity/lever.py --help).
+old = "tests/handoff.sh"
+old_at = "ef42b60"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = []
+new = "tests/gate/kit/test_handoff.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash kit script, which coverage.py does not see; coverage: a Python kit script run by the kit venv's python.
+[ran]
+"scripts/octo-feather-handoff" = "coverage"

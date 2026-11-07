@@ -11,8 +11,8 @@ set here: never the live kit), its origin a local bare repo behind a GitHub URL:
 justfile recipes (vendored-fetch, install-check) and the real mise run; `uv sync` and `pnpm
 install`, which would reach the package registries, are testkit/argv_recorder.sh (a plain seam
 stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
-the pinned Python absent, downloads off). Step 4 (issue 398, tests/lane-post-merge-tell.sh) reads a
-throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5 (issue 399,
+the pinned Python absent, downloads off). Step 4 (issue 398, herdr_messaging.py's tell items) reads
+a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5 (issue 399,
 tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending and a green
 run exits 3.
 

@@ -1,0 +1,15 @@
+Seeded defect: a pane id herdr-close cannot map is closed as a tab id, exit 0 (herdr-close, #76).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-close b/.agents/skills/herdr-comms/assets/herdr-close
+index 25b8e9f..e62443e 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-close
++++ b/.agents/skills/herdr-comms/assets/herdr-close
+@@ -66,8 +66,7 @@ id="${1:-}"
+ 
+ if [[ "$id" == *:p* ]]; then
+   tab="$(herdr agent get "$id" 2>/dev/null | jq -r '.result.agent.tab_id // empty' 2>/dev/null)" || tab=""
+-  [[ -n "$tab" ]] || { echo "herdr-close: cannot map pane $id to its tab (no Herdr agent there); give TAB|SPACE|PANE: a tab (w5:t2), a space (w5), or an agent's pane (w5:p3); nothing closed" >&2; exit 65; }
+-  id="$tab"
++  id="${tab:-$id}"
+ fi
+ 
+ if [[ "$id" == *:* ]]; then kind=tab; tag=HERDR_TAB_ID; cmd=(tab close)

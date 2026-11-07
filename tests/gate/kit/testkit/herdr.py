@@ -23,7 +23,16 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
-`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Workspaces (a start's):
+`tab create` also writes the tab's environment (each --env KEY=VALUE, one per line) to `tab-env`,
+`agent start` its Pi argv (after --, one per line) to `start-argv`, `tab close` each tab id to
+`closed`; `tab get T` prints T's label (its agent's name). `pane read` shows a ready Pi prompt,
+or a startup dialog while one is open (exit 0, the text of tests/fixtures/herdr-spawn/'s): Pi's
+trust dialog when the start argv lacks --approve or the file `dialog` says `pi`, another that
+never clears when it says `other`; while a dialog is open `agent start` answers
+`agent_not_ready` (exit 1), as Herdr does. Each read is a line in `reads`; a file `reads_ok`
+holding N fails every read after the first N (exit 42, a line in `failed-reads`). `pane
+send-keys|send-text` log their key in `keys`. A `get-down` file naming targets (one per line)
+fails only those. Workspaces (a start's):
 `workspace create --label L` makes the next wN with its seed tab wN:t0 (`workspaces.json`, a
 scenario may write it), `workspace list` lists them; `workspace get W` finds W while it is
 listed or an agent's pane is in it, else workspace_not_found; `workspace close W` drops W and its
@@ -92,9 +101,11 @@ class World:
         self.agents[pane] = {"name": "", "pane_id": pane, "workspace_id": w, "tab_id": tab}
         self.agents[pane]["agent_status"] = "none"
         self.save()
+        (self.dir / "tab-env").write_text("".join(f"{e}\n" for e in opts(a, "--env")))
         return say({"tab": {"tab_id": tab}, "root_pane": {"pane_id": pane}})
 
     def tab_close(self, a: list[str]) -> int:
+        self.note("closed", a[2])
         self.agents = {p: g for p, g in self.agents.items() if g["tab_id"] != a[2]}
         self.save()
         return 0
@@ -123,10 +134,41 @@ class World:
         g = self.agents[opts(a, "--pane")[0]]
         g |= {"name": a[2], "agent_status": "idle", "ready_at": time.time() + delay}
         self.save()
+        if "--" in a:
+            argv = a[a.index("--") + 1 :]
+            (self.dir / "start-argv").write_text("".join(f"{x}\n" for x in argv))
+        return fail("agent_not_ready") if self.dialog() else 0
+
+    def dialog(self) -> str:
+        """The startup dialog open in the pane: `pi`, `other`, or none (the module docstring)."""
+        f, argv = self.dir / "dialog", self.dir / "start-argv"
+        if f.exists():
+            return f.read_text().strip()
+        if argv.exists() and "--approve" not in argv.read_text().splitlines():
+            return "pi"
+        return ""
+
+    def pane_read(self, _: list[str]) -> int:
+        self.note("reads", "x")
+        ok = self.dir / "reads_ok"
+        n = len((self.dir / "reads").read_text().splitlines())
+        if ok.exists() and n > int(ok.read_text()):
+            self.note("failed-reads", "x")
+            return 42
+        shown = {"pi": "pi-trust-dialog.txt", "other": "other-dialog.txt"}.get(self.dialog())
+        fixtures = Path(__file__).resolve().parents[3] / "fixtures" / "herdr-spawn"
+        sys.stdout.write((fixtures / shown).read_text() if shown else " pi\n\n > \n")
         return 0
 
+    def tab_get(self, a: list[str]) -> int:
+        g = next((g for g in self.agents.values() if g["tab_id"] == a[2]), None)
+        if g is None:
+            return fail("tab_not_found")
+        return say({"tab": {"tab_id": a[2], "label": g["name"]}})
+
     def agent_get(self, a: list[str]) -> int:
-        if (self.dir / "get-down").exists():
+        down = self.dir / "get-down"
+        if down.exists() and (not down.read_text().split() or a[2] in down.read_text().split()):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
         g = self.find(a[2])
@@ -205,15 +247,15 @@ class World:
         if a[:1] == ["workspace"] and a[1:2] in (["list"], ["create"], ["close"]):
             return self.workspace(a)
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
-        if two == ("pane", "read"):
-            sys.stdout.write(" pi\n\n > \n")
-            return 0
         if two in (("pane", "send-keys"), ("pane", "send-text")):
+            self.note("keys", a[3] if len(a) > 3 else "")
             return 0
         verbs = {
             ("session", "list"): self.session_list,
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
+            ("tab", "get"): self.tab_get,
+            ("pane", "read"): self.pane_read,
             ("workspace", "get"): self.workspace_get,
             ("agent", "list"): self.agent_list,
             ("agent", "start"): self.agent_start,
