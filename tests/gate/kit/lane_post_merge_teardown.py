@@ -1,18 +1,18 @@
 """The scenarios of tests/gate/kit/test_lane_post_merge_teardown.py (its items), this file their
 command (testkit.main): octo-feather-lane post-merge step 5, teardown (owner ruling 2026-10-29 on
 issue 206; issue 399), offline: a throwaway target repo with a bare origin holds lane branch gh12,
-its worktree and its merge commit; the testkit's fake gh holds PR #12 merged there with a green
-push run and PR #13 based on gh12; the testkit's fake herdr (its FAKE_HERDR agents world) stands
-for Herdr under the kit's own herdr-close and herdr-say (HERDR_SESSION unset; space ids no real
-Herdr gives; each run in a PID namespace of its own, so herdr-close's sweep of tagged processes
-sees only the run's); a throwaway mise state dir (MISE_STATE_DIR); a throwaway state dir
-(XDG_STATE_HOME) holds the lane records, director.toml and the Spec Chat registries; a throwaway kit install clone (OCTO_FEATHER_KIT_INSTALL,
-never the live kit) of another repo, so step 3 leaves it unchanged. Not archived: steps 1-4 run,
-step 5 pending, exit 3. Archived: the lane's own space is closed (only its supervisor pane's tab
-when shared), its worktree removed and the mise links into it pruned (one into the live repo
-kept), PRs based on its branch retargeted before the remote branch is deleted, the local branch
-deleted; a rerun prints already for each, on a repo with no workflow as with a green run. A dirty
-worktree, the kit install, the main worktree and a review row's root are kept, exit 1.
+its worktree and its merge commit; the testkit's fake gh holds PR #12 merged there with a green push
+run and PR #13 based on gh12; the testkit's fake herdr (its FAKE_HERDR agents world) stands for
+Herdr under the kit's own herdr-close and herdr-say (HERDR_SESSION unset; space ids no real Herdr
+gives; each run in a PID namespace of its own, so herdr-close's sweep of tagged processes sees only
+the run's); a throwaway mise state dir (MISE_STATE_DIR); a throwaway state dir (XDG_STATE_HOME)
+holds the lane records, director.toml and the Spec Chat registries; a throwaway kit install clone
+(OCTO_FEATHER_KIT_INSTALL, never the live kit) of another repo, so step 3 leaves it unchanged. Not
+archived: steps 1-4 run, step 5 pending, exit 3. Archived: the lane's own space is closed (only its
+supervisor pane's tab when shared), its worktree removed and the mise links into it pruned (one into
+the live repo kept), PRs based on its branch retargeted before the remote branch is deleted, the
+local branch deleted; a rerun prints already for each, on a repo with no workflow as with a green
+run. A dirty worktree, the kit install, the main worktree and a review row's root are kept, exit 1.
 
 The world (target repo, origin, worktree, kit install) is prepared once per gate run (testkit
 Scratch.prepare); each case is a fresh copy of it, its worktree links rewritten.
