@@ -1,0 +1,14 @@
+Seeded defect: a page whose .viz/runtime.js is missing is no longer refused (review-host: no Spec Chat UI).
+diff --git a/scripts/review-host b/scripts/review-host
+index 0063f16..ee6b0a8 100755
+--- a/scripts/review-host
++++ b/scripts/review-host
+@@ -86,7 +86,7 @@ def missing_ui(host, preflight, args):
+                 f"{spec}: no Spec Chat runtime <script>; add exactly one "
+                 f'<script defer src="./.viz/runtime.js"></script> (a repository-relative path) to its <head>, '
+                 f"then run {fix}")
+-        elif not runtime.is_file():
++        elif not runtime.is_file() and runtime.name != "runtime.js":
+             problems.append(
+                 f"{spec}: Spec Chat runtime {runtime} is missing; run {fix} "
+                 "(it copies Spec Chat's runtime into that .viz and commits it)")

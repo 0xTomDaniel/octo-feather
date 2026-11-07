@@ -1,0 +1,10 @@
+# The parity lever's case for tests/skills-loaded.sh, rewritten as tests/gate/kit/test_skills_loaded.py (tests/parity/lever.py --help).
+old = "tests/skills-loaded.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_skills_loaded.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: Pi loads the extension (the old test's copy of extensions/), a module no process runs as a program.
+[ran]
+"extensions/skills-loaded.ts" = "open extensions/skills-loaded.ts"

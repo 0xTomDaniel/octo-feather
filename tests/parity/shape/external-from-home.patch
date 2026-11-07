@@ -1,0 +1,14 @@
+Seeded defect: external skills are looked up in HOME first, not only in the target repo (pi-role --help, externalSkills).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index ea12cfc..d89091d 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -312,7 +312,7 @@ def launch(path: str, *, to_file: bool = False):
+                 break
+         else:
+             sys.exit(f"pi-role: skill {s} not found in {roots}")
+-    ext = repo_skill_roots()
++    ext = [os.path.expanduser("~/.agents/skills"), *repo_skill_roots()]
+     for s in fm.get("externalSkills", []):
+         hit = [os.path.join(d, s) for d in ext if os.path.isfile(os.path.join(d, s, "SKILL.md"))]
+         if hit:

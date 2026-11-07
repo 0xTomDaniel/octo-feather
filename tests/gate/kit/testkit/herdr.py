@@ -23,12 +23,15 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
-`workspace get W` finds W while an agent's pane is in it, else workspace_not_found;
-`workspace close W` drops W's agents (workspace_not_found when none); `workspace create --label
-L` makes the next space W with its seed tab W:t1 (a bare pane, no agent), `workspace list` lists
-each space by its label. `agent list` prints every agent, in the order the world holds them, in
-Herdr's envelope; a file `down` fails every call as a herdr with no server does. `pane read`
-shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
+`pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Workspaces (a start's):
+`workspace create --label L` makes the next wN with its seed tab wN:t0 (`workspaces.json`, a
+scenario may write it), `workspace list` lists them; `workspace get W` finds W while it is
+listed or an agent's pane is in it, else workspace_not_found; `workspace close W` drops W and its
+agents (workspace_not_found when there is no W); `session list` prints Herdr's table: `default`
+running, and each name in the file `sessions` running. `agent list` prints every agent, in the
+order the world holds them, in Herdr's envelope; a file `down` fails every call as a herdr with
+no server does. Each call is also one line in `session-log`, "HERDR_SESSION=<the caller's>
+CALL". Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
 each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
@@ -96,29 +99,20 @@ class World:
         self.save()
         return 0
 
-    def workspace_create(self, a: list[str]) -> int:
-        w = f"w{len({g['workspace_id'] for g in self.agents.values()}) + 1}"
-        label = (opts(a, "--label") or [w])[0]
-        self.agents[f"{w}:p1"] = {"name": "", "pane_id": f"{w}:p1", "workspace_id": w}
-        self.agents[f"{w}:p1"] |= {"tab_id": f"{w}:t1", "agent_status": "none", "label": label}
-        self.save()
-        return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": f"{w}:t1"}})
-
-    def workspace_list(self, _: list[str]) -> int:
-        spaces: dict[str, object] = {}
-        for g in self.agents.values():
-            spaces.setdefault(str(g["workspace_id"]), g.get("label", g["workspace_id"]))
-        return say({"workspaces": [{"workspace_id": w, "label": n} for w, n in spaces.items()]})
-
     def workspace_get(self, a: list[str]) -> int:
-        if not any(g["workspace_id"] == a[2] for g in self.agents.values()):
+        listed = any(w["workspace_id"] == a[2] for w in self.workspaces())
+        if not listed and not any(g["workspace_id"] == a[2] for g in self.agents.values()):
             return fail("workspace_not_found")
         return say({"type": "workspace_info", "workspace": {"workspace_id": a[2]}})
 
     def workspace_close(self, a: list[str]) -> int:
+        spaces, f = self.workspaces(), self.dir / "workspaces.json"
+        left = [w for w in spaces if w["workspace_id"] != a[2]]
         kept = {p: g for p, g in self.agents.items() if g["workspace_id"] != a[2]}
-        if len(kept) == len(self.agents):
+        if len(left) == len(spaces) and len(kept) == len(self.agents):
             return fail("workspace_not_found")
+        if len(left) != len(spaces):
+            f.write_text(json.dumps(left))
         self.agents = kept
         self.save()
         return 0
@@ -171,16 +165,42 @@ class World:
             return fail("timeout")
         return say({"agent_status": "idle"})
 
+    def workspaces(self) -> list[dict[str, str]]:
+        f = self.dir / "workspaces.json"
+        return json.loads(f.read_text()) if f.exists() else []
+
+    def workspace(self, a: list[str]) -> int:
+        spaces, f = self.workspaces(), self.dir / "workspaces.json"
+        if a[1] == "list":
+            return say({"workspaces": spaces})
+        if a[1] == "close":
+            return self.workspace_close(a)
+        w = f"w{len(spaces) + 1}"
+        f.write_text(json.dumps([*spaces, {"label": opts(a, "--label")[0], "workspace_id": w}]))
+        return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": f"{w}:t0"}})
+
+    def sessions(self) -> int:
+        f = self.dir / "sessions"
+        names = f.read_text().split() if f.exists() else []
+        rows = ["name status directory socket", "default running /d /d.sock"]
+        sys.stdout.write("\n".join(rows + [f"{n} running /s /s.sock" for n in names]) + "\n")
+        return 0
+
+    def agent_list(self, _: list[str]) -> int:
+        shown = [{k: v for k, v in g.items() if k != "ready_at"} for g in self.agents.values()]
+        sys.stdout.write(json.dumps({"id": "1", "result": {"agents": shown}}) + "\n")
+        return 0
+
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
+        who = os.environ.get("HERDR_SESSION", "")
+        self.note("session-log", f"HERDR_SESSION={who} {' '.join(a)}")
         if (self.dir / "down").exists():
             sys.stderr.write("error: could not connect to herdr server\n")
             return 1
-        if a == ["agent", "list"]:
-            shown = [{k: v for k, v in g.items() if k != "ready_at"} for g in self.agents.values()]
-            sys.stdout.write(json.dumps({"id": "1", "result": {"agents": shown}}) + "\n")
-            return 0
+        if a[:1] == ["workspace"] and a[1:2] in (["list"], ["create"], ["close"]):
+            return self.workspace(a)
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
@@ -188,12 +208,11 @@ class World:
         if two in (("pane", "send-keys"), ("pane", "send-text")):
             return 0
         verbs = {
+            ("session", "list"): lambda _: self.sessions(),
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
             ("workspace", "get"): self.workspace_get,
-            ("workspace", "create"): self.workspace_create,
-            ("workspace", "list"): self.workspace_list,
-            ("workspace", "close"): self.workspace_close,
+            ("agent", "list"): self.agent_list,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,

@@ -1,0 +1,14 @@
+Seeded defect: a record hashes the criterion id, not its text: an edit to the text goes unseen (quality#acceptance-evidence-record).
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5..2f9d873 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -187,7 +187,7 @@ def append(a):
+     try:
+         outputs = write_stage(stage, files)
+         record = {"format": FORMAT, "id": rid, "target": target, "revision": revision, "dirty": dirty,
+-                  "criterion": {"id": a.criterion, "text_sha256": sha256(text.encode()), "text_from": text_from},
++                  "criterion": {"id": a.criterion, "text_sha256": sha256(a.criterion.encode()), "text_from": text_from},
+                   "contract": contract, "fixture": fixture, "outputs": outputs, "time": f"{now:%Y-%m-%dT%H:%M:%SZ}"}
+         with open(os.path.join(stage, "record.json"), "x", encoding="utf-8") as fh:
+             json.dump(record, fh, indent=2, sort_keys=True)

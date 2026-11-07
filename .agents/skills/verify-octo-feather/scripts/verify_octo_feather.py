@@ -1179,7 +1179,7 @@ def drive_skill_loading(f: Feature) -> None:
     say(f"skill-loading evidence: {f.d}")
 
 
-# A fake OpenAI-compatible provider (a test double, stdlib, as tests/web-tools.sh's): logs each request body to
+# A fake OpenAI-compatible provider (a test double, stdlib, as the kit tests' tests/gate/kit/testkit/provider.py): logs each request body to
 # argv[2], answers "fake-done"; writes argv[1] once it listens, the readiness signal. Hand-written: the helper is
 # stdlib-only (AGENTS.md), and the mock LLM servers searched (mock-llm, fakellm, llm-mock, 2026) are young
 # single-maintainer packages; the drive needs only the logged request Pi sends.

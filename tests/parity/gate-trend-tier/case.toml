@@ -1,0 +1,10 @@
+# The parity lever's case for tests/gate-trend-tier.sh, rewritten as tests/gate/kit/test_gate_trend_tier.py (tests/parity/lever.py --help).
+old = "tests/gate-trend-tier.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none but the conftest it copies, which is the code under test.
+needs = []
+new = "tests/gate/kit/test_gate_trend_tier.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): open: the old test copies the hook into its suite (cp opens it).
+[ran]
+"tests/gate/conftest.py" = "open tests/gate/conftest.py"

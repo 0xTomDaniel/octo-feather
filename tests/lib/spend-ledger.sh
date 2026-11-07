@@ -1,5 +1,5 @@
 # shellcheck shell=bash disable=SC2034  # v, ledger, out, rc, gitenv: used by the scripts that source this file
-# Sourced by tests/spend-ledger.sh and each tests/spend-ledger-*.sh (one gate item per case group, #509), never run
+# Sourced by each tests/spend-ledger-*.sh (one gate item per case group, #509), never run
 # itself: in tests/lib/ so the gate's tests/*.sh glob does not collect it. Real Pi at the kit's pin (pi-version),
 # headless, against a fake OpenAI-compatible provider on 127.0.0.1 whose model has a catalog price (input $1000/M
 # tokens, output $2000/M), then `octo-feather-lane spend`. Credential-free: Pi starts from an empty environment with an
@@ -19,46 +19,12 @@ t="$(mktemp -d)"; srv=""
 trap '[[ -z "$srv" ]] || kill "$srv" 2>/dev/null || true; rm -rf "$t"' EXIT
 fail() { echo "spend-ledger test: $*" >&2; exit 1; }
 
-# The fake provider: a request whose prompt asks for the tool, and that has no tool result yet,
-# gets a nested_work tool call (usage 100 in, 20 out); any other request gets the answer
-# fake-answer-ok (usage 150 in, 10 out).
-cat > "$t/fake.py" <<'EOF'
-import http.server, json, os, re, sys
-port_file = sys.argv[1]
-class H(http.server.BaseHTTPRequestHandler):
-    def log_message(self, *a): pass
-    def do_POST(self):
-        body = json.loads(self.rfile.read(int(self.headers.get("content-length", 0))))
-        msgs = body.get("messages", [])
-        tool = "use the tool" in json.dumps(msgs) and not any(m.get("role") == "tool" for m in msgs)
-        qc = re.search(r"Repo: .*, head ([0-9a-f]{40})\.", json.dumps(msgs))
-        self.send_response(200); self.send_header("content-type", "text/event-stream"); self.end_headers()
-        base = {"id": "x", "object": "chat.completion.chunk", "created": 0, "model": "fake"}
-        if tool:
-            delta = {"role": "assistant", "tool_calls": [{"index": 0, "id": "call_1", "type": "function",
-                     "function": {"name": "nested_work", "arguments": "{}"}}]}
-            end, usage = "tool_calls", {"prompt_tokens": 100, "completion_tokens": 20, "total_tokens": 120}
-        elif qc:   # a qc brief (scripts/octo-feather-qc BRIEF): every criterion it names passes
-            ids = re.findall(r"\\n- (acceptance-[a-z0-9-]+): ", json.dumps(msgs))
-            crit = [{"id": i, "verdict": "pass", "command": "demo", "output": "ok", "why": "shown"} for i in ids]
-            delta = {"role": "assistant", "content": "```json\n" + json.dumps({"head": qc.group(1), "criteria": crit}) + "\n```"}
-            end, usage = "stop", {"prompt_tokens": 150, "completion_tokens": 10, "total_tokens": 160}
-        else:
-            delta = {"role": "assistant", "content": "fake-answer-ok"}
-            end, usage = "stop", {"prompt_tokens": 150, "completion_tokens": 10, "total_tokens": 160}
-        for d in ({**base, "choices": [{"index": 0, "delta": delta, "finish_reason": None}]},
-                  {**base, "choices": [{"index": 0, "delta": {}, "finish_reason": end}], "usage": usage}):
-            self.wfile.write(b"data: " + json.dumps(d).encode() + b"\n\n")
-        self.wfile.write(b"data: [DONE]\n\n")
-s = http.server.HTTPServer(("127.0.0.1", 0), H)
-open(port_file + ".tmp", "w").write(str(s.server_address[1])); os.replace(port_file + ".tmp", port_file)
-s.serve_forever()
-EOF
+# The fake provider (tests/gate/kit/testkit/provider.py, its header: what it answers).
 mkdir -p "$t/home" "$t/agent" "$t/repo"
 XDG_STATE_HOME="$t/state" "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 git -c init.defaultBranch=main init -q "$t/repo"
 echo '{"retry":{"enabled":false}}' > "$t/agent/settings.json"
-python3 "$t/fake.py" "$t/port" & srv=$!
+python3 "$kit/tests/gate/kit/testkit/provider.py" > "$t/port" & srv=$!
 for _ in $(seq 50); do [[ -s "$t/port" ]] && break; sleep 0.1; done
 [[ -s "$t/port" ]] || fail "fake provider did not start"
 printf '{"providers":{"fake":{"baseUrl":"http://127.0.0.1:%s/v1","api":"openai-completions","apiKey":"x","models":[{"id":"fake","cost":{"input":1000,"output":2000,"cacheRead":0,"cacheWrite":0}},{"id":"free","cost":{"input":0,"output":0,"cacheRead":0,"cacheWrite":0}}]}}}\n' \
@@ -101,7 +67,7 @@ qc() { set +e
     "$kit/scripts/octo-feather-qc" docs/specs/demo.status.json 5 acceptance-a 2>"$t/err")"; rc=$?
   set -e; }
 # seed N: the ledger's first N records as the cases before leave it (each through `spend record`, the extension's
-# writer): 8, the spend-ledger.sh cases agents to zero-priced (gh149 implementer: fake/fake 100 in 20 out $0.14,
+# writer): 8, tests/gate/kit/spend_ledger.py's cases agents to zero-priced (gh149 implementer: fake/fake 100 in 20 out $0.14,
 # 150 in 10 out $0.17 three times, tool/nested_work 7 in 3 out $0.004, fake/free 150 in 10 out unknown cost; no lane:
 # agent and code-reviewer, fake/fake 150 in 10 out $0.17 each); 10, then the qc case's (gh149 judge and qc-judge).
 seed() {

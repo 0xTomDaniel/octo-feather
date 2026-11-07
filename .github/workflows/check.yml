@@ -90,7 +90,7 @@ jobs:
       # inside it with UV_OFFLINE=1, from this cache only.
       - run: uv sync --locked --quiet && for l in evals/fixtures/*/uv.lock templates/python/uv.lock; do UV_PROJECT_ENVIRONMENT="$RUNNER_TEMP/fixture-venv" uv sync --locked --quiet --project "${l%/uv.lock}"; done
       # The TypeScript template's locked packages into pnpm's store, with mise's pnpm: the fourth network step. The gate's
-      # tests (tests/contract.sh, tests/evidence.sh) install template copies with pnpm install --offline
+      # tests (tests/gate/kit/test_contract.py, test_evidence_store.py) install template copies with pnpm install --offline
       # --frozen-lockfile, from this store only.
       - run: pnpm fetch --frozen-lockfile --dir templates/typescript
       # The kit's TypeScript tools (tsc, eslint: package.json, pnpm-lock.yaml) into the same store and

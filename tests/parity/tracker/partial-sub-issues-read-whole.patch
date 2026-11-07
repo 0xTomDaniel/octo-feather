@@ -1,0 +1,14 @@
+Seeded defect: github-issues' issue-view reads a partial (paged) sub-issue list as the whole, never refusing it (the script's header; spec skills#tracker).
+diff --git a/.agents/skills/github-issues/scripts/issue-view b/.agents/skills/github-issues/scripts/issue-view
+index 0e3da3f..92a9455 100755
+--- a/.agents/skills/github-issues/scripts/issue-view
++++ b/.agents/skills/github-issues/scripts/issue-view
+@@ -6,7 +6,7 @@ set -euo pipefail
+ [[ "$1" =~ ^#?([0-9]+)$ ]] || { echo "issue-view: $1 is not a GitHub issue key" >&2; exit 1; }
+ out="$(gh issue view "${BASH_REMATCH[1]}" --json number,title,body,state,url,parent,subIssues,blockedBy 2>&1)" || { echo "issue-view: $out" >&2; exit 1; }
+ # A partial sub-issue list would read as the whole: refuse it.
+-jq -e '(.subIssues.totalCount // 0) == ((.subIssues.nodes // []) | length)' <<<"$out" >/dev/null 2>&1 \
++jq -e 'true' <<<"$out" >/dev/null 2>&1 \
+   || { echo "issue-view: #${BASH_REMATCH[1]}: gh returned a partial or unreadable sub-issue list: $(head -c 300 <<<"$out")" >&2; exit 1; }
+ jq -c '{key: (.number | tostring), title, body, state: (if .state == "CLOSED" then "done" else "open" end), url, parent: (.parent.number // null | if . == null then null else tostring end),
+         children: [(.subIssues.nodes // [])[].number | tostring], blocked_by: [(.blockedBy.nodes // [])[].number | tostring]}' <<<"$out"

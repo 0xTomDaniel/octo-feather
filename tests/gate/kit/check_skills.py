@@ -7,8 +7,9 @@ recipe itself where it is the surface, a broken python3.
 
 Each check-skills run starts Pi, the cost floor (#558), so the content cases are judged together:
 case N plants its SKILL.md as .agents/skills/qc-bad-N or qc-good-N, its own name spelled with -N
-so no two share a name. The good skills alone keep the copy green (so the clean copy too); then
-with every bad skill beside them, one run fails naming each bad SKILL.md and no good one: a
+so no two share a name. The good skills alone keep the copy green (so the clean copy too; its ok
+line names both trackers); then with every bad skill beside them, one run fails naming each bad
+SKILL.md and no good one: a
 missing, body-only or empty name or description, adversarial forms, a description Pi cannot read
 (and a role listing it, named with it), an unreadable (dangling) SKILL.md; one bad skill's exact
 message. A broken python3 or pi fails closed, never skills: ok. That `just check` runs it:
@@ -141,6 +142,7 @@ def judged(s: Scratch) -> None:
     rc, out = c.run()
     assert rc == 0, f"the good skills failed check-skills:\n{out}"
     assert "skills: ok" in out, out
+    assert "trackers github, linear)" in out, f"check-skills covers both trackers: {out}"
     bad = c.plant("qc-bad", BAD)
     (c.dir / ROLE).write_text(
         f"---\nname: qc-role\ndescription: A role.\nskills: qc-bad-{UNREADABLE}\n---\nBody.\n"

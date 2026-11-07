@@ -1,0 +1,14 @@
+Seeded defect: read by commit ignores the commit: every commit's records show (octo-feather-evidence --help, read; quality#acceptance-evidence-read).
+diff --git a/scripts/octo-feather-evidence b/scripts/octo-feather-evidence
+index 20344c5..f4875fd 100755
+--- a/scripts/octo-feather-evidence
++++ b/scripts/octo-feather-evidence
+@@ -259,8 +259,6 @@ def read(a):
+             raise Refused(f"record {d}: format {r.get('format')!r} is not one this kit reads ({sorted(formats)}); update the kit")
+         if a.criterion and r["criterion"]["id"] != a.criterion:
+             continue
+-        if want and not want(r["revision"]):
+-            continue
+         records.append({"record": r, "dir": d})
+     if a.json:
+         print(json.dumps(records, indent=2))

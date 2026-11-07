@@ -31,7 +31,7 @@ Run: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive shape
 
 ## Gotchas
 
-- `--model fake/fake` is the one launch change: it follows pi-role's own `--model`, so the role's model, thinking and tools are as `just shape` gives them, and only the provider is fake. That the launch names the role file's model, thinking and tools is tests/shape.sh's (`just shape --json`) and the role-launch drive's `shaper` case.
+- `--model fake/fake` is the one launch change: it follows pi-role's own `--model`, so the role's model, thinking and tools are as `just shape` gives them, and only the provider is fake. That the launch names the role file's model, thinking and tools is tests/gate/kit/test_shape_launch.py's (`just shape --json`) and the role-launch drive's `shaper` case.
 - The expected list is read from `agents/shaper.md` on each drive, never written in the helper: a skill added to the role (as `repair-specs` was, #607) is expected with no drive edit, and fails the drive until the target has it.
 - The shaper lists `web`: its web servers are registered at session start and fail to connect inside the namespace, which the run survives. The namespace, not a stub, keeps every request but the fake provider's from leaving.
 - The kit's `just` is mise-shimmed: under a private HOME mise would try to install it, so the drive passes mise's own data dir (`mise doctor --json`) and a scratch `MISE_STATE_DIR`.

@@ -38,6 +38,10 @@ class Corr:
         self.dlog = self.lanes.parent / "director.handoffs.jsonl"
         (self.lanes / "archive").mkdir(parents=True)
         self.dlog.write_text("")
+        # o/r's earlier issue: the issues filed here number after it, from 901 (GitHub numbers
+        # them across a repo's history; the fake gh after every stored one)
+        earlier = {"number": 900, "title": "an earlier issue", "state": "CLOSED"}
+        s.gh.store("issue/900.json", earlier)
         self.none()
 
     def reply(self, who: str, *findings: str) -> None:

@@ -1,0 +1,10 @@
+# The parity lever's case for tests/shape.sh, rewritten as tests/gate/kit/test_shape_launch.py (tests/parity/lever.py --help).
+old = "tests/shape.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_shape_launch.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: octo-feather-shape execs pi-role with the box's python3, outside the kit venv.
+[ran]
+"scripts/pi-role" = "exec scripts/pi-role"

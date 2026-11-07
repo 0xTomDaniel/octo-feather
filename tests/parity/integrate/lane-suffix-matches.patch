@@ -1,0 +1,14 @@
+Seeded defect: the lane match takes a suffix: worker branch gh7-x and lane gh70 match lane gh7 (docs/adr/0011).
+diff --git a/scripts/octo-feather-integrate b/scripts/octo-feather-integrate
+index c4b0464..8aa645b 100755
+--- a/scripts/octo-feather-integrate
++++ b/scripts/octo-feather-integrate
+@@ -46,7 +46,7 @@ shift
+ # The lane worktree is the one whose branch ends in the path segment of the lane key
+ # (docs/adr/0011): gh12 or a namespaced <prefix>/gh12. No suffix, so worker branches
+ # gh12-* and lane gh120 never match (likewise eng-123-*, eng-1230).
+-mapfile -t lanes < <(git worktree list --porcelain | awk -v re="(^|/)$n\$" '
++mapfile -t lanes < <(git worktree list --porcelain | awk -v re="(^|/)$n" '
+   /^worktree /{wt=substr($0, 10)} /^branch /{b=substr($0, 19); if (b ~ re) print wt "\t" b}')
+ if ((${#lanes[@]} != 1)); then
+   echo "octo-feather-integrate: need exactly one worktree on branch $n or <prefix>/$n, found ${#lanes[@]}" >&2

@@ -1,0 +1,12 @@
+Seeded defect: a start that makes a new workspace no longer runs the director reflection when due (comms #reflection-director).
+diff --git a/scripts/octo-feather-start b/scripts/octo-feather-start
+index e6aadbd..a47be94 100755
+--- a/scripts/octo-feather-start
++++ b/scripts/octo-feather-start
+@@ -100,6 +100,5 @@ spawned="$(spawn "$workspace")" || {
+   rc=$?; herdr workspace close "$workspace" >/dev/null 2>&1 || true; exit "$rc"; }
+ # The workspace's seed tab is a bare shell; the agent's tab is the only one left.
+ herdr tab close "$seed" >/dev/null
+-reflect_due
+ echo "workspace=$workspace $spawned"
+ [[ "$role" != director ]] || echo "octo-feather-start: next, send the director its /goal, then a kickoff brief filled from $root/docs/kickoff-brief.md" >&2
