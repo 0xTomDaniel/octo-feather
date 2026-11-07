@@ -1444,11 +1444,23 @@ def covered(mid: str, path: str) -> bool:
     return bool(m) and m.group(1) != mid
 
 
+def srt_set(k: str) -> bool:
+    """K is one of the variables srt sets in its sandbox for its network proxy (sandbox-utils.ts generateProxyEnvVars,
+    the Linux wrapper's --setenv), whose value inside is srt's own."""
+    return (
+        "proxy" in k.lower()
+        or k.startswith(("CLOUDSDK_PROXY_", "CLAUDE_CODE_HOST_"))
+        or k in ("SANDBOX_RUNTIME", "GIT_SSH_COMMAND", "GIT_CONFIG_PARAMETERS", "JAVA_TOOL_OPTIONS")
+    )
+
+
 def inner(cfgp: str, judge: list[str]) -> NoReturn:
     c: dict[str, Any] = json.load(open(cfgp))
     S, SCR, SB, HC, HERDR, WT = c["S"], c["SCR"], c["SB"], c["HC"], c["HERDR"], c["WT"]
     env = {k: v for k, v in os.environ.items() if k not in INPUTS}
-    env.update(c["env"])
+    # The judge's env over srt's, but srt's own network plumbing (its proxy vars, set by bwrap --setenv) kept: a caller
+    # inside an outer sandbox carries the outer srt's, which point at no proxy of this one (nested: a 407, no record).
+    env.update({k: v for k, v in c["env"].items() if not (k in os.environ and srt_set(k))})
     if c["shots"]:
         env["QC_SCREENSHOTS"] = c["env"]["QC_SCREENSHOTS"]
     # A loopback model host on the allowlist (a local provider): srt's NO_PROXY names loopback, which would send the
