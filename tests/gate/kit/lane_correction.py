@@ -25,8 +25,20 @@ def cr(at: str, cls: str, summary: str) -> str:
     return json.dumps(d | {"summary": summary}, separators=(",", ":"))
 
 
+LIST = (
+    'issue list --repo {} --state all --limit 1000 --search "correction-lane" in:title --json '
+    "number,title,state,closedAt"
+)
+# The number GitHub gives the next issue of each repo (its own sequence, per repo).
+FIRST = {"o/t": 901, KIT_REPO: 704}
+
+
 class Corr:
-    """A scratch state and tracker: lanes on target o/t, the reflector's replies recorded."""
+    """A scratch state and tracker: lanes on target o/t, the reflector's replies recorded. GitHub
+    is the testkit gh's recordings, armed before each command (arm): each repo's correction-lane
+    issue search answers what that repo holds then (`held`, the scenario's record of it), a new
+    issue in it the next number of its own sequence; what the command sent is read back from the
+    gh's requests (issues)."""
 
     def __init__(self, s: Scratch) -> None:
         self.s = s
@@ -38,10 +50,10 @@ class Corr:
         self.dlog = self.lanes.parent / "director.handoffs.jsonl"
         (self.lanes / "archive").mkdir(parents=True)
         self.dlog.write_text("")
-        # o/r's earlier issue: the issues filed here number after it, from 901 (GitHub numbers
-        # them across a repo's history; the fake gh after every stored one)
-        earlier = {"number": 900, "title": "an earlier issue", "state": "CLOSED"}
-        s.gh.store("issue/900.json", earlier)
+        self.held: dict[str, list[dict[str, object]]] = {r: [] for r in FIRST}
+        self.next = dict(FIRST)
+        self.filed: dict[int, dict[str, object]] = {}
+        self.seen = 0  # requests read so far
         self.none()
 
     def reply(self, who: str, *findings: str) -> None:
@@ -61,22 +73,48 @@ class Corr:
         )
         (d / f"{name}.handoffs.jsonl").write_text("".join(x + "\n" for x in lines))
 
+    def arm(self) -> None:
+        """The gh's recordings for the next command: each repo's search, its next new issues."""
+        tapes: dict[str, list[object]] = {}
+        for repo, held in self.held.items():
+            tapes[LIST.format(repo)] = [json.dumps(held) + "\n"]
+            n = self.next[repo]
+            tapes[f"GH_REPO={repo} issue create"] = [
+                f"https://github.com/{repo}/issues/{k}\n" for k in range(n, n + 4)
+            ]
+        self.s.gh.tape(tapes)
+
     def lane_cmd(self, *args: str) -> str:
+        """octo-feather-lane ARGS; each issue it filed (its create request, answered the repo's
+        next number) recorded in `filed` and held by its repo from then on."""
+        self.arm()
         r: Ran = self.s.run([kit("octo-feather-lane"), *args])
+        log = (self.s.gh.dir / "requests.jsonl").read_text().splitlines()
+        for line in log[self.seen :]:
+            req = json.loads(line)
+            m = re.fullmatch(
+                r"GH_REPO=(\S+) issue create --title (.*) --body-file -", req["request"]
+            )
+            if not m:
+                continue
+            repo, n = m.group(1), self.next[m.group(1)]
+            self.next[repo] = n + 1
+            d = {"number": n, "title": m.group(2), "state": "OPEN", "closedAt": None}
+            self.held[repo].append(d)
+            self.filed[n] = d | {"repo": repo, "body": req["body"]}
+        self.seen = len(log)
         return (r.out + ("\n" + r.err if r.err else "")).strip("\n")
 
     def issues(self) -> dict[int, dict[str, object]]:
-        """Every issue filed, by number, with its repo."""
-        top = self.s.gh.dir / "repo"
-        found: dict[int, dict[str, object]] = {}
-        for p in sorted(top.glob("*/*/issue/*.json")) if top.is_dir() else []:
-            d = json.loads(p.read_text())
-            found[int(d["number"])] = d | {"repo": f"{p.parents[2].name}/{p.parents[1].name}"}
-        return found
+        """Every issue filed, by number: its repo, title and body as sent."""
+        return self.filed
 
     def close(self, n: int, at: str) -> None:
-        p = next((self.s.gh.dir / "repo").glob(f"*/*/issue/{n}.json"))
-        p.write_text(json.dumps(json.loads(p.read_text()) | {"state": "CLOSED", "closedAt": at}))
+        """Issue N closed on GitHub at AT, as its repo's search answers from then on."""
+        for held in self.held.values():
+            for d in held:
+                if d["number"] == n:
+                    d |= {"state": "CLOSED", "closedAt": at}
 
 
 def filed(out: str, n: int, repo: str, cls: str, rest: str = "") -> None:
@@ -91,12 +129,13 @@ def none_filed(c: Corr, out: str, n: int) -> None:
 
 def lifecycle(s: Scratch) -> None:
     """acceptance-reflect-files-correction, -writer-route-lane: gh1 (archived) logged one dup-rule,
-    gh2's review the second, the director routes it: archive gh2 files 901 in o/t quoting both and
-    the route, key printed. Its issue open: a third finding files nothing; closed after the class's
-    latest finding: nothing; closed before a newer finding: files 902. acceptance-reflection-missed
-    -lane: a lane reflection-missed finding files at once in the target (903), a director one in
-    the kit's repo (904), each naming the question list; owner-caught classes twice in the
-    director log file nothing; the director reflection alone, no new finding, refiles nothing."""
+    gh2's review the second, the director routes it: archive gh2 files 901 in o/t quoting both
+    and the route, key printed. Its issue open: a third finding files nothing; closed after the
+    class's latest finding: nothing; closed before a newer finding: files 902. acceptance-
+    reflection-missed -lane: a lane reflection-missed finding files at once in the target (903),
+    a director one in the kit's repo (its own sequence: 704), each naming the question list;
+    owner-caught classes twice in the director log file nothing; the director reflection alone,
+    no new finding, refiles nothing."""
     c = Corr(s)
     c.lane(
         "gh1", cr("2026-10-20T00:00:00Z", "dup-rule", "gh1 restated the merge rule"), archived=True
@@ -154,14 +193,15 @@ def lifecycle(s: Scratch) -> None:
     )
     out = c.lane_cmd("archive", "gh6")
     filed(out, 903, "o/t", "reflection-missed ")
-    filed(out, 904, KIT_REPO, "reflection-missed ")
+    filed(out, 704, KIT_REPO, "reflection-missed ")
     by = c.issues()
     assert len(by) == 4, by.keys()
-    for n, quote in ((903, "reword undetected-rule"), (904, "add a stale-PR question")):
+    for n, quote in ((903, "reword undetected-rule"), (704, "add a stale-PR question")):
         assert "[correction-lane reflection-missed " in str(by[n]["title"]), by[n]
         assert "Changes: the question list, reflection/questions.json" in str(by[n]["body"]), by[n]
         assert quote in str(by[n]["body"]), by[n]
     assert not any("owner-caught" in str(i["title"]) for i in by.values()), by
+    assert [by[n]["repo"] for n in (901, 902, 903, 704)] == ["o/t", "o/t", "o/t", KIT_REPO], by
     c.none()
     none_filed(c, c.lane_cmd("reflect", "--director"), 4)
 

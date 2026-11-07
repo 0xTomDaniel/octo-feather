@@ -1,24 +1,26 @@
 """The scenarios of tests/gate/kit/test_lane_spend.py (its items), this file their command
 (testkit.main): scripts/octo-feather-lane spend (spec spend): totals by lane, purpose, model and
 day, unknown cost apart (rule-cost); the lane (rule-lane); append-only writes (rule-append); an
-unwritable ledger (rule-write-fails); the reconcile per window (acceptance-spend-reconcile),
-against the testkit's fake curl (testkit/curl.py, OpenRouter's GET /api/v1/key, which the kit
-does not own; its header says what it answers) first on PATH: never the network. Each rule as
-`octo-feather-lane --help` (spend) states it. Rows are read by tests/spend-out, as a command."""
+unwritable ledger (rule-write-fails); the reconcile per window (acceptance-spend-reconcile), against
+the testkit's fake curl (testkit/curl.py: OpenRouter's recorded answers to GET /api/v1/key, which
+the kit does not own; its header says what it replays) first on PATH: never the network. Each rule
+as `octo-feather-lane --help` (spend) states it. Rows are read by tests/spend-out, as a command."""
 
 from __future__ import annotations
 
 import datetime as dt
 import json
+import socket
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import HERE, ROOT, Ran, Scratch, kit, main
+from testkit import FIXTURES, HERE, ROOT, Ran, Scratch, kit, main
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 LANE = kit("octo-feather-lane")
+URL = "https://openrouter.ai/api/v1/key"
 SPEND_OUT = str(ROOT / "tests" / "spend-out")
 
 
@@ -37,15 +39,27 @@ class Spend:
 
     def __init__(self, s: Scratch) -> None:
         self.s = s
-        for k in ("HERDR_SESSION", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID", "FAKE_CURL_EXIT"):
+        for k in ("HERDR_SESSION", "HERDR_WORKSPACE_ID", "HERDR_PANE_ID"):
             s.env.pop(k, None)
         s.env |= {
             "XDG_STATE_HOME": str(s.root / "state"),
             "FAKE_CURL_DIR": str(s.root),
         }
         (s.bin / "curl").symlink_to(HERE / "curl.py")
+        rec = FIXTURES / "openrouter-key"
+        self.tape(
+            {
+                "sk-test-123": {"status": "200", "body": str(rec / "200.json")},
+                "sk-wrong": {"status": "401", "body": str(rec / "401.json")},
+            }
+        )
         self.state = s.root / "state" / "octo-feather"
         self.ledger = self.state / "spend.jsonl"
+
+    def tape(self, by_key: dict[str, dict[str, str]]) -> None:
+        """The fake curl's recordings (testkit/curl.py): GET /api/v1/key with each key's answer."""
+        tape = {f"GET {URL} Authorization: Bearer {k}": v for k, v in by_key.items()}
+        (self.s.root / "tape.json").write_text(json.dumps(tape))
 
     def record(self, text: str, *args: str, **env: str) -> Ran:
         return self.s.run([LANE, "spend", "record", *args], stdin=text, env=env)
@@ -147,11 +161,12 @@ def append_only(s: Scratch) -> None:
 
 
 def reconcile(s: Scratch) -> None:
-    """acceptance-spend-reconcile (the fake answers today $1.5, this week $2.5, this month $4.0):
-    the ledger column counts openrouter/* calls with a cost in the window, from each window's
-    first second; each session is its own ledger; the key never printed nor in curl's argv.
-    OPENROUTER_API_KEY wins over auth.json (a wrong env key gets the fake's 401). Unreachable
-    endpoint and no key: the reason prints, the totals still print, exit 0."""
+    """acceptance-spend-reconcile (OpenRouter's recorded answer for the key: today $0.00026376, this
+    week and this month $0.014446614): the ledger column counts openrouter/* calls with a cost
+    in the window, from each window's first second; each session is its own ledger; the key
+    never printed nor in curl's argv. OPENROUTER_API_KEY wins over auth.json (a wrong env key
+    gets OpenRouter's recorded 401). Unreachable endpoint (a real refused connection: a local
+    port nothing listens on) and no key: the reason prints, the totals still print, exit 0."""
     sp = Spend(s)
     now = dt.datetime.now(dt.UTC)
     day = now.replace(hour=0, minute=0, second=0, microsecond=0)
@@ -179,22 +194,26 @@ def reconcile(s: Scratch) -> None:
     rec("rc", (ab, "0.25", t_now), (ab, "null", t_now), ("anthropic/x", "7", t_now))
     rec("rc", (ab, "9", 1577836800))
     out = sp.spend(HERDR_SESSION="rc")
-    row(out, "today", ("$1.500000", "$0.250000", "$1.250000"), 1)
-    row(out, "this week", ("$2.500000", "$0.250000", "$2.250000"), 1)
-    row(out, "this month", ("$4.000000", "$0.250000", "$3.750000"), 1)
+    row(out, "today", ("$0.000264", "$0.250000", "-$0.249736"), 1)
+    row(out, "this week", ("$0.014447", "$0.250000", "-$0.235553"), 1)
+    row(out, "this month", ("$0.014447", "$0.250000", "-$0.235553"), 1)
     argv = s.root / "argv"
     assert "sk-test-123" not in out + argv.read_text(), "the key was printed or passed in argv"
     rec("d", (ab, "2", t_day), (ab, "0.125", t_day - 1))
-    row(sp.spend(HERDR_SESSION="d"), "today", ("$1.500000", "$2.000000", "-$0.500000"))
+    row(sp.spend(HERDR_SESSION="d"), "today", ("$0.000264", "$2.000000", "-$1.999736"))
     rec("w", (ab, "0.5", t_mon), (ab, "0.125", t_mon - 1))
-    row(sp.spend(HERDR_SESSION="w"), "this week", ("$2.500000", "$0.500000", "$2.000000"))
+    row(sp.spend(HERDR_SESSION="w"), "this week", ("$0.014447", "$0.500000", "-$0.485553"))
     rec("m", (ab, "1", t_m1), (ab, "0.125", t_m1 - 1))
-    row(sp.spend(HERDR_SESSION="m"), "this month", ("$4.000000", "$1.000000", "$3.000000"))
+    row(sp.spend(HERDR_SESSION="m"), "this month", ("$0.014447", "$1.000000", "-$0.985553"))
     out = sp.spend(HERDR_SESSION="rc", OPENROUTER_API_KEY="sk-wrong")
     want = "OpenRouter unavailable: GET https://openrouter.ai/api/v1/key: HTTP 401"
     assert want in out, f"wrong key not reported: {out}"
     assert "sk-wrong" not in out + argv.read_text(), "the env key was printed or passed in argv"
-    out = sp.spend(HERDR_SESSION="rc", FAKE_CURL_EXIT="7")
+    with socket.socket() as sk:  # a local port, closed again: nothing listens on it
+        sk.bind(("127.0.0.1", 0))
+        port = sk.getsockname()[1]
+    sp.tape({"sk-test-123": {"connect": f"127.0.0.1:{port}"}})
+    out = sp.spend(HERDR_SESSION="rc")
     want = "OpenRouter unavailable: GET https://openrouter.ai/api/v1/key: unreachable (curl: (7)"
     assert want in out, f"unreachable: {out}"
     assert "By model:" in out, f"unreachable: {out}"

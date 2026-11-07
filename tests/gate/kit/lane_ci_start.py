@@ -81,6 +81,8 @@ class Lane:
                     json.dumps({"total_count": 2, "jobs": skipped}) + "\n"
                 ],
                 f"{API}runs/2/jobs?per_page=100": jobs or [jobs_of("in_progress", "")],
+                # gh's answer to marking it ready (the PR as stored stays as read before)
+                "pr ready 7": ['\u2713 Pull request o/r#7 is marked as "ready for review"\n'],
             }
         )
 

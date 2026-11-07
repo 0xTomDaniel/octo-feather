@@ -387,23 +387,41 @@ def scratch_state(f: Feature) -> Path:
     return Path(r.stdout.strip())
 
 
-def fake_gh(kit: str, sc: Path) -> dict[str, str]:
-    """The scratch env that fakes GitHub: the testkit's gh (tests/gate/kit/testkit/gh.py, its store layout in its
-    docstring) first on PATH as `gh`, its store SC/gh, so a correction lane a reflection files and a report's reads
-    never reach GitHub (SKILL.md)."""
+CORRECTION_SEARCH = ('issue list --repo {} --state all --limit 1000 --search "correction-lane" in:title '
+                     "--json number,title,state,closedAt")
+TRACKERS = ("scratch/target", "0xTomDaniel/octo-feather")   # the drives' lane target and the kit's tracker
+
+
+def fake_gh(kit: str, sc: Path, held: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, str]:
+    """The scratch env that fakes GitHub: the testkit's gh (tests/gate/kit/testkit/gh.py, its store and its recordings
+    in its docstring) first on PATH as `gh`, its store SC/gh, so a correction lane a reflection files and a report's
+    reads never reach GitHub (SKILL.md). Its recordings for each tracker (TRACKERS): the correction-lane search answers
+    HELD's issues of that repo (none by default), a new issue there the next numbers of that repo, from 901."""
     (sc / "gh").mkdir(parents=True, exist_ok=True)
     (sc / "ghbin").mkdir(parents=True, exist_ok=True)
     if not (sc / "ghbin" / "gh").is_symlink():
         (sc / "ghbin" / "gh").symlink_to(Path(kit) / "tests" / "gate" / "kit" / "testkit" / "gh.py")
+    tape: dict[str, list[str]] = {}
+    for repo in TRACKERS:
+        tape[CORRECTION_SEARCH.format(repo)] = [json.dumps((held or {}).get(repo, [])) + "\n"]
+        tape[f"GH_REPO={repo} issue create"] = [f"https://github.com/{repo}/issues/{n}\n" for n in range(901, 905)]
+    (sc / "gh" / "tape.json").write_text(json.dumps(tape))
+    (sc / "gh" / "tape.n.json").unlink(missing_ok=True)
     return {"PATH": f"{sc / 'ghbin'}:{os.environ.get('PATH', '')}", "FAKE_GH": str(sc / "gh"), "GH_TOKEN": "verify-fake-gh"}
 
 
 def tracker_issues(sc: Path) -> list[dict[str, Any]]:
-    """Every issue the fake gh under SC holds (fake_gh), each with its repo, by number."""
-    found = [json.loads(p.read_text()) | {"repo": f"{p.parents[2].name}/{p.parents[1].name}"}
-             for p in (sc / "gh" / "repo").glob("*/*/issue/*.json")]
-    found += [json.loads(p.read_text()) | {"repo": "o/r"} for p in (sc / "gh" / "issue").glob("*.json")]
-    return sorted(found, key=lambda i: int(i["number"]))
+    """Every issue the commands filed through the fake gh under SC (fake_gh): each create it was sent, with its repo,
+    title, body and the number its recording answered (that repo's next, from 901), in order."""
+    log = sc / "gh" / "requests.jsonl"
+    found: list[dict[str, Any]] = []
+    for line in log.read_text().splitlines() if log.is_file() else []:
+        req = json.loads(line)
+        m = re.fullmatch(r"GH_REPO=(\S+) issue create --title (.*) --body-file -", req["request"])
+        if m:
+            n = 901 + sum(i["repo"] == m[1] for i in found)
+            found.append({"number": n, "repo": m[1], "title": m[2], "body": req["body"], "state": "OPEN", "closedAt": None})
+    return found
 
 
 def fresh_path(p: Path) -> None:
@@ -854,12 +872,15 @@ def drive_correction_intake(f: Feature) -> None:
                     r"(?m)^correction lane: filed \d+ in github-issues scratch/target for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
                     c.out) is not None)
     f.check("file-rule", filed)
-    # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates).
+    # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates): each tracker's
+    # recorded search answer holds them, beside the issue the archive filed.
+    held: dict[str, list[dict[str, Any]]] = {r: [] for r in TRACKERS}
+    for i in tracker_issues(sc):
+        held[i["repo"]].append({k: i[k] for k in ("number", "title", "state", "closedAt")})
     for n, repo, cls in ((951, "scratch/target", "slow-gate"), (952, "scratch/target", "one-lane"), (953, "0xTomDaniel/octo-feather", "one-lane")):
-        issue = sc / "gh" / "repo" / repo / "issue" / f"{n}.json"
-        issue.parent.mkdir(parents=True, exist_ok=True)
-        issue.write_text(json.dumps({"number": n, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
-                                     "state": "OPEN", "closedAt": None}))
+        held[repo].append({"number": n, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "state": "OPEN",
+                           "closedAt": None})
+    fake_gh(f.s.repo, sc, held)   # the recordings now; the env as armed above
     before = tracker_issues(sc)
     f.run("intake", "octo-feather-lane", "intake")
     f.obs("intake", "unchanged", "yes\n" if tracker_issues(sc) == before else "no\n")
