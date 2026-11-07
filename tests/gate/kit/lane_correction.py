@@ -99,7 +99,8 @@ class Corr:
                 continue
             repo, n = m.group(1), self.next[m.group(1)]
             self.next[repo] = n + 1
-            d = {"number": n, "title": m.group(2), "state": "OPEN", "closedAt": None}
+            d: dict[str, object] = {"number": n, "title": m.group(2), "state": "OPEN"}
+            d["closedAt"] = None
             self.held[repo].append(d)
             self.filed[n] = d | {"repo": repo, "body": req["body"]}
         self.seen = len(log)
