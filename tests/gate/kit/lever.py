@@ -4,7 +4,9 @@
 stopped by a signal once its copy is made (its `restored from` line, the readiness) removes the
 copy and exits 128 + the signal, past a copy a live lever holds (flock on its dir, as the lever's
 --help says), which it neither refuses nor touches; a lever beside a copy no lever holds (one
-stopped outright left it) refuses to start (exit 2), naming it, and makes no copy."""
+stopped outright left it) refuses to start (exit 2), naming it, and makes no copy. A `needs` file
+old_at holds executable (an old test's fake on PATH), gone from HEAD, comes back executable: the
+old test, which runs it, passes on the clean tree (#679)."""
 
 from __future__ import annotations
 
@@ -15,7 +17,7 @@ import subprocess
 import sys
 from typing import TYPE_CHECKING
 
-from testkit import Scratch, kit_repo, main, tool_homes
+from testkit import Scratch, kit_repo, main, pnpm_store, tool_homes
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -89,5 +91,57 @@ def stale(s: Scratch) -> None:
     sys.stdout.write(f"{r.err}\nkit copies after: {copies(k)}\n")
 
 
+NEED_CASE = """old = "tests/zz-need.sh"
+old_at = "HEAD~1"
+needs = ["tests/fixtures/zz-need/tool"]
+new = "tests/gate/kit/test_zz_need.py"
+"""
+
+
+def executable_need(s: Scratch) -> None:
+    """An old test that runs its executable need, both committed at old_at, both deleted at HEAD
+    (the case kept): in the lever's clean old run the old test finds its need executable, and says
+    so on the scenario's own pipe (a FIFO, its readiness: no wait on time); the lever is then
+    stopped (SIGTERM), its new run not needed."""
+    k = kit_repo(s)
+    fifo = s.root / "said"
+    os.mkfifo(fifo)
+    (k / "tests" / "zz-need.sh").write_text(
+        "#!/usr/bin/env bash\n"
+        'need="$(dirname "$0")/fixtures/zz-need/tool"\n'
+        'if [ -x "$need" ]; then echo executable; else echo "not executable"; fi >"$ZZ_NEED_SAID"\n'
+        'exec "$need"\n'
+    )
+    (k / "tests" / "zz-need.sh").chmod(0o755)
+    tool = k / "tests" / "fixtures" / "zz-need" / "tool"
+    tool.parent.mkdir(parents=True)
+    tool.write_text("#!/bin/sh\nexit 0\n")
+    tool.chmod(0o755)
+    s.git(k, "add", "-A")
+    s.git(k, "-c", "core.hooksPath=/dev/null", "commit", "-qm", "old test and its need")
+    s.git(k, "rm", "-q", "tests/zz-need.sh", str(tool))
+    (k / "tests" / "parity" / "zz-need").mkdir()
+    (k / "tests" / "parity" / "zz-need" / "case.toml").write_text(NEED_CASE)
+    s.git(k, "add", "-A")
+    s.git(k, "-c", "core.hooksPath=/dev/null", "commit", "-qm", "rewritten: old test gone")
+    env = s.env | tool_homes() | {"npm_config_store_dir": pnpm_store(), "ZZ_NEED_SAID": str(fifo)}
+    p = subprocess.Popen(
+        [sys.executable, str(k / "tests" / "parity" / "lever.py"), "zz-need"],
+        cwd=k,
+        env=env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    signal.alarm(120)  # a lever that never reaches the old test fails the case, never hangs it
+    with fifo.open() as f:
+        said = f.read().strip()
+    signal.alarm(0)
+    p.send_signal(signal.SIGTERM)
+    out, err = p.communicate()
+    assert said == "executable", f"the old test's need, restored: {said}\n{out}\n{err}"
+    sys.stdout.write(f"the old test's need, restored by the lever: {said}\n")
+
+
 if __name__ == "__main__":
-    main(interrupted, stale)
+    main(interrupted, stale, executable_need)

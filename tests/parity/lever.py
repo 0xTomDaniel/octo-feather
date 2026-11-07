@@ -6,7 +6,8 @@
 CASE is a dir here, tests/parity/CASE/: case.toml names the old test (`old`, a tests/*.sh
 path, and `old_at`, a commit holding it, as it is gone from HEAD once parity holds), every
 file under tests/ the old test needs at old_at (`needs`: the libraries it sources, the fixtures
-and helpers it runs or reads; a dir stands for every file under it), the new test (`new`, a
+and helpers it runs or reads; a dir stands for every file under it; each restored with its mode
+there, an executable one executable), the new test (`new`, a
 pytest path), and how the old run shows it ran each file a defect patches (`ran`, file: fact);
 each *.patch there is one seeded defect in a kit command, its first line saying what it breaks.
 In one scratch copy of the kit's files (tracked, and new ones git would track), a git repo,
@@ -136,19 +137,25 @@ def copy(dest: Path) -> None:
 
 def old_files(old: str, old_at: str, needs: list[str]) -> dict[str, bytes]:
     """The old test and each file of NEEDS (a dir: every file under it) at OLD_AT, by path;
-    refused when OLD_AT lacks one."""
+    refused when OLD_AT lacks one. EXECUTABLE: those OLD_AT holds as mode 100755 (git ls-tree)."""
     out: dict[str, bytes] = {}
     for n in [old, *needs]:
-        listed = git("ls-tree", "-r", "--name-only", old_at, "--", n).stdout.decode().split()
+        rows = git("ls-tree", "-r", "-z", old_at, "--", n).stdout.decode().split("\0")
+        listed = [r.split("\t", 1) for r in rows if r]
         if not listed:
             refuse(
                 f"{n} is not at {old_at}: drop it from needs, or set old_at to a commit holding it"
             )
-        for p in listed:
+        for meta, p in listed:
             body = at(old_at, p)
             assert body is not None, p
             out[p] = body
+            if meta.split()[0] == "100755":
+                EXECUTABLE.add(p)
     return out
+
+
+EXECUTABLE: set[str] = set()  # restored paths old_at holds executable (old_files)
 
 
 def referenced(old: str, files: dict[str, bytes]) -> list[str]:
@@ -362,6 +369,7 @@ class Lever:
         for p, body in files.items():
             (k / p).parent.mkdir(parents=True, exist_ok=True)
             (k / p).write_bytes(body)
+            (k / p).chmod(0o755 if p in EXECUTABLE else 0o644)  # its mode at old_at
         (k / old).chmod(0o755)
         git("add", "-A", cwd=k)
         log = logs / f"{name}.old.log"
