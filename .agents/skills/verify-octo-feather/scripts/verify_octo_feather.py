@@ -2598,7 +2598,7 @@ def drive_starter_acceptance(f: Feature) -> None:
              "OCTO_FEATHER_QC_PATH": classify_stub(f, sc)}
     env = {**os.environ, **f.env}
     cid = "app#acceptance-hello-json"
-    tests = {"python": "tests/e2e/test_cli_e2e.py", "typescript": "tests/cli.e2e.test.ts"}
+    tests = {"python": "tests/integration/test_cli.py", "typescript": "tests/cli.test.ts"}  # the light acceptance tests
     rid = r"([0-9]{8}T[0-9]{6}Z-[0-9a-f]{8})"
     for lang, test in tests.items():
         r = sc / lang

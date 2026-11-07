@@ -23,7 +23,8 @@ export default defineConfig({
           globalSetup: ["tests/shared-fixture.ts"],
         },
       },
-      // No per-test timeout, as pytest has none: a tagged test told the claims runs its command in the qc sandbox.
+      // No per-test timeout, as pytest has none; a tagged test sets its own to none, as told the claims it runs its command
+      // in the qc sandbox (tests/cli.test.ts).
       { test: { name: "e2e", include: ["tests/**/*.e2e.test.ts"], testTimeout: 0 } },
       { test: { name: "gate", include: ["tests/gate.test.ts"] } },
     ],
