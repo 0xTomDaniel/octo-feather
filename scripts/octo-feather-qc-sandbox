@@ -425,11 +425,10 @@ class Recorder:
                     "result": f"offline gh refused: {r['why']}",
                 }
             )
-        elif (
-            t == "net" and self.live
-        ):  # srt refused a host (its proxy's log line, read setup-side): once per host
-            host = f"{m.get('host', '')}:{m.get('port', '')}"
-            if host not in self.net:
+        elif t == "net" and self.live:
+            # an srt violation (srt_log): a refused host recorded once per host, any other violation whole
+            host = f"{m.get('host', '')}:{m.get('port', '')}" if "host" in m else ""
+            if host and host not in self.net:
                 self.net.add(host)
                 self.emit(
                     {
@@ -437,7 +436,17 @@ class Recorder:
                         "attempt": True,
                         "refused": True,
                         "what": f"connect {host}",
-                        "result": f"srt refused: {host} not in the network allowlist",
+                        "result": f"srt refused: {m.get('why', '')}",
+                    }
+                )
+            elif not host:
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": str(m.get("line", "")),
+                        "result": "srt violation (no host in srt's line)",
                     }
                 )
         elif t == "cred":
@@ -682,13 +691,15 @@ def srt_js() -> tuple[str, str, str]:
     got = ""
     with contextlib.suppress(OSError, ValueError):
         got = json.load(open(f"{SK}/node_modules/{SRT_PKG}/package.json")).get("version", "")
-    js = os.path.realpath(f"{SK}/node_modules/{SRT_PKG}/dist/cli.js")
+    js = os.path.realpath(
+        f"{SK}/node_modules/{SRT_PKG}/dist/cli.js"
+    )  # the package's own entry, there iff installed
     if not pin or got != pin or not os.path.isfile(js):
         die(
             f"srt ({SRT_PKG} {pin or 'unpinned'}, the kit's package.json and pnpm-lock.yaml) not installed in "
             f"{SK}/node_modules (found: {got or 'none'}): run pnpm install --frozen-lockfile --dir {SK}"
         )
-    return js, got, os.path.realpath(f"{SK}/node_modules")
+    return os.path.dirname(os.path.dirname(js)), got, os.path.realpath(f"{SK}/node_modules")
 
 
 def srt_node(data: str) -> str:
@@ -707,36 +718,39 @@ def srt_node(data: str) -> str:
 
 
 def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Recorder) -> None:
-    """srt's stderr (run with -d): each refused host sent to the recorder as {"t": "net"}; every other line kept for
-    the caller only until the inner has started (srt's own failure to start it), then dropped (its debug log)."""
-    blocked = re.compile(
-        rb"\[SandboxDebug\] (?:Connection|HTTP request) blocked to (\S+):(\d+)\s*$"
-    )
+    """srt's stderr: each violation line (SRT_SHIM) sent to the recorder as {"t": "net"}, a network refusal's host,
+    port and srt's reason read from it, any other violation sent whole (recorded, never dropped); srt's other lines
+    kept for the caller until the inner has started (shown when srt never started it), passed through after."""
+    deny = re.compile(r"deny network-outbound (\S+):(\d+) \((.*)\)$")
     assert p.stderr is not None
     for ln in p.stderr:
-        m = blocked.match(ln)
-        if m:
-            c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
-            try:
-                c.connect(sock)
-                c.send(
-                    json.dumps(
-                        {
-                            "t": "net",
-                            "host": m.group(1).decode(errors="replace"),
-                            "port": int(m.group(2)),
-                        }
-                    ).encode()
-                )
-                c.shutdown(socket.SHUT_WR)
-                while c.recv(16):
-                    pass
-            except OSError:
+        if not ln.startswith(b"QC-SRT-VIOLATION "):
+            if rec.hello:
+                sys.stderr.write(ln.decode(errors="replace"))
+            else:
+                early.append(ln.decode(errors="replace"))
+            continue
+        try:
+            line = str(json.loads(ln[len(b"QC-SRT-VIOLATION ") :]).get("line", ""))
+        except ValueError:
+            line = ln.decode(errors="replace").strip()
+        m = deny.search(line)
+        msg = (
+            {"t": "net", "host": m.group(1), "port": m.group(2), "why": m.group(3)}
+            if m
+            else {"t": "net", "line": line}
+        )
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        try:
+            c.connect(sock)
+            c.send(json.dumps(msg).encode())
+            c.shutdown(socket.SHUT_WR)
+            while c.recv(16):
                 pass
-            finally:
-                c.close()
-        elif not rec.hello and not ln.startswith(b"[SandboxDebug]"):
-            early.append(ln.decode(errors="replace"))
+        except OSError:
+            pass
+        finally:
+            c.close()
 
 
 def setup(judge: list[str]) -> NoReturn:
@@ -953,7 +967,7 @@ def setup(judge: list[str]) -> NoReturn:
                     f"mise doctor --json (exit {r.returncode}) printed no dirs.{d}: mise's dirs unknown"
                 )
             menv[f"MISE_{d.upper()}_DIR"] = E.get(f"MISE_{d.upper()}_DIR") or x
-    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), sjs]
+    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), "--input-type=module", "-e", SRT_SHIM, sjs]
     # 2. the run tmpfs: overlay upper and work dirs, Pi copies.
     for c in (",", ":"):
         if c in WT:
@@ -1257,15 +1271,11 @@ def setup(judge: list[str]) -> NoReturn:
     # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
     # discarded with the overlay anyway. The inner enters the caller's dir.
     os.makedirs(f"{SCR}/cwd")
-    # srt with -d: its proxy logs each host it refuses ("... blocked to HOST:PORT"), its one report of one (the CLI
-    # prints no violation summary); read here, each refusal sent to the recorder. The inner takes this process's
-    # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own log; it is shown
-    # only when srt never started the inner (its own error then).
+    # srt's violations (SRT_SHIM) on its stderr, read here, each sent to the recorder. The inner takes this process's
+    # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own.
     p = subprocess.Popen(
         [
             *srt,
-            "-d",
-            "--settings",
             f"{SCR}/srt.json",
             "--",
             py,
@@ -1437,9 +1447,7 @@ def covered(mid: str, path: str) -> bool:
 def inner(cfgp: str, judge: list[str]) -> NoReturn:
     c: dict[str, Any] = json.load(open(cfgp))
     S, SCR, SB, HC, HERDR, WT = c["S"], c["SCR"], c["SB"], c["HC"], c["HERDR"], c["WT"]
-    env = {
-        k: v for k, v in os.environ.items() if k not in INPUTS and k != "SRT_DEBUG"
-    }  # srt -d's, for its own log
+    env = {k: v for k, v in os.environ.items() if k not in INPUTS}
     env.update(c["env"])
     if c["shots"]:
         env["QC_SCREENSHOTS"] = c["env"]["QC_SCREENSHOTS"]
