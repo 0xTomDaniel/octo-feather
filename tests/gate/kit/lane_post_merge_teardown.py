@@ -352,11 +352,5 @@ def kept(s: Scratch) -> None:
     assert w.branch_on(w.origin, bare=True), "the remote branch was deleted before the retarget"
 
 
-# Every scenario above in one gate item (testkit.together).
-LANE_POST_MERGE_TEARDOWN = together(
-    "lane_post_merge_teardown", not_archived, own_space, no_ci, shared_space, kept
-)
-
-
 if __name__ == "__main__":
     main(not_archived, own_space, no_ci, shared_space, kept)
