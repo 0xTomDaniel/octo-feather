@@ -1,0 +1,14 @@
+Seeded defect: externalSkills are looked up only in the current checkout, never the main one a lane worktree belongs to (pi-role --help, externalSkills).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index ea12cfc..2a7d82e 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -226,7 +226,7 @@ def repo_skill_roots(cwd="."):
+         return r.stdout.strip() if r.returncode == 0 else ""
+     tops = [git("rev-parse", "--show-toplevel") or os.path.abspath(cwd)]
+     common = git("rev-parse", "--path-format=absolute", "--git-common-dir")
+-    if common.endswith("/.git"):
++    if common.endswith("/.git/"):
+         tops.append(os.path.dirname(common))
+     roots = []
+     for t in tops:

@@ -1,0 +1,14 @@
+Seeded defect: the template's files are added without -f: the caller's ignore rules drop some (octo-feather-new-repo).
+diff --git a/scripts/octo-feather-new-repo b/scripts/octo-feather-new-repo
+index 9c619c5..4969d17 100755
+--- a/scripts/octo-feather-new-repo
++++ b/scripts/octo-feather-new-repo
+@@ -75,7 +75,7 @@ mkdir -p "$dest"
+ git -C "$dest" init -q -b main
+ # Exactly the template's list: -f so the caller's ignore rules (core.excludesFile,
+ # global gitignore) or the template's own .gitignore cannot drop a tracked file.
+-printf '%s\0' "${files[@]}" | git -C "$dest" --literal-pathspecs add -f --pathspec-from-file=- --pathspec-file-nul
++printf '%s\0' "${files[@]}" | git -C "$dest" --literal-pathspecs add --pathspec-from-file=- --pathspec-file-nul
+ [[ "$(git -C "$dest" ls-files -z | tr '\0' '\n' | sort)" == "$(printf '%s\n' "${files[@]}" | sort)" ]] \
+   || { echo "$me: staged files differ from templates/$lang's tracked files" >&2; false; }
+ git -C "$dest" -c core.hooksPath=/dev/null commit -q -m "Initial commit from octo-feather templates/$lang @ $sha"

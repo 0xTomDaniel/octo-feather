@@ -14,9 +14,11 @@ missing fixture fails naming it.
 
 from __future__ import annotations
 
+import contextlib
 import fcntl
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -26,7 +28,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Callable, Generator, Mapping, Sequence
 
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[3]
@@ -41,8 +43,10 @@ FAKES = {
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
 # way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
 # too), gh.py (above) on a PATH of its own, git_refused.py (a git remote refusing credentials,
-# as `git`), and argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls); each
-# file's header says what it answers.
+# as `git`), argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls) and uname.sh
+# (another OS, as `uname`); each file's header says what it answers. A model provider is no
+# command: provider.py serves Pi's provider boundary on 127.0.0.1 (started by `provider`, below;
+# its header says what it answers); nor is an MCP server: mcp_stub.py, as an mcp.json names it.
 # Unset in every scenario: a user's config, state and auth, a Herdr pane's session, and a check
 # run's marker (a scenario's commands start outside any check run: scripts/check-gate-free).
 CLEARED = (
@@ -289,6 +293,93 @@ def pnpm_store() -> str:
     asked; one store for the kit and its test copies, owner ruling #422), for
     npm_config_store_dir."""
     return asked("pnpm", "store", "path")
+
+
+# settled's reaper: this process the subreaper of what CMD starts (prctl PR_SET_CHILD_SUBREAPER,
+# 36), so a process CMD leaves behind, detached or not, is reparented here; its own children
+# waited for until none is left (ECHILD: no descendant can live without a live child of this one).
+REAPER = """import ctypes, os, subprocess, sys
+libc = ctypes.CDLL(None, use_errno=True)
+assert libc.prctl(36, 1, 0, 0, 0) == 0, "testkit: no subreaper (Linux only)"
+rc = subprocess.call(sys.argv[1:])
+while True:
+    try:
+        os.wait()
+    except ChildProcessError:
+        break
+sys.exit(rc)
+"""
+
+
+def settled(cmd: Sequence[str]) -> list[str]:
+    """CMD as a command that exits, with CMD's exit, only once CMD and every process it started,
+    detached ones too (a Pi extension's unref'd writer or herdr-say), have exited: readiness
+    through the process tree this command owns, never a wait and never another process's /proc.
+    Linux only."""
+    return [sys.executable, "-c", REAPER, *cmd]
+
+
+# Spec Chat's installer (scripts/install-spec-chat of a Spec Chat clone; the pinned extract,
+# check-vendored --extract spec-chat, holds only its skills): the stand-in records its argv in the
+# clone's `argv` (one per line), links the three skills into PREFIX/.agents/skills (a present link
+# kept), writes its onboarding state under XDG_STATE_HOME, and says where it linked, as the real
+# one does.
+SPEC_CHAT_INSTALLER = """#!/usr/bin/env bash
+set -euo pipefail
+root="$(cd "$(dirname "$0")/.." && pwd -P)"
+printf '%s\\n' "$@" > "$root/argv"
+prefix=""; while [[ $# -gt 0 ]]; do [[ "$1" == --prefix ]] && { prefix="$2"; shift; }; shift; done
+mkdir -p "$prefix/.agents/skills" "$XDG_STATE_HOME/spec-chat"
+for p in spec-chat-shape:shape-spec spec-chat-review:review-spec repair-specs:repair-specs; do
+  to="$prefix/.agents/skills/${p%%:*}"
+  [[ -L "$to" ]] || ln -s "$root/skill/${p#*:}" "$to"
+done
+echo 'status = "pending"' > "$XDG_STATE_HOME/spec-chat/onboarding.toml"
+echo "fake installer: linked into $prefix"
+"""
+
+
+def spec_chat_clone(d: Path) -> Path:
+    """A Spec Chat clone at D (for SPEC_CHAT_CLONE): its three skills and the installer stand-in
+    (SPEC_CHAT_INSTALLER, above)."""
+    for name in ("shape-spec", "review-spec", "repair-specs"):
+        (d / "skill" / name).mkdir(parents=True)
+        (d / "skill" / name / "SKILL.md").write_text(f"# {name}\n")
+    (d / "scripts").mkdir()
+    (d / "scripts" / "install-spec-chat").write_text(SPEC_CHAT_INSTALLER)
+    (d / "scripts" / "install-spec-chat").chmod(0o755)
+    return d
+
+
+@contextlib.contextmanager
+def provider(*args: str) -> Generator[int]:
+    """The fake model provider (testkit/provider.py, ARGS its own) serving while the block runs: its
+    port, read off its own stdout pipe once it listens (readiness, never a wait); stopped after."""
+    p = subprocess.Popen(
+        [sys.executable, str(HERE / "provider.py"), *args], stdout=subprocess.PIPE, text=True
+    )
+    try:
+        line = p.stdout.readline() if p.stdout else ""
+        assert line.strip().isdigit(), f"testkit: the fake provider did not start: {line!r}"
+        yield int(line)
+    finally:
+        p.kill()
+        p.wait()
+
+
+def real_pi(tag: str, *, pinned: bool = True) -> str:
+    """The real pi on the caller's PATH (never testkit's stand-in), PINNED: at the kit's pin
+    (pi-version), else failing naming the install command; its path."""
+    pin = (ROOT / "pi-version").read_text().strip()
+    install = f"npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{pin}"
+    pi = shutil.which("pi", path=os.environ["PATH"])
+    assert pi, f"{tag}: pi not on PATH; install Pi {pin}: {install}"
+    if not pinned:
+        return pi
+    v = subprocess.run([pi, "--version"], capture_output=True, text=True, check=False)
+    got = next(iter(re.findall(r"[0-9]+\.[0-9]+\.[0-9]+", v.stdout + v.stderr)), "no version")
+    assert got == pin, f"{tag}: pi reports {got}, the kit pins {pin} (pi-version); {install}"
+    return pi
 
 
 def main(*scenarios: Callable[..., None]) -> None:

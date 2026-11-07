@@ -1,4 +1,4 @@
-// Test fixture for tests/spend-ledger.sh: a tool that reports nested model work, as Pi's tool
+// Test fixture for tests/gate/kit/spend_ledger.py: a tool that reports nested model work, as Pi's tool
 // contract asks a tool that makes model calls to do (docs/extensions.md, Tools: "include their
 // usage in the result"). Its usage is literal: 7 tokens in, 3 out, $0.004.
 export default function (pi: any) {

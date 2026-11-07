@@ -14,7 +14,12 @@ appends a comment, its id the next of the store's (as GitHub's, unique across PR
 repos/o/r/issues/comments/ID` replaces that comment's body; each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
-$FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
+$FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent.
+Issue writes as gh 2.x makes them: `issue create --title T --body-file F|- [--parent N]
+[--blocked-by N,...]` stores issue/M.json, M the highest stored number + 1, and prints its URL;
+`issue comment N --body-file F|-` appends a comment to issue N, its id the next of the store's
+issue comments (1001 first), and prints its URL; `issue close N` sets it CLOSED, saying so on
+stderr, or, already closed, says that on stderr, exit 0; a stored issue N is required. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 Anything else exits 2 naming it.
@@ -27,7 +32,7 @@ import sys
 
 # A process per gh call: it starts light (no site, -S above; os.path, not pathlib or typing, each
 # ~5 ms of import on every call).
-# ruff: noqa: PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
+# ruff: noqa: PTH103, PTH110, PTH112, PTH113, PTH118, PTH123, PTH208
 STORE = os.environ["FAKE_GH"]
 RAW = ["-H", "Accept: application/vnd.github.raw"]
 
@@ -155,6 +160,61 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def flag(a: list[str], name: str) -> str | None:
+    return a[a.index(name) + 1] if name in a else None
+
+
+def body(a: list[str]) -> str:
+    """The --body-file's text, standard input for -."""
+    f = flag(a, "--body-file") or "-"
+    return sys.stdin.read() if f == "-" else read(f)
+
+
+def issues() -> dict[int, dict[str, object]]:
+    d = at("issue")
+    names = os.listdir(d) if os.path.isdir(d) else []
+    return {int(f[:-5]): json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")}
+
+
+def count(x: object) -> int:
+    """The length of X, a stored list, else 0."""
+    return len(x) if isinstance(x, list) else 0  # pyright: ignore[reportUnknownArgumentType]
+
+
+def issue_write(a: list[str]) -> None:
+    """`issue create|comment|close` (the module docstring)."""
+    held = issues()
+    if a[1] == "create":
+        n = max(held, default=0) + 1
+        d: dict[str, object] = {"number": n, "title": flag(a, "--title"), "body": body(a)}
+        d |= {"state": "OPEN", "comments": []}
+        url = f"https://github.com/o/r/issues/{n}"
+    else:
+        n = int(a[2])
+        if n not in held:
+            die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
+        d = held[n]
+        title = f"o/r#{n} ({d.get('title')})"
+        if a[1] == "close" and d.get("state") == "CLOSED":
+            sys.stderr.write(f"! Issue {title} is already closed\n")
+            return
+        if a[1] == "close":
+            d["state"] = "CLOSED"
+            sys.stderr.write(f"\u2713 Closed issue {title}\n")
+            url = ""
+        else:
+            cid = 1001 + sum(count(x.get("comments")) for x in held.values())
+            url = f"https://github.com/o/r/issues/{n}#issuecomment-{cid}"
+            had = d.get("comments")
+            mine = {"author": {"login": "sup"}, "body": body(a), "url": url}
+            d["comments"] = [*(had if isinstance(had, list) else []), mine]
+    os.makedirs(at("issue"), exist_ok=True)
+    with open(at("issue", f"{n}.json"), "w") as f:
+        f.write(json.dumps(d))
+    if url:
+        sys.stdout.write(url + "\n")
+
+
 def main(a: list[str]) -> None:
     with open(at("log"), "a") as f:
         f.write(" ".join(a) + "\n")
@@ -167,6 +227,8 @@ def main(a: list[str]) -> None:
         view(a)
     elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
         listed(a)
+    elif two in (("issue", "create"), ("issue", "comment"), ("issue", "close")):
+        issue_write(a)
     elif two == ("repo", "view"):
         out(pick(json.loads(read(at("repo.json"))), a))
     elif two == ("pr", "diff"):

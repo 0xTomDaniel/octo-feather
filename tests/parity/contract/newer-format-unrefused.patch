@@ -1,0 +1,14 @@
+Seeded defect: a format version above the supported ones is not refused as unsupported (octo-feather-contract; quality#qc-contract).
+diff --git a/scripts/octo-feather-contract b/scripts/octo-feather-contract
+index 6b7af05..e2e0b21 100755
+--- a/scripts/octo-feather-contract
++++ b/scripts/octo-feather-contract
+@@ -94,7 +94,7 @@ def main(argv):
+     if type(fmt) is not int:
+         print(f"{ME}: {path}: format must be an integer (the contract's format version; supported: {have})", file=sys.stderr)
+         return 1
+-    if fmt not in versions:
++    if fmt not in versions and fmt < 3:
+         print(f"{ME}: {path}: format {fmt} is not a supported format version (supported: {have})", file=sys.stderr)
+         return 1
+     schema_path = os.path.join(SCHEMAS, f"qc.v{fmt}.schema.json")

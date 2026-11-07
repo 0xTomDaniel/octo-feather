@@ -1,0 +1,14 @@
+Seeded defect: pi-role no longer passes --no-mcp to a role not listing web, so the user's and the project's MCP servers reach it (spec roles#acceptance-web-no-other-mcp).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index ea12cfc..6386784 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -289,7 +289,7 @@ def launch(path: str, *, to_file: bool = False):
+     if "tools" in fm:
+         tools = [t for t in role_tools if t != WEB] + ["codemode"] + (web_patterns(kit) if web else [])
+         args += ["--tools", ",".join(tools)] if fm["tools"] else ["--no-tools"]
+-    args += [] if web else ["--no-mcp"]
++    args += []
+     args += ["--no-skills"]
+     roots = skill_roots(path)
+     for e in EXTENSIONS:

@@ -1,0 +1,14 @@
+Seeded defect: on macOS the project session is not the target top's dir name (octo-feather-start: HERDR_SESSION).
+diff --git a/scripts/octo-feather-start b/scripts/octo-feather-start
+index e6aadbd..4f0b51e 100755
+--- a/scripts/octo-feather-start
++++ b/scripts/octo-feather-start
+@@ -64,7 +64,7 @@ fi
+ ! git -C "$cwd" rev-parse --is-inside-work-tree >/dev/null 2>&1 || "$root/scripts/octo-feather-exclude" "$cwd" >&2
+ if [[ "$(uname -s)" == Darwin && -z "${HERDR_SESSION:-}" && -z "${HERDR_PANE_ID:-}" ]]; then
+   top="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null || (cd "$cwd" && pwd -P))"
+-  export HERDR_SESSION="${top##*/}"
++  export HERDR_SESSION="${top%%/*}"
+   echo "octo-feather-start: HERDR_SESSION=$HERDR_SESSION (the project's; set HERDR_SESSION to choose another)" >&2
+   herdr session list 2>/dev/null | awk -v s="$HERDR_SESSION" '$1 == s && $2 == "running" {f=1} END {exit !f}' \
+     || { echo "octo-feather-start: Herdr session $HERDR_SESSION is not running; start it in a terminal with: herdr --session $HERDR_SESSION" >&2; exit 69; }

@@ -1,0 +1,18 @@
+Seeded defect: a rerun appends each link's exclude line again (octo-feather-spec-chat: ignored once).
+diff --git a/scripts/octo-feather-spec-chat b/scripts/octo-feather-spec-chat
+index 4ff884e..6d7cc25 100755
+--- a/scripts/octo-feather-spec-chat
++++ b/scripts/octo-feather-spec-chat
+@@ -35,10 +35,8 @@ for l in "$repo"/.agents/skills/*; do
+   dest="$(realpath -m "$l")"
+   [[ "$dest" == "$clone"/* ]] || continue
+   line="/.agents/skills/$(basename "$l")"
+-  if ! grep -qxF "$line" "$exclude"; then
+-    [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
+-    echo "$line" >> "$exclude"
+-  fi
++  [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
++  echo "$line" >> "$exclude"
+   n=$((n + 1))
+ done
+ echo "$me: $n Spec Chat skill links in $repo/.agents/skills, ignored in $exclude"

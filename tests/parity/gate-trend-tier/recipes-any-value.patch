@@ -1,0 +1,14 @@
+Seeded defect: any GATE_RECIPES value passes as the justfile's: a run carrying only part of the static steps says full (tests/gate/conftest.py, tier; #536).
+diff --git a/tests/gate/conftest.py b/tests/gate/conftest.py
+index 4330c85..d6293b4 100644
+--- a/tests/gate/conftest.py
++++ b/tests/gate/conftest.py
+@@ -125,7 +125,7 @@ def _static_short(root: Path) -> bool:
+     if p.returncode:
+         return "No justfile found" not in p.stderr
+     declared = json.loads(p.stdout).get("assignments", {}).get("GATE_RECIPES")
+-    return declared is not None and declared.get("value") != os.environ.get("GATE_RECIPES")
++    return declared is not None and not os.environ.get("GATE_RECIPES")
+ 
+ 
+ def _tier(config: pytest.Config) -> str:

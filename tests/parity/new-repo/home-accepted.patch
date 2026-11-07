@@ -1,0 +1,14 @@
+Seeded defect: DEST may be the caller's HOME: no longer refused (octo-feather-new-repo).
+diff --git a/scripts/octo-feather-new-repo b/scripts/octo-feather-new-repo
+index 9c619c5..b4eb46b 100755
+--- a/scripts/octo-feather-new-repo
++++ b/scripts/octo-feather-new-repo
+@@ -32,7 +32,7 @@ known=0; for l in "${langs[@]}"; do [[ "$l" == "$lang" ]] && known=1; done
+ 
+ dest="$(realpath -m -- "$dest_arg")"
+ home="$(realpath -m -- "$HOME")"
+-[[ "$dest" != "$home" && "$dest" != / ]] \
++[[ "$dest" != / ]] \
+   || { echo "$me: DEST $dest is your HOME or /; pass a new directory for the repo, e.g. $home/src/NAME" >&2; exit 1; }
+ [[ ! -e "$dest" || -d "$dest" ]] || { echo "$me: DEST $dest exists and is not a directory; pass a new path" >&2; exit 1; }
+ if [[ -d "$dest" && -n "$(ls -A "$dest")" ]]; then
