@@ -35,4 +35,4 @@ Not separating: acceptance quality#acceptance-qa-fails-before is not met by thes
 
 - The skill change is reverted (c2b8444): the old wording already blocks an extension with no Prior art line, 6/6 baseline runs (3 train, 3 held-out) in the run above; no prose without a behaviour it adds. `.agents/skills/code-review/SKILL.md` and its patch equal B 9fd7bff; `just check-vendored` ok.
 - The three cases stay as regression cases (docs/owed-evals/690.md).
-- prior-art-extends-stated re-fixtured (91dbc29): head python-app-yaml-reader-crew, a one-key extension (`crew:` read as `names:` is) with a PyYAML Prior art line and its reason, so the negative tests the line, not parser edge cases. Its 3-run check at the head: pending the eval slot.
+- prior-art-extends-stated re-fixtured (91dbc29): head python-app-yaml-reader-crew, a one-key extension (`crew:` read as `names:` is) with a PyYAML Prior art line and its reason, so the negative tests the line, not parser edge cases. Its 3-run check at fe4480e: `scripts/octo-feather-qa --case prior-art-extends-stated --runs 3`, run 20261107T034959Z-da929c: PASS 3/3 (`Verdict: clear` each run, 75 to 81 s each), no flags.
