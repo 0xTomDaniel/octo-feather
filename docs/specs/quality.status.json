@@ -278,13 +278,16 @@
     "acceptance-qc-sandbox-maintained": {
       "status": "built",
       "pr": 698,
-      "record": "20261107T000321Z-26a56638",
-      "commit": "135151dd3b233ac19ddd0b3d79074ad600a9f28e",
+      "record": "20261107T040459Z-bfa05d62",
+      "commit": "cb7a415ec34fbfbcf3915c12b8984182df01fbf2",
       "tests": []
     },
     "acceptance-qc-sandbox-cost": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 698,
+      "record": "20261107T040510Z-dab1b7fe",
+      "commit": "cb7a415ec34fbfbcf3915c12b8984182df01fbf2",
+      "tests": []
     }
   }
 }
