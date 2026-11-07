@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import re
 
-from testkit import Ran, Scratch, kit, main, reflector, together
+from testkit import Ran, Scratch, kit, main, reflector
 
 KIT_REPO = "0xTomDaniel/octo-feather"
 
@@ -257,9 +257,5 @@ def counts(s: Scratch) -> None:
     assert len(c.issues()) == 1, f"counts: want only judged filed: {out} {c.issues()}"
 
 
-# Every scenario above in one gate item (testkit.together).
-LANE_CORRECTION = together("lane_correction", lifecycle, other_lane, routed, counts)
-
-
 if __name__ == "__main__":
-    main(LANE_CORRECTION, lifecycle, other_lane, routed, counts)
+    main(lifecycle, other_lane, routed, counts)

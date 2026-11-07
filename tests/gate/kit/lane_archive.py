@@ -16,7 +16,7 @@ import stat
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import Scratch, kit, main, reflector, together
+from testkit import Scratch, kit, main, reflector
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -201,9 +201,5 @@ def read_only(s: Scratch) -> None:
     st.archive_ok(ro, "gh6", "ro")
 
 
-# Every scenario above in one gate item (testkit.together).
-LANE_ARCHIVE = together("lane_archive", archived, refusals, read_only)
-
-
 if __name__ == "__main__":
-    main(LANE_ARCHIVE, archived, refusals, read_only)
+    main(archived, refusals, read_only)

@@ -25,7 +25,7 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import ROOT, Ran, Scratch, kit, main, together
+from testkit import ROOT, Ran, Scratch, kit, main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -359,4 +359,4 @@ LANE_POST_MERGE_TEARDOWN = together(
 
 
 if __name__ == "__main__":
-    main(LANE_POST_MERGE_TEARDOWN, not_archived, own_space, no_ci, shared_space, kept)
+    main(not_archived, own_space, no_ci, shared_space, kept)

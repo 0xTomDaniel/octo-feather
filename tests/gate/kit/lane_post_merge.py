@@ -30,7 +30,7 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
-from testkit import HERE, ROOT, Ran, Scratch, kit, main, together, tool_homes
+from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
 
 if TYPE_CHECKING:
     from collections.abc import Sequence
@@ -556,11 +556,5 @@ def install_stops(s: Scratch) -> None:
     assert (lane.head(), lane.calls()) == (d, []), f"diverged install changed: {lane.calls()}"
 
 
-# Every scenario above in one gate item (testkit.together).
-LANE_POST_MERGE = together(
-    "lane_post_merge", merged_step, main_ci, no_ci, superseded, kit_refresh, install_stops
-)
-
-
 if __name__ == "__main__":
-    main(LANE_POST_MERGE, merged_step, main_ci, no_ci, superseded, kit_refresh, install_stops)
+    main(merged_step, main_ci, no_ci, superseded, kit_refresh, install_stops)

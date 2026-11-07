@@ -19,7 +19,7 @@ import json
 import re
 import shutil
 
-from testkit import FIXTURES, Scratch, kit, main, together
+from testkit import FIXTURES, Scratch, kit, main
 
 FX = FIXTURES / "lane-report"
 AGE = re.compile(r"\(([0-9]+d)?([0-9]+h)?[0-9]+m ago\)")
@@ -261,9 +261,5 @@ def skill_reach(s: Scratch) -> None:
     assert "unread: Pi session --w-b--/review-1.jsonl" in out, f"unreadable session: {out}"
 
 
-# Every scenario above in one gate item (testkit.together).
-LANE_REPORT = together("lane_report", expected, gate_budget, headline, skill_reach)
-
-
 if __name__ == "__main__":
-    main(LANE_REPORT, expected, gate_budget, headline, skill_reach)
+    main(expected, gate_budget, headline, skill_reach)
