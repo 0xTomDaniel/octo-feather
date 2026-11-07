@@ -287,6 +287,7 @@ class Recorder:
         self.recs: list[dict[str, Any]] = []
         self.misses: list[dict[str, Any]] = []
         self.conns: dict[socket.socket, dict[str, Any]] = {}
+        self.net: set[str] = set()
         self.hello = False
         self.wr, self.ww = os.pipe()
         self.stop = False
@@ -398,6 +399,21 @@ class Recorder:
                     "result": f"offline gh refused: {r['why']}",
                 }
             )
+        elif (
+            t == "net" and self.live
+        ):  # srt refused a host (its proxy's log line, read setup-side): once per host
+            host = f"{m.get('host', '')}:{m.get('port', '')}"
+            if host not in self.net:
+                self.net.add(host)
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": f"connect {host}",
+                        "result": f"srt refused: {host} not in the network allowlist",
+                    }
+                )
         elif t == "cred":
             op, p, h = (str(m.get(k, "")) for k in ("op", "protocol", "host"))
             self.emit(
@@ -662,6 +678,39 @@ def srt_node(data: str) -> str:
             f"node (the kit's mise.toml pin {nv}) not installed: run {SK}/scripts/octo-feather-mise-install {SK}"
         )
     return node
+
+
+def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Recorder) -> None:
+    """srt's stderr (run with -d): each refused host sent to the recorder as {"t": "net"}; every other line kept for
+    the caller only until the inner has started (srt's own failure to start it), then dropped (its debug log)."""
+    blocked = re.compile(
+        rb"\[SandboxDebug\] (?:Connection|HTTP request) blocked to (\S+):(\d+)\s*$"
+    )
+    assert p.stderr is not None
+    for ln in p.stderr:
+        m = blocked.match(ln)
+        if m:
+            c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+            try:
+                c.connect(sock)
+                c.send(
+                    json.dumps(
+                        {
+                            "t": "net",
+                            "host": m.group(1).decode(errors="replace"),
+                            "port": int(m.group(2)),
+                        }
+                    ).encode()
+                )
+                c.shutdown(socket.SHUT_WR)
+                while c.recv(16):
+                    pass
+            except OSError:
+                pass
+            finally:
+                c.close()
+        elif not rec.hello and not ln.startswith(b"[SandboxDebug]"):
+            early.append(ln.decode(errors="replace"))
 
 
 def setup(judge: list[str]) -> NoReturn:
@@ -1169,7 +1218,10 @@ def setup(judge: list[str]) -> NoReturn:
     os.chmod(f"{SCR}/bin/run.json", 0o444)
 
     # R. the recorder, then srt.
-    fds = [o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")]
+    fds = [
+        *(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")),
+        2,
+    ]  # and the inner's stderr
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1179,9 +1231,14 @@ def setup(judge: list[str]) -> NoReturn:
     # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
     # discarded with the overlay anyway. The inner enters the caller's dir.
     os.makedirs(f"{SCR}/cwd")
+    # srt with -d: its proxy logs each host it refuses ("... blocked to HOST:PORT"), its one report of one (the CLI
+    # prints no violation summary); read here, each refusal sent to the recorder. The inner takes this process's
+    # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own log; it is shown
+    # only when srt never started the inner (its own error then).
     p = subprocess.Popen(
         [
             *srt,
+            "-d",
             "--settings",
             f"{SCR}/srt.json",
             "--",
@@ -1195,9 +1252,16 @@ def setup(judge: list[str]) -> NoReturn:
         env=senv,
         cwd=f"{SCR}/cwd",
         stdin=None if hand else subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         close_fds=True,
     )
+    early: list[str] = []
+    th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
+    th.start()
     rc = p.wait()
+    th.join(10)
+    if not rec.hello:
+        sys.stderr.write("".join(early))
     fin = rec.finish()
     if not rec.hello:
         say(f"FAIL srt sandbox did not start the inner (srt exit {rc})")
@@ -1347,7 +1411,9 @@ def covered(mid: str, path: str) -> bool:
 def inner(cfgp: str, judge: list[str]) -> NoReturn:
     c: dict[str, Any] = json.load(open(cfgp))
     S, SCR, SB, HC, HERDR, WT = c["S"], c["SCR"], c["SB"], c["HC"], c["HERDR"], c["WT"]
-    env = {k: v for k, v in os.environ.items() if k not in INPUTS}
+    env = {
+        k: v for k, v in os.environ.items() if k not in INPUTS and k != "SRT_DEBUG"
+    }  # srt -d's, for its own log
     env.update(c["env"])
     if c["shots"]:
         env["QC_SCREENSHOTS"] = c["env"]["QC_SCREENSHOTS"]
@@ -1371,7 +1437,12 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     try:
         sk.connect(f"{SCR}/rec/sock")
         sk.send(b'{"t": "hello"}')
-        msg, fds, _, _ = socket.recv_fds(sk, 64, 3)
+        msg, fds, _, _ = socket.recv_fds(sk, 64, 4)
+        os.dup2(
+            fds[3], 2
+        )  # this process's stderr, and its children's: the caller's, past srt's own log
+        os.close(fds[3])
+        fds = fds[:3]
     except OSError as e:
         sys.exit(
             print(
