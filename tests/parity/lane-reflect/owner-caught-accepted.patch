@@ -1,0 +1,14 @@
+Seeded defect: a reflector finding of an owner-caught- class is accepted, a class only the director's gate files (spec comms #reflection-output).
+diff --git a/scripts/octo-feather-reflect b/scripts/octo-feather-reflect
+index 3d00561..aa1b21a 100755
+--- a/scripts/octo-feather-reflect
++++ b/scripts/octo-feather-reflect
+@@ -392,7 +392,7 @@ def finding(line: str, want: list[str]) -> Finding | None:
+         msg = f"Finding line not in the form `class: | question: | route: | summary:`: {line[:200]}"
+         raise FailedError(msg)
+     cls, q, route, summary = s.groups()
+-    if not CLASS.fullmatch(cls) or cls.startswith("owner-caught-"):
++    if not CLASS.fullmatch(cls):
+         msg = f"finding class {cls!r} is not lower-case kebab or starts owner-caught-"
+         raise FailedError(msg)
+     if q not in want:

@@ -1,0 +1,14 @@
+Seeded defect: a later push run on a head that does not contain the merge commit (gh compare diverged) supersedes the cancelled run (octo-feather-lane --help, post-merge step 2).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..6348fa3 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -3706,7 +3706,7 @@ def pm_contains(pm: PostMerge, sha: str, seen: dict[str, bool]) -> bool:
+     if sha not in seen:
+         out = gh(["api", f"repos/{pm.repo or '{owner}/{repo}'}/compare/{pm.merge}...{sha}", "--jq", ".status"],
+                  f"check gh auth status and that {sha[:12]} is in the repo of PR #{pm.pr}, then rerun")
+-        seen[sha] = out.strip() in ("ahead", "identical")
++        seen[sha] = out.strip() in ("ahead", "identical", "diverged")
+     return seen[sha]
+ 
+ 

@@ -69,11 +69,7 @@ extend-include = [
   "scripts/review-host",
   "tests/fixtures/classify-stub/pi",
   "tests/fixtures/install-check/pi",
-  "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
-  "tests/fixtures/lane-spend/curl",
   "tests/fixtures/start-nohup",
-  "tests/fixtures/tracker-gh/gh",
   "tests/spend-out",
 ]
 # Out of the kit's Python file set, each once with its reason (the template's own extend-exclude names its
@@ -643,37 +639,6 @@ extraPaths = ["tests/gate"]
   "S607",
   "T201",
 ]
-"tests/fixtures/lane-report/gh" = [
-  "ANN001",
-  "ANN201",
-  "E401",
-  "E501",
-  "E702",
-  "EXE001",
-  "I001",
-  "PTH110",
-  "PTH118",
-  "PTH123",
-  "SIM115",
-  "T201",
-]
-"tests/fixtures/lane-report/herdr" = [
-  "E401",
-  "E501",
-  "E702",
-  "EXE001",
-  "I001",
-  "PTH123",
-  "SIM115",
-  "T201",
-]
-"tests/fixtures/lane-spend/curl" = [
-  "E401",
-  "E501",
-  "I001",
-  "PTH123",
-  "T201",
-]
 "tests/gate/conftest.py" = [
   "ANN001",
   "ANN002",
@@ -744,9 +709,6 @@ exclude = [
   "scripts/octo_feather_spec_status.py",
   "scripts/pi-role",
   "scripts/review-host",
-  "tests/fixtures/lane-report/gh",
-  "tests/fixtures/lane-report/herdr",
-  "tests/fixtures/lane-spend/curl",
   "tests/gate/conftest.py",
   "tests/gate/test_gate.py",
   "tests/spend-out",

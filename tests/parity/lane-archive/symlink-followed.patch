@@ -1,0 +1,14 @@
+Seeded defect: a symlinked lane record or log is archived instead of refused (spec comms #acceptance-lane-archive).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..303e010 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -494,7 +494,7 @@ def cmd_archive(args: list[str]) -> int:
+     files = []  # regular sources, checked with lstat so a symlink is never followed
+     for f in (record, log):
+         try:
+-            mode = os.lstat(f).st_mode
++            mode = os.stat(f).st_mode
+         except FileNotFoundError:
+             if f == record:
+                 raise Refuse(f"no lane record {record}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")

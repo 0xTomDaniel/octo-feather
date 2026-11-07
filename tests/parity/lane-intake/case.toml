@@ -1,0 +1,12 @@
+# The parity lever's case for tests/lane-intake.sh, rewritten as tests/gate/kit/test_lane_intake.py (tests/parity/lever.py --help).
+old = "tests/lane-intake.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/tracker-gh/gh",
+]
+new = "tests/gate/kit/test_lane_intake.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: the lane's module, imported by its launcher under the kit venv's python: coverage.py measures it.
+[ran]
+"scripts/octo_feather_lane.py" = "coverage"

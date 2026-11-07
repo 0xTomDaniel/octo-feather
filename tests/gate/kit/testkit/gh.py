@@ -16,13 +16,26 @@ repos/o/r/issues/comments/ID` replaces that comment's body; each prints the comm
 branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.github.raw`
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent.
 Issue writes as gh 2.x makes them: `issue create --title T --body-file F|- [--parent N]
-[--blocked-by N,...]` stores issue/M.json, M the highest stored number + 1, and prints its URL;
+[--blocked-by N,...]` stores issue/M.json, M the highest stored number of any repo + 1, and
+prints its URL;
 `issue comment N --body-file F|-` appends a comment to issue N, its id the next of the store's
 issue comments (1001 first), and prints its URL; `issue close N` sets it CLOSED, saying so on
 stderr, or, already closed, says that on stderr, exit 0; a stored issue N is required. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
-Anything else exits 2 naming it.
+`gh pr list --base B --state S` lists only the stored PRs GitHub would (their baseRefName and
+state); `gh pr edit N --base B` sets the stored PR N's baseRefName, `gh pr ready N` its isDraft
+false. Another repo (the tracker's, a lane's target) keeps the same layout under repo/OWNER/NAME/
+(its PRs, issues, commits.json, contents/), named by --repo or -R (or repos/OWNER/NAME/ in an api
+PATH); an issue list or write naming neither is $GH_REPO's, else o/r's; `issue list --search
+'WORDS in:title' --limit N` lists those whose title holds WORDS. `gh repo view
+OWNER/NAME|URL --json F` answers, for a repo other than o/r, api/repos/OWNER/NAME.json the same
+way (gh reads the URL itself), an unstored one GitHub's unresolved repository. A call over time
+(a run list while runs start and end, a run watch) is a tape: $FAKE_GH/tape.json maps a call's
+exact argv, one line as the log writes it, to its recorded answers in order, each its stdout (a
+string) or {"out", "err", "exit"}; the Nth such call replays the Nth, the last repeated (the
+count in tape.n.json); a call no tape names is answered as above. Anything else exits 2 naming
+it.
 """
 
 import json
@@ -71,26 +84,81 @@ def served(p: str) -> None:
     sys.stdout.write(read(p))
 
 
+def stored(repo: str, *parts: str) -> str:
+    """REPO's store path PARTS: the store's own for o/r, under repo/OWNER/NAME/ for another."""
+    return at(*parts) if repo == "o/r" else at("repo", *repo.split("/"), *parts)
+
+
 def view(a: list[str]) -> None:
-    """`issue|pr view N --json F`."""
+    """`issue|pr view N --json F [--repo|-R O/R]`."""
     kind = a[0]
-    if os.path.isfile(tape := at(kind, f"{a[2]}.out")):
+    repo = next((a[a.index(f) + 1] for f in ("--repo", "-R") if f in a), "o/r")
+    if os.path.isfile(tape := stored(repo, kind, f"{a[2]}.out")):
         sys.stdout.write(read(tape))
         return
-    p = at(kind, f"{a[2]}.json")
+    p = stored(repo, kind, f"{a[2]}.json")
     if not os.path.isfile(p):
         what = "a PullRequest" if kind == "pr" else "an issue or pull request"
         die(f"GraphQL: Could not resolve to {what} with the number of {a[2]}.")
     out(pick(json.loads(read(p)), a))
 
 
+def repo_of(a: list[str]) -> str:
+    """The repo a call names (--repo, -R), else $GH_REPO's, else o/r."""
+    for flag in ("--repo", "-R"):
+        if flag in a:
+            return a[a.index(flag) + 1]
+    return os.environ.get("GH_REPO") or "o/r"
+
+
+def issues_of(repo: str) -> str:
+    """REPO's issue dir."""
+    return stored(repo, "issue")
+
+
 def listed(a: list[str]) -> None:
-    """`issue|pr|run list --json F`: every one stored, by number."""
-    d = at(a[0])
+    """`issue|pr|run list --json F`: every one stored, by number; as GitHub filters them, only
+    those on --base B (a stored baseRefName) and in --state S (a stored state), when asked; an
+    issue list of the repo it names; with --search 'WORDS in:title' only those whose stored title
+    holds WORDS, the first --limit N of them."""
+    d = issues_of(repo_of(a)) if a[0] == "issue" else at(a[0])
     names = sorted(os.listdir(d)) if os.path.isdir(d) else []
     rows = [json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")]
+    for flag, key in (("--base", "baseRefName"), ("--state", "state")):
+        if flag in a and a[a.index(flag) + 1] != "all":
+            want = a[a.index(flag) + 1].upper() if key == "state" else a[a.index(flag) + 1]
+            rows = [r for r in rows if str(r.get(key, want)).upper() == want.upper()]
     key = "databaseId" if a[0] == "run" else "number"
-    out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+    rows = sorted(rows, key=lambda d: d[key])
+    if "--search" in a:
+        words = a[a.index("--search") + 1].removesuffix(" in:title").strip('"')
+        rows = [r for r in rows if words in str(r.get("title"))]
+        rows = rows[: int(a[a.index("--limit") + 1])] if "--limit" in a else rows
+    out([pick(d, a) for d in rows])
+
+
+def edit(a: list[str]) -> None:
+    """`pr edit N --base B`: the stored PR N's base set to B; prints its URL, as gh does."""
+    p = pr_file(a[2])
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    d = json.loads(read(p))
+    d["baseRefName"] = a[a.index("--base") + 1]
+    with open(p, "w") as f:
+        f.write(json.dumps(d))
+    sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
+
+
+def ready(a: list[str]) -> None:
+    """`pr ready N`: the stored PR N no draft; prints what gh prints."""
+    p = pr_file(a[2])
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    d = json.loads(read(p))
+    d["isDraft"] = False
+    with open(p, "w") as f:
+        f.write(json.dumps(d))
+    sys.stdout.write(f'\u2713 Pull request o/r#{a[2]} is marked as "ready for review"\n')
 
 
 def diff(a: list[str]) -> None:
@@ -110,11 +178,11 @@ def get(a: list[str]) -> None:
     """`api [--paginate --slurp] PATH`, a GET; the default branch's commits and raw files."""
     a = [*a[:-1], a[-1].replace("{owner}/{repo}", "o/r")]
     failed(a[-1].lstrip("/"))
-    if len(a) == 2 and re.fullmatch(r"repos/o/r/commits(\?.*)?", a[1]):
-        served(at("commits.json"))
+    if len(a) == 2 and (m := re.fullmatch(r"repos/([^/]+/[^/]+)/commits(\?.*)?", a[1])):
+        served(stored(m.group(1), "commits.json"))
         return
-    if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
-        served(at("contents", m.group(1)))
+    if a[2:] == RAW and (m := re.fullmatch(r"repos/([^/]+/[^/]+)/contents/(.+)", a[1])):
+        served(stored(m.group(1), "contents", m.group(2)))
         return
     p = at("api", f"{a[-1].lstrip('/')}.json")
     if not os.path.isfile(p):
@@ -160,6 +228,38 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def taped(call: str) -> bool:
+    """CALL's next recorded answer replayed, if a tape names it (the module docstring)."""
+    if not os.path.isfile(at("tape.json")):
+        return False
+    tape: dict[str, list[object]] = json.loads(read(at("tape.json")))
+    if call not in tape:
+        return False
+    n_file = at("tape.n.json")
+    n: dict[str, int] = json.loads(read(n_file)) if os.path.isfile(n_file) else {}
+    k = n.get(call, 0)
+    with open(n_file, "w") as f:
+        f.write(json.dumps(n | {call: k + 1}))
+    ans = tape[call][min(k, len(tape[call]) - 1)]
+    d = {"out": ans} if isinstance(ans, str) else json.loads(json.dumps(ans))
+    sys.stdout.write(str(d.get("out", "")))
+    sys.stderr.write(str(d.get("err", "")))
+    sys.exit(int(str(d.get("exit", 0))))
+
+
+def repo_view(a: list[str]) -> None:
+    """`repo view [OWNER/NAME|URL] --json F`: repo.json for this dir's repo or o/r, else the
+    named repo's."""
+    if a[2:3] == ["--json"] or len(a) == 2:
+        out(pick(json.loads(read(at("repo.json"))), a))
+        return
+    name = re.sub(r"^https://github\.com/|\.git$|/$", "", a[2])
+    p = at("repo.json") if name == "o/r" else at("api", "repos", f"{name}.json")
+    if not os.path.isfile(p):
+        die(f"GraphQL: Could not resolve to a Repository with the name '{name}'. (repository)")
+    out(pick(json.loads(read(p)), a))
+
+
 def flag(a: list[str], name: str) -> str | None:
     return a[a.index(name) + 1] if name in a else None
 
@@ -170,10 +270,21 @@ def body(a: list[str]) -> str:
     return sys.stdin.read() if f == "-" else read(f)
 
 
-def issues() -> dict[int, dict[str, object]]:
-    d = at("issue")
+def issues(d: str) -> dict[int, dict[str, object]]:
+    """The issues stored in issue dir D, by number."""
     names = os.listdir(d) if os.path.isdir(d) else []
     return {int(f[:-5]): json.loads(read(os.path.join(d, f))) for f in names if f.endswith(".json")}
+
+
+def every_issue_dir() -> list[str]:
+    """o/r's issue dir and every other repo's (repo/OWNER/NAME/issue)."""
+    dirs, top = [at("issue")], at("repo")
+    for owner in sorted(os.listdir(top)) if os.path.isdir(top) else []:
+        dirs += [
+            os.path.join(top, owner, n, "issue")
+            for n in sorted(os.listdir(os.path.join(top, owner)))
+        ]
+    return dirs
 
 
 def count(x: object) -> int:
@@ -183,18 +294,20 @@ def count(x: object) -> int:
 
 def issue_write(a: list[str]) -> None:
     """`issue create|comment|close` (the module docstring)."""
-    held = issues()
+    repo = repo_of(a)
+    home = issues_of(repo)
+    held = issues(home)
     if a[1] == "create":
-        n = max(held, default=0) + 1
+        n = max((k for d in every_issue_dir() for k in issues(d)), default=0) + 1
         d: dict[str, object] = {"number": n, "title": flag(a, "--title"), "body": body(a)}
         d |= {"state": "OPEN", "comments": []}
-        url = f"https://github.com/o/r/issues/{n}"
+        url = f"https://github.com/{repo}/issues/{n}"
     else:
         n = int(a[2])
         if n not in held:
             die(f"GraphQL: Could not resolve to an issue or pull request with the number of {n}.")
         d = held[n]
-        title = f"o/r#{n} ({d.get('title')})"
+        title = f"{repo}#{n} ({d.get('title')})"
         if a[1] == "close" and d.get("state") == "CLOSED":
             sys.stderr.write(f"! Issue {title} is already closed\n")
             return
@@ -204,35 +317,49 @@ def issue_write(a: list[str]) -> None:
             url = ""
         else:
             cid = 1001 + sum(count(x.get("comments")) for x in held.values())
-            url = f"https://github.com/o/r/issues/{n}#issuecomment-{cid}"
+            url = f"https://github.com/{repo}/issues/{n}#issuecomment-{cid}"
             had = d.get("comments")
             mine = {"author": {"login": "sup"}, "body": body(a), "url": url}
             d["comments"] = [*(had if isinstance(had, list) else []), mine]
-    os.makedirs(at("issue"), exist_ok=True)
-    with open(at("issue", f"{n}.json"), "w") as f:
+    os.makedirs(home, exist_ok=True)
+    with open(os.path.join(home, f"{n}.json"), "w") as f:
         f.write(json.dumps(d))
     if url:
         sys.stdout.write(url + "\n")
 
 
 def main(a: list[str]) -> None:
+    call = " ".join(a)
     with open(at("log"), "a") as f:
-        f.write(" ".join(a) + "\n")
+        f.write(call + "\n")
     if os.path.exists(at("down")):
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
-    two = tuple(a[:2])
-    if two in (("pr", "view"), ("issue", "view")):
-        view(a)
-    elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
-        listed(a)
-    elif two in (("issue", "create"), ("issue", "comment"), ("issue", "close")):
-        issue_write(a)
-    elif two == ("repo", "view"):
-        out(pick(json.loads(read(at("repo.json"))), a))
-    elif two == ("pr", "diff"):
-        diff(a)
+    if not taped(call):
+        answer(a)
+
+
+def answer(a: list[str]) -> None:
+    """A call no tape names, by its first two words."""
+    two = " ".join(a[:2])
+    simple = {
+        "pr view": view,
+        "issue view": view,
+        "issue list": listed,
+        "pr list": listed,
+        "run list": listed,
+        "repo view": repo_view,
+        "pr diff": diff,
+        "issue close": issue_write,
+        "issue comment": issue_write,
+        "issue create": issue_write,
+        "pr ready": ready,
+    }
+    if two in simple:
+        simple[two](a)
+    elif two == "pr edit" and "--base" in a:
+        edit(a)
     elif a[:1] == ["api"] and "-X" not in a:
         get(a)
     elif a[:1] == ["api"] and "-X" in a and "--input" in a:

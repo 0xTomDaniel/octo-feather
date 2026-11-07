@@ -1,0 +1,14 @@
+Seeded defect: a due run of the director reflection runs even when the last one is fresh (spec comms #acceptance-reflect-daily).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..a26735b 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -621,7 +621,7 @@ def reflect_director(lanes: Path, due: bool = False) -> bool:
+             dlines = read_log(dlog)[0] if dlog.exists() else []
+             now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+             last = r.reflected_at(dlines)
+-            if due and (not dlines if last is None else (now - last).total_seconds() <= DAY):
++            if due and not dlines:
+                 print("director reflection: not due, " + (f"last ran {stamp(f'{last:%Y-%m-%dT%H:%M:%SZ}', now)}" if last
+                                                          else f"no director log lines to reflect on ({dlog})"))
+                 return False

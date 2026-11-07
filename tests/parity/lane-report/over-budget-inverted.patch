@@ -1,0 +1,14 @@
+Seeded defect: a full gate run exactly within its budget reads over it, and one over reads within (comms #acceptance-report-gate-budget).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..80169b5 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -3343,7 +3343,7 @@ def budget_lines(last: Run, before: list[Run], budget: Budget | None, why: str,
+         out = [f"{run}: no budget ({why})"]
+     else:
+         b = float(budget["budget_seconds"])
+-        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t > b else f"within budget, {secs(b - t)} to spare")
++        out = [f"{run}: " + (f"OVER BUDGET by {secs(t - b)}" if t < b else f"within budget, {secs(b - t)} to spare")
+                + f" (budget {secs(b)})"]
+     base = before[-int(budget["trend_runs"] if budget else BUDGET_TREND):]
+     if not base:

@@ -15,17 +15,13 @@ missing fixture fails naming it.
 from __future__ import annotations
 
 import contextlib
-import fcntl
 import json
 import os
 import re
-import shutil
 import subprocess
 import sys
-import tempfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Generator, Mapping, Sequence
@@ -41,9 +37,10 @@ FAKES = {
     "pi": FIXTURES / "classify-stub" / "pi",
 }
 # Stand-ins a scenario puts first on PATH itself, where its command reaches the system another
-# way: pi_agent.py (Pi at the agent boundary, an eval case's role run; tests/lib/qa.sh copies it
-# too), gh.py (above) on a PATH of its own, git_refused.py (a git remote refusing credentials,
-# as `git`), argv_recorder.sh (a recipe's argv and cwd, as the kit command it calls) and uname.sh
+# way: pi_agent.py (Pi at the agent boundary, an eval case's role run, a reflector's reply;
+# tests/lib/qa.sh copies it too; reflector below), gh.py (above) on a PATH of its own,
+# git_refused.py (a git remote refusing credentials, as `git`), curl.py (OpenRouter's key usage,
+# as `curl`), argv_recorder.sh (a caller's argv and cwd, as the command it calls) and uname.sh
 # (another OS, as `uname`); each file's header says what it answers. A model provider is no
 # command: provider.py serves Pi's provider boundary on 127.0.0.1 (started by `provider`, below;
 # its header says what it answers); nor is an MCP server: mcp_stub.py, as an mcp.json names it.
@@ -77,8 +74,10 @@ def kit(name: str) -> str:
     return str(ROOT / "scripts" / name)
 
 
-@dataclass(frozen=True)
-class Ran:
+class Ran(NamedTuple):
+    """A command's exit, stdout and stderr (a NamedTuple: dataclasses' import is a third of a
+    scenario's start)."""
+
     rc: int
     out: str
     err: str
@@ -104,6 +103,13 @@ class Gh:
         p = self.dir / rel
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(d if isinstance(d, str) else json.dumps(d))
+
+    def tape(self, tapes: Mapping[str, Sequence[object]]) -> None:
+        """The store's tapes (testkit/gh.py's docstring) set to TAPES, each call's recorded
+        answers in order, replayed from the first; the call log emptied."""
+        (self.dir / "tape.json").write_text(json.dumps(tapes))
+        (self.dir / "tape.n.json").unlink(missing_ok=True)
+        (self.dir / "log").write_text("")
 
     def log(self) -> list[str]:
         return (self.dir / "log").read_text().splitlines()
@@ -149,6 +155,9 @@ class Scratch:
         exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
         installs; read-only by contract, copied here (its bin and tmp aside). Outside a gate run,
         BUILD fills this scratch itself."""
+        import fcntl  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)
+        import shutil  # noqa: PLC0415
+
         run = os.environ.get("GATE_RUN_DIR")
         if not run:
             build(self)
@@ -229,9 +238,37 @@ class Scratch:
         return self.run(["git", "-C", str(repo), *ident, *args]).out
 
 
+# The reflector's question lines (reflection/questions.json's ids, as agents/reflector.md answers).
+LANE_QUESTIONS = (
+    "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, "
+    "mechanical-step, writer-mistake, reflection-missed"
+)
+DIRECTOR_QUESTIONS = (
+    "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, "
+    "outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, "
+    "director-reflection-missed"
+)
+
+
+def reflector(s: Scratch, lane: Sequence[str] = (), director: Sequence[str] = ()) -> None:
+    """S's Pi the testkit's agent stand-in (pi_agent.py, print mode) first on PATH, its reflector
+    replies recorded in S: the lane's FindingS lines (or `Findings: none`), the director's."""
+    (s.bin / "pi").unlink(missing_ok=True)
+    (s.bin / "pi").symlink_to(HERE / "pi_agent.py")
+    s.env["STUB_REPLY_DIR"] = str(s.root)
+    for who, q, found in (
+        ("lane", LANE_QUESTIONS, lane),
+        ("director", DIRECTOR_QUESTIONS, director),
+    ):
+        body = "\n".join(found) if found else "Findings: none"
+        (s.root / f"reply.{who}").write_text(f"{q}\n{body}\n")
+
+
 def build_kit_repo(p: Scratch) -> None:
     """The kit's tracked files (their worktree content; a tracked file deleted there skipped) in
     P/kit, a git repo of one commit."""
+    import shutil  # noqa: PLC0415 (lazy: Scratch.prepare's)
+
     k = p.root / "kit"
     names = subprocess.run(
         ["git", "ls-files", "-z"],  # noqa: S607
@@ -264,6 +301,8 @@ def asked(*cmd: str) -> str:
     caller's HOME, uncoloured: NO_COLOR, no FORCE_COLOR, and uv's own --color never, as uv
     colours even a path under FORCE_COLOR (as a CI runner may set it), and a coloured path is no
     dir. The testkit's one way to ask a tool where its things are."""
+    import shutil  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)
+
     exe = shutil.which(cmd[0]) or cmd[0]
     args = ["--color", "never", *cmd[1:]] if cmd[0] == "uv" else list(cmd[1:])
     env = {k: v for k, v in os.environ.items() if k != "FORCE_COLOR"} | {"NO_COLOR": "1"}
@@ -370,6 +409,8 @@ def provider(*args: str) -> Generator[int]:
 def real_pi(tag: str, *, pinned: bool = True) -> str:
     """The real pi on the caller's PATH (never testkit's stand-in), PINNED: at the kit's pin
     (pi-version), else failing naming the install command; its path."""
+    import shutil  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)
+
     pin = (ROOT / "pi-version").read_text().strip()
     install = f"npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{pin}"
     pi = shutil.which("pi", path=os.environ["PATH"])
@@ -389,10 +430,25 @@ def main(*scenarios: Callable[..., None]) -> None:
     name, *args = sys.argv[1:] or [""]
     if name not in by:
         sys.exit(f"usage: {sys.argv[0]} SCENARIO [ARG...], SCENARIO one of {', '.join(by)}")
-    base = Path(tempfile.gettempdir()).resolve()
-    t = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=base))
+    t = scratch_dir(name)
     try:
         by[name](Scratch(t), *args)
     finally:
-        shutil.rmtree(t, ignore_errors=True)
+        subprocess.run(["rm", "-rf", "--", str(t)], check=False)  # noqa: S607 (the real rm)
     sys.stdout.write(f"{name}: ok\n")
+
+
+def scratch_dir(name: str) -> Path:
+    """A new dir NAME-PID-N under the temp dir ($TMPDIR, else /tmp, resolved), mkdir's own
+    exclusivity making it new, as tempfile.mkdtemp does: here without tempfile's and shutil's
+    imports (random, bz2, lzma: a quarter of every scenario's start; the dir is removed with rm)."""
+    base = Path(os.environ.get("TMPDIR") or "/tmp").resolve()  # noqa: S108 (tempfile's own default)
+    for n in range(100):
+        d = base / f"{name}-{os.getpid()}-{n}"
+        try:
+            d.mkdir(mode=0o700)
+        except FileExistsError:
+            continue
+        return d
+    msg = f"testkit: no new scratch dir {name}-{os.getpid()}-N under {base}"
+    raise FileExistsError(msg)

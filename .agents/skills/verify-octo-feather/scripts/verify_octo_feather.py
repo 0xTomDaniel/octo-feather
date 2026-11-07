@@ -387,10 +387,23 @@ def scratch_state(f: Feature) -> Path:
     return Path(r.stdout.strip())
 
 
-def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
-    """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
-    store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
-    return {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+def fake_gh(kit: str, sc: Path) -> dict[str, str]:
+    """The scratch env that fakes GitHub: the testkit's gh (tests/gate/kit/testkit/gh.py, its store layout in its
+    docstring) first on PATH as `gh`, its store SC/gh, so a correction lane a reflection files and a report's reads
+    never reach GitHub (SKILL.md)."""
+    (sc / "gh").mkdir(parents=True, exist_ok=True)
+    (sc / "ghbin").mkdir(parents=True, exist_ok=True)
+    if not (sc / "ghbin" / "gh").is_symlink():
+        (sc / "ghbin" / "gh").symlink_to(Path(kit) / "tests" / "gate" / "kit" / "testkit" / "gh.py")
+    return {"PATH": f"{sc / 'ghbin'}:{os.environ.get('PATH', '')}", "FAKE_GH": str(sc / "gh"), "GH_TOKEN": "verify-fake-gh"}
+
+
+def tracker_issues(sc: Path) -> list[dict[str, Any]]:
+    """Every issue the fake gh under SC holds (fake_gh), each with its repo, by number."""
+    found = [json.loads(p.read_text()) | {"repo": f"{p.parents[2].name}/{p.parents[1].name}"}
+             for p in (sc / "gh" / "repo").glob("*/*/issue/*.json")]
+    found += [json.loads(p.read_text()) | {"repo": "o/r"} for p in (sc / "gh" / "issue").glob("*.json")]
+    return sorted(found, key=lambda i: int(i["number"]))
 
 
 def fresh_path(p: Path) -> None:
@@ -613,7 +626,7 @@ def drive_lane_archive(f: Feature) -> None:
     # OCTO_FEATHER_REFLECT_ARGS from the caller rides along (e.g. "--thinking off" for a cheap smoke).
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
-             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_tracker(f.s.repo, sc)}
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_gh(f.s.repo, sc)}
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -694,7 +707,7 @@ def drive_director_reflection(f: Feature) -> None:
     dlog.write_text(seeded)
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
-             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_tracker(f.s.repo, sc)}
+             "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_gh(f.s.repo, sc)}
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -750,7 +763,6 @@ def drive_correction_lane(f: Feature) -> None:
     shutil.rmtree(sc, ignore_errors=True)
     lanes = sc / "state" / "octo-feather" / "lanes"
     (lanes / "archive").mkdir(parents=True)
-    store = sc / "gh.json"
     # Archived lanes gh900 and gh901 logged one code-review finding of a class each; open scratch lane gh902 none.
     def cr(at: str, summary: str) -> str:
         return json.dumps({"at": at, "kind": "finding", "source": "code-review", "class": "duplicated-rule", "blocking": True,
@@ -764,10 +776,10 @@ def drive_correction_lane(f: Feature) -> None:
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800",
-             **fake_tracker(f.s.repo, sc)}
+             **fake_gh(f.s.repo, sc)}
     # The real reflectors (SKILL.md: a role's model run is the one exception to offline), the tracker faked.
     f.run("file-live", "octo-feather-lane", "archive", "gh902")
-    f.obs("file-live", "tracker", store.read_text() if store.is_file() else "{}")
+    f.obs("file-live", "tracker", json.dumps({"issues": tracker_issues(sc)}))
 
     def filed(c: Case) -> bool:
         """The archive printed the key of one issue in the lane record's repository whose title carries the class's
@@ -780,8 +792,7 @@ def drive_correction_lane(f: Feature) -> None:
                 and (lanes / "archive" / "gh902.toml").is_file())
 
     f.check("file-live", filed)
-    issues: list[dict[str, Any]] = json.loads(store.read_text()).get("issues", []) if store.is_file() else []
-    for i in issues:
+    for i in tracker_issues(sc):
         print(f"    filed: {i['repo']}#{i['number']} {i['title']}")
     f.env = {}
     say(f"correction-lane evidence: {f.d}")
@@ -808,7 +819,6 @@ def drive_correction_intake(f: Feature) -> None:
     (sc / "bin").mkdir()
     (sc / "bin" / "pi").write_text(REFLECT_STUB_PI)
     (sc / "bin" / "pi").chmod(0o755)
-    store = sc / "gh.json"
 
     def fl(at: str, source: str, cls: str, summary: str, *, blocking: bool = True) -> str:
         return json.dumps({"at": at, "kind": "finding", "source": source, "class": cls, "blocking": blocking, "summary": summary}) + "\n"
@@ -831,11 +841,11 @@ def drive_correction_intake(f: Feature) -> None:
     (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFindings: none\n")
     (sc / "reply.director").write_text(f"Questions: {qs('director')}\nFinding: class: stale-pointer | question: writer-route"
                                        " | route: agents/implementer.md Rules | summary: blocking in gh910 and gh911\n")
-    tr = fake_tracker(f.s.repo, sc)
+    tr = fake_gh(f.s.repo, sc)
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "REFLECT_STUB_DIR": str(sc), **tr, "PATH": f"{sc / 'bin'}:{tr['PATH']}"}
     f.run("file-rule", "octo-feather-lane", "archive", "gh912")
-    f.obs("file-rule", "tracker", store.read_text() if store.is_file() else "{}")
+    f.obs("file-rule", "tracker", json.dumps({"issues": tracker_issues(sc)}))
 
     def filed(c: Case) -> bool:
         issues = json.loads(c.o["tracker"]).get("issues", [])
@@ -845,14 +855,14 @@ def drive_correction_intake(f: Feature) -> None:
                     c.out) is not None)
     f.check("file-rule", filed)
     # Seeded beside it: an open issue backed only by reflections, and two of one class (duplicates).
-    db: dict[str, list[dict[str, Any]]] = json.loads(store.read_text()) if store.is_file() else {"issues": []}
     for n, repo, cls in ((951, "scratch/target", "slow-gate"), (952, "scratch/target", "one-lane"), (953, "0xTomDaniel/octo-feather", "one-lane")):
-        db["issues"].append({"number": n, "repo": repo, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
-                             "state": "OPEN", "closedAt": None})
-    store.write_text(json.dumps(db))
-    before = store.read_text()
+        issue = sc / "gh" / "repo" / repo / "issue" / f"{n}.json"
+        issue.parent.mkdir(parents=True, exist_ok=True)
+        issue.write_text(json.dumps({"number": n, "title": f"[correction-lane {cls}] repeated finding class: {cls}", "body": "",
+                                     "state": "OPEN", "closedAt": None}))
+    before = tracker_issues(sc)
     f.run("intake", "octo-feather-lane", "intake")
-    f.obs("intake", "unchanged", "yes\n" if store.read_text() == before else "no\n")
+    f.obs("intake", "unchanged", "yes\n" if tracker_issues(sc) == before else "no\n")
     f.check("intake", lambda c: c.code == 0 and c.o["unchanged"] == "yes\n"
             and "\nclass stale-pointer: due yes; blocking 2 in 2 lane(s) (gh910, gh911); findings 3\n" in c.out
             and "\nclass slow-gate: due no; blocking 0 in 0 lane(s); findings 2\n" in c.out
@@ -887,14 +897,14 @@ def drive_factory_report(f: Feature) -> None:
     f.check("reflection-two-days", lambda c: c.code == 0 and c.o["director-log"] == c.o["before"]
             and len(re.findall(r"(?m)^director reflection: ", c.out)) == 1
             and re.search(rf"(?m)^director reflection: last ran {re.escape(c.o['at'])} \(2d0h\d+m ago\)$", c.out) is not None)
-    # One open lane on o/r, no PR; GitHub is the kit's fake (tests/fixtures/lane-report/gh) over a scratch store: o/r's
-    # default branch commits and its gate-budget.toml. The trend: three passed full runs on main, then one over the
+    # One open lane on o/r, no PR; GitHub is the testkit's gh (fake_gh) over a scratch store: o/r's default branch
+    # commits and its gate-budget.toml. The trend: three passed full runs on main, then one over the
     # budget and grown past the share; a subset run after it stays out.
-    gh = sc / "gh" / "o__r"
-    gh.mkdir(parents=True)
+    gh = sc / "gh"
+    (gh / "contents").mkdir(parents=True)
     mains = [f"{n}" * 40 for n in "1234"]
     (gh / "commits.json").write_text(json.dumps([{"sha": m} for m in reversed(mains)]))
-    (gh / "gate-budget.toml").write_text("budget_seconds = 300\ngrowth_share = 0.2\ntrend_runs = 3\n")
+    (gh / "contents" / "gate-budget.toml").write_text("budget_seconds = 300\ngrowth_share = 0.2\ntrend_runs = 3\n")
     (lanes / "lane-r.toml").write_text('supervisor = "w1:p1"\nrepository = "o/r"\nissue = "gh1"\ngoal = "Gate grew"\n'
                                         'started_at = "2026-10-20T08:00:00Z"\nlast_handoff_at = "2026-10-20T08:00:00Z"\nwaiting_on = ""\n')
 
@@ -906,10 +916,7 @@ def drive_factory_report(f: Feature) -> None:
         trend("2026-10-01T10:00:00Z", mains[0], 200.0) + trend("2026-10-02T10:00:00Z", mains[1], 220.0)
         + trend("2026-10-03T10:00:00Z", mains[2], 210.0) + trend("2026-10-04T10:00:00Z", mains[3], 330.0)
         + trend("2026-10-04T11:00:00Z", mains[3], 9.0, "subset"))
-    (sc / "bin").mkdir()
-    (sc / "bin" / "gh").write_text(f'#!/bin/sh\nexec python3 {shlex.quote(f.s.repo)}/tests/fixtures/lane-report/gh "$@"\n')
-    (sc / "bin" / "gh").chmod(0o755)
-    f.env = {**f.env, "FAKE_GH_PRS": str(sc / "gh"), "PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}"}
+    f.env = {**f.env, **fake_gh(f.s.repo, sc)}
     f.obs("gate-budget-over", "trend", (lanes.parent / "check-runs.jsonl").read_text())
     f.run("gate-budget-over", "octo-feather-lane", "report")
     f.obs("gate-budget-over", "trend-after", (lanes.parent / "check-runs.jsonl").read_text())
@@ -2478,28 +2485,25 @@ def drive_template_tiers(f: Feature) -> None:
 
         # The runs' trend lines (the runner's own hook: tests/conftest.py, tests/trend-reporter.ts): just check's one
         # line full, timing every GATE_RECIPES recipe; every just fast line after it subset. Then the factory report
-        # over that state, one lane on o/<lang> and the kit's fake gh (tests/fixtures/lane-report/gh) over a scratch
-        # store: the repo's commits as o/<lang>'s default branch, its gate-budget.toml (none in a repo without one).
+        # over that state, one lane on o/<lang> and the testkit's gh (fake_gh) over a scratch store: the repo's
+        # commits as o/<lang>'s default branch, its gate-budget.toml (none in a repo without one).
         state = scratch_state(f)   # where the runs' hook wrote and the report reads, under this drive's env
         trend = state / "check-runs.jsonl"
         top = str(r.resolve())
         f.obs(f"{lang}-trend", "lines", "".join(ln + "\n" for ln in trend.read_text().splitlines() if json.loads(ln).get("repo") == top))
         f.obs(f"{lang}-trend", "recipes", output(["just", "--evaluate", "GATE_RECIPES"], cwd=r, env=env)[1])
-        store = sc / "gh" / f"o__{lang}"
-        store.mkdir(parents=True)
+        store = sc / "gh" / "repo" / "o" / lang
+        (store / "contents").mkdir(parents=True)
         (store / "commits.json").write_text(json.dumps([{"sha": s} for s in git("rev-list", "HEAD").split()]))
         if (r / "gate-budget.toml").exists():
-            shutil.copy(r / "gate-budget.toml", store / "gate-budget.toml")
+            shutil.copy(r / "gate-budget.toml", store / "contents" / "gate-budget.toml")
         (state / "lanes").mkdir(exist_ok=True)
         (state / "lanes" / f"{lang}.toml").write_text(
             f'supervisor = "w1:p1"\nrepository = "o/{lang}"\nissue = "gh1"\ngoal = "Template gate"\n'
             'started_at = "2026-11-04T08:00:00Z"\nlast_handoff_at = "2026-11-04T08:00:00Z"\nwaiting_on = ""\n')
-        (sc / "bin").mkdir(exist_ok=True)
-        (sc / "bin" / "gh").write_text(f'#!/bin/sh\nexec python3 {shlex.quote(f.s.repo)}/tests/fixtures/lane-report/gh "$@"\n')
-        (sc / "bin" / "gh").chmod(0o755)
-        f.env = {**f.env, "FAKE_GH_PRS": str(sc / "gh"), "PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}"}
+        f.env = {**f.env, **fake_gh(f.s.repo, sc)}
         f.run(f"{lang}-trend", "octo-feather-lane", "report")
-        f.env = {k: v for k, v in f.env.items() if k not in ("FAKE_GH_PRS", "PATH")}
+        f.env = {k: v for k, v in f.env.items() if k not in ("FAKE_GH", "GH_TOKEN", "PATH")}
 
         def trend_holds(c: Case, lang: str = lang, head: str = checked) -> bool:
             runs = [json.loads(ln) for ln in c.o["lines"].splitlines()]

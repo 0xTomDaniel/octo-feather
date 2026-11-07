@@ -1,0 +1,14 @@
+Seeded defect: the director's pane no longer makes a lane's space shared, so teardown closes the director's whole space (octo-feather-lane --help, post-merge step 5).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..cd329b0 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -4132,7 +4132,7 @@ def pm_teardown(pm: PostMerge) -> str:
+         raise Refuse(f"archived lane {pm.lane}'s supervisor {sup!r} is no pane id: nothing torn down")
+     space = sup.split(":", 1)[0]
+     others: list[object] = []
+-    for p in [*sorted(lanes.glob("*.toml")), lanes.parent / "director.toml"]:
++    for p in sorted(lanes.glob("*.toml")):
+         try:
+             d = tomllib.loads(p.read_text(encoding="utf-8"))
+         except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:

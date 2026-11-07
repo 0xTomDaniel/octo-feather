@@ -1,0 +1,13 @@
+Seeded defect: a failed move leaves the files already linked into archive/ (spec comms #acceptance-lane-archive: no partial archive).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..5f1b45b 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -540,7 +540,6 @@ def cmd_archive(args: list[str]) -> int:
+                 raise ValueError(f"{f} changed before the move: sha256 {before[f.name]} -> {got}")
+             f.unlink()
+     except Exception as e:
+-        rollback(created, archive)
+         unreflect(log, pre)
+         unreflect(dlog, dpre)
+         if made_dir:

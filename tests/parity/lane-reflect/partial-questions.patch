@@ -1,0 +1,14 @@
+Seeded defect: a reflector answering only some of the brief's questions is accepted (spec comms #reflection-output: each question once).
+diff --git a/scripts/octo-feather-reflect b/scripts/octo-feather-reflect
+index 3d00561..a207f65 100755
+--- a/scripts/octo-feather-reflect
++++ b/scripts/octo-feather-reflect
+@@ -414,7 +414,7 @@ def parse(reply: str, qs: list[Question]) -> tuple[list[Finding], list[str]]:
+         msg = f"reflector reply has {len(qlines)} Questions lines, want 1"
+         raise FailedError(msg)
+     got = [x.strip() for x in qlines[0].split(",") if x.strip()]
+-    if sorted(got) != sorted(want) or len(set(got)) != len(got):
++    if not set(got) <= set(want) or len(set(got)) != len(got):
+         msg = f"reflector answered questions {got}, want each of {want} once"
+         raise FailedError(msg)
+     none = any(NONE_LINE.match(line) for line in lines)

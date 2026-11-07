@@ -1,0 +1,13 @@
+Seeded defect: the first ticket the tracker cannot move stops the close, the others not tried (octo-feather-lane --help, done).
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+index c1ccf65..046bd4c 100755
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -2689,6 +2689,7 @@ def cmd_done(args: list[str]) -> int:
+             print(f"{k}: done")
+         except Refuse as e:
+             failed.append(f"  - {k}: {e}")
++            break
+     if failed:
+         raise Refuse(f"{parent}: {len(failed)} of {len(keys)} not done:\n" + "\n".join(failed) + "\nrerun `octo-feather-lane done " + parent + "` after the fix (issue-done leaves a done ticket as it is)")
+     print(f"{parent}: parent and {len(keys) - 1} tickets done")
