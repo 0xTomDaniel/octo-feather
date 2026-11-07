@@ -1,0 +1,14 @@
+Seeded defect: uv's cache overlay gets an empty lower dir, the box's cache never bound under it (scripts/octo-feather-qc-sandbox step 5).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 425ebab..f055851 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -241,7 +241,7 @@ if [[ "$phase" == setup ]]; then
+       || die "uv --color never cache dir printed ${UC@Q}: not a directory"
+     if [[ -d "$UC" ]]; then
+       [[ "$UC" != *[,:]* ]] || die "uv cache dir $UC holds , or : (overlay options)"
+-      mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" && mount --bind "$UC" "$OV/uvl" && remount ro "$OV/uvl" || die "uv cache lower $UC"
++      mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" || die "uv cache lower $UC"
+     else printf '\n\n%s\n' "$UC" > "$SCR/uvcache"; UC=""; fi
+   else UC=""; fi
+   if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi

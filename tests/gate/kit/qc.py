@@ -7,7 +7,7 @@ pre-run proof printed, a nested qc sandbox passes its proof, a pane the judge sp
 PID namespace and dies with it (the fake herdr; the box's real herdr only with QC_TEST_HERDR=real,
 `just qc-real-herdr`; the scenario prints which), and the qc recipes pass arguments as data.
 The other sections of the qc sandbox test: tests/gate/kit/test_qc_judge.py, test_qc_copies.py,
-and tests/qc-escapes.sh, qc-oauth, qc-mise, qc-vendored, qc-uv-cache (tests/lib/qc.sh)."""
+test_qc_uv_cache.py, and tests/qc-escapes.sh, qc-oauth, qc-mise, qc-vendored (tests/lib/qc.sh)."""
 
 from __future__ import annotations
 

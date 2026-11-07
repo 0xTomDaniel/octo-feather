@@ -203,6 +203,25 @@ def m_nested(h: str, _: list[str]) -> None:
     ok(h)
 
 
+def m_uvcache(h: str, _: list[str]) -> None:
+    """An offline `uv sync` of QC_UVP's lock (its one package only in uv's cache), an import of
+    it, then a write into that cache, each said with its result."""
+    env = os.environ | {"UV_PROJECT_ENVIRONMENT": "/tmp/uv-venv"}  # noqa: S108 (the run's tmpfs)
+    sync = ["uv", "sync", "--project", os.environ["QC_UVP"], "--locked", "--offline", "--quiet"]
+    p = subprocess.run(sync, env=env, capture_output=True, text=True, check=False)
+    say(p.stdout + p.stderr + f"UVSYNC exit {p.returncode}")
+    imp = ["/tmp/uv-venv/bin/python", "-c", "import qcw; print('UVIMPORT', qcw.X)"]  # noqa: S108
+    try:
+        p = subprocess.run(imp, capture_output=True, text=True, check=False)
+        say((p.stdout + p.stderr).rstrip("\n"))
+    except OSError as e:
+        say(f"UVIMPORT failed: {e}")
+    where = ["uv", "--color", "never", "cache", "dir"]
+    uc = subprocess.run(where, capture_output=True, text=True, check=False).stdout.strip()
+    say(f"UVWRITE exit {0 if lands(Path(uc) / 'judge-wrote') else 1}")
+    ok(h)
+
+
 MODES = {n.removeprefix("m_"): f for n, f in list(globals().items()) if n.startswith("m_")}
 
 

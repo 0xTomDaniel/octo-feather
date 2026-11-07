@@ -1,6 +1,7 @@
 # shellcheck shell=bash
-# Sourced by each tests/qc-<section>.sh (the qc sandbox test, one gate item per section, #508; its sections qc, judge and
-# copies are pytest kit items: tests/gate/kit/test_qc.py, test_qc_judge.py, test_qc_copies.py, the stand-ins testkit's), never
+# Sourced by each tests/qc-<section>.sh (the qc sandbox test, one gate item per section, #508; its sections qc, judge,
+# copies and uv-cache are pytest kit items: tests/gate/kit/test_qc.py, test_qc_judge.py, test_qc_copies.py,
+# test_qc_uv_cache.py, the stand-ins testkit's), never
 # run itself: in tests/lib/ so the gate's tests/*.sh glob does not collect it. Integration test setup for
 # scripts/octo-feather-qc with a fake `pi` and a fake `herdr` on PATH (no model call; a real Herdr only in the pane
 # test on a box, tests/gate/kit/test_qc.py's pane item). Each item gets its own throwaway dir ($t: TMPDIR, HOME holding a "live" box,
@@ -146,11 +147,6 @@ P
     herdr pane run "$id" "bash $PWD/scratch/pane.sh $PWD/scratch/pane.txt" > /dev/null
     for _ in $(seq 100); do [[ -f scratch/pane.txt ]] && break; sleep 0.1; done
     echo "judge pidns $(readlink /proc/self/ns/pid)"; cat scratch/pane.txt 2>/dev/null || echo "MISSING pane output (pane $id)"
-    printf "$ok" ;;
-  uvcache)   # an offline uv sync from uv's cache (QC_UVP's lock, its one package only there), then a write into that cache
-    UV_PROJECT_ENVIRONMENT=/tmp/uv-venv uv sync --project "$QC_UVP" --locked --offline --quiet 2>&1; echo "UVSYNC exit $?"
-    /tmp/uv-venv/bin/python -c 'import qcw; print("UVIMPORT", qcw.X)' 2>&1
-    echo judge > "$(uv cache dir --color never)/judge-wrote" 2>&1; echo "UVWRITE exit $?"
     printf "$ok" ;;
   vendored)   # `just check`'s check-vendored on the kit reads the cache; every write into it fails
     vc="$HOME/.cache/octo-feather/skillfile"; kit="$(dirname "$(command -v octo-feather-state)")/.."

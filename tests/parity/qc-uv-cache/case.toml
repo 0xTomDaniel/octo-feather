@@ -1,0 +1,13 @@
+# The parity lever's case for tests/qc-uv-cache.sh, rewritten as tests/gate/kit/test_qc_uv_cache.py (tests/parity/lever.py --help).
+old = "tests/qc-uv-cache.sh"
+old_at = "ef42b60"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/lib/qc.sh",
+    "tests/fixtures/spec-status/good/demo.spec.html",
+]
+new = "tests/gate/kit/test_qc_uv_cache.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash kit script, which coverage.py does not see.
+[ran]
+"scripts/octo-feather-qc-sandbox" = "exec scripts/octo-feather-qc-sandbox"
