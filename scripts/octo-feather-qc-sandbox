@@ -95,6 +95,8 @@ import contextlib
 import ctypes
 import fcntl
 import glob
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
@@ -1442,44 +1444,48 @@ def upper(up: str, lo: str) -> list[list[str]]:
 # ---------------------------------------------------------------- inner
 def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
     """6b: (ok, proof line): the worktree's and the kit's own mise tools installed in env's MISE_DATA_DIR, each dir's
-    tools as scripts/octo-feather-mise-install --list --json names them, asked with a throwaway state dir."""
-
-    ms = tempfile.mkdtemp()
+    tools as scripts/octo-feather-mise-install names them (its own_tools(), loaded here: one Python start less per
+    dir than its --list --json command), asked with a throwaway state dir."""
     helper = f"{kit}/scripts/octo-feather-mise-install"
+    loader = importlib.machinery.SourceFileLoader("octo_feather_mise_install", helper)
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True  # never a __pycache__ in the kit's scripts/
+    loader.exec_module(mod)
+    ms = tempfile.mkdtemp()
+    saved, want = dict(os.environ), dict(env, MISE_STATE_DIR=ms)  # env may be os.environ itself
+    os.environ.clear()
+    os.environ.update(want)
     miss: list[str] = []
     judged: list[str] = []
     fix: list[str] = []
-    asked: dict[
-        str, subprocess.CompletedProcess[str]
-    ] = {}  # one ask per dir: the kit judging itself asks once
-    for d in (wt, kit):
-        dr = os.path.realpath(d)
-        if dr not in asked:
-            asked[dr] = subprocess.run(
-                [helper, "--list", "--json", d],
-                capture_output=True,
-                text=True,
-                env=dict(env, MISE_STATE_DIR=ms),
-            )
-        r = asked[dr]
-        try:
-            tools: object = json.loads(r.stdout) if r.returncode == 0 else None
-        except ValueError:
-            tools = None
-        own: list[tuple[str, dict[str, Any]]] = []
-        if not isinstance(tools, dict):
-            err = " ".join(r.stderr.split())[:300]
-            m = [f"{helper} --list --json failed: {err or 'no output'}"]
-        else:
-            rows = cast("dict[str, list[dict[str, Any]]]", tools)
-            own = [(tn, v) for tn, vs in rows.items() for v in vs]
-            m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
-        if m:
-            miss.append(f"{dr}: {' '.join(m)}")
-            fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
-        names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
-        judged.append(f"{dr}: {names or 'none'}")
-    shutil.rmtree(ms, ignore_errors=True)
+    asked: dict[str, dict[str, Any] | str] = {}  # one ask per dir: the kit judging itself asks once
+    try:
+        for d in (wt, kit):
+            dr = os.path.realpath(d)
+            if dr not in asked:
+                mise = shutil.which("mise")
+                try:
+                    asked[dr] = mod.own_tools(mise, dr) if mise else "mise is not on PATH"
+                except SystemExit as e:  # its failure, named as its command names it
+                    asked[dr] = str(e.code)
+            got = asked[dr]
+            own: list[tuple[str, dict[str, Any]]] = []
+            if isinstance(got, str):
+                m = [f"{helper} --list --json failed: {' '.join(got.split())[:300] or 'no output'}"]
+            else:
+                own = [(tn, v) for tn, vs in got.items() for v in vs]
+                m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
+            if m:
+                miss.append(f"{dr}: {' '.join(m)}")
+                fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
+            names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
+            judged.append(f"{dr}: {names or 'none'}")
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+        shutil.rmtree(ms, ignore_errors=True)
     line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {env.get('MISE_DATA_DIR', '')}"
     if miss:
         line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it: {'; '.join(dict.fromkeys(fix))})"
