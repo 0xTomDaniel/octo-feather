@@ -1,6 +1,6 @@
 # gh690: extended hand-built infrastructure needs its Prior art line
 
-Change: the code-review skill's Verdict step, **Prior art** (patch `.skillfile/patches/skills/code-review/SKILL.md.patch`, materialized `.agents/skills/code-review/SKILL.md`): a diff extending hand-built infrastructure the repo already has needs its `Prior art:` line, blocked as `reinvented-library` without one (spec quality#acceptance-prior-art-extends). Cases: docs/owed-evals/690.md.
+Change tried, then reverted (Ruling below): the code-review skill's Verdict step, **Prior art** (patch `.skillfile/patches/skills/code-review/SKILL.md.patch`, materialized `.agents/skills/code-review/SKILL.md`): a diff extending hand-built infrastructure the repo already has needs its `Prior art:` line, blocked as `reinvented-library` without one (spec quality#acceptance-prior-art-extends). Cases: docs/owed-evals/690.md.
 
 Smoke: .agents/skills/code-review/SKILL.md (the proof run below drives the code reviewer through it)
 Smoke: .skillfile/patches/skills/code-review/SKILL.md.patch (the patch that materializes it; same run)
@@ -30,3 +30,9 @@ Class tags the reviewer put in its json block (shown, not graded: docs/owed-eval
 ## Result
 
 Not separating: acceptance quality#acceptance-qa-fails-before is not met by these cases. The baseline reviewer already reads "adds or uses" as covering an extension of a small, plainly-parser piece; the gap #576 records does not reproduce on these fixtures. The negative measures the fixture parser's correctness, not the line. Earlier runs: 20261107T024302Z-fd5746 (no model ran: srt not installed), 20261107T024449Z-e94a2e (2 runs died on the qa watcher's non-blocking stdout, fixed in gh576 efea1c6; the negative blocked on fixture parser bugs, fixed in 1ccb39f).
+
+## Ruling and what landed (director, stop rule as lane 503 #554)
+
+- The skill change is reverted (c2b8444): the old wording already blocks an extension with no Prior art line, 6/6 baseline runs (3 train, 3 held-out) in the run above; no prose without a behaviour it adds. `.agents/skills/code-review/SKILL.md` and its patch equal B 9fd7bff; `just check-vendored` ok.
+- The three cases stay as regression cases (docs/owed-evals/690.md).
+- prior-art-extends-stated re-fixtured (91dbc29): head python-app-yaml-reader-crew, a one-key extension (`crew:` read as `names:` is) with a PyYAML Prior art line and its reason, so the negative tests the line, not parser edge cases. Its 3-run check at the head: pending the eval slot.
