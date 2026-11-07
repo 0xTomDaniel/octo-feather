@@ -184,7 +184,8 @@ INPUTS = (
 )  # the inputs above, never passed on to the judge
 SRT_PKG = "@anthropic-ai/sandbox-runtime"
 # srt run through its own library, as its CLI (dist/cli.js, the Linux path) runs a command: loadConfig, initialize,
-# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand. The bwrap argv is
+# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand, then (unlike the CLI, which exits
+# first) its reset() awaited, so its proxy bridges are reaped before exit. The bwrap argv is
 # the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
 # reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
 # "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
@@ -207,7 +208,13 @@ store.subscribe(vs => {
 })
 const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
-child.on('exit', (code, sig) => { SandboxManager.cleanupAfterCommand(); process.exit(sig ? 1 : (code ?? 0)) })
+child.on('exit', async (code, sig) => {
+  SandboxManager.cleanupAfterCommand()
+  // srt's own teardown, awaited: its proxy bridges (socat, started outside the sandbox) killed and waited for, so
+  // every process the run started is reaped up to this one and counted in its CPU; exiting first would leave them.
+  await SandboxManager.reset()
+  process.exit(sig ? 1 : (code ?? 0))
+})
 """
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
@@ -1265,6 +1272,10 @@ def setup(judge: list[str]) -> NoReturn:
     # caller and every writer in the sandbox: a judge writing a burst into a full pipe then failed with EAGAIN (#690's
     # eval runs). srt gets /dev/null and its own stderr pipe.
     fds = [*(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")), 2, 0, 1]
+    # This process the child subreaper of everything the run starts: bubblewrap's monitor exits before the sandbox's
+    # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
+    # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
+    libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1310,7 +1321,47 @@ def setup(judge: list[str]) -> NoReturn:
     post(fin)
     say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
     post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
+    left = orphans()
+    if (
+        left
+    ):  # a process the run started still running outside the sandbox's PID namespace: never silent
+        say(f"FAIL processes the run started still running after it: {', '.join(left)}")
+        post({"orphans_left": left})
     sys.exit(rc)
+
+
+def orphans(wait_s: float = 5.0) -> list[str]:
+    """Reap every process the run left to this subreaper (its CPU then counted by whoever waits for this one), for up
+    to WAIT_S s; return those still running then, each "PID CMDLINE"."""
+    end = time.monotonic() + wait_s
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return []
+        if pid:
+            continue
+        if time.monotonic() >= end:
+            break
+        time.sleep(0.02)
+    out: list[str] = []
+    me = str(os.getpid())
+    for q in os.listdir("/proc"):
+        if not q.isdigit():
+            continue
+        try:
+            st = open(f"/proc/{q}/stat").read().rsplit(")", 1)[1].split()
+            if st[1] == me:
+                cl = (
+                    open(f"/proc/{q}/cmdline", "rb")
+                    .read()
+                    .replace(b"\0", b" ")
+                    .decode(errors="replace")
+                )
+                out.append(f"{q} {cl.strip()[:80]}")
+        except OSError:
+            pass
+    return out
 
 
 def upper(up: str, lo: str) -> list[list[str]]:
