@@ -13,7 +13,8 @@
 The judge runs inside anthropics/sandbox-runtime (srt, @anthropic-ai/sandbox-runtime pinned exact in the kit's
 package.json and pnpm-lock.yaml, run from the kit's node_modules: `pnpm install --frozen-lockfile`; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
 namespaces, no capabilities, no_new_privs, every path read-only but what the policy below lets write, read-denied
-paths as empty tmpfs masks whose writes die with the run, and a network allowlist. This script is the kit's policy
+paths as empty tmpfs masks whose writes die with the run, and a network allowlist, each refused host one attempt
+(SRT_SHIM: srt run through its library, its violation store read). This script is the kit's policy
 over it (which paths are masked, kept, writable; the shims, the attempt record, the proof and the records) and the
 one isolation srt cannot express, the discard stage (step D). `just qc` and `just qa` start it through
 octo-feather-qc sandboxed(); it also runs by hand (`scripts/octo-feather-qc-sandbox -- CMD` in a repo): every input
