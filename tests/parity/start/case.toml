@@ -1,0 +1,13 @@
+# The parity lever's case for tests/start.sh, rewritten as tests/gate/kit/test_start.py (tests/parity/lever.py --help).
+old = "tests/start.sh"
+old_at = "7f3e5b8"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/herdr-say/herdr",
+    "tests/fixtures/start-nohup",
+]
+new = "tests/gate/kit/test_start.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash kit command, which coverage cannot see.
+[ran]
+"scripts/octo-feather-start" = "exec scripts/octo-feather-start"

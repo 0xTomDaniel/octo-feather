@@ -40,5 +40,5 @@ Each launch case runs, from a scratch git target under `$VERIFY_OCTO_FEATHER_RUN
 
 ## Gotchas
 
-- RPC mode with no prompt: Pi starts, runs its session start and exits at end of input, so no model turn is possible, refused or not, and the scratch agent dir holds no credentials. That a refusal comes before a headless `-p` run's first request is tests/skills-loaded.sh's (a fake provider, zero requests).
-- A pane launch also tells its parent (`herdr-say --parent`); the drive empties `OCTO_FEATHER_PARENT` and the Herdr pane ids, so no live pane is told. The parent message is tests/skills-loaded.sh's, through a stub herdr-say.
+- RPC mode with no prompt: Pi starts, runs its session start and exits at end of input, so no model turn is possible, refused or not, and the scratch agent dir holds no credentials. That a refusal comes before a headless `-p` run's first request is tests/gate/kit/test_skills_loaded.py's (a fake provider, zero requests).
+- A pane launch also tells its parent (`herdr-say --parent`); the drive empties `OCTO_FEATHER_PARENT` and the Herdr pane ids, so no live pane is told. The parent message is tests/gate/kit/test_skills_loaded.py's, through the kit's herdr-say over the testkit's Herdr stand-in.

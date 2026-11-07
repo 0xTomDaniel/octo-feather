@@ -1,0 +1,14 @@
+Seeded defect: a recorded full pass on a clean tree is never the diff base: changes it gated still select (octo-feather-gate --help, select).
+diff --git a/scripts/octo-feather-gate b/scripts/octo-feather-gate
+index 57531a2..ec1129a 100755
+--- a/scripts/octo-feather-gate
++++ b/scripts/octo-feather-gate
+@@ -343,7 +343,7 @@ def diff_base(at: str) -> str:
+     best: tuple[int, str] = (int(git("rev-list", "--count", f"{at}..HEAD")), at)
+     for rec in records():
+         head = rec.get("head")
+-        if not isinstance(head, str) or rec.get("clean") is not True:
++        if not isinstance(head, str) or rec.get("clean") is True:
+             continue
+         if ok("merge-base", "--is-ancestor", at, head) and ok(
+             "merge-base", "--is-ancestor", head, "HEAD"

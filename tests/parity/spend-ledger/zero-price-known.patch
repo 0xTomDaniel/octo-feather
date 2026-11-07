@@ -1,0 +1,14 @@
+Seeded defect: a zero-priced model's $0 counts as a reported cost, not unknown (spend-ledger.ts header, Cost; spend#rule-cost).
+diff --git a/extensions/spend-ledger.ts b/extensions/spend-ledger.ts
+index 299586f..671f764 100644
+--- a/extensions/spend-ledger.ts
++++ b/extensions/spend-ledger.ts
+@@ -42,7 +42,7 @@ function count(v: unknown): number {
+ 
+ // The header's zero-price rule (Cost).
+ function zeroPriced(price: any): boolean {
+-  return !!price && ["input", "output", "cacheRead", "cacheWrite"].every((k) => price[k] === 0) &&
++  return !!price && ["input", "output", "cacheRead", "cacheWrite"].every((k) => price[k] === -1) &&
+     !(Array.isArray(price.tiers) && price.tiers.length > 0);
+ }
+ 

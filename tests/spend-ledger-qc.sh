@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Integration test for the kit's spend-ledger Pi extension (extensions/spend-ledger.ts, issue #187), one gate item
 # per case group (#509; the fake provider, Pi environment and helpers: tests/lib/spend-ledger.sh). Cases here, on the
-# ledger as tests/spend-ledger.sh's cases agents to zero-priced leave it (seed 8):
+# ledger as tests/gate/kit/spend_ledger.py's cases agents to zero-priced leave it (seed 8):
 #   qc  `just qc` (scripts/octo-feather-qc, its sandbox) in lane gh149's space, beside a classifier judge
 #       call: the judge's message under gh149 and qc-judge, the lane's roles and total in `spend`'s lane and
 #       purpose rows (spend#acceptance-spend-agents)

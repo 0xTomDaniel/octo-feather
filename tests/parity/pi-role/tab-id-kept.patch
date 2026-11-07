@@ -1,0 +1,14 @@
+Seeded defect: a headless run keeps HERDR_TAB_ID (pi-role --help; #77).
+diff --git a/scripts/pi-role b/scripts/pi-role
+index ea12cfc..9e06f5c 100755
+--- a/scripts/pi-role
++++ b/scripts/pi-role
+@@ -78,7 +78,7 @@ from typing import Any, cast
+ KEYS = {"name", "description", "model", "thinking", "tools", "skills", "externalSkills"}
+ LIST_KEYS = {"tools", "skills", "externalSkills"}
+ # A headless run's route to panes: herdr-say --parent and Herdr's own pane ids (#77).
+-HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_TAB_ID", "HERDR_WORKSPACE_ID")
++HEADLESS_UNSET = ("OCTO_FEATHER_PARENT", "HERDR_PANE_ID", "HERDR_WORKSPACE_ID")
+ # A target's `tracker` value and the kit skill that implements it (spec skills#tracker); the kit
+ # has a tracker when its skill folder exists. {tracker} on a role's skills line loads it.
+ TRACKERS = {"github": "github-issues", "linear": "linear"}

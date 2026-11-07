@@ -3,7 +3,7 @@
 roles#fm-tools). Real Pi, at the kit's pin (pi-version), launched headless through a copy of the
 kit whose web-mcp.json names stub stdio MCP servers (testkit/mcp_stub.py: the
 hosted search servers' stand-in, no network) and one unreachable server, against testkit's fake
-model provider (testkit/provider.py) on 127.0.0.1. The provider logs each request and answers the
+model provider (testkit/provider.py, its --code mode) on 127.0.0.1. The provider logs each request and answers the
 first with one codemode call listing ALL_TOOLS, so a run reads both the tools declared to the
 model and the tools a codemode script reaches. The user Pi config and the target repo's
 .pi/mcp.json each name another stub server.
@@ -35,10 +35,8 @@ import re
 import subprocess
 import sys
 
-from testkit import HERE, ROOT, Scratch, main
+from testkit import HERE, ROOT, Scratch, main, provider, real_pi
 
-PIN = (ROOT / "pi-version").read_text().strip()
-INSTALL = f"npm install -g --ignore-scripts @earendil-works/pi-coding-agent@{PIN}"
 RO = ("bash", "find", "grep", "ls", "read")
 RW = ("bash", "edit", "find", "grep", "ls", "read", "write")
 WEB = tuple(f"mcp__{n}__{t}" for n in ("webstub", "second") for t in ("fetch", "search"))
@@ -71,7 +69,7 @@ def build(p: Scratch) -> None:
     projonly; P/agent, Pi's user dir whose mcp.json names useronly; the commit identity set."""
     import shutil  # noqa: PLC0415 (only the build copies)
 
-    pi_at_pin()
+    real_pi("web-tools")
     k = p.root / "kit"
     (k / ".agents").mkdir(parents=True)
     (k / "scripts").mkdir()
@@ -92,34 +90,12 @@ def build(p: Scratch) -> None:
     p.identity()
 
 
-def pi_at_pin() -> None:
-    """The real pi on the caller's PATH reports the kit's pin, else fail naming the install."""
-    v = subprocess.run(
-        ["pi", "--version"],  # noqa: S607 (the caller's pi, as pi-role execs it)
-        capture_output=True,
-        text=True,
-        check=False,
-        env=os.environ,
-    )
-    got = re.search(r"\d+\.\d+\.\d+", v.stdout + v.stderr)
-    said = got.group() if got else "no version"
-    assert said == PIN, f"pi reports {said}, the kit pins {PIN} (pi-version); {INSTALL}"
-
-
 class World:
-    """The prepared fixture in a scratch and the fake provider serving it."""
+    """The prepared fixture in a scratch, Pi's models.json naming the fake provider at PORT."""
 
-    def __init__(self, s: Scratch) -> None:
+    def __init__(self, s: Scratch, port: int) -> None:
         s.prepare("web-tools", build)
         self.s, self.log = s, s.root / "provider.log"
-        self.p = subprocess.Popen(
-            [sys.executable, str(HERE / "provider.py"), str(self.log), CODE],
-            stdout=subprocess.PIPE,
-            text=True,
-        )
-        assert self.p.stdout
-        port = self.p.stdout.readline().strip()  # readiness off the provider's own pipe
-        assert port.isdigit(), "the fake provider did not start"
         models = {
             "providers": {
                 "fake": {
@@ -131,10 +107,6 @@ class World:
             }
         }
         (s.root / "agent" / "models.json").write_text(json.dumps(models))
-
-    def close(self) -> None:
-        self.p.kill()
-        self.p.wait()
 
     def run(self, role: str) -> tuple[list[str], list[str]]:
         """ROLE started headless in the repo: the tools declared to the model and those its
@@ -175,8 +147,9 @@ class World:
 def roles(s: Scratch, *names: str) -> None:
     """Each role NAMES: declared tools exactly codemode, its role file's and, listing web, every
     reachable listed server's; codemode reaches the same less itself (the module docstring)."""
-    w = World(s)
-    try:
+    log = s.root / "provider.log"
+    with provider("--log", str(log), "--answer", "fake-done", "--code", CODE) as port:
+        w = World(s, port)
         cmp = filecmp.dircmp(ROOT / "agents", s.root / "kit" / "agents")
         differ = [*cmp.diff_files, *cmp.left_only, *cmp.right_only]
         assert not differ, f"list-once: the fixture's role files differ from the kit's: {differ}"
@@ -188,8 +161,6 @@ def roles(s: Scratch, *names: str) -> None:
                 f"{role}: declared {declared}, want codemode, {want}"
             )
             assert reached == want, f"{role}: codemode reaches {reached}, want {want}"
-    finally:
-        w.close()
 
 
 def web_read_roles(s: Scratch) -> None:

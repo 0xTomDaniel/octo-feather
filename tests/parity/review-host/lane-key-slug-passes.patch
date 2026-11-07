@@ -1,0 +1,14 @@
+Seeded defect: a lane key as --slug is no longer refused (review-host; remote #review-one-row).
+diff --git a/scripts/review-host b/scripts/review-host
+index 0063f16..113e8d8 100755
+--- a/scripts/review-host
++++ b/scripts/review-host
+@@ -113,7 +113,7 @@ def lane_key_slugs(host: ModuleType, args: argparse.Namespace) -> list[str]:
+         if key.returncode != 0:
+             continue
+         lane = subprocess.run([scripts / "lane-key", key.stdout.strip()], capture_output=True, text=True, check=False)
+-        if lane.returncode == 0 and lane.stdout.strip() == slug:
++        if lane.returncode == 0 and lane.stdout.strip() == slug.upper():
+             found.append(slug)
+     return found
+ 
