@@ -18,9 +18,9 @@ supplies; none there: exit 2 naming it. Else one bash call (`ls`), then:
   STUB-DECL-*     the final message a declaration case grades
 Each assistant message carries usage: 100 input and 10*k output tokens, cost 0.001.
 
-Print mode (no --mode json: a headless role's text reply, scripts/octo-feather-reflect's
-reflector): its argv written to argv.WHO in $STUB_REPLY_DIR (NUL-separated), then the reply
-recorded there, reply.WHO, printed as is, WHO director when the -p prompt is a director
+Print mode (no --mode json and no -e EXT: a headless role's text reply, scripts/octo-feather-
+reflect's reflector): its argv written to argv.WHO in $STUB_REPLY_DIR (NUL-separated), then the
+reply recorded there, reply.WHO, printed as is, WHO director when the -p prompt is a director
 reflection ("Director reflection"), else lane; with reply.WHO.exit there, a failed run instead:
 reply.WHO.err on stderr, that exit. With a FIFO reply.WHO.gate there, it answers only once the
 caller opened and closed the gate's write end (the caller's readiness pipe, never a delay). A
@@ -44,7 +44,9 @@ from __future__ import annotations
 import os
 import sys
 
-if "--mode" not in sys.argv and "-p" in sys.argv:  # print mode: the recorded reply (docstring),
+if (  # print mode: the recorded reply (docstring); an extension command (a bench) is not one
+    "--mode" not in sys.argv and "-p" in sys.argv and "-e" not in sys.argv
+):
     # before the event stream's imports: a reflector run starts light
     who = "director" if "Director reflection" in sys.argv[sys.argv.index("-p") + 1] else "lane"
     rd = os.environ.get("STUB_REPLY_DIR", ".")

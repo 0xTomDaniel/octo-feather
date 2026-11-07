@@ -24,6 +24,10 @@ def build(p: Scratch) -> None:
     r = p.root / "repo"
     (r / ".github" / "workflows").mkdir(parents=True)
     p.git(r, "init", "-q", "-b", "main")
+    # the repo's own identity, as config: octo-feather-gate record writes a git note (a commit), and
+    # a gate item's env carries none (testkit/qc.py's target, the same)
+    for k, v in (("user.email", "t@example.com"), ("user.name", "t"), ("commit.gpgsign", "false")):
+        p.git(r, "config", k, v)
     (r / ".github" / "workflows" / "ci.yml").write_text(WORKFLOW)
     (r / "app.py").write_text("one\n")
     p.git(r, "add", "-A")

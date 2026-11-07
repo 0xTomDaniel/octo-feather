@@ -1,11 +1,13 @@
 #!/bin/sh
-# A stand-in at a caller's command boundary only, put first by a scenario itself (testkit's
-# docstring) as a command a kit recipe or command calls whose real run would launch agents or
-# external systems (octo-feather-shape: a Pi agent; -start: Herdr panes and agents; -qc: a model
-# judge; post-merge's refresh `uv sync` and `pnpm install`: the package registries): it records
-# the name it was run as, its physical cwd and its exact argv, each NUL-terminated, then a
-# newline, appended to $ARGV_LOG (one record per call, in call order), and exits 0. It
-# reproduces no logic and never answers as the command.
+# A stand-in at a caller's command boundary, put first by a scenario itself (testkit's docstring) as
+# a command the caller runs, recording the name it was run as, its physical cwd and its exact argv,
+# each NUL-terminated, then a newline, appended to $ARGV_LOG (one record per call, in call order),
+# and exits 0. It reproduces no logic and never answers as the command. Two uses: (1) under the
+# owner's narrow exception below, a kit command a justfile recipe calls whose real run would
+# launch agents (octo-feather-shape: a Pi agent; -start: Herdr panes and agents; -qc: a model
+# judge); (2) a plain seam stand-in for an external system the kit does not own, where the fact is
+# the call: post-merge's refresh `uv sync` and `pnpm install`, which reach the package registries
+# (tests/gate/kit/lane_post_merge.py), no exception needed.
 #
 # Owner ruling (owner, 2026-11-06, lane gh653 #674): argv_recorder is allowed as a NARROW
 # exception: only where the fact under test is the argv a caller passes AND the real callee would
