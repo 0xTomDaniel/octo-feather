@@ -4,9 +4,9 @@ issue 206; issue 399), offline: a throwaway target repo with a bare origin holds
 its worktree and its merge commit; the testkit's fake gh holds PR #12 merged there with a green
 push run and PR #13 based on gh12; the testkit's fake herdr (its FAKE_HERDR agents world) stands
 for Herdr under the kit's own herdr-close and herdr-say (HERDR_SESSION unset; space ids no real
-Herdr gives, so herdr-close's sweep of tagged processes can match none); a throwaway mise state
-dir (MISE_STATE_DIR); a throwaway state dir (XDG_STATE_HOME) holds the lane records,
-director.toml and the Spec Chat registries; a throwaway kit install clone (OCTO_FEATHER_KIT_INSTALL,
+Herdr gives; each run in a PID namespace of its own, so herdr-close's sweep of tagged processes
+sees only the run's); a throwaway mise state dir (MISE_STATE_DIR); a throwaway state dir
+(XDG_STATE_HOME) holds the lane records, director.toml and the Spec Chat registries; a throwaway kit install clone (OCTO_FEATHER_KIT_INSTALL,
 never the live kit) of another repo, so step 3 leaves it unchanged. Not archived: steps 1-4 run,
 step 5 pending, exit 3. Archived: the lane's own space is closed (only its supervisor pane's tab
 when shared), its worktree removed and the mise links into it pruned (one into the live repo
@@ -30,6 +30,10 @@ from testkit import ROOT, Ran, Scratch, kit, main
 if TYPE_CHECKING:
     from pathlib import Path
 
+# Each post-merge runs in a PID namespace of its own (its /proc its own processes): herdr-close's
+# close sweeps the process table for processes its close left tagged with the space or tab and
+# kills them, so here it can never reach a box process, and it reads only the run's own few.
+PIDNS = ("unshare", "--map-current-user", "--pid", "--fork", "--mount-proc")
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"  # herdr-close, herdr-say
 S4 = (
     "post-merge gh12 PR #12: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 "
@@ -162,7 +166,7 @@ class World:
 
     def run(self, want: int, **env: str) -> tuple[Ran, str]:
         """post-merge 12 H --lane gh12 from the target repo; its run and step 5 line."""
-        cmd = [kit("octo-feather-lane"), "post-merge", "12", self.h, "--lane", "gh12"]
+        cmd = [*PIDNS, kit("octo-feather-lane"), "post-merge", "12", self.h, "--lane", "gh12"]
         r = self.s.run([*cmd, "--repo", "o/r", "--wait", "0"], want=want, cwd=self.r, env=env)
         s5 = next((x for x in r.out.split("\n") if x.startswith("step 5 teardown: ")), "")
         assert s5, f"no step 5 line: {r.out}"
