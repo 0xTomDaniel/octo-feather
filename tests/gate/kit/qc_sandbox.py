@@ -6,13 +6,15 @@ write to HOME, an umount of a mask, a live Herdr session through the shim) and l
 node_modules (no pnpm install yet), it refuses before any judge, naming the install command; the
 network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a
 local provider, through srt's proxy), an allowed host never an attempt; a refused host is one
-attempt-record entry; the judge's stdio stays blocking; run by hand inside a qc sandbox
-(nested), its proof passes."""
+attempt-record entry; the judge's stdio stays blocking; every process the run starts is reaped
+within it; run by hand inside a qc sandbox (nested), its proof passes."""
 
 from __future__ import annotations
 
+import ctypes
 import http.server
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -134,6 +136,26 @@ def blocking_stdio(s: Scratch) -> None:
     assert len(out) == 4_000_000, (len(out), e)
 
 
+def reaped(s: Scratch) -> None:
+    """Every process the run starts is reaped within it (none left to its caller), so the caller's
+    CPU count (getrusage of its children) holds the whole run: the caller made a child subreaper,
+    after the run no orphan of it is reparented there."""
+    r = repo(s)
+    ctypes.CDLL(None).prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
+    s.run([kit("octo-feather-qc-sandbox"), "--", "true"], cwd=r, env=tool_homes())
+    time.sleep(1)
+    left: list[int] = []
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            break
+        if not pid:
+            break
+        left.append(pid)
+    assert not left, f"processes of the run reaped by its caller, not within it: {left}"
+
+
 def nested(s: Scratch) -> None:
     """The by-hand run inside a qc sandbox (a nested run, as a demo of the kit judging itself runs
     it): the inner proof passes, its live-record masks holding though the outer run's state dir is
@@ -188,4 +210,4 @@ def network(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio)
+    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio, reaped)

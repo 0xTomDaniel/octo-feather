@@ -5,7 +5,15 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_sandbox import blocking_stdio, by_hand, nested, network, refused_host, srt_missing
+from qc_sandbox import (
+    blocking_stdio,
+    by_hand,
+    nested,
+    network,
+    reaped,
+    refused_host,
+    srt_missing,
+)
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
@@ -38,3 +46,8 @@ def test_refused_host(case: Case) -> None:
 @pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
 def test_blocking_stdio(case: Case) -> None:
     case(blocking_stdio)
+
+
+@pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
+def test_reaped(case: Case) -> None:
+    case(reaped)
