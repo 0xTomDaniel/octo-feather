@@ -325,6 +325,21 @@ def pnpm_store() -> str:
     return asked("pnpm", "store", "path")
 
 
+def together(name: str, *parts: Callable[[Scratch], None]) -> Callable[[Scratch], None]:
+    """Scenario NAME: each of PARTS in order, each in a fresh Scratch of its own under the
+    caller's: one gate item, one start, for a test whose cases are too many for one function (an
+    item's own start is CPU the gate pays per item)."""
+
+    def run(s: Scratch) -> None:
+        for part in parts:
+            d = s.root / part.__name__
+            d.mkdir()
+            part(Scratch(d))
+
+    run.__name__ = name
+    return run
+
+
 def main(*scenarios: Callable[..., None]) -> None:
     """A test file's own command: `python3 FILE NAME [ARG...]` runs scenario NAME(scratch, *ARGS)
     in a fresh Scratch."""

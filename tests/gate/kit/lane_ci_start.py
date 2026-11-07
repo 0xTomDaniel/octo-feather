@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 
-from testkit import Ran, Scratch, kit, main
+from testkit import Ran, Scratch, kit, main, together
 
 API = "api repos/{owner}/{repo}/actions/"
 WORKFLOW = (
@@ -192,5 +192,9 @@ def not_started(s: Scratch) -> None:
     assert "within 1s: no workflow run on it yet" in r.err, f"no run: {r.err}"
 
 
+# Every scenario above in one gate item (testkit.together).
+LANE_CI_START = together("lane_ci_start", refusals, started, not_started)
+
+
 if __name__ == "__main__":
-    main(refusals, started, not_started)
+    main(LANE_CI_START, refusals, started, not_started)

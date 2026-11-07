@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import os
 
-from testkit import ROOT, Ran, Scratch, kit, main
+from testkit import ROOT, Ran, Scratch, kit, main, together
 
 LINEAR = ROOT / ".agents" / "skills" / "linear" / "scripts"
 STORE: dict[str, object] = {
@@ -134,5 +134,9 @@ def github(s: Scratch) -> None:
     )
 
 
+# Every scenario above in one gate item (testkit.together).
+LANE_DONE = together("lane_done", linear, github)
+
+
 if __name__ == "__main__":
-    main(linear, github)
+    main(LANE_DONE, linear, github)

@@ -13,7 +13,7 @@ import json
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import HERE, ROOT, Ran, Scratch, kit, main
+from testkit import HERE, ROOT, Ran, Scratch, kit, main, together
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -204,5 +204,9 @@ def reconcile(s: Scratch) -> None:
     assert "(4 calls)" in out, f"no key: {out}"
 
 
+# Every scenario above in one gate item (testkit.together).
+LANE_SPEND = together("lane_spend", totals, append_only, reconcile)
+
+
 if __name__ == "__main__":
-    main(totals, append_only, reconcile)
+    main(LANE_SPEND, totals, append_only, reconcile)

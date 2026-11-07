@@ -14,7 +14,7 @@ from __future__ import annotations
 import hashlib
 import json
 
-from testkit import LANE_QUESTIONS, ROOT, Ran, Scratch, kit, main, reflector
+from testkit import LANE_QUESTIONS, ROOT, Ran, Scratch, kit, main, reflector, together
 
 SESSION = "0b5e7a1c-0000-4000-8000-00000000c0de"
 QUESTIONS = [
@@ -204,5 +204,9 @@ def refusals(s: Scratch) -> None:
         refuse(want)
 
 
+# Every scenario above in one gate item (testkit.together).
+LANE_REFLECT = together("lane_reflect", archive_findings, reflect_alone, refusals)
+
+
 if __name__ == "__main__":
-    main(archive_findings, reflect_alone, refusals)
+    main(LANE_REFLECT, archive_findings, reflect_alone, refusals)

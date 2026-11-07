@@ -21,7 +21,7 @@ import os
 import signal
 import subprocess
 
-from testkit import ROOT, Ran, Scratch, kit, main, reflector
+from testkit import ROOT, Ran, Scratch, kit, main, reflector, together
 
 
 def ago(hours: float) -> str:
@@ -292,5 +292,9 @@ def at_start(s: Scratch) -> None:
     assert not (s.root / "argv.director").exists(), "a fresh reflection ran again"
 
 
+# Every scenario above in one gate item (testkit.together).
+DIRECTOR_REFLECT = together("director_reflect", writer_route, at_archive, at_start)
+
+
 if __name__ == "__main__":
-    main(writer_route, at_archive, at_start)
+    main(DIRECTOR_REFLECT, writer_route, at_archive, at_start)

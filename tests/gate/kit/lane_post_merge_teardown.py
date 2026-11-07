@@ -25,7 +25,7 @@ import os
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import ROOT, Ran, Scratch, kit, main
+from testkit import ROOT, Ran, Scratch, kit, main, together
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -204,9 +204,9 @@ def not_archived(s: Scratch) -> None:
 
 def own_space(s: Scratch) -> None:
     """Archived, its own space: the space closed (herdr-close zt5), the worktree removed and the
-    mise links into it pruned (the one into the live repo kept), #13 retargeted while gh12 is
-    still on origin (a failed retarget stops with gh12 still there), then the local and remote
-    branch deleted; exit 0. A rerun prints already for each and changes nothing."""
+    mise links into it pruned (the one into the live repo kept), #13 retargeted (before the
+    remote delete: kept), then the local and remote branch deleted; exit 0. A rerun prints already
+    for each and changes nothing."""
     w = World(s, "own")
     w.archived()
     w.lane(w.lanes / "other.toml", "zt6:p1", 14)
@@ -218,19 +218,6 @@ def own_space(s: Scratch) -> None:
     ):
         (mise / d).mkdir(parents=True, exist_ok=True)
         (mise / d / name).symlink_to(target)
-    # the retarget fails once: step 5 stops there, gh12 still on origin (retarget before delete)
-    w.s.gh.tape({"pr edit 13 --base main -R o/r": [{"err": "HTTP 502\n", "exit": 1}]})
-    r, s5 = w.run(1)
-    assert "retarget PR #13 to main by hand" in s5, f"failed retarget: {s5}"
-    assert w.branch_on(w.origin, bare=True), "the remote branch was deleted before the retarget"
-    w.s.gh.tape({})
-    w.agents(["zt1:p1", "zt5:p1", "zt6:p1"])
-    w.s.git(w.r, "worktree", "add", "-q", str(w.wt), "gh12")
-    (mise / "tracked-configs" / "wt").unlink(missing_ok=True)
-    (mise / "tracked-configs" / "wt").symlink_to(w.wt / "mise.toml")
-    (mise / "trusted-configs" / "wt").unlink(missing_ok=True)
-    (mise / "trusted-configs" / "wt").symlink_to(w.wt)
-    (w.herdr / "log").unlink()
     r, s5 = w.run(0)
     links = sorted(str(x.relative_to(mise)) for x in mise.rglob("*") if x.is_symlink())
     assert links == ["tracked-configs/r"], f"mise links: {links}"
@@ -300,7 +287,10 @@ def shared_space(s: Scratch) -> None:
 
 def kept(s: Scratch) -> None:
     """Refused and kept, exit 1, nothing retargeted: a dirty worktree (git's words), a review
-    row's root, the kit install, the main worktree; a local branch past the merge commit."""
+    row's root, the kit install, the main worktree; a local branch past the merge commit. A
+    retarget that fails stops step 5 with gh12 still on origin: the retarget comes before the
+    remote delete. Each lane's supervisor tab is already closed in the director's space (step 5's
+    close says so and goes on), so herdr-close maps no pane and sweeps no process table."""
 
     def refused(w: World, what: str, want: str, **env: str) -> str:
         r, s5 = w.run(1, **env)
@@ -312,7 +302,7 @@ def kept(s: Scratch) -> None:
         return s5
 
     w = World(s, "dirty")
-    w.archived()
+    w.archived("zt1:p9")
     (w.wt / "stray").write_text("x\n")
     refused(
         w,
@@ -321,7 +311,7 @@ def kept(s: Scratch) -> None:
         "--force to delete it)",
     )
     w = World(s, "review")
-    w.archived()
+    w.archived("zt1:p9")
     (w.reg / "registry.toml").write_text(
         f'[[resource]]\nslug = "s"\nspec = "docs/s.spec.html"\nroot = "{w.wt}"\n'
     )
@@ -330,7 +320,7 @@ def kept(s: Scratch) -> None:
     )
     refused(w, "review root", want)
     w = World(s, "install")
-    w.archived()
+    w.archived("zt1:p9")
     # the worktree as the install: its origin (r's) another GitHub repo, so step 3 leaves it
     other = "https://github.com/o/other.git"
     w.s.git(w.r, "remote", "set-url", "origin", other)
@@ -339,13 +329,13 @@ def kept(s: Scratch) -> None:
     want = f"worktree {w.wt} kept: it is the kit install"
     refused(w, "kit install", want, OCTO_FEATHER_KIT_INSTALL=str(w.wt))
     w = World(s, "main-wt")
-    w.archived()
+    w.archived("zt1:p9")
     w.s.git(w.r, "worktree", "remove", str(w.wt))
     w.s.git(w.r, "checkout", "-q", "gh12")
     w.wt.mkdir()
     refused(w, "main worktree", f"worktree {w.r} kept: it is the main worktree")
     w = World(s, "unmerged")
-    w.archived()
+    w.archived("zt1:p9")
     w.s.git(w.wt, "commit", "-q", "--allow-empty", "-m", "later")
     w.s.git(w.r, "worktree", "remove", str(w.wt))
     w.wt.mkdir()
@@ -354,7 +344,19 @@ def kept(s: Scratch) -> None:
     assert s5.startswith("step 5 teardown: stopped: "), f"unmerged: {s5}"
     assert want in s5, f"unmerged: {s5}"
     w.kept("unmerged")
+    w = World(s, "retarget")
+    w.archived("zt1:p9")
+    w.s.gh.tape({"pr edit 13 --base main -R o/r": [{"err": "HTTP 502\n", "exit": 1}]})
+    _, s5 = w.run(1)
+    assert "retarget PR #13 to main by hand" in s5, f"failed retarget: {s5}"
+    assert w.branch_on(w.origin, bare=True), "the remote branch was deleted before the retarget"
+
+
+# Every scenario above in one gate item (testkit.together).
+LANE_POST_MERGE_TEARDOWN = together(
+    "lane_post_merge_teardown", not_archived, own_space, no_ci, shared_space, kept
+)
 
 
 if __name__ == "__main__":
-    main(not_archived, own_space, no_ci, shared_space, kept)
+    main(LANE_POST_MERGE_TEARDOWN, not_archived, own_space, no_ci, shared_space, kept)

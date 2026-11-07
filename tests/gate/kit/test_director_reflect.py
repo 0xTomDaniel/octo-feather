@@ -1,20 +1,13 @@
-"""The pytest items of tests/gate/kit/director_reflect.py's scenarios (what they prove: its
-docstring), each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
+"""The pytest item of tests/gate/kit/director_reflect.py's scenarios (what they prove: its
+docstring), all run as that file's command, one item (testkit.together), through `case`
+(tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from director_reflect import at_archive, at_start, writer_route
+from director_reflect import DIRECTOR_REFLECT
 
 Case = Callable[..., None]
 
 
-def test_director_reflect_writer_route(case: Case) -> None:
-    case(writer_route)
-
-
-def test_director_reflect_at_archive(case: Case) -> None:
-    case(at_archive)
-
-
-def test_director_reflect_at_start(case: Case) -> None:
-    case(at_start)
+def test_director_reflect(case: Case) -> None:
+    case(DIRECTOR_REFLECT)

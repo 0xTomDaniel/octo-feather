@@ -1,20 +1,13 @@
-"""The pytest items of tests/gate/kit/lane_spend.py's scenarios (what they prove: its docstring),
-each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
+"""The pytest item of tests/gate/kit/lane_spend.py's scenarios (what they prove: its docstring), all
+run as that file's command, one item (testkit.together), through `case`
+(tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
-from lane_spend import append_only, reconcile, totals
+from lane_spend import LANE_SPEND
 
 Case = Callable[..., None]
 
 
-def test_lane_spend_totals(case: Case) -> None:
-    case(totals)
-
-
-def test_lane_spend_append_only(case: Case) -> None:
-    case(append_only)
-
-
-def test_lane_spend_reconcile(case: Case) -> None:
-    case(reconcile)
+def test_lane_spend(case: Case) -> None:
+    case(LANE_SPEND)
