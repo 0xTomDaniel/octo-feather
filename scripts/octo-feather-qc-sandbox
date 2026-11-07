@@ -93,6 +93,7 @@ Exit: the judge's exit, or 66 when the sandbox or a proof check failed (judge ne
 import base64
 import contextlib
 import ctypes
+import fcntl
 import glob
 import json
 import os
@@ -1259,10 +1260,11 @@ def setup(judge: list[str]) -> NoReturn:
     os.chmod(f"{SCR}/bin/run.json", 0o444)
 
     # R. the recorder, then srt.
-    fds = [
-        *(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")),
-        2,
-    ]  # and the inner's stderr
+    # The inner's pipes, and the caller's stdin, stdout and stderr: handed over the recorder's socket, never to srt's
+    # Node, which sets O_NONBLOCK on the stdio it inherits (libuv), on the open file description itself, shared by the
+    # caller and every writer in the sandbox: a judge writing a burst into a full pipe then failed with EAGAIN (#690's
+    # eval runs). srt gets /dev/null and its own stderr pipe.
+    fds = [*(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")), 2, 0, 1]
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1288,7 +1290,8 @@ def setup(judge: list[str]) -> NoReturn:
         ],
         env=senv,
         cwd=f"{SCR}/cwd",
-        stdin=None if hand else subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         close_fds=True,
     )
@@ -1484,12 +1487,15 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     try:
         sk.connect(f"{SCR}/rec/sock")
         sk.send(b'{"t": "hello"}')
-        msg, fds, _, _ = socket.recv_fds(sk, 64, 4)
-        os.dup2(
-            fds[3], 2
-        )  # this process's stderr, and its children's: the caller's, past srt's own log
-        os.close(fds[3])
+        msg, fds, _, _ = socket.recv_fds(sk, 64, 6)
+        # the caller's stderr, stdin and stdout for this process and its children (srt's own stdio aside), blocking
+        for f, to in ((fds[3], 2), (fds[4], 0), (fds[5], 1)):
+            os.dup2(f, to)
+            os.close(f)
         fds = fds[:3]
+        for f in (0, 1, 2, *fds):
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(f, fcntl.F_SETFL, fcntl.fcntl(f, fcntl.F_GETFL) & ~os.O_NONBLOCK)
     except OSError as e:
         sys.exit(
             print(
