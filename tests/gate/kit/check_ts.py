@@ -8,14 +8,17 @@ where the box has one; else TMPDIR) install offline from the kit's store; a type
 lint violation added to an extension fail naming each file and line; eslint's baseline only
 shrinks: one more `any` in extensions/spend-ledger.ts fails naming its line, and, alone, a fixed
 violation leaves an unused suppression that fails naming --prune-suppressions. The clean copy
-passing is the kit gate's own check-ts item (tests/gate/test_gate.py, test_recipe): each failing
-case names its own lines, so none passes on a copy broken some other way. Each run lints the
-kit's TypeScript with typed eslint, the cost floor: two such runs, as eslint reports unused
-suppressions only in a run with no other finding.
+passing is the kit gate's own check-ts item (tests/gate/test_gate.py, test_recipe), which runs it
+on every file tsconfig.json lists: each failing case names its own lines, so none passes on a copy
+broken some other way. Each failing case's copy has tsconfig.json's include cut to the files it
+plants in (Copy.only; its data, as check-ts reads its file list from tsconfig.json): typed eslint
+and tsc over the whole kit are the cost floor (#686), and every assertion is about those files.
+Two runs, as eslint reports unused suppressions only in a run with no other finding.
 """
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -69,6 +72,14 @@ class Copy:
             check=False,
         )
         return Ran(p.returncode, p.stdout, "")
+
+    def only(self, *rels: str) -> None:
+        """tsconfig.json's include cut to RELS: the files check-ts checks (its file list)."""
+        p = self.dir / "tsconfig.json"
+        text = p.read_text()
+        old = '"include": ["**/*"]'
+        assert old in text, f"no {old} in {p}"
+        p.write_text(text.replace(old, f'"include": {json.dumps(list(rels))}'))
 
     def append(self, rel: str, text: str) -> int:
         """TEXT appended to REL; the line number of its last line."""
@@ -126,6 +137,7 @@ def findings(s: Scratch) -> None:
     """A type error and a lint violation in the extension, and one more `any` in baselined
     spend-ledger.ts: one run names each by file and line."""
     c = Copy(s)
+    c.only(EXT, LEDGER)
     n = c.append(EXT, 'export const typeProbe: number = "x";\n')
     c.append(EXT, "export function lintProbe(x: any): unknown { return x; }\n")
     m = c.append(LEDGER, "export function probe(x: any): unknown { return x; }\n")
@@ -141,7 +153,9 @@ def unused_suppression(s: Scratch) -> None:
     """Only an unused suppression (a fixed violation in the fixture): fails naming
     --prune-suppressions."""
     c = Copy(s)
-    f = c.dir / "tests" / "fixtures" / "spend-ledger" / "nested-tool.ts"
+    rel = "tests/fixtures/spend-ledger/nested-tool.ts"
+    c.only(rel)
+    f = c.dir / rel
     text = f.read_text()
     assert "    async execute() {" in text, f"no async execute() in {f}"
     f.write_text(text.replace("    async execute() {", "    execute() {"))

@@ -150,7 +150,7 @@ P
   uvcache)   # an offline uv sync from uv's cache (QC_UVP's lock, its one package only there), then a write into that cache
     UV_PROJECT_ENVIRONMENT=/tmp/uv-venv uv sync --project "$QC_UVP" --locked --offline --quiet 2>&1; echo "UVSYNC exit $?"
     /tmp/uv-venv/bin/python -c 'import qcw; print("UVIMPORT", qcw.X)' 2>&1
-    echo judge > "$(uv cache dir)/judge-wrote" 2>&1; echo "UVWRITE exit $?"
+    echo judge > "$(uv cache dir --color never)/judge-wrote" 2>&1; echo "UVWRITE exit $?"
     printf "$ok" ;;
   vendored)   # `just check`'s check-vendored on the kit reads the cache; every write into it fails
     vc="$HOME/.cache/octo-feather/skillfile"; kit="$(dirname "$(command -v octo-feather-state)")/.."

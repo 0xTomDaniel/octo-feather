@@ -12,10 +12,14 @@ export root := justfile_directory()
 # mise's own dirs, as mise reports them, pinned for every recipe and test, so a test that points HOME elsewhere
 # leaves nothing of mise's there and still finds its installs. Asked only when unset (a nested run inherits them):
 # asking mise with HOME redirected is itself what wrote its cache under that HOME (#261 gate run 983e89dc).
-export MISE_DATA_DIR := if env_var_or_default('MISE_DATA_DIR', '') != '' { env_var('MISE_DATA_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["data"])' || true` }
-export MISE_CACHE_DIR := if env_var_or_default('MISE_CACHE_DIR', '') != '' { env_var('MISE_CACHE_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["cache"])' || true` }
-export MISE_STATE_DIR := if env_var_or_default('MISE_STATE_DIR', '') != '' { env_var('MISE_STATE_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["state"])' || true` }
-export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { env_var('MISE_CONFIG_DIR') } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["config"])' || true` }
+# One ask answers all four, a line each (data, cache, state, config); each takes its line (#692: four asks were
+# 2/3 of every fresh just run's CPU; just 1.21 evaluates every assignment, lazy or not).
+mise_unset := if env_var_or_default('MISE_DATA_DIR', '') == '' { 'yes' } else if env_var_or_default('MISE_CACHE_DIR', '') == '' { 'yes' } else if env_var_or_default('MISE_STATE_DIR', '') == '' { 'yes' } else if env_var_or_default('MISE_CONFIG_DIR', '') == '' { 'yes' } else { '' }
+mise_dirs := if mise_unset == '' { '' } else { `command -v mise >/dev/null && mise doctor --json | python3 -c 'import json, sys; d = json.load(sys.stdin)["dirs"]; print("\n".join(d.get(k, "") for k in ("data", "cache", "state", "config")))' || true` }
+export MISE_DATA_DIR := if env_var_or_default('MISE_DATA_DIR', '') != '' { env_var('MISE_DATA_DIR') } else { replace_regex(mise_dirs, '^([^\n]*)(?s:.*)$', '$1') }
+export MISE_CACHE_DIR := if env_var_or_default('MISE_CACHE_DIR', '') != '' { env_var('MISE_CACHE_DIR') } else { replace_regex(mise_dirs, '^(?:[^\n]*\n){1}([^\n]*)(?s:.*)$', '$1') }
+export MISE_STATE_DIR := if env_var_or_default('MISE_STATE_DIR', '') != '' { env_var('MISE_STATE_DIR') } else { replace_regex(mise_dirs, '^(?:[^\n]*\n){2}([^\n]*)(?s:.*)$', '$1') }
+export MISE_CONFIG_DIR := if env_var_or_default('MISE_CONFIG_DIR', '') != '' { env_var('MISE_CONFIG_DIR') } else { replace_regex(mise_dirs, '^(?:[^\n]*\n){3}([^\n]*)(?s:.*)$', '$1') }
 # Offline: a tool missing from mise's installs fails, never downloads (the gate calls no network service, quality
 # #boundary-gate); `mise install --locked` fills them, outside the gate.
 export MISE_OFFLINE := "1"

@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 OTHER_T = "PASSED tests/integration/test_other.py::test_double"
 INTEG = "PASSED tests/integration/test_cli.py::"
 E2E = "tests/e2e/test_cli_e2e.py::test_installed_command_end_to_end"
-TEST = "tests/e2e/test_cli_e2e.py"
+TEST = "tests/integration/test_cli.py"  # the starter acceptance test, light
 FIXTURE = "shared fixture greetings.json: prepared once"
 # Two workers: the shared fixture across xdist workers (a nested gate is otherwise -n 0, #208).
 # pytest's own --color=no, so a CI forcing colour never splits the lines read here.

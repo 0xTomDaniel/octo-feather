@@ -1,0 +1,682 @@
+#!/usr/bin/env python3
+"""check-evals [EVALS_DIR]   the shape of every factory eval case (quality #acceptance-qa-cases-checked)
+
+Deterministic and free: reads JSON only, never starts an agent or a model. Run by `just check`
+(check-evals) and first by every factory eval run, which refuses a malformed suite.
+
+EVALS_DIR: default the kit's evals/.
+Schema owner: the eval-cases skill, .agents/skills/eval-cases/references/schema.md. Every field this
+refuses, and why, is stated there, by section: Layout (the files), Suite (suite.json), Case (cases.json,
+role-transcript setup branch/head/origin/fake_gh/fake_qa, review, history fixture), Facts (reference/expectations.json: the closed fact
+list, Before targets, Attempt record, Run record, Final JSON, Field lines, Branch paths), Leaks, Coverage, Judgment
+suite (question.json, cases, labels), Calibration, Judgment model and classifiers (judgment-model.json,
+classifiers.json).
+Each problem prints `check-evals: <file>[ case <id>][ fact #<n>]: field <name>: <problem>`.
+Exit 0 with `evals: ok (...)`, 1 naming each problem (a missing or unreadable file included), 2 when
+EVALS_DIR is not a dir.
+"""
+import importlib.machinery, importlib.util, json, re, shutil, subprocess, sys, tomllib
+from typing import cast
+from pathlib import Path
+
+KIT = Path(__file__).resolve().parent.parent
+FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_before": {"skill", "before"},
+         "attempt_blocked": {"kind"}, "declared": {"field", "in"}, "declared_includes": {"field", "items"},
+         "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"},
+         "tool_called_before": {"tools", "before"}}
+PROGRAM = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*")   # a ran fact's program: a command name (schema.md, Facts)
+OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}}
+FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
+FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
+PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
+BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
+NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
+SETUP = {"branch", "head", "origin", "fake_gh", "fake_qa"}   # schema.md, Case
+BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
+ATTEMPTS = {"herdr", "lane_state", "credential", "repo"}
+KINDS = {"skill-trigger", "role-transcript", "judgment"}
+JUDGMENT_MIN = 15   # schema.md, Judgment suite
+QUESTION = {"id", "question", "labels", "label_help", "state_shape"}
+J_CASE = {"id", "split", "state"}
+J_EXP = {"label", "reason", "source"}
+J_EXP_OPT = {"labelled_by", "relabel"}   # the labeller record (schema.md, Judgment suite)
+CALIBRATION = {"evidence", "held_out", "threshold"}   # schema.md, Calibration
+HELD_OUT = {"accuracy", "brier"}   # calibration.held_out (schema.md, Calibration)
+THRESHOLD = {"accuracy_min", "brier_max", "accepted"}   # calibration.threshold (schema.md, Calibration)
+MODEL_FILE = "judgment-model.json"   # schema.md, Judgment model and classifiers
+MODEL_KEYS = {"model", "evidence"}
+CLASSIFIERS = "classifiers.json"   # schema.md, Judgment model and classifiers
+CLASSIFIER_KEYS = {"owner", "moving_alias", "yes_no_only", "pinned"}
+YES_NO_KEYS = ("ruling", "error", "evidence")   # each yes_no_only entry's (schema.md, Judgment model and classifiers)
+NAMES_MODEL = {"model", "chosen"}   # schema.md, Suite
+MODEL = re.compile(r"[^\s/]+/\S*[^\s/]")
+BASE = {"id", "role", "fixture", "task"}
+TRIGGER = {"should_trigger", "split"}
+SPLITS = {"train", "held-out"}
+ID = re.compile(r"[a-z0-9][a-z0-9-]*")
+FIX = "fix the case (check-evals --help lists the shape)"
+
+
+def load(path, errs, holds=None):
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except FileNotFoundError:
+        errs.append(f"{path}: missing; " + (f"it holds {holds}" if holds else "a suite needs suite.json, cases.json and reference/expectations.json"))
+    except (OSError, ValueError) as e:
+        errs.append(f"{path}: unreadable JSON ({e})")
+    return None
+
+
+def leaks(task, exp):
+    """The grade TASK leaks (rule: schema.md, Leaks), one finding each, sorted."""
+    dec, objs = json.JSONDecoder(), []
+    for i, ch in enumerate(task):
+        if ch == "{":
+            try:
+                objs.append(dec.raw_decode(task, i)[0])
+            except ValueError:
+                pass
+    found = []
+    for n, f in enumerate(exp.get("facts", [])):
+        if any(o == f for o in objs):
+            found.append(f"fact #{n + 1} as JSON {json.dumps(f)}")
+        sk = f.get("skill") if isinstance(f, dict) else None
+        if isinstance(sk, str) and sk:
+            for s in (f"{sk}/SKILL.md", f"skills/{sk}"):
+                if re.search(r"(?<![\w.-])" + re.escape(s) + r"(?![\w.-])", task):
+                    found.append(f"skill path {s}")
+    return sorted(set(found))
+
+
+def check_suite(d, evals, errs):
+    name = d.name
+    suite = load(d / "suite.json", errs)
+    cases = load(d / "cases.json", errs)
+    exps = load(d / "reference" / "expectations.json", errs)
+    if suite is None or cases is None or exps is None:
+        return 0
+    where = f"{name}/suite.json"
+    if not isinstance(suite, dict):
+        errs.append(f"{where}: must be a JSON object"); return 0
+    named = model_keys(suite)
+    for k in named:
+        errs.append(f"{where}: field {k}: a suite names no model; the kit's one judgment model is {MODEL_FILE} "
+                    "(spec judgment#rule-one-model), this question's calibration of it goes in calibration")
+    for k in sorted(set(suite) - {"suite", "kind", "description", "max_tool_calls", "timeout_s", "covers", "calibration"} - set(named)):
+        errs.append(f"{where}: field {k}: unknown field")
+    if suite.get("suite") != name:
+        errs.append(f"{where}: field suite: must equal the dir name {name!r}, got {suite.get('suite')!r}")
+    kind = suite.get("kind")
+    if kind not in KINDS:
+        errs.append(f"{where}: field kind: must be one of {sorted(KINDS)}, got {kind!r}")
+    if not isinstance(suite.get("description"), str) or not suite.get("description", "").strip():
+        errs.append(f"{where}: field description: missing or empty")
+    for k in ("max_tool_calls", "timeout_s"):
+        if k in suite and not (type(suite[k]) is int and suite[k] > 0):
+            errs.append(f"{where}: field {k}: must be a positive integer")
+    if "covers" in suite and (suite["covers"] != "role-skills" or kind != "skill-trigger"):
+        errs.append(f"{where}: field covers: only \"role-skills\", and only in a skill-trigger suite, got {suite['covers']!r}")
+    if "calibration" in suite:
+        check_calibration(suite["calibration"], kind, where, evals, errs, named)
+    if not isinstance(cases, list):
+        errs.append(f"{name}/cases.json: must be a JSON list of cases"); return 0
+    if not isinstance(exps, dict):
+        errs.append(f"{name}/reference/expectations.json: must be a JSON object keyed by case id"); return 0
+    if kind == "judgment":
+        return check_judgment(d, cases, exps, errs)
+    need = BASE | (TRIGGER if kind == "skill-trigger" else set())
+    extra = SETUP | {"review"} if kind == "role-transcript" else set()
+    ids = []
+    for n, c in enumerate(cases):
+        if not isinstance(c, dict):
+            errs.append(f"{name}/cases.json: case #{n + 1}: must be a JSON object"); continue
+        cid = c.get("id") if isinstance(c.get("id"), str) else f"#{n + 1}"
+        at = f"{name}/cases.json case {cid}"
+        for k in sorted(need - set(c)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(c) - need - extra):
+            errs.append(f"{at}: field {k}: unknown field" + ("; graded facts live only in reference/expectations.json" if k == "facts" else "")
+                        + ("; only a role-transcript case sets up a repo" if k in SETUP else ""))
+        if kind == "role-transcript":
+            check_setup(at, c, evals, errs)
+        if "review" in c and "review" in extra:
+            check_review(str(at), cast("object", c["review"]), cast("list[str]", errs))
+        if "id" in c:
+            if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
+                errs.append(f"{at}: field id: must match {ID.pattern}")
+            elif c["id"] in ids:
+                errs.append(f"{at}: field id: duplicate")
+            else:
+                ids.append(c["id"])
+        if "fixture" in c and isinstance(cast("object", c["fixture"]), dict):   # a history fixture (schema.md, Case)
+            check_history(str(at), cast("object", c["fixture"]), cast("list[str]", errs))
+        for k in ("role", "fixture", "task"):
+            if k in c and not (isinstance(c[k], str) and c[k].strip()) and not (k == "fixture" and isinstance(c[k], dict)):
+                errs.append(f"{at}: field {k}: must be a non-empty string")
+        if isinstance(c.get("role"), str) and c["role"].strip() and not (
+                re.fullmatch(r"[a-z0-9-]+", c["role"]) and (KIT / "agents" / f"{c['role']}.md").is_file()):
+            errs.append(f"{at}: field role: no kit role agents/{c['role']}.md")
+        if isinstance(c.get("fixture"), str) and c["fixture"].strip() and not (
+                re.fullmatch(r"[A-Za-z0-9._-]+", c["fixture"]) and (evals / "fixtures" / c["fixture"]).is_dir()):
+            errs.append(f"{at}: field fixture: no fixture dir {evals / 'fixtures' / c['fixture']}")
+        if "should_trigger" in c and kind == "skill-trigger" and not isinstance(c["should_trigger"], bool):
+            errs.append(f"{at}: field should_trigger: must be true or false")
+        if "split" in c and kind == "skill-trigger" and c["split"] not in SPLITS:
+            errs.append(f"{at}: field split: must be one of {sorted(SPLITS)}, got {c['split']!r}")
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        if exp is None:
+            if isinstance(c.get("id"), str):
+                errs.append(f"{at}: field id: no expectations in reference/expectations.json")
+            continue
+        tree = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")   # the tree the agent sees
+        check_exp(f"{name}/reference/expectations.json case {cid}", exp, errs,
+                  evals / "fixtures" / tree if isinstance(tree, str) and re.fullmatch(r"[A-Za-z0-9._-]+", tree) else None,
+                  review="review" in c and "review" in extra)
+        if not isinstance(exp, dict) or not isinstance(exp.get("facts"), list):
+            continue
+        for n, f in enumerate(exp["facts"]):
+            k = NEEDS.get(f.get("before")) if isinstance(f, dict) and isinstance(f.get("before"), str) else None
+            if k and c.get(k) is not True:
+                errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: {f['before']} "
+                            f"needs the case's {k}: true (nothing else can reach it)")
+            fx = c["head"].get("fixture") if isinstance(c.get("head"), dict) else c.get("fixture")
+            if isinstance(f, dict) and f.get("before") == "test_write" and isinstance(fx, str) and not declares_tests(evals, fx):
+                errs.append(f"{name}/reference/expectations.json case {cid} fact #{n + 1}: field before: test_write needs fixture "
+                            f"{fx} to declare its tests (pyproject.toml [tool.pytest.ini_options] testpaths, and uv.lock); it declares none")
+        kinds = {f.get("fact") for f in exp["facts"] if isinstance(f, dict)}
+        if kind == "skill-trigger" and isinstance(c.get("should_trigger"), bool):
+            if c["should_trigger"] and not kinds & {"skill_read", "skill_read_before"}:
+                errs.append(f"{at}: field should_trigger: true, but no skill_read or skill_read_before fact grades it")
+            if not c["should_trigger"] and "skill_not_read" not in kinds:
+                errs.append(f"{at}: field should_trigger: false, but no skill_not_read fact grades it")
+        if isinstance(c.get("task"), str):
+            for leak in leaks(c["task"], exp):
+                errs.append(f"{at}: field task: shows the agent its grade ({leak}); graded facts stay hidden")
+    for k in sorted(set(exps) - set(ids)):
+        errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
+    if suite.get("covers") == "role-skills" and kind == "skill-trigger":
+        check_coverage(name, cases, exps, evals, errs)
+    return len(cases)
+
+
+def model_keys(o, at=""):
+    """The dotted paths of every NAMES_MODEL key in O (rule: schema.md, Suite)."""
+    if isinstance(o, list):
+        return [p for n, x in enumerate(o) for p in model_keys(x, f"{at}[{n}]")]
+    if not isinstance(o, dict):
+        return []
+    return [p for k, v in o.items() for p in ([f"{at}{k}"] if k in NAMES_MODEL else model_keys(v, f"{at}{k}."))]
+
+
+def check_model_ref(m, field, where, errs, ruled):
+    """M as FIELD's model (rule: schema.md, Judgment model and classifiers); RULED: classifiers.json's lists, None unread."""
+    if not (isinstance(m, str) and MODEL.fullmatch(m)):
+        errs.append(f"{where}: field {field}: must be a classifier <provider>/<id>, got {m!r}"); return
+    if ruled is None:
+        return
+    if m in ruled["moving_alias"]:
+        errs.append(f"{where}: field {field}: {m} is a moving alias in {CLASSIFIERS} (owner: {ruled['owner']}); name a pinned one")
+    elif m in ruled["yes_no_only"]:
+        errs.append(f"{where}: field {field}: {m} is yes/no only in {CLASSIFIERS} (ruling: {ruled['yes_no_only'][m]['ruling']}); "
+                    f"name a pinned one")
+    elif m not in ruled["pinned"]:
+        errs.append(f"{where}: field {field}: {m} is not in {CLASSIFIERS} pinned; name a pinned one or rule it there")
+
+
+def check_classifiers(evals, errs):
+    """EVALS/classifiers.json (schema: .agents/skills/eval-cases/references/schema.md, Judgment model and classifiers). Returns it when well formed, else None."""
+    where = CLASSIFIERS
+    o = load(evals / CLASSIFIERS, errs, "every catalogue classifier ruled {owner, moving_alias, yes_no_only, pinned} (spec judgment#rule-available)")
+    if o is None:
+        return None
+    if not isinstance(o, dict):
+        errs.append(f"{where}: must be a JSON object {{owner, moving_alias, yes_no_only, pinned}}"); return None
+    n = len(errs)
+    for k in sorted(CLASSIFIER_KEYS - set(o)):
+        errs.append(f"{where}: field {k}: missing")
+    for k in sorted(set(o) - CLASSIFIER_KEYS):
+        errs.append(f"{where}: field {k}: unknown field")
+    if "owner" in o and not (isinstance(o["owner"], str) and o["owner"].strip() and "\n" not in o["owner"]):
+        errs.append(f"{where}: field owner: must be the ruling's source, one non-empty line, got {o['owner']!r}")
+    seen = {}
+    if isinstance(o.get("pinned"), dict):
+        for m, src in o["pinned"].items():
+            if not (isinstance(src, str) and src.strip() and "\n" not in src):
+                errs.append(f"{where}: field pinned.{m}: must be its pinning ruling's source, one non-empty line, got {src!r}")
+    elif "pinned" in o:
+        errs.append(f"{where}: field pinned: must be an object {{<provider>/<id>: its ruling's source}}, got {o['pinned']!r}")
+    if isinstance(o.get("yes_no_only"), dict):
+        for m, y in o["yes_no_only"].items():
+            at = f"yes_no_only.{m}"
+            if not isinstance(y, dict):
+                errs.append(f"{where}: field {at}: must be an object {{{', '.join(YES_NO_KEYS)}}}, got {y!r}"); continue
+            for k in YES_NO_KEYS:
+                if k not in y:
+                    errs.append(f"{where}: field {at}.{k}: missing")
+                elif not (isinstance(y[k], str) and y[k].strip() and (k == "error" or "\n" not in y[k])):
+                    errs.append(f"{where}: field {at}.{k}: must be " + ("the verbatim provider error, non-empty" if k == "error" else
+                                f"its {k}'s source, one non-empty line") + f", got {y[k]!r}")
+            for k in sorted(set(y) - set(YES_NO_KEYS)):
+                errs.append(f"{where}: field {at}.{k}: unknown field")
+    elif "yes_no_only" in o:
+        errs.append(f"{where}: field yes_no_only: must be an object {{<provider>/<id>: {{{', '.join(YES_NO_KEYS)}}}}}, got {o['yes_no_only']!r}")
+    for k in ("moving_alias", "yes_no_only", "pinned"):
+        if k not in o:
+            continue
+        if k == "moving_alias" and not isinstance(o[k], list):
+            errs.append(f"{where}: field {k}: must be a list of classifier ids <provider>/<id>, got {o[k]!r}"); continue
+        if not isinstance(o[k], list if k == "moving_alias" else dict):
+            continue
+        for i, m in enumerate(o[k]):
+            at = f"{k}[{i}]" if k == "moving_alias" else f"{k}.{m}"
+            if not (isinstance(m, str) and MODEL.fullmatch(m)):
+                errs.append(f"{where}: field {at}: must be a classifier <provider>/<id>, got {m!r}")
+            elif m in seen:
+                errs.append(f"{where}: field {at}: {m} already listed in {seen[m]}")
+            else:
+                seen[m] = k
+    return o if len(errs) == n else None
+
+
+def check_evidence(ev, field, where, evals, errs):
+    if not (isinstance(ev, str) and PATH.fullmatch(ev)):
+        errs.append(f"{where}: field {field}: must be a relative path inside the repo, got {ev!r}")
+    elif not (evals.parent / ev).is_file():
+        errs.append(f"{where}: field {field}: no file {ev} beside evals/ (in {evals.parent}); name the bench's evidence file")
+
+
+def check_model_file(evals, errs):
+    """EVALS/judgment-model.json (rule: schema.md, Judgment model and classifiers)."""
+    where = MODEL_FILE
+    ruled = check_classifiers(evals, errs)
+    o = load(evals / MODEL_FILE, errs, f"the kit's one judgment model {{model, evidence}} (spec judgment#rule-one-model)")
+    if o is None:
+        return
+    if not isinstance(o, dict):
+        errs.append(f"{where}: must be a JSON object {{model, evidence}}"); return
+    for k in sorted(MODEL_KEYS - set(o)):
+        errs.append(f"{where}: field {k}: missing")
+    for k in sorted(set(o) - MODEL_KEYS):
+        errs.append(f"{where}: field {k}: unknown field")
+    if "model" in o:
+        check_model_ref(o["model"], "model", where, errs, ruled)
+    if "evidence" in o:
+        check_evidence(o["evidence"], "evidence", where, evals, errs)
+
+
+def check_calibration(ch, kind, where, evals, errs, named=()):
+    """A suite's calibration CH (rule: schema.md, Calibration)."""
+    if kind != "judgment":
+        errs.append(f"{where}: field calibration: only in a judgment suite, got kind {kind!r}"); return
+    if not isinstance(ch, dict):
+        errs.append(f"{where}: field calibration: must be an object {{evidence, held_out, threshold}}, got {ch!r}"); return
+    for k in sorted(CALIBRATION - set(ch)):
+        errs.append(f"{where}: field calibration.{k}: missing")
+    for k in sorted(set(ch) - CALIBRATION):
+        if f"calibration.{k}" not in named:
+            errs.append(f"{where}: field calibration.{k}: unknown field")
+    if "evidence" in ch:
+        check_evidence(ch["evidence"], "calibration.evidence", where, evals, errs)
+    num = lambda v: type(v) in (int, float)
+    for k, keys, rng in (("held_out", HELD_OUT, {"accuracy": 1, "brier": 2}), ("threshold", THRESHOLD, {"accuracy_min": 1, "brier_max": None})):
+        o = ch.get(k)
+        if k not in ch:
+            continue
+        if not isinstance(o, dict):
+            errs.append(f"{where}: field calibration.{k}: must be an object {{{', '.join(sorted(keys))}}}, got {o!r}"); continue
+        for f in sorted(keys - set(o)):
+            errs.append(f"{where}: field calibration.{k}.{f}: missing")
+        for f in sorted(set(o) - keys):
+            if f"calibration.{k}.{f}" not in named:
+                errs.append(f"{where}: field calibration.{k}.{f}: unknown field")
+        for f, top in rng.items():
+            if f in o and not (num(o[f]) and 0 <= o[f] and (top is None or o[f] <= top)):
+                errs.append(f"{where}: field calibration.{k}.{f}: must be a number from 0" + (f" to {top}" if top else " up") + f", got {o[f]!r}")
+        if "accepted" in o and type(o["accepted"]) is not bool:
+            errs.append(f"{where}: field calibration.{k}.accepted: must be true or false, got {o['accepted']!r}")
+
+
+def check_judgment(d, cases, exps, errs):
+    """A judgment suite (rule: schema.md, Judgment suite)."""
+    name = d.name
+    q = load(d / "question.json", errs)
+    labels = []
+    if q is not None and not isinstance(q, dict):
+        errs.append(f"{name}/question.json: must be a JSON object")
+    elif q is not None:
+        at = f"{name}/question.json"
+        for k in sorted(QUESTION - set(q)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(q) - QUESTION):
+            errs.append(f"{at}: field {k}: unknown field")
+        for k in ("id", "question", "state_shape"):
+            if k in q and not (isinstance(q[k], str) and q[k].strip()):
+                errs.append(f"{at}: field {k}: must be a non-empty string")
+        ls = q.get("labels")
+        if "labels" in q and not (isinstance(ls, list) and len(ls) >= 2 and all(isinstance(x, str) and x.strip() for x in ls)
+                                  and len(set(ls)) == len(ls)):
+            errs.append(f"{at}: field labels: must be a list of 2 or more distinct non-empty strings")
+        elif "labels" in q:
+            labels = ls
+        h = q.get("label_help")
+        if "label_help" in q and not (isinstance(h, dict) and all(isinstance(v, str) and v.strip() for v in h.values())):
+            errs.append(f"{at}: field label_help: must map each label to a non-empty string")
+        elif "label_help" in q and labels and set(h) != set(labels):
+            errs.append(f"{at}: field label_help: keys must be exactly the labels {labels}, got {sorted(h)}")
+    ids, splits = [], set()
+    for n, c in enumerate(cases):
+        if not isinstance(c, dict):
+            errs.append(f"{name}/cases.json: case #{n + 1}: must be a JSON object"); continue
+        cid = c.get("id") if isinstance(c.get("id"), str) else f"#{n + 1}"
+        at = f"{name}/cases.json case {cid}"
+        for k in sorted(J_CASE - set(c)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(c) - J_CASE):
+            errs.append(f"{at}: field {k}: unknown field" + ("; label, reason and source live only in reference/expectations.json" if k in J_EXP else ""))
+        if "id" in c:
+            if not (isinstance(c["id"], str) and ID.fullmatch(c["id"])):
+                errs.append(f"{at}: field id: must match {ID.pattern}")
+            elif c["id"] in ids:
+                errs.append(f"{at}: field id: duplicate")
+            else:
+                ids.append(c["id"])
+        if "split" in c and c["split"] not in SPLITS:
+            errs.append(f"{at}: field split: must be one of {sorted(SPLITS)}, got {c['split']!r}")
+        elif "split" in c:
+            splits.add(c["split"])
+        if "state" in c and not (isinstance(c["state"], str) and c["state"].strip()):
+            errs.append(f"{at}: field state: must be a non-empty string")
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        if exp is None:
+            if isinstance(c.get("id"), str):
+                errs.append(f"{at}: field id: no expectations in reference/expectations.json")
+            continue
+        at = f"{name}/reference/expectations.json case {cid}"
+        if not isinstance(exp, dict):
+            errs.append(f"{at}: must be a JSON object {{\"label\", \"reason\", \"source\"}}"); continue
+        for k in sorted(J_EXP - set(exp)):
+            errs.append(f"{at}: field {k}: missing")
+        for k in sorted(set(exp) - J_EXP - J_EXP_OPT):
+            errs.append(f"{at}: field {k}: unknown field")
+        for k in sorted(J_EXP_OPT & set(exp)):
+            if not (isinstance(exp[k], str) and exp[k].strip() and "\n" not in exp[k]):
+                errs.append(f"{at}: field {k}: must be one non-empty line")
+        if "label" in exp and labels and exp["label"] not in labels:
+            errs.append(f"{at}: field label: must be one of {labels}, got {exp['label']!r}")
+        if "reason" in exp and not (isinstance(exp["reason"], str) and exp["reason"].strip() and "\n" not in exp["reason"]):
+            errs.append(f"{at}: field reason: must be one non-empty line")
+        if "source" in exp and not (isinstance(exp["source"], str) and exp["source"].strip()):
+            errs.append(f"{at}: field source: must be a non-empty string")
+    for k in sorted(set(exps) - set(ids)):
+        errs.append(f"{name}/reference/expectations.json case {k}: field id: no case in cases.json")
+    if len(cases) < JUDGMENT_MIN:
+        errs.append(f"{name}/cases.json: {len(cases)} cases; a judgment set needs at least {JUDGMENT_MIN}")
+    for sp in sorted(SPLITS - splits):
+        errs.append(f"{name}/cases.json: no case in split {sp}; a judgment set marks a held-out share apart from train")
+    return len(cases)
+
+
+def check_setup(at, c, evals, errs):
+    """A role-transcript case's repo setup fields (rule: schema.md, Case)."""
+    ref = lambda v: isinstance(v, str) and BRANCH.fullmatch(v) and ".." not in v and not v.endswith(("/", ".lock"))
+    if "branch" in c and not ref(c["branch"]):
+        errs.append(f"{at}: field branch: must be a branch name ({BRANCH.pattern}, no '..'), got {c['branch']!r}")
+    if "branch" in c and c["branch"] == "main":
+        errs.append(f"{at}: field branch: main exists already; name the branch to cut from it")
+    for k in ("origin", "fake_gh", "fake_qa"):
+        if k in c and c[k] is not True:
+            errs.append(f"{at}: field {k}: must be true (leave it out for false)")
+    if "head" not in c:
+        return
+    h = c["head"]
+    if not isinstance(h, dict):
+        errs.append(f"{at}: field head: must be an object {{\"fixture\", \"branch\", \"message\"}}"); return
+    for k in sorted({"fixture", "branch", "message"} - set(h)):
+        errs.append(f"{at}: field head.{k}: missing")
+    for k in sorted(set(h) - {"fixture", "branch", "message"}):
+        errs.append(f"{at}: field head.{k}: unknown field")
+    hist = "fixture" in h and isinstance(cast("object", h["fixture"]), dict)
+    if hist:
+        check_history(cast("str", at), cast("object", h["fixture"]), cast("list[str]", errs), "head.fixture")
+    if "fixture" in h and not (isinstance(h["fixture"], str) and re.fullmatch(r"[A-Za-z0-9._-]+", h["fixture"])
+                               and (evals / "fixtures" / h["fixture"]).is_dir()) and not hist:
+        errs.append(f"{at}: field head.fixture: no fixture dir {evals / 'fixtures' / str(h['fixture'])}")
+    if "branch" in h and (not ref(h["branch"]) or h["branch"] in ("main", c.get("branch"))):
+        errs.append(f"{at}: field head.branch: must be a new branch name (not main, not the case's branch), got {h['branch']!r}")
+    if "message" in h and not (isinstance(h["message"], str) and h["message"].strip()):
+        errs.append(f"{at}: field head.message: must be a non-empty string")
+
+
+def pi_role():
+    """pi-role's tracker table (TRACKERS, DEFAULT_TRACKER, TRACKER_SLOT, kit_trackers): one mapping, pi-role's."""
+    loader = importlib.machinery.SourceFileLoader("pi_role", str(KIT / "scripts" / "pi-role"))
+    mod = importlib.util.module_from_spec(importlib.util.spec_from_loader("pi_role", loader))
+    loader.exec_module(mod)
+    return mod
+
+
+def declares_tests(evals, name):
+    """Fixture NAME declares its tests (rule: schema.md, Before targets, test_write). A missing fixture dir is
+    reported elsewhere."""
+    fx = evals / "fixtures" / name
+    if not (re.fullmatch(r"[A-Za-z0-9._-]+", name) and fx.is_dir()):
+        return True
+    try:
+        tp = tomllib.loads((fx / "pyproject.toml").read_text(encoding="utf-8")).get("tool", {}).get("pytest", {}).get("ini_options", {}).get("testpaths")
+    except (OSError, ValueError, AttributeError):
+        return False
+    return isinstance(tp, list) and bool(tp) and all(isinstance(p, str) and p for p in tp) and (fx / "uv.lock").is_file()
+
+
+def fixture_trackers(evals, errs):
+    """The tracker skills the fixtures resolve {tracker} to (rule: schema.md, Coverage)."""
+    pr = pi_role()
+    have = pr.kit_trackers(str(KIT / ".agents" / "skills"))
+    out = set()
+    for fx in sorted(p for p in (evals / "fixtures").glob("*") if p.is_dir()):
+        cfg, name = fx / ".octo-feather.toml", pr.DEFAULT_TRACKER
+        if cfg.is_file():
+            try:
+                name = tomllib.loads(cfg.read_text(encoding="utf-8")).get("tracker", pr.DEFAULT_TRACKER)
+            except (OSError, ValueError) as e:
+                errs.append(f"fixtures/{fx.name}/.octo-feather.toml: unreadable ({e})"); continue
+        if name not in have:
+            errs.append(f"fixtures/{fx.name}/.octo-feather.toml: field tracker: {name!r} has no kit tracker skill; the kit has: {', '.join(have)}")
+            continue
+        out.add(pr.TRACKERS[name])
+    return sorted(out or {pr.TRACKERS[pr.DEFAULT_TRACKER]}), pr.TRACKER_SLOT
+
+
+def role_skills(evals, errs):
+    """(role, skill) for every skill each kit role lists (rule: schema.md, Coverage)."""
+    trackers, slot = fixture_trackers(evals, errs)
+    pairs = []
+    for f in sorted((KIT / "agents").glob("*.md")):
+        m = re.match(r"---\n(.*?)\n---", f.read_text(encoding="utf-8"), re.S)
+        line = re.search(r"^skills:(.*)$", m.group(1), re.M) if m else None
+        for s in (x.strip() for x in (line.group(1).split(",") if line else [])):
+            pairs += [(f.stem, t) for t in trackers] if s == slot else [(f.stem, s)] if s else []
+    return pairs
+
+
+def check_coverage(name, cases, exps, evals, errs):
+    have = set()
+    for c in cases:
+        if not isinstance(c, dict) or not isinstance(c.get("should_trigger"), bool) or c.get("split") not in SPLITS:
+            continue
+        exp = exps.get(c.get("id")) if isinstance(c.get("id"), str) else None
+        facts = exp.get("facts") if isinstance(exp, dict) and isinstance(exp.get("facts"), list) else []
+        grading = {"skill_read", "skill_read_before"} if c["should_trigger"] else {"skill_not_read"}
+        for f in facts:
+            if isinstance(f, dict) and f.get("fact") in grading:
+                have.add((c.get("role"), f.get("skill"), c["should_trigger"], c["split"]))
+    for role, skill in role_skills(evals, errs):
+        missing = [f"should_trigger {str(st).lower()} split {sp}" for st in (True, False) for sp in ("train", "held-out")
+                   if (role, skill, st, sp) not in have]
+        if missing:
+            errs.append(f"{name}: role {role} skill {skill}: no case for {', '.join(missing)}; every skill a role lists "
+                        "needs a should and a should-not (near miss) case, each in train and held-out")
+
+
+def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
+    if not isinstance(exp, dict):
+        errs.append(f"{at}: must be a JSON object {{\"facts\": [...]}}"); return
+    for k in sorted(set(exp) - {"facts"}):
+        errs.append(f"{at}: field {k}: unknown field")
+    facts = exp.get("facts")
+    if review:
+        if facts != []:
+            cast("list[str]", errs).append(f"{at}: field facts: a review case has none (its verdict is a maintainer's); want []")
+        return
+    if not isinstance(facts, list) or not facts:
+        errs.append(f"{at}: field facts: missing or empty"); return
+    for n, f in enumerate(facts):
+        fa = f"{at} fact #{n + 1}"
+        if not isinstance(f, dict):
+            errs.append(f"{fa}: must be a JSON object"); continue
+        t = f.get("fact")
+        if t not in FACTS:
+            errs.append(f"{fa}: field fact: unknown fact type {t!r}; known: {sorted(FACTS)}"); continue
+        for k in sorted(FACTS[t] - set(f)):
+            errs.append(f"{fa}: field {k}: missing")
+        for k in sorted(set(f) - FACTS[t] - OPTIONAL.get(t, set()) - {"fact"}):
+            errs.append(f"{fa}: field {k}: unknown field for {t}")
+        sk = f.get("skill")
+        if "skill" in f and not (isinstance(sk, str) and re.fullmatch(r"[a-z0-9-]+", sk)
+                                 and any((d / ".agents" / "skills" / sk / "SKILL.md").is_file() for d in (KIT, fixture) if d)):
+            errs.append(f"{fa}: field skill: no .agents/skills/{sk}/SKILL.md in the kit"
+                        + (f" or in fixture {fixture.name}" if fixture else ""))
+        if "kind" in f and f["kind"] not in ATTEMPTS:
+            errs.append(f"{fa}: field kind: must be one of {sorted(ATTEMPTS)}, got {f['kind']!r}")
+        if t == "declared" and "field" in f and not (isinstance(f["field"], str) and f["field"].strip()):
+            errs.append(f"{fa}: field field: must be a non-empty string")
+        if t == "declared" and "in" in f and not (isinstance(f["in"], list) and f["in"] and all(isinstance(x, str) for x in f["in"])):
+            errs.append(f"{fa}: field in: must be a non-empty list of strings")
+        if t == "declared_includes" and "field" in f and not (isinstance(f["field"], str) and f["field"].strip()):
+            errs.append(f"{fa}: field field: must be a non-empty string")
+        if t == "declared_includes" and "items" in f and not (
+                isinstance(f["items"], list) and f["items"] and all(isinstance(o, dict) and o and all(
+                    isinstance(k, str) and k and isinstance(v, str) for k, v in o.items()) for o in f["items"])):
+            errs.append(f"{fa}: field items: must be a non-empty list of non-empty objects of string values")
+        if t == "field_lines":
+            check_fields(fa, f, errs)
+        if t in ("tool_called", "tool_called_before") and "tools" in f:
+            check_tools(fa, cast("object", f["tools"]), cast("list[str]", errs))
+        if t == "ran" and "program" in f and not (isinstance(f["program"], str) and PROGRAM.fullmatch(f["program"])):
+            cast("list[str]", errs).append(f"{fa}: field program: must be a command name ({PROGRAM.pattern}), got {f['program']!r}")
+        if t == "ran" and "args" in f and not (isinstance(f["args"], list) and all(isinstance(x, str) for x in cast("list[object]", f["args"]))):
+            cast("list[str]", errs).append(f"{fa}: field args: must be a list of strings")
+        if t == "branch_paths":
+            if not set(f) & OPTIONAL[t]:
+                errs.append(f"{fa}: field untouched: missing (give untouched, touched or both)")
+            for k in sorted(set(f) & OPTIONAL[t]):
+                if not (isinstance(f[k], list) and f[k] and all(isinstance(p, str) and PATH.fullmatch(p) for p in f[k])):
+                    errs.append(f"{fa}: field {k}: must be a non-empty list of relative paths (a dir ends in /)")
+        if "before" in f and isinstance(cast("object", f["before"]), dict):
+            check_under(fa, cast("object", f["before"]), cast("list[str]", errs))
+        elif "before" in f and f["before"] not in BEFORE:
+            errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)}, got {f['before']!r}")
+
+
+SHA = re.compile(r"[0-9a-f]{40}")
+
+
+def history_repo(name: object) -> Path | None:
+    """A history fixture's repo (schema.md, Case): the kit, or a local clone ~/src/<name>; None when unknown."""
+    if name == "kit":
+        return KIT
+    if isinstance(name, str) and re.fullmatch(r"[A-Za-z0-9._-]+", name) and (Path.home() / "src" / name / ".git").exists():
+        return Path.home() / "src" / name
+    return None
+
+
+def check_history(at: str, fx: object, errs: list[str], field: str = "fixture") -> None:
+    """A history fixture {repo, commit} at FIELD (schema.md, Case): repo known, commit a full sha the repo holds."""
+    f = cast("dict[str, object]", fx)
+    errs.extend(f"{at}: field {field}.{k}: missing" for k in sorted({"repo", "commit"} - set(f)))
+    errs.extend(f"{at}: field {field}.{k}: unknown field" for k in sorted(set(f) - {"repo", "commit"}))
+    repo = history_repo(f.get("repo"))
+    if "repo" in f and repo is None:
+        errs.append(f"{at}: field {field}.repo: {f['repo']!r} is not kit or a git clone at ~/src/<name>")
+    c = f.get("commit")
+    if "commit" in f and not (isinstance(c, str) and SHA.fullmatch(c)):
+        errs.append(f"{at}: field {field}.commit: must be a full 40 character sha, got {c!r}")
+    elif repo is not None and (repo / ".git").exists() and isinstance(c, str) and subprocess.run(
+            [shutil.which("git") or "/usr/bin/git", "-C", str(repo), "cat-file", "-e", f"{c}^{{commit}}"], capture_output=True, check=False).returncode:
+        errs.append(f"{at}: field {field}.commit: no commit {c} in {repo}")
+
+
+def check_review(at: str, rv: object, errs: list[str]) -> None:
+    """A review case's review field (schema.md, Case)."""
+    r = cast("dict[str, object]", rv) if isinstance(rv, dict) else {}
+    q = r.get("question")
+    if not (isinstance(q, str) and q.strip()):
+        errs.append(f"{at}: field review.question: missing or blank (a review case asks the maintainer one question)")
+    errs.extend(f"{at}: field review.{k}: unknown field" for k in sorted(set(r) - {"question"}))
+    if not isinstance(rv, dict):
+        errs.append(f"{at}: field review: must be an object {{\"question\"}}")
+
+
+def check_under(fa: str, before: object, errs: list[str]) -> None:
+    """A before target {"edit_under": [P...]} (schema.md, Before targets)."""
+    b = cast("dict[str, object]", before)
+    if set(b) != {"edit_under"}:
+        errs.append(f"{fa}: field before: must be one of {sorted(BEFORE)} or {{\"edit_under\": [P...]}}, got {json.dumps(b)}")
+        return
+    ps = cast("list[object]", b["edit_under"]) if isinstance(b["edit_under"], list) else []
+    if not ps or not all(isinstance(p, str) and PATH.fullmatch(p) for p in ps):
+        errs.append(f"{fa}: field before: edit_under must be a non-empty list of relative paths (a dir ends in /)")
+
+
+def check_tools(fa: str, tools: object, errs: list[str]) -> None:
+    """A tool_called fact's tools: tool names (.agents/skills/eval-cases/references/schema.md, Facts)."""
+    names = cast("list[object]", tools) if isinstance(tools, list) else []
+    if not names or not all(isinstance(x, str) and re.fullmatch(r"\S+", x) for x in names):
+        errs.append(f"{fa}: field tools: must be a non-empty list of tool names (no whitespace)")
+
+
+def check_fields(fa, f, errs):
+    """A field_lines fact: field a field name, then none, includes and every (.agents/skills/eval-cases/references/schema.md, Field lines)."""
+    fld = f.get("field")
+    if "field" in f and not (isinstance(fld, str) and FIELD_NAME.fullmatch(fld) and fld not in ("Checks", "Owners")):
+        errs.append(f"{fa}: field field: must be a field name ({FIELD_NAME.pattern}): Check or Owner (their none lines "
+                    f"too), or another, got {fld!r}"); return
+    keys = FIELD_KEYS.get(fld, {"text"})
+    if "none" in f and (f["none"] is not True or fld not in FIELD_KEYS or {"includes", "every"} & set(f)):
+        errs.append(f"{fa}: field none: only true, only for Check or Owner, and without includes or every")
+    if "includes" in f and not (isinstance(f["includes"], list) and f["includes"] and all(
+            isinstance(o, dict) and o and all(k in keys and isinstance(v, str) and v for k, v in o.items()) for o in f["includes"])):
+        errs.append(f"{fa}: field includes: must be a non-empty list of non-empty objects of string values, keys from {sorted(keys)}")
+    if "every" in f and not (isinstance(f["every"], dict) and f["every"] and all(
+            k in keys and isinstance(v, list) and all(isinstance(x, str) and x for x in v) for k, v in f["every"].items())):
+        errs.append(f"{fa}: field every: must be a non-empty object of string lists, keys from {sorted(keys)}")
+
+
+def main(argv: list[str]) -> int:
+    if argv[:1] in (["-h"], ["--help"]):
+        print(__doc__.strip()); return 0
+    evals = Path(argv[0]) if argv else KIT / "evals"
+    if not evals.is_dir():
+        print(f"check-evals: no evals dir {evals}", file=sys.stderr); return 2
+    errs, n, suites = [], 0, 0
+    judgment = False
+    for d in sorted(p for p in evals.iterdir() if p.is_dir() and p.name != "fixtures"):
+        suites += 1
+        n += check_suite(d, evals, errs)
+        try:
+            judgment |= json.loads((d / "suite.json").read_text(encoding="utf-8")).get("kind") == "judgment"
+        except (OSError, ValueError, AttributeError):
+            pass
+    if judgment or (evals / MODEL_FILE).exists():
+        check_model_file(evals, errs)
+    if errs:
+        for e in errs:
+            print(f"check-evals: {e}", file=sys.stderr)
+        print(f"check-evals: {len(errs)} problem(s) above; {FIX}", file=sys.stderr)
+        return 1
+    print(f"evals: ok ({suites} suites, {n} cases)")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main(sys.argv[1:]))
