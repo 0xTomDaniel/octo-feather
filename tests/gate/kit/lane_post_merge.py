@@ -25,9 +25,8 @@ from __future__ import annotations
 
 import json
 import os
-import platform
 import re
-import shutil
+import sys
 from typing import TYPE_CHECKING
 
 from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
@@ -39,7 +38,7 @@ H = "1234567890abcdef1234567890abcdef12345678"  # the pinned head
 FIELDS = "databaseId,status,conclusion,workflowName,url"  # post-merge's run list fields
 BASE_FIELDS = FIELDS + ",headSha"
 PR_FIELDS = "state,headRefOid,mergeCommit,baseRefName,headRefName"
-PIN = platform.python_version()  # an installed Python: the one running this
+PIN = "{}.{}.{}".format(*sys.version_info[:3])  # an installed Python: the one running this
 NO_PIN = "3.8.1"  # a Python no box here installs
 TREES = "api/repos/o/r/git/trees"
 # The gh calls post-merge may make: every one a read.
@@ -464,6 +463,8 @@ def kit_refresh(s: Scratch) -> None:
     no move, the kit's own locked tools installed first (octo-feather-mise-install, #493 AC5). A
     failing refresh command stops naming it, later ones not run. The pinned Python absent: uv
     sync never downloads it, and the stop names the install command for the pin."""
+    import shutil  # noqa: PLC0415 (lazy: the other scenarios' start does not pay it)
+
     assert shutil.which("uv"), "no uv: the failing refresh cases need it"
     lane = Lane(s)
     lane.homes = tool_homes()

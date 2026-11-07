@@ -14,16 +14,12 @@ missing fixture fails naming it.
 
 from __future__ import annotations
 
-import fcntl
 import json
 import os
-import shutil
 import subprocess
 import sys
-import tempfile
-from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -74,8 +70,10 @@ def kit(name: str) -> str:
     return str(ROOT / "scripts" / name)
 
 
-@dataclass(frozen=True)
-class Ran:
+class Ran(NamedTuple):
+    """A command's exit, stdout and stderr (a NamedTuple: dataclasses' import is a third of a
+    scenario's start)."""
+
     rc: int
     out: str
     err: str
@@ -153,6 +151,9 @@ class Scratch:
         exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
         installs; read-only by contract, copied here (its bin and tmp aside). Outside a gate run,
         BUILD fills this scratch itself."""
+        import fcntl  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)
+        import shutil  # noqa: PLC0415
+
         run = os.environ.get("GATE_RUN_DIR")
         if not run:
             build(self)
@@ -262,6 +263,8 @@ def reflector(s: Scratch, lane: Sequence[str] = (), director: Sequence[str] = ()
 def build_kit_repo(p: Scratch) -> None:
     """The kit's tracked files (their worktree content; a tracked file deleted there skipped) in
     P/kit, a git repo of one commit."""
+    import shutil  # noqa: PLC0415 (lazy: Scratch.prepare's)
+
     k = p.root / "kit"
     names = subprocess.run(
         ["git", "ls-files", "-z"],  # noqa: S607
@@ -294,6 +297,8 @@ def asked(*cmd: str) -> str:
     caller's HOME, uncoloured: NO_COLOR, no FORCE_COLOR, and uv's own --color never, as uv
     colours even a path under FORCE_COLOR (as a CI runner may set it), and a coloured path is no
     dir. The testkit's one way to ask a tool where its things are."""
+    import shutil  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)
+
     exe = shutil.which(cmd[0]) or cmd[0]
     args = ["--color", "never", *cmd[1:]] if cmd[0] == "uv" else list(cmd[1:])
     env = {k: v for k, v in os.environ.items() if k != "FORCE_COLOR"} | {"NO_COLOR": "1"}
@@ -332,10 +337,25 @@ def main(*scenarios: Callable[..., None]) -> None:
     name, *args = sys.argv[1:] or [""]
     if name not in by:
         sys.exit(f"usage: {sys.argv[0]} SCENARIO [ARG...], SCENARIO one of {', '.join(by)}")
-    base = Path(tempfile.gettempdir()).resolve()
-    t = Path(tempfile.mkdtemp(prefix=f"{name}-", dir=base))
+    t = scratch_dir(name)
     try:
         by[name](Scratch(t), *args)
     finally:
-        shutil.rmtree(t, ignore_errors=True)
+        subprocess.run(["rm", "-rf", "--", str(t)], check=False)  # noqa: S607 (the real rm)
     sys.stdout.write(f"{name}: ok\n")
+
+
+def scratch_dir(name: str) -> Path:
+    """A new dir NAME-PID-N under the temp dir ($TMPDIR, else /tmp, resolved), mkdir's own
+    exclusivity making it new, as tempfile.mkdtemp does: here without tempfile's and shutil's
+    imports (random, bz2, lzma: a quarter of every scenario's start; the dir is removed with rm)."""
+    base = Path(os.environ.get("TMPDIR") or "/tmp").resolve()  # noqa: S108 (tempfile's own default)
+    for n in range(100):
+        d = base / f"{name}-{os.getpid()}-{n}"
+        try:
+            d.mkdir(mode=0o700)
+        except FileExistsError:
+            continue
+        return d
+    msg = f"testkit: no new scratch dir {name}-{os.getpid()}-N under {base}"
+    raise FileExistsError(msg)
