@@ -5,8 +5,8 @@ DEST --no-spec-chat` offline, its packages from the run's one install (testkit/t
 Its own check-languages (#362, owner rulings #225, #261): each rule, broken once, fails it naming
 the file and the fix: a tracked unknown file, a Go file (unmapped), a file a tool's own list
 misses (an unattributed bash script, a dot-file .ts outside tsconfig's include), an `env -S`
-shebang scc cannot read, both pnpm pins, and ShellCheck's recipe out of the gate; one run, as
-each run lints the repo with typed eslint (its file list), the cost floor. Its two tiers
+shebang scc cannot read, both pnpm pins, and ShellCheck's recipe out of the gate; one run. Its
+untyped eslint file list names what the typed lint lints (eslint_files, #686). Its two tiers
 (templates spec #acceptance-fresh-fast, #acceptance-test-kinds, #acceptance-shared-fixture), its
 trend line (comms #acceptance-report-gate-budget, issue-lifecycle
 #acceptance-merge-ask-gate-budget, #556) and its starter acceptance test (templates spec
@@ -18,7 +18,9 @@ with the recording Python stubs first on PATH: none is called (the repo needs no
 
 from __future__ import annotations
 
+import json
 import re
+import shutil
 from typing import TYPE_CHECKING
 
 from testkit import Scratch, main
@@ -30,7 +32,8 @@ if TYPE_CHECKING:
 OTHER_T = "✓ |integration| tests/other.test.ts > doubles"
 INTEG = "✓ |integration| tests/cli.test.ts > "
 E2E = "|e2e| tests/cli.e2e.test.ts"
-TEST = "tests/cli.e2e.test.ts"
+TEST = "tests/cli.test.ts"  # the starter acceptance test, light
+E2E_FILE = "tests/cli.e2e.test.ts"  # its flow's end-to-end test
 FIXTURE = "shared fixture greetings.json: prepared once"
 WARN = r"^trend: warning: line not written to check-runs.jsonl \(.*\); the verdict stands$"
 
@@ -47,7 +50,7 @@ def full_tier(r: Repo, out: str, head: str) -> None:
     recipes = r.run("just", "--evaluate", "GATE_RECIPES").out.split()
     want = [f"tests/gate.test.ts > {x}" for x in recipes] + ["tests/other.test.ts > doubles"]
     assert not [w for w in want if w not in ok], f"steps missing from the full run: {ok}"
-    assert any(n.startswith(f"{TEST} > ") for n in ok), f"no e2e step: {ok}"
+    assert any(n.startswith(f"{E2E_FILE} > ") for n in ok), f"no e2e step: {ok}"
 
 
 def full_gate(s: Scratch) -> None:
@@ -66,6 +69,37 @@ def rules(s: Scratch) -> None:
     assert got.rc != 0, f"planted files passed: {got.out}"
     lines = got.out.splitlines()
     assert not [w for w in want if f"check-languages: {w}" not in lines], got.out
+    r.no_python()
+
+
+def eslint_files(s: Scratch) -> None:
+    """The repo's `just eslint-files`, the untyped list check-languages reads, names the files the
+    typed lint check-ts runs (`eslint .`) lints: the same set, ESLint's own enumeration deciding,
+    with a file only an override's files pattern covers (only/a.jsx) in both, one no pattern
+    covers (other/b.jsx) and one a global ignore covers (gen/c.ts) in neither (#686). The trees
+    whose types make the typed run slow (tests/, scripts/, the verify-app script) are removed
+    first: the config, not the tree, decides the list, and a dot dir's file (.dot/e.ts) stays."""
+    r = Repo(s, "typescript")
+    for d in ("tests", "scripts", ".agents/skills/verify-app/scripts"):
+        shutil.rmtree(r.dir / d)
+    (r.dir / "vitest.config.ts").unlink()
+    for f in ("only/a.jsx", "other/b.jsx", "gen/c.ts", "gen/d.mts", ".dot/e.ts"):
+        r.write(f, "export const x = 1;\n")
+    cfg = (r.dir / "eslint.config.js").read_text()
+    old = '  { ignores: ["node_modules"] },\n'
+    assert old in cfg, f"no {old.strip()} in eslint.config.js"
+    new = '  { ignores: ["node_modules", "gen/*.ts"] },\n  { files: ["only/**/*.jsx"] },\n'
+    r.write("eslint.config.js", cfg.replace(old, new))
+    untyped = set(r.run("just", "eslint-files").out.splitlines())
+    report = s.root / "typed.json"
+    typed = r.run("pnpm", "exec", "eslint", "--format", "json", "-o", str(report), ".", want=None)
+    assert typed.rc in (0, 1), typed.out  # 1: findings in the planted files, never a crash (2)
+    want = {str(x["filePath"]) for x in json.loads(report.read_text())}
+    assert untyped == want, f"untyped {sorted(untyped)} != typed {sorted(want)}"
+    files = (("only/a.jsx", True), ("gen/d.mts", True), (".dot/e.ts", True), ("other/b.jsx", False))
+    for f, listed in files:
+        assert (str(r.dir / f) in untyped) is listed, f"{f} listed: {not listed}: {sorted(untyped)}"
+    assert str(r.dir / "gen/c.ts") not in untyped, sorted(untyped)
     r.no_python()
 
 
@@ -234,4 +268,4 @@ def bare_vitest(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(full_gate, rules, claims_gate, refusals, fast, state_dir, bare_vitest)
+    main(full_gate, rules, eslint_files, claims_gate, refusals, fast, state_dir, bare_vitest)
