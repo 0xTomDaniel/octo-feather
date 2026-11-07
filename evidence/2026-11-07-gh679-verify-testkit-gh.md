@@ -15,3 +15,7 @@ Smoke: .agents/skills/verify-octo-feather/features/director-reflection.md (point
 - correction-lane: drive PASS (file-live, the real reflector, the tracker the testkit's gh); evidence record 20261106T234918Z-2067e888.
 - factory-report: drive PASS (reflection-never, reflection-two-days, gate-budget-over, owner-caught-headline, skill-reach); evidence records 20261106T234920Z-0d440948, 20261106T234920Z-95034846, 20261106T234920Z-157135e8, 20261106T234921Z-f1695686.
 - template-tiers: drive PASS, 17 of 17 cases (python and typescript: new-repo, check, fast-one-file, hook-core, fast-residual, trend, ci-status-only, ci-code); evidence record 20261107T025540Z-87220cf0 (comms#acceptance-report-gate-budget) beside the templates criteria's.
+
+## Round 3 (review r7: recordings, never computed), lane head after merging gh653 ef42b60
+
+The testkit gh answers another repo's correction-lane search and new issues only from recordings (fake_gh arms them; tracker_issues reads the creates it was sent): correction-intake drive PASS (evidence records 20261107T040919Z-dc40c805, 20261107T040919Z-596819a8, 20261107T040919Z-896f8770); correction-lane drive PASS (20261107T041021Z-bd1af427); factory-report drive PASS (20261107T041023Z-6448841f, 20261107T041023Z-f79fe176, 20261107T041024Z-f5748931, 20261107T041024Z-bb0846cb).
