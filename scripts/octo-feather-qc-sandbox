@@ -181,6 +181,32 @@ INPUTS = (
     "QC_GHSNAP_LINE",
 )  # the inputs above, never passed on to the judge
 SRT_PKG = "@anthropic-ai/sandbox-runtime"
+# srt run through its own library, as its CLI (dist/cli.js, the Linux path) runs a command: loadConfig, initialize,
+# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand. The bwrap argv is
+# the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
+# reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
+# "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
+SRT_SHIM = r"""
+const [pkg, settings, , ...args] = process.argv.slice(1)
+const { SandboxManager } = await import(`${pkg}/dist/index.js`)
+const { loadConfig } = await import(`${pkg}/dist/utils/config-loader.js`)
+const { quote } = await import(`${pkg}/dist/utils/shell-quote.js`)
+const { spawn } = await import('node:child_process')
+const loaded = loadConfig(settings)
+if (loaded.kind !== 'ok') { console.error(`qc sandbox: srt settings ${settings}: ${loaded.reason ?? loaded.kind}`); process.exit(1) }
+await SandboxManager.initialize(loaded.config)
+const store = SandboxManager.getSandboxViolationStore()
+let seen = store.getTotalCount()
+store.subscribe(vs => {
+  const total = store.getTotalCount()
+  const fresh = vs.slice(Math.max(0, vs.length - (total - seen)))
+  seen = total
+  for (const v of fresh) process.stderr.write(`QC-SRT-VIOLATION ${JSON.stringify({ line: v.line })}\n`)
+})
+const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
+child.on('exit', (code, sig) => { SandboxManager.cleanupAfterCommand(); process.exit(sig ? 1 : (code ?? 0)) })
+"""
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
 
