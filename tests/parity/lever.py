@@ -44,19 +44,27 @@ line and exit 0).
 
 The caller's GATE_WORKERS reaches each run. The copy: under the git common dir's
 octo-feather/, removed after, as is the runs' own mise state dir (the caller's is never
-written); each run's output: in the log dir printed last, kept.
+written); each run's output: in the log dir printed last, kept. On SIGINT, SIGTERM or SIGHUP
+the lever stops its run (the run's process group killed), removes both and exits 128 + the
+signal's number. Each lever holds its copy (flock on the copy's dir) while it lives; a copy no
+lever holds is stale (a lever killed outright left it), and the lever refuses to start beside one
+(exit 2), naming it.
 """
 
+import contextlib
+import fcntl
 import json
 import os
 import re
 import shutil
+import signal
 import subprocess
 import sys
 import tempfile
+from collections.abc import Generator
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NoReturn, cast
+from typing import Any, NoReturn, cast
 
 import tomllib
 
@@ -100,9 +108,18 @@ def sh(
 ) -> int:
     env = {k: v for k, v in os.environ.items() if k not in DROP} | (add or {})
     with (log or Path(os.devnull)).open("w") as f:
-        return subprocess.run(
-            cmd, cwd=cwd, env=env, stdout=f, stderr=subprocess.STDOUT, check=False
-        ).returncode
+        # Its own process group, so a stop kills the whole run (pytest's workers, strace's
+        # tracees), never only its first process, before the copy it runs in goes.
+        p = subprocess.Popen(
+            cmd, cwd=cwd, env=env, stdout=f, stderr=subprocess.STDOUT, start_new_session=True
+        )
+        try:
+            return p.wait()
+        except BaseException:
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGKILL)
+            p.wait()
+            raise
 
 
 def copy(dest: Path) -> None:
@@ -283,6 +300,50 @@ def apply(k: Path, patch: Path | None) -> None:
         )
 
 
+STOPS = (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+
+
+class StoppedError(BaseException):
+    """A stop signal the lever got (STOPS): its number."""
+
+    def __init__(self, signum: int) -> None:
+        super().__init__(signum)
+        self.signum = signum
+
+
+def stop(signum: int, _frame: object) -> None:
+    """The first stop raised; every later one ignored, so the cleanup it starts runs to its end."""
+    for s in STOPS:
+        signal.signal(s, signal.SIG_IGN)
+    raise StoppedError(signum)
+
+
+@contextlib.contextmanager
+def stops_ignored_after() -> Generator[None]:
+    """The block run; then every stop ignored, so a stop during the cleanup after it (the with
+    statement's earlier items) cannot cut it short."""
+    try:
+        yield
+    finally:
+        for s in STOPS:
+            signal.signal(s, signal.SIG_IGN)
+
+
+def held(d: Path) -> bool:
+    """A live lever holds the copy D (flock on its dir; released when that lever exits, however)."""
+    try:
+        fd = os.open(d, os.O_RDONLY)
+    except FileNotFoundError:
+        return True  # gone since listed: its lever removed it
+    try:
+        fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        return True
+    finally:
+        os.close(fd)
+    return False
+
+
 @dataclass
 class Lever:
     """One case's runs in the kit copy K: CASE (case.toml), FILES (restored from old_at), each
@@ -387,17 +448,46 @@ def main() -> int:
     if not (d / "case.toml").is_file():
         sys.exit(f"lever: no case {sys.argv[1]}: no file {d / 'case.toml'}")
     case = tomllib.loads((d / "case.toml").read_text())
-    old, old_at = case["old"], case["old_at"]
     defects = sorted(d.glob("*.patch"))
-    logs = Path(tempfile.mkdtemp(prefix=f"parity-{sys.argv[1]}-"))
     # The copy outside /tmp, where the kit itself lives: the qc sandbox makes /tmp private, so a
     # kit under /tmp holding a test's own kit copy under /tmp is a setup the real kit never has.
     common = git("rev-parse", "--path-format=absolute", "--git-common-dir").stdout.decode().strip()
-    (Path(common) / "octo-feather").mkdir(exist_ok=True)
+    base = Path(common) / "octo-feather"
+    base.mkdir(exist_ok=True)
+    for s in STOPS:
+        signal.signal(s, stop)
+    try:
+        return levered(case, defects, d.name, base)
+    except StoppedError as e:
+        name = signal.Signals(e.signum).name
+        sys.stderr.write(f"lever: stopped by {name}: its kit copy and mise state dir removed\n")
+        return 128 + e.signum
+
+
+def levered(case: dict[str, Any], defects: list[Path], name: str, base: Path) -> int:
+    """The case's runs in a kit copy under BASE, refused (2) beside a stale copy; its exit."""
+    old, old_at = case["old"], case["old_at"]
+    # BASE locked from the stale check until this lever holds its own copy, so no lever takes
+    # another's new copy, not held yet, for a stale one.
+    reg = os.open(base, os.O_RDONLY)  # closed with the process, at the latest
+    fcntl.flock(reg, fcntl.LOCK_EX)
+    stale = [p for p in sorted(base.glob("parity-kit-*")) if p.is_dir() and not held(p)]
+    for p in stale:
+        sys.stderr.write(
+            f"lever: refused: stale kit copy {p}: no lever holds it (one stopped outright left"
+            f" it); remove it (rm -rf {p}) and rerun\n"
+        )
+    if stale:
+        return 2
+    logs = Path(tempfile.mkdtemp(prefix=f"parity-{name}-"))
     with (
-        tempfile.TemporaryDirectory(prefix="parity-kit-", dir=Path(common) / "octo-feather") as t,
+        tempfile.TemporaryDirectory(prefix="parity-kit-", dir=base) as t,
         tempfile.TemporaryDirectory(prefix="parity-mise-state-") as ms,
+        stops_ignored_after(),
     ):
+        own = os.open(t, os.O_RDONLY)  # held until this process exits (no child inherits it)
+        fcntl.flock(own, fcntl.LOCK_EX)
+        os.close(reg)
         # mise's state dir one per lever run, removed after it: the `just` shim each run starts in
         # the copy records the copy's mise.toml there (tracked-configs), never in the caller's,
         # where the link dangles once the copy goes (#664).
@@ -410,6 +500,7 @@ def main() -> int:
             for b in unrestored(old, old_at, files, k):  # a hint only: the run's facts decide
                 sys.stdout.write(f"lever: note: {old} names {b}, and needs omits it\n")
             sys.stdout.write(f"restored from {old_at}: {' '.join(sorted(files))}\n")
+            sys.stdout.flush()
             lever = Lever(k, logs, case, files)
             results = [lever.run(None, how)]
             results += [lever.run(p, None) for p in defects]
