@@ -276,8 +276,11 @@
       "pr": null
     },
     "acceptance-qc-sandbox-maintained": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 698,
+      "record": "20261107T000321Z-26a56638",
+      "commit": "135151dd3b233ac19ddd0b3d79074ad600a9f28e",
+      "tests": []
     },
     "acceptance-qc-sandbox-cost": {
       "status": "planned",
