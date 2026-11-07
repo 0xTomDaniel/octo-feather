@@ -52,6 +52,15 @@ class Director:
         s.env |= {"XDG_STATE_HOME": str(s.root / "state"), "HERDR_SESSION": ""}
         s.identity()
         reflector(s)
+        # the kit's tracker, where a director reflection-missed finding files: its recorded search
+        # answer (none open) and its answer to the new issue
+        kit_repo = "0xTomDaniel/octo-feather"
+        search = (
+            f"issue list --repo {kit_repo} --state all --limit 1000 --search "
+            '"correction-lane" in:title --json number,title,state,closedAt'
+        )
+        create = [f"https://github.com/{kit_repo}/issues/704\n"]
+        s.gh.tape({search: ["[]\n"], f"GH_REPO={kit_repo} issue create": create})
         self.state = s.root / "state" / "octo-feather"
         self.lanes = self.state / "lanes"
         self.dlog = self.state / "director.handoffs.jsonl"
