@@ -1,10 +1,10 @@
 """The scenarios of tests/gate/kit/test_web_tools.py (its items), this file their command
 (testkit.main): a role's `web` tool (issue #262; spec roles#launch-web, roles#roles-web,
 roles#fm-tools). Real Pi, at the kit's pin (pi-version), launched headless through a copy of the
-kit whose web-mcp.json names stub stdio MCP servers (testkit/mcp_stub.py: the
-hosted search servers' stand-in, no network) and one unreachable server, against testkit's fake
-model provider (testkit/provider.py, its --code mode) on 127.0.0.1. The provider logs each request and answers the
-first with one codemode call listing ALL_TOOLS, so a run reads both the tools declared to the
+kit whose web-mcp.json names stub stdio MCP servers (testkit/mcp_stub.py: the hosted search
+servers' stand-in, no network) and one unreachable server, against testkit's fake model provider
+(testkit/provider.py, its --code mode) on 127.0.0.1. The provider logs each request and answers
+the first with one codemode call listing ALL_TOOLS, so a run reads both the tools declared to the
 model and the tools a codemode script reaches. The user Pi config and the target repo's
 .pi/mcp.json each name another stub server.
 
