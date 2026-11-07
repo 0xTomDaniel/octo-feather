@@ -254,8 +254,11 @@ check-decision-log:
 # exclusion and why). Today's violations sit in each tool's own baseline, which only shrinks: pyproject.toml
 # [tool.ruff.lint.extend-per-file-ignores] and [tool.ruff.format] exclude, .basedpyright/baseline.json
 # (scripts/octo-feather-lint --help). Pinned in pyproject.toml and uv.lock, run offline from the uv cache.
+# Then the kit's import contracts (#684): import-linter over pyproject.toml [tool.importlinter], from the repo root
+# (it finds the root package from there); no cache dir written into the tree.
 check-lint:
     @uv run --locked --offline --no-sync octo-feather-lint lint
+    @uv run --locked --offline --no-sync lint-imports --no-cache --no-logo
 
 check-format:
     @uv run --locked --offline --no-sync octo-feather-lint format

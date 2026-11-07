@@ -16,6 +16,7 @@ dependencies = [
 dev = [
     "basedpyright==1.40.2",
     "coverage==7.17.1 ; python_full_version >= '3.11'",
+    "import-linter==2.16 ; python_full_version >= '3.11'",
     "pytest==9.1.1",
     "pytest-xdist==3.8.0",
     "ruff==0.17.1",
@@ -99,6 +100,19 @@ ignore = [
 typeCheckingMode = "strict"
 # tests/gate/kit/conftest.py imports the gate runner (test_gate), as pytest's rootdir import puts tests/gate on sys.path.
 extraPaths = ["tests/gate"]
+
+# Kit import contracts, `lint-imports` in check-lint (#684): a kit test imports shared stand-ins and helpers
+# only from the testkit (owner ruling #577); the contract type and why it is custom: tests/gate/import_contracts.py.
+[tool.importlinter]
+root_packages = ["tests.gate.kit"]
+include_external_packages = true
+contract_types = ["sibling_imports: tests.gate.import_contracts.SiblingImportsContract"]
+
+[[tool.importlinter.contracts]]
+name = "kit tests import shared support only from the testkit"
+type = "sibling_imports"
+containers = ["tests.gate.kit"]
+shared_modules = ["testkit"]
 
 [tool.ruff.lint.extend-per-file-ignores]
 # Baseline (octo-feather-lint): taken once, only shrinks.

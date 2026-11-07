@@ -11,81 +11,24 @@ violation leaves an unused suppression that fails naming --prune-suppressions. T
 passing is the kit gate's own check-ts item (tests/gate/test_gate.py, test_recipe), which runs it
 on every file tsconfig.json lists: each failing case names its own lines, so none passes on a copy
 broken some other way. Each failing case's copy has tsconfig.json's include cut to the files it
-plants in (Copy.only; its data, as check-ts reads its file list from tsconfig.json): typed eslint
-and tsc over the whole kit are the cost floor (#686), and every assertion is about those files.
+plants in (Copy.only, testkit/kit_copy.py; its data, as check-ts reads its file list from
+tsconfig.json): typed eslint and tsc over the whole kit are the cost floor (#686), and every
+assertion is about those files.
 Two runs, as eslint reports unused suppressions only in a run with no other finding.
 """
 
 from __future__ import annotations
 
-import json
-import shutil
 import subprocess
 import sys
 import tempfile
 from pathlib import Path
 
-from testkit import FIXTURES, ROOT, Ran, Scratch, main, pnpm_store, tool_homes
-from testkit.template import uncoloured
+from testkit import FIXTURES, ROOT, Scratch, main
+from testkit.kit_copy import Copy, tool
 
 EXT = "extensions/resume-on-error.ts"
 LEDGER = "extensions/spend-ledger.ts"
-
-
-def tool(name: str) -> str:
-    """NAME's path on PATH; a missing tool fails naming it."""
-    path = shutil.which(name)
-    assert path, f"{name} is not on PATH"
-    return path
-
-
-class Copy:
-    """The kit's tracked files under SCRATCH/kit, the kit's pnpm store named for every command."""
-
-    def __init__(self, s: Scratch) -> None:
-        self.s = s
-        self.dir = s.root / "kit"
-        self.dir.mkdir()
-        files = subprocess.run(
-            [tool("git"), "ls-files", "-z"], cwd=ROOT, capture_output=True, check=True
-        ).stdout
-        tar = subprocess.run(  # a tracked file deleted in the worktree is skipped
-            [tool("tar"), "-cf", "-", "--null", "--ignore-failed-read", "-T", "-"],
-            cwd=ROOT,
-            input=files,
-            capture_output=True,
-            check=False,
-        ).stdout
-        subprocess.run([tool("tar"), "-xf", "-"], cwd=self.dir, input=tar, check=True)
-        self.store = pnpm_store()  # the caller's HOME finds it, never the scratch HOME
-        s.env |= tool_homes() | {"npm_config_store_dir": self.store}
-        uncoloured(s)  # eslint's stylish rows and tsc's lines read here
-
-    def check_ts(self, **env: str) -> Ran:
-        p = subprocess.run(
-            [tool("just"), "check-ts"],
-            cwd=self.dir,
-            env={**self.s.env, **env},
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            check=False,
-        )
-        return Ran(p.returncode, p.stdout, "")
-
-    def only(self, *rels: str) -> None:
-        """tsconfig.json's include cut to RELS: the files check-ts checks (its file list)."""
-        p = self.dir / "tsconfig.json"
-        text = p.read_text()
-        old = '"include": ["**/*"]'
-        assert old in text, f"no {old} in {p}"
-        p.write_text(text.replace(old, f'"include": {json.dumps(list(rels))}'))
-
-    def append(self, rel: str, text: str) -> int:
-        """TEXT appended to REL; the line number of its last line."""
-        p = self.dir / rel
-        p.write_text(p.read_text() + text)
-        return len(p.read_text().splitlines())
 
 
 def named(c: Copy, out: str, rel: str, line: int) -> None:
