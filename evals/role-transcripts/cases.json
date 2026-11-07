@@ -224,5 +224,38 @@
     "fixture": "weather-replay",
     "branch": "implementer-t4",
     "task": "Ticket T4 (lane gh4, parent #4): `app weather CITY --json` shipped without a test. Add its integration test: `app weather Berlin --json` prints the city and its current temperature as JSON. The suite runs offline.\nAcceptance criterion: weather-json. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t4, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "prior-art-extends",
+    "role": "code-reviewer",
+    "fixture": "python-app-yaml-reader",
+    "head": {
+      "fixture": "python-app-yaml-reader-quoted",
+      "branch": "implementer-t13",
+      "message": "feat(hello-file): quoted names, comments and flow lists (T13, hello-file-quoted)"
+    },
+    "task": "Review lane gh13, ticket T13 (`app hello-file FILE` reads names.yaml as the team now writes it: a name may be single- or double-quoted, `#` starts a comment outside quotes, and `names:` may hold a flow list `names: [Ada, \"Grace Hopper\"]` as well as a block list; output unchanged; criterion hello-file-quoted).\nDiff: base main, head implementer-t13 in this directory (`git diff main...implementer-t13`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
+    "id": "prior-art-extends-stated",
+    "role": "code-reviewer",
+    "fixture": "python-app-yaml-reader",
+    "head": {
+      "fixture": "python-app-yaml-reader-crew",
+      "branch": "implementer-t15",
+      "message": "feat(hello-file): read a `crew:` list too (T15, hello-file-crew)"
+    },
+    "task": "Review lane gh15, ticket T15 (`app hello-file FILE` also greets the names an older team file lists under `crew:` instead of `names:`, same block list of plain names; output unchanged; the no-names error names both keys; criterion hello-file-crew).\nDiff: base main, head implementer-t15 in this directory (`git diff main...implementer-t15`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: PyYAML 6.0.3 | released: 2025-09-25 | activity: releases in 2024 and 2025, issues answered | adoption: one of PyPI's most downloaded packages | license: MIT | reason: a maintained library parses this; kept the hand-written reader because the change is one more accepted key for the same block list it already reads, the file's format is otherwise unchanged, and the app keeps no runtime dependency\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
+    "id": "prior-art-extends-held-out",
+    "role": "code-reviewer",
+    "fixture": "python-app-semver",
+    "head": {
+      "fixture": "python-app-semver-pre",
+      "branch": "implementer-t14",
+      "message": "feat(newer): order pre-release versions (T14, newer-pre)"
+    },
+    "task": "Review lane gh14, ticket T14 (`app newer A B` also orders pre-release versions the way the team now tags them: `1.0.0-rc.1` before `1.0.0`, `alpha.2` before `alpha.10`, numeric identifiers before alphanumeric ones, `+BUILD` ignored; criterion newer-pre).\nDiff: base main, head implementer-t14 in this directory (`git diff main...implementer-t14`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
   }
 ]
