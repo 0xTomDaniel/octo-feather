@@ -23,7 +23,7 @@ Preconditions:
 
 Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather drive qc-sandbox-cost`. Evidence: `$VERIFY_OCTO_FEATHER_EVIDENCE_DIR/qc-sandbox-cost/`.
 
-The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-sandbox-cost`, then runs there, 5 times, one after another, `octo-feather-qc-sandbox -- true`, measuring each run's CPU as the CPU of its waited-for processes (getrusage of children: user plus system time).
+The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-sandbox-cost`, then runs there, 5 times, one after another, `octo-feather-qc-sandbox -- true`, measuring each run's CPU as the CPU of the case command and every process it waited for (getrusage of children: user plus system time), not the drive's own checks around it.
 
 - **Each run** (`run-1` ... `run-5`). Observe exit 0, no `qc sandbox: FAIL` line, and its CPU (`<case>.obs.cpu`, also printed as `qc-sandbox-cost run-N: S s CPU`) under the criterion's bound (the drive's QC_SANDBOX_COST_CPU_S). The drive's last line prints every run's CPU and the median.
 
