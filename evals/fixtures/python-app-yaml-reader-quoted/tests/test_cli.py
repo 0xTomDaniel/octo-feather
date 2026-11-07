@@ -63,3 +63,15 @@ def test_hello_file_reads_quoted_names_comments_and_flow_lists(
     names.write_text('names:\n  - "O\'Brien # 2"  # quoted hash\n  - Linus\n')
     assert main(["hello-file", str(names)]) == 0
     assert capsys.readouterr().out == "Hello, O'Brien # 2\nHello, Linus\n"
+
+
+def test_hello_file_keeps_quoted_commas_and_plain_apostrophes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = tmp_path / "names.yaml"
+    names.write_text('names: ["Hopper, Grace", Ada]\n')
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, Hopper, Grace\nHello, Ada\n"
+    names.write_text("names:\n  - O'Brien # lead\n  - 'it''s Linus'\n")
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, O'Brien\nHello, it's Linus\n"
