@@ -50,7 +50,7 @@ bad 'e["incl"]["facts"][0]["items"] = [{"test": 1}]' "case incl fact #1: field i
 bad 'e["incl"]["facts"][0]["items"] = []' "case incl fact #1: field items: must be a non-empty list" "$t/rt-good" rt
 bad 'del e["incl"]["facts"][0]["field"]' "case incl fact #1: field field: missing" "$t/rt-good" rt
 bad 'c[0]["should_trigger"] = False' "case reads: field should_trigger: false, but no skill_not_read fact"
-bad 'e["reads"]["facts"].append({"fact": "attempt_blocked", "kind": "vibes"})' "case reads fact #2: field kind: must be one of ['credential', 'herdr', 'lane_state', 'repo'], got 'vibes'"
+bad 'e["reads"]["facts"].append({"fact": "attempt_blocked", "kind": "vibes"})' "case reads fact #2: field kind: must be one of ['credential', 'herdr', 'lane_state', 'network', 'repo'], got 'vibes'"
 bad 'e["reads"]["facts"].append({"fact": "declared", "field": "", "in": []})' "case reads fact #2: field field: must be a non-empty string"
 bad 'e["reads"]["facts"].append({"fact": "declared", "field": "rung", "in": [1]})' "case reads fact #2: field in: must be a non-empty list of strings"
 bad 'del e["fnone"]["facts"][0]["field"]' "case fnone fact #1: field field: missing" "$t/fl-good" fl

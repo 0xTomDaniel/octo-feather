@@ -15,8 +15,10 @@ import hashlib
 import json
 import os
 import re
+import resource
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -28,7 +30,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -1567,6 +1569,40 @@ def drive_qc_sandbox(f: Feature) -> None:
     say(f"qc-sandbox evidence: {f.d}")
 
 
+# Per quality spec #acceptance-qc-sandbox-cost: the runs a drive makes, and the CPU each must stay under (seconds).
+QC_SANDBOX_COST_RUNS, QC_SANDBOX_COST_CPU_S = 5, 0.8
+
+
+def drive_qc_sandbox_cost(f: Feature) -> None:
+    """The qc sandbox around a judge that does nothing (`octo-feather-qc-sandbox -- true`, by hand, the box's herdr when
+    there is one), QC_SANDBOX_COST_RUNS runs one after another in a scratch git repo: each run's CPU, the sandbox's setup,
+    proof and cleanup with every process they start (this process's waited-for children, getrusage), printed with the
+    median; a run at or over QC_SANDBOX_COST_CPU_S fails its case."""
+    sc = RUN_DIR / "scratch" / "qc-sandbox-cost"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    r.mkdir(parents=True)
+    for args in (("init", "-q", "-b", "main"),
+                 ("-c", "user.name=verify-octo-feather", "-c", "user.email=verify@octo-feather.invalid",
+                  "commit", "-q", "--allow-empty", "-m", "scratch")):
+        subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True)
+    f.pre = ["env", "-C", str(r)]
+    cpus: list[float] = []
+    for i in range(1, QC_SANDBOX_COST_RUNS + 1):
+        name = f"run-{i}"
+        r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+        f.run(name, "octo-feather-qc-sandbox", "--", "true")
+        r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+        cpu = r1.ru_utime - r0.ru_utime + r1.ru_stime - r0.ru_stime
+        cpus.append(cpu)
+        f.obs(name, "cpu", f"{cpu:.3f}\n")
+        say(f"qc-sandbox-cost {name}: {cpu:.3f} s CPU")
+        f.check(name, lambda c: c.code == 0 and "qc sandbox: FAIL" not in c.err and float(c.o["cpu"]) < QC_SANDBOX_COST_CPU_S)
+    f.pre = []
+    say(f"qc-sandbox-cost: {' '.join(f'{c:.3f}' for c in cpus)} s CPU per run; median {statistics.median(cpus):.3f} s, "
+        f"each under {QC_SANDBOX_COST_CPU_S} s: {all(c < QC_SANDBOX_COST_CPU_S for c in cpus)}")
+
+
 def drive_qc_advisory(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a passing demo, with the classifier boundary stubbed (the
     kit's tests/fixtures/classify-stub/pi first on PATH, never a real model): the kit's judgment model is induced to
@@ -2783,6 +2819,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
     "qc-sandbox": drive_qc_sandbox,
+    "qc-sandbox-cost": drive_qc_sandbox_cost,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
     "qc-stale": drive_qc_stale,

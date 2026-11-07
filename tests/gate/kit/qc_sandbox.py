@@ -5,7 +5,9 @@ write to HOME, an umount of a mask, a live Herdr session through the shim) and l
 (its worktree write discarded, listed in the upper record); without srt in the kit's
 node_modules (no pnpm install yet), it refuses before any judge, naming the install command; the
 network: a run with no Pi reaches no host, a Pi run only the hosts of Pi's models.json (here a
-local provider, through srt's proxy); run by hand inside a qc sandbox (nested), its proof passes."""
+local provider, through srt's proxy), an allowed host never an attempt; a refused host is one
+attempt-record entry; the judge's stdio stays blocking; run by hand inside a qc sandbox
+(nested), its proof passes."""
 
 from __future__ import annotations
 
@@ -13,7 +15,9 @@ import http.server
 import json
 import re
 import shutil
+import subprocess
 import threading
+import time
 from typing import TYPE_CHECKING
 
 from testkit import ROOT, Scratch, kit, main, tool_homes
@@ -74,6 +78,62 @@ def srt_missing(s: Scratch) -> None:
         assert want in ran.err, (want, ran.err)
 
 
+def refused_host(s: Scratch) -> None:
+    """A host outside the allowlist, asked for twice: srt refuses it, and the attempt record holds
+    exactly one entry for it (kind network, refused, naming the host and srt's reason)."""
+    r = repo(s)
+    py = (
+        "import urllib.request\n"
+        "for _ in range(2):\n"
+        "    try: urllib.request.urlopen('http://blocked.invalid/', timeout=5)\n"
+        "    except Exception as e: print('refused', e)\n"
+    )
+    ran = s.run(
+        [kit("octo-feather-qc-sandbox"), "--", "python3", "-c", py], cwd=r, env=tool_homes()
+    )
+    assert ran.out.count("refused") == 2, ran.out
+    rec = next(ln for ln in ran.err.splitlines() if ln.startswith('qc sandbox: record {"attempts"'))
+    got = [a for a in json.loads(rec.split("record ", 1)[1])["attempts"] if a["kind"] == "network"]
+    assert len(got) == 1, got
+    assert got[0]["attempt"] is True, got
+    assert got[0]["refused"] is True, got
+    assert got[0]["what"] == "connect blocked.invalid:80", got
+    assert got[0]["result"].startswith("srt refused: "), got
+
+
+def blocking_stdio(s: Scratch) -> None:
+    """The judge's stdin, stdout and stderr stay blocking (srt's Node never holds them: it would
+    set O_NONBLOCK on the open file description itself), so a burst written into a pipe its reader
+    drains late completes: 4 MB, read only after a pause."""
+    r = repo(s)
+    # A refused host first: srt's Node then writes (its violation line), as a Herdr server's
+    # update check makes it on the box.
+    py = (
+        "import fcntl, os, sys, time, urllib.request\n"
+        "try: urllib.request.urlopen('http://blocked.invalid/', timeout=5)\n"
+        "except Exception: pass\n"
+        "time.sleep(1)\n"
+        "nb = [bool(fcntl.fcntl(f, fcntl.F_GETFL) & os.O_NONBLOCK) for f in (0, 1, 2)]\n"
+        "print('nonblock', nb, file=sys.stderr, flush=True)\n"
+        "sys.stdout.buffer.write(b'x' * 4_000_000)\n"
+        "sys.stdout.flush()\n"
+    )
+    p = subprocess.Popen(
+        [kit("octo-feather-qc-sandbox"), "--", "python3", "-c", py],
+        cwd=r,
+        env={**s.env, **tool_homes()},
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    time.sleep(2)  # the judge fills the pipe first
+    out, err = p.communicate(timeout=120)
+    e = err.decode(errors="replace")
+    assert p.returncode == 0, e
+    assert "nonblock [False, False, False]" in e, e
+    assert len(out) == 4_000_000, (len(out), e)
+
+
 def nested(s: Scratch) -> None:
     """The by-hand run inside a qc sandbox (a nested run, as a demo of the kit judging itself runs
     it): the inner proof passes, its live-record masks holding though the outer run's state dir is
@@ -123,8 +183,9 @@ def network(s: Scratch) -> None:
     piran = s.run(sb, cwd=r, env=tool_homes() | {"QC_PI": ""})
     assert f"network allowlist: {host}" in piran.err, piran.err
     assert piran.out == "provider", (piran.out, piran.err)
+    assert '"kind": "network"' not in piran.err, piran.err  # an allowed host is no attempt
     srv.shutdown()
 
 
 if __name__ == "__main__":
-    main(by_hand, srt_missing, network, nested)
+    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio)
