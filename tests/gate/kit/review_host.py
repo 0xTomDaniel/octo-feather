@@ -6,24 +6,24 @@ the box's clone, #96). Only --test rows in a scratch state dir with a space in i
 `refusals` (no server starts): on a spawned pane's PATH (herdr-spawn over the testkit's Herdr
 stand-in) review-host is the kit script and --help passes through; register refuses a page with no
 Spec Chat runtime <script>, then one whose .viz/runtime.js is missing, registering nothing; a lane
-key as --slug is refused (remote #review-one-row), exit 2, no row: gh230 for a GitHub target,
-eng-12 for a Linear one.
+key as --slug is refused (remote #review-one-row), exit 2, no row: gh230 for a GitHub target, eng-12
+for a Linear one.
 
 `servers` (e2e, quality #test-kinds: its purpose is Spec Chat's real review server working, on
-loopback): re-registering at a new commit keeps the link, which answers 200 with the new version;
-a lane-key slug on a live registry leaves it as it was; project and spec slugs, and gh230 on a
-Linear target, register; a process that only names the registry (the reviewed repro, one passing
-the real server path as a plain argument, one running another review-serve.py) is never stopped,
-even by a register that then fails, and is reported; a real review-serve on the registry it does
-not own is stopped; where review-host.py cannot see the live server (no /proc, as on macOS:
-register in a user+mount namespace with /proc covered, the testkit's ps stand-in reading the real
-one, as macOS ps reads the kernel) the link holds and the old server is replaced, and a sleeper
-whose args end with the exact launch text is left running and reported. Which servers run is
-proved through what this scenario owns, never a process listing: it is the subreaper of every
-server review-host starts (prctl PR_SET_CHILD_SUBREAPER), so a replaced server is reaped here
-(waitpid) and, at the end, with the registry's own stopped, no server is left (waitpid until
-ECHILD); a lookalike or stray is this scenario's own child, its handle saying whether it runs.
-Each wait is bounded by an alarm that fails the item (never a pacing sleep)."""
+loopback): re-registering at a new commit keeps the link, which answers 200 with the new version; a
+lane-key slug on a live registry leaves it as it was; project and spec slugs, and gh230 on a Linear
+target, register; a process that only names the registry (the reviewed repro, one passing the real
+server path as a plain argument, one running another review-serve.py) is never stopped, even by a
+register that then fails, and is reported; a real review-serve on the registry it does not own is
+stopped; where review-host.py cannot see the live server (no /proc, as on macOS: register in a
+user+mount namespace with /proc covered, the testkit's ps stand-in showing this scenario's own
+processes only, as launched) the link holds and the old server is replaced, and a sleeper whose args
+end with the exact launch text is left running and reported. Which servers run is proved through
+what this scenario owns, never a process listing: it is the subreaper of every server review-host
+starts (prctl PR_SET_CHILD_SUBREAPER), so a replaced server is reaped here (waitpid) and, at the
+end, with the registry's own stopped, no server is left (waitpid until ECHILD); a lookalike or stray
+is this scenario's own child, its handle saying whether it runs. Each wait is bounded by an alarm
+that fails the item (never a pacing sleep)."""
 
 from __future__ import annotations
 
@@ -401,17 +401,32 @@ def lookalikes(w: World, own: Owned, first: str, p2: int) -> None:
     no_proc(w, own, first, p4)
 
 
+def server_row(w: World, python: str) -> str:
+    """The ps row of the server this registry records (owned: its own register started it), as
+    review-host.py launched it (its record's bind, port and host; review-host's interpreter)."""
+    text = w.registry.read_text()
+
+    def field(k: str) -> str:
+        m = re.search(rf'(?m)^{k} = "?([^"\n]*)"?$', text)
+        assert m, f"{TAG}: the registry records no {k}: {text}"
+        return m.group(1)
+
+    argv = [python, str(w.server), "--registry", str(w.registry.resolve())]
+    argv += ["--bind", field("bind"), "--port", field("port"), "--host", field("host")]
+    return f"{field('pid')} {' '.join(argv)}"
+
+
 def no_proc(w: World, own: Owned, first: str, p4: int) -> None:
     """Where review-host.py cannot see its live server (no /proc, as on macOS), the link holds and
-    the old server is replaced; a prefixed lookalike is left running and reported."""
+    the old server is replaced; a prefixed lookalike is left running and reported. The ps
+    stand-in shows only this scenario's own processes (FAKE_PS_ROWS): the server the registry
+    records and the lookalike this scenario started, each as launched; no process listing."""
     t = w.t
-    real = t / "realproc"
-    real.mkdir()
     psbin = t / "psbin"
     psbin.mkdir()
     (psbin / "ps").symlink_to(HERE / "ps.py")
-    cover = 'mount --rbind /proc "$1" && mount -t tmpfs none /proc && shift && exec "$@"'
-    noproc = ["unshare", "-rm", "sh", "-c", cover, "sh", str(real)]
+    rows = t / "ps-rows"
+    noproc = ["unshare", "-rm", "sh", "-c", 'mount -t tmpfs none /proc && exec "$@"', "sh"]
     probe = subprocess.run(
         [*noproc, "sh", "-c", "! test -e /proc/self"], capture_output=True, check=False
     )
@@ -420,7 +435,10 @@ def no_proc(w: World, own: Owned, first: str, p4: int) -> None:
             "review-host: no-/proc case skipped: unshare -rm cannot cover /proc here\n"
         )
         return
-    env = {"FAKE_PS_PROC": str(real), "PATH": f"{psbin}{os.pathsep}{w.s.env['PATH']}"}
+    path = f"{psbin}{os.pathsep}{w.s.env['PATH']}"
+    env = {"FAKE_PS_ROWS": str(rows), "PATH": path}
+    python = os.path.realpath(shutil.which("python3", path=path) or "python3")  # review-host's
+    rows.write_text(server_row(w, python) + "\n")
     w.page("v5", SCRIPT)
     rc, out = w.reg(env=env, wrap=noproc)
     assert rc == 0, f"{TAG}: register v5 without /proc: {out}"
@@ -431,20 +449,13 @@ def no_proc(w: World, own: Owned, first: str, p4: int) -> None:
     answers(first, "v5")
     # The reviewed repro, last: a sleeper whose args end with the exact launch text, the real
     # interpreter path included, is left running and reported.
-    python = os.path.realpath(shutil.which("python3") or "python3")  # review-host's interpreter
     reg, srv = str(w.registry), str(w.server)
     tail = ("--bind", "127.0.0.1", "--port", "1", "--host", "127.0.0.1")
-    pre = own.start(
-        "prefixed",
-        "python3",
-        "-c",
-        "import time; time.sleep(3600)",
-        python,
-        srv,
-        "--registry",
-        reg,
-        *tail,
-    )
+    sleeper = ("python3", "-c", "import time; time.sleep(3600)")
+    launch = (python, srv, "--registry", reg, *tail)
+    pre = own.start("prefixed", *sleeper, *launch)
+    planted = f"{pre} {' '.join((*sleeper, *launch))}"
+    rows.write_text(f"{server_row(w, python)}\n{planted}\n")
     rc, out = w.reg("docs/specs/missing.spec.html", env=env, wrap=noproc)
     assert rc != 0, f"{TAG}: register of a missing spec without /proc passed: {out}"
     assert own.runs("prefixed"), (
