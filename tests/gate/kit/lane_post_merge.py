@@ -2,23 +2,23 @@
 (testkit.main): scripts/octo-feather-lane post-merge, the director's post-merge routine (owner
 ruling 2026-10-29 on issue 206; steps 1-2, issue 396), offline: the testkit's fake gh holds PR #7
 and the push runs of its merge commit (a tape per run list and run watch: the runs start and end
-between calls), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged
-at another head; step 2 stops on a red run naming its URL, on no run within the --wait bound, and
-on a watch that fails with its run unfinished; all runs concluded success passes. Every run ends
-with a one-line summary of each step's outcome, and only gh reads run (rerun safe), asserted
-after every run. Step 3 (issue 397) refreshes a throwaway kit install clone
-(OCTO_FEATHER_KIT_INSTALL, always set here: never the live kit), its origin a local bare repo
-behind a GitHub URL: the install's own justfile recipes (vendored-fetch, install-check) and the
-real mise run; `uv sync` and `pnpm install`, which would reach the package registries, are
-testkit/argv_recorder.sh (a plain seam stand-in for the registries), except where a refresh
-fails: the real uv fails for real (no lockfile; the pinned Python absent, downloads off). Step 4 (issue 398,
-tests/lane-post-merge-tell.sh) reads a throwaway state dir (XDG_STATE_HOME) with no lane record,
-so it tells no pane; step 5 (issue 399, tests/gate/kit/lane_post_merge_teardown.py) finds no
-archived record, so it is pending and a green run exits 3.
+between calls), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged at
+another head; step 2 stops on a red run naming its URL, on no run within the --wait bound, and on a
+watch that fails with its run unfinished; all runs concluded success passes. Every run ends with a
+one-line summary of each step's outcome, and only gh reads run (rerun safe), asserted after every
+run. Step 3 (issue 397) refreshes a throwaway kit install clone (OCTO_FEATHER_KIT_INSTALL, always
+set here: never the live kit), its origin a local bare repo behind a GitHub URL: the install's own
+justfile recipes (vendored-fetch, install-check) and the real mise run; `uv sync` and `pnpm
+install`, which would reach the package registries, are testkit/argv_recorder.sh (a plain seam
+stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
+the pinned Python absent, downloads off). Step 4 (issue 398, tests/lane-post-merge-tell.sh) reads a
+throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5 (issue 399,
+tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending and a green
+run exits 3.
 
-The kit's origin (B, then the merge commit M with a pyproject, then P past it with a mise.toml;
-and M2 off B pinning a Python no one has), its install clone and the target repo are prepared
-once per gate run (testkit Scratch.prepare); each case moves the install clone, never clones.
+The kit's origin (B, then the merge commit M with a pyproject, then P past it with a mise.toml; and
+M2 off B pinning a Python no one has), its install clone and the target repo are prepared once per
+gate run (testkit Scratch.prepare); each case moves the install clone, never clones.
 """
 
 from __future__ import annotations
