@@ -120,8 +120,9 @@ class Gh:
 
 
 class Scratch:
-    """One scenario's world under a fresh temp dir: HOME, TMPDIR, the fakes first on PATH,
-    CLEARED unset, and a fake GitHub store. Removed when the scenario ends."""
+    """One scenario's world under a fresh temp dir: HOME, TMPDIR, mise's state dir
+    (MISE_STATE_DIR, ROOT/mise-state: what mise trusts and tracks, never the caller's, #683), the
+    fakes first on PATH, CLEARED unset, and a fake GitHub store. Removed when the scenario ends."""
 
     def __init__(self, root: Path) -> None:
         self.root = root
@@ -135,6 +136,7 @@ class Scratch:
         env |= {
             "HOME": str(self.home),
             "TMPDIR": str(root / "tmp"),
+            "MISE_STATE_DIR": str(root / "mise-state"),
             "PATH": f"{self.bin}{os.pathsep}{os.environ['PATH']}",
             "FAKE_GH": str(self.gh.dir),
             "GH_TOKEN": "testkit-token",  # the caller's gh auth, as the fake gh asks for it
