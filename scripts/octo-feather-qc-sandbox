@@ -1179,9 +1179,15 @@ def setup(judge: list[str]) -> NoReturn:
                 RSOCK,
             )
         )
+        # The per-run server's config: no background version or agent-manifest check (herdr's own [update] keys); the
+        # sandbox's network refuses herdr.dev anyway, and each check was a curl, a refusal and srt's handling of it.
+        open(f"{SCR}/bin/herdr.toml", "w").write(
+            "[update]\nversion_check = false\nmanifest_check = false\n"
+        )
         jenv.update(
             HERDR_BIN_PATH=f"{SCR}/bin/herdr",
             HERDR_SOCKET_PATH=f"{HC}/sessions/{S}/herdr.sock",
+            HERDR_CONFIG_PATH=f"{SCR}/bin/herdr.toml",
             OCTO_FEATHER_QC_HERDR=HERDR,
         )
     open(f"{SCR}/bin/git-credential-qc", "w").write(credhelper(py, RSOCK))
@@ -1279,7 +1285,14 @@ def setup(judge: list[str]) -> NoReturn:
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
-    senv = dict(jenv, PATH=E.get("PATH", ""), TMPDIR=f"{SCR}/srt")
+    # Node's own compile cache (module.enableCompileCache, NODE_COMPILE_CACHE) for srt's modules, setup-side under the
+    # cache dir (the judge's view masks it): loading srt's library was most of its CPU per run.
+    senv = dict(
+        jenv,
+        PATH=E.get("PATH", ""),
+        TMPDIR=f"{SCR}/srt",
+        NODE_COMPILE_CACHE=f"{E.get('XDG_CACHE_HOME') or HOME + '/.cache'}/octo-feather/node-compile-cache",
+    )
     # srt runs from an empty dir of the private /tmp, which the judge cannot write: its built-in write denies (shell rc
     # files, .git/hooks and .git/config, .vscode ... in and below its working dir, within the writable paths) would
     # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
@@ -1436,14 +1449,19 @@ def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
     miss: list[str] = []
     judged: list[str] = []
     fix: list[str] = []
+    asked: dict[
+        str, subprocess.CompletedProcess[str]
+    ] = {}  # one ask per dir: the kit judging itself asks once
     for d in (wt, kit):
-        r = subprocess.run(
-            [helper, "--list", "--json", d],
-            capture_output=True,
-            text=True,
-            env=dict(env, MISE_STATE_DIR=ms),
-        )
         dr = os.path.realpath(d)
+        if dr not in asked:
+            asked[dr] = subprocess.run(
+                [helper, "--list", "--json", d],
+                capture_output=True,
+                text=True,
+                env=dict(env, MISE_STATE_DIR=ms),
+            )
+        r = asked[dr]
         try:
             tools: object = json.loads(r.stdout) if r.returncode == 0 else None
         except ValueError:
