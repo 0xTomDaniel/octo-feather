@@ -115,8 +115,11 @@ class Lane:
             d.mkdir()
             for n in names:
                 (d / n).symlink_to(HERE / "argv_recorder.sh")
-        for k in ("VIRTUAL_ENV", "HERDR_SESSION", "GH_REPO"):
+        # FORCE_COLOR (a CI runner's) unset, NO_COLOR set: the real uv colours its own error, which
+        # step 3 quotes and a case asserts in uv's words (testkit.asked, the same).
+        for k in ("VIRTUAL_ENV", "HERDR_SESSION", "GH_REPO", "FORCE_COLOR"):
             s.env.pop(k, None)
+        s.env["NO_COLOR"] = "1"
         s.env |= {
             "XDG_STATE_HOME": str(self.state),
             "OCTO_FEATHER_KIT_INSTALL": str(self.kit),
