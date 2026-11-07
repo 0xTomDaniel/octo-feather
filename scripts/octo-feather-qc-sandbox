@@ -13,7 +13,8 @@
 The judge runs inside anthropics/sandbox-runtime (srt, @anthropic-ai/sandbox-runtime pinned exact in the kit's
 package.json and pnpm-lock.yaml, run from the kit's node_modules: `pnpm install --frozen-lockfile`; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
 namespaces, no capabilities, no_new_privs, every path read-only but what the policy below lets write, read-denied
-paths as empty tmpfs masks whose writes die with the run, and a network allowlist. This script is the kit's policy
+paths as empty tmpfs masks whose writes die with the run, and a network allowlist, each refused host one attempt
+(SRT_SHIM: srt run through its library, its violation store read). This script is the kit's policy
 over it (which paths are masked, kept, writable; the shims, the attempt record, the proof and the records) and the
 one isolation srt cannot express, the discard stage (step D). `just qc` and `just qa` start it through
 octo-feather-qc sandboxed(); it also runs by hand (`scripts/octo-feather-qc-sandbox -- CMD` in a repo): every input
@@ -92,6 +93,7 @@ Exit: the judge's exit, or 66 when the sandbox or a proof check failed (judge ne
 import base64
 import contextlib
 import ctypes
+import fcntl
 import glob
 import json
 import os
@@ -181,6 +183,32 @@ INPUTS = (
     "QC_GHSNAP_LINE",
 )  # the inputs above, never passed on to the judge
 SRT_PKG = "@anthropic-ai/sandbox-runtime"
+# srt run through its own library, as its CLI (dist/cli.js, the Linux path) runs a command: loadConfig, initialize,
+# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand. The bwrap argv is
+# the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
+# reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
+# "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
+SRT_SHIM = r"""
+const [pkg, settings, , ...args] = process.argv.slice(1)
+const { SandboxManager } = await import(`${pkg}/dist/index.js`)
+const { loadConfig } = await import(`${pkg}/dist/utils/config-loader.js`)
+const { quote } = await import(`${pkg}/dist/utils/shell-quote.js`)
+const { spawn } = await import('node:child_process')
+const loaded = loadConfig(settings)
+if (loaded.kind !== 'ok') { console.error(`qc sandbox: srt settings ${settings}: ${loaded.reason ?? loaded.kind}`); process.exit(1) }
+await SandboxManager.initialize(loaded.config)
+const store = SandboxManager.getSandboxViolationStore()
+let seen = store.getTotalCount()
+store.subscribe(vs => {
+  const total = store.getTotalCount()
+  const fresh = vs.slice(Math.max(0, vs.length - (total - seen)))
+  seen = total
+  for (const v of fresh) process.stderr.write(`QC-SRT-VIOLATION ${JSON.stringify({ line: v.line })}\n`)
+})
+const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
+child.on('exit', (code, sig) => { SandboxManager.cleanupAfterCommand(); process.exit(sig ? 1 : (code ?? 0)) })
+"""
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
 
@@ -287,6 +315,7 @@ class Recorder:
         self.recs: list[dict[str, Any]] = []
         self.misses: list[dict[str, Any]] = []
         self.conns: dict[socket.socket, dict[str, Any]] = {}
+        self.net: set[str] = set()
         self.hello = False
         self.wr, self.ww = os.pipe()
         self.stop = False
@@ -398,6 +427,30 @@ class Recorder:
                     "result": f"offline gh refused: {r['why']}",
                 }
             )
+        elif t == "net" and self.live:
+            # an srt violation (srt_log): a refused host recorded once per host, any other violation whole
+            host = f"{m.get('host', '')}:{m.get('port', '')}" if "host" in m else ""
+            if host and host not in self.net:
+                self.net.add(host)
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": f"connect {host}",
+                        "result": f"srt refused: {m.get('why', '')}",
+                    }
+                )
+            elif not host:
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": str(m.get("line", "")),
+                        "result": "srt violation (no host in srt's line)",
+                    }
+                )
         elif t == "cred":
             op, p, h = (str(m.get(k, "")) for k in ("op", "protocol", "host"))
             self.emit(
@@ -640,13 +693,15 @@ def srt_js() -> tuple[str, str, str]:
     got = ""
     with contextlib.suppress(OSError, ValueError):
         got = json.load(open(f"{SK}/node_modules/{SRT_PKG}/package.json")).get("version", "")
-    js = os.path.realpath(f"{SK}/node_modules/{SRT_PKG}/dist/cli.js")
+    js = os.path.realpath(
+        f"{SK}/node_modules/{SRT_PKG}/dist/cli.js"
+    )  # the package's own entry, there iff installed
     if not pin or got != pin or not os.path.isfile(js):
         die(
             f"srt ({SRT_PKG} {pin or 'unpinned'}, the kit's package.json and pnpm-lock.yaml) not installed in "
             f"{SK}/node_modules (found: {got or 'none'}): run pnpm install --frozen-lockfile --dir {SK}"
         )
-    return js, got, os.path.realpath(f"{SK}/node_modules")
+    return os.path.dirname(os.path.dirname(js)), got, os.path.realpath(f"{SK}/node_modules")
 
 
 def srt_node(data: str) -> str:
@@ -662,6 +717,42 @@ def srt_node(data: str) -> str:
             f"node (the kit's mise.toml pin {nv}) not installed: run {SK}/scripts/octo-feather-mise-install {SK}"
         )
     return node
+
+
+def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Recorder) -> None:
+    """srt's stderr: each violation line (SRT_SHIM) sent to the recorder as {"t": "net"}, a network refusal's host,
+    port and srt's reason read from it, any other violation sent whole (recorded, never dropped); srt's other lines
+    kept for the caller until the inner has started (shown when srt never started it), passed through after."""
+    deny = re.compile(r"deny network-outbound (\S+):(\d+) \((.*)\)$")
+    assert p.stderr is not None
+    for ln in p.stderr:
+        if not ln.startswith(b"QC-SRT-VIOLATION "):
+            if rec.hello:
+                sys.stderr.write(ln.decode(errors="replace"))
+            else:
+                early.append(ln.decode(errors="replace"))
+            continue
+        try:
+            line = str(json.loads(ln[len(b"QC-SRT-VIOLATION ") :]).get("line", ""))
+        except ValueError:
+            line = ln.decode(errors="replace").strip()
+        m = deny.search(line)
+        msg = (
+            {"t": "net", "host": m.group(1), "port": m.group(2), "why": m.group(3)}
+            if m
+            else {"t": "net", "line": line}
+        )
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        try:
+            c.connect(sock)
+            c.send(json.dumps(msg).encode())
+            c.shutdown(socket.SHUT_WR)
+            while c.recv(16):
+                pass
+        except OSError:
+            pass
+        finally:
+            c.close()
 
 
 def setup(judge: list[str]) -> NoReturn:
@@ -878,7 +969,7 @@ def setup(judge: list[str]) -> NoReturn:
                     f"mise doctor --json (exit {r.returncode}) printed no dirs.{d}: mise's dirs unknown"
                 )
             menv[f"MISE_{d.upper()}_DIR"] = E.get(f"MISE_{d.upper()}_DIR") or x
-    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), sjs]
+    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), "--input-type=module", "-e", SRT_SHIM, sjs]
     # 2. the run tmpfs: overlay upper and work dirs, Pi copies.
     for c in (",", ":"):
         if c in WT:
@@ -1169,7 +1260,11 @@ def setup(judge: list[str]) -> NoReturn:
     os.chmod(f"{SCR}/bin/run.json", 0o444)
 
     # R. the recorder, then srt.
-    fds = [o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")]
+    # The inner's pipes, and the caller's stdin, stdout and stderr: handed over the recorder's socket, never to srt's
+    # Node, which sets O_NONBLOCK on the stdio it inherits (libuv), on the open file description itself, shared by the
+    # caller and every writer in the sandbox: a judge writing a burst into a full pipe then failed with EAGAIN (#690's
+    # eval runs). srt gets /dev/null and its own stderr pipe.
+    fds = [*(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")), 2, 0, 1]
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1179,10 +1274,11 @@ def setup(judge: list[str]) -> NoReturn:
     # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
     # discarded with the overlay anyway. The inner enters the caller's dir.
     os.makedirs(f"{SCR}/cwd")
+    # srt's violations (SRT_SHIM) on its stderr, read here, each sent to the recorder. The inner takes this process's
+    # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own.
     p = subprocess.Popen(
         [
             *srt,
-            "--settings",
             f"{SCR}/srt.json",
             "--",
             py,
@@ -1194,10 +1290,18 @@ def setup(judge: list[str]) -> NoReturn:
         ],
         env=senv,
         cwd=f"{SCR}/cwd",
-        stdin=None if hand else subprocess.DEVNULL,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
         close_fds=True,
     )
+    early: list[str] = []
+    th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
+    th.start()
     rc = p.wait()
+    th.join(10)
+    if not rec.hello:
+        sys.stderr.write("".join(early))
     fin = rec.finish()
     if not rec.hello:
         say(f"FAIL srt sandbox did not start the inner (srt exit {rc})")
@@ -1344,11 +1448,23 @@ def covered(mid: str, path: str) -> bool:
     return bool(m) and m.group(1) != mid
 
 
+def srt_set(k: str) -> bool:
+    """K is one of the variables srt sets in its sandbox for its network proxy (sandbox-utils.ts generateProxyEnvVars,
+    the Linux wrapper's --setenv), whose value inside is srt's own."""
+    return (
+        "proxy" in k.lower()
+        or k.startswith(("CLOUDSDK_PROXY_", "CLAUDE_CODE_HOST_"))
+        or k in ("SANDBOX_RUNTIME", "GIT_SSH_COMMAND", "GIT_CONFIG_PARAMETERS", "JAVA_TOOL_OPTIONS")
+    )
+
+
 def inner(cfgp: str, judge: list[str]) -> NoReturn:
     c: dict[str, Any] = json.load(open(cfgp))
     S, SCR, SB, HC, HERDR, WT = c["S"], c["SCR"], c["SB"], c["HC"], c["HERDR"], c["WT"]
     env = {k: v for k, v in os.environ.items() if k not in INPUTS}
-    env.update(c["env"])
+    # The judge's env over srt's, but srt's own network plumbing (its proxy vars, set by bwrap --setenv) kept: a caller
+    # inside an outer sandbox carries the outer srt's, which point at no proxy of this one (nested: a 407, no record).
+    env.update({k: v for k, v in c["env"].items() if not (k in os.environ and srt_set(k))})
     if c["shots"]:
         env["QC_SCREENSHOTS"] = c["env"]["QC_SCREENSHOTS"]
     # A loopback model host on the allowlist (a local provider): srt's NO_PROXY names loopback, which would send the
@@ -1371,7 +1487,15 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     try:
         sk.connect(f"{SCR}/rec/sock")
         sk.send(b'{"t": "hello"}')
-        msg, fds, _, _ = socket.recv_fds(sk, 64, 3)
+        msg, fds, _, _ = socket.recv_fds(sk, 64, 6)
+        # the caller's stderr, stdin and stdout for this process and its children (srt's own stdio aside), blocking
+        for f, to in ((fds[3], 2), (fds[4], 0), (fds[5], 1)):
+            os.dup2(f, to)
+            os.close(f)
+        fds = fds[:3]
+        for f in (0, 1, 2, *fds):
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(f, fcntl.F_SETFL, fcntl.fcntl(f, fcntl.F_GETFL) & ~os.O_NONBLOCK)
     except OSError as e:
         sys.exit(
             print(
