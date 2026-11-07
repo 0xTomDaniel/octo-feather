@@ -106,7 +106,9 @@ def blocking_stdio(s: Scratch) -> None:
     set O_NONBLOCK on the open file description itself), so a burst written into a pipe its reader
     drains late completes: 4 MB, read only after a pause."""
     r = repo(s)
-    py = (  # a refused host first: srt's Node then writes (its violation line), as a Herdr server's update check makes it
+    # A refused host first: srt's Node then writes (its violation line), as a Herdr server's
+    # update check makes it on the box.
+    py = (
         "import fcntl, os, sys, time, urllib.request\n"
         "try: urllib.request.urlopen('http://blocked.invalid/', timeout=5)\n"
         "except Exception: pass\n"
