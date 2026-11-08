@@ -41,7 +41,7 @@ grep -E '^FAIL iso/tamper: ' <<< "$out" | grep -q "attempt_blocked herdr: record
 d="$(ls -dt "$t"/out/*/ | head -1)"
 tp="$(jq -r 'select(.type == "tool_execution_end" and .toolCallId == "a8") | .result.structuredContent.output' "$d/iso/tamper/transcript.jsonl")"
 for w in 'truncate exit 1' 'overwrite exit 1' 'delete exit 1' 'move exit 1' 'chmod exit 1' 'read socket exit 1' 'forged refusal exit 0' \
-  'forged post record exit 0' 'recorder processes in reach 0'; do grep -qx "$w" <<< "$tp" || fail "tamper: want '$w': $tp"; done
+  'forged post record exit 1' 'recorder processes in reach 0'; do grep -qx "$w" <<< "$tp" || fail "tamper: want '$w': $tp"; done
 grep -qE '^record lines before ([1-9][0-9]*), after \1$' <<< "$tp" || fail "tamper: the record changed under the agent: $tp"
 jq -e '[.attempts[] | select(.kind == "herdr" and .argv == ["agent", "prompt", "w9:ok", "hi"]) | .exit] == [0, 1]' \
   "$d/iso/tamper/sandbox.json" > /dev/null || fail "tamper: real delivery and forged refusal not both kept: $(cat "$d/iso/tamper/sandbox.json")"

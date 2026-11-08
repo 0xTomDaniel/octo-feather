@@ -19,6 +19,13 @@ grep -qx 'kernel 6.12.0 ok (6.6 or later, the qc sandbox)' <<<"$out" && grep -qx
   || fail "box facts at good values: not every ok line: $out"
 grep -qE '^sharing MANUAL exe\.dev Private sharing cannot be checked from inside the box; on the exe\.dev VM that hosts reviews, from your own machine: ssh exe\.dev share set-private \S+ \(never share set-public: a public share has no login\)$' <<<"$out" \
   || fail "no manual sharing step: $out"
+# ripgrep is a required srt dependency: fixture PATH controls presence, never the host's rg.
+grep -qx 'rg ok (srt, the qc sandbox, needs it)' <<<"$out" || fail "rg present: no ok line: $out"
+mv "$t/bin/rg" "$t/rg"; check 1 "$gh_target" ""
+grep -qx 'rg MISSING (srt, the qc sandbox, needs it); sudo apt install ripgrep' <<<"$out" \
+  || fail "rg absent: no MISSING line with package fix: $out"
+mv "$t/rg" "$t/bin/rg"; check 0 "$gh_target" ""
+grep -qx 'rg ok (srt, the qc sandbox, needs it)' <<<"$out" || fail "rg restored: no ok line: $out"
 # A kernel older than 6.6: TOO OLD naming the upgrade, exit 1.
 echo 6.1.0 >"$t/kver"; check 1 "$gh_target" ""; echo 6.12.0 >"$t/kver"
 grep -qE '^kernel 6\.1\.0 TOO OLD, want 6\.6 or later \(the qc sandbox overlay needs tmpfs user xattrs: scripts/octo-feather-qc-sandbox\); boot a 6\.6 or later kernel, then reboot \(Debian 12: .*sudo apt install -t bookworm-backports linux-image-\$\(dpkg --print-architecture\); Ubuntu 22\.04: sudo apt install linux-generic-hwe-22\.04\)$' <<<"$out" \

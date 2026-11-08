@@ -15,7 +15,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
-from testkit import HERE, ROOT, Scratch, main
+from testkit import HERE, ROOT, Scratch, kit_deps, main
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -69,6 +69,7 @@ def build_kit(s: Scratch) -> None:
     c1 = s.git(k, "rev-parse", "HEAD")
     im.write_text(head)
     s.git(k, *g, "commit", "-qam", "c2")
+    kit_deps(k)
     (s.root / "kit.json").write_text(json.dumps({"c1": c1}))
 
 

@@ -1,355 +1,594 @@
-#!/usr/bin/env bash
-# octo-feather-qc-sandbox -- JUDGE_CMD...   the qc judge's sandbox (docs/adr/0022)
-#
-# Not run by hand: scripts/octo-feather-qc starts it as `unshare -rm
-# octo-feather-qc-sandbox -- pi-role ...`. Two phases.
-# Setup (root of the outer user namespace, mounts private to it; order from lane #23):
-#   1. private /tmp (tmpfs); QC_KEEP paths (worktree, kit, PATH dirs) bound back
-#   2. tmpfs over the Herdr and gh config dirs; ~/.git-credentials and ~/.ssh masked
-#   3. caller's archived lanes and director log bound read-only at a scratch
-#      state dir (none with QC_HISTORY=none: a factory eval sees no lane history), and the box onboarding file
-#      (the commit identity a role launch applies) read-only at its top;
-#      live lanes/, sessions/, director.toml masked
-#   3b. other repos masked (#182; which repos, what is bound back on a mask: docs/adr/0022, the sandbox
-#      paragraph): each a tmpfs; QC_KIT the kit under test, default this script's kit
-#   4. QC_RO_BINDS bound read-only (the GitHub snapshot octo-feather-qc fetched, if any)
-#   5. tmpfs over the cache dir (its octo-feather/skillfile, check-vendored's cache
-#      authenticated against each pin, bound back read-only; uv's cache, as `uv --color never cache dir` names it, bound back as an
-#      overlay like the worktree's below, so an offline `uv sync` finds the box's packages, locks and writes, and
-#      nothing reaches the real cache or outlives the run), /dev/shm and the Pi agent dir (its entries
-#      bound back read-only, auth.json and models.json per-run copies on the hidden run tmpfs,
-#      never written back; with QC_PI=none, a run with no Pi such as a declared demo, neither one at all); then every other
-#      mount but /proc (/dev/mqueue, /sys included) is remounted read-only, and the worktree becomes an
-#      overlay whose upper and work dirs sit on a run tmpfs, masked from the judge. It mounts with userxattr
-#      (#395): in a user namespace overlayfs cannot write trusted.overlay.* on the tmpfs upper, so removing a
-#      directory the lower holds (uv add replacing a .venv package) failed with EIO; with userxattr its whiteouts
-#      and opaque dirs are user.overlay.*, which step 10 reads. Needs kernel >= 5.11 and tmpfs user xattrs
-#      (>= 6.6): a kernel without them fails closed (exit 66), never an overlay without userxattr
-#   6. env scrubbed (gh, git and Linear credentials, the parent route); herdr shim pins a fresh per-run Herdr session
-#      (OCTO_FEATHER_QC_HERDR names the real binary it wraps, for a nested qc); pi shim counts agents;
-#      MISE_STATE_DIR an empty per-run dir on the private /tmp, so `mise trust` (new-repo) writes and nothing it writes
-#      persists; empty, never a copy of the caller's: its trusted-configs name other repos on the box (step 3b) (#428);
-#      .agents/skills/github-pr/scripts first on PATH: its gh is the offline gh serving QC_GHSNAP (or
-#      refusing every call with QC_GHSNAP_OFF), each refusal sent to the recorder's socket; git's only credential helper
-#      (GIT_CONFIG_* reset) records each request and answers none. The attempt record (JSON lines {kind, attempt,
-#      refused, what, result}; what counts: .agents/skills/eval-cases/references/schema.md, Attempt record) is kept by the recorder, a
-#      setup-side process outside the judge's namespaces (its PID namespace cannot name it: no kill, no ptrace),
-#      on the hidden run tmpfs; the judge sees it only through a read-only bind ($SCR/rec: the live
-#      attempts.jsonl, OCTO_FEATHER_QC_ATTEMPTS; the socket, write-only, mode 0200, not removable; each sender returns only once the recorder has written its entry).
-#      Senders: the herdr shim (a start message with the argv before the call, its exit after), each run shim (the same
-#      shim, one per program QC_RECORD names, kind run: .agents/skills/eval-cases/references/schema.md, Run record),
-#      the git helper,
-#      the offline gh's refusals, and the recorder's own inotify watch on the tmpfs masks (gh config and ~/.ssh as credential, live lanes/ and sessions/ as lane_state,
-#      other repos as repo;
-#      /dev/null-bound files are not watchable exactly and are not recorded). Only what arrives after the
-#      inner's go (step 7) counts. The shims and their dir are read-only
-#   then a nested user+mount+PID+IPC namespace mapped to the caller's uid/gid
-#   with no_new_privs, so every mount above is locked (umount fails, also after
-#   the judge's own `unshare -rm`) and the judge holds no capabilities.
-#   10. after it exits, setup (outside the judge's namespaces) lists the overlay
-#      upper dir: one JSON line {"upper": [[kind, path]...]} on QC_FD_POST,
-#      after the recorder's line {attempts, recorded, gh_misses, gh_miss_log}, each list whole (or {attempts_error} if it ended without one),
-#      kind new, changed or deleted; octo-feather-qc classifies them. The upper
-#      dir dies with the namespace: nothing the judge wrote anywhere persists.
-#   11. the run's model spend: the lines the spend ledger's writer appended to the scratch state dir's
-#      spend.jsonl (no lane: the route is unset), one JSON line {"spend": [line...]} on QC_FD_POST;
-#      octo-feather-qc records them (its record_spend).
-#   12. QC_SHOTS=1 (a captured demo): the files the run wrote to $QC_SCREENSHOTS (on the private /tmp, dying with
-#      the run), regular files only, one JSON line {"shots": [[name, base64]...]} on QC_FD_POST; octo-feather-qc
-#      stores them in the demo's evidence record. QC_BROWSER (a browser demo): the box's Playwright browsers folder,
-#      also in QC_RO_BINDS (step 4: read-only); the proof checks it holds a headless shell and is not writable.
-#   6b. (setup, with step 6) mise installs nothing (rule: docs/adr/0022, the sandbox paragraph): mise settings offline,
-#      auto_install, not_found_auto_install and not_found_system_fallback; its data, cache and config dirs pinned as
-#      mise reports them (unless the caller pinned them), so a judge that moves HOME still finds the box's installs;
-#      read from `mise doctor --json` whatever its exit, none there fails closed (exit 66)
-# Inner (PID 1 of that namespace):
-#   7. pre-run proof: one ok/FAIL line per check on stderr; any FAIL exits 66 (a mise tool not installed: 6b; the tools
-#      judged are those of the worktree's and the kit's own mise config, as scripts/octo-feather-mise-install --list names them); then go to the recorder
-#      (what the proof's own calls and reads sent before it is dropped)
-#   8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
-#   9. post-run: wait up to 10 s for the spend ledger's writers still running (detached, extensions/spend-ledger.ts),
-#      count agents, stop and delete the sandbox session, kill every
-#      other process in the PID namespace (nested ones included) and count what
-#      is left; exiting PID 1 then makes the kernel kill anything remaining.
-#      One cleanup line on stderr, the record on the QC_FD_POST pipe (setup then stops the recorder and
-#      adds its line, step 10).
-# The judge has no persistent writable path at all; the proof lists every writable one.
-# Inputs (env, data only): QC_SESSION sandbox session name, QC_STATE caller's
-# state dir, QC_WORKTREE, QC_KIT the kit under test (step 3b), QC_UID/QC_GID, QC_HERDR / QC_GH real binaries (empty:
-# not installed), QC_KEEP and QC_RO_BINDS newline-separated paths,
-# QC_PATH_PREPEND dirs put on PATH after the offline gh's dir, QC_RECORD program names to record runs of (step 6), QC_GHSNAP snapshot dir and
-# QC_GHSNAP_LINE its proof summary, or QC_GHSNAP_OFF the reason there is none, QC_HISTORY=none to bind
-# no history (step 3), QC_PI=none to give no Pi model credentials (step 5), QC_FD_PROOF /
-# QC_FD_POST / QC_FD_ERR pipe fds (no write fd may pin a mount being remounted).
-# Exit: the judge's exit, or 66 when a mount or a proof check failed (judge never started).
-set -uo pipefail
-phase=setup; [[ "${1:-}" == inner ]] && { phase=inner; shift; }
-[[ "${1:-}" == -- ]] && shift
-S="$QC_SESSION" HERDR="$QC_HERDR"
-cfg="${XDG_CONFIG_HOME:-$HOME/.config}"
-HC="$cfg/herdr"
-SCR="/tmp/.qc-$S"                      # per-run scratch on the private /tmp
-SB="$SCR/state/octo-feather/sessions/$S"
-say() { printf 'qc sandbox: %s\n' "$*" >&4; printf 'qc sandbox: %s\n' "$*" >&2; }
-# covered ID PATH: mount ID is covered by a later mount (in a nested run, the outer sandbox's /tmp binds,
-# worktree overlay and /proc submounts): PATH is gone or reaches another mount, so ID is unreachable.
-covered() { local m; [[ -e "$2" || -L "$2" ]] || return 0
-  m=$(awk '/^mnt_id:/ {print $2}' /proc/self/fdinfo/3 2>/dev/null 3<"$2"); [[ -n "$m" && "$m" != "$1" ]]; }
+#!/usr/bin/env python3
+# Lint exemptions, each for this script's whole job: it works on mount points, /proc/<pid>/fd and /proc/<pid>/root
+# paths through os and libc mount(2) (PTH: pathlib adds nothing there), keeps long-lived fds (SIM115), runs on the
+# private /tmp it makes itself (S108), names its paths as the header and ADR 0022 do (N806: S, SCR, HC, WT ...), runs
+# the judge's own tools by name on the PATH it builds (S607) with their exit statuses as data (PLW1510), prints its
+# proof and records (T201), keeps the proof's line texts whole (E501: the qc tests grep them), and keeps setup and
+# inner each one ordered list of the header's steps (C901, PLR0912, PLR0915), shims executable (S103).
+# ruff: noqa: PTH101, PTH116, PTH102, PTH103, PTH108, PTH109, PTH110, PTH112, PTH113, PTH114, PTH115, PTH118, PTH119
+# ruff: noqa: PTH120, PTH123, PTH207, PTH208, SIM115, S108, N806, S607, PLW1510, T201, E501, C901, PLR0912, PLR0915
+# ruff: noqa: S103, PERF203
+"""octo-feather-qc-sandbox [--] JUDGE_CMD...   the qc judge's sandbox (docs/adr/0022, the sandbox paragraph)
 
-if [[ "$phase" == setup ]]; then
-  exec 4>&"$QC_FD_PROOF" 5>&"$QC_FD_POST" 6>&"$QC_FD_ERR" {QC_FD_PROOF}>&- {QC_FD_POST}>&- {QC_FD_ERR}>&-
-  RS="$QC_STATE" GH="$QC_GH" WT="$QC_WORKTREE"
-  GC="${GH_CONFIG_DIR:-$cfg/gh}" PI="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
-  CACHE="${XDG_CACHE_HOME:-$HOME/.cache}"
-  TOP="${XDG_STATE_HOME:-$HOME/.local/state}/octo-feather"
-  die() { say "FAIL $*"; say "proof failed; judge not started (exit 66)"; exit 66; }
-  # Remount one mount read-only (or rw), repeating its own flags: locked ones cannot be cleared.
-  remount() { local o; o=$(awk -v m="$2" '{p=$5; gsub(/\\040/, " ", p)} p == m {o=$6} END {print o}' /proc/self/mountinfo \
-      | tr , '\n' | grep -vx 'rw\|ro' | paste -sd,); mount -n -o "remount,bind,$1${o:+,$o}" "$2"; }
+The judge runs inside anthropics/sandbox-runtime (srt, @anthropic-ai/sandbox-runtime pinned exact in the kit's
+package.json and pnpm-lock.yaml, run from the kit's node_modules: `pnpm install --frozen-lockfile`; it drives bubblewrap): srt gives the judge its own user, mount, PID and network
+namespaces, no capabilities, no_new_privs, every path read-only but what the policy below lets write, read-denied
+paths as empty tmpfs masks whose writes die with the run, and a network allowlist, each refused host one attempt
+(SRT_SHIM: srt run through its library, its violation store read). This script is the kit's policy
+over it (which paths are masked, kept, writable; the shims, the attempt record, the proof and the records) and the
+one isolation srt cannot express, the discard stage (step D). `just qc` and `just qa` start it through
+octo-feather-qc sandboxed(); it also runs by hand (`scripts/octo-feather-qc-sandbox -- CMD` in a repo): every input
+below then has a default.
 
-  # 1. private /tmp, needed paths bound back from the old one (fd 3, closed before the judge).
-  exec 3</tmp
-  mount -t tmpfs tmpfs /tmp || die "mount tmpfs /tmp"
-  chmod 1777 /tmp
-  while IFS= read -r p; do
-    [[ -n "$p" && "$p" == /tmp/* ]] || continue
-    src="/proc/self/fd/3/${p#/tmp/}"; [[ -e "$src" ]] || continue
-    if [[ -d "$src" ]]; then mkdir -p "$p"; else mkdir -p "$(dirname "$p")"; touch "$p"; fi
-    # canonicalizing would resolve to the new /tmp; recursive: nested, a kept path has an outer run's locked binds below it
-    mount --no-canonicalize --rbind "$src" "$p" || die "bind back $p"
-  done <<< "$QC_KEEP"
-  probe="qc-tmp-probe-$S"; : > "/proc/self/fd/3/$probe"
-  [[ ! -e "/tmp/$probe" ]] && say "ok   /tmp is private (nothing the judge writes there outlives the run)" || die "/tmp is private"
-  rm -f "/proc/self/fd/3/$probe"; exec 3<&-
-  cd "$PWD" || die "re-enter $PWD"
+By hand (no QC_SESSION set), the defaults: session qc-hand-<6 hex>; state dir as scripts/octo-feather-state prints it;
+worktree the current dir's git top (else the dir); kit under test this script's kit; uid/gid the caller's; herdr and gh
+as found on PATH; QC_KEEP the paths under /tmp of the worktree, kit, state dirs, HOME and PATH dirs; no history
+(QC_HISTORY=none), no Pi credentials (QC_PI=none: no network host either), GitHub `github: none (run by hand)`; the
+proof and every record on stderr (records prefixed `qc sandbox: record`); CMD's stdin, stdout and stderr the caller's.
 
-  # 2. credentials and every live Herdr session out of reach.
-  mkdir -p "$HC" && mount -t tmpfs tmpfs "$HC" && mkdir -p "$HC/sessions" || die "mask $HC"
-  cmask=()   # tmpfs credential masks, watched for opens (step 7)
-  if [[ -d "$GC" ]]; then mount -t tmpfs tmpfs "$GC" || die "mask $GC"; cmask+=("$GC"); fi
-  for f in "$HOME/.git-credentials" "$cfg/git/credentials"; do
-    if [[ -e "$f" ]]; then mount --bind /dev/null "$f" || die "mask $f"; fi
-  done
-  if [[ -d "$HOME/.ssh" ]]; then mount -t tmpfs tmpfs "$HOME/.ssh" || die "mask ~/.ssh"; cmask+=("$HOME/.ssh"); fi
+Setup (this process, outside the judge's namespaces):
+  D. the discard stage: its own user (mapped to the caller's uid), mount and IPC namespace. Kit-made, because srt
+     cannot: srt's filesystem schema has only deny/allow read and write (an allowed write reaches the real dir, a
+     denied dir becomes an empty tmpfs), so it can neither discard writes to a dir whose content must stay visible
+     nor bind a file at another path; bubblewrap's --overlay needs bwrap >= 0.10.0 (the factory box has 0.9.0); srt
+     passes no --unshare-ipc. In it:
+     1. a private /tmp (tmpfs) for this run's scratch, QC_KEEP paths (worktree, kit, PATH dirs) bound back;
+        srt's own writable /tmp/claude and TMPDIR land there too, so they die with the run
+     2. the run tmpfs ($SCR/ov, under the private /tmp: srt masks /tmp from the judge): the worktree becomes an
+        overlay whose upper and work dirs sit there (userxattr, #395: in a user namespace overlayfs cannot write
+        trusted.overlay.* on a tmpfs upper, so removing a directory the lower holds failed with EIO; needs kernel
+        >= 5.11 and tmpfs user xattrs >= 6.6, else exit 66); uv's cache (as `uv --color never cache dir` names it) the same
+        overlay, so an offline `uv sync` finds the box's packages and nothing reaches the real cache; Pi's
+        auth.json and models.json per-run copies there, bound over the real files (never written back; none with
+        QC_PI=none, a run with no Pi such as a declared demo); the caller's archived lanes and director log bound
+        at a scratch state dir (none with QC_HISTORY=none: a factory eval sees no lane history), and the box
+        onboarding file (the commit identity a role launch applies) at its top
+  S. srt's policy (one settings file on the private /tmp): denyRead /tmp (the judge's own empty /tmp), the Herdr and
+     gh config dirs, ~/.ssh, git credential files, live lanes/, sessions/, director.toml and director log, every
+     other repo (#182: each git repo up to 3 levels below HOME, dot-dirs aside, but the kit under test QC_KIT and
+     the worktree; what is bound back on each mask: docs/adr/0022), the cache dir and Pi's agent dir; allowRead
+     carve-outs under them, read-only (kept /tmp paths, the shims, the attempt record view, history, what a repo
+     mask binds back, the vendored-skill cache, Pi's entries but sessions); allowWrite only the overlays and the Pi
+     copies (their writes discarded by step D); srt's own convenience write dirs (~/.npm/_logs, ~/.claude/debug)
+     read-denied, so they are masks, never the real dirs; allowAllUnixSockets (Herdr talks over a Unix socket; srt's
+     default seccomp filter refuses socket(AF_UNIX)); allowNestedUserNamespaces (a qc run inside the sandbox); the
+     network: no host at all for a run with no Pi, else the model hosts of Pi's models.json and auth.json and the
+     kit's web-mcp.json
+  6. env scrubbed (gh, git and Linear credentials, the parent route); the herdr shim pins the per-run Herdr session
+     (OCTO_FEATHER_QC_HERDR names the real binary, for a nested qc); the pi shim counts agents; MISE_STATE_DIR an
+     empty per-run dir (#428); the offline gh first on PATH (serving QC_GHSNAP, or refusing every call with
+     QC_GHSNAP_OFF, each refusal sent to the recorder); git's only credential helper records each request and
+     answers none; one run shim per program QC_RECORD names (schema.md, Run record)
+  6b. mise installs nothing: offline, auto_install, not_found_auto_install and not_found_system_fallback off; its
+     data, cache and config dirs as `mise doctor --json` reports them (whatever its exit, #493; none: exit 66)
+  R. the recorder (a thread here, outside the judge's PID namespace: no kill, no ptrace) keeps the attempt record
+     (JSON lines {kind, attempt, refused, what, result}: .agents/skills/eval-cases/references/schema.md, Attempt
+     record) on $SCR/rec, which the judge sees read-only; the socket there, mode 0200: each sender returns only once
+     its entry is written. Senders: the herdr shim, the run shims, the git helper, the offline gh's refusals, and
+     its own inotify watch on the tmpfs masks, reached through the inner's /proc/PID/root (gh config and ~/.ssh as
+     credential, live lanes/ and sessions/ as lane_state, other repos as repo; file masks are not watchable exactly
+     and are not recorded). Only what arrives after the inner's go counts. The inner's first message gets the
+     proof, post and judge-stderr pipes (SCM_RIGHTS: srt passes only stdin, stdout and stderr); no later one does.
+Inner (`inner` mode, srt's command, the caller's uid, no capabilities; the judge runs as its child):
+  7. starts the one fresh per-run Herdr server inside the PID namespace; pre-run proof: one ok/FAIL line per check on
+     stderr and QC_FD_PROOF; any FAIL exits 66 (a mise tool not installed: 6b, judged from the worktree's and the
+     kit's own mise config as scripts/octo-feather-mise-install --list names them); then go to the recorder
+  8. judge runs (stdout passes through, stderr to the QC_FD_ERR pipe)
+  9. post-run: wait up to 10 s for the spend ledger's detached writers, count agents, stop and delete the
+     sandbox session, kill and count every other process in the PID namespace (srt's own bridges aside); one
+     cleanup line on stderr and the record on QC_FD_POST; then the run's spend lines (the scratch ledger's
+     spend.jsonl, {"spend": [...]}) and with QC_SHOTS=1 the files the run wrote to $QC_SCREENSHOTS ({"shots":
+     [[name, base64]...]}); exiting makes the kernel kill anything left (bubblewrap's PID 1 ends the namespace)
+Then setup:
+  10. the recorder's line {attempts, recorded, gh_misses, gh_miss_log} (or {attempts_error}); the overlay upper dir
+     listed, {"upper": [[kind, path]...]} (new, changed or deleted; octo-feather-qc classifies them). The run tmpfs
+     dies with the discard stage: nothing the judge wrote anywhere persists.
+Inputs (env, data only): QC_SESSION, QC_STATE caller's state dir, QC_WORKTREE, QC_KIT, QC_UID/QC_GID, QC_HERDR /
+QC_GH real binaries (empty: not installed), QC_KEEP and QC_RO_BINDS newline-separated paths, QC_PATH_PREPEND,
+QC_RECORD, QC_GHSNAP / QC_GHSNAP_LINE or QC_GHSNAP_OFF, QC_HISTORY=none, QC_PI=none, QC_BROWSER, QC_SHOTS,
+QC_FD_PROOF / QC_FD_POST / QC_FD_ERR pipe fds.
+Exit: the judge's exit, or 66 when the sandbox or a proof check failed (judge never started).
+"""
 
-  # 3. history read-only at the scratch state dir, then live records masked.
-  mkdir -p "$SB/lanes" "$SCR/gh" "$SCR/bin"
-  hist=0; nohist=0; [[ "${QC_HISTORY:-}" == none ]] && nohist=1
-  if ((nohist)); then :
-  elif [[ -d "$RS/lanes/archive" ]]; then
-    mkdir -p "$SB/lanes/archive"
-    mount --bind "$RS/lanes/archive" "$SB/lanes/archive" && remount ro "$SB/lanes/archive" || die "history archive"
-    hist=$((hist + 1))
-  fi
-  if ((!nohist)) && [[ -f "$RS/director.handoffs.jsonl" ]]; then
-    touch "$SB/director.handoffs.jsonl"
-    mount --bind "$RS/director.handoffs.jsonl" "$SB/director.handoffs.jsonl" && remount ro "$SB/director.handoffs.jsonl" || die "history director log"
-    hist=$((hist + 1))
-  fi
-  ((nohist)) && hist=none
-  # The box onboarding file read-only at the scratch state dir's top, where a role launch inside (pi-role, under the
-  # XDG_STATE_HOME of step 6) reads the factory commit identity it applies (scripts/pi-role --help, Commit identity).
-  ob="$SCR/state/octo-feather/onboarding.toml"
-  if [[ -f "$TOP/onboarding.toml" ]]; then
-    touch "$ob" && mount --bind "$TOP/onboarding.toml" "$ob" && remount ro "$ob" || die "onboarding file $TOP/onboarding.toml"
-  fi
-  echo "$hist" > "$SCR/hist"; : > "$SCR/masked"
-  for d in "$TOP" "$RS"; do
-    for x in lanes sessions; do
-      if [[ -d "$d/$x" ]]; then mount -t tmpfs tmpfs "$d/$x" || die "mask $d/$x"; echo "$d/$x" >> "$SCR/masked"; fi
-    done
-    for x in director.toml director.handoffs.jsonl; do
-      if [[ -f "$d/$x" ]]; then mount --bind /dev/null "$d/$x" || die "mask $d/$x"; echo "$d/$x" >> "$SCR/masked"; fi
-    done
-  done
-  # The masks the attempt record watches (the recorder, step 6): tmpfs dirs only; a /dev/null bind cannot be watched exactly
-  # (an open of /dev/null from anywhere would show), so director.toml, director.handoffs.jsonl and the git-credentials files are not.
-  { for m in "${cmask[@]}"; do printf 'credential\t%s\n' "$m"; done
-    while IFS= read -r m; do [[ -d "$m" ]] && printf 'lane_state\t%s\n' "$m"; done < "$SCR/masked"; } > "$SCR/watch"
+import base64
+import contextlib
+import ctypes
+import fcntl
+import glob
+import importlib.machinery
+import importlib.util
+import json
+import os
+import re
+import secrets
+import selectors
+import shlex
+import shutil
+import socket
+import stat
+import struct
+import subprocess
+import sys
+import tempfile
+import threading
+import time
+from collections.abc import Mapping
+from typing import Any, NoReturn, cast
 
-  # 3b. other repos under HOME out of reach (rule: header). Sources bound back through an fd held
-  # on the repo before its mask; PATH and QC_PATH_PREPEND resolved before any mask.
-  within() { [[ "$1" == "$2" || "$1" == "$2"/* ]]; }   # within PATH DIR
-  KUT=$(cd "${QC_KIT:-$(dirname "$0")/..}" && pwd -P) || die "kit under test ${QC_KIT:-}"
-  sk=$(cd "$(dirname "$0")/.." && pwd -P); wtp=$(cd "$WT" && pwd -P) || die "worktree $WT"
-  keep=("$wtp" "$KUT") back=("$wtp" "$KUT")
-  for k in "${keep[@]}"; do
-    [[ -e "$k/.git" ]] && c=$(git -C "$k" rev-parse --path-format=absolute --git-common-dir 2>/dev/null) && c=$(cd "$c" && pwd -P) && back+=("$c")
-  done
-  while IFS= read -r p; do [[ -n "$p" ]] && back+=("$(realpath -m -- "$p")"); done <<< "${QC_RO_BINDS:-}"
-  j=$(command -v -- "${1:-}" 2>/dev/null) || j=
-  for m in "$0" "$sk/scripts/octo-feather-state" "$sk/scripts/octo-feather-mise-install" "$sk/.agents/skills/github-pr/scripts" ${j:+"$j"}; do
-    [[ -e "$m" ]] && back+=("$(realpath -- "$m")")
-  done
-  canon() { local p; IFS=: read -ra ps <<< "$1"; for p in "${ps[@]}"; do [[ -n "$p" ]] && realpath -m -- "$p"; done | paste -sd:; }
-  cpath=$(canon "$PATH"); cpre=$(canon "${QC_PATH_PREPEND:-}")
-  HM=$(cd "$HOME" && pwd -P) || die "HOME $HOME"
-  hid=() bound=(); : > "$SCR/repos"
-  while IFS= read -r -d '' r; do
-    for k in "${keep[@]}"; do within "$r" "$k" && continue 2; done
-    exec {rf}<"$r" || die "open repo $r"
-    mount -t tmpfs -o mode=755 tmpfs "$r" || die "mask repo $r"
-    names=()
-    for b in "${back[@]}"; do
-      [[ "$b" == "$r"/* ]] || continue
-      rel=${b#"$r"/}; src="/proc/self/fd/$rf/$rel"
-      if [[ -d "$src" ]]; then mkdir -p "$r/$rel"; else mkdir -p "$(dirname "$r/$rel")" && touch "$r/$rel"; fi
-      mount --no-canonicalize --rbind "$src" "$r/$rel" && remount ro "$r/$rel" || die "bind back $b on the mask over $r"
-      names+=("${rel%%/*}"); bound+=("$b")
-    done
-    exec {rf}<&-
-    nm=$( ((${#names[@]})) && printf '%s\n' "${names[@]}" | sort -u | paste -sd/)
-    hid+=("$r"); printf '%s\t%s\n' "$r" "$nm" >> "$SCR/repos"; printf 'repo\t%s\t%s\n' "$r" "$nm" >> "$SCR/watch"
-  done < <(find "$HM" -mindepth 1 -maxdepth 3 -name '.*' -prune -o -type d -exec test -e '{}/.git' \; -print0 -prune 2>/dev/null | sort -z)
-  swap() {   # DIRS: one inside a hidden repo, not inside a path bound back, becomes the same path in the run's kit, or goes
-    local p r b out=(); IFS=: read -ra ps <<< "$1"
-    for p in "${ps[@]}"; do
-      for b in "${back[@]}"; do within "$p" "$b" && { out+=("$p"); continue 2; }; done
-      for r in "${hid[@]}"; do
-        within "$p" "$r" || continue
-        [[ -d "$KUT${p#"$r"}" ]] && out+=("$KUT${p#"$r"}"); continue 2
-      done
-      out+=("$p")
-    done
-    (IFS=:; echo "${out[*]}"); }
-  PATH=$(swap "$cpath"); QC_PATH_PREPEND=$(swap "$cpre")
-  { echo "$KUT"; echo "$wtp"; ((${#bound[@]})) && printf '%s\n' "${bound[@]}"; } > "$SCR/kept"
-  cd "$PWD" || die "re-enter $PWD"
+import tomllib
 
-  # 4. seam: extra read-only binds (e.g. a GitHub evidence snapshot, ticket #34).
-  printf '%s\n' "${QC_RO_BINDS:-}" > "$SCR/robinds"
-  while IFS= read -r p; do
-    [[ -n "$p" ]] || continue
-    mount --bind "$p" "$p" && remount ro "$p" || die "read-only bind $p"
-  done <<< "${QC_RO_BINDS:-}"
+SELF = os.path.realpath(__file__)
+SK = os.path.dirname(os.path.dirname(SELF))  # the kit this script runs from
+E = os.environ
+libc = ctypes.CDLL(None, use_errno=True)
+MS_RDONLY, MS_NOSUID, MS_NODEV, MS_NOEXEC, MS_REMOUNT, MS_BIND, MS_REC, MS_PRIVATE = (
+    1,
+    2,
+    4,
+    8,
+    32,
+    4096,
+    16384,
+    1 << 18,
+)
+SCRUB = (
+    "OCTO_FEATHER_PARENT",
+    "OCTO_FEATHER_SESSION_ID",
+    "OCTO_FEATHER_ROLE",
+    "OCTO_FEATHER_SPEND_SPACE",
+    "HERDR_PANE_ID",
+    "HERDR_TAB_ID",
+    "HERDR_WORKSPACE_ID",
+    "HERDR_ENV",
+    "HERDR_SOCKET_PATH",
+    "HERDR_BIN_PATH",
+    "GH_TOKEN",
+    "GITHUB_TOKEN",
+    "GH_ENTERPRISE_TOKEN",
+    "SSH_AUTH_SOCK",
+    "LINEAR_API_KEY",
+)
+# Pi's built-in provider hosts, for a provider auth.json names without a models.json baseUrl (the network allowlist, S).
+PI_HOSTS = {
+    "anthropic": "api.anthropic.com",
+    "openai": "api.openai.com",
+    "openrouter": "openrouter.ai",
+    "google": "generativelanguage.googleapis.com",
+    "groq": "api.groq.com",
+    "mistral": "api.mistral.ai",
+    "xai": "api.x.ai",
+    "cerebras": "api.cerebras.ai",
+    "github-copilot": "api.githubcopilot.com",
+}
+INPUTS = (
+    "QC_PI",
+    "QC_BROWSER",
+    "QC_SHOTS",
+    "QC_RECORD",
+    "QC_KIT",
+    "QC_HISTORY",
+    "QC_SESSION",
+    "QC_STATE",
+    "QC_HERDR",
+    "QC_GH",
+    "QC_KEEP",
+    "QC_RO_BINDS",
+    "QC_PATH_PREPEND",
+    "QC_UID",
+    "QC_GID",
+    "QC_WORKTREE",
+    "QC_FD_PROOF",
+    "QC_FD_POST",
+    "QC_FD_ERR",
+    "QC_GHSNAP",
+    "QC_GHSNAP_OFF",
+    "QC_GHSNAP_LINE",
+)  # the inputs above, never passed on to the judge
+SRT_PKG = "@anthropic-ai/sandbox-runtime"
+# srt run through its own library, as its CLI (dist/cli.js, the Linux path) runs a command: loadConfig, initialize,
+# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand, then (unlike the CLI, which exits
+# first) its reset() awaited, so its proxy bridges are reaped before exit. The bwrap argv is
+# the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
+# reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
+# "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
+SRT_SHIM = r"""
+const [pkg, settings, , ...args] = process.argv.slice(1)
+const { SandboxManager } = await import(`${pkg}/dist/index.js`)
+const { loadConfig } = await import(`${pkg}/dist/utils/config-loader.js`)
+const { quote } = await import(`${pkg}/dist/utils/shell-quote.js`)
+const { spawn } = await import('node:child_process')
+const loaded = loadConfig(settings)
+if (loaded.kind !== 'ok') { console.error(`qc sandbox: srt settings ${settings}: ${loaded.reason ?? loaded.kind}`); process.exit(1) }
+await SandboxManager.initialize(loaded.config)
+const store = SandboxManager.getSandboxViolationStore()
+let seen = store.getTotalCount()
+store.subscribe(vs => {
+  const total = store.getTotalCount()
+  const fresh = vs.slice(Math.max(0, vs.length - (total - seen)))
+  seen = total
+  for (const v of fresh) process.stderr.write(`QC-SRT-VIOLATION ${JSON.stringify({ line: v.line })}\n`)
+})
+const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
+child.on('exit', async (code, sig) => {
+  SandboxManager.cleanupAfterCommand()
+  // srt's own teardown, awaited: its proxy bridges (socat, started outside the sandbox) killed and waited for, so
+  // every process the run started is reaped up to this one and counted in its CPU; exiting first would leave them.
+  await SandboxManager.reset()
+  process.exit(sig ? 1 : (code ?? 0))
+})
+"""
+REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
+OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
 
-  # 5. per-run tmpfs where tools write; everything else read-only but the worktree.
-  # The run tmpfs (masked below; fd 8 keeps it for step 10): overlay upper and work dirs, and
-  # the judge's per-run copies of Pi's auth.json and models.json (never written back).
-  [[ "$WT" != *[,:]* ]] || die "worktree path $WT holds , or : (overlay options)"
-  OV="$SCR/ov"; mkdir -p "$OV"
-  mount -t tmpfs -o mode=700 tmpfs "$OV" && mkdir "$OV/u" "$OV/w" "$OV/pi" "$OV/rec" || die "run tmpfs"
-  rw=(/tmp "$HC" "$OV")
-  VC="$CACHE/octo-feather/skillfile"; : > "$SCR/vcache"   # `just check` in the sandbox reads it; read-only
-  vc=0; if [[ -d "$VC" ]]; then exec 10<"$VC" && vc=1; fi
-  # uv's cache (step 5, header), asked of uv itself: its real dir bound on the run tmpfs as the overlay's lower, below.
-  # Asked uncoloured (#637: under FORCE_COLOR uv colours even a path). A path that is not absolute, or names no dir,
-  # fails naming what uv printed; an absolute one not there yet (uv never ran under this HOME) is named in the proof.
-  UC=""; : > "$SCR/uvcache"
-  if command -v uv > /dev/null && UC=$(uv --color never cache dir 2> /dev/null); then
-    [[ "$UC" == /* && "$UC" != *[[:cntrl:]]* ]] && { [[ -d "$UC" ]] || [[ ! -e "$UC" && ! -L "$UC" ]]; } \
-      || die "uv --color never cache dir printed ${UC@Q}: not a directory"
-    if [[ -d "$UC" ]]; then
-      [[ "$UC" != *[,:]* ]] || die "uv cache dir $UC holds , or : (overlay options)"
-      mkdir "$OV/uvl" "$OV/uvu" "$OV/uvw" && mount --bind "$UC" "$OV/uvl" && remount ro "$OV/uvl" || die "uv cache lower $UC"
-    else printf '\n\n%s\n' "$UC" > "$SCR/uvcache"; UC=""; fi
-  else UC=""; fi
-  if [[ -d "$CACHE" ]]; then mount -t tmpfs tmpfs "$CACHE" || die "tmpfs $CACHE"; rw+=("$CACHE"); fi
-  if ((vc)); then
-    mkdir -p "$VC" && mount --no-canonicalize --bind /proc/self/fd/10 "$VC" && remount ro "$VC" || die "read-only bind $VC"
-    echo "$VC" > "$SCR/vcache"; exec 10<&-
-  fi
-  mount -t tmpfs tmpfs /dev/shm 2>/dev/null
-  nopi=0; [[ "${QC_PI:-}" == none ]] && nopi=1
-  printf '%s\n' "$PI" "$( ((nopi)) && echo none)" > "$SCR/pi"   # the proof's credential line (step 7)
-  if [[ -d "$PI" ]]; then
-    exec 7<"$PI"
-    for n in auth.json models.json; do
-      [[ -f "$PI/$n" ]] && ((!nopi)) || continue
-      (umask 077; cat "$PI/$n" > "$OV/pi/$n" && chmod --reference="$PI/$n" "$OV/pi/$n") || die "copy Pi $n"
-    done
-    mount -t tmpfs tmpfs "$PI" || die "tmpfs $PI"; rw+=("$PI")
-  fi
-  while read -r id _ _ _ mp _; do
-    mp=$(printf '%b' "$mp")
-    [[ "$mp" == /proc ]] && continue   # replaced by the judge's own /proc
-    for k in "${rw[@]}" /dev/shm; do [[ "$mp" == "$k" ]] && continue 2; done
-    covered "$id" "$mp" && continue   # unreachable: keeps its flags; the proof counts it
-    remount ro "$mp" || die "read-only $mp"
-  done < <(cat /proc/self/mountinfo)
-  if [[ -d "$PI" ]]; then   # Pi runs: its files back read-only, auth.json and models.json the per-run copies
-    for e in /proc/self/fd/7/* /proc/self/fd/7/.[!.]*; do
-      [[ -e "$e" ]] || continue; n="${e##*/}"; [[ "$n" == sessions ]] && continue
-      ((nopi)) && [[ "$n" == auth.json || "$n" == models.json ]] && continue   # QC_PI=none: no credentials
-      if [[ -d "$e" ]]; then mkdir -p "$PI/$n"; else touch "$PI/$n"; fi
-      if [[ -f "$OV/pi/$n" ]]; then
-        mount --bind "$OV/pi/$n" "$PI/$n" || die "bind $n copy"
-      else
-        mount --no-canonicalize --bind "$e" "$PI/$n" && remount ro "$PI/$n" || die "bind back $PI/$n"
-      fi
-    done
-    exec 7<&-
-  fi
-  # The worktree: an overlay on the read-only real one, its upper and work dirs on the run tmpfs,
-  # so the judge's writes die with the run. userxattr: rule in the header, step 5.
-  exec 9<"$WT"
-  kreq="needs kernel >= 5.11 (overlay userxattr) and >= 6.6 (tmpfs user xattrs), this one $(uname -r)"
-  python3 -c 'import os, sys; os.setxattr(sys.argv[1], "user.qc.probe", b"y"); os.removexattr(sys.argv[1], "user.qc.probe")' "$OV/u" \
-    || die "run tmpfs takes no user.* xattrs: the worktree overlay $kreq"
-  mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w,userxattr" "$WT" || die "worktree overlay with userxattr: $kreq"
-  if [[ -n "$UC" ]]; then   # uv's cache: the same overlay, its lower the real cache bound read-only above
-    mkdir -p "$UC" && mount -t overlay overlay -o "lowerdir=$OV/uvl,upperdir=$OV/uvu,workdir=$OV/uvw,userxattr" "$UC" \
-      || die "uv cache overlay $UC with userxattr: $kreq"
-    printf '%s\n%s\n' "$UC" "$OV/uvu" > "$SCR/uvcache"
-  fi
-  exec 8<"$OV"; mount -t tmpfs -o ro,mode=000 tmpfs "$OV" || die "mask overlay upper"
-  echo "$OV/u" > "$SCR/ovupper"
-  cd "$PWD" || die "re-enter $PWD"
 
-  # 6. env and shims.
-  unset OCTO_FEATHER_PARENT OCTO_FEATHER_SESSION_ID OCTO_FEATHER_ROLE OCTO_FEATHER_SPEND_SPACE \
-    HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID HERDR_ENV HERDR_SOCKET_PATH HERDR_BIN_PATH \
-    GH_TOKEN GITHUB_TOKEN GH_ENTERPRISE_TOKEN SSH_AUTH_SOCK LINEAR_API_KEY
-  # mise's state dir (trusted-configs, tracked-configs): empty, per-run (header, step 6).
-  mkdir -p "$SCR/mise/state" || die "mise state dir"
-  export MISE_STATE_DIR="$SCR/mise/state"
-  export HERDR_SESSION="$S" XDG_STATE_HOME="$SCR/state" \
-    GH_CONFIG_DIR="$SCR/gh" GIT_TERMINAL_PROMPT=0 TMPDIR=/tmp QC_GH="$GH"
-  # The attempt record: kept by the recorder (below) in $OV/rec, on the hidden run tmpfs; the judge's view a read-only bind.
-  mkdir -p "$SCR/rec" && mount --no-canonicalize --bind /proc/self/fd/8/rec "$SCR/rec" && remount ro "$SCR/rec" || die "attempt record view"
-  REC="$SCR/rec/attempts.jsonl" RSOCK="$SCR/rec/sock" PY=$(command -v python3 || echo python3)
-  # 6b. mise (rule: header).
-  if command -v mise > /dev/null; then
-    # Its own state dir a throwaway (removed): the judge's per-run MISE_STATE_DIR starts empty (step 6).
-    # The dirs come from doctor's JSON whatever its exit: doctor exits 1 on the user's own unrelated problems (stale
-    # shims, a global tool not installed under a moved HOME) and still prints them (#493); no JSON, or a dir missing
-    # from it, fails closed.
-    ms=$(mktemp -d) || die "mise doctor --json: no scratch state dir"
-    md=$(MISE_STATE_DIR="$ms" mise doctor --json 2> /dev/null); mdrc=$?
-    rm -rf "$ms"
-    for d in data cache config; do
-      x=$(jq -er --arg d "$d" '.dirs[$d] | select(type == "string" and . != "")' <<< "$md" 2> /dev/null) \
-        || die "mise doctor --json (exit $mdrc) printed no dirs.$d: mise's dirs unknown"
-      v="MISE_${d^^}_DIR"; [[ -n "${!v:-}" ]] || export "$v=$x"
-    done
-  fi
-  export MISE_OFFLINE=1 MISE_AUTO_INSTALL=0 MISE_NOT_FOUND_AUTO_INSTALL=0 MISE_NOT_FOUND_SYSTEM_FALLBACK=0
-  # The real pi, resolved with the shim dir off PATH: none, or one under the shim dir, and the shim refuses (exit 127)
-  # rather than exec the bare name pi, which PATH resolves to the shim again, forever (#493 AC1, a box without pi). A
-  # pi that leads back to this shim in the same process (one running the bare name) is refused the same way.
-  realpi=$(PATH=$(tr : '\n' <<< "$PATH" | grep -vxF "$SCR/bin" | paste -sd :) command -v pi) && rp=$(realpath -- "$realpi") \
-    && [[ "$rp" != "$SCR/bin/"* ]] || realpi=
-  { echo '#!/usr/bin/env bash'
-    echo '# qc sandbox pi shim: run only a real pi; log each start, one line (agents count), then run it.'
-    if [[ -z "$realpi" ]]; then echo 'echo "qc sandbox: pi not on PATH (the pi shim runs only a real pi)" >&2; exit 127'; fi
-    printf '[[ "${QC_PI_SHIM:-}" != "$$ "%q ]] || { echo "qc sandbox: pi leads back to the qc sandbox pi shim (%s ran it again); refused" >&2; exit 127; }\n' "$SCR" "$realpi"
-    printf 'export QC_PI_SHIM="$$ "%q\n' "$SCR"
-    printf 'echo "$$" >> %q\n' "$SCR/agents.log"
-    printf 'exec %q "$@"\n' "$realpi"
-  } > "$SCR/bin/pi"
-  # recshim FILE KIND NAME REAL PRE DROP ENVDROP: write to FILE the one recording shim, herdr's and each run program's:
-  # DROP options dropped (each with its value), REAL run (empty: the next NAME on PATH past the shim's own dir) with PRE
-  # before the argv. What it records and passes through: .agents/skills/eval-cases/references/schema.md, Attempt
-  # record, Run record.
-  recshim() {
-    { echo "#!$PY"
-      echo "# qc sandbox $2 shim for $3: record the call (argv before, exit after), run the real program unchanged."
-      echo 'import json, os, shutil, socket, subprocess, sys'
-      printf 'KIND, NAME, REAL, SOCK = %s, %s, %s, %s\n' "$(jq -n --arg x "$2" '$x')" "$(jq -n --arg x "$3" '$x')" \
-        "$(jq -n --arg x "$4" '$x')" "$(jq -n --arg x "$RSOCK" '$x')"
-      printf 'PRE, DROP, ENVDROP = %s, %s, %s\n' "$5" "$6" "$7"
-      cat <<'EOF'
-a, args, i = sys.argv[1:], [], 0
+def say(m: str) -> None:
+    line = f"qc sandbox: {m}\n"
+    if OUT["proof"] is not None:
+        os.write(OUT["proof"], line.encode())
+    sys.stderr.write(line)
+    sys.stderr.flush()
+
+
+def post(rec: dict[str, Any]) -> None:
+    line = json.dumps(rec) + "\n"
+    if OUT["post"] is not None:
+        os.write(OUT["post"], line.encode())
+    else:  # by hand: the records on stderr
+        sys.stderr.write("qc sandbox: record " + line)
+        sys.stderr.flush()
+
+
+def die(m: str) -> NoReturn:
+    say(f"FAIL {m}")
+    say("proof failed; judge not started (exit 66)")
+    sys.exit(66)
+
+
+def mount(
+    src: str | None, tgt: str, fs: str | None = None, flags: int = 0, data: str | None = None
+) -> None:
+    def b(s: str | None) -> bytes | None:
+        return s.encode() if s is not None else None
+
+    if libc.mount(b(src), b(tgt), b(fs), flags, b(data)) != 0:
+        e = ctypes.get_errno()
+        raise OSError(e, os.strerror(e), tgt)
+
+
+def ro(p: str) -> None:
+    """Remount P's bind read-only, repeating the flags a user namespace cannot clear (locked)."""
+    f = os.statvfs(p).f_flag
+    keep = sum(
+        m
+        for st, m in (
+            (os.ST_NOSUID, MS_NOSUID),
+            (os.ST_NODEV, MS_NODEV),
+            (os.ST_NOEXEC, MS_NOEXEC),
+            (os.ST_NOATIME, 1024),
+            (os.ST_NODIRATIME, 2048),
+            (os.ST_RELATIME, 1 << 21),
+        )
+        if f & st
+    )
+    mount(None, p, None, MS_REMOUNT | MS_BIND | MS_RDONLY | keep)
+
+
+def run(*a: str, **k: Any) -> subprocess.CompletedProcess[str]:  # noqa: ANN401  # subprocess.run's own keywords
+    return subprocess.run(list(a), capture_output=True, text=True, **k)
+
+
+def within(p: str, d: str) -> bool:
+    return p == d or p.startswith(d.rstrip("/") + "/")
+
+
+def touchable(p: str) -> bool:
+    """A write at P succeeds (the probe removed)."""
+    try:
+        os.close(os.open(p, os.O_WRONLY | os.O_CREAT, 0o600))
+        os.unlink(p)
+    except OSError:
+        return False
+    return True
+
+
+# The recorder (R).
+AT = {
+    ("agent", "prompt"),
+    ("agent", "send-keys"),
+    ("pane", "send-text"),
+    ("pane", "send-keys"),
+    ("pane", "run"),
+}
+
+
+class Recorder:
+    """The attempt record (R): one thread, outside the judge's namespaces; it alone writes $SCR/rec/attempts.jsonl."""
+
+    def __init__(
+        self, rd: str, watch: list[tuple[str, str, list[str]]], session: str, fds: list[int]
+    ) -> None:
+        self.S, self.watch, self.fds = session, watch, fds  # fds: handed once, to the inner's hello
+        self.out = os.fdopen(
+            os.open(rd + "/attempts.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o444), "a"
+        )
+        self.srv = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+        self.srv.bind(rd + "/sock")
+        os.chmod(rd + "/sock", 0o200)
+        self.srv.listen(128)
+        self.srv.setblocking(False)  # noqa: FBT003  # socket's own positional flag
+        self.ino = libc.inotify_init1(0o4000 | 0o2000000)  # IN_NONBLOCK | IN_CLOEXEC
+        self.wds: dict[int, tuple[str, str, int, set[str]]] = {}
+        self.live = False
+        self.go: socket.socket | None = None
+        self.recs: list[dict[str, Any]] = []
+        self.misses: list[dict[str, Any]] = []
+        self.conns: dict[socket.socket, dict[str, Any]] = {}
+        self.net: set[str] = set()
+        self.hello = False
+        self.wr, self.ww = os.pipe()
+        self.stop = False
+        self.sel = selectors.DefaultSelector()
+        for f in (self.srv, self.wr) + ((self.ino,) if self.ino >= 0 else ()):
+            self.sel.register(f, selectors.EVENT_READ)
+        self.th = threading.Thread(target=self.loop, daemon=True)
+
+    def watches(self, pid: int) -> int:
+        """The masks as the judge's mount namespace holds them, through the inner's /proc root."""
+        n = 0
+        for kind, path, kept in self.watch:
+            p = f"/proc/{pid}/root{path}"
+            w = (
+                libc.inotify_add_watch(self.ino, p.encode(), 0x20) if self.ino >= 0 else -1
+            )  # IN_OPEN
+            # its entries counted through an fd held from here: listing by path would be an open itself
+            if w >= 0:
+                try:
+                    self.wds.setdefault(
+                        w, (kind, path, os.open(p, os.O_RDONLY | os.O_DIRECTORY), set(kept))
+                    )
+                    n += 1
+                except OSError:
+                    pass
+        return n
+
+    def emit(self, r: dict[str, Any], ok: bool | None = None) -> None:  # noqa: FBT001  # a call's own liveness
+        if self.live if ok is None else ok:
+            self.recs.append(r)
+            self.out.write(json.dumps(r) + "\n")
+            self.out.flush()
+
+    def call_end(self, st: dict[str, Any]) -> None:
+        """One shim call, recorded at its close (schema.md, Attempt record; Run record)."""
+        raw, rc = st.get("argv"), st.get("exit")
+        if not isinstance(raw, list):
+            return None
+        a = [str(x) for x in cast("list[object]", raw)]
+        known = isinstance(rc, int)
+        S = self.S
+        if st.get("t") == "run":
+            p = str(st.get("program"))
+            return self.emit(
+                {
+                    "kind": "run",
+                    "attempt": False,
+                    "refused": False,
+                    "program": p,
+                    "argv": a,
+                    "exit": rc if known else None,
+                    "what": " ".join([p, *a]),
+                    "result": f"exit {rc}" if known else "the shim never reported an exit",
+                },
+                st["live"],
+            )
+        self.emit(
+            {
+                "kind": "herdr",
+                "attempt": tuple(a[:2]) in AT,
+                "refused": known and rc != 0,
+                "argv": a,
+                "session": S,
+                "exit": rc if known else None,
+                "what": " ".join(["herdr", *a]),
+                "result": f"session {S}, exit {rc}"
+                if known
+                else f"session {S}, the shim never reported an exit: counted as delivered",
+            },
+            st["live"],
+        )
+        return None
+
+    def message(self, c: socket.socket, raw: bytes) -> None:
+        st = self.conns[c]
+        try:
+            got: object = json.loads(raw)
+        except ValueError:
+            return
+        if not isinstance(got, dict):
+            return
+        m = cast("dict[str, Any]", got)
+        t = m.get("t")
+        if t == "hello" and not self.hello:
+            # the inner, before any judge exists: its pipes, then the mask watches
+            self.hello = True
+            pid = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
+            n = self.watches(pid) if self.ino >= 0 else None
+            socket.send_fds(
+                c, [(f"ready {n}" if n is not None else "ready no-inotify").encode()], self.fds
+            )
+        elif t == "go" and not self.live and self.go is None:
+            self.go = c
+        elif t in ("herdr", "run") and "argv" not in st:
+            st.update(t=t, program=m.get("program"), argv=m.get("argv"), live=self.live)
+        elif t == "exit" and "argv" in st and "exit" not in st:
+            st["exit"] = m.get("exit")
+        elif t == "miss" and self.live:  # an offline gh refusal
+            av = m.get("argv")
+            argv = [str(x) for x in cast("list[object]", av)] if isinstance(av, list) else []
+            r: dict[str, Any] = {"argv": argv, "why": str(m.get("why", ""))}
+            self.misses.append(r)
+            self.emit(
+                {
+                    "kind": "credential",
+                    "attempt": True,
+                    "refused": True,
+                    "what": " ".join(["gh", *argv]),
+                    "result": f"offline gh refused: {r['why']}",
+                }
+            )
+        elif t == "net" and self.live:
+            # an srt violation (srt_log): a refused host recorded once per host, any other violation whole
+            host = f"{m.get('host', '')}:{m.get('port', '')}" if "host" in m else ""
+            if host and host not in self.net:
+                self.net.add(host)
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": f"connect {host}",
+                        "result": f"srt refused: {m.get('why', '')}",
+                    }
+                )
+            elif not host:
+                self.emit(
+                    {
+                        "kind": "network",
+                        "attempt": True,
+                        "refused": True,
+                        "what": str(m.get("line", "")),
+                        "result": "srt violation (no host in srt's line)",
+                    }
+                )
+        elif t == "cred":
+            op, p, h = (str(m.get(k, "")) for k in ("op", "protocol", "host"))
+            self.emit(
+                {
+                    "kind": "credential",
+                    "attempt": op == "get",
+                    "refused": True,
+                    "what": f"git credential {op} {p}://{h}",
+                    "result": "the sandbox helper (git's only one) answered no credential",
+                }
+            )
+
+    def conn(self, c: socket.socket) -> None:
+        while True:
+            try:
+                m = c.recv(1 << 18)
+            except BlockingIOError:
+                return
+            except OSError:
+                m = b""
+            if not m:  # the sender is done: its entries, and any open queued before, written before the close it waits for
+                self.opens()
+                self.sel.unregister(c)
+                self.call_end(self.conns.pop(c))
+                c.close()
+                return
+            self.message(c, m)
+
+    def accept(self) -> None:
+        while True:
+            try:
+                c, _ = self.srv.accept()
+            except BlockingIOError:
+                return
+            c.setblocking(False)  # noqa: FBT003  # socket's own positional flag
+            self.conns[c] = {}
+            self.sel.register(c, selectors.EVENT_READ)
+
+    def opens(self) -> None:  # inotify on the tmpfs masks (schema.md, Attempt record)
+        while self.ino >= 0:
+            try:
+                b = os.read(self.ino, 65536)
+            except OSError:
+                return
+            i = 0
+            while i + 16 <= len(b):
+                w, mk, _, n = struct.unpack_from("iIII", b, i)
+                name = b[i + 16 : i + 16 + n].rstrip(b"\0").decode(errors="replace")
+                i += 16 + n
+                if w not in self.wds or not mk & 0x20:
+                    continue
+                kind, path, dfd, kept = self.wds[w]
+                if name in kept:  # an entry bound back on the mask (the run's own): not an attempt
+                    continue
+                try:
+                    seen = set(os.listdir(dfd))
+                    k = len(seen)
+                except OSError:
+                    seen, k = None, -1
+                self.emit(
+                    {
+                        "kind": kind,
+                        "attempt": True,
+                        "refused": seen is not None and seen <= kept,
+                        "what": f"open {path}/{name}" if name else f"open {path}",
+                        "result": f"tmpfs mask over {path}, {k} entries"
+                        + (f" (bound back: {', '.join(sorted(kept))})" if kept else ""),
+                    }
+                )
+
+    def drain(self) -> None:
+        self.accept()
+        for c in list(self.conns):
+            self.conn(c)
+        self.opens()
+
+    def loop(self) -> None:
+        while not self.stop:
+            for k, _ in self.sel.select():
+                f = k.fileobj
+                if f is self.srv:
+                    self.accept()
+                elif f == self.wr:
+                    self.stop = True
+                elif f == self.ino:
+                    self.opens()
+                elif isinstance(f, socket.socket) and f in self.conns:
+                    self.conn(f)
+            # the inner waits for this answer before the judge starts
+            if self.go is not None and not self.live:
+                self.drain()
+                self.live = True
+                with contextlib.suppress(OSError):
+                    self.go.send(b"live")
+
+    def finish(self) -> dict[str, Any]:
+        """The record whole: the judge's namespace is gone, every call still open ended without its exit."""
+        os.write(self.ww, b"x")
+        self.th.join(10)
+        self.drain()
+        for c in list(self.conns):
+            self.call_end(self.conns.pop(c))
+            c.close()
+        return {
+            "attempts": self.recs,
+            "recorded": len(self.recs),
+            "gh_misses": len(self.misses),
+            "gh_miss_log": self.misses,
+        }
+
+
+# The shims (6).
+def recshim(  # noqa: PLR0913, PLR0917  # the shim's own fields
+    py: str,
+    kind: str,
+    name: str,
+    real: str,
+    shape: tuple[list[str], list[str], list[str]],
+    sock: str,
+) -> str:
+    """The one recording shim, herdr's and each run program's (schema.md, Attempt record, Run record)."""
+    return (
+        f"""#!{py}
+# qc sandbox {kind} shim for {name}: record the call (argv before, exit after), run the real program unchanged.
+import json, os, shutil, socket, subprocess, sys
+KIND, NAME, REAL, SOCK = {json.dumps(kind)}, {json.dumps(name)}, {json.dumps(real)}, {json.dumps(sock)}
+PRE, DROP, ENVDROP = {json.dumps(shape[0])}, {json.dumps(shape[1])}, {json.dumps(shape[2])}
+"""
+        r"""a, args, i = sys.argv[1:], [], 0
 while i < len(a):
     if a[i] in DROP: i += 2; continue
     if a[i].split("=", 1)[0] in DROP and "=" in a[i]: i += 1; continue
@@ -374,22 +613,18 @@ try:   # then wait for the recorder's close: it has written this call's entry (a
 except OSError:
     pass
 sys.exit(rc)
-EOF
-    } > "$1"; }
-  if [[ -n "$HERDR" ]]; then
-    # herdr's: pin the sandbox session; drop any --session/--remote/--machine.
-    recshim "$SCR/bin/herdr" herdr herdr "$HERDR" "$(jq -cn --arg s "$S" '["--session", $s]')" \
-      '("--session", "--remote", "--machine")' '("HERDR_PANE_ID",)'
-    # OCTO_FEATHER_QC_HERDR: the real binary the shim wraps; a qc started in this sandbox wraps it, not the shim.
-    export HERDR_BIN_PATH="$SCR/bin/herdr" HERDR_SOCKET_PATH="$HC/sessions/$S/herdr.sock" OCTO_FEATHER_QC_HERDR="$HERDR"
-  fi
-  # git's only credential helper (GIT_CONFIG_* resets the list, then names this): records each request, answers none.
-  { echo "#!$PY"
-    echo '# qc sandbox git credential helper: send the request to the recorder (protocol, host; never a secret), wait until it is written, answer no credential.'
-    echo 'import json, socket, sys'
-    printf 'SOCK = %s\n' "$(jq -n --arg x "$RSOCK" '$x')"
-    cat <<'EOF'
-f = {}
+"""
+    )
+
+
+def credhelper(py: str, sock: str) -> str:
+    return (
+        f"""#!{py}
+# qc sandbox git credential helper: send the request to the recorder (protocol, host; never a secret), wait until it is written, answer no credential.
+import json, socket, sys
+SOCK = {json.dumps(sock)}
+"""
+        r"""f = {}
 for l in sys.stdin:
     if not l.strip(): break
     k, _, v = l.rstrip("\n").partition("="); f[k] = v
@@ -400,475 +635,1433 @@ try:
     while c.recv(16): pass   # the recorder closes once the entry is written
 except OSError:
     pass
-EOF
-  } > "$SCR/bin/git-credential-qc"
-  n=${GIT_CONFIG_COUNT:-0}
-  export GIT_CONFIG_COUNT=$((n + 2)) "GIT_CONFIG_KEY_$n=credential.helper" "GIT_CONFIG_VALUE_$n=" \
-    "GIT_CONFIG_KEY_$((n + 1))=credential.helper" "GIT_CONFIG_VALUE_$((n + 1))=$SCR/bin/git-credential-qc"
-  # QC_RECORD: program names, one per line, each a run shim in $SCR/rbin (which, and what it does: schema.md, Run record).
-  mkdir -p "$SCR/rbin"; recs=()
-  while IFS= read -r p; do
-    [[ -n "$p" ]] || continue
-    [[ "$p" =~ ^[A-Za-z0-9_+-][A-Za-z0-9._+-]*$ ]] || die "run record: program name $p"
-    recshim "$SCR/rbin/$p" run "$p" "" '[]' '()' '()'; recs+=("$p")
-  done <<< "${QC_RECORD:-}"
-  chmod +x "$SCR"/bin/*; ((${#recs[@]})) && chmod +x "$SCR"/rbin/*
-  if [[ -n "${QC_SHOTS:-}" ]]; then mkdir -p "$SCR/shots" && export QC_SCREENSHOTS="$SCR/shots" || die "screenshots dir"; fi
-  mount --bind "$SCR/bin" "$SCR/bin" && remount ro "$SCR/bin" || die "shims read-only"
-  mount --bind "$SCR/rbin" "$SCR/rbin" && remount ro "$SCR/rbin" || die "run shims read-only"
-  PATH="$SCR/bin:$PATH"
-  [[ -n "${QC_PATH_PREPEND:-}" ]] && PATH="$QC_PATH_PREPEND:$PATH"
-  PATH="$(cd "$(dirname "$0")/.." && pwd -P)/.agents/skills/github-pr/scripts:$PATH"   # the offline gh shadows every other gh
-  # a run shim wraps whichever one of its name comes next, the offline gh too; OCTO_FEATHER_QC_RUN_SHIMS names their dir
-  ((${#recs[@]})) && PATH="$SCR/rbin:$PATH" && export OCTO_FEATHER_QC_RUN_SHIMS="$SCR/rbin"
-  export PATH OCTO_FEATHER_GHSNAP="${QC_GHSNAP:-}" OCTO_FEATHER_GHSNAP_OFF="${QC_GHSNAP_OFF:-}" OCTO_FEATHER_GHSNAP_MISS="$RSOCK" \
-    OCTO_FEATHER_QC_ATTEMPTS="$REC"
-  # The recorder: setup-side (outside the judge's namespaces), so the judge can neither kill nor ptrace it; it alone
-  # writes the record. Socket mode 0200 on the read-only view: the judge can send, never read, remove or replace. Each sender
-  # shuts its side and reads to EOF: the recorder closes a connection only after writing what it sent, so a call returns recorded.
-  exec {rr}< <(exec python3 - /proc/self/fd/8/rec "$SCR/watch" "$S" 4>&- 5>&- 6>&- <<'EOF'
-import ctypes, json, os, selectors, signal, socket, struct, sys
-rd, lst, S = sys.argv[1:]
-# herdr's pane-delivering subcommands, as its own CLI lists them (.agents/skills/eval-cases/references/schema.md, Attempt record)
-AT = {("agent", "prompt"), ("agent", "send-keys"), ("pane", "send-text"), ("pane", "send-keys"), ("pane", "run")}
-out = os.fdopen(os.open(rd + "/attempts.jsonl", os.O_WRONLY | os.O_CREAT | os.O_APPEND, 0o444), "a")
-srv = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); srv.bind(rd + "/sock"); os.chmod(rd + "/sock", 0o200)
-srv.listen(128); srv.setblocking(False)
-libc = ctypes.CDLL(None, use_errno=True)
-ino = libc.inotify_init1(0o4000 | 0o2000000)   # IN_NONBLOCK | IN_CLOEXEC
-wds = {}
-for l in open(lst):
-    kind, _, path = l.rstrip("\n").partition("\t")
-    path, _, kept = path.partition("\t")   # kept: the entries bound back on a repo mask, "/"-separated
-    w = libc.inotify_add_watch(ino, path.encode(), 0x20) if path and ino >= 0 else -1   # IN_OPEN
-    if w >= 0:   # its entries counted through an fd held from here: listing by path would be an open, an event of its own
-        wds.setdefault(w, (kind, path, os.open(path, os.O_RDONLY | os.O_DIRECTORY), set(filter(None, kept.split("/")))))
-wr, ww = os.pipe(); os.set_blocking(ww, False); os.set_blocking(wr, False)
-signal.set_wakeup_fd(ww); signal.signal(signal.SIGTERM, lambda *_: None)
-live, go, recs, misses, conns = False, None, [], [], {}
-def emit(r, ok=None):
-    if live if ok is None else ok:
-        recs.append(r); out.write(json.dumps(r) + "\n"); out.flush()
-def herdr_end(st):   # one shim call, recorded at its close (no exit reported: .agents/skills/eval-cases/references/schema.md, Attempt record)
-    a, rc = st.get("argv"), st.get("exit")
-    if not isinstance(a, list):
-        return
-    a = [str(x) for x in a]; known = isinstance(rc, int)
-    if st.get("t") == "run":   # a run shim's call, never an attempt (schema.md, Run record)
-        p = str(st.get("program"))
-        return emit({"kind": "run", "attempt": False, "refused": False, "program": p, "argv": a, "exit": rc if known else None,
-                     "what": " ".join([p, *a]), "result": f"exit {rc}" if known else "the shim never reported an exit"}, st["live"])
-    emit({"kind": "herdr", "attempt": tuple(a[:2]) in AT, "refused": known and rc != 0, "argv": a, "session": S,
-          "exit": rc if known else None, "what": " ".join(["herdr", *a]),
-          "result": f"session {S}, exit {rc}" if known else f"session {S}, the shim never reported an exit: counted as delivered"},
-         st["live"])
-def message(c, m):
-    global go
-    st = conns[c]
+"""
+    )
+
+
+def pishim(realpi: str, scr: str) -> str:
+    q = shlex.quote
+    lines = [
+        "#!/usr/bin/env bash",
+        "# qc sandbox pi shim: run only a real pi; log each start, one line (agents count), then run it.",
+    ]
+    if not realpi:
+        lines.append(
+            'echo "qc sandbox: pi not on PATH (the pi shim runs only a real pi)" >&2; exit 127'
+        )
+    lines += [
+        f'[[ "${{QC_PI_SHIM:-}}" != "$$ "{q(scr)} ]] || {{ echo "qc sandbox: pi leads back to the qc sandbox pi shim ({realpi} ran it again); refused" >&2; exit 127; }}',
+        f'export QC_PI_SHIM="$$ "{q(scr)}',
+        f'echo "$$" >> {q(scr + "/agents.log")}',
+        f'exec {q(realpi)} "$@"',
+    ]
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------- setup
+def hosts_for_pi(pi_dir: str) -> list[str]:
+    """The network allowlist of a Pi run (S): each models.json baseUrl host, each auth.json provider's built-in host,
+    each web MCP server of the kit's web-mcp.json (docs/specs/roles.spec.html#launch-web)."""
+    hs: set[str] = set()
+
+    def urls(x: object) -> None:
+        if isinstance(x, dict):
+            for k, v in cast("dict[str, object]", x).items():
+                if k in ("baseUrl", "url") and isinstance(v, str) and "://" in v:
+                    h = v.split("://", 1)[1].split("/", 1)[0].split("@")[-1]
+                    if h:
+                        hs.add(h)
+                else:
+                    urls(v)
+        elif isinstance(x, list):
+            for v in cast("list[object]", x):
+                urls(v)
+
+    for f in (f"{pi_dir}/models.json", f"{SK}/web-mcp.json"):
+        with contextlib.suppress(OSError, ValueError):
+            urls(json.load(open(f)))
     try:
-        m = json.loads(m)
-    except ValueError:
-        return
-    t = m.get("t") if isinstance(m, dict) else None
-    if t == "go" and not live and go is None:
-        go = c   # answered from the main loop, once the proof's own calls and reads (all sent before go) are dropped
-    elif t in ("herdr", "run") and "argv" not in st:
-        st.update(t=t, program=m.get("program"), argv=m.get("argv"), live=live)
-    elif t == "exit" and "argv" in st and "exit" not in st:
-        st["exit"] = m.get("exit")
-    elif t == "miss" and live:   # an offline gh refusal
-        r = {"argv": [str(x) for x in m.get("argv", [])] if isinstance(m.get("argv"), list) else [], "why": str(m.get("why", ""))}
-        misses.append(r)
-        emit({"kind": "credential", "attempt": True, "refused": True, "what": " ".join(["gh", *r["argv"]]),
-              "result": f"offline gh refused: {r['why']}"})
-    elif t == "cred":
-        op, p, h = (str(m.get(k, "")) for k in ("op", "protocol", "host"))
-        emit({"kind": "credential", "attempt": op == "get", "refused": True, "what": f"git credential {op} {p}://{h}",
-              "result": "the sandbox helper (git's only one) answered no credential"})
-def conn(c):
-    while True:
+        auth: object = json.load(open(f"{pi_dir}/auth.json"))
+        names = list(cast("dict[str, object]", auth)) if isinstance(auth, dict) else []
+        hs.update(PI_HOSTS[p] for p in names if p in PI_HOSTS)
+    except (OSError, ValueError):
+        pass
+    return sorted(hs)
+
+
+def srt_js() -> tuple[str, str, str]:
+    """srt as the kit pins it (package.json, exact, locked in pnpm-lock.yaml): its cli in the kit's node_modules, its
+    version, and the node_modules dir it loads from (read on the host, before any namespace: a kit's node_modules may
+    live under /tmp, which the discard stage makes private, so that dir is kept). Missing, or at another version
+    than the pin: exit 66 naming the install command."""
+    try:
+        dev: dict[str, Any] = json.load(open(f"{SK}/package.json")).get("devDependencies", {})
+    except (OSError, ValueError):
+        dev = {}
+    pin = dev.get(SRT_PKG)
+    got = ""
+    with contextlib.suppress(OSError, ValueError):
+        got = json.load(open(f"{SK}/node_modules/{SRT_PKG}/package.json")).get("version", "")
+    js = os.path.realpath(
+        f"{SK}/node_modules/{SRT_PKG}/dist/cli.js"
+    )  # the package's own entry, there iff installed
+    if not pin or got != pin or not os.path.isfile(js):
+        die(
+            f"srt ({SRT_PKG} {pin or 'unpinned'}, the kit's package.json and pnpm-lock.yaml) not installed in "
+            f"{SK}/node_modules (found: {got or 'none'}): run pnpm install --frozen-lockfile --dir {SK}"
+        )
+    return os.path.dirname(os.path.dirname(js)), got, os.path.realpath(f"{SK}/node_modules")
+
+
+def srt_node(data: str) -> str:
+    """The node srt runs on: the kit's mise.toml pin in mise's data dir DATA, else the first on PATH."""
+    try:
+        nv = tomllib.load(open(f"{SK}/mise.toml", "rb")).get("tools", {}).get("node")
+    except (OSError, ValueError):
+        nv = None
+    node = f"{data}/installs/node/{nv}/bin/node" if nv and data else ""
+    node = node if os.path.exists(node) else (shutil.which("node") or "")
+    if not node:
+        die(
+            f"node (the kit's mise.toml pin {nv}) not installed: run {SK}/scripts/octo-feather-mise-install {SK}"
+        )
+    return node
+
+
+def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Recorder) -> None:
+    """srt's stderr: each violation line (SRT_SHIM) sent to the recorder as {"t": "net"}, a network refusal's host,
+    port and srt's reason read from it, any other violation sent whole (recorded, never dropped); srt's other lines
+    kept for the caller until the inner has started (shown when srt never started it), passed through after."""
+    deny = re.compile(r"deny network-outbound (\S+):(\d+) \((.*)\)$")
+    assert p.stderr is not None
+    for ln in p.stderr:
+        if not ln.startswith(b"QC-SRT-VIOLATION "):
+            if rec.hello:
+                sys.stderr.write(ln.decode(errors="replace"))
+            else:
+                early.append(ln.decode(errors="replace"))
+            continue
         try:
-            m = c.recv(1 << 18)
-        except BlockingIOError:
-            return
-        except OSError:
-            m = b""
-        if not m:   # the sender is done: its entries, and any open queued before, written before the close it waits for
-            opens(); sel.unregister(c); herdr_end(conns.pop(c)); c.close(); return
-        message(c, m)
-def accept():
-    while True:
+            line = str(json.loads(ln[len(b"QC-SRT-VIOLATION ") :]).get("line", ""))
+        except ValueError:
+            line = ln.decode(errors="replace").strip()
+        m = deny.search(line)
+        msg = (
+            {"t": "net", "host": m.group(1), "port": m.group(2), "why": m.group(3)}
+            if m
+            else {"t": "net", "line": line}
+        )
+        c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
         try:
-            c, _ = srv.accept()
-        except BlockingIOError:
-            return
-        c.setblocking(False); conns[c] = {}; sel.register(c, selectors.EVENT_READ)
-def opens():   # inotify on the tmpfs masks (what is an attempt, what is refused: .agents/skills/eval-cases/references/schema.md, Attempt record)
-    while True:
-        try:
-            b = os.read(ino, 65536)
-        except (BlockingIOError, OSError):
-            return
-        i = 0
-        while i + 16 <= len(b):
-            w, mk, _, n = struct.unpack_from("iIII", b, i)
-            name = b[i + 16:i + 16 + n].rstrip(b"\0").decode(errors="replace"); i += 16 + n
-            if w not in wds or not mk & 0x20:
-                continue
-            kind, path, dfd, kept = wds[w]
-            if name in kept:   # an entry bound back on the mask (the run's own): not an attempt
-                continue
-            try:
-                seen = set(os.listdir(dfd)); k = len(seen)
-            except OSError:
-                seen, k = None, -1
-            emit({"kind": kind, "attempt": True, "refused": seen is not None and seen <= kept,
-                  "what": f"open {path}/{name}" if name else f"open {path}",
-                  "result": f"tmpfs mask over {path}, {k} entries" + (f" (bound back: {', '.join(sorted(kept))})" if kept else "")})
-def drain():
-    accept()
-    for c in list(conns):
-        conn(c)
-    opens()
-sel = selectors.DefaultSelector()
-for f in (srv, wr) + ((ino,) if ino >= 0 else ()):
-    sel.register(f, selectors.EVENT_READ)
-print(f"ready {len(wds)}" if ino >= 0 else "ready no-inotify", flush=True)
-stop = False
-while not stop:
-    for k, _ in sel.select():
-        f = k.fileobj
-        if f is srv: accept()
-        elif f == wr:
-            try:
-                stop = bool(os.read(wr, 64))
-            except BlockingIOError:
+            c.connect(sock)
+            c.send(json.dumps(msg).encode())
+            c.shutdown(socket.SHUT_WR)
+            while c.recv(16):
                 pass
-        elif f == ino: opens()
-        elif f in conns: conn(f)
-    if go is not None and not live:   # the inner waits for this answer before the judge starts: nothing of its is dropped
-        drain(); live = True
-        try:
-            go.send(b"live")
         except OSError:
             pass
-drain()
-for c in list(conns):   # the judge's namespace is gone: every call still open ended without its exit
-    herdr_end(conns.pop(c)); c.close()
-# Whole, never a prefix: `recorded` lets the grader refuse a record it did not get whole (schema.md, Attempt record).
-print(json.dumps({"attempts": recs, "recorded": len(recs), "gh_misses": len(misses), "gh_miss_log": misses}), flush=True)
-EOF
-); rpid=$!
-  read -r -u "$rr" ready || ready=
-  [[ "$ready" == "ready "[0-9]* ]] || die "attempt recorder did not start (${ready:-no line})"
-  say "ok   attempt record: kept setup-side, outside the judge's namespaces (the judge sees $SCR/rec read-only); herdr shim, git credential helper, offline gh refusals, inotify on ${ready#ready } masks"
-  ((${#recs[@]})) && say "ok   run record: shims first on PATH for $(IFS=,; echo "${recs[*]}" | sed 's/,/, /g') (each runs the next one of its name unchanged)"
-  unshare --map-user="$QC_UID" --map-group="$QC_GID" --mount --pid --ipc --fork --kill-child --mount-proc \
-    -- setpriv --no-new-privs -- "$0" inner -- "$@" 8<&- 9<&- {rr}<&-; rc=$?
-  # The recorder's line: only after the judge's namespace is gone (every sender dead), the record as it holds it.
-  kill -TERM "$rpid" 2>/dev/null
-  fin=$(tail -n 1 <&"$rr"); exec {rr}<&-
-  if jq -e 'has("attempts")' <<< "$fin" > /dev/null 2>&1; then
-    printf '%s\n' "$fin" >&5
-    say "attempt record: $(jq '.attempts | length' <<< "$fin") entries; offline gh refusals $(jq .gh_misses <<< "$fin")"
-  else
-    jq -cn '{attempts_error: "the attempt recorder ended without its record"}' >&5
-    say "FAIL attempt record: the recorder ended without its record"
-  fi
-  # 11. the run's spend lines, from the scratch ledger (a regular file only: the judge could plant a fifo there).
-  sl="$SB/spend.jsonl"
-  if [[ -f "$sl" && ! -L "$sl" ]]; then jq -Rnc '{spend: [inputs]}' < "$sl"; else jq -nc '{spend: []}'; fi >&5
-  # 10. what the judge wrote into the worktree, read from the masked upper dir (real worktree at fd 9).
-  python3 - /proc/self/fd/8/u /proc/self/fd/9 >&5 <<'EOF'
-import json, os, stat, sys
-up, lo = sys.argv[1:]
-out = []
-def lower_files(rel):
-    p = os.path.join(lo, rel)
-    if not os.path.isdir(p) or os.path.islink(p):
-        return [rel] if os.path.lexists(p) else []
-    return [os.path.relpath(os.path.join(r, f), lo) for r, _, fs in os.walk(p) for f in fs]
-def same(a, b):
+        finally:
+            c.close()
+
+
+def setup(judge: list[str]) -> NoReturn:
+    hand = "QC_SESSION" not in E  # by hand: every input defaulted
+    S = E.get("QC_SESSION") or f"qc-hand-{secrets.token_hex(3)}"
+    for k, n in (("proof", "QC_FD_PROOF"), ("post", "QC_FD_POST"), ("err", "QC_FD_ERR")):
+        OUT[k] = int(E[n]) if E.get(n) else None
+    HOME = E["HOME"]
+    cfg = E.get("XDG_CONFIG_HOME") or f"{HOME}/.config"
+    HC, GC = f"{cfg}/herdr", E.get("GH_CONFIG_DIR") or f"{cfg}/gh"
+    PI = E.get("PI_CODING_AGENT_DIR") or f"{HOME}/.pi/agent"
+    CACHE = E.get("XDG_CACHE_HOME") or f"{HOME}/.cache"
+    TOP = (E.get("XDG_STATE_HOME") or f"{HOME}/.local/state") + "/octo-feather"
+    RS = E.get("QC_STATE") or run(f"{SK}/scripts/octo-feather-state").stdout.strip()
+    WT = E.get("QC_WORKTREE") or (
+        run("git", "rev-parse", "--show-toplevel").stdout.strip() or os.getcwd()
+    )
+    HERDR = (
+        E.get("QC_HERDR")
+        if "QC_HERDR" in E
+        else (E.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "")
+    )
+    GH = E.get("QC_GH") if "QC_GH" in E else (shutil.which("gh") or "")
+    uid, gid = int(E.get("QC_UID") or os.getuid()), int(E.get("QC_GID") or os.getgid())
+    nohist = E.get("QC_HISTORY", "none" if hand else "") == "none"
+    nopi = E.get("QC_PI", "none" if hand else "") == "none"
+    ghoff = E.get("QC_GHSNAP_OFF") or ("" if E.get("QC_GHSNAP") else "github: none (run by hand)")
+    ro_binds = [p for p in E.get("QC_RO_BINDS", "").split("\n") if p]
+    SCR = f"/tmp/.qc-{S}"
+    SB = f"{SCR}/state/octo-feather/sessions/{S}"
+    OV = f"{SCR}/ov"
+    if hand:  # what octo-feather-qc sandboxed() keeps: the paths under /tmp the run needs back
+        want = [WT, SK, RS, TOP, HOME, *E.get("PATH", "").split(":")]
+        keep = sorted({os.path.realpath(p) for p in want if p and os.path.exists(p)})
+        E["QC_KEEP"] = "\n".join(p for p in keep if p.startswith("/tmp/"))
+
+    # Host facts, read before any namespace or mask.
+    sjs, srtv, snm = srt_js()
+    if snm.startswith("/tmp/"):  # srt's node_modules, bound back on the private /tmp (step 1)
+        E["QC_KEEP"] = "\n".join([*E.get("QC_KEEP", "").split("\n"), snm]).strip("\n")
+    os.makedirs(HC, exist_ok=True)
     try:
-        sa, sb = os.lstat(a), os.lstat(b)
-    except OSError:
-        return False
-    if stat.S_IFMT(sa.st_mode) != stat.S_IFMT(sb.st_mode) or (sa.st_mode & 0o111) != (sb.st_mode & 0o111):
-        return False
-    if stat.S_ISLNK(sa.st_mode):
-        return os.readlink(a) == os.readlink(b)
-    if sa.st_size != sb.st_size:
-        return False
-    with open(a, "rb") as x, open(b, "rb") as y:
-        while True:
-            p, q = x.read(1 << 20), y.read(1 << 20)
-            if p != q:
-                return False
-            if not p:
-                return True
-for root, dirs, files in os.walk(up):
-    for d in list(dirs):   # opaque dir: everything below it in the lower is hidden
-        rel = os.path.relpath(os.path.join(root, d), up)
+        KUT = os.path.realpath(E.get("QC_KIT") or SK, strict=True)
+        wtp = os.path.realpath(WT, strict=True)
+    except OSError as e:
+        die(f"kit under test or worktree: {e}")
+    keep = [wtp, KUT]
+    back = [wtp, KUT]
+    for k in keep:
+        if os.path.exists(k + "/.git"):
+            r = run("git", "-C", k, "rev-parse", "--path-format=absolute", "--git-common-dir")
+            if r.returncode == 0 and r.stdout.strip():
+                back.append(os.path.realpath(r.stdout.strip()))
+    back += [os.path.realpath(p) for p in ro_binds]
+    j = shutil.which(judge[0]) if judge else None
+    for m in (
+        SELF,
+        f"{SK}/scripts/octo-feather-state",
+        f"{SK}/scripts/octo-feather-mise-install",
+        f"{SK}/.agents/skills/github-pr/scripts",
+        j,
+    ):
+        if m and os.path.exists(m):
+            back.append(os.path.realpath(m))
+    # srt's own node_modules (the sandbox's machinery, as the script itself): where it lies inside another repo (a kit
+    # copy linking a checkout's), bound back on that mask, as srt reads its own files back through any deny.
+    back.append(snm)
+
+    def canon(s: str) -> list[str]:
+        return [os.path.realpath(p) for p in s.split(":") if p]
+
+    cpath, cpre = canon(E.get("PATH", "")), canon(E.get("QC_PATH_PREPEND", ""))
+    HM = os.path.realpath(HOME)
+    repos: list[
+        str
+    ] = []  # git repos up to 3 levels below HOME, dot-dirs aside, symlinks not followed
+
+    def scan(d: str, depth: int) -> None:
         try:
-            opq = any(os.getxattr(os.path.join(root, d), x, follow_symlinks=False) == b"y"
-                      for x in ("trusted.overlay.opaque", "user.overlay.opaque") if x in os.listxattr(os.path.join(root, d), follow_symlinks=False))
+            es = sorted(os.scandir(d), key=lambda e: e.name)
         except OSError:
-            opq = False
-        if opq:
-            out += [["deleted", f] for f in lower_files(rel) if not os.path.lexists(os.path.join(up, f))]
-    for f in files + [d for d in dirs if os.path.islink(os.path.join(root, d))]:
-        p = os.path.join(root, f); rel = os.path.relpath(p, up); s = os.lstat(p)
-        if stat.S_ISCHR(s.st_mode) and s.st_rdev == 0:   # whiteout
-            out += [["deleted", x] for x in lower_files(rel)]
-        elif not os.path.lexists(os.path.join(lo, rel)):
-            out.append(["new", rel])
-        elif not same(p, os.path.join(lo, rel)):
-            out.append(["changed", rel])
-print(json.dumps({"upper": sorted(out, key=lambda e: e[1])}))
-EOF
-  # 12. the demo's screenshots, from the run's /tmp (the namespace is gone: nothing writes there now).
-  if [[ -n "${QC_SHOTS:-}" ]]; then python3 - "$SCR/shots" >&5 <<'EOF'
-import base64, json, os, stat, sys
-d = sys.argv[1]; out = []
-for root, dirs, files in os.walk(d):
-    dirs.sort()
-    for f in sorted(files):
-        p = os.path.join(root, f)
-        if stat.S_ISREG(os.lstat(p).st_mode):
-            out.append([os.path.relpath(p, d), base64.b64encode(open(p, "rb").read()).decode()])
-print(json.dumps({"shots": out}))
-EOF
-  fi
-  exit "$rc"
-fi
+            return
+        for e in es:
+            if e.name.startswith(".") or not e.is_dir(follow_symlinks=False):
+                continue
+            if os.path.lexists(e.path + "/.git"):
+                if not any(within(e.path, k) for k in keep):
+                    repos.append(e.path)
+                continue
+            if depth < REPO_DEPTH:
+                scan(e.path, depth + 1)
 
-# Inner: PID 1 of the judge's namespace, the caller's uid, no capabilities.
-GH="$QC_GH"; GC="$GH_CONFIG_DIR"; GHLINE="${QC_GHSNAP_LINE:-}"; WT="$QC_WORKTREE"
-BR="${QC_BROWSER:-}"
-unset QC_PI QC_BROWSER QC_SHOTS QC_RECORD QC_KIT QC_HISTORY QC_SESSION QC_STATE QC_HERDR QC_GH QC_KEEP QC_RO_BINDS QC_PATH_PREPEND QC_UID QC_GID QC_WORKTREE QC_FD_PROOF QC_FD_POST QC_FD_ERR \
-  QC_GHSNAP QC_GHSNAP_OFF QC_GHSNAP_LINE
-nsprocs() {   # every live process in this PID namespace but PID 1 and the caller
-  local p s; for p in /proc/[0-9]*; do p=${p#/proc/}
-    [[ "$p" == 1 || "$p" == "$BASHPID" ]] && continue
-    s=$(cut -d' ' -f3 "/proc/$p/stat" 2>/dev/null) && [[ "$s" != Z ]] && echo "$p"; done; }
-killed=()
-reap() {
-  if [[ -n "$HERDR" ]]; then "$HERDR" session stop "$S" >/dev/null 2>&1; "$HERDR" session delete "$S" >/dev/null 2>&1; fi
-  local p c; for p in $(nsprocs); do
-    c=$(tr '\0' ' ' < "/proc/$p/cmdline" 2>/dev/null) || continue
-    [[ -n "$c" ]] && killed+=("$p ${c:0:80}"); kill -9 "$p" 2>/dev/null
-  done
-  sleep 0.3
-}
-if [[ -n "$HERDR" ]]; then
-  setsid "$HERDR" --session "$S" server >/dev/null 2>&1 < /dev/null &
-  for _ in $(seq 50); do "$HERDR" --session "$S" workspace list >/dev/null 2>&1 && break; sleep 0.2; done
-fi
+    scan(HM, 1)
+    repos.sort()
+    rmask: list[
+        tuple[str, list[str], list[str]]
+    ] = []  # (repo, its bound-back paths, the names they show on the mask)
+    for r in repos:
+        bs = sorted({b for b in back if b.startswith(r + "/")})
+        for b in bs:
+            if not os.path.lexists(b):
+                die(f"bind back {b} on the mask over {r}")
+        rmask.append((r, bs, sorted({b[len(r) + 1 :].split("/")[0] for b in bs})))
+    hid = [r for r, _, _ in rmask]
 
-# 7. pre-run proof.
-fails=0
-check() { if [[ "$1" == 0 ]]; then say "ok   $2"; else say "FAIL $2"; fails=$((fails+1)); fi; }
-t() { "$@" >/dev/null 2>&1; echo $?; }   # exit status as data
-caps=$(awk '/^CapEff/ {print $2}' /proc/self/status); nnp=$(awk '/^NoNewPrivs/ {print $2}' /proc/self/status)
-check "$(t test "$caps" = 0000000000000000 -a "$nnp" = 1)" "judge holds no capabilities (CapEff $caps), no_new_privs $nnp, uid $(id -u)"
-r1=$(t umount "$HC"); r2=$(t unshare -rm umount "$HC")
-check "$(t test "$r1" != 0 -a "$r2" != 0)" "masks locked: umount of the Herdr mask exits $r1, after its own unshare -rm $r2"
-kit=$(cd "$(dirname "$0")/.." && pwd -P); rol=(HOME /var/tmp); dirs=("$HOME" /var/tmp)
-if [[ "$kit/" == "$(cd "$WT" && pwd -P)/"* ]]; then kitn="the kit is the judged worktree (on the overlay: writes discarded, a tracked change fails the run)"
-else rol+=("the kit"); dirs+=("$kit/scripts"); kitn=""; fi
-w=0; for d in "${dirs[@]}"; do touch "$d/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$d/.qc-ro-$S"; }; done
-check "$w" "$(IFS=,; echo "${rol[*]}" | sed 's/,/, /g') read-only${kitn:+; $kitn}"
-# Every writable mount, by its own flags: tmpfs and /proc die with the run, the worktree overlay's
-# upper dir is on the run tmpfs; anything else is persistent (Pi's auth.json and models.json are binds of run tmpfs files).
-ov=$(cat "$SCR/ovupper"); wt=$(git rev-parse --show-toplevel 2>/dev/null)
-{ read -r uc; read -r ucu; read -r ucn; } < "$SCR/uvcache"
-mapfile -t pers < <(awk -v ov="upperdir=$ov," -v uv="upperdir=${ucu:-/nonexistent}," '
-  { for (i = 7; $i != "-"; i++); fs = $(i+1); so = $(i+3) ","; mp = $5; gsub(/\\040/, " ", mp); w[mp] = ""
-    if (!(("," $6 ",") ~ /,ro,/ || fs == "tmpfs" || fs == "proc" || (fs == "overlay" && (index(so, ov) || index(so, uv))))) w[mp] = $1 " " mp }
-  END { for (m in w) if (w[m] != "") print w[m] }' /proc/self/mountinfo)   # last mount on a path wins: covered ones are unreachable
-reach=(); unreach=0   # writable but covered under another path (nested run): unreachable, counted apart
-for e in "${pers[@]}"; do if covered "${e%% *}" "${e#* }"; then unreach=$((unreach + 1)); else reach+=("${e#* }"); fi; done
-pers=("${reach[@]}")
-ovl=$(awk -v wt="$wt" -v ov="upperdir=$ov," '{ for (i = 7; $i != "-"; i++); mp = $5; gsub(/\\040/, " ", mp) }
-  mp == wt && $(i+1) == "overlay" && index($(i+3) ",", ov) { n++ } END { print n + 0 }' /proc/self/mountinfo)
-check "$(t test "$ovl" -ge 1 -a ! -e "$ov")" "worktree $wt is an overlay, upper dir on the run tmpfs and hidden from the judge"
-check "$(t test "${#pers[@]}" = 0)" "writable persistent paths: ${pers[*]:-none}"
-if [[ -n "$uc" ]]; then   # uv's cache: an overlay whose upper is on the hidden run tmpfs, writable, its writes discarded
-  ucl=$(awk -v m="$uc" -v u="upperdir=$ucu," '{ for (i = 7; $i != "-"; i++); mp = $5; gsub(/\\040/, " ", mp) }
-    mp == m && $(i+1) == "overlay" && index($(i+3) ",", u) { n++ } END { print n + 0 }' /proc/self/mountinfo)
-  w=0; touch "$uc/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$uc/.qc-w-$S"; }
-  check "$(t test "$ucl" -ge 1 -a "$w" = 1 -a ! -e "$ucu")" "uv cache $uc is an overlay, upper dir $ucu on the run tmpfs and hidden from the judge (writable; its writes discarded with the run)"
-elif [[ -n "$ucn" ]]; then
-  say "ok   uv cache: $ucn (uv --color never cache dir) absent, nothing bound"
-else
-  say "ok   uv cache: none on the box (no uv, or uv cache dir exits non-zero), nothing bound"
-fi
-((unreach == 0)) || say "ok   $unreach writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run)"
-vc=$(cat "$SCR/vcache")
-if [[ -n "$vc" ]]; then   # check-vendored's cache: the last mount on its path is read-only, a write fails
-  vro=$(awk -v m="$vc" '{mp = $5; gsub(/\\040/, " ", mp)} mp == m {o = $6} END {print (("," o ",") ~ /,ro,/)}' /proc/self/mountinfo)
-  w=0; touch "$vc/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$vc/.qc-ro-$S"; }
-  inw=0; for p in "${pers[@]}"; do [[ "$p" == "$vc" ]] && inw=1; done
-  check "$(t test "$vro" = 1 -a "$w" = 0 -a "$inw" = 0)" "vendored-skill cache $vc bound read-only (not writable, not in the writable list)"
-else
-  say "ok   vendored-skill cache: none on the box, nothing bound"
-fi
-if [[ -n "$HERDR" ]]; then
-  r=$(t "$HERDR" --session default workspace list); check $((r == 0)) "live Herdr unreachable: raw herdr --session default workspace list exits $r"
-  a=$(herdr --session default --remote x --machine y workspace list 2>&1); b=$("$HERDR" --session "$S" workspace list 2>&1)
-  check "$(t test -n "$b" -a "$a" = "$b")" "herdr shim pins sandbox session $S despite --session default --remote --machine"
-  ls_s=$(ls -A "$HC/sessions" | tr '\n' ' '); check "$(t test "$ls_s" = "$S ")" "Herdr config shows only the sandbox session: [${ls_s% }]"
-else
-  say "ok   herdr not installed: no Herdr session reachable"
-fi
-cfgc="${XDG_CONFIG_HOME:-$HOME/.config}"
-tok=$(env | grep -cE '^(GH_TOKEN|GITHUB_TOKEN|GH_ENTERPRISE_TOKEN)=')
-ghls=$(find "$GC" "$cfgc/gh" -mindepth 1 2>/dev/null | wc -l)
-cred=$(cat "$HOME/.git-credentials" "$cfgc/git/credentials" 2>/dev/null | wc -c)
-r=1; [[ -n "$GH" ]] && r=$(t "$GH" auth status)
-check "$(t test "$tok" = 0 -a "$ghls" = 0 -a "$cred" = 0 -a "$r" != 0)" "no gh or git creds: tokens $tok, gh config entries $ghls, git-credentials ${cred} bytes, gh auth status exits $r"
-# The judge reads no tracker ticket: no tracker credential (issue-lifecycle spec #qc-interim).
-lin=$(env | grep -c '^LINEAR_API_KEY=')
-check "$(t test "$lin" = 0)" "no tracker credential: LINEAR_API_KEY set $lin times"
-# Pi's model credentials (step 5): per-run copies where a Pi runs; none at all with QC_PI=none (a declared demo).
-{ read -r pid; read -r pin; } < "$SCR/pi"; pis=()
-for n in auth.json models.json; do [[ -e "$pid/$n" ]] && pis+=("$n"); done
-if [[ "$pin" == none ]]; then
-  rd=0; for n in auth.json models.json; do cat "$pid/$n" >/dev/null 2>&1 && rd=1; done
-  check "$(t test "${#pis[@]}" = 0 -a "$rd" = 0)" "no Pi model credentials (no Pi runs here): auth.json and models.json absent from $pid${pis:+ (NOT: ${pis[*]} present)}"
-else
-  say "ok   Pi model credentials: ${pis[*]:-none on the box}${pis:+ per-run copies on the hidden run tmpfs, never written back}"
-fi
-route=$(env | grep -cE '^(OCTO_FEATHER_PARENT|OCTO_FEATHER_SESSION_ID|OCTO_FEATHER_ROLE|OCTO_FEATHER_SPEND_SPACE|HERDR_PANE_ID|HERDR_TAB_ID|HERDR_WORKSPACE_ID|HERDR_ENV)=')
-check "$(t test "$route" = 0)" "parent route unset: $route of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set"
-w=0; touch "$MISE_STATE_DIR/.qc-w-$S" 2>/dev/null && { w=1; rm -f "$MISE_STATE_DIR/.qc-w-$S"; }
-me=$(find "$MISE_STATE_DIR" -mindepth 1 2>/dev/null | wc -l)
-check "$(t test "$MISE_STATE_DIR" = "$SCR/mise/state" -a "$w" = 1 -a "$me" = 0 -a "$(stat -f -c %T "$MISE_STATE_DIR")" = tmpfs)" \
-  "mise state dir per-run: $MISE_STATE_DIR (tmpfs on the private /tmp, started empty: $me entries; mise trust writes there and it dies with the run)"
-st=$("$(dirname "$0")/octo-feather-state")
-check "$(t test "$st" = "$SB")" "state dir is per-run scratch: $st"
-w=0
-[[ -d "$SB/lanes/archive" ]] && touch "$SB/lanes/archive/.w" 2>/dev/null && w=1
-[[ -f "$SB/director.handoffs.jsonl" ]] && (: >> "$SB/director.handoffs.jsonl") 2>/dev/null && w=1
-live=0; nmask=0
-while IFS= read -r m; do
-  [[ -n "$m" ]] || continue; nmask=$((nmask + 1))
-  [[ -d "$m" ]] && live=$((live + $(ls -A "$m" | wc -l))); [[ -f "$m" ]] && live=$((live + $(wc -c < "$m")))
-done < "$SCR/masked"
-hist=$(cat "$SCR/hist")
-got=0; [[ -d "$SB/lanes/archive" ]] && got=$((got + 1)); [[ -f "$SB/director.handoffs.jsonl" ]] && got=$((got + 1))
-if [[ "$hist" == none ]]; then
-  check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = 0)" "history none ($got bound: no archived lanes, no director log; a factory eval sees no lane history); live records masked ($nmask paths, $live bytes or entries visible)"
-else
-check "$(t test "$w" = 0 -a "$live" = 0 -a "$got" = "$hist")" "history read-only ($got of $hist bound: archive $(find "$SB/lanes/archive" -type f 2>/dev/null | wc -l) files, director log $(cat "$SB/director.handoffs.jsonl" 2>/dev/null | wc -l) lines); live records masked ($nmask paths, $live bytes or entries visible)"
-fi
-# Other repos (step 3b): each mask lists only what was bound back on it.
-HM=$(cd "$HOME" && pwd -P); nr=0; rbad=(); rl=()
-while IFS=$'\t' read -r r nm; do
-  [[ -n "$r" ]] || continue; nr=$((nr + 1)); got=$(ls -A "$r" 2>&1 | sort | paste -sd/)
-  [[ "$got" == "$nm" ]] || rbad+=("$r shows [$got]")
-  rl+=("${r#"$HM"/}${nm:+ [${nm//\// }]}")
-done < "$SCR/repos"
-mapfile -t kept < "$SCR/kept"
-vis="visible: kit under test ${kept[0]}, worktree ${kept[1]}$( ((${#kept[@]} > 2)) && printf '; bound back read-only: %s' "$(IFS=,; echo "${kept[*]:2}" | sed 's/,/, /g')")"
-if ((nr)); then
-  check "${#rbad[@]}" "other repos hidden: $nr git repos under $HM (up to 3 levels down, dot-dirs aside), each a tmpfs mask listing only what is bound back${rbad:+ (NOT: ${rbad[*]})}: $(IFS=,; echo "${rl[*]}" | sed 's/,/, /g'); $vis"
-else
-  say "ok   other repos: none under $HM (git repos up to 3 levels down, dot-dirs aside); $vis"
-fi
-ro=0; while IFS= read -r p; do [[ -n "$p" ]] && touch "$p/.w" 2>/dev/null && ro=1; done < "$SCR/robinds"
-[[ -n "$(tr -d '\n' < "$SCR/robinds")" ]] && check "$ro" "extra binds read-only"
-offgh="$kit/.agents/skills/github-pr/scripts/gh"
-if [[ -n "$OCTO_FEATHER_GHSNAP" ]]; then
-  w=0; touch "$OCTO_FEATHER_GHSNAP/.w" 2>/dev/null && w=1
-  r=$(gh repo view --json nameWithOwner -q .nameWithOwner 2>&1)
-  check "$(t test "$(command -v gh)" = "$offgh" -a "$w" = 0 -a -n "$r" -a "$r" = "$(jq -r .repo "$OCTO_FEATHER_GHSNAP/meta.json")")" \
-    "github: $GHLINE; read-only, served by the offline gh ($(command -v gh)), which refuses writes"
-else
-  r=$(t gh issue list)
-  check "$(t test "$(command -v gh)" = "$offgh" -a "$r" = 1)" "$OCTO_FEATHER_GHSNAP_OFF; the offline gh refuses every call (exit $r)"
-fi
-if [[ -n "$BR" ]]; then   # a browser demo: the box's headless shell, read-only; the cache dir stays masked
-  w=0; touch "$BR/.qc-ro-$S" 2>/dev/null && { w=1; rm -f "$BR/.qc-ro-$S"; }
-  sh=$(ls -d "$BR"/chromium_headless_shell-*/INSTALLATION_COMPLETE 2>/dev/null | head -1)
-  check "$(t test "$w" = 0 -a -n "$sh")" "browser: PLAYWRIGHT_BROWSERS_PATH=$BR read-only, headless shell ${sh%/INSTALLATION_COMPLETE}"
-fi
-if command -v mise > /dev/null; then   # step 6b: the worktree's and the kit's mise tools installed
-  # Asked with a throwaway state dir (removed), so the per-run MISE_STATE_DIR the judge gets stays empty.
-  ms=$(mktemp -d); ml=()
-  for d in "$WT" "$kit"; do
-    f="$ms/ls-${#ml[@]}.json"
-    MISE_STATE_DIR="$ms" "$kit/scripts/octo-feather-mise-install" --list --json "$d" > "$f" 2> "$f.err"; ml+=("$(cd "$d" && pwd -P)" "$f" "$?")
-  done
-  mline=$(python3 - "$MISE_DATA_DIR" "$kit/scripts/octo-feather-mise-install" "${ml[@]}" <<'EOF'
-# DATA_DIR HELPER then DIR FILE EXIT per dir: FILE is `octo-feather-mise-install --list --json DIR`, the tools of DIR's own
-# config files only (that script owns the rule: never the user's global config, the moved-HOME parent walk's included)
-# as mise's ls rows ({tool: [{version, installed}]}).
-import json, shlex, sys
-data, helper, a = sys.argv[1], sys.argv[2], sys.argv[3:]
-miss, judged, fix = [], [], []
-for d, f, rc in zip(a[0::3], a[1::3], a[2::3]):
+    def swap(ps: list[str]) -> list[str]:
+        """A PATH dir inside a hidden repo, not inside a path bound back: the same path in the run's kit, or gone."""
+        out: list[str] = []
+        for p in ps:
+            if any(within(p, b) for b in back):
+                out.append(p)
+                continue
+            r = next((r for r in hid if within(p, r)), None)
+            if r is None:
+                out.append(p)
+            elif os.path.isdir(KUT + p[len(r) :]):
+                out.append(KUT + p[len(r) :])
+        return out
+
+    jpath, jpre = swap(cpath), swap(cpre)
+    # uv's cache, asked of uv itself, uncoloured (#637: under FORCE_COLOR uv colours even a path). A path that is not
+    # absolute, or names no dir, fails naming what uv printed; an absolute one not there yet (uv never ran under this
+    # HOME) is named in the proof, nothing bound.
+    ucr = run("uv", "--color", "never", "cache", "dir") if shutil.which("uv") else None
+    got = ucr.stdout.rstrip("\n") if ucr and ucr.returncode == 0 else ""
+    absent = bool(got) and not os.path.lexists(got)
+    bad = not got.startswith("/") or any(ch < " " or ch == "\x7f" for ch in got)
+    if got and (bad or not (os.path.isdir(got) or absent)):
+        die(f"uv --color never cache dir printed {got!r}: not a directory")
+    UC = got if got and not absent else ""
+    ucn = got if absent else ""
+    shimless = ":".join(p for p in E.get("PATH", "").split(":") if p and p != f"{SCR}/bin")
+    realpi = shutil.which("pi", path=shimless) or ""
+    if realpi and os.path.realpath(realpi).startswith(f"{SCR}/bin/"):
+        realpi = ""
+    pis = [n for n in ("auth.json", "models.json") if os.path.isfile(f"{PI}/{n}")]
+    pient = sorted(os.listdir(PI)) if os.path.isdir(PI) else []
+    wfd = os.open(WT, os.O_RDONLY | os.O_DIRECTORY)  # the real worktree, for the upper list (10)
+    cwd = os.getcwd()
+
+    # D. the discard stage: own user (the caller's uid), mount and IPC namespace.
+    ou, og = os.geteuid(), os.getegid()
+
+    def put(f: str, s: str) -> None:
+        fd = os.open(f, os.O_WRONLY)
+        try:
+            os.write(fd, s.encode())
+        finally:
+            os.close(fd)
+
     try:
-        tools = json.load(open(f)) if rc == "0" else None
-    except (OSError, ValueError):
-        tools = None
-    if not isinstance(tools, dict):
-        err = " ".join(open(f + ".err", errors="replace").read().split())[:300]
-        m, own = [f"{helper} --list --json failed: {err or 'no output'}"], []
-    else:
-        own = [(t, v) for t, vs in tools.items() for v in vs]
-        m = [f"{t}@{v.get('version')}" for t, v in own if not v.get("installed")]
-    if m:
-        miss.append(f"{d}: {' '.join(m)}")
-        fix.append(f"{shlex.quote(helper)} {shlex.quote(d)}")   # the kit's one install command: that dir's own locked tools
-    names = " ".join(f"{t}@{v.get('version')}" for t, v in own)
-    judged.append(f"{d}: {names or 'none'}")
-line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {data}"
-if miss:
-    line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it: {'; '.join(dict.fromkeys(fix))})"
-print(f"{line}; judged, each from its own mise config only: {'; '.join(judged)}")
-sys.exit(1 if miss else 0)
-EOF
-  ); mrc=$?; rm -rf "$ms"
-  check "$mrc" "$mline"
-fi
-# Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
-go=$(python3 -c 'import socket, sys
-c = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET); c.connect(sys.argv[1]); c.send(b"{\"t\": \"go\"}"); print(c.recv(16).decode())' "$SCR/rec/sock" 2>&1)
-check "$(t test "$go" = live)" "attempt record live from here (recorder answered: ${go:-nothing}); the judge's view of it read-only: $SCR/rec"
-dirty=$(git status --porcelain 2>&1 && git rev-parse --short=12 HEAD); check "$(t test "$(wc -l <<< "$dirty")" = 1)" "worktree clean at $dirty"
-((fails == 0)) || { say "proof failed ($fails checks); judge not started (exit 66)"; reap; exit 66; }
-
-# 8. the judge.
-"$@" 2>&6 4>&- 5>&- 6>&-; rc=$?
-
-# 9. post-run cleanup. The spend ledger's writers run detached: the kill below would lose their lines.
-python3 - <<'EOF'
-# Up to 10 s for every live `spend record` in this PID namespace (but PID 1, this shell, and itself) to end.
-import os, time
-def writer(p):
+        os.unshare(os.CLONE_NEWUSER | os.CLONE_NEWNS | os.CLONE_NEWIPC)
+        put("/proc/self/uid_map", f"{uid} {ou} 1")
+        put("/proc/self/setgroups", "deny")
+        put("/proc/self/gid_map", f"{gid} {og} 1")
+        mount(None, "/", None, MS_REC | MS_PRIVATE)
+    except OSError as e:
+        die(f"discard stage: user and mount namespace ({e})")
+    # 1. private /tmp, kept paths bound back from the old one (through an fd held on it).
+    tfd = os.open("/tmp", os.O_RDONLY | os.O_DIRECTORY)
     try:
-        if open(f"/proc/{p}/stat").read().split(" ")[2] == "Z":
-            return False
-        return b"spend record" in open(f"/proc/{p}/cmdline", "rb").read().replace(b"\0", b" ")
+        mount("tmpfs", "/tmp", "tmpfs", 0, "mode=1777")
+    except OSError as e:
+        die(f"mount tmpfs /tmp ({e})")
+    for p in E.get("QC_KEEP", "").split("\n"):
+        if not p.startswith("/tmp/"):
+            continue
+        src = f"/proc/self/fd/{tfd}/{p[5:]}"
+        if not os.path.exists(src):
+            continue
+        if os.path.isdir(src):
+            os.makedirs(p, exist_ok=True)
+        else:
+            os.makedirs(os.path.dirname(p), exist_ok=True)
+            open(p, "a").close()
+        try:  # recursive: nested, a kept path has an outer run's binds below it
+            mount(src, p, None, MS_BIND | MS_REC)
+        except OSError as e:
+            die(f"bind back {p} ({e})")
+    probe = f"qc-tmp-probe-{S}"
+    open(f"/proc/self/fd/{tfd}/{probe}", "w").close()
+    ok = not os.path.exists(f"/tmp/{probe}")
+    os.unlink(f"/proc/self/fd/{tfd}/{probe}")
+    os.close(tfd)
+    if not ok:
+        die("/tmp is private")
+    say("ok   /tmp is private (nothing the judge writes there outlives the run)")
+    os.chdir(cwd)
+
+    # mise doctor writes nothing that outlives the run: it runs with the cache dir (or its nearest existing parent)
+    # read-only in its own mount namespace, as it reports the real dirs.
+    def cache_masked() -> None:
+        os.unshare(os.CLONE_NEWNS)
+        a = CACHE
+        while not os.path.exists(a):
+            a = os.path.dirname(a)
+        mount(a, a, None, MS_BIND | MS_REC)
+        ro(a)
+
+    menv: dict[str, str] = {}
+    # 6b: mise's dirs from doctor's JSON whatever its exit (#493); none fails closed
+    if shutil.which("mise"):
+        ms = f"/tmp/.qc-mise-{S}"  # a throwaway state dir: the judge's per-run MISE_STATE_DIR starts empty
+        os.makedirs(ms)
+        r = run("mise", "doctor", "--json", env=dict(E, MISE_STATE_DIR=ms), preexec_fn=cache_masked)
+        try:
+            dd: object = json.loads(r.stdout).get("dirs", {})
+        except (ValueError, AttributeError):
+            dd = {}
+        for d in ("data", "cache", "config"):
+            x = cast("dict[str, object]", dd).get(d) if isinstance(dd, dict) else None
+            if not isinstance(x, str) or not x:
+                die(
+                    f"mise doctor --json (exit {r.returncode}) printed no dirs.{d}: mise's dirs unknown"
+                )
+            menv[f"MISE_{d.upper()}_DIR"] = E.get(f"MISE_{d.upper()}_DIR") or x
+    srt = [srt_node(menv.get("MISE_DATA_DIR", "")), "--input-type=module", "-e", SRT_SHIM, sjs]
+    # 2. the run tmpfs: overlay upper and work dirs, Pi copies.
+    for c in (",", ":"):
+        if c in WT:
+            die(f"worktree path {WT} holds , or : (overlay options)")
+        if c in UC:
+            die(f"uv cache dir {UC} holds , or : (overlay options)")
+    os.makedirs(OV)
+    mount("tmpfs", OV, "tmpfs", 0, "mode=700")
+    for d in ("u", "w", "uvu", "uvw", "pi"):
+        os.mkdir(f"{OV}/{d}")
+    kreq = f"needs kernel >= 5.11 (overlay userxattr) and >= 6.6 (tmpfs user xattrs), this one {os.uname().release}"
+    try:
+        os.setxattr(f"{OV}/u", "user.qc.probe", b"y")
+        os.removexattr(f"{OV}/u", "user.qc.probe")
     except OSError:
-        return False
-for _ in range(100):
-    if not any(writer(p) for p in os.listdir("/proc") if p.isdigit() and p not in ("1", str(os.getpid()))):
-        break
-    time.sleep(0.1)
-EOF
-panes=0
-[[ -n "$HERDR" ]] && panes=$("$HERDR" --session "$S" pane list 2>/dev/null | grep -o '"pane_id"' | wc -l)
-headless=$(( $(cat "$SCR/agents.log" 2>/dev/null | wc -l) ))   # no log: no pi started (a declared demo)
-((headless > 0)) && headless=$((headless - 1))   # the first pi start is the judge itself
-reap
-left=$(nsprocs); left=$(wc -w <<< "$left")
-say "cleanup: agents started $((headless + panes)) (headless pi $headless, Herdr panes $panes); leftover processes killed ${#killed[@]}, left $left (the kernel kills those as PID 1 exits); session $S stopped and deleted"
-python3 - "$headless" "$panes" "$left" "$S" "${killed[@]}" >&5 <<'EOF'
-import json, sys
-a = sys.argv
-print(json.dumps({"session": a[4], "agents_started": int(a[1]) + int(a[2]), "headless_pi": int(a[1]), "herdr_panes": int(a[2]),
-                  "killed": a[5:], "left_after_kill": int(a[3])}))
-EOF
-exit "$rc"
+        die(f"run tmpfs takes no user.* xattrs: the worktree overlay {kreq}")
+    try:
+        mount(
+            "overlay", WT, "overlay", 0, f"lowerdir={WT},upperdir={OV}/u,workdir={OV}/w,userxattr"
+        )
+    except OSError:
+        die(f"worktree overlay with userxattr: {kreq}")
+    if UC:
+        try:
+            mount(
+                "overlay",
+                UC,
+                "overlay",
+                0,
+                f"lowerdir={UC},upperdir={OV}/uvu,workdir={OV}/uvw,userxattr",
+            )
+        except OSError:
+            die(f"uv cache overlay {UC} with userxattr: {kreq}")
+    if not nopi:
+        for n in pis:
+            try:
+                shutil.copyfile(f"{PI}/{n}", f"{OV}/pi/{n}")
+                shutil.copymode(f"{PI}/{n}", f"{OV}/pi/{n}")
+                mount(f"{OV}/pi/{n}", f"{PI}/{n}", None, MS_BIND)
+            except OSError as e:
+                die(f"copy Pi {n} ({e})")
+    os.chdir(cwd)
+    # history at the scratch state dir (step 2, read-only through srt's allowRead below).
+    os.makedirs(f"{SB}/lanes")
+    os.makedirs(f"{SCR}/bin")
+    os.makedirs(f"{SCR}/rbin")
+    os.makedirs(f"{SCR}/rec")
+    hist, hro = 0, cast("list[str]", [])
+    try:
+        if not nohist and os.path.isdir(f"{RS}/lanes/archive"):
+            os.mkdir(f"{SB}/lanes/archive")
+            mount(f"{RS}/lanes/archive", f"{SB}/lanes/archive", None, MS_BIND)
+            hist += 1
+            hro.append(f"{SB}/lanes/archive")
+        if not nohist and os.path.isfile(f"{RS}/director.handoffs.jsonl"):
+            open(f"{SB}/director.handoffs.jsonl", "w").close()
+            mount(f"{RS}/director.handoffs.jsonl", f"{SB}/director.handoffs.jsonl", None, MS_BIND)
+            hist += 1
+            hro.append(f"{SB}/director.handoffs.jsonl")
+        # The box onboarding file read-only at the scratch state dir's top, where a role launch inside (pi-role, under
+        # this XDG_STATE_HOME) reads the factory commit identity it applies (scripts/pi-role --help, Commit identity).
+        # A bind at another path: srt cannot (its schema binds a path only at itself).
+        if os.path.isfile(f"{TOP}/onboarding.toml"):
+            ob = f"{SCR}/state/octo-feather/onboarding.toml"
+            open(ob, "w").close()
+            mount(f"{TOP}/onboarding.toml", ob, None, MS_BIND)
+            hro.append(ob)
+    except OSError as e:
+        die(f"history or onboarding file ({e})")
+
+    # A repo mask with paths bound back on it (a --kit-ref run's head-kit machinery): made here, a tmpfs with each path
+    # bound back through an fd held on the repo, so srt's read-only root covers mask and binds alike. srt cannot: its
+    # denyRead mask is a writable tmpfs mounted after the read-only root, and its denyWrite does not reach inside one.
+    for r, bs, _ in rmask:
+        if not bs:
+            continue
+        rf, b = os.open(r, os.O_RDONLY | os.O_DIRECTORY), r
+        try:
+            mount("tmpfs", r, "tmpfs", 0, "mode=755")
+            for b in bs:
+                rel = b[len(r) + 1 :]
+                src = f"/proc/self/fd/{rf}/{rel}"
+                if os.path.isdir(src):
+                    os.makedirs(f"{r}/{rel}", exist_ok=True)
+                else:
+                    os.makedirs(os.path.dirname(f"{r}/{rel}"), exist_ok=True)
+                    open(f"{r}/{rel}", "a").close()
+                mount(src, f"{r}/{rel}", None, MS_BIND | MS_REC)
+        except OSError as e:
+            die(f"bind back {b} on the mask over {r} ({e})")
+        finally:
+            os.close(rf)
+    os.chdir(cwd)
+
+    # S. srt's policy.
+    deny: list[str] = ["/tmp", HC]
+    allow_r: list[str] = []
+    allow_w: list[str] = []
+    watch: list[tuple[str, str, list[str]]] = []
+    masked: list[str] = []
+    cmask: list[str] = []
+    if os.path.isdir(GC):
+        deny.append(GC)
+        cmask.append(GC)
+    deny += [
+        f for f in (f"{HOME}/.git-credentials", f"{cfg}/git/credentials") if os.path.lexists(f)
+    ]
+    if os.path.isdir(f"{HOME}/.ssh"):
+        deny.append(f"{HOME}/.ssh")
+        cmask.append(f"{HOME}/.ssh")
+    # Live records masked, each once: a path inside a mask already listed (a named session's state dir RS lies inside
+    # the top's sessions/, as in a nested run, where the outer sandbox's session is the caller's) is hidden by that
+    # mask; denied again, srt would make its mount point inside the outer mask, an entry the proof counts as visible.
+    for d in dict.fromkeys((TOP, RS)):
+        for x, isit in (
+            ("lanes", os.path.isdir),
+            ("sessions", os.path.isdir),
+            ("director.toml", os.path.isfile),
+            ("director.handoffs.jsonl", os.path.isfile),
+        ):
+            m = f"{d}/{x}"
+            if isit(m) and not any(within(m, k) for k in masked):
+                deny.append(m)
+                masked.append(m)
+    watch += [("credential", m, []) for m in cmask] + [
+        ("lane_state", m, []) for m in masked if os.path.isdir(m)
+    ]
+    for r, bs, names in rmask:
+        if not bs:
+            deny.append(r)  # one with paths bound back is masked above
+        watch.append(("repo", r, names))
+    # kept /tmp paths read-only, but the worktree (writable, below) and any inside a mask (a repo, a live record, a
+    # credential dir; nested, the outer run's state dir is the caller's): the mask wins there
+    allow_r += [
+        p
+        for p in E.get("QC_KEEP", "").split("\n")
+        if p.startswith("/tmp/")
+        and os.path.exists(p)
+        and not within(p, wtp)
+        and not any(within(p, r) for r in hid + masked + cmask)
+    ]
+    # srt's own temp dir (its proxy bridge sockets): carved back read-only, as its denyRead /tmp would cover the sockets it binds
+    allow_r += [f"{SCR}/bin", f"{SCR}/rbin", f"{SCR}/rec", f"{SCR}/srt", *hro]
+    VC = f"{CACHE}/octo-feather/skillfile"
+    if os.path.isdir(CACHE):
+        deny.append(CACHE)
+        if os.path.isdir(VC):
+            allow_r.append(VC)
+    if os.path.isdir(PI):
+        deny.append(PI)
+        for n in pient:
+            if n == "sessions" or (n in ("auth.json", "models.json")):
+                continue
+            allow_r.append(f"{PI}/{n}")
+        if not nopi:
+            allow_w += [f"{PI}/{n}" for n in pis]
+    # srt's convenience write dirs: masks, never the real dirs
+    deny += [f"{HOME}/.npm/_logs", f"{HOME}/.claude/debug"]
+    allow_w += [wtp] + ([UC] if UC else [])
+    allow_r += [p for p in ro_binds if any(within(p, d) for d in deny)]
+    hosts = [] if nopi else hosts_for_pi(PI)
+    settings: dict[str, Any] = {
+        "network": {"allowedDomains": hosts, "deniedDomains": [], "allowAllUnixSockets": True},
+        "filesystem": {
+            "denyRead": deny,
+            "allowRead": allow_r,
+            "allowWrite": allow_w,
+            "denyWrite": [],
+        },
+        "allowNestedUserNamespaces": True,
+    }
+    json.dump(settings, open(f"{SCR}/srt.json", "w"))
+
+    # 6. env and shims.
+    jenv = {k: v for k, v in E.items() if k not in SCRUB and k not in INPUTS}
+    py = sys.executable or shutil.which("python3") or "python3"
+    RSOCK, REC = f"{SCR}/rec/sock", f"{SCR}/rec/attempts.jsonl"
+    jenv.update(
+        MISE_STATE_DIR=f"{SCR}/mise/state",
+        HERDR_SESSION=S,
+        XDG_STATE_HOME=f"{SCR}/state",
+        GH_CONFIG_DIR=f"{SCR}/gh",
+        GIT_TERMINAL_PROMPT="0",
+        TMPDIR="/tmp",
+        MISE_OFFLINE="1",
+        MISE_AUTO_INSTALL="0",
+        MISE_NOT_FOUND_AUTO_INSTALL="0",
+        MISE_NOT_FOUND_SYSTEM_FALLBACK="0",
+        **menv,
+    )
+    open(f"{SCR}/bin/pi", "w").write(pishim(realpi, SCR))
+    if HERDR:
+        open(f"{SCR}/bin/herdr", "w").write(
+            recshim(
+                py,
+                "herdr",
+                "herdr",
+                HERDR,
+                (["--session", S], ["--session", "--remote", "--machine"], ["HERDR_PANE_ID"]),
+                RSOCK,
+            )
+        )
+        # The per-run server's config: no background version or agent-manifest check (herdr's own [update] keys); the
+        # sandbox's network refuses herdr.dev anyway, and each check was a curl, a refusal and srt's handling of it.
+        open(f"{SCR}/bin/herdr.toml", "w").write(
+            "[update]\nversion_check = false\nmanifest_check = false\n"
+        )
+        jenv.update(
+            HERDR_BIN_PATH=f"{SCR}/bin/herdr",
+            HERDR_SOCKET_PATH=f"{HC}/sessions/{S}/herdr.sock",
+            HERDR_CONFIG_PATH=f"{SCR}/bin/herdr.toml",
+            OCTO_FEATHER_QC_HERDR=HERDR,
+        )
+    open(f"{SCR}/bin/git-credential-qc", "w").write(credhelper(py, RSOCK))
+    n = int(E.get("GIT_CONFIG_COUNT") or 0)
+    jenv.update(
+        {
+            "GIT_CONFIG_COUNT": str(n + 2),
+            f"GIT_CONFIG_KEY_{n}": "credential.helper",
+            f"GIT_CONFIG_VALUE_{n}": "",
+            f"GIT_CONFIG_KEY_{n + 1}": "credential.helper",
+            f"GIT_CONFIG_VALUE_{n + 1}": f"{SCR}/bin/git-credential-qc",
+        }
+    )
+    recs: list[str] = []
+    for p in E.get("QC_RECORD", "").split("\n"):
+        if not p:
+            continue
+        if not re.fullmatch(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*", p):
+            die(f"run record: program name {p}")
+        open(f"{SCR}/rbin/{p}", "w").write(recshim(py, "run", p, "", ([], [], []), RSOCK))
+        recs.append(p)
+    for d in ("bin", "rbin"):
+        for f in os.listdir(f"{SCR}/{d}"):
+            os.chmod(f"{SCR}/{d}/{f}", 0o755)
+    path = (
+        [f"{SK}/.agents/skills/github-pr/scripts"]
+        + ([f"{SCR}/rbin"] if recs else [])
+        + jpre
+        + [f"{SCR}/bin"]
+        + jpath
+    )
+    if recs:  # a run shim wraps whichever one of its name comes next, the offline gh too
+        path = [
+            f"{SCR}/rbin",
+            f"{SK}/.agents/skills/github-pr/scripts",
+            *jpre,
+            f"{SCR}/bin",
+            *jpath,
+        ]
+        jenv["OCTO_FEATHER_QC_RUN_SHIMS"] = f"{SCR}/rbin"
+    jenv.update(
+        PATH=":".join(path),
+        OCTO_FEATHER_GHSNAP=E.get("QC_GHSNAP", ""),
+        OCTO_FEATHER_GHSNAP_OFF=ghoff,
+        OCTO_FEATHER_GHSNAP_MISS=RSOCK,
+        OCTO_FEATHER_QC_ATTEMPTS=REC,
+    )
+    if E.get("QC_SHOTS"):
+        jenv["QC_SCREENSHOTS"] = f"{SCR}/shots"
+    inner = {
+        "S": S,
+        "SCR": SCR,
+        "SB": SB,
+        "HC": HC,
+        "HERDR": HERDR,
+        "GH": GH,
+        "GC": f"{SCR}/gh",
+        "WT": WT,
+        "OV": f"{OV}/u",
+        "UC": UC,
+        "UCU": f"{OV}/uvu" if UC else "",
+        "UCN": ucn,
+        "VC": VC if VC in allow_r else "",
+        "PI": PI,
+        "nopi": nopi,
+        "hist": "none" if nohist else hist,
+        "masked": masked,
+        "repos": [[r, "/".join(nm)] for r, _, nm in rmask],
+        "kept": [KUT, wtp, *sorted({b for _, bs, _ in rmask for b in bs}, key=back.index)],
+        "robinds": ro_binds,
+        "ghline": E.get("QC_GHSNAP_LINE", ""),
+        "browser": E.get("QC_BROWSER", ""),
+        "shots": bool(E.get("QC_SHOTS")),
+        "recs": recs,
+        "env": jenv,
+        "srt": srtv,
+        "hosts": hosts,
+        "bwrap": (run("bwrap", "--version").stdout.strip() or "bwrap ?"),
+        "cwd": cwd,
+        "hand": OUT["proof"] is None,
+    }
+    json.dump(inner, open(f"{SCR}/bin/run.json", "w"))
+    os.chmod(f"{SCR}/bin/run.json", 0o444)
+
+    # R. the recorder, then srt.
+    # The inner's pipes, and the caller's stdin, stdout and stderr: handed over the recorder's socket, never to srt's
+    # Node, which sets O_NONBLOCK on the stdio it inherits (libuv), on the open file description itself, shared by the
+    # caller and every writer in the sandbox: a judge writing a burst into a full pipe then failed with EAGAIN (#690's
+    # eval runs). srt gets /dev/null and its own stderr pipe.
+    fds = [*(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")), 2, 0, 1]
+    # This process the child subreaper of everything the run starts: bubblewrap's monitor exits before the sandbox's
+    # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
+    # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
+    libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
+    rec = Recorder(f"{SCR}/rec", watch, S, fds)
+    rec.th.start()
+    os.makedirs(f"{SCR}/srt")
+    # Node's own compile cache (module.enableCompileCache, NODE_COMPILE_CACHE) for srt's modules, setup-side under the
+    # cache dir (the judge's view masks it): loading srt's library was most of its CPU per run.
+    senv = dict(
+        jenv,
+        PATH=E.get("PATH", ""),
+        TMPDIR=f"{SCR}/srt",
+        NODE_COMPILE_CACHE=f"{E.get('XDG_CACHE_HOME') or HOME + '/.cache'}/octo-feather/node-compile-cache",
+    )
+    # srt runs from an empty dir of the private /tmp, which the judge cannot write: its built-in write denies (shell rc
+    # files, .git/hooks and .git/config, .vscode ... in and below its working dir, within the writable paths) would
+    # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
+    # discarded with the overlay anyway. The inner enters the caller's dir.
+    os.makedirs(f"{SCR}/cwd")
+    # srt's violations (SRT_SHIM) on its stderr, read here, each sent to the recorder. The inner takes this process's
+    # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own.
+    p = subprocess.Popen(
+        [
+            *srt,
+            f"{SCR}/srt.json",
+            "--",
+            py,
+            SELF,
+            "inner",
+            f"{SCR}/bin/run.json",
+            "--",
+            *judge,
+        ],
+        env=senv,
+        cwd=f"{SCR}/cwd",
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        close_fds=True,
+    )
+    early: list[str] = []
+    th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
+    th.start()
+    rc = p.wait()
+    th.join(10)
+    if not rec.hello:
+        sys.stderr.write("".join(early))
+    fin = rec.finish()
+    if not rec.hello:
+        say(f"FAIL srt sandbox did not start the inner (srt exit {rc})")
+        say("proof failed; judge not started (exit 66)")
+        rc = 66
+    post(fin)
+    say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
+    post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
+    left = orphans()
+    if (
+        left
+    ):  # a process the run started still running outside the sandbox's PID namespace: never silent
+        say(f"FAIL processes the run started still running after it: {', '.join(left)}")
+        post({"orphans_left": left})
+    sys.exit(rc)
+
+
+def orphans(wait_s: float = 5.0) -> list[str]:
+    """Reap every process the run left to this subreaper (its CPU then counted by whoever waits for this one), for up
+    to WAIT_S s; return those still running then, each "PID CMDLINE"."""
+    end = time.monotonic() + wait_s
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return []
+        if pid:
+            continue
+        if time.monotonic() >= end:
+            break
+        time.sleep(0.02)
+    out: list[str] = []
+    me = str(os.getpid())
+    for q in os.listdir("/proc"):
+        if not q.isdigit():
+            continue
+        try:
+            st = open(f"/proc/{q}/stat").read().rsplit(")", 1)[1].split()
+            if st[1] == me:
+                cl = (
+                    open(f"/proc/{q}/cmdline", "rb")
+                    .read()
+                    .replace(b"\0", b" ")
+                    .decode(errors="replace")
+                )
+                out.append(f"{q} {cl.strip()[:80]}")
+        except OSError:
+            pass
+    return out
+
+
+def upper(up: str, lo: str) -> list[list[str]]:
+    """10: what the judge wrote into the worktree, from the upper dir (whiteouts, opaque dirs: user.overlay.*)."""
+    out: list[list[str]] = []
+
+    def lower_files(rel: str) -> list[str]:
+        p = os.path.join(lo, rel)
+        if not os.path.isdir(p) or os.path.islink(p):
+            return [rel] if os.path.lexists(p) else []
+        return [os.path.relpath(os.path.join(r, f), lo) for r, _, fs in os.walk(p) for f in fs]
+
+    def same(a: str, b: str) -> bool:
+        try:
+            sa, sb = os.lstat(a), os.lstat(b)
+        except OSError:
+            return False
+        if stat.S_IFMT(sa.st_mode) != stat.S_IFMT(sb.st_mode) or (sa.st_mode & 0o111) != (
+            sb.st_mode & 0o111
+        ):
+            return False
+        if stat.S_ISLNK(sa.st_mode):
+            return os.readlink(a) == os.readlink(b)
+        if sa.st_size != sb.st_size:
+            return False
+        with open(a, "rb") as x, open(b, "rb") as y:
+            while True:
+                p, q = x.read(1 << 20), y.read(1 << 20)
+                if p != q:
+                    return False
+                if not p:
+                    return True
+
+    for root, dirs, files in os.walk(up):
+        for d in list(dirs):  # opaque dir: everything below it in the lower is hidden
+            rel = os.path.relpath(os.path.join(root, d), up)
+            pd = os.path.join(root, d)
+            try:
+                opq = any(
+                    os.getxattr(pd, x, follow_symlinks=False) == b"y"
+                    for x in ("trusted.overlay.opaque", "user.overlay.opaque")
+                    if x in os.listxattr(pd, follow_symlinks=False)
+                )
+            except OSError:
+                opq = False
+            if opq:
+                out += [
+                    ["deleted", f]
+                    for f in lower_files(rel)
+                    if not os.path.lexists(os.path.join(up, f))
+                ]
+        for f in files + [d for d in dirs if os.path.islink(os.path.join(root, d))]:
+            p = os.path.join(root, f)
+            rel = os.path.relpath(p, up)
+            s = os.lstat(p)
+            if stat.S_ISCHR(s.st_mode) and s.st_rdev == 0:  # whiteout
+                out += [["deleted", x] for x in lower_files(rel)]
+            elif not os.path.lexists(os.path.join(lo, rel)):
+                out.append(["new", rel])
+            elif not same(p, os.path.join(lo, rel)):
+                out.append(["changed", rel])
+    return sorted(out, key=lambda e: e[1])
+
+
+# ---------------------------------------------------------------- inner
+def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
+    """6b: (ok, proof line): the worktree's and the kit's own mise tools installed in env's MISE_DATA_DIR, each dir's
+    tools as scripts/octo-feather-mise-install names them (its own_tools(), loaded here: one Python start less per
+    dir than its --list --json command), asked with a throwaway state dir."""
+    helper = f"{kit}/scripts/octo-feather-mise-install"
+    loader = importlib.machinery.SourceFileLoader("octo_feather_mise_install", helper)
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True  # never a __pycache__ in the kit's scripts/
+    loader.exec_module(mod)
+    ms = tempfile.mkdtemp()
+    saved, want = dict(os.environ), dict(env, MISE_STATE_DIR=ms)  # env may be os.environ itself
+    os.environ.clear()
+    os.environ.update(want)
+    miss: list[str] = []
+    judged: list[str] = []
+    fix: list[str] = []
+    asked: dict[str, dict[str, Any] | str] = {}  # one ask per dir: the kit judging itself asks once
+    try:
+        for d in (wt, kit):
+            dr = os.path.realpath(d)
+            if dr not in asked:
+                mise = shutil.which("mise")
+                try:
+                    asked[dr] = mod.own_tools(mise, dr) if mise else "mise is not on PATH"
+                except SystemExit as e:  # its failure, named as its command names it
+                    asked[dr] = str(e.code)
+            got = asked[dr]
+            own: list[tuple[str, dict[str, Any]]] = []
+            if isinstance(got, str):
+                m = [f"{helper} --list --json failed: {' '.join(got.split())[:300] or 'no output'}"]
+            else:
+                own = [(tn, v) for tn, vs in got.items() for v in vs]
+                m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
+            if m:
+                miss.append(f"{dr}: {' '.join(m)}")
+                fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
+            names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
+            judged.append(f"{dr}: {names or 'none'}")
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+        shutil.rmtree(ms, ignore_errors=True)
+    line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {env.get('MISE_DATA_DIR', '')}"
+    if miss:
+        line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it: {'; '.join(dict.fromkeys(fix))})"
+    return not miss, f"{line}; judged, each from its own mise config only: {'; '.join(judged)}"
+
+
+def mounts() -> list[tuple[str, str, str, str, str]]:
+    """/proc/self/mountinfo rows: (id, mountpoint, options, fstype, superoptions)."""
+    rows: list[tuple[str, str, str, str, str]] = []
+    for ln in open("/proc/self/mountinfo"):
+        a = ln.split()
+        i = a.index("-")
+        rows.append(
+            (
+                a[0],
+                re.sub(r"\\([0-7]{3})", lambda m: chr(int(m.group(1), 8)), a[4]),
+                a[5],
+                a[i + 1],
+                a[i + 3] if len(a) > i + 3 else "",
+            )
+        )
+    return rows
+
+
+def covered(mid: str, path: str) -> bool:
+    """Mount MID is covered by a later one: PATH is gone or reaches another mount."""
+    try:
+        fd = os.open(path, os.O_PATH)
+    except OSError:
+        return True
+    try:
+        m = re.search(r"^mnt_id:\s*(\d+)", open(f"/proc/self/fdinfo/{fd}").read(), re.MULTILINE)
+    finally:
+        os.close(fd)
+    return bool(m) and m.group(1) != mid
+
+
+def srt_set(k: str) -> bool:
+    """K is one of the variables srt sets in its sandbox for its network proxy (sandbox-utils.ts generateProxyEnvVars,
+    the Linux wrapper's --setenv), whose value inside is srt's own."""
+    return (
+        "proxy" in k.lower()
+        or k.startswith(("CLOUDSDK_PROXY_", "CLAUDE_CODE_HOST_"))
+        or k in ("SANDBOX_RUNTIME", "GIT_SSH_COMMAND", "GIT_CONFIG_PARAMETERS", "JAVA_TOOL_OPTIONS")
+    )
+
+
+def inner(cfgp: str, judge: list[str]) -> NoReturn:
+    c: dict[str, Any] = json.load(open(cfgp))
+    S, SCR, SB, HC, HERDR, WT = c["S"], c["SCR"], c["SB"], c["HC"], c["HERDR"], c["WT"]
+    env = {k: v for k, v in os.environ.items() if k not in INPUTS}
+    # The judge's env over srt's, but srt's own network plumbing (its proxy vars, set by bwrap --setenv) kept: a caller
+    # inside an outer sandbox carries the outer srt's, which point at no proxy of this one (nested: a 407, no record).
+    env.update({k: v for k, v in c["env"].items() if not (k in os.environ and srt_set(k))})
+    if c["shots"]:
+        env["QC_SCREENSHOTS"] = c["env"]["QC_SCREENSHOTS"]
+    # A loopback model host on the allowlist (a local provider): srt's NO_PROXY names loopback, which would send the
+    # call to the sandbox's own loopback; dropped, it goes through srt's proxy to the host's, which the list allows.
+    loop = {h.rsplit(":", 1)[0].strip("[]") for h in c["hosts"]} & {"127.0.0.1", "localhost", "::1"}
+    if loop:
+        for k in ("NO_PROXY", "no_proxy"):
+            if k in env:
+                env[k] = ",".join(
+                    x for x in env[k].split(",") if x not in ("127.0.0.1", "localhost", "::1")
+                )
+    # Node's fetch takes the proxy srt sets only when told to (Node >= 22.21)
+    env.setdefault("NODE_USE_ENV_PROXY", "1")
+    os.environ.clear()
+    os.environ.update(env)
+    base = {str(os.getpid())} | {
+        p for p in os.listdir("/proc") if p.isdigit()
+    }  # srt's own processes and ours
+    sk = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
+    try:
+        sk.connect(f"{SCR}/rec/sock")
+        sk.send(b'{"t": "hello"}')
+        msg, fds, _, _ = socket.recv_fds(sk, 64, 6)
+        # the caller's stderr, stdin and stdout for this process and its children (srt's own stdio aside), blocking
+        for f, to in ((fds[3], 2), (fds[4], 0), (fds[5], 1)):
+            os.dup2(f, to)
+            os.close(f)
+        fds = fds[:3]
+        for f in (0, 1, 2, *fds):
+            with contextlib.suppress(OSError):
+                fcntl.fcntl(f, fcntl.F_SETFL, fcntl.fcntl(f, fcntl.F_GETFL) & ~os.O_NONBLOCK)
+    except OSError as e:
+        sys.exit(
+            print(
+                f"qc sandbox: FAIL attempt record unreachable ({e}); judge not started (exit 66)",
+                file=sys.stderr,
+            )
+            or 66
+        )
+    OUT["proof"], OUT["post"], OUT["err"] = fds
+    if c["hand"]:  # by hand: the proof goes to stderr once, the records there too
+        OUT["proof"] = OUT["post"] = None
+    os.chdir(c["cwd"])
+    for f in fds:
+        os.set_inheritable(f, False)  # noqa: FBT003  # os's own positional flag
+    ready = msg.decode()
+    for d in (f"{SB}/lanes", c["GC"], f"{SCR}/mise/state", f"{HC}/sessions") + (
+        (c["env"]["QC_SCREENSHOTS"],) if c["shots"] else ()
+    ):
+        os.makedirs(d, exist_ok=True)
+    fails = 0
+
+    def check(ok: bool, m: str) -> None:  # noqa: FBT001  # one proof check: its result, its line
+        nonlocal fails
+        say(f"{'ok  ' if ok else 'FAIL'} {m}")
+        fails += 0 if ok else 1
+
+    def t(*a: str) -> int:
+        """A's exit status, as data."""
+        try:
+            return subprocess.run(
+                list(a), stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+            ).returncode
+        except OSError:
+            return 127
+
+    if not ready.startswith("ready "):
+        check(ok=False, m=f"attempt recorder did not start ({ready or 'no line'})")
+    say(
+        f"ok   attempt record: kept setup-side, outside the judge's namespaces (the judge sees {SCR}/rec read-only); herdr shim, git credential helper, offline gh refusals, inotify on {ready[6:]} masks"
+    )
+    if c["recs"]:
+        say(
+            f"ok   run record: shims first on PATH for {', '.join(c['recs'])} (each runs the next one of its name unchanged)"
+        )
+    if HERDR:
+        subprocess.Popen(
+            [HERDR, "--session", S, "server"],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+        for _ in range(50):
+            if t(HERDR, "--session", S, "workspace", "list") == 0:
+                break
+            time.sleep(0.2)
+    # 7. pre-run proof.
+    pid1 = open("/proc/1/cmdline", "rb").read().split(b"\0")[0].decode(errors="replace")
+    check(
+        os.path.basename(pid1) == "bwrap" and os.environ.get("SANDBOX_RUNTIME") == "1",
+        f"judge runs in the srt sandbox (@anthropic-ai/sandbox-runtime {c['srt']}, {c['bwrap']}; PID 1 {os.path.basename(pid1)}): own user, mount, PID and network namespaces; "
+        f"network allowlist: {', '.join(c['hosts']) or 'none'}"
+        "; kit discard stage (srt and bwrap 0.9 have no overlay): worktree and uv cache overlays, Pi copies, own IPC namespace",
+    )
+    st = dict(ln.split(":", 1) for ln in open("/proc/self/status") if ":" in ln)
+    caps, nnp = st["CapEff"].strip(), st["NoNewPrivs"].strip()
+    check(
+        caps == "0000000000000000" and nnp == "1",
+        f"judge holds no capabilities (CapEff {caps}), no_new_privs {nnp}, uid {os.getuid()}",
+    )
+    r1, r2 = t("umount", HC), t("unshare", "-rm", "umount", HC)
+    check(
+        r1 != 0 and r2 != 0,
+        f"masks locked: umount of the Herdr mask exits {r1}, after its own unshare -rm {r2}",
+    )
+    kit = SK
+    rol, dirs = ["HOME", "/var/tmp"], [os.environ["HOME"], "/var/tmp"]
+    wtr = os.path.realpath(WT)
+    if (kit + "/").startswith(wtr + "/"):
+        kitn = "the kit is the judged worktree (on the overlay: writes discarded, a tracked change fails the run)"
+    else:
+        rol.append("the kit")
+        dirs.append(kit + "/scripts")
+        kitn = ""
+    w = any(touchable(f"{d}/.qc-ro-{S}") for d in dirs)
+    check(not w, f"{', '.join(rol)} read-only" + (f"; {kitn}" if kitn else ""))
+    ov, ucu, uc = c["OV"], c["UCU"], c["UC"]
+    wt = subprocess.run(
+        ["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True
+    ).stdout.strip()
+    last: dict[str, tuple[str, str, str, str, str]] = {}
+    for row in mounts():
+        last[row[1]] = row
+    # Every writable mount, by its own flags: tmpfs and /proc die with the run, the overlays' upper dirs are on the run
+    # tmpfs; a device node bound in (srt's /dev: null, zero, tty...) and devpts hold no file a write could leave behind.
+    pers: list[str] = []
+    unreach = 0
+    for mp, (mid, _, o, fs, so) in last.items():
+        if (
+            "ro" in o.split(",")
+            or fs in ("tmpfs", "proc", "devpts")
+            or (
+                fs == "overlay"
+                and (f"upperdir={ov}," in so + "," or (ucu and f"upperdir={ucu}," in so + ","))
+            )
+        ):
+            continue
+        try:
+            if stat.S_ISCHR(os.stat(mp).st_mode):
+                continue
+        except OSError:
+            pass
+        if covered(mid, mp):
+            unreach += 1
+        else:
+            pers.append(mp)
+    ovl = any(
+        mp == wt and fs == "overlay" and f"upperdir={ov}," in so + ","
+        for _, mp, _, fs, so in mounts()
+    )
+    check(
+        ovl and not os.path.exists(ov),
+        f"worktree {wt} is an overlay, upper dir on the run tmpfs and hidden from the judge",
+    )
+    check(not pers, f"writable persistent paths: {' '.join(pers) or 'none'}")
+    if uc:
+        ucl = any(
+            mp == uc and fs == "overlay" and f"upperdir={ucu}," in so + ","
+            for _, mp, _, fs, so in mounts()
+        )
+        check(
+            ucl and touchable(f"{uc}/.qc-w-{S}") and not os.path.exists(ucu),
+            f"uv cache {uc} is an overlay, upper dir {ucu} on the run tmpfs and hidden from the judge (writable; its writes discarded with the run)",
+        )
+    elif c["UCN"]:
+        say(f"ok   uv cache: {c['UCN']} (uv --color never cache dir) absent, nothing bound")
+    else:
+        say("ok   uv cache: none on the box (no uv, or uv cache dir exits non-zero), nothing bound")
+    if unreach:
+        say(
+            f"ok   {unreach} writable mounts covered by later ones, unreachable by any path (an outer sandbox's, in a nested run, or below the old /proc)"
+        )
+    vc = c["VC"]
+    if vc:
+        vro = "ro" in last.get(vc, ("", "", "rw"))[2].split(",")
+        check(
+            vro and not touchable(f"{vc}/.qc-ro-{S}") and vc not in pers,
+            f"vendored-skill cache {vc} bound read-only (not writable, not in the writable list)",
+        )
+    else:
+        say("ok   vendored-skill cache: none on the box, nothing bound")
+    if HERDR:
+        r = t(HERDR, "--session", "default", "workspace", "list")
+        check(
+            r != 0, f"live Herdr unreachable: raw herdr --session default workspace list exits {r}"
+        )
+        a = subprocess.run(
+            [
+                "herdr",
+                "--session",
+                "default",
+                "--remote",
+                "x",
+                "--machine",
+                "y",
+                "workspace",
+                "list",
+            ],
+            capture_output=True,
+            text=True,
+        )
+        b = subprocess.run(
+            [HERDR, "--session", S, "workspace", "list"], capture_output=True, text=True
+        )
+        ab, bb = (a.stdout + a.stderr).rstrip("\n"), (b.stdout + b.stderr).rstrip("\n")
+        check(
+            bool(bb) and ab == bb,
+            f"herdr shim pins sandbox session {S} despite --session default --remote --machine",
+        )
+        ls_s = " ".join(sorted(os.listdir(f"{HC}/sessions")))
+        check(ls_s == S, f"Herdr config shows only the sandbox session: [{ls_s}]")
+    else:
+        say("ok   herdr not installed: no Herdr session reachable")
+    cfgc = os.environ.get("XDG_CONFIG_HOME") or os.environ["HOME"] + "/.config"
+    tok = sum(1 for k in os.environ if k in ("GH_TOKEN", "GITHUB_TOKEN", "GH_ENTERPRISE_TOKEN"))
+    ghls = sum(
+        len(ds) + len(fs)
+        for g in (c["GC"], f"{cfgc}/gh")
+        if os.path.isdir(g)
+        for _, ds, fs in os.walk(g)
+    )
+    cred = 0
+    for f in (os.environ["HOME"] + "/.git-credentials", f"{cfgc}/git/credentials"):
+        with contextlib.suppress(OSError):
+            cred += len(open(f, "rb").read())
+    r = t(c["GH"], "auth", "status") if c["GH"] else 1
+    check(
+        tok == 0 and ghls == 0 and cred == 0 and r != 0,
+        f"no gh or git creds: tokens {tok}, gh config entries {ghls}, git-credentials {cred} bytes, gh auth status exits {r}",
+    )
+    lin = int("LINEAR_API_KEY" in os.environ)
+    check(lin == 0, f"no tracker credential: LINEAR_API_KEY set {lin} times")
+    pid, pis = (
+        c["PI"],
+        [n for n in ("auth.json", "models.json") if os.path.lexists(f"{c['PI']}/{n}")],
+    )
+    if c["nopi"]:
+        rd = False
+        for n in ("auth.json", "models.json"):
+            try:
+                open(f"{pid}/{n}").read()
+                rd = True
+            except OSError:
+                pass
+        check(
+            not pis and not rd,
+            f"no Pi model credentials (no Pi runs here): auth.json and models.json absent from {pid}"
+            + (f" (NOT: {' '.join(pis)} present)" if pis else ""),
+        )
+    else:
+        say(
+            f"ok   Pi model credentials: {' '.join(pis) or 'none on the box'}"
+            + (" per-run copies on the hidden run tmpfs, never written back" if pis else "")
+        )
+    route = sum(
+        1
+        for k in (
+            "OCTO_FEATHER_PARENT",
+            "OCTO_FEATHER_SESSION_ID",
+            "OCTO_FEATHER_ROLE",
+            "OCTO_FEATHER_SPEND_SPACE",
+            "HERDR_PANE_ID",
+            "HERDR_TAB_ID",
+            "HERDR_WORKSPACE_ID",
+            "HERDR_ENV",
+        )
+        if k in os.environ
+    )
+    check(
+        route == 0,
+        f"parent route unset: {route} of OCTO_FEATHER_PARENT/SESSION_ID/ROLE/SPEND_SPACE, HERDR_PANE/TAB/WORKSPACE_ID, HERDR_ENV set",
+    )
+    msd = os.environ["MISE_STATE_DIR"]
+    me = len(os.listdir(msd))
+    check(
+        msd == f"{SCR}/mise/state"
+        and touchable(f"{msd}/.qc-w-{S}")
+        and me == 0
+        and subprocess.run(
+            ["stat", "-f", "-c", "%T", msd], capture_output=True, text=True
+        ).stdout.strip()
+        == "tmpfs",
+        f"mise state dir per-run: {msd} (tmpfs on the private /tmp, started empty: {me} entries; mise trust writes there and it dies with the run)",
+    )
+    stp = subprocess.run(
+        [f"{SK}/scripts/octo-feather-state"], capture_output=True, text=True
+    ).stdout.strip()
+    check(stp == SB, f"state dir is per-run scratch: {stp}")
+    w = os.path.isdir(f"{SB}/lanes/archive") and touchable(f"{SB}/lanes/archive/.w")
+    if os.path.isfile(f"{SB}/director.handoffs.jsonl"):
+        try:
+            open(f"{SB}/director.handoffs.jsonl", "a").close()
+            w = True
+        except OSError:
+            pass
+    live = 0
+    masks: list[str] = c["masked"]
+    for m in masks:
+        if os.path.isdir(m):
+            live += len(os.listdir(m))
+        elif os.path.isfile(m):
+            with contextlib.suppress(OSError):
+                live += len(open(m, "rb").read())
+    got = int(os.path.isdir(f"{SB}/lanes/archive")) + int(
+        os.path.isfile(f"{SB}/director.handoffs.jsonl")
+    )
+    nm = len(c["masked"])
+    if c["hist"] == "none":
+        check(
+            not w and live == 0 and got == 0,
+            f"history none ({got} bound: no archived lanes, no director log; a factory eval sees no lane history); live records masked ({nm} paths, {live} bytes or entries visible)",
+        )
+    else:
+        af = sum(len(fs) for _, _, fs in os.walk(f"{SB}/lanes/archive"))
+        try:
+            dl = open(f"{SB}/director.handoffs.jsonl").read().count("\n")
+        except OSError:
+            dl = 0
+        check(
+            not w and live == 0 and got == c["hist"],
+            f"history read-only ({got} of {c['hist']} bound: archive {af} files, director log {dl} lines); live records masked ({nm} paths, {live} bytes or entries visible)",
+        )
+    HM = os.path.realpath(os.environ["HOME"])
+    rbad: list[str] = []
+    rl: list[str] = []
+    repo_masks: list[tuple[str, str]] = c["repos"]
+    for r, nmn in repo_masks:
+        try:
+            g = "/".join(sorted(os.listdir(r)))
+        except OSError as e:
+            g = str(e)
+        if g != nmn:
+            rbad.append(f"{r} shows [{g}]")
+        rel = r[len(HM) + 1 :] if r.startswith(HM + "/") else r
+        rl.append(rel + (f" [{nmn.replace('/', ' ')}]" if nmn else ""))
+    kept = c["kept"]
+    vis = f"visible: kit under test {kept[0]}, worktree {kept[1]}" + (
+        f"; bound back read-only: {', '.join(kept[2:])}" if len(kept) > len(kept[:2]) else ""
+    )
+    if c["repos"]:
+        check(
+            not rbad,
+            f"other repos hidden: {len(c['repos'])} git repos under {HM} (up to 3 levels down, dot-dirs aside), each a tmpfs mask listing only what is bound back"
+            + (f" (NOT: {' '.join(rbad)})" if rbad else "")
+            + f": {', '.join(rl)}; {vis}",
+        )
+    else:
+        say(
+            f"ok   other repos: none under {HM} (git repos up to 3 levels down, dot-dirs aside); {vis}"
+        )
+    if c["robinds"]:
+        check(not any(touchable(f"{p}/.w") for p in c["robinds"]), "extra binds read-only")
+    offgh = f"{SK}/.agents/skills/github-pr/scripts/gh"
+    snap = os.environ.get("OCTO_FEATHER_GHSNAP", "")
+    if snap:
+        r = subprocess.run(
+            ["gh", "repo", "view", "--json", "nameWithOwner", "-q", ".nameWithOwner"],
+            capture_output=True,
+            text=True,
+        )
+        rr = (r.stdout + r.stderr).rstrip("\n")
+        try:
+            repo = json.load(open(f"{snap}/meta.json")).get("repo")
+        except (OSError, ValueError):
+            repo = None
+        check(
+            shutil.which("gh") == offgh and not touchable(f"{snap}/.w") and bool(rr) and rr == repo,
+            f"github: {c['ghline']}; read-only, served by the offline gh ({shutil.which('gh')}), which refuses writes",
+        )
+    else:
+        r = t("gh", "issue", "list")
+        check(
+            shutil.which("gh") == offgh and r == 1,
+            f"{os.environ.get('OCTO_FEATHER_GHSNAP_OFF', '')}; the offline gh refuses every call (exit {r})",
+        )
+    br = c["browser"]
+    if br:  # a browser demo: the box's headless shell, read-only; the cache dir stays masked
+        sh = sorted(glob.glob(f"{br}/chromium_headless_shell-*/INSTALLATION_COMPLETE"))
+        check(
+            not touchable(f"{br}/.qc-ro-{S}") and bool(sh),
+            f"browser: PLAYWRIGHT_BROWSERS_PATH={br} read-only, headless shell {sh[0].rsplit('/', 1)[0] if sh else ''}",
+        )
+    if shutil.which("mise"):  # 6b: the worktree's and the kit's mise tools installed
+        check(*mise_tools(WT, kit, os.environ))
+    # Go to the recorder: what the proof's own calls and reads sent before it is dropped; its answer comes once it has.
+    try:
+        sk.send(b'{"t": "go"}')
+        go = sk.recv(16).decode()
+    except OSError as e:
+        go = str(e)
+    check(
+        go == "live",
+        f"attempt record live from here (recorder answered: {go or 'nothing'}); the judge's view of it read-only: {SCR}/rec",
+    )
+    gs = subprocess.run(["git", "status", "--porcelain"], capture_output=True, text=True)
+    hd = subprocess.run(["git", "rev-parse", "--short=12", "HEAD"], capture_output=True, text=True)
+    dirty = (gs.stdout + gs.stderr + hd.stdout + hd.stderr).rstrip("\n")
+    check(dirty.count("\n") == 0, f"worktree clean at {dirty}")
+    if fails:
+        say(f"proof failed ({fails} checks); judge not started (exit 66)")
+        reap(base, HERDR, S)
+        sys.exit(66)
+
+    # 8. the judge.
+    try:
+        rc = subprocess.run(judge, stderr=OUT["err"]).returncode
+    except OSError:
+        rc = 127
+    rc = 128 - rc if rc < 0 else rc
+
+    # 9. post-run. The spend ledger's writers run detached: up to 10 s for each live `spend record` to end.
+    def writer(p: str) -> bool:
+        try:
+            return open(f"/proc/{p}/stat").read().split(" ")[2] != "Z" and b"spend record" in open(
+                f"/proc/{p}/cmdline", "rb"
+            ).read().replace(b"\0", b" ")
+        except OSError:
+            return False
+
+    for _ in range(100):
+        if not any(writer(p) for p in os.listdir("/proc") if p.isdigit() and p not in base):
+            break
+        time.sleep(0.1)
+    panes = 0
+    if HERDR:
+        panes = subprocess.run(
+            [HERDR, "--session", S, "pane", "list"], capture_output=True, text=True
+        ).stdout.count('"pane_id"')
+    try:
+        # the first pi start is the judge itself
+        headless = max(0, len(open(f"{SCR}/agents.log").read().splitlines()) - 1)
+    except OSError:
+        headless = 0
+    killed = reap(base, HERDR, S)
+    left = len(nsprocs(base))
+    say(
+        f"cleanup: agents started {headless + panes} (headless pi {headless}, Herdr panes {panes}); leftover processes killed {len(killed)}, left {left} (the kernel kills those as PID 1 exits); session {S} stopped and deleted"
+    )
+    post(
+        {
+            "session": S,
+            "agents_started": headless + panes,
+            "headless_pi": headless,
+            "herdr_panes": panes,
+            "killed": killed,
+            "left_after_kill": left,
+        }
+    )
+    sl = f"{SB}/spend.jsonl"  # a regular file only: the judge could plant a fifo there
+    post(
+        {
+            "spend": open(sl).read().splitlines()
+            if os.path.isfile(sl) and not os.path.islink(sl)
+            else []
+        }
+    )
+    if c["shots"]:
+        d: str = c["env"]["QC_SCREENSHOTS"]
+        out: list[list[str]] = []
+        for root, dirs, files in os.walk(d):
+            dirs.sort()
+            for f in sorted(files):
+                p = os.path.join(root, f)
+                if stat.S_ISREG(os.lstat(p).st_mode):
+                    out.append(
+                        [os.path.relpath(p, d), base64.b64encode(open(p, "rb").read()).decode()]
+                    )
+        post({"shots": out})
+    sys.exit(rc)
+
+
+def nsprocs(base: set[str]) -> list[str]:
+    """Every live process in this PID namespace but srt's own and this one."""
+    out: list[str] = []
+    for p in os.listdir("/proc"):
+        if p.isdigit() and p not in base:
+            try:
+                if open(f"/proc/{p}/stat").read().rsplit(")", 1)[1].split()[0] != "Z":
+                    out.append(p)
+            except OSError:
+                pass
+    return out
+
+
+def reap(base: set[str], herdr: str, session: str) -> list[str]:
+    if herdr:
+        for a in (("session", "stop", session), ("session", "delete", session)):
+            subprocess.run([herdr, *a], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    killed: list[str] = []
+    for p in nsprocs(base):
+        try:
+            cl = (
+                open(f"/proc/{p}/cmdline", "rb")
+                .read()
+                .replace(b"\0", b" ")
+                .decode(errors="replace")
+                .strip()
+            )
+        except OSError:
+            continue
+        if cl:
+            killed.append(f"{p} {cl[:80]}")
+        with contextlib.suppress(OSError):
+            os.kill(int(p), 9)
+    time.sleep(0.3)
+    return killed
+
+
+def main(a: list[str]) -> None:
+    if a[:1] == ["inner"]:
+        cfgp, rest = a[1], a[2:]
+        inner(cfgp, rest[1:] if rest[:1] == ["--"] else rest)
+    if a[:1] in (["-h"], ["--help"]):
+        sys.stdout.write(__doc__ or "")
+        return
+    if a[:1] == ["--"]:
+        a = a[1:]
+    if not a:
+        sys.exit(print("usage: octo-feather-qc-sandbox [--] JUDGE_CMD...", file=sys.stderr) or 64)
+    setup(a)
+
+
+if __name__ == "__main__":
+    main(sys.argv[1:])
