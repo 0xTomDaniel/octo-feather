@@ -1,0 +1,13 @@
+Seeded defect: OAuth copies no longer warn that refresh is discarded; both tests require exactly one warning.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -211,7 +211,7 @@
+         return None
+     entries = auth.values() if isinstance(auth, dict) else []
+     if any(isinstance(e, dict) and (e.get("type") == "oauth" or any("refresh" in str(k).lower() for k in e)) for e in entries):
+-        return "qc: warning: auth.json has OAuth credentials: a token refresh during this run is discarded"
++        return None
+     return None
+ 
+ 

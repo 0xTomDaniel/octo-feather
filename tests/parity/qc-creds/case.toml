@@ -1,0 +1,11 @@
+# Credential tracer definitions only. Do not run until parity slot GO.
+old = "tests/qc-creds.sh"
+old_at = "398f936e07ebdc2ce0be6b3d49e093b903bd5f1f"
+needs = [
+    "tests/fixtures/classify-stub",
+    "tests/fixtures/spec-status/good/demo.spec.html",
+]
+new = "tests/gate/kit/test_qc_creds.py"
+
+[ran]
+"scripts/octo-feather-qc" = "coverage"
