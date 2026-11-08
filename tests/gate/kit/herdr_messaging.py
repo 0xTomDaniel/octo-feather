@@ -807,7 +807,13 @@ def told_gone(t: Tell) -> None:
         'supervisor = "w9:p1"\nrepository = "o/r"\nissue = 1\npr = 7\ngoal = "g"\n'
         'started_at = "2026-10-29T00:00:00Z"\n'
     )
+    # Teardown asks for open children of gh1, not the merged PR view fixtures in this store.
+    # The exact list reply is empty; no gh list filtering or default response in the stand-in.
+    t.s.gh.tape({"pr list --base gh1 --state open --json number -R o/r": ["[]\n"]})
     t.run(0, 7, "--lane", "gh1", "--repo", "o/r")
+    assert json.loads((t.s.gh.dir / "tape.n.json").read_text()) == {
+        "pr list --base gh1 --state open --json number -R o/r": 1,
+    }, "teardown did not consume its exact recorded PR list"
     down = (
         "step 5 teardown: ok: space w9 already closed; worktree of gh1 already removed; no open "
         "PR based on gh1; local branch gh1 already deleted; remote branch gh1 already deleted "

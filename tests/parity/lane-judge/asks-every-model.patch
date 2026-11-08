@@ -1,7 +1,8 @@
 Seeded defect: judge asks every available classifier, not the kit's one judgment model (spec judgment#rule-one-model).
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1294,7 +1294,7 @@
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -1512,7 +1512,7 @@ def cmd_judge(args: list[str]) -> int:
          raise Refuse("refused inside just check, which stays deterministic and free (message above)")
      qa = qa_module()
      inp = {"question": q["question"], "labels": q["labels"], "criteria": {lb: q["label_help"][lb] for lb in q["labels"]},

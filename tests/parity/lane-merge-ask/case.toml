@@ -7,6 +7,6 @@ needs = [
 ]
 new = "tests/gate/kit/test_lane_merge_ask.py"
 
-# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: a Python kit script run by the kit venv's python: coverage.py measures it.
+# How the clean old run shows it ran each file a defect patches (lever.py --help): coverage: the lane's module, imported by its launcher under the kit venv's python: coverage.py measures it.
 [ran]
-"scripts/octo-feather-lane" = "coverage"
+"scripts/octo_feather_lane.py" = "coverage"

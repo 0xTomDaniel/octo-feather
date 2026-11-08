@@ -1,7 +1,7 @@
 """The scenario of tests/gate/kit/test_lane_intake.py (its item), this file its command
-(testkit.main): `octo-feather-lane intake` (spec comms #reflection-correction,
-#acceptance-correction-intake; the rule: issue-lifecycle #lanes-correction), run over scratch lane
-logs and the testkit's fake gh (its other repos' issues): nothing reaches GitHub, nothing is
+(testkit.main): `octo-feather-lane intake` (spec comms #reflection-correction, #acceptance-
+correction-intake; the rule: issue-lifecycle #lanes-correction), run over scratch lane logs and the
+testkit's fake gh (each tracker's recorded search answer): nothing reaches GitHub, nothing is
 written. Each open correction-lane issue under its class with its findings, blocking count, lanes
 and due or not; two open issues of one class grouped as duplicates; a closed one left out."""
 
@@ -27,6 +27,12 @@ class twice: due no; blocking 1 in 1 lane(s) (gh1); findings 2
   duplicates: 2 open issues of class twice
   finding gh1 2026-10-20T02:00:00Z code-review blocking: gh1 twice
   finding director 2026-10-22T00:00:00Z director not blocking: director saw twice"""  # noqa: E501 (the report's own line)
+
+
+SEARCH = (
+    'issue list --repo {} --state all --limit 1000 --search "correction-lane" in:title --json '
+    "number,title,state,closedAt"
+)
 
 
 def finding(at: str, source: str, cls: str, blocking: str, summary: str) -> str:
@@ -78,29 +84,36 @@ def intake(s: Scratch) -> None:
         '{"at":"2026-10-22T00:00:00Z","kind":"finding","class":"twice",'
         '"summary":"director saw twice"}\n'
     )
-    for n, repo, cls, st in (
-        (901, "o/t", "dup-rule", "OPEN"),
-        (902, "o/t", "refl-only", "OPEN"),
-        (903, "o/t", "twice", "OPEN"),
-        (904, "0xTomDaniel/octo-feather", "twice", "OPEN"),
-        (905, "o/t", "old", "CLOSED"),
-    ):
-        s.gh.store(
-            f"repo/{repo}/issue/{n}.json",
-            {
-                "number": n,
-                "title": f"[correction-lane {cls}] repeated finding class: {cls}",
-                "body": "",
-                "state": st,
-                "closedAt": None if st == "OPEN" else "2026-10-01T00:00:00Z",
-            },
-        )
+
+    def issue(n: int, cls: str, st: str) -> dict[str, object]:
+        return {
+            "number": n,
+            "title": f"[correction-lane {cls}] repeated finding class: {cls}",
+            "state": st,
+            "closedAt": None if st == "OPEN" else "2026-10-01T00:00:00Z",
+        }
+
+    # each tracker's recorded answer to the search (GitHub's: open and closed, --state all)
+    held = {
+        "o/t": [
+            issue(901, "dup-rule", "OPEN"),
+            issue(902, "refl-only", "OPEN"),
+            issue(903, "twice", "OPEN"),
+            issue(905, "old", "CLOSED"),
+        ],
+        "0xTomDaniel/octo-feather": [issue(904, "twice", "OPEN")],
+    }
+    s.gh.tape({SEARCH.format(repo): [json.dumps(v) + "\n"] for repo, v in held.items()})
     r = s.run([kit("octo-feather-lane"), "intake"])
     out = (r.out + ("\n" + r.err if r.err else "")).strip("\n")
     assert out == WANT, f"intake report: want\n{WANT}\ngot\n{out}"
-    log = s.gh.log()
-    assert log, "intake searched no tracker"
-    assert all(x.startswith("issue list ") for x in log), f"intake wrote to the tracker: {log}"
+    sent = [
+        json.loads(x)["request"] for x in (s.gh.dir / "requests.jsonl").read_text().splitlines()
+    ]
+    assert sent == [SEARCH.format("o/t"), SEARCH.format("0xTomDaniel/octo-feather")], (
+        f"intake's requests (each tracker searched once, nothing written): {sent}"
+    )
+    assert s.gh.log() == sent, f"intake made a request no recording answers: {s.gh.log()}"
     s.run([kit("octo-feather-lane"), "intake", "extra"], want=1)
 
 

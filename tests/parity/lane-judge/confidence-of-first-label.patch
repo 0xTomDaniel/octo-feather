@@ -1,7 +1,8 @@
 Seeded defect: judge reports the first label's probability as the answer's confidence.
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1308,7 +1308,7 @@
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -1526,7 +1526,7 @@ def cmd_judge(args: list[str]) -> int:
      if choice not in q["labels"]:
          err = (bench.get("errors") or [])[ei] if ei is not None else f"answer {choice!r} is not one of {q['labels']}"
          raise Refuse(f"{model} gave no answer ({err}): rerun, or check the provider")
