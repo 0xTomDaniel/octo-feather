@@ -36,6 +36,7 @@ import tomllib
 # templates/python copies this kit file byte for byte (kit path: template path).
 COPIES = {
     "tests/gate/conftest.py": "tests/conftest.py",
+    "tests/gate/import_contracts.py": "tests/import_contracts.py",
     "scripts/check-languages": "scripts/check-languages",
 }
 MISE_FILES = ("mise.toml", "mise.lock", "mise-version")

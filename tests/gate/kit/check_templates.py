@@ -34,7 +34,13 @@ TJ = "templates/typescript/justfile"
 FAST = "must run `just fast` and exit with its status"
 WIRED = "needs check, fast, integrate and product-judge recipes"
 LANGS = "the gate never runs check-languages"
-OWN = ("mise.toml", "mise-version", "tests/gate/conftest.py", "scripts/check-languages")
+OWN = (
+    "mise.toml",
+    "mise-version",
+    "tests/gate/conftest.py",
+    "tests/gate/import_contracts.py",
+    "scripts/check-languages",
+)
 
 
 def build(p: Scratch) -> None:

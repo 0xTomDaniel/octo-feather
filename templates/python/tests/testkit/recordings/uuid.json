@@ -1,0 +1,58 @@
+{
+    "version": 1,
+    "interactions": [
+        {
+            "request": {
+                "method": "GET",
+                "uri": "https://httpbin.org/uuid",
+                "body": null,
+                "headers": {
+                    "Host": [
+                        "httpbin.org"
+                    ],
+                    "User-Agent": [
+                        "Python-urllib/3.12"
+                    ],
+                    "Connection": [
+                        "close"
+                    ]
+                }
+            },
+            "response": {
+                "status": {
+                    "code": 200,
+                    "message": "OK"
+                },
+                "headers": {
+                    "access-control-allow-credentials": [
+                        "true"
+                    ],
+                    "access-control-allow-origin": [
+                        "*"
+                    ],
+                    "content-type": [
+                        "application/json"
+                    ],
+                    "connection": [
+                        "close"
+                    ],
+                    "content-length": [
+                        "53"
+                    ],
+                    "x-content-type-options": [
+                        "nosniff"
+                    ],
+                    "date": [
+                        "Sun, 08 Nov 2026 17:39:37 GMT"
+                    ],
+                    "access-control-expose-headers": [
+                        "Retry-After, RateLimit, RateLimit-Policy"
+                    ]
+                },
+                "body": {
+                    "string": "{\n  \"uuid\": \"58a16c30-eae1-424f-a340-2627acfa0389\"\n}\n"
+                }
+            }
+        }
+    ]
+}
