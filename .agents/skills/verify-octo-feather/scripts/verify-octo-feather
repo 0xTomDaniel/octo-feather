@@ -1660,6 +1660,23 @@ def drive_qc_advisory(f: Feature) -> None:
                 and (a.get("answer"), a.get("confidence"), a.get("model")) == ("does-not-show", 0.91, model)
                 and str(a.get("judgment", "")).startswith("model judgment") and "no gate reads it" in a["judgment"])
     f.check("qc", holds)
+    git("reset", "--hard", "HEAD^")  # same demo, not a carried result
+    f.env |= {"OCTO_FEATHER_QC_ADVISORY_AUTHORITY": "gpt-only-sprint-2026-11-08",
+              "OCTO_FEATHER_QC_ADVISORY_SCOPE": "sandbox"}
+    f.pre = ["env", "-C", str(r)]
+    f.run("sprint", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.pre = []
+    f.obs("sprint", "results", json.dumps(qc_report(f, "sprint").get("results")) + "\n")
+    f.obs("sprint", "built", json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]["acceptance-a"]["status"])
+
+    def suspended(c: Case) -> bool:
+        res = json.loads(c.o["results"])[0]
+        return (c.code == 0 and res["verdict"] == "pass" and res["evidence"] == "complete"
+                and c.o["built"] == "built" and "advisory NOT RUN" in c.out
+                and "qc: advisory criterion-evidence question" not in c.err
+                and res["advisory"] == {"status": "NOT RUN", "authority": "gpt-only-sprint-2026-11-08",
+                                        "scope": "sandbox", "expiry": "sprint pause after final cleanup"})
+    f.check("sprint", suspended)
     f.env = {}
     say(f"qc-advisory evidence: {f.d}")
 
