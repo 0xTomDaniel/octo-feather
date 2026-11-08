@@ -43,7 +43,8 @@ no server does. Each call is also one line in `session-log`, "HERDR_SESSION=<the
 CALL". Anything else exits 2.
 
 Started light (-I -S, only os and sys imported up front): a qc run calls it dozens of times, and
-each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call.
+each start is CPU the item pays (#672): pathlib's import alone costs more than the rest of a call,
+so the agents world too reads and writes its files through os.path (a spawn calls it ~8 times).
 """
 # ruff: noqa: PTH103, PTH108, PTH111, PTH113, PTH118, PTH120, PTH123  # os.path, not pathlib: above
 
@@ -70,17 +71,28 @@ def say(d: object) -> int:
 class World:
     """The agents world in a dir (the module docstring)."""
 
-    def __init__(self, d: Path) -> None:
-        self.dir, self.store = d, d / "agents.json"
-        self.agents: dict[str, dict[str, object]] = (
-            json.loads(self.store.read_text()) if self.store.exists() else {}
-        )
+    def __init__(self, d: str) -> None:
+        self.dir = d
+        stored = self.read("agents.json")
+        self.agents: dict[str, dict[str, object]] = json.loads(stored) if stored else {}
+
+    def read(self, name: str) -> str | None:
+        """The world's file NAME, None when there is none."""
+        try:
+            with open(os.path.join(self.dir, name)) as f:
+                return f.read()
+        except FileNotFoundError:
+            return None
+
+    def write(self, name: str, text: str) -> None:
+        with open(os.path.join(self.dir, name), "w") as f:
+            f.write(text)
 
     def save(self) -> None:
-        self.store.write_text(json.dumps(self.agents))
+        self.write("agents.json", json.dumps(self.agents))
 
     def note(self, name: str, line: str) -> None:
-        with (self.dir / name).open("a") as f:
+        with open(os.path.join(self.dir, name), "a") as f:
             f.write(line + "\n")
 
     def find(self, t: str) -> dict[str, object] | None:
@@ -101,7 +113,7 @@ class World:
         self.agents[pane] = {"name": "", "pane_id": pane, "workspace_id": w, "tab_id": tab}
         self.agents[pane]["agent_status"] = "none"
         self.save()
-        (self.dir / "tab-env").write_text("".join(f"{e}\n" for e in opts(a, "--env")))
+        self.write("tab-env", "".join(f"{e}\n" for e in opts(a, "--env")))
         return say({"tab": {"tab_id": tab}, "root_pane": {"pane_id": pane}})
 
     def tab_close(self, a: list[str]) -> int:
@@ -117,47 +129,49 @@ class World:
         return say({"type": "workspace_info", "workspace": {"workspace_id": a[2]}})
 
     def workspace_close(self, a: list[str]) -> int:
-        spaces, f = self.workspaces(), self.dir / "workspaces.json"
+        spaces = self.workspaces()
         left = [w for w in spaces if w["workspace_id"] != a[2]]
         kept = {p: g for p, g in self.agents.items() if g["workspace_id"] != a[2]}
         if len(left) == len(spaces) and len(kept) == len(self.agents):
             return fail("workspace_not_found")
         if len(left) != len(spaces):
-            f.write_text(json.dumps(left))
+            self.write("workspaces.json", json.dumps(left))
         self.agents = kept
         self.save()
         return 0
 
     def agent_start(self, a: list[str]) -> int:
-        after = self.dir / "ready_after"
-        delay = float(after.read_text()) if after.exists() else 0.0
+        delay = float(self.read("ready_after") or 0)
         g = self.agents[opts(a, "--pane")[0]]
         g |= {"name": a[2], "agent_status": "idle", "ready_at": time.time() + delay}
         self.save()
         if "--" in a:
             argv = a[a.index("--") + 1 :]
-            (self.dir / "start-argv").write_text("".join(f"{x}\n" for x in argv))
+            self.write("start-argv", "".join(f"{x}\n" for x in argv))
         return fail("agent_not_ready") if self.dialog() else 0
 
     def dialog(self) -> str:
         """The startup dialog open in the pane: `pi`, `other`, or none (the module docstring)."""
-        f, argv = self.dir / "dialog", self.dir / "start-argv"
-        if f.exists():
-            return f.read_text().strip()
-        if argv.exists() and "--approve" not in argv.read_text().splitlines():
+        forced, argv = self.read("dialog"), self.read("start-argv")
+        if forced is not None:
+            return forced.strip()
+        if argv is not None and "--approve" not in argv.splitlines():
             return "pi"
         return ""
 
     def pane_read(self, _: list[str]) -> int:
         self.note("reads", "x")
-        ok = self.dir / "reads_ok"
-        n = len((self.dir / "reads").read_text().splitlines())
-        if ok.exists() and n > int(ok.read_text()):
+        ok, n = self.read("reads_ok"), len((self.read("reads") or "").splitlines())
+        if ok is not None and n > int(ok):
             self.note("failed-reads", "x")
             return 42
         shown = {"pi": "pi-trust-dialog.txt", "other": "other-dialog.txt"}.get(self.dialog())
-        fixtures = Path(__file__).resolve().parents[3] / "fixtures" / "herdr-spawn"
-        sys.stdout.write((fixtures / shown).read_text() if shown else " pi\n\n > \n")
+        if not shown:
+            sys.stdout.write(" pi\n\n > \n")
+            return 0
+        here = os.path.dirname(os.path.realpath(__file__))
+        with open(os.path.join(here, "..", "..", "..", "fixtures", "herdr-spawn", shown)) as f:
+            sys.stdout.write(f.read())
         return 0
 
     def tab_get(self, a: list[str]) -> int:
@@ -167,8 +181,8 @@ class World:
         return say({"tab": {"tab_id": a[2], "label": g["name"]}})
 
     def agent_get(self, a: list[str]) -> int:
-        down = self.dir / "get-down"
-        if down.exists() and (not down.read_text().split() or a[2] in down.read_text().split()):
+        down = self.read("get-down")
+        if down is not None and (not down.split() or a[2] in down.split()):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
         g = self.find(a[2])
@@ -208,22 +222,22 @@ class World:
         return say({"agent_status": "idle"})
 
     def workspaces(self) -> list[dict[str, str]]:
-        f = self.dir / "workspaces.json"
-        return json.loads(f.read_text()) if f.exists() else []
+        stored = self.read("workspaces.json")
+        return json.loads(stored) if stored else []
 
     def workspace(self, a: list[str]) -> int:
-        spaces, f = self.workspaces(), self.dir / "workspaces.json"
+        spaces = self.workspaces()
         if a[1] == "list":
             return say({"workspaces": spaces})
         if a[1] == "close":
             return self.workspace_close(a)
         w = f"w{len(spaces) + 1}"
-        f.write_text(json.dumps([*spaces, {"label": opts(a, "--label")[0], "workspace_id": w}]))
+        made = {"label": opts(a, "--label")[0], "workspace_id": w}
+        self.write("workspaces.json", json.dumps([*spaces, made]))
         return say({"workspace": {"workspace_id": w}, "tab": {"tab_id": f"{w}:t0"}})
 
     def sessions(self) -> int:
-        f = self.dir / "sessions"
-        names = f.read_text().split() if f.exists() else []
+        names = (self.read("sessions") or "").split()
         rows = ["name status directory socket", "default running /d /d.sock"]
         sys.stdout.write("\n".join(rows + [f"{n} running /s /s.sock" for n in names]) + "\n")
         return 0
@@ -241,7 +255,7 @@ class World:
         self.note("log", " ".join(a))
         who = os.environ.get("HERDR_SESSION", "")
         self.note("session-log", f"HERDR_SESSION={who} {' '.join(a)}")
-        if (self.dir / "down").exists():
+        if self.read("down") is not None:
             sys.stderr.write("error: could not connect to herdr server\n")
             return 1
         if a[:1] == ["workspace"] and a[1:2] in (["list"], ["create"], ["close"]):
@@ -284,9 +298,8 @@ for x in it:
 if os.environ.get("FAKE_HERDR"):  # the agents world: its imports only here, the lean start kept
     import json
     import time
-    from pathlib import Path
 
-    sys.exit(World(Path(os.environ["FAKE_HERDR"])).call(a))
+    sys.exit(World(os.environ["FAKE_HERDR"]).call(a))
 sock = (
     os.path.join(home, "herdr.sock")
     if session == "default"

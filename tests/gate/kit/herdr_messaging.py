@@ -289,7 +289,8 @@ def spawn_plain(s: Scratch) -> None:
     tab's env holds the Linear key, no file the spawn writes does, and a ticket filed from that
     env through the linear skill's issue-create reaches the store; the tab's PATH the kit dirs,
     the caller's PATH as it was, ~/.local/bin last, finding the stub pi first and a tool only
-    ~/.local/bin holds. Then headless pi-role passes --approve too."""
+    ~/.local/bin holds. Then headless pi-role passes --approve too. Then pi-role runs in --cwd
+    (cwd_target) and the tab's PATH in a mise.toml worktree (mise_path)."""
     cwd = spawner(s)
     d = herdr_world(s)
     uh, stub, mbin = toolbox(s)
@@ -327,14 +328,16 @@ def spawn_plain(s: Scratch) -> None:
     s.run([kit("pi-role"), str(ROOT / "agents" / "implementer.md"), "-p", "brief"], cwd=cwd)
     headless = (s.root / "argv.lane").read_text().split("\0")
     assert "--approve" in headless, f"headless pi-role argv lacks --approve: {headless}"
+    cwd_target(s, cwd)
+    (s.bin / "pi").unlink()  # reflector installed its recording pi; PATH probes use the stub.
+    mise_path(s, cwd, (uh, stub, mbin))
 
 
-def spawn_cwd(s: Scratch) -> None:
-    """pi-role runs in --cwd, not the caller's dir: a caller in a jira target spawning into a
-    target with no config gets github-issues; spawning into the jira target is refused (65,
+def cwd_target(s: Scratch, cwd: Path) -> None:
+    """pi-role runs in --cwd, not the caller's dir: a caller in a jira target spawning into CWD,
+    a target with no config, gets github-issues; spawning into the jira target is refused (65,
     unknown tracker 'jira') before any agent starts."""
-    cwd = spawner(s)
-    d = herdr_world(s)
+    d = herdr_world(s, name="cwd-herdr")
     jira = s.root / "jira"
     s.git(s.root, "init", "-q", str(jira))
     (jira / ".octo-feather.toml").write_text('tracker = "jira"\n')
@@ -382,15 +385,14 @@ def spawn_dialog(s: Scratch) -> None:
         assert text in ran.err, f"{case}: pane text not on stderr: {ran.err}"
 
 
-def spawn_mise_path(s: Scratch) -> None:
-    """#261, owner ruling #437: in a worktree with its own mise.toml the tab's PATH is the kit
-    dirs, the caller's PATH with mise's shims (as `mise doctor` names them) just before its first
-    system dir, ~/.local/bin last, the caller's stub pi still first; with no mise on PATH, the
-    caller's PATH as it was. No Linear key in the caller: none in the tab."""
-    cwd = spawner(s)
+def mise_path(s: Scratch, cwd: Path, tools: tuple[Path, Path, Path]) -> None:
+    """#261, owner ruling #437: in a worktree (CWD) with its own mise.toml the tab's PATH is the
+    kit dirs, the caller's PATH with mise's shims (as `mise doctor` names them) just before its
+    first system dir, ~/.local/bin last, the caller's stub pi still first; with no mise on PATH,
+    the caller's PATH as it was. No Linear key in the caller: none in the tab. TOOLS: toolbox's."""
     (cwd / "mise.toml").write_text("[tools]\n")
-    uh, stub, mbin = toolbox(s)
-    d = herdr_world(s)
+    uh, stub, mbin = tools
+    d = herdr_world(s, name="mise")
     sys_dirs = ["/usr/local/bin", "/usr/bin", "/bin"]
     path = os.pathsep.join([str(s.bin), str(stub), str(mbin), *sys_dirs])
     env = {"HOME": str(uh), "PATH": path}
@@ -485,7 +487,10 @@ def resume_live(s: Scratch) -> None:
     still exists: --parked gh2 prints its line named for the lane, session kept; a message to it
     resumes it in a new tab of w5 (no workspace created, no tab closed, its session kept, the
     notice naming its new pane); a message to that pane, now live, arrives plain (no resume); a
-    fresh start (no --resume) of lane gh2 refuses with 73, nothing created."""
+    fresh start (no --resume) of lane gh2 refuses with 73, nothing created. Then (comms
+    #roles-park) that workspace gone, Herdr holding no agent: a message to the parked pane resumes
+    the supervisor in a new lane workspace gh2, only its seed tab closed, told it was resumed
+    with its new pane."""
     cwd = s.root / "cwd"
     sup = parked_line("w5:p1", "S1", "w2:p1", cwd)
     d = parked_world(s, [("gh2", "w5")], {"gh2": [sup]})
@@ -505,13 +510,8 @@ def resume_live(s: Scratch) -> None:
     s.run(settled(start), want=73, env=DIRECTOR)
     made = [x for x in lines(d / "log")[n:] if x.startswith(("tab create", "workspace create"))]
     assert made == [], f"a fresh start on an existing gh2 created {made}"
-
-
-def resume_gone(s: Scratch) -> None:
-    """comms #roles-park: a parked supervisor whose lane workspace is gone resumes in a new lane
-    workspace gh2, only its seed tab closed, told it was resumed with its new pane."""
-    sup = parked_line("w5:p1", "S1", "w2:p1", s.root / "cwd")
-    d = parked_world(s, [], {"gh2": [sup]})
+    (d / "workspaces.json").write_text("[]")
+    (d / "agents.json").write_text("{}")
     ran = say(s, DIRECTOR, "w5:p1", "hello")
     made = [x for x in lines(d / "log") if x.startswith("workspace create --label gh2 ")]
     assert made, lines(d / "log")
@@ -530,60 +530,50 @@ SUP_GH2 = {
 }
 
 
-def say_resume_lane(s: Scratch) -> None:
-    """#75: supervisor gh2 (live at w5:p1) to its parked worker impl1, found by its lane log (the
-    line's parent a pane the supervisor had before its own park): another lane's corrupt log
-    named line by line on stderr, the lookup still answered; the worker resumed in the caller's
-    space w5 with its old session, pane= printed, told it was resumed."""
+def say_parked(s: Scratch) -> None:
+    """#75, herdr-say's up-chain guard vs parked agents, in one lane gh2 (w5, its supervisor gh2
+    live at w5:p1, its worker implementer-gh2 at w5:p2): a worker to a parked sibling (not its
+    parent) and supervisor gh2 to a parked worker of lane gh3 each exit 77, the up-chain refusal
+    on stderr, nothing resumed or prompted. Supervisor gh2 to its parked worker impl1, found by
+    its lane log (the line's parent a pane the supervisor had before its own park): another
+    lane's corrupt log named line by line on stderr, the lookup still answered; the worker
+    resumed in the caller's space w5 with its old session, pane= printed, told it was resumed.
+    Then, Herdr knowing the supervisor by no name, impl1 parked again naming the caller's pane as
+    its parent: resumed by that route, its new session, told it was resumed."""
     cwd = s.root / "cwd"
     other = ["not JSON", '{"kind":', "42", "\xff"]
     worker = parked_line("w5:p3", "S2", "w5:p0", cwd, "impl1")
-    d = parked_world(
-        s,
-        [("gh2", "w5")],
-        {"gh2": [worker], "other": other},
-        {"w5:p1": agent("w5:p1", "gh2", "idle")},
-    )
-    ran = say(s, SUP_GH2, "--parked", "impl1")
-    line = json.loads(ran.out)
-    assert (line["session"], line["name"]) == ("S2", "impl1"), line
-    for n in (1, 2, 3, 4):
-        assert f"other.handoffs.jsonl:{n}:" in ran.err, f"no diagnostic for line {n}: {ran.err}"
-    resumed(d, say(s, SUP_GH2, "impl1", "go on"), "w5", ("impl1", "S2"), "go on")
-
-
-def say_resume_parent(s: Scratch) -> None:
-    """#75: a supervisor Herdr knows by no name to a parked worker whose line names the caller's
-    pane as its parent: resumed, old session, told it was resumed."""
-    worker = parked_line("w5:p3", "S3", "w5:p1", s.root / "cwd", "impl1")
-    d = parked_world(s, [("gh2", "w5")], {"gh2": [worker]})
-    resumed(d, say(s, SUP_GH2, "w5:p3", "go on"), "w5", ("impl1", "S3"), "go on")
-
-
-def say_refused(s: Scratch) -> None:
-    """#75: a worker to a parked sibling (not its parent), and supervisor gh2 to a parked worker
-    of lane gh3: each 77, the up-chain refusal on stderr, nothing resumed or prompted."""
-    cwd = s.root / "cwd"
-    sib = parked_line("w5:p3", "S4", "w5:p1", cwd, "impl1")
     gh3 = parked_line("w6:p3", "S5", "w6:p1", cwd, "impl9")
     live = {
         "w5:p1": agent("w5:p1", "gh2", "idle"),
         "w5:p2": agent("w5:p2", "implementer-gh2", "idle"),
     }
-    d = parked_world(s, [("gh2", "w5")], {"gh2": [sib], "gh3": [gh3]}, live)
-    worker = SUP_GH2 | {
+    logs = {"gh2": [worker], "gh3": [gh3], "other": other}
+    d = parked_world(s, [("gh2", "w5")], logs, live)
+    sibling = SUP_GH2 | {
         "OCTO_FEATHER_ROLE": "implementer",
         "OCTO_FEATHER_PARENT": "w5:p1",
         "HERDR_PANE_ID": "w5:p2",
     }
     for what, env, target in (
-        ("worker to parked sibling", worker, "w5:p3"),
+        ("worker to parked sibling", sibling, "w5:p3"),
         ("other lane", SUP_GH2, "impl9"),
     ):
         ran = say(s, env, target, "hi", want=77)
         assert "may message only up its chain" in ran.err, f"{what}: {ran.err}"
     acts = ("tab create", "workspace create", "agent start", "agent prompt")
     assert not [x for x in lines(d / "log") if x.startswith(acts)], lines(d / "log")
+    ran = say(s, SUP_GH2, "--parked", "impl1")
+    line = json.loads(ran.out)
+    assert (line["session"], line["name"]) == ("S2", "impl1"), line
+    for n in (1, 2, 3, 4):
+        assert f"other.handoffs.jsonl:{n}:" in ran.err, f"no diagnostic for line {n}: {ran.err}"
+    resumed(d, say(s, SUP_GH2, "impl1", "go on"), "w5", ("impl1", "S2"), "go on")
+    (d / "agents.json").write_text("{}")
+    lanes = s.root / "state" / "octo-feather" / "lanes"
+    with (lanes / "gh2.handoffs.jsonl").open("a") as f:
+        f.write(parked_line("w5:p3", "S3", "w5:p1", cwd, "impl1") + "\n")
+    resumed(d, say(s, SUP_GH2, "w5:p3", "go on"), "w5", ("impl1", "S3"), "go on")
 
 
 # octo-feather-lane post-merge step 4, tell supervisors (owner ruling 2026-10-29 on issue 206;
@@ -598,7 +588,8 @@ RULED = ".agents/skills/foo/SKILL.md, agents/supervisor.md"
 
 def build_tell(p: Scratch) -> None:
     """repo: main merged gh7 (two rule files and a product file changed) then gh8 (a file under
-    no rule path); kit: a clone of it at main, its origin o/kit (fetched from repo)."""
+    no rule path); kit: a clone of it at main, its origin o/kit (Tell fetches it from repo);
+    shas.json: each merge commit and the head it merged."""
     r = p.root / "repo"
     p.run(["git", "init", "-q", "-b", "main", str(r)])
     for f, text in (("agents/supervisor.md", "a"), ("src/app.py", "a"), ("docs/notes.md", "a")):
@@ -622,7 +613,9 @@ def build_tell(p: Scratch) -> None:
     k = p.root / "kit"
     p.run(["git", "clone", "-q", str(r), str(k)])
     p.git(k, "remote", "set-url", "origin", "https://github.com/o/kit.git")
-    p.git(k, "config", f"url.{r}.insteadOf", "https://github.com/o/kit.git")
+    log = p.git(r, "log", "--first-parent", "--format=%H %P", "main").splitlines()
+    (m2, _, h2), (m, _, h) = (x.split() for x in log[:2])
+    (p.root / "shas.json").write_text(json.dumps({"m": m, "h": h, "m2": m2, "h2": h2}))
 
 
 class Tell:
@@ -632,8 +625,6 @@ class Tell:
     def __init__(self, s: Scratch) -> None:
         s.prepare("lane-post-merge-tell", build_tell)
         self.s, self.r = s, s.root / "repo"
-        # The kit install's url rewrite names the prepared tree's repo: this copy's own.
-        s.git(s.root / "kit", "config", f"url.{self.r}.insteadOf", "https://github.com/o/kit.git")
         self.d = herdr_world(s)
         s.env.pop("GH_REPO", None)
         st = s.root / "state" / "octo-feather"
@@ -648,9 +639,14 @@ class Tell:
             "OCTO_FEATHER_KIT_INSTALL": str(s.root / "kit"),
             "ARGV_LOG": str(s.root / "argv.log"),
             "PATH": os.pathsep.join([str(rec), str(ASSETS), s.env["PATH"]]),
+            # The kit install's origin, o/kit, is this copy's repo: a url rewrite in git's env
+            # (no git call; the prepared tree's path is not this copy's).
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": f"url.{self.r}.insteadOf",
+            "GIT_CONFIG_VALUE_0": "https://github.com/o/kit.git",
         }
-        log = s.git(self.r, "log", "--first-parent", "--format=%H %P", "main").splitlines()
-        (self.m2, _, self.h2), (self.m, _, self.h) = (x.split() for x in log[:2])
+        shas = json.loads((s.root / "shas.json").read_text())
+        self.m, self.h, self.m2, self.h2 = (shas[k] for k in ("m", "h", "m2", "h2"))
         s.gh.store("repo.json", {"nameWithOwner": "o/r"})
         s.gh.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
         run = {"databaseId": 1, "status": "completed", "conclusion": "success"}
@@ -714,13 +710,9 @@ class Tell:
             f.write_text("")
 
 
-def tell_live(s: Scratch) -> None:
-    """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
-    title and changed rule files; the --lane lane, a parked one (its latest parked line names its
-    pane) and another repo's lane (never looked up) none; one canonical prod line per lane told,
-    after the director's own; step 4 ok, step 5 pending, exit 3. A rerun sends and logs nothing
-    new (already told). A merge touching no rule file says none, and is told again."""
-    t = Tell(s)
+def told_live(t: Tell) -> None:
+    """tell_supervisors' first phase: live, parked and another repo's lanes; a rerun; a merge
+    with no rule file."""
     t.lane("gh7", "w0:p1", "o/r", 7)
     t.lane("live1", "w1:p1", "o/r", 11)
     t.lane("parked", "w2:p1", "o/r", 12)
@@ -758,30 +750,21 @@ def tell_live(s: Scratch) -> None:
     assert t.prods()[-1]["note"] == f"post-merge {t.m2} #8: main moved, told live1 to re-read none"
 
 
-def tell_kit(s: Scratch) -> None:
-    """A kit PR (o/kit, the install's own repo): every lane runs kit roles, so another repo's live
-    lane is told too, one prod line each (step 3 refreshes the install first: its recipes no-ops,
-    uv and pnpm argv_recorder.sh)."""
-    t = Tell(s)
+def told_kit(t: Tell) -> None:
+    """tell_supervisors' kit PR phase: the sends and the director log emptied first."""
     t.store("o/kit", "Kit rule")
-    t.lane("gh7", "w0:p1", "o/r", 7)
-    t.lane("live1", "w1:p1", "o/r", 11)
-    t.lane("other", "w3:p1", "x/y", 13)
+    t.clear()
     t.live("w0:p1", "w1:p1", "w3:p1")
     t.run(3, 7, "--lane", "gh7", "--repo", "o/kit")
     assert t.said() == ["w1:p1", "w3:p1"], f"{t.said()}: {t.out}"
     assert sorted(int(str(p["issue"])) for p in t.prods()) == [11, 13], t.prods()
 
 
-def tell_failed(s: Scratch) -> None:
-    """A send that fails (its supervisor blocked on a dialog, herdr-say's 75): named, no prod line
-    for it, the others still tried and told, the step stopped, exit 1. A rerun tells only that
-    one."""
-    t = Tell(s)
-    t.lane("gh7", "w0:p1", "o/r", 7)
-    t.lane("live1", "w1:p1", "o/r", 11)
+def told_failed(t: Tell) -> None:
+    """tell_supervisors' failed send phase, on the o/r PR again: live2 added, live1 blocked."""
+    t.clear()
     t.lane("live2", "w4:p1", "o/r", 14)
-    t.live("w0:p1", "w1:p1", "w4:p1", blocked="w1:p1")
+    t.live("w0:p1", "w1:p1", "w3:p1", "w4:p1", blocked="w1:p1")
     tell, last = t.run(1, 7, "--lane", "gh7", "--repo", "o/r")
     assert t.said() == ["w1:p1", "w4:p1"], t.said()
     assert "stopped: " in tell, tell
@@ -789,20 +772,18 @@ def tell_failed(s: Scratch) -> None:
     assert "told: live2 w4:p1" in tell, tell
     assert [p["issue"] for p in t.prods()] == [14], t.prods()
     assert "tell supervisors stopped" in last, last
-    t.live("w0:p1", "w1:p1", "w4:p1")
+    t.live("w0:p1", "w1:p1", "w3:p1", "w4:p1")
     (t.d / "log").write_text("")
     t.run(3, 7, "--lane", "gh7", "--repo", "o/r")
     assert t.said() == ["w1:p1"], f"retry: {t.said()}"
     assert [p["issue"] for p in t.prods()] == [14, 11], t.prods()
 
 
-def tell_gone(s: Scratch) -> None:
-    """Issue 458: --lane gh1 with a live, a parked and two gone lanes (one never parked, one
-    whose latest parked line names an older pane): only the live one told, the rest listed, step 4
-    ok, step 5 pending (not archived). Archived: step 5 runs, herdr-close failing and Herdr's
-    workspace_not_found read as already closed. Any other herdr failure (on the parked lane's
-    lookup) stops step 4, named, the other lanes still handled."""
-    t = Tell(s)
+def told_gone(t: Tell) -> None:
+    """tell_supervisors' issue 458 phase: every lane record and hand-off log replaced first."""
+    for f in t.lanes.iterdir():
+        f.unlink()
+    t.clear()
     t.lane("live1", "w1:p1", "o/r", 11)
     t.lane("parked", "w2:p1", "o/r", 12)
     t.lane("gone", "w5:p1", "o/r", 15)
@@ -845,6 +826,29 @@ def tell_gone(s: Scratch) -> None:
     assert tell.endswith(gone), tell
 
 
+def tell_supervisors(s: Scratch) -> None:
+    """Only a live supervisor of the PR's repo gets one message naming the merge commit, PR,
+    title and changed rule files; the --lane lane, a parked one (its latest parked line names its
+    pane) and another repo's lane (never looked up) none; one canonical prod line per lane told,
+    after the director's own; step 4 ok, step 5 pending, exit 3. A rerun sends and logs nothing
+    new (already told). A merge touching no rule file says none, and is told again. A kit PR
+    (o/kit, the install's own repo): every lane runs kit roles, so another repo's live lane is
+    told too, one prod line each (step 3 refreshes the install first: its recipes no-ops, uv and
+    pnpm argv_recorder.sh). A send that fails (its supervisor blocked on a dialog, herdr-say's
+    75): named, no prod line for it, the others still tried and told, the step stopped, exit 1; a
+    rerun tells only that one. Issue 458: --lane gh1 with a live, a parked and two gone lanes (one
+    never parked, one whose latest parked line names an older pane): only the live one told, the
+    rest listed, step 4 ok, step 5 pending (not archived). Archived: step 5 runs, herdr-close
+    failing and Herdr's workspace_not_found read as already closed. Any other herdr failure (on
+    the parked lane's lookup) stops step 4, named, the other lanes still handled. One world, the
+    old test's order: each phase resets only what it names."""
+    t = Tell(s)
+    told_live(t)
+    told_kit(t)
+    told_failed(t)
+    told_gone(t)
+
+
 if __name__ == "__main__":
     main(
         spawn_ready_late,
@@ -852,16 +856,8 @@ if __name__ == "__main__":
         say_stalled,
         post_merge_busy,
         spawn_plain,
-        spawn_cwd,
         spawn_dialog,
-        spawn_mise_path,
         resume_live,
-        resume_gone,
-        say_resume_lane,
-        say_resume_parent,
-        say_refused,
-        tell_live,
-        tell_kit,
-        tell_failed,
-        tell_gone,
+        say_parked,
+        tell_supervisors,
     )

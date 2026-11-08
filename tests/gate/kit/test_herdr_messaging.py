@@ -5,22 +5,14 @@ from collections.abc import Callable
 
 from herdr_messaging import (
     post_merge_busy,
-    resume_gone,
     resume_live,
     say_lookup_fails,
-    say_refused,
-    say_resume_lane,
-    say_resume_parent,
+    say_parked,
     say_stalled,
-    spawn_cwd,
     spawn_dialog,
-    spawn_mise_path,
     spawn_plain,
     spawn_ready_late,
-    tell_failed,
-    tell_gone,
-    tell_kit,
-    tell_live,
+    tell_supervisors,
 )
 
 Case = Callable[..., None]
@@ -46,49 +38,17 @@ def test_herdr_spawn_plain(case: Case) -> None:
     case(spawn_plain)
 
 
-def test_herdr_spawn_cwd(case: Case) -> None:
-    case(spawn_cwd)
-
-
 def test_herdr_spawn_dialog(case: Case) -> None:
     case(spawn_dialog)
-
-
-def test_herdr_spawn_mise_path(case: Case) -> None:
-    case(spawn_mise_path)
 
 
 def test_herdr_say_resume_live(case: Case) -> None:
     case(resume_live)
 
 
-def test_herdr_say_resume_gone(case: Case) -> None:
-    case(resume_gone)
+def test_herdr_say_parked(case: Case) -> None:
+    case(say_parked)
 
 
-def test_herdr_say_resume_lane(case: Case) -> None:
-    case(say_resume_lane)
-
-
-def test_herdr_say_resume_parent(case: Case) -> None:
-    case(say_resume_parent)
-
-
-def test_herdr_say_refused(case: Case) -> None:
-    case(say_refused)
-
-
-def test_post_merge_tell_live(case: Case) -> None:
-    case(tell_live)
-
-
-def test_post_merge_tell_kit(case: Case) -> None:
-    case(tell_kit)
-
-
-def test_post_merge_tell_failed(case: Case) -> None:
-    case(tell_failed)
-
-
-def test_post_merge_tell_gone(case: Case) -> None:
-    case(tell_gone)
+def test_post_merge_tell_supervisors(case: Case) -> None:
+    case(tell_supervisors)
