@@ -128,7 +128,7 @@ def writer_route(s: Scratch) -> None:
         ],
     )
     b = len(d.dlog.read_text().splitlines())
-    from lane_correction import create_request, recording_run  # noqa: PLC0415 (only this case)
+    from testkit.gh_recordings import recording_run  # noqa: PLC0415 (only this case)
 
     expected_request: list[str] = []
 
@@ -139,7 +139,7 @@ def writer_route(s: Scratch) -> None:
             f"[correction-lane reflection-missed {at} 6aea7eb4] "
             "change the question list: reflection-missed"
         )
-        request = create_request("0xTomDaniel/octo-feather", title)
+        request = f"GH_REPO=0xTomDaniel/octo-feather issue create --title {title} --body-file -"
         expected_request.append(request)
         tape_file = s.gh.dir / "tape.json"
         tape = json.loads(tape_file.read_text())
