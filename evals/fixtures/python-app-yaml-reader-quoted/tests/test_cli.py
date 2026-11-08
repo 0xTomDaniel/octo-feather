@@ -1,0 +1,77 @@
+"""Integration (in-process CLI) and end-to-end (installed `app` command) tests."""
+
+import json
+import shutil
+import subprocess
+from pathlib import Path
+
+import pytest
+
+from app.cli import main
+
+
+def test_hello_json_in_process(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["hello", "Ada", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out) == {"name": "Ada", "text": "Hello, Ada"}
+
+
+def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["hello", "  ", "--json"]) == 2
+    assert json.loads(capsys.readouterr().out) == {"error": "name must not be empty"}
+
+
+def test_installed_command_end_to_end() -> None:
+    app = shutil.which("app")
+    assert app, "run through `uv run` so the app command is on PATH"
+    done = subprocess.run(
+        [app, "hello", "Grace", "--json"], capture_output=True, text=True, check=True
+    )
+    assert json.loads(done.stdout) == {"name": "Grace", "text": "Hello, Grace"}
+
+
+def test_hello_file_greets_each_listed_name(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = tmp_path / "names.yaml"
+    names.write_text("names:\n  - Ada\n  - Grace\nteam: crew\n")
+    assert main(["hello-file", str(names), "--json"]) == 0
+    lines = capsys.readouterr().out.splitlines()
+    assert [json.loads(line) for line in lines] == [
+        {"name": "Ada", "text": "Hello, Ada"},
+        {"name": "Grace", "text": "Hello, Grace"},
+    ]
+
+
+def test_hello_file_without_names_is_a_json_error(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = tmp_path / "names.yaml"
+    names.write_text("team: crew\n")
+    assert main(["hello-file", str(names), "--json"]) == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "error": f"{names}: no names listed under `names:`"
+    }
+
+
+def test_hello_file_reads_quoted_names_comments_and_flow_lists(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = tmp_path / "names.yaml"
+    names.write_text("# the crew\nnames: [\"Ada Lovelace\", 'Grace']  # leads\nteam: crew\n")
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, Ada Lovelace\nHello, Grace\n"
+    names.write_text('names:\n  - "O\'Brien # 2"  # quoted hash\n  - Linus\n')
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, O'Brien # 2\nHello, Linus\n"
+
+
+def test_hello_file_keeps_quoted_commas_and_plain_apostrophes(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    names = tmp_path / "names.yaml"
+    names.write_text('names: ["Hopper, Grace", Ada]\n')
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, Hopper, Grace\nHello, Ada\n"
+    names.write_text("names:\n  - O'Brien # lead\n  - 'it''s Linus'\n")
+    assert main(["hello-file", str(names)]) == 0
+    assert capsys.readouterr().out == "Hello, O'Brien\nHello, it's Linus\n"

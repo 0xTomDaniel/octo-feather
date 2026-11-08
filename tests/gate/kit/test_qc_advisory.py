@@ -5,7 +5,16 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_advisory import does_not_show, no_pi, node_shim, shows, unavailable
+from qc_advisory import (
+    does_not_show,
+    incomplete_sprint,
+    no_pi,
+    node_shim,
+    refused_sprint,
+    shows,
+    sprint,
+    unavailable,
+)
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
@@ -13,6 +22,19 @@ pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox
 
 def test_does_not_show(case: Case) -> None:
     case(does_not_show)
+
+
+@pytest.mark.parametrize("how", ["authority", "scope", "missing", "fallback"])
+def test_refused_sprint(case: Case, how: str) -> None:
+    case(refused_sprint, how)
+
+
+def test_incomplete_sprint(case: Case) -> None:
+    case(incomplete_sprint)
+
+
+def test_sprint(case: Case) -> None:
+    case(sprint)
 
 
 def test_shows(case: Case) -> None:

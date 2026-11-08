@@ -4,6 +4,10 @@ Each role is one file in `agents/` (`director.md`, `supervisor.md`, `implementer
 
 Models, through cliproxy: director and supervisor `anthropic/claude-opus-5-5` high; implementer and corrector `anthropic/claude-opus-5-5` medium; code reviewer `openai/gpt-6.1-sol` high. The reviewer comes from a different model family than the implementer (scaling-octo-engine's reviewer-same-family tripwire), and `check-roles` enforces that. Decided by Tom, 2026-10-18.
 
+## Bounded sprint ruling, 2026-11-08
+
+The Models decision above is amended in place by the owner-delegated ruling recorded in quality.calls.jsonl call 7. The exception is owned by [quality-reviewer](../specs/quality.spec.html#quality-reviewer); fallback eligibility points there through [quality-judge-family](../specs/quality.spec.html#quality-judge-family). This records the decision, not a launcher or provenance-guard change.
+
 ## Considered options
 
 - octo-lite's Claude-style frontmatter, with the body appended as a contract. Rejected: no per-role model, tools or skills.

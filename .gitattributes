@@ -25,7 +25,6 @@
 scripts/octo-feather-exclude shell
 scripts/octo-feather-integrate shell
 scripts/octo-feather-new-repo shell
-scripts/octo-feather-qc-sandbox shell
 scripts/octo-feather-spec-chat shell
 scripts/octo-feather-start shell
 scripts/octo-feather-state shell

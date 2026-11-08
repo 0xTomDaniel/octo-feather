@@ -13,10 +13,13 @@ import difflib
 import glob
 import hashlib
 import json
+import math
 import os
 import re
+import resource
 import shlex
 import shutil
+import statistics
 import subprocess
 import sys
 from collections.abc import Callable, Sequence
@@ -28,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -295,6 +298,7 @@ class Feature:
     unreachable: list[str] = field(default_factory=list[str])  # steps not reached, each with its prerequisite
     env: dict[str, str] = field(default_factory=dict[str, str])  # scratch env for the next cases
     pre: list[str] = field(default_factory=list[str])  # a wrapper such as unshare for the next cases
+    cpu: float = 0.0  # the last case command's CPU, user + system, with every process it waited for (getrusage)
 
     def run(self, name: str, *args: str) -> None:
         """One isolated case: fresh empty cwd, the command as typed, stdout, stderr, exit code, files left
@@ -307,8 +311,11 @@ class Feature:
         (d / f"{name}.cmd").write_text("".join(f"{shlex.quote(a)} " for a in typed) + "\n")
         before = self.kit_status()
         with (d / f"{name}.stdout").open("wb") as out, (d / f"{name}.stderr").open("wb") as err:
+            r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
             rc = subprocess.run([*self.pre, self.s.kit, *args], cwd=cwd, env={**os.environ, **self.env},
                                 stdout=out, stderr=err, check=False).returncode
+            r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+            self.cpu = r1.ru_utime - r0.ru_utime + r1.ru_stime - r0.ru_stime
         (d / f"{name}.exit").write_text(f"{128 - rc if rc < 0 else rc}\n")
         left = sorted(str(Path(r) / f) for r, ds, fs in os.walk(cwd) for f in [*ds, *fs])
         (d / f"{name}.files").write_text("".join(f"{p}\n" for p in left))
@@ -1554,6 +1561,94 @@ def drive_qc_browser(f: Feature) -> None:
     say(f"qc-browser evidence: {f.d}")
 
 
+def drive_qc_sandbox(f: Feature) -> None:
+    """The qc sandbox by hand (`octo-feather-qc-sandbox -- CMD`) in a scratch git repo, CMD trying each escape the
+    criterion names, each outcome observed outside the launcher's own proof: a mask removed (umount of the Herdr config
+    mask, then what it shows), a credential copied out (git and gh credential files into the worktree and /tmp), a write
+    to the worktree and to HOME kept, a process left running (a setsid'd sleep), a live Herdr session reached (the real
+    herdr binary, past the shim, at the default session). After the run: no file of it in the repo or HOME, the sleep
+    gone, the credential read empty."""
+    sc = RUN_DIR / "scratch" / "qc-sandbox"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    r.mkdir(parents=True)
+
+    def git(*args: str) -> str:
+        return subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True, text=True).stdout.strip()
+
+    git("init", "-q", "-b", "main")
+    for k, val in (("user.name", "verify-octo-feather"), ("user.email", "verify@octo-feather.invalid"), ("core.hooksPath", "/dev/null")):
+        git("config", k, val)
+    git("commit", "-q", "--allow-empty", "-m", "scratch")
+    home = Path(os.environ.get("HOME", "/"))
+    tok = f"7171{os.getpid()}"
+    cmd = ('umount "$HOME/.config/herdr"; echo "umount $?"; echo "mask shows [$(ls -A "$HOME/.config/herdr" | tr "\\n" " ")]"; '
+           'cat "$HOME/.git-credentials" "${XDG_CONFIG_HOME:-$HOME/.config}/git/credentials" "${XDG_CONFIG_HOME:-$HOME/.config}/gh/hosts.yml" '
+           '> stolen 2>/dev/null; cp stolen /tmp/stolen; echo "creds $(wc -c < stolen) bytes"; '
+           'touch "$HOME/x"; echo "touch $?"; echo w > newfile; echo "wrote $?"; '
+           f'setsid sleep {tok} < /dev/null > /dev/null 2>&1 & '
+           'if [ -n "$OCTO_FEATHER_QC_HERDR" ]; then "$OCTO_FEATHER_QC_HERDR" --session default workspace list > /dev/null 2>&1; '
+           'echo "live herdr $?"; else echo "live herdr none"; fi')
+    f.pre = ["env", "-C", str(r)]
+    f.run("by-hand", "octo-feather-qc-sandbox", "--", "sh", "-c", cmd)
+    f.pre = []
+    left = subprocess.run(["pgrep", "-f", f"sleep {tok}"], capture_output=True, text=True, check=False).stdout.split()
+    f.obs("by-hand", "after", f"{(home / 'x').exists()} {(r / 'newfile').exists()} {(r / 'stolen').exists()} "
+                              f"{len(left)} {git('status', '--porcelain') or 'clean'}\n")
+
+    def mask_ok(out: str) -> bool:   # the mask shows only what the run's own Herdr server makes there
+        m = re.search(r"(?m)^mask shows \[(.*)\]$", out)
+        return m is not None and set(m.group(1).split()) <= {"sessions", ".plugins.lock"}
+
+    def holds(c: Case) -> bool:
+        live = re.search(r"(?m)^live herdr (\S+)$", c.out)
+        return (c.code == 0 and "qc sandbox: FAIL" not in c.err and c.o["after"] == "False False False 0 clean\n"
+                and re.search(r"(?m)^umount [1-9][0-9]*$", c.out) is not None   # the mask stays
+                and mask_ok(c.out)
+                and re.search(r"(?m)^creds 0 bytes$", c.out) is not None   # nothing to copy out
+                and re.search(r"(?m)^touch [1-9][0-9]*$", c.out) is not None and re.search(r"(?m)^wrote 0$", c.out) is not None
+                and live is not None and live.group(1) != "0")   # the real herdr reaches no default session
+    f.check("by-hand", holds)
+    if re.search(r"(?m)^live herdr none$", (f.d / "by-hand.stdout").read_text()):
+        f.unreachable_step("by-hand", "no herdr on the box: the live Herdr session escape not tried")
+    say(f"qc-sandbox evidence: {f.d}")
+
+
+# Per quality spec #acceptance-qc-sandbox-cost: serial runs and report-only CPU target (seconds).
+QC_SANDBOX_COST_RUNS, QC_SANDBOX_COST_CPU_S = 5, 0.8
+
+
+def drive_qc_sandbox_cost(f: Feature) -> None:
+    """The qc sandbox around a judge that does nothing (`octo-feather-qc-sandbox -- true`, by hand, the box's herdr when
+    there is one), QC_SANDBOX_COST_RUNS runs one after another in a scratch git repo: each run's CPU, the sandbox's setup,
+    proof and cleanup with every process they start (the case command's waited-for children, getrusage, Feature.cpu:
+    not the drive's own checks around it), printed with the
+    median; QC_SANDBOX_COST_CPU_S is report-only, not a pass condition."""
+    sc = RUN_DIR / "scratch" / "qc-sandbox-cost"
+    r = sc / "repo"
+    shutil.rmtree(sc, ignore_errors=True)
+    r.mkdir(parents=True)
+    for args in (("init", "-q", "-b", "main"),
+                 ("-c", "user.name=verify-octo-feather", "-c", "user.email=verify@octo-feather.invalid",
+                  "commit", "-q", "--allow-empty", "-m", "scratch")):
+        subprocess.run(["git", "-C", str(r), *args], check=True, capture_output=True)
+    f.pre = ["env", "-C", str(r)]
+    cpus: list[float] = []
+    for i in range(1, QC_SANDBOX_COST_RUNS + 1):
+        name = f"run-{i}"
+        f.run(name, "octo-feather-qc-sandbox", "--", "true")
+        cpu = f.cpu  # the case command's own: not the drive's checks around it (the kit's git status)
+        cpus.append(cpu)
+        f.obs(name, "cpu", f"{cpu!r}\n")
+        say(f"qc-sandbox-cost {name}: {cpu:.3f} s CPU; target < {QC_SANDBOX_COST_CPU_S} s: "
+            f"{cpu < QC_SANDBOX_COST_CPU_S} (report-only)")
+        f.check(name, lambda c: c.code == 0 and "qc sandbox: FAIL" not in c.err
+                and math.isfinite(float(c.o["cpu"])) and float(c.o["cpu"]) >= 0)
+    f.pre = []
+    say(f"qc-sandbox-cost: {' '.join(f'{c:.3f}' for c in cpus)} s CPU per run; median {statistics.median(cpus):.3f} s, "
+        f"each under {QC_SANDBOX_COST_CPU_S} s: {all(c < QC_SANDBOX_COST_CPU_S for c in cpus)} (report-only)")
+
+
 def drive_qc_advisory(f: Feature) -> None:
     """`just qc` on a scratch target whose qc.toml declares a passing demo, with the classifier boundary stubbed (the
     kit's tests/fixtures/classify-stub/pi first on PATH, never a real model): the kit's judgment model is induced to
@@ -1605,6 +1700,23 @@ def drive_qc_advisory(f: Feature) -> None:
                 and (a.get("answer"), a.get("confidence"), a.get("model")) == ("does-not-show", 0.91, model)
                 and str(a.get("judgment", "")).startswith("model judgment") and "no gate reads it" in a["judgment"])
     f.check("qc", holds)
+    git("reset", "--hard", "HEAD^")  # same demo, not a carried result
+    f.env |= {"OCTO_FEATHER_QC_ADVISORY_AUTHORITY": "gpt-only-sprint-2026-11-08",
+              "OCTO_FEATHER_QC_ADVISORY_SCOPE": "sandbox"}
+    f.pre = ["env", "-C", str(r)]
+    f.run("sprint", "just", "--justfile", f"{f.s.repo}/justfile", "qc", "docs/specs/demo.status.json", "7", "acceptance-a")
+    f.pre = []
+    f.obs("sprint", "results", json.dumps(qc_report(f, "sprint").get("results")) + "\n")
+    f.obs("sprint", "built", json.loads(git("show", "HEAD:docs/specs/demo.status.json"))["criteria"]["acceptance-a"]["status"])
+
+    def suspended(c: Case) -> bool:
+        res = json.loads(c.o["results"])[0]
+        return (c.code == 0 and res["verdict"] == "pass" and res["evidence"] == "complete"
+                and c.o["built"] == "built" and "advisory NOT RUN" in c.out
+                and "qc: advisory criterion-evidence question" not in c.err
+                and res["advisory"] == {"status": "NOT RUN", "authority": "gpt-only-sprint-2026-11-08",
+                                        "scope": "sandbox", "expiry": "sprint pause after final cleanup"})
+    f.check("sprint", suspended)
     f.env = {}
     say(f"qc-advisory evidence: {f.d}")
 
@@ -1673,6 +1785,9 @@ def drive_qa_runs(f: Feature) -> None:
     # The stub first on PATH and on the qa sandbox's PATH; qa's artifacts and state in scratch.
     f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     qa = ("octo-feather-qa", "--evals", str(ev))
 
     def last_run(name: str, case: str) -> None:
@@ -1729,6 +1844,11 @@ def scratch_kit(f: Feature, kit: Path) -> tuple[str, str]:
     im.write_text(role)
     git("commit", "-q", "-am", "change: the implementer lists tdd")
     change = git("rev-parse", "HEAD")
+    # The checkout's installed JavaScript packages (gitignored, so not copied): the qc sandbox runs srt from the running
+    # kit's node_modules at its package.json pin; a link, kept out of the scratch repo's status.
+    (kit / "node_modules").symlink_to(Path(f.s.repo) / "node_modules")
+    with (kit / ".git" / "info" / "exclude").open("a") as ex:
+        ex.write("/node_modules\n")
     return before, change
 
 
@@ -1753,6 +1873,9 @@ def drive_qa_baseline(f: Feature) -> None:
     before, change = scratch_kit(f, kit)
     f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     qa = (str(kit / "scripts" / "octo-feather-qa"), "--evals", str(ev), "--case", "build", "--runs", "2")
 
     def result(name: str) -> None:
@@ -1812,6 +1935,9 @@ def drive_qa_analyst(f: Feature) -> None:
     before, _ = scratch_kit(f, kit)
     f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     qa = str(kit / "scripts" / "octo-feather-qa")
     want = ("qa: analysis (deterministic, no model; rules: octo-feather-qa --help, --analyze):\n"
             "  non-discriminating case va/same: every run on both kits passed\n"
@@ -1864,6 +1990,9 @@ def drive_qa_review(f: Feature) -> None:
     essay("The notes say hi.")
     f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     f.run("run", "octo-feather-qa", "--evals", str(ev))
     runs = sorted(p for p in (sc / "out").iterdir() if p.name != "reviews") if (sc / "out").is_dir() else []
     first = runs[-1] if runs else sc / "none"
@@ -1908,6 +2037,9 @@ def drive_qa_history(f: Feature) -> None:
     case(at)
     f.env = {"PATH": f"{sc / 'bin'}:{os.environ.get('PATH', '')}", "OCTO_FEATHER_QC_PATH": str(sc / "bin"),
              "OCTO_FEATHER_QA_DIR": str(sc / "out"), "XDG_STATE_HOME": str(sc / "state")}
+    # The scratch state dir holds the commit identity the eval's role launch needs (pi-role --help, Commit identity).
+    subprocess.run([f"{f.s.repo}/scripts/pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid"],
+                   env={**os.environ, "XDG_STATE_HOME": str(sc / "state")}, capture_output=True, check=True)
     f.run("whole-tree", "octo-feather-qa", "--evals", str(ev))
     runs = sorted((sc / "out").iterdir()) if (sc / "out").is_dir() else []
     tr = runs[-1] / "vh" / "tree" / "transcript.jsonl" if runs else sc / "none"
@@ -2746,6 +2878,8 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "shape": drive_shape,
     "qc-capture": drive_qc_capture,
     "qc-browser": drive_qc_browser,
+    "qc-sandbox": drive_qc_sandbox,
+    "qc-sandbox-cost": drive_qc_sandbox_cost,
     "qc-advisory": drive_qc_advisory,
     "qc-fallback": drive_qc_fallback,
     "qc-stale": drive_qc_stale,

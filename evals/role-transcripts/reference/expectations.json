@@ -408,5 +408,8 @@
   "implementer-hands-off-on-fast": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]},
   "implementer-hands-off-on-fast-heldout": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]},
   "implementer-hands-off-on-fast-heldout-2": {"facts": [{"fact": "ran", "program": "just", "args": ["fast"]}]},
-  "implementer-missing-recording-heldout": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "branch_paths", "untouched": ["tests/"]}]}
+  "implementer-missing-recording-heldout": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "branch_paths", "untouched": ["tests/"]}]},
+  "prior-art-extends": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/names.py"}]}]},
+  "prior-art-extends-stated": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
+  "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]}
 }

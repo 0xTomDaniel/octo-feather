@@ -59,6 +59,14 @@ command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --
 browser = true
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qc-sandbox", "scripts/octo-feather-evidence"]
 
+[demo."quality#acceptance-qc-sandbox-maintained"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox"
+covers = ["scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc", "package.json", "pnpm-lock.yaml"]
+
+[demo."quality#acceptance-qc-sandbox-cost"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox-cost"
+covers = ["scripts/octo-feather-qc-sandbox", "package.json", "pnpm-lock.yaml", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", ".agents/skills/verify-octo-feather/scripts/verify_octo_feather.py", "tests/gate/kit/qc_sandbox_cost.py", "tests/gate/kit/test_qc_sandbox_cost.py"]
+
 [demo."quality#acceptance-qc-advisory"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"
 covers = ["scripts/octo-feather-qc", "scripts/octo-feather-qa", "evals/judgment-criterion-evidence", "tests/fixtures/classify-stub/pi"]

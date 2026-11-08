@@ -15,6 +15,7 @@ im="$HOME/src/kit/agents/implementer.md"; cp "$im" "$t/im.md"
 sed 's/^skills:\(.*\), tdd,/skills:\1,/' "$t/im.md" > "$im"; ! grep -q '^skills:.*tdd' "$im" || fail "c1 still lists tdd"
 gk init -q -b main; gk add -A; gk commit -qm c1; c1="$(gk rev-parse HEAD)"
 cp "$t/im.md" "$im"; gk commit -qam c2; c2="$(gk rev-parse HEAD)"
+ln -s "$kit/node_modules" "$HOME/src/kit/node_modules" && echo /node_modules >> "$HOME/src/kit/.git/info/exclude"   # srt, the qc sandbox, runs from the running kit's node_modules
 K="$HOME/src/kit/scripts/octo-feather-qa"
 last() { ls -dt "$t"/out/*/ | head -1; }
 
