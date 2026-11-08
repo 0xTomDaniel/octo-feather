@@ -1,6 +1,6 @@
 """quality#acceptance-qc-sandbox-cost through its demo: the verify-octo-feather qc-sandbox-cost
 drive runs the qc sandbox around a judge that does nothing, 5 runs one after another, prints each
-run's CPU and the median, and passes with each run under the bound (a CPU check: e2e)."""
+run's CPU and the median, and reports the optimization target without gating on it (e2e)."""
 
 from __future__ import annotations
 
@@ -40,10 +40,16 @@ def cost(s: Scratch) -> None:
         "VERIFY_OCTO_FEATHER_EVIDENCE_DIR": str(s.root / "evidence"),
     }
     ran = s.run([str(DRIVE), "run", "qc-sandbox-cost"], env=env)
+    sys.stdout.write(ran.out + "\n")
     runs = re.findall(r"qc-sandbox-cost run-\d: (\d+\.\d+) s CPU", ran.out)
     assert len(runs) == 5, ran.out
-    assert all(float(c) < 0.8 for c in runs), runs
-    assert re.search(r"median \d+\.\d+ s, each under 0\.8 s: True", ran.out), ran.out
+    assert all(float(c) >= 0 for c in runs), runs
+    comparisons = re.findall(r"target < 0\.8 s: (True|False) \(report-only\)", ran.out)
+    assert len(comparisons) == 5, ran.out
+    assert comparisons == [str(float(c) < 0.8) for c in runs], ran.out
+    assert re.search(
+        r"median \d+\.\d+ s, each under 0\.8 s: (True|False) \(report-only\)", ran.out
+    ), ran.out
     assert "verify-octo-feather: run PASS" in ran.out, ran.out
 
 

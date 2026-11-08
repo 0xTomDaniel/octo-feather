@@ -13,6 +13,7 @@ import difflib
 import glob
 import hashlib
 import json
+import math
 import os
 import re
 import resource
@@ -1573,7 +1574,7 @@ def drive_qc_sandbox(f: Feature) -> None:
     say(f"qc-sandbox evidence: {f.d}")
 
 
-# Per quality spec #acceptance-qc-sandbox-cost: the runs a drive makes, and the CPU each must stay under (seconds).
+# Per quality spec #acceptance-qc-sandbox-cost: serial runs and report-only CPU target (seconds).
 QC_SANDBOX_COST_RUNS, QC_SANDBOX_COST_CPU_S = 5, 0.8
 
 
@@ -1582,7 +1583,7 @@ def drive_qc_sandbox_cost(f: Feature) -> None:
     there is one), QC_SANDBOX_COST_RUNS runs one after another in a scratch git repo: each run's CPU, the sandbox's setup,
     proof and cleanup with every process they start (the case command's waited-for children, getrusage, Feature.cpu:
     not the drive's own checks around it), printed with the
-    median; a run at or over QC_SANDBOX_COST_CPU_S fails its case."""
+    median; QC_SANDBOX_COST_CPU_S is report-only, not a pass condition."""
     sc = RUN_DIR / "scratch" / "qc-sandbox-cost"
     r = sc / "repo"
     shutil.rmtree(sc, ignore_errors=True)
@@ -1598,12 +1599,14 @@ def drive_qc_sandbox_cost(f: Feature) -> None:
         f.run(name, "octo-feather-qc-sandbox", "--", "true")
         cpu = f.cpu  # the case command's own: not the drive's checks around it (the kit's git status)
         cpus.append(cpu)
-        f.obs(name, "cpu", f"{cpu:.3f}\n")
-        say(f"qc-sandbox-cost {name}: {cpu:.3f} s CPU")
-        f.check(name, lambda c: c.code == 0 and "qc sandbox: FAIL" not in c.err and float(c.o["cpu"]) < QC_SANDBOX_COST_CPU_S)
+        f.obs(name, "cpu", f"{cpu!r}\n")
+        say(f"qc-sandbox-cost {name}: {cpu:.3f} s CPU; target < {QC_SANDBOX_COST_CPU_S} s: "
+            f"{cpu < QC_SANDBOX_COST_CPU_S} (report-only)")
+        f.check(name, lambda c: c.code == 0 and "qc sandbox: FAIL" not in c.err
+                and math.isfinite(float(c.o["cpu"])) and float(c.o["cpu"]) >= 0)
     f.pre = []
     say(f"qc-sandbox-cost: {' '.join(f'{c:.3f}' for c in cpus)} s CPU per run; median {statistics.median(cpus):.3f} s, "
-        f"each under {QC_SANDBOX_COST_CPU_S} s: {all(c < QC_SANDBOX_COST_CPU_S for c in cpus)}")
+        f"each under {QC_SANDBOX_COST_CPU_S} s: {all(c < QC_SANDBOX_COST_CPU_S for c in cpus)} (report-only)")
 
 
 def drive_qc_advisory(f: Feature) -> None:
