@@ -1,0 +1,14 @@
+Seeded defect: a resumed agent's message no longer starts with the resume notice naming its pane (herdr-say, #9).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-say b/.agents/skills/herdr-comms/assets/herdr-say
+index dc36990..62622e6 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-say
++++ b/.agents/skills/herdr-comms/assets/herdr-say
+@@ -118,7 +118,7 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")
+     fi
+     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"
+     echo "pane=$name"
+-    message="Resumed from park as pane=$name. $message"
++    message="Resumed as pane=$name. $message"
+   fi
+   prompt "$name"
+ fi

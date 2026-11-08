@@ -1,0 +1,13 @@
+# The parity lever's case for tests/herdr-spawn.sh, rewritten as tests/gate/kit/test_herdr_messaging.py (tests/parity/lever.py --help).
+old = "tests/herdr-spawn.sh"
+old_at = "ef42b60"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
+needs = [
+    "tests/fixtures/herdr-spawn",
+    "tests/fixtures/herdr-say/herdr",
+]
+new = "tests/gate/kit/test_herdr_messaging.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: a bash kit script, which coverage.py does not see; coverage: a Python kit script run by the kit venv's python.
+[ran]
+".agents/skills/herdr-comms/assets/herdr-spawn" = "exec .agents/skills/herdr-comms/assets/herdr-spawn"

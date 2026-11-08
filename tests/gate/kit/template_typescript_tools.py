@@ -3,7 +3,7 @@ owner ruling #548 2026-11-04, #660: no silent failures), through `just check-lan
 template's repo (testkit/template.py, its own copy of the run's one package install).
 
 tsc a stand-in at node_modules/.bin/tsc (what `pnpm exec tsc` runs) exiting 0 with empty stdout, or
-no tsc at all (none on PATH either, asserted first: check_languages.no_tsc; the real pnpm prints
+no tsc at all (none on PATH either, asserted first: testkit.kit_copy.no_tsc; the real pnpm prints
 "Command tsc not found" on stdout, exit 254), eslint's config throwing (eslint-files reads
 ESLint's own enumeration through its Node API, #686: named with the call and the error),
 scc a stand-in first on PATH printing no JSON, only its own stderr: each is named with the command,
@@ -13,8 +13,8 @@ nothing, so the kit's install race (#548) has no counterpart here.
 
 from __future__ import annotations
 
-from check_languages import no_tsc
 from testkit import Ran, Scratch, main
+from testkit.kit_copy import no_tsc
 from testkit.template import Repo
 
 

@@ -28,11 +28,10 @@ check-tests installed) always finds tsc.
 from __future__ import annotations
 
 import json
-import shutil
 from typing import TYPE_CHECKING
 
-from check_ts import Copy, tool
 from testkit import ROOT, Ran, Scratch, kit, kit_repo, main, tool_homes
+from testkit.kit_copy import Copy, no_tsc, tool
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -147,16 +146,6 @@ def tsc_fails(s: Scratch) -> None:
     c = copy(s)
     stand_in_tsc(c, "echo 'tsc stand-in: cannot read tsconfig.json' >&2; exit 3")
     named(languages(c), f"{CMD} exited 3; stderr: tsc stand-in: cannot read tsconfig.json")
-
-
-def no_tsc(s: Scratch, repo: Path) -> None:
-    """No tsc reachable in REPO's recipes, whatever the box installed globally: none on this
-    scratch's PATH (Scratch.without) nor on the PATH REPO's justfile gives its recipes (it adds
-    mise's tool dirs), asked of just itself."""
-    s.without("tsc")
-    path = s.run([tool("just"), "--evaluate", "PATH"], cwd=repo).out
-    found = shutil.which("tsc", path=path)
-    assert found is None, f"premise: a tsc outside node_modules is reachable: {found}"
 
 
 def tsc_absent(s: Scratch) -> None:

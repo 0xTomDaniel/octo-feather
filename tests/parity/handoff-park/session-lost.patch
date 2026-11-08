@@ -1,0 +1,14 @@
+Seeded defect: park records the session id cut at its last dash, not the pane's original Pi session (herdr-close --park).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-close b/.agents/skills/herdr-comms/assets/herdr-close
+index 25b8e9f..d1b64d1 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-close
++++ b/.agents/skills/herdr-comms/assets/herdr-close
+@@ -58,7 +58,7 @@ if [[ "${1:-}" == --park ]]; then
+   [[ "$tabs" == 1 ]] && set -- "$space" || set -- "$(jq -r '.result.agent.tab_id // empty' <<<"$agent")"
+   line="$("$(dirname "$(readlink -f "$0")")/../../../../scripts/octo-feather-handoff" encode \
+     --field at "$(date -u +%FT%TZ)" --field kind parked --field pane "$pane" --field name "$name" \
+-    --field role "$role" --field cwd "$cwd" --field session "$session" --field label "$label" --field parent "$parent")"
++    --field role "$role" --field cwd "$cwd" --field session "${session%-*}" --field label "$label" --field parent "$parent")"
+ fi
+ 
+ id="${1:-}"

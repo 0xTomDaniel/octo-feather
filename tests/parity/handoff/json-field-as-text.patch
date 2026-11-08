@@ -1,0 +1,14 @@
+Seeded defect: --json-field values kept as text, not decoded JSON (octo-feather-handoff encode).
+diff --git a/scripts/octo-feather-handoff b/scripts/octo-feather-handoff
+index 0af4388..e71d81a 100755
+--- a/scripts/octo-feather-handoff
++++ b/scripts/octo-feather-handoff
+@@ -28,7 +28,7 @@ def main() -> int:
+     if args.command == "encode":
+         record: dict[str, object] = dict(args.field)
+         for key, value in args.json_field:
+-            record[key] = json.loads(value)
++            record[key] = value
+         sys.stdout.write(encode(record) + "\n")
+         return 0
+     matches: list[dict[str, object]] = []
