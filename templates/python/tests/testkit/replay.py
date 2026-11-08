@@ -11,7 +11,7 @@ _RECORDINGS = Path(__file__).parent / "recordings"
 
 
 def recorded_body() -> bytes:
-    return (_RECORDINGS / "uuid.body").read_bytes()
+    return (_RECORDINGS / "uuid-body.json").read_bytes()
 
 
 @contextmanager
