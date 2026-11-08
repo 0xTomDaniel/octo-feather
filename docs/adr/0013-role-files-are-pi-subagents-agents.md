@@ -4,6 +4,10 @@ Each role is one file in `agents/` (`director.md`, `supervisor.md`, `implementer
 
 Models, through cliproxy: director and supervisor `anthropic/claude-opus-5-5` high; implementer and corrector `anthropic/claude-opus-5-5` medium; code reviewer `openai/gpt-6.1-sol` high. The reviewer comes from a different model family than the implementer (scaling-octo-engine's reviewer-same-family tripwire), and `check-roles` enforces that. Decided by Tom, 2026-10-18.
 
+## Bounded sprint ruling, 2026-11-08
+
+The owner-delegated ruling recorded in quality.calls.jsonl call 7 permits fresh independent GPT-only review and fallback sessions only in this sprint's owner-authorized sandbox, light-test, revision-repair and final-cleanup lanes, expiring at the sprint pause after final cleanup. The owning [quality-reviewer](../specs/quality.spec.html#quality-reviewer) and [quality-judge-family](../specs/quality.spec.html#quality-judge-family) sections define the exception and its actual-invoked-model and owner-authority evidence requirements. Separate writer/reviewer sessions remain mandatory; old blocked reports remain historical blocking and require a new verdict. Default cross-family policy and role pins elsewhere are unchanged. No permanent opt-out or flag is introduced. This amends the Models decision above in place, not the launcher or its provenance guards.
+
 ## Considered options
 
 - octo-lite's Claude-style frontmatter, with the body appended as a contract. Rejected: no per-role model, tools or skills.

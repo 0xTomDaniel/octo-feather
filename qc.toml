@@ -65,7 +65,7 @@ covers = ["scripts/octo-feather-qc-sandbox", "scripts/octo-feather-qc", "package
 
 [demo."quality#acceptance-qc-sandbox-cost"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-sandbox-cost"
-covers = ["scripts/octo-feather-qc-sandbox", "package.json", "pnpm-lock.yaml"]
+covers = ["scripts/octo-feather-qc-sandbox", "package.json", "pnpm-lock.yaml", ".agents/skills/verify-octo-feather/scripts/verify-octo-feather", "tests/gate/kit/qc_sandbox_cost.py", "tests/gate/kit/test_qc_sandbox_cost.py"]
 
 [demo."quality#acceptance-qc-advisory"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 qc-advisory"

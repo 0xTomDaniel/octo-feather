@@ -198,5 +198,95 @@ def no_pi(s: Scratch, how: str) -> None:
         )
 
 
+def sprint(s: Scratch) -> None:
+    """Explicit authorization leaves real demo outcomes intact without starting a classifier."""
+    (s.bin / "pi").unlink()
+    (s.bin / "pi").write_text("#!/bin/sh\necho CLASSIFIER_CALLED >&2\nexit 99\n")
+    (s.bin / "pi").chmod(0o755)
+    q = Run(
+        s,
+        OCTO_FEATHER_QC_ADVISORY_AUTHORITY="gpt-only-sprint-2026-11-08",
+        OCTO_FEATHER_QC_ADVISORY_SCOPE="revision-repair",
+    )
+    assert "CLASSIFIER_CALLED" not in q.err + q.out
+    assert "qc: advisory criterion-evidence question" not in q.err
+    for i in IDS:
+        a = q.results[i]["advisory"]
+        assert a == {
+            "status": "NOT RUN",
+            "authority": "gpt-only-sprint-2026-11-08",
+            "scope": "revision-repair",
+            "expiry": "sprint pause after final cleanup",
+        }
+        assert "advisory NOT RUN" in q.adv(i)
+
+
+def incomplete_sprint(s: Scratch) -> None:
+    """Authorization cannot turn a demo that never completed into a built criterion."""
+    s.prepare("qc-advisory", build)
+    r = s.root / "repo"
+    (r / "qc.toml").write_text(QC_TOML.replace("echo a checks pass", "exit 77"))
+    s.git(r, "add", "qc.toml")
+    s.git(r, "commit", "-qm", "demo cannot complete")
+    head = s.git(r, "rev-parse", "HEAD")
+    ran = qc(
+        s,
+        r,
+        "9",
+        *IDS[:1],
+        want=2,
+        env={
+            "OCTO_FEATHER_QC_ADVISORY_AUTHORITY": "gpt-only-sprint-2026-11-08",
+            "OCTO_FEATHER_QC_ADVISORY_SCOPE": "light-test",
+        },
+    )
+    rep = json.loads(Path(ran.out.splitlines()[-1].rpartition("; report ")[2]).read_text())
+    result = rep["results"][0]
+    assert result["verdict"] == "insufficient evidence"
+    assert result["evidence"] == "incomplete"
+    assert result["missing"]
+    assert result["advisory"]["status"] == "NOT RUN"
+    assert s.git(r, "rev-parse", "HEAD") == head
+    assert (
+        json.loads((r / "docs/specs/demo.status.json").read_text())["criteria"][IDS[0]]["status"]
+        == "planned"
+    )
+
+
+def refused_sprint(s: Scratch, how: str) -> None:
+    """Unsupported authorization cannot launch advice or replace fallback judgment."""
+    s.prepare("qc-advisory", build)
+    r = s.root / "repo"
+    env = {
+        "OCTO_FEATHER_QC_ADVISORY_AUTHORITY": "gpt-only-sprint-2026-11-08",
+        "OCTO_FEATHER_QC_ADVISORY_SCOPE": "sandbox",
+    }
+    ids = IDS
+    if how == "authority":
+        env["OCTO_FEATHER_QC_ADVISORY_AUTHORITY"] = "unknown"
+    elif how == "scope":
+        env["OCTO_FEATHER_QC_ADVISORY_SCOPE"] = "ordinary"
+    elif how == "missing":
+        del env["OCTO_FEATHER_QC_ADVISORY_SCOPE"]
+    else:
+        (r / "qc.toml").write_text(QC_TOML.split('[demo."demo#acceptance-b"]', maxsplit=1)[0])
+        s.git(r, "add", "qc.toml")
+        s.git(r, "commit", "-qm", "criterion b needs fallback")
+        ids = IDS[1:]
+    head = s.git(r, "rev-parse", "HEAD")
+    ran = qc(s, r, "9", *ids, want=64, env=env)
+    assert "advisory authorization requires" in ran.err
+    assert s.git(r, "rev-parse", "HEAD") == head
+
+
 if __name__ == "__main__":
-    main(does_not_show, shows, unavailable, node_shim, no_pi)
+    main(
+        does_not_show,
+        shows,
+        unavailable,
+        node_shim,
+        no_pi,
+        sprint,
+        refused_sprint,
+        incomplete_sprint,
+    )

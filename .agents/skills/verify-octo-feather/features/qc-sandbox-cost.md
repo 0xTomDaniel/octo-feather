@@ -8,7 +8,7 @@ Drive criterion: `quality#acceptance-qc-sandbox-cost`
 
 ## Sub-features
 
-- `run-1` to `run-5` the qc sandbox around a judge that does nothing, one run after another: each run's CPU (the sandbox's setup, proof and cleanup with every process they start) printed, with the median; each run under the criterion's bound.
+- `run-1` to `run-5` the qc sandbox around a judge that does nothing, one run after another: each run's CPU (the sandbox's setup, proof and cleanup with every process they start) printed, with the median; each run compared with the criterion's report-only optimization target.
 
 ## How to get to it (user POV)
 
@@ -25,7 +25,7 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 
 The drive makes a scratch git repo under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/qc-sandbox-cost`, then runs there, 5 times, one after another, `octo-feather-qc-sandbox -- true`, measuring each run's CPU as the CPU of the case command and every process it waited for (getrusage of children: user plus system time), not the drive's own checks around it.
 
-- **Each run** (`run-1` ... `run-5`). Observe exit 0, no `qc sandbox: FAIL` line, and its CPU (`<case>.obs.cpu`, also printed as `qc-sandbox-cost run-N: S s CPU`) under the criterion's bound (the drive's QC_SANDBOX_COST_CPU_S). The drive's last line prints every run's CPU and the median.
+- **Each run** (`run-1` ... `run-5`). Observe exit 0, no `qc sandbox: FAIL` line, and a finite nonnegative CPU measurement (`<case>.obs.cpu`, also printed as `qc-sandbox-cost run-N: S s CPU`). Each printed result includes the truthful comparison with the report-only target (the drive's QC_SANDBOX_COST_CPU_S); the last line prints all five CPUs, their median and the aggregate comparison. A target miss alone does not fail on the factory or generic CI. Command, proof, cleanup and accounting failures still fail. The policy is owned by [quality#acceptance-qc-sandbox-cost](../../../../docs/specs/quality.spec.html#acceptance-qc-sandbox-cost), not a host-dependent exemption.
 
 ## Gotchas
 

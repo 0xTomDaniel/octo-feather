@@ -55,6 +55,12 @@ reads no Linear ticket; the sandbox proof fails if it is set.
                          aborting when the fetch fails
   --no-sandbox           debugging only: prints UNSANDBOXED, writes the report,
                          never changes or commits the status file
+  OCTO_FEATHER_QC_ADVISORY_AUTHORITY  explicit gpt-only-sprint-2026-11-08 authorization
+  OCTO_FEATHER_QC_ADVISORY_SCOPE  sandbox, light-test, revision-repair or final-cleanup
+                         (owner-authorized current-sprint lanes only; expires at
+                         sprint pause after final cleanup; quality#qc-advisory-sprint).
+                         Both required; declared-demo-only, sandboxed, no tagged tests
+                         or carried results. Reports advisory NOT RUN, not unavailable.
   OCTO_FEATHER_QC_MODEL  judge model override (still checked against the family)
   OCTO_FEATHER_QC_ARGS   extra pi args, e.g. "--thinking off" for a smoke
   OCTO_FEATHER_QC_RO_BINDS, OCTO_FEATHER_QC_PATH  ":"-separated paths bound
@@ -476,6 +482,12 @@ def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str, 
     mechanism). Advisory (judgment spec #rule-advisory): stored beside the result as `advisory`, never read to decide it;
     any failure to get an answer shows as unavailable with its reason and changes nothing else."""
     ids = [i for i, r in done.items() if r.get("record") and r.get("evidence") == "complete" and not r.get("carried")]
+    if os.environ.get("OCTO_FEATHER_QC_ADVISORY_AUTHORITY"):
+        for result in done.values():
+            result["advisory"] = {"status": "NOT RUN", "authority": os.environ["OCTO_FEATHER_QC_ADVISORY_AUTHORITY"],
+                                   "scope": os.environ["OCTO_FEATHER_QC_ADVISORY_SCOPE"],
+                                   "expiry": "sprint pause after final cleanup"}
+        return
     if not ids:
         return
     loader = importlib.machinery.SourceFileLoader("octo_feather_qa", str(KIT / "scripts" / "octo-feather-qa"))
@@ -522,6 +534,8 @@ def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list
 
 def advised(a: dict[str, Any]) -> str:
     """The advisory line shown beside a result."""
+    if a.get("status") == "NOT RUN":
+        return f"advisory NOT RUN (authority {a['authority']}; scope {a['scope']}; expiry {a['expiry']})"
     by = f"{a['question']} by {a['model'] or 'the kit judgment model'}"
     if "unavailable" in a:
         return f"advisory model judgment unavailable ({by}): {a['unavailable']}; the result stands as decided"
@@ -872,6 +886,13 @@ def main(argv: list[str]) -> int:
     tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
     tests |= unrecorded([i for i in ids if i not in tests and i not in carried], tags, stem, head)
     demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests and i not in carried}
+
+    authority = os.environ.get("OCTO_FEATHER_QC_ADVISORY_AUTHORITY")
+    scope = os.environ.get("OCTO_FEATHER_QC_ADVISORY_SCOPE")
+    if (authority is not None or scope is not None) and (
+            authority != "gpt-only-sprint-2026-11-08" or scope not in
+            ("sandbox", "light-test", "revision-repair", "final-cleanup") or nosb or len(demos) != len(ids)):
+        die(64, "advisory authorization requires its named authority and authorized scope, sandboxed declared-demo-only QC; no fallback, tagged or carried results")
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")
