@@ -1,0 +1,14 @@
+Seeded defect: the tab's PATH loses its ~/.local/bin fallback (herdr-spawn; owner ruling #261, #437).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-spawn b/.agents/skills/herdr-comms/assets/herdr-spawn
+index 687e6a6..b158bb9 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-spawn
++++ b/.agents/skills/herdr-comms/assets/herdr-spawn
+@@ -99,7 +99,7 @@ launch_argv+=(--session-id "$session")
+ # (where the Pi and Herdr installers put them): a stub the caller put first still wins (owner ruling #261, #437).
+ rest="$(jq -r '.path // empty' <<<"$role_json")"
+ tab_env=(--env "HOME=$HOME"
+-  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:${rest:-$PATH}:$HOME/.local/bin"
++  --env "PATH=$root/.agents/skills/herdr-comms/assets:$root/scripts:${rest:-$PATH}"
+   --env "OCTO_FEATHER_ROLE=$role" --env "OCTO_FEATHER_SESSION_ID=$session"
+   --env "OCTO_FEATHER_PARENT=$parent")
+ [[ -z "$model" ]] || tab_env+=(--env "OCTO_FEATHER_OPERATING_MODEL=$model")

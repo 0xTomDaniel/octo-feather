@@ -1,0 +1,12 @@
+Seeded defect: park prints its close report on stdout beside the hand-off line (herdr-close --park).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-close b/.agents/skills/herdr-comms/assets/herdr-close
+index 25b8e9f..122d99e 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-close
++++ b/.agents/skills/herdr-comms/assets/herdr-close
+@@ -85,5 +85,5 @@ done
+ 
+ report="$kind=$id ${kind}_close_rc=$rc killed=$killed"
+ if [[ -z "$line" ]]; then echo "$report"
+-else echo "$report" >&2; echo "$line"; fi
++else echo "$report"; echo "$line"; fi
+ exit "$rc"

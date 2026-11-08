@@ -3,14 +3,13 @@ table of the box onboarding file (scripts/pi-role --help, Commit identity), appl
 launch; a launch of a role that would commit, with it unset, refuses naming the setting and how to
 set it. Driven through the commands: `pi-role --set-identity` writes it in the scratch HOME's state
 dir; a headless `pi-role agents/implementer.md -p` starts a stand-in pi that commits in a scratch
-repo with no user config (no model call); herdr-spawn (the pane launch) with the fake herdr of
-tests/fixtures/herdr-spawn records the tab's env; `just install-check` reports the setting."""
+repo with no user config (no model call); herdr-spawn (the pane launch) over the testkit's Herdr
+world, which records the tab's env; `just install-check` reports the setting."""
 
 from __future__ import annotations
 
 import os
 import re
-import shutil
 import subprocess
 from typing import TYPE_CHECKING
 
@@ -58,18 +57,11 @@ def onboarding(s: Scratch) -> Path:
 
 
 def spawn(s: Scratch, cwd: Path, *, want: int) -> Path:
-    """herdr-spawn of an implementer pane at CWD with the fake herdr; the fake's state dir."""
+    """herdr-spawn of an implementer pane at CWD with the testkit's Herdr world (testkit/herdr.py,
+    FAKE_HERDR); the world's dir."""
     d = s.root / "herdr"
-    hb = s.root / "herdrbin"
-    for x in (d, hb):
-        x.mkdir(exist_ok=True)
-    for f in (ROOT / "tests" / "fixtures" / "herdr-spawn").iterdir():
-        shutil.copy(f, hb / f.name)
-    env = {
-        "FAKE_HERDR_DIR": str(d),
-        "PATH": f"{hb}{os.pathsep}{s.env['PATH']}",
-        "HERDR_PANE_ID": "w9:p0",
-    }
+    d.mkdir(exist_ok=True)
+    env = {"FAKE_HERDR": str(d), "HERDR_PANE_ID": "w9:p0"}
     spawner = str(ROOT / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-spawn")
     s.run(
         [spawner, "--workspace", "w9", "--name", "t1", "--role", "implementer", "--cwd", str(cwd)],

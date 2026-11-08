@@ -1,0 +1,14 @@
+Seeded defect: the caller's LINEAR_API_KEY never reaches the tab's env (herdr-spawn; spec remote#host-tracker-key).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-spawn b/.agents/skills/herdr-comms/assets/herdr-spawn
+index 687e6a6..3225336 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-spawn
++++ b/.agents/skills/herdr-comms/assets/herdr-spawn
+@@ -106,7 +106,7 @@ tab_env=(--env "HOME=$HOME"
+ for kv in "${role_env[@]}"; do tab_env+=(--env "$kv"); done
+ # The Linear key comes only from the caller's environment (spec remote#host-tracker-key): passed
+ # on when set, never written to any file; unset in the caller means unset in the tab.
+-[[ -z "${LINEAR_API_KEY:-}" ]] || tab_env+=(--env "LINEAR_API_KEY=$LINEAR_API_KEY")
++[[ -z "${LINEAR_API_KEY:-}" ]] || true
+ out="$(herdr tab create --workspace "$workspace" --label "$label" --cwd "$cwd" "${tab_env[@]}" --no-focus)"
+ tab="$(jq -r '.result.tab.tab_id // empty' <<<"$out")"
+ pane="$(jq -r '.result.root_pane.pane_id // empty' <<<"$out")"

@@ -29,8 +29,6 @@ scripts/octo-feather-qc-sandbox shell
 scripts/octo-feather-spec-chat shell
 scripts/octo-feather-start shell
 scripts/octo-feather-state shell
-tests/fixtures/herdr-say/herdr shell
-tests/fixtures/herdr-spawn/herdr shell
 tests/fixtures/qc-judge/pi shell
 
 # `language-exempt`: paths scripts/check-languages does not scan, each with its reason.

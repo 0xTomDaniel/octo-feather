@@ -1,0 +1,14 @@
+Seeded defect: uv's cache bound back read-only, no overlay, so the judge cannot write into it (scripts/octo-feather-qc-sandbox step 5).
+diff --git a/scripts/octo-feather-qc-sandbox b/scripts/octo-feather-qc-sandbox
+index 425ebab..53db9e4 100755
+--- a/scripts/octo-feather-qc-sandbox
++++ b/scripts/octo-feather-qc-sandbox
+@@ -288,7 +288,7 @@ if [[ "$phase" == setup ]]; then
+     || die "run tmpfs takes no user.* xattrs: the worktree overlay $kreq"
+   mount -t overlay overlay -o "lowerdir=$WT,upperdir=$OV/u,workdir=$OV/w,userxattr" "$WT" || die "worktree overlay with userxattr: $kreq"
+   if [[ -n "$UC" ]]; then   # uv's cache: the same overlay, its lower the real cache bound read-only above
+-    mkdir -p "$UC" && mount -t overlay overlay -o "lowerdir=$OV/uvl,upperdir=$OV/uvu,workdir=$OV/uvw,userxattr" "$UC" \
++    mkdir -p "$UC" && mount --bind "$OV/uvl" "$UC" \
+       || die "uv cache overlay $UC with userxattr: $kreq"
+     printf '%s\n%s\n' "$UC" "$OV/uvu" > "$SCR/uvcache"
+   fi

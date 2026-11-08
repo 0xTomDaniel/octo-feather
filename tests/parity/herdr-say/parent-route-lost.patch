@@ -1,0 +1,13 @@
+Seeded defect: a supervisor may no longer reach a parked worker whose line names it as parent (herdr-say's up-chain guard, #75).
+diff --git a/.agents/skills/herdr-comms/assets/herdr-say b/.agents/skills/herdr-comms/assets/herdr-say
+index dc36990..52cfd31 100755
+--- a/.agents/skills/herdr-comms/assets/herdr-say
++++ b/.agents/skills/herdr-comms/assets/herdr-say
+@@ -87,7 +87,6 @@ allowed() {
+   # A supervisor's own parked agent: not live, its latest parked line in the
+   # caller's lane log (the caller's agent name) or naming the caller as parent.
+   if [[ "$role" == supervisor && -z "$pane" && -n "${HERDR_PANE_ID:-}" ]] && line="$(parked "$target")"; then
+-    [[ "$(jq -r '.parent // empty' <<<"$line")" == "$HERDR_PANE_ID" ]] && return 0
+     lane="$(herdr agent get "$HERDR_PANE_ID" 2>/dev/null | jq -r '.result.agent.name // empty' 2>/dev/null || true)"
+     [[ -n "$lane" && "$(jq -r .lane <<<"$line")" == "$lane" ]] && return 0
+   fi
