@@ -39,6 +39,8 @@ S4 = (
     "post-merge gh12 PR #12: step 1 merged ok; step 2 main CI ok; step 3 kit refresh ok; step 4 "
     "tell supervisors ok"
 )
+PR_LIST = "pr list --base gh12 --state open --json number -R o/r"
+PR_EDIT = "pr edit 13 --base main -R o/r"
 ALREADY = (
     "worktree of gh12 already removed; no open PR based on gh12; local branch gh12 already "
     "deleted; remote branch gh12 already deleted from origin"
@@ -118,7 +120,10 @@ class World:
                 "url": "https://github.com/o/r/pull/12",
             },
         )
-        g.put(13, {"number": 13, "state": "OPEN", "baseRefName": "gh12", "headRefName": "gh13"})
+        # GitHub's recorded answers: PR #13 open on gh12 (then none: retargeted), its retarget
+        g.tape(
+            {PR_LIST: ['[{"number":13}]\n', "[]\n"], PR_EDIT: ["https://github.com/o/r/pull/13\n"]}
+        )
         g.store("repo.json", {"nameWithOwner": "o/r"})
         g.store("api/repos/o/kit.json", {"nameWithOwner": "o/kit"})
         g.store(
@@ -235,7 +240,10 @@ def own_space(s: Scratch) -> None:
     assert not w.wt.is_dir(), "worktree kept"
     assert not w.branch_on(w.r), "local branch kept"
     assert not w.branch_on(w.origin, bare=True), "remote branch kept"
-    assert "pr edit 13 --base main -R o/r" in w.s.gh.log(), f"no retarget: {w.s.gh.log()}"
+    sent = [
+        json.loads(x)["request"] for x in (w.s.gh.dir / "requests.jsonl").read_text().splitlines()
+    ]
+    assert sent[:2] == [PR_LIST, PR_EDIT], f"PRs on gh12 listed, then #13 retargeted: {sent}"
     r, s5 = w.run(0)
     assert s5 == f"step 5 teardown: ok: space zt5 already closed; {ALREADY}", f"rerun: {s5}"
 
@@ -350,7 +358,7 @@ def kept(s: Scratch) -> None:
     w.kept("unmerged")
     w = World(s, "retarget")
     w.archived("zt1:p9")
-    w.s.gh.tape({"pr edit 13 --base main -R o/r": [{"err": "HTTP 502\n", "exit": 1}]})
+    w.s.gh.tape({PR_LIST: ['[{"number":13}]\n'], PR_EDIT: [{"err": "HTTP 502\n", "exit": 1}]})
     _, s5 = w.run(1)
     assert "retarget PR #13 to main by hand" in s5, f"failed retarget: {s5}"
     assert w.branch_on(w.origin, bare=True), "the remote branch was deleted before the retarget"

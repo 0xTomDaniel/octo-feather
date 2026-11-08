@@ -1,8 +1,7 @@
 Seeded defect: a denied call still names its anchors, so a change only it logs passes (issue-lifecycle #gates-spec-calls).
-diff --git a/scripts/octo-feather-spec-status b/scripts/octo-feather-spec-status
-index 5289964..1d6e04f 100755
---- a/scripts/octo-feather-spec-status
-+++ b/scripts/octo-feather-spec-status
+diff --git a/scripts/octo_feather_spec_status.py b/scripts/octo_feather_spec_status.py
+--- a/scripts/octo_feather_spec_status.py
++++ b/scripts/octo_feather_spec_status.py
 @@ -345,7 +345,7 @@ def check_calls(status: Path) -> list[str]:
      new = spec.read_text(encoding="utf-8")
      was, now = criteria_of(old), criteria_of(new)

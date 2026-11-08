@@ -1,9 +1,8 @@
 Seeded defect: a rule item's ADR owner passes when no ADR file has its number.
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index b9edc28..3b1db17 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1739,7 +1739,7 @@ def rule_why_not(rest: str, adr: Path) -> str | None:
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -2163,7 +2163,7 @@ def rule_why_not(rest: str, adr: Path) -> str | None:
      hits = sorted(adr.glob(f"{a.group(2) or a.group(3)}-*.md")) if adr.is_dir() else []
      if a.group(1):
          hits = [h for h in hits if f"docs/adr/{h.name}".startswith(a.group(1))]

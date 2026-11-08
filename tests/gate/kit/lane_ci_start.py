@@ -48,10 +48,16 @@ class Lane:
         self.h12 = self.h[:12]
 
     def pr(
-        self, head: str, *, draft: bool, runs: bool = True, jobs: list[str] | None = None
+        self,
+        head: str,
+        *,
+        draft: bool,
+        runs: bool = True,
+        jobs: list[str] | None = None,
+        polls: int = 1,
     ) -> None:
         """PR #7 at HEAD (a DRAFT); with RUNS, the head's latest run 2 of the workflow beside an
-        earlier run 1 the draft skipped, run 2's JOBS (each read's answer, the last repeated)."""
+        earlier run 1 the draft skipped, run 2's JOBS (one recorded answer per poll)."""
         self.s.gh.put(
             7,
             {
@@ -76,11 +82,15 @@ class Lane:
             {
                 f"{API}runs?head_sha={head}&per_page=100": [
                     json.dumps(listed if runs else empty) + "\n"
-                ],
+                ]
+                * polls,
                 f"{API}runs/1/jobs?per_page=100": [
                     json.dumps({"total_count": 2, "jobs": skipped}) + "\n"
-                ],
+                ]
+                * polls,
                 f"{API}runs/2/jobs?per_page=100": jobs or [jobs_of("in_progress", "")],
+                # gh's answer to marking it ready (the PR as stored stays as read before)
+                "pr ready 7": ['\u2713 Pull request o/r#7 is marked as "ready for review"\n'],
             }
         )
 
@@ -152,6 +162,7 @@ def started(s: Scratch) -> None:
         lane.h,
         draft=True,
         jobs=[jobs_of("in_progress", ""), jobs_of("completed", "success", "queued")],
+        polls=2,
     )
     r = lane.ci_start(0, "--wait", "30")
     log = s.gh.log()
@@ -188,10 +199,10 @@ def not_started(s: Scratch) -> None:
         (jobs_of("in_progress", "", "pending"), "run 2 job check pending"),
         (jobs_of("completed", "success", "completed", "skipped"), "run 2 job check skipped"),
     ):
-        lane.pr(lane.h, draft=False, jobs=[jobs])
+        lane.pr(lane.h, draft=False, jobs=[jobs, jobs], polls=2)
         r = lane.ci_start(1, "--wait", "1")
         assert within + why in r.err, f"{why}: {r.err}"
-    lane.pr(lane.h, draft=True, runs=False)
+    lane.pr(lane.h, draft=True, runs=False, polls=2)
     r = lane.ci_start(1, "--wait", "1")
     assert "within 1s: no workflow run on it yet" in r.err, f"no run: {r.err}"
 

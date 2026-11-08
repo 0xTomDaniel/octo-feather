@@ -1,9 +1,8 @@
 Seeded defect: a full gate pass recorded on a dirty tree (clean false) counts as the head's full pass (octo-feather-lane --help, merge-ask: a record whose clean is true; issue-lifecycle #acceptance-merge-ask-full-proof).
-diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
-index 00367e7..449c758 100755
---- a/scripts/octo-feather-lane
-+++ b/scripts/octo-feather-lane
-@@ -1237,7 +1237,7 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
+diff --git a/scripts/octo_feather_lane.py b/scripts/octo_feather_lane.py
+--- a/scripts/octo_feather_lane.py
++++ b/scripts/octo_feather_lane.py
+@@ -1260,7 +1260,7 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
          rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
          if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
              continue
