@@ -285,8 +285,8 @@
     "acceptance-qc-sandbox-cost": {
       "status": "built",
       "pr": 698,
-      "record": "20261108T215806Z-f9607188",
-      "commit": "34f9034606f4c5c11ad9a2ad6a8241c76b4e30ea",
+      "record": "20261108T222658Z-31923476",
+      "commit": "031d6788be8f0611c3a85b028645831f13f82d68",
       "tests": []
     }
   }
