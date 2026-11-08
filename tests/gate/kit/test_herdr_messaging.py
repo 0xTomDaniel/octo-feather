@@ -41,6 +41,7 @@ def test_herdr_spawn_plain(case: Case) -> None:
     case(spawn_plain)
 
 
+@pytest.mark.e2e
 def test_herdr_spawn_dialog(case: Case) -> None:
     case(spawn_dialog)
 
