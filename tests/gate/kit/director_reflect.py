@@ -59,8 +59,8 @@ class Director:
             f"issue list --repo {kit_repo} --state all --limit 1000 --search "
             '"correction-lane" in:title --json number,title,state,closedAt'
         )
-        create = [f"https://github.com/{kit_repo}/issues/704\n"]
-        s.gh.tape({search: ["[]\n"], f"GH_REPO={kit_repo} issue create": create})
+        self.search = search
+        s.gh.tape({search: ["[]\n"]})
         self.state = s.root / "state" / "octo-feather"
         self.lanes = self.state / "lanes"
         self.dlog = self.state / "director.handoffs.jsonl"
@@ -128,7 +128,33 @@ def writer_route(s: Scratch) -> None:
         ],
     )
     b = len(d.dlog.read_text().splitlines())
-    r = d.lane("reflect", "--director")
+    from lane_correction import create_request, recording_run  # noqa: PLC0415 (only this case)
+
+    expected_request: list[str] = []
+
+    def arm_create() -> None:
+        findings = [json.loads(x) for x in d.dlog.read_text().splitlines()[b:]]
+        at = next(x["at"] for x in findings if x.get("class") == "reflection-missed")
+        title = (
+            f"[correction-lane reflection-missed {at} 6aea7eb4] "
+            "change the question list: reflection-missed"
+        )
+        request = create_request("0xTomDaniel/octo-feather", title)
+        expected_request.append(request)
+        tape_file = s.gh.dir / "tape.json"
+        tape = json.loads(tape_file.read_text())
+        tape[request] = ["https://github.com/0xTomDaniel/octo-feather/issues/704\n"]
+        tape_file.write_text(json.dumps(tape))
+
+    r = recording_run(
+        s, [kit("octo-feather-lane"), "reflect", "--director"], (d.search,), arm_create
+    )
+    sent = [json.loads(x) for x in (s.gh.dir / "requests.jsonl").read_text().splitlines()]
+    assert [x["request"] for x in sent] == [d.search, *expected_request], sent
+    assert (
+        "gh1 reflection found no gap; gh3 review found duplicated-rule; reword undetected-rule"
+        in sent[-1]["body"]
+    ), sent
     out = r.out + r.err
     assert "reflection: director, 2 findings, questions owner-asked," in out, (
         f"no reflection summary: {out}"

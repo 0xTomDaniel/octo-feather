@@ -12,9 +12,16 @@ counts, when a class is due, refiling, reflection-missed, owner-caught), and com
 from __future__ import annotations
 
 import json
+import os
 import re
+import signal
+import subprocess
+from typing import TYPE_CHECKING
 
 from testkit import Ran, Scratch, kit, main, reflector
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 KIT_REPO = "0xTomDaniel/octo-feather"
 
@@ -31,6 +38,58 @@ LIST = (
 )
 # The number GitHub gives the next issue of each repo (its own sequence, per repo).
 FIRST = {"o/t": 901, KIT_REPO: 704}
+
+
+def create_request(repo: str, title: str) -> str:
+    return f"GH_REPO={repo} issue create --title {title} --body-file -"
+
+
+def recording_run(
+    s: Scratch, cmd: list[str], searches: tuple[str, ...], arm: Callable[[], None]
+) -> Ran:
+    """Pause the recorded search after the product writes findings, then arm exact creates."""
+    ready, release = s.root / "gh-ready", s.root / "gh-release"
+    os.mkfifo(ready)
+    os.mkfifo(release)
+    tape_file = s.gh.dir / "tape.json"
+    tape = json.loads(tape_file.read_text())
+    for search in searches:
+        answer = tape[search][0]
+        tape[search][0] = {"out": answer, "ready": str(ready), "release": str(release)}
+    tape_file.write_text(json.dumps(tape))
+    p = subprocess.Popen(
+        cmd,
+        env=s.env,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        start_new_session=True,
+    )
+
+    def timeout(_sig: int, _frame: object) -> None:
+        msg = "gh recording rendezvous timed out"
+        raise TimeoutError(msg)
+
+    previous = signal.signal(signal.SIGALRM, timeout)
+    signal.alarm(60)
+    try:
+        for search in searches:
+            with ready.open() as f:
+                assert f.read() == search + "\n", "unexpected gh search or readiness EOF"
+            arm()
+            with release.open("w") as f:
+                f.write("release\n")
+        out, err = p.communicate(timeout=60)
+        assert p.returncode == 0, f"{cmd}: {p.returncode}\n{out}\n{err}"
+        return Ran(p.returncode, out.strip(), err.strip())
+    finally:
+        signal.alarm(0)
+        signal.signal(signal.SIGALRM, previous)
+        if p.poll() is None:
+            os.killpg(p.pid, signal.SIGKILL)
+        p.communicate()
+        ready.unlink()
+        release.unlink()
 
 
 class Corr:
@@ -73,25 +132,81 @@ class Corr:
         )
         (d / f"{name}.handoffs.jsonl").write_text("".join(x + "\n" for x in lines))
 
-    def arm(self) -> None:
-        """The gh's recordings for the next command: each repo's search, its next new issues."""
+    def arm(self, creates: tuple[tuple[str, str], ...] = ()) -> None:
+        """Exact search and create requests expected in the next command."""
         tapes: dict[str, list[object]] = {}
         for repo, held in self.held.items():
             tapes[LIST.format(repo)] = [json.dumps(held) + "\n"]
-            n = self.next[repo]
-            tapes[f"GH_REPO={repo} issue create"] = [
-                f"https://github.com/{repo}/issues/{k}\n" for k in range(n, n + 4)
+        for repo, title in creates:
+            tapes[create_request(repo, title)] = [
+                f"https://github.com/{repo}/issues/{self.next[repo]}\n"
             ]
         self.s.gh.tape(tapes)
 
-    def lane_cmd(self, *args: str) -> str:
+    def lane_cmd(
+        self,
+        *args: str,
+        creates: tuple[tuple[str, str], ...] = (),
+        missed: bool = False,
+        searches: int = 1,
+    ) -> str:
         """octo-feather-lane ARGS; each issue it filed (its create request, answered the repo's
         next number) recorded in `filed` and held by its repo from then on."""
-        self.arm()
-        r: Ran = self.s.run([kit("octo-feather-lane"), *args])
+        self.arm(creates)
+        if searches != 1:
+            tape_file = self.s.gh.dir / "tape.json"
+            tape = json.loads(tape_file.read_text())
+            tape[LIST.format("o/t")] *= searches
+            tape_file.write_text(json.dumps(tape))
+        expected_creates = [create_request(repo, title) for repo, title in creates]
+        cmd = [kit("octo-feather-lane"), *args]
+        if missed:
+
+            def arm_missed() -> None:
+                tape = json.loads((self.s.gh.dir / "tape.json").read_text())
+                for repo, path, tag in (
+                    ("o/t", self.lanes / "gh6.handoffs.jsonl", "fe02d601"),
+                    (KIT_REPO, self.dlog, "d91e4c73"),
+                ):
+                    findings = [json.loads(x) for x in path.read_text().splitlines()]
+                    at = next(
+                        (d["at"] for d in findings if d.get("class") == "reflection-missed"), None
+                    )
+                    if at is None:
+                        continue
+                    title = (
+                        f"[correction-lane reflection-missed {at} {tag}] "
+                        "change the question list: reflection-missed"
+                    )
+                    request = create_request(repo, title)
+                    if request not in expected_creates:
+                        expected_creates.append(request)
+                    tape[request] = [f"https://github.com/{repo}/issues/{self.next[repo]}\n"]
+                (self.s.gh.dir / "tape.json").write_text(json.dumps(tape))
+
+            tape_file = self.s.gh.dir / "tape.json"
+            tape = json.loads(tape_file.read_text())
+            tape[LIST.format("o/t")].append(
+                json.dumps(self.held["o/t"]) + "\n"
+            )  # gh5 and gh6 owners
+            tape_file.write_text(json.dumps(tape))
+            r = recording_run(self.s, cmd, (LIST.format("o/t"), LIST.format(KIT_REPO)), arm_missed)
+        else:
+            r = self.s.run(cmd)
         log = (self.s.gh.dir / "requests.jsonl").read_text().splitlines()
-        for line in log[self.seen :]:
-            req = json.loads(line)
+        sent = [json.loads(line) for line in log[self.seen :]]
+        assert [
+            r["request"] for r in sent if " issue create " in r["request"]
+        ] == expected_creates, sent
+        if missed:
+            assert [r["request"] for r in sent] == [
+                LIST.format("o/t"),
+                LIST.format("o/t"),
+                expected_creates[0],
+                LIST.format(KIT_REPO),
+                expected_creates[1],
+            ], sent
+        for req in sent:
             m = re.fullmatch(
                 r"GH_REPO=(\S+) issue create --title (.*) --body-file -", req["request"]
             )
@@ -144,7 +259,11 @@ def lifecycle(s: Scratch) -> None:
     c.lane("gh2", cr("2026-10-21T00:00:00Z", "dup-rule", "gh2 restated the gate rule"))
     route = "Finding: class: dup-rule | question: writer-route | route: agents/implementer.md Rules"
     c.reply("director", route + " | summary: 2 code-review findings in gh1, gh2")
-    out = c.lane_cmd("archive", "gh2")
+    out = c.lane_cmd(
+        "archive",
+        "gh2",
+        creates=(("o/t", "[correction-lane dup-rule] repeated finding class: dup-rule"),),
+    )
     filed(
         out,
         901,
@@ -173,7 +292,16 @@ def lifecycle(s: Scratch) -> None:
     assert len(c.issues()) == 1, f"closed after the latest finding: filed again: {out}"
     c.close(901, "2026-10-23T12:00:00Z")
     c.lane("gh5", cr("2026-10-24T00:00:00Z", "dup-rule", "gh5 after the close"))
-    filed(c.lane_cmd("archive", "gh5"), 902, "o/t", "dup-rule")
+    filed(
+        c.lane_cmd(
+            "archive",
+            "gh5",
+            creates=(("o/t", "[correction-lane dup-rule] repeated finding class: dup-rule"),),
+        ),
+        902,
+        "o/t",
+        "dup-rule",
+    )
     with c.dlog.open("a") as f:
         for at, x in (("2026-10-25T00:00:00Z", "a"), ("2026-10-25T01:00:00Z", "b")):
             f.write(
@@ -192,7 +320,7 @@ def lifecycle(s: Scratch) -> None:
         "reflection/questions.json owner-asked | summary: owner caught a stale PR after the last "
         "reflection; add a stale-PR question",
     )
-    out = c.lane_cmd("archive", "gh6")
+    out = c.lane_cmd("archive", "gh6", missed=True)
     filed(out, 903, "o/t", "reflection-missed ")
     filed(out, 704, KIT_REPO, "reflection-missed ")
     by = c.issues()
@@ -204,7 +332,7 @@ def lifecycle(s: Scratch) -> None:
     assert not any("owner-caught" in str(i["title"]) for i in by.values()), by
     assert [by[n]["repo"] for n in (901, 902, 903, 704)] == ["o/t", "o/t", "o/t", KIT_REPO], by
     c.none()
-    none_filed(c, c.lane_cmd("reflect", "--director"), 4)
+    none_filed(c, c.lane_cmd("reflect", "--director", searches=2), 4)
 
 
 def other_lane(s: Scratch) -> None:
@@ -219,7 +347,11 @@ def other_lane(s: Scratch) -> None:
         "gh2", cr("2026-10-21T00:00:00Z", "dup-rule", "gh2 restated the gate rule"), archived=True
     )
     c.lane("gh3")
-    out = c.lane_cmd("archive", "gh3")
+    out = c.lane_cmd(
+        "archive",
+        "gh3",
+        creates=(("o/t", "[correction-lane dup-rule] repeated finding class: dup-rule"),),
+    )
     filed(
         out,
         901,
@@ -256,7 +388,11 @@ def routed(s: Scratch) -> None:
         "Finding: class: stale-check | question: writer-route | route: agents/code-reviewer.md "
         "Rules | summary: 2 code-review findings in gh1, gh2",
     )
-    out = c.lane_cmd("reflect", "--director")
+    out = c.lane_cmd(
+        "reflect",
+        "--director",
+        creates=(("o/t", "[correction-lane stale-check] repeated finding class: stale-check"),),
+    )
     rest = re.escape(" (2 findings; route: agents/code-reviewer.md Rules)") + "$"
     filed(out, 901, "o/t", "stale-check", rest)
     (i,) = c.issues().values()
@@ -297,7 +433,11 @@ def counts(s: Scratch) -> None:
         '"summary":"director saw it"}\n'
     )
     c.lane("gh3")
-    out = c.lane_cmd("archive", "gh3")
+    out = c.lane_cmd(
+        "archive",
+        "gh3",
+        creates=(("o/t", "[correction-lane judged] repeated finding class: judged"),),
+    )
     filed(out, 901, "o/t", "judged", re.escape(" (2 findings; "))
     assert len(c.issues()) == 1, f"counts: want only judged filed: {out} {c.issues()}"
 

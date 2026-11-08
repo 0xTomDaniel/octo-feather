@@ -31,14 +31,16 @@ way (gh reads the URL itself), an unstored one GitHub's unresolved repository.
 A call no stored answer covers (a run list while runs start and end, a run watch, a PR marked
 ready or retargeted, another repo's issue search or new issue) is a recording, never computed:
 $FAKE_GH/tape.json maps a request (its exact argv, one line as the log writes it, after
-`GH_REPO=O/R ` when the caller names another repo so), or a request's repo and first two words
-alone (`GH_REPO=o/t issue create`: what a new issue's URL depends on, never its title or body),
-to its recorded answers in order, each its
-stdout (a string) or {"out", "err", "exit"}; the Nth such request replays the Nth, the last
-repeated (the count in tape.n.json), and is appended to requests.jsonl, {"request", "body"}, the
+`GH_REPO=O/R ` when the caller names another repo so), to its recorded answers in order, each its
+stdout (a string) or {"out", "err", "exit"}; the Nth such request replays the Nth (the count in
+tape.n.json), missing or exhausted recordings refuse, and it is appended to requests.jsonl,
+{"request", "body"}, the
 body it sent (--body-file, --input), so a scenario asserts what was sent, in order. An issue list
 or create for another repo with no recording fails loudly, exit 2; anything else no rule above
-answers exits 2 naming it.
+answers exits 2 naming it. A recorded search answer may also name `ready` and `release` FIFOs:
+write its exact request to ready, wait for `release\\n`, then replay the stored response. This
+lets a scenario arm a timestamped create after the product writes the finding. EOF, I/O errors
+and a 60-second safety timeout refuse; no response is computed from the request.
 """
 
 import json
@@ -204,9 +206,9 @@ def taped(a: list[str]) -> bool:
         return False
     tape: dict[str, list[object]] = json.loads(read(at("tape.json")))
     call = request(a)
-    key = call if call in tape else request(a[:2])  # the exact request, else its repo and verb
+    key = call
     if key not in tape:
-        return False
+        return False  # only the pre-existing store surface may answer; never another tape key
     sent = None
     for f in ("--body-file", "--input"):
         if f in a:
@@ -218,8 +220,30 @@ def taped(a: list[str]) -> bool:
     k = n.get(key, 0)
     with open(n_file, "w") as f:
         f.write(json.dumps(n | {key: k + 1}))
-    ans = tape[key][min(k, len(tape[key]) - 1)]
+    if k >= len(tape[key]):
+        die(f"fake gh: exhausted recording for: {call} (tape.json)", 2)
+    ans = tape[key][k]
     d = {"out": ans} if isinstance(ans, str) else json.loads(json.dumps(ans))
+    if "ready" in d:
+        # The scenario arms an exact timestamped create after the product writes its finding.
+        # Only readiness travels over these FIFOs; the response above remains recorded data.
+        import signal  # noqa: PLC0415 (only handshake calls pay for signals)
+
+        def timeout(_sig: int, _frame: object) -> None:
+            die(f"fake gh: recording handshake timed out for: {call}", 2)
+
+        signal.signal(signal.SIGALRM, timeout)
+        signal.alarm(60)
+        try:
+            with open(d["ready"], "w") as f:
+                f.write(call + "\n")
+            with open(d["release"]) as f:
+                if f.read() != "release\n":
+                    die(f"fake gh: recording handshake EOF/error for: {call}", 2)
+        except OSError as e:
+            die(f"fake gh: recording handshake error for: {call}: {e}", 2)
+        finally:
+            signal.alarm(0)
     sys.stdout.write(str(d.get("out", "")))
     sys.stderr.write(str(d.get("err", "")))
     sys.exit(int(str(d.get("exit", 0))))
@@ -330,7 +354,7 @@ def answer(a: list[str]) -> None:
     elif a[:1] == ["api"] and "-X" in a and "--input" in a:
         write(a)
     else:
-        die(f"fake gh: unexpected {a}", 2)
+        die(f"fake gh: no recording for: {request(a)} (tape.json)", 2)
 
 
 if __name__ == "__main__":

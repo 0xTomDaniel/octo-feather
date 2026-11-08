@@ -172,8 +172,8 @@ class Lane:
         wf: Sequence[tuple[str, str]] | None = (("check.yml", "blob"),),
     ) -> None:
         """PR #7 merged at H (self.pr); the merge commit's push runs, LISTS one answer per run
-        list (the last repeated); each WATCH run's watch answer (a watch of any other run
-        succeeds); BASE the base's later push runs of `check` per list; COMPARE each sha's compare
+        list (no repetition after exhaustion); each WATCH run's watch answer; BASE the base's later
+        push runs of `check` per list; COMPARE each sha's compare
         status against the merge commit; the merge commit's .github/workflows entries WF (None: no
         .github). With self.repo, gh is asked with -R it."""
         g, m, repo = self.s.gh, self.merge, self.repo
@@ -314,7 +314,9 @@ def main_ci(s: Scratch) -> None:
     red_line = f"step 2 main CI: stopped: main CI red on {m12}: check failure "
     says(r, "red", red_line + "https://github.com/o/r/actions/runs/13", summary=STOP2)
     assert "concluded success" not in r.out, f"red: {r.out}"
-    lane.store(lists=[[busy]], watch={11: {"err": "failed to get run: HTTP 502\n", "exit": 1}})
+    lane.store(
+        lists=[[busy], [busy]], watch={11: {"err": "failed to get run: HTTP 502\n", "exit": 1}}
+    )
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
     assert re.search(
         r"step 2 main CI: stopped: gh run watch 11 failed.*https://github.com/o/r/actions/runs/11",
@@ -479,7 +481,7 @@ def kit_refresh(s: Scratch) -> None:
     ]
     ff = f"kit install {k} fast-forwarded {b12}..{m12}; just vendored-fetch ok; "
     stop3 = "step 3 kit refresh: stopped: "
-    lane.store(lists=[[green]])
+    lane.store(lists=[[green], [green], [green], [green]])  # behind, rerun, past, failing uv
     lane.install(b)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
     says(
@@ -539,7 +541,8 @@ def install_stops(s: Scratch) -> None:
     lane = Lane(s)
     m12, b, k = lane.m[:12], lane.b, lane.kit
     stop3 = "step 3 kit refresh: stopped: "
-    lane.store(lists=[[run1("check", "completed", "success", 11, lane.m)]])
+    green = run1("check", "completed", "success", 11, lane.m)
+    lane.store(lists=[[green], [green]])  # dirty, then diverged
     lane.install(b)
     (k / "stray").write_text("x\n")
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")

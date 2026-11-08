@@ -392,11 +392,13 @@ CORRECTION_SEARCH = ('issue list --repo {} --state all --limit 1000 --search "co
 TRACKERS = ("scratch/target", "0xTomDaniel/octo-feather")   # the drives' lane target and the kit's tracker
 
 
-def fake_gh(kit: str, sc: Path, held: dict[str, list[dict[str, Any]]] | None = None) -> dict[str, str]:
+def fake_gh(kit: str, sc: Path, held: dict[str, list[dict[str, Any]]] | None = None,
+            *, create_title: str | None = None) -> dict[str, str]:
     """The scratch env that fakes GitHub: the testkit's gh (tests/gate/kit/testkit/gh.py, its store and its recordings
     in its docstring) first on PATH as `gh`, its store SC/gh, so a correction lane a reflection files and a report's
     reads never reach GitHub (SKILL.md). Its recordings for each tracker (TRACKERS): the correction-lane search answers
-    HELD's issues of that repo (none by default), a new issue there the next numbers of that repo, from 901."""
+    HELD's issues of that repo (none by default); CREATE_TITLE records exactly that new issue in scratch/target,
+    answered as 901. No unlisted create is answered."""
     (sc / "gh").mkdir(parents=True, exist_ok=True)
     (sc / "ghbin").mkdir(parents=True, exist_ok=True)
     if not (sc / "ghbin" / "gh").is_symlink():
@@ -404,7 +406,9 @@ def fake_gh(kit: str, sc: Path, held: dict[str, list[dict[str, Any]]] | None = N
     tape: dict[str, list[str]] = {}
     for repo in TRACKERS:
         tape[CORRECTION_SEARCH.format(repo)] = [json.dumps((held or {}).get(repo, [])) + "\n"]
-        tape[f"GH_REPO={repo} issue create"] = [f"https://github.com/{repo}/issues/{n}\n" for n in range(901, 905)]
+    if create_title is not None:
+        tape[f"GH_REPO=scratch/target issue create --title {create_title} --body-file -"] = [
+            "https://github.com/scratch/target/issues/901\n"]
     (sc / "gh" / "tape.json").write_text(json.dumps(tape))
     (sc / "gh" / "tape.n.json").unlink(missing_ok=True)
     return {"PATH": f"{sc / 'ghbin'}:{os.environ.get('PATH', '')}", "FAKE_GH": str(sc / "gh"), "GH_TOKEN": "verify-fake-gh"}
@@ -794,17 +798,21 @@ def drive_correction_lane(f: Feature) -> None:
     args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or "1800",
-             **fake_gh(f.s.repo, sc)}
+             **fake_gh(f.s.repo, sc, create_title="[correction-lane duplicated-rule] repeated finding class: duplicated-rule")}
     # The real reflectors (SKILL.md: a role's model run is the one exception to offline), the tracker faked.
     f.run("file-live", "octo-feather-lane", "archive", "gh902")
     f.obs("file-live", "tracker", json.dumps({"issues": tracker_issues(sc)}))
+    f.obs("file-live", "requests", (sc / "gh" / "requests.jsonl").read_text())
 
     def filed(c: Case) -> bool:
         """The archive printed the key of one issue in the lane record's repository whose title carries the class's
         marker and whose body quotes both findings and names a route line; gh902 left lanes/."""
         m = re.search(r"(?m)^correction lane: filed (\d+) in github-issues scratch/target for duplicated-rule ", c.out)
         hits = [i for i in json.loads(c.o["tracker"]).get("issues", []) if m and str(i["number"]) == m[1]]
-        return (c.code == 0 and len(hits) == 1 and hits[0]["repo"] == "scratch/target"
+        requests = [json.loads(x)["request"] for x in c.o["requests"].splitlines()]
+        return (requests == [CORRECTION_SEARCH.format("scratch/target"),
+                             "GH_REPO=scratch/target issue create --title [correction-lane duplicated-rule] repeated finding class: duplicated-rule --body-file -"]
+                and c.code == 0 and len(hits) == 1 and hits[0]["repo"] == "scratch/target"
                 and "[correction-lane duplicated-rule]" in hits[0]["title"]
                 and all(x in hits[0]["body"] for x in (first, second, "Class: duplicated-rule", "Route: "))
                 and (lanes / "archive" / "gh902.toml").is_file())
@@ -859,15 +867,19 @@ def drive_correction_intake(f: Feature) -> None:
     (sc / "reply.lane").write_text(f"Questions: {qs('lane')}\nFindings: none\n")
     (sc / "reply.director").write_text(f"Questions: {qs('director')}\nFinding: class: stale-pointer | question: writer-route"
                                        " | route: agents/implementer.md Rules | summary: blocking in gh910 and gh911\n")
-    tr = fake_gh(f.s.repo, sc)
+    tr = fake_gh(f.s.repo, sc, create_title="[correction-lane stale-pointer] repeated finding class: stale-pointer")
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "REFLECT_STUB_DIR": str(sc), **tr, "PATH": f"{sc / 'bin'}:{tr['PATH']}"}
     f.run("file-rule", "octo-feather-lane", "archive", "gh912")
     f.obs("file-rule", "tracker", json.dumps({"issues": tracker_issues(sc)}))
+    f.obs("file-rule", "requests", (sc / "gh" / "requests.jsonl").read_text())
 
     def filed(c: Case) -> bool:
         issues = json.loads(c.o["tracker"]).get("issues", [])
-        return (c.code == 0 and len(issues) == 1 and "[correction-lane stale-pointer]" in issues[0]["title"]
+        requests = [json.loads(x)["request"] for x in c.o["requests"].splitlines()]
+        return (requests == [CORRECTION_SEARCH.format("scratch/target"),
+                             "GH_REPO=scratch/target issue create --title [correction-lane stale-pointer] repeated finding class: stale-pointer --body-file -"]
+                and c.code == 0 and len(issues) == 1 and "[correction-lane stale-pointer]" in issues[0]["title"]
                 and "Route: agents/implementer.md Rules" in issues[0]["body"] and re.search(
                     r"(?m)^correction lane: filed \d+ in github-issues scratch/target for stale-pointer \(2 findings; route: agents/implementer.md Rules\)$",
                     c.out) is not None)
