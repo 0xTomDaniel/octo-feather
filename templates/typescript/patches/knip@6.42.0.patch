@@ -1,0 +1,11 @@
+diff --git a/dist/util/jiti.js b/dist/util/jiti.js
+index 8da75dbe0a06b630aa9da82130cd7840d4461c3f..317b5f2eb77106572d4a4d00f76f2aae5946b62c 100644
+--- a/dist/util/jiti.js
++++ b/dist/util/jiti.js
+@@ -10,5 +10,5 @@ const options = {
+     tsconfigPaths: true,
+     jsx: true,
+ };
+-const createLoader = (options) => createJiti(process.cwd(), options);
++const createLoader = (options) => createJiti(join(process.cwd(), "_index.js"), options);
+ export const jiti = createLoader(options);
