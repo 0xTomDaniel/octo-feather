@@ -3,6 +3,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
+import pytest
 from herdr_messaging import (
     post_merge_busy,
     resume_live,
@@ -18,6 +19,7 @@ from herdr_messaging import (
 Case = Callable[..., None]
 
 
+@pytest.mark.e2e
 def test_spawn_ready_late(case: Case) -> None:
     case(spawn_ready_late)
 
@@ -30,6 +32,7 @@ def test_say_stalled(case: Case) -> None:
     case(say_stalled)
 
 
+@pytest.mark.e2e
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
 
