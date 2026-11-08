@@ -56,12 +56,23 @@ include = ["src", "tests", "scripts/check-languages", "scripts/own-tool-paths", 
 exclude = ["tests/conftest.py"]  # the kit's trend hook, copied byte for byte (see [tool.ruff])
 
 [tool.importlinter]
-root_package = "app"
+root_packages = ["app", "tests"]
+# A test's import of a module beside it is an external top-level name to import-linter (tests/import_contracts.py).
+include_external_packages = true
+contract_types = ["sibling_imports: tests.import_contracts.SiblingImportsContract"]
 
 [[tool.importlinter.contracts]]
 name = "core never imports the CLI"
 type = "layers"
 layers = ["app.cli", "app.core"]
+
+# Shared test support lives in one place, the repo's testkit (the octo-feather tdd skill's mocking.md, Test
+# support): a test imports no helper beside it; the shared fixtures are conftest.py's, never imported.
+[[tool.importlinter.contracts]]
+name = "tests import shared support only from the testkit"
+type = "sibling_imports"
+containers = ["tests"]
+shared_modules = ["testkit"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
