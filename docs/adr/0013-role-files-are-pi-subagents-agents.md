@@ -6,7 +6,7 @@ Models, through cliproxy: director and supervisor `anthropic/claude-opus-5-5` hi
 
 ## Bounded sprint ruling, 2026-11-08
 
-The owner-delegated ruling recorded in quality.calls.jsonl call 7 permits fresh independent GPT-only review and fallback sessions only in this sprint's owner-authorized sandbox, light-test, revision-repair and final-cleanup lanes, expiring at the sprint pause after final cleanup. The owning [quality-reviewer](../specs/quality.spec.html#quality-reviewer) and [quality-judge-family](../specs/quality.spec.html#quality-judge-family) sections define the exception and its actual-invoked-model and owner-authority evidence requirements. Separate writer/reviewer sessions remain mandatory; old blocked reports remain historical blocking and require a new verdict. Default cross-family policy and role pins elsewhere are unchanged. No permanent opt-out or flag is introduced. This amends the Models decision above in place, not the launcher or its provenance guards.
+The Models decision above is amended in place by the owner-delegated ruling recorded in quality.calls.jsonl call 7. The exception is owned by [quality-reviewer](../specs/quality.spec.html#quality-reviewer); fallback eligibility points there through [quality-judge-family](../specs/quality.spec.html#quality-judge-family). This records the decision, not a launcher or provenance-guard change.
 
 ## Considered options
 
