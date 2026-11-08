@@ -297,6 +297,7 @@ class Feature:
     unreachable: list[str] = field(default_factory=list[str])  # steps not reached, each with its prerequisite
     env: dict[str, str] = field(default_factory=dict[str, str])  # scratch env for the next cases
     pre: list[str] = field(default_factory=list[str])  # a wrapper such as unshare for the next cases
+    cpu: float = 0.0  # the last case command's CPU, user + system, with every process it waited for (getrusage)
 
     def run(self, name: str, *args: str) -> None:
         """One isolated case: fresh empty cwd, the command as typed, stdout, stderr, exit code, files left
@@ -309,8 +310,11 @@ class Feature:
         (d / f"{name}.cmd").write_text("".join(f"{shlex.quote(a)} " for a in typed) + "\n")
         before = self.kit_status()
         with (d / f"{name}.stdout").open("wb") as out, (d / f"{name}.stderr").open("wb") as err:
+            r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
             rc = subprocess.run([*self.pre, self.s.kit, *args], cwd=cwd, env={**os.environ, **self.env},
                                 stdout=out, stderr=err, check=False).returncode
+            r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+            self.cpu = r1.ru_utime - r0.ru_utime + r1.ru_stime - r0.ru_stime
         (d / f"{name}.exit").write_text(f"{128 - rc if rc < 0 else rc}\n")
         left = sorted(str(Path(r) / f) for r, ds, fs in os.walk(cwd) for f in [*ds, *fs])
         (d / f"{name}.files").write_text("".join(f"{p}\n" for p in left))
@@ -1576,7 +1580,8 @@ QC_SANDBOX_COST_RUNS, QC_SANDBOX_COST_CPU_S = 5, 0.8
 def drive_qc_sandbox_cost(f: Feature) -> None:
     """The qc sandbox around a judge that does nothing (`octo-feather-qc-sandbox -- true`, by hand, the box's herdr when
     there is one), QC_SANDBOX_COST_RUNS runs one after another in a scratch git repo: each run's CPU, the sandbox's setup,
-    proof and cleanup with every process they start (this process's waited-for children, getrusage), printed with the
+    proof and cleanup with every process they start (the case command's waited-for children, getrusage, Feature.cpu:
+    not the drive's own checks around it), printed with the
     median; a run at or over QC_SANDBOX_COST_CPU_S fails its case."""
     sc = RUN_DIR / "scratch" / "qc-sandbox-cost"
     r = sc / "repo"
@@ -1590,10 +1595,8 @@ def drive_qc_sandbox_cost(f: Feature) -> None:
     cpus: list[float] = []
     for i in range(1, QC_SANDBOX_COST_RUNS + 1):
         name = f"run-{i}"
-        r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
         f.run(name, "octo-feather-qc-sandbox", "--", "true")
-        r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
-        cpu = r1.ru_utime - r0.ru_utime + r1.ru_stime - r0.ru_stime
+        cpu = f.cpu  # the case command's own: not the drive's checks around it (the kit's git status)
         cpus.append(cpu)
         f.obs(name, "cpu", f"{cpu:.3f}\n")
         say(f"qc-sandbox-cost {name}: {cpu:.3f} s CPU")

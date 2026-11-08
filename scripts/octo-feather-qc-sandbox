@@ -95,6 +95,8 @@ import contextlib
 import ctypes
 import fcntl
 import glob
+import importlib.machinery
+import importlib.util
 import json
 import os
 import re
@@ -184,7 +186,8 @@ INPUTS = (
 )  # the inputs above, never passed on to the judge
 SRT_PKG = "@anthropic-ai/sandbox-runtime"
 # srt run through its own library, as its CLI (dist/cli.js, the Linux path) runs a command: loadConfig, initialize,
-# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand. The bwrap argv is
+# wrapWithSandbox of the quoted argv, spawn with the shell and stdio inherited, cleanupAfterCommand, then (unlike the CLI, which exits
+# first) its reset() awaited, so its proxy bridges are reaped before exit. The bwrap argv is
 # the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
 # reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
 # "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
@@ -207,7 +210,13 @@ store.subscribe(vs => {
 })
 const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
 for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
-child.on('exit', (code, sig) => { SandboxManager.cleanupAfterCommand(); process.exit(sig ? 1 : (code ?? 0)) })
+child.on('exit', async (code, sig) => {
+  SandboxManager.cleanupAfterCommand()
+  // srt's own teardown, awaited: its proxy bridges (socat, started outside the sandbox) killed and waited for, so
+  // every process the run started is reaped up to this one and counted in its CPU; exiting first would leave them.
+  await SandboxManager.reset()
+  process.exit(sig ? 1 : (code ?? 0))
+})
 """
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
@@ -1172,9 +1181,15 @@ def setup(judge: list[str]) -> NoReturn:
                 RSOCK,
             )
         )
+        # The per-run server's config: no background version or agent-manifest check (herdr's own [update] keys); the
+        # sandbox's network refuses herdr.dev anyway, and each check was a curl, a refusal and srt's handling of it.
+        open(f"{SCR}/bin/herdr.toml", "w").write(
+            "[update]\nversion_check = false\nmanifest_check = false\n"
+        )
         jenv.update(
             HERDR_BIN_PATH=f"{SCR}/bin/herdr",
             HERDR_SOCKET_PATH=f"{HC}/sessions/{S}/herdr.sock",
+            HERDR_CONFIG_PATH=f"{SCR}/bin/herdr.toml",
             OCTO_FEATHER_QC_HERDR=HERDR,
         )
     open(f"{SCR}/bin/git-credential-qc", "w").write(credhelper(py, RSOCK))
@@ -1265,10 +1280,21 @@ def setup(judge: list[str]) -> NoReturn:
     # caller and every writer in the sandbox: a judge writing a burst into a full pipe then failed with EAGAIN (#690's
     # eval runs). srt gets /dev/null and its own stderr pipe.
     fds = [*(o if (o := OUT[k]) is not None else 2 for k in ("proof", "post", "err")), 2, 0, 1]
+    # This process the child subreaper of everything the run starts: bubblewrap's monitor exits before the sandbox's
+    # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
+    # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
+    libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
-    senv = dict(jenv, PATH=E.get("PATH", ""), TMPDIR=f"{SCR}/srt")
+    # Node's own compile cache (module.enableCompileCache, NODE_COMPILE_CACHE) for srt's modules, setup-side under the
+    # cache dir (the judge's view masks it): loading srt's library was most of its CPU per run.
+    senv = dict(
+        jenv,
+        PATH=E.get("PATH", ""),
+        TMPDIR=f"{SCR}/srt",
+        NODE_COMPILE_CACHE=f"{E.get('XDG_CACHE_HOME') or HOME + '/.cache'}/octo-feather/node-compile-cache",
+    )
     # srt runs from an empty dir of the private /tmp, which the judge cannot write: its built-in write denies (shell rc
     # files, .git/hooks and .git/config, .vscode ... in and below its working dir, within the writable paths) would
     # otherwise be made as empty mount points in the worktree overlay, each a new untracked file; every write there is
@@ -1310,7 +1336,47 @@ def setup(judge: list[str]) -> NoReturn:
     post(fin)
     say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
     post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
+    left = orphans()
+    if (
+        left
+    ):  # a process the run started still running outside the sandbox's PID namespace: never silent
+        say(f"FAIL processes the run started still running after it: {', '.join(left)}")
+        post({"orphans_left": left})
     sys.exit(rc)
+
+
+def orphans(wait_s: float = 5.0) -> list[str]:
+    """Reap every process the run left to this subreaper (its CPU then counted by whoever waits for this one), for up
+    to WAIT_S s; return those still running then, each "PID CMDLINE"."""
+    end = time.monotonic() + wait_s
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return []
+        if pid:
+            continue
+        if time.monotonic() >= end:
+            break
+        time.sleep(0.02)
+    out: list[str] = []
+    me = str(os.getpid())
+    for q in os.listdir("/proc"):
+        if not q.isdigit():
+            continue
+        try:
+            st = open(f"/proc/{q}/stat").read().rsplit(")", 1)[1].split()
+            if st[1] == me:
+                cl = (
+                    open(f"/proc/{q}/cmdline", "rb")
+                    .read()
+                    .replace(b"\0", b" ")
+                    .decode(errors="replace")
+                )
+                out.append(f"{q} {cl.strip()[:80]}")
+        except OSError:
+            pass
+    return out
 
 
 def upper(up: str, lo: str) -> list[list[str]]:
@@ -1378,39 +1444,48 @@ def upper(up: str, lo: str) -> list[list[str]]:
 # ---------------------------------------------------------------- inner
 def mise_tools(wt: str, kit: str, env: Mapping[str, str]) -> tuple[bool, str]:
     """6b: (ok, proof line): the worktree's and the kit's own mise tools installed in env's MISE_DATA_DIR, each dir's
-    tools as scripts/octo-feather-mise-install --list --json names them, asked with a throwaway state dir."""
-
-    ms = tempfile.mkdtemp()
+    tools as scripts/octo-feather-mise-install names them (its own_tools(), loaded here: one Python start less per
+    dir than its --list --json command), asked with a throwaway state dir."""
     helper = f"{kit}/scripts/octo-feather-mise-install"
+    loader = importlib.machinery.SourceFileLoader("octo_feather_mise_install", helper)
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.dont_write_bytecode = True  # never a __pycache__ in the kit's scripts/
+    loader.exec_module(mod)
+    ms = tempfile.mkdtemp()
+    saved, want = dict(os.environ), dict(env, MISE_STATE_DIR=ms)  # env may be os.environ itself
+    os.environ.clear()
+    os.environ.update(want)
     miss: list[str] = []
     judged: list[str] = []
     fix: list[str] = []
-    for d in (wt, kit):
-        r = subprocess.run(
-            [helper, "--list", "--json", d],
-            capture_output=True,
-            text=True,
-            env=dict(env, MISE_STATE_DIR=ms),
-        )
-        dr = os.path.realpath(d)
-        try:
-            tools: object = json.loads(r.stdout) if r.returncode == 0 else None
-        except ValueError:
-            tools = None
-        own: list[tuple[str, dict[str, Any]]] = []
-        if not isinstance(tools, dict):
-            err = " ".join(r.stderr.split())[:300]
-            m = [f"{helper} --list --json failed: {err or 'no output'}"]
-        else:
-            rows = cast("dict[str, list[dict[str, Any]]]", tools)
-            own = [(tn, v) for tn, vs in rows.items() for v in vs]
-            m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
-        if m:
-            miss.append(f"{dr}: {' '.join(m)}")
-            fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
-        names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
-        judged.append(f"{dr}: {names or 'none'}")
-    shutil.rmtree(ms, ignore_errors=True)
+    asked: dict[str, dict[str, Any] | str] = {}  # one ask per dir: the kit judging itself asks once
+    try:
+        for d in (wt, kit):
+            dr = os.path.realpath(d)
+            if dr not in asked:
+                mise = shutil.which("mise")
+                try:
+                    asked[dr] = mod.own_tools(mise, dr) if mise else "mise is not on PATH"
+                except SystemExit as e:  # its failure, named as its command names it
+                    asked[dr] = str(e.code)
+            got = asked[dr]
+            own: list[tuple[str, dict[str, Any]]] = []
+            if isinstance(got, str):
+                m = [f"{helper} --list --json failed: {' '.join(got.split())[:300] or 'no output'}"]
+            else:
+                own = [(tn, v) for tn, vs in got.items() for v in vs]
+                m = [f"{tn}@{v.get('version')}" for tn, v in own if not v.get("installed")]
+            if m:
+                miss.append(f"{dr}: {' '.join(m)}")
+                fix.append(f"{shlex.quote(helper)} {shlex.quote(dr)}")
+            names = " ".join(f"{tn}@{v.get('version')}" for tn, v in own)
+            judged.append(f"{dr}: {names or 'none'}")
+    finally:
+        os.environ.clear()
+        os.environ.update(saved)
+        shutil.rmtree(ms, ignore_errors=True)
     line = f"mise offline, auto-install off; tools of the worktree and the kit installed in {env.get('MISE_DATA_DIR', '')}"
     if miss:
         line += f" (NOT installed: {' '.join(miss)}; the sandbox installs nothing: run outside it: {'; '.join(dict.fromkeys(fix))})"
