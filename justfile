@@ -499,7 +499,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
         else: how = "no sysctl here turns them off (kernel.apparmor_restrict_unprivileged_userns, kernel.unprivileged_userns_clone, user.max_user_namespaces): a container or seccomp policy does; run the kit on a VM or a bare-metal box"
         last = (err.splitlines() or ["exit " + str(rc)])[-1]
         print(f"userns FAILED unshare -rm true: {last} (the qc sandbox runs its judge in unprivileged user namespaces, #404); {how}"); bad = 1
-    for tool, pkg in (("bwrap", "bubblewrap"), ("socat", "socat")):   # srt needs both (scripts/octo-feather-qc-sandbox)
+    for tool, pkg in (("bwrap", "bubblewrap"), ("socat", "socat"), ("rg", "ripgrep")):   # srt dependencies (scripts/octo-feather-qc-sandbox)
         if shutil.which(tool): print(f"{tool} ok (srt, the qc sandbox, needs it)")
         else: print(f"{tool} MISSING (srt, the qc sandbox, needs it); sudo apt install {pkg}"); bad = 1
     srt = "@anthropic-ai/sandbox-runtime"   # the qc sandbox, its pin in package.json (scripts/octo-feather-qc-sandbox)

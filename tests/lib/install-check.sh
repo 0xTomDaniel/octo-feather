@@ -13,7 +13,7 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "install-check test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$t/home" "$t/old"
 pin="$(tr -d '[:space:]' <"$kit/pi-version")"
-for x in herdr gh; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
+for x in herdr gh rg; do printf '#!/bin/sh\nexit 0\n' >"$t/bin/$x"; done
 printf '#!/bin/sh\necho "$*" >>%s/pi-calls\necho %s\n' "$t" "$pin" >"$t/bin/pi"
 # The review service: systemctl --user show answers $t/unit (active, enabled unless a case rewrites it).
 printf 'ActiveState=active\nUnitFileState=enabled\n' >"$t/unit"
@@ -64,7 +64,8 @@ print(out, end="")' "$1" "$2" "$t"
 # and mise in one dir ($t/shared, the only mise on it), so hiding linear must keep that mise (first case below).
 mkdir -p "$t/shared"; ln -s "$(command -v mise)" "$t/shared/mise"
 printf '#!/bin/sh\necho "linear 3.1.0"\n' >"$t/shared/linear"; chmod +x "$t/shared/linear"
-clean="$(hide linear "$t/shared$(hide mise "$PATH")")"
+shims="$(hide rg "$shims")"; shims="${shims#:}"
+clean="$(hide "linear rg" "$t/shared$(hide mise "$PATH")")"
 mdir="$(dirname "$(PATH="${clean#:}" command -v mise)")"   # $t/shared mirrored minus linear
 lin_target="$t/linear"; gh_target="$t/github"
 git init -q "$lin_target"; git init -q "$gh_target"; mkdir -p "$lin_target/sub"
