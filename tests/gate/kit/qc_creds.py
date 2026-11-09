@@ -11,7 +11,7 @@ import shutil
 import stat
 from pathlib import Path
 
-from testkit import HERE, ROOT, Scratch, kit, main
+from testkit import HERE, ROOT, Scratch, kit, main, tool_homes
 from testkit.qc import MODEL, RID, STATUS, block, clean, qc, report, target
 
 AUTH = '{"anthropic": {"type": "oauth", "refresh": "SECRET-pi-oauth-r", "access": "SECRET-pi-oauth-a", "expires": 1}}\n'
@@ -49,7 +49,7 @@ def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, t
         if name.endswith(("_API_KEY", "_AUTH_TOKEN", "_ACCESS_TOKEN", "_SECRET_ACCESS_KEY")):
             s.env.pop(name)
     s.prepare("qc-creds", build)
-    s.env |= {"XDG_STATE_HOME": str(s.root / "state"), "STUB_ANSWER": "shows"}
+    s.env |= tool_homes() | {"XDG_STATE_HOME": str(s.root / "state"), "STUB_ANSWER": "shows"}
     source: dict[Path, tuple[bytes, int]] = {}
     for name, text, mode in (("auth.json", AUTH, 0o600), ("models.json", MODELS, 0o644)):
         p = s.home / ".pi" / "agent" / name
