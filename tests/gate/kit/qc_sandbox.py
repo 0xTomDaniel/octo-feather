@@ -16,7 +16,9 @@ import http.server
 import json
 import os
 import re
+import select
 import shutil
+import signal
 import subprocess
 import threading
 import time
@@ -142,18 +144,99 @@ def reaped(s: Scratch) -> None:
     after the run no orphan of it is reparented there."""
     r = repo(s)
     ctypes.CDLL(None).prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
-    s.run([kit("octo-feather-qc-sandbox"), "--", "true"], cwd=r, env=tool_homes())
-    time.sleep(1)
-    left: list[int] = []
-    while True:
+    ran = s.run([kit("octo-feather-qc-sandbox"), "--", "true"], cwd=r, env=tool_homes())
+    assert SRT in ran.err, ran.err
+    assert "qc sandbox: FAIL" not in ran.err, ran.err
+    try:
+        pid, _ = os.waitpid(-1, os.WNOHANG)
+    except ChildProcessError:
+        return
+    raise AssertionError(f"run left an owned child to its caller (0 means still live): {pid}")
+
+
+def live_survivor(s: Scratch) -> None:
+    """Real bwrap still runs; its wrapper leaves a live owned child outside its PID namespace."""
+    r = repo(s)
+    ctypes.CDLL(None).prctl(36, 1, 0, 0, 0)
+    real = shutil.which("bwrap")
+    assert real is not None
+    pidfile = s.bin / "survivor.pid"
+    wrapper = s.bin / "bwrap"
+    # srt 0.0.81 linux-sandbox-utils.js:3039 adds --unshare-pid to the actual launch,
+    # not the dependency/version probes. Delegate every argument to the real installed binary.
+    wrapper.write_text(
+        "#!/usr/bin/env python3\n"
+        "import os, sys, time\n"
+        "if '--unshare-pid' in sys.argv and os.fork() == 0:\n"
+        "    os.setsid()\n"
+        "    for fd in (0, 1, 2):\n"
+        "        os.dup2(os.open('/dev/null', os.O_RDWR), fd)\n"
+        f"    with open({str(pidfile)!r}, 'w') as f: f.write(str(os.getpid()))\n"
+        "    time.sleep(120)\n"
+        "    os._exit(0)\n"
+        f"os.execv({real!r}, [{real!r}, *sys.argv[1:]])\n"
+    )
+    wrapper.chmod(0o755)
+    handle = None
+    with (s.root / "stdout").open("w+") as out, (s.root / "stderr").open("w+") as err:
+        p = subprocess.Popen(
+            [kit("octo-feather-qc-sandbox"), "--", "true"], cwd=r,
+            env={**s.env, **tool_homes()}, stdout=out, stderr=err,
+        )
         try:
-            pid, _ = os.waitpid(-1, os.WNOHANG)
-        except ChildProcessError:
-            break
-        if not pid:
-            break
-        left.append(pid)
-    assert not left, f"processes of the run reaped by its caller, not within it: {left}"
+            deadline = time.monotonic() + 30
+            while not pidfile.exists() and p.poll() is None and time.monotonic() < deadline:
+                time.sleep(0.01)
+            assert pidfile.exists(), "actual bwrap launch did not start the survivor"
+            pid = int(pidfile.read_text())
+            handle = os.pidfd_open(pid)
+            poll = select.poll()
+            poll.register(handle, select.POLLIN)
+            assert not poll.poll(0), "survivor already exited before launcher deadline"
+            assert p.poll() is None, "launcher exited before live-child observation"
+            print(f"START live owned survivor pid={pid}; launcher={p.pid}", flush=True)
+            rc = p.wait(timeout=30)
+            out.seek(0)
+            err.seek(0)
+            proof = err.read()
+            print(f"PRODUCT launcher rc={rc}", flush=True)
+            print(proof, flush=True)
+            assert SRT in proof, proof
+            assert rc == 66, (rc, proof)
+            records = [json.loads(ln.split("record ", 1)[1]) for ln in proof.splitlines()
+                       if ln.startswith("qc sandbox: record ")]
+            survivors = [v for rec in records for v in rec.get("orphans_left", [])]
+            assert any(v.startswith(f"{pid} ") for v in survivors), (pid, survivors, proof)
+            assert poll.poll(0), "owned survivor was not terminated"
+            try:
+                adopted, _ = os.waitpid(-1, os.WNOHANG)
+            except ChildProcessError:
+                pass
+            else:
+                raise AssertionError(f"launcher failed complete reaping: {adopted}")
+        finally:
+            try:
+                if handle is not None:
+                    try:
+                        signal.pidfd_send_signal(handle, signal.SIGKILL)
+                        print("CLEANUP fixture: SIGKILL sent through owned pidfd", flush=True)
+                    except ProcessLookupError:
+                        print("CLEANUP fixture: owned pidfd already exited", flush=True)
+                    finally:
+                        os.close(handle)
+            finally:
+                try:
+                    if p.poll() is None:
+                        p.kill()
+                    print(f"CLEANUP fixture: launcher waited rc={p.wait()}", flush=True)
+                finally:
+                    while True:
+                        try:
+                            adopted, status = os.waitpid(-1, 0)
+                            print(f"CLEANUP fixture: reaped owned child={adopted} status={status}", flush=True)
+                        except ChildProcessError:
+                            print("CLEANUP fixture: all owned children reaped (ECHILD)", flush=True)
+                            break
 
 
 def nested(s: Scratch) -> None:
@@ -210,4 +293,4 @@ def network(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio, reaped)
+    main(by_hand, srt_missing, network, nested, refused_host, blocking_stdio, reaped, live_survivor)

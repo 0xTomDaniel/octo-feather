@@ -8,6 +8,7 @@ import pytest
 from qc_sandbox import (
     blocking_stdio,
     by_hand,
+    live_survivor,
     nested,
     network,
     reaped,
@@ -51,3 +52,8 @@ def test_blocking_stdio(case: Case) -> None:
 @pytest.mark.e2e  # real srt and namespaces (quality spec #test-kinds)
 def test_reaped(case: Case) -> None:
     case(reaped)
+
+
+@pytest.mark.e2e  # real live descendant outside the judge PID namespace
+def test_live_survivor(case: Case) -> None:
+    case(live_survivor)
