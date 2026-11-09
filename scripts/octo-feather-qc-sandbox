@@ -104,6 +104,7 @@ import secrets
 import selectors
 import shlex
 import shutil
+import signal
 import socket
 import stat
 import struct
@@ -1342,41 +1343,70 @@ def setup(judge: list[str]) -> NoReturn:
     ):  # a process the run started still running outside the sandbox's PID namespace: never silent
         say(f"FAIL processes the run started still running after it: {', '.join(left)}")
         post({"orphans_left": left})
+        rc = 66
     sys.exit(rc)
 
 
 def orphans(wait_s: float = 5.0) -> list[str]:
     """Reap every process the run left to this subreaper (its CPU then counted by whoever waits for this one), for up
-    to WAIT_S s; return those still running then, each "PID CMDLINE"."""
+    to WAIT_S s; terminate and reap survivors, returning each "PID CMDLINE" as a fatal diagnostic.
+    Only ECHILD proves completion: Linux's task children snapshots can omit children during exits."""
     end = time.monotonic() + wait_s
+    cleanup_end = end + wait_s
+    out: list[str] = []
     while True:
         try:
             pid, _ = os.waitpid(-1, os.WNOHANG)
         except ChildProcessError:
-            return []
+            return out
         if pid:
             continue
-        if time.monotonic() >= end:
-            break
-        time.sleep(0.02)
-    out: list[str] = []
-    me = str(os.getpid())
-    for q in os.listdir("/proc"):
-        if not q.isdigit():
+        if time.monotonic() < end:
+            time.sleep(0.02)
             continue
+        # Every task belongs to us; only its explicitly owned children are inspected. No
+        # other thread reaps them, so their PIDs cannot be reused before pidfd_open below.
+        children: set[int] = set()
         try:
-            st = open(f"/proc/{q}/stat").read().rsplit(")", 1)[1].split()
-            if st[1] == me:
-                cl = (
-                    open(f"/proc/{q}/cmdline", "rb")
-                    .read()
-                    .replace(b"\0", b" ")
-                    .decode(errors="replace")
-                )
-                out.append(f"{q} {cl.strip()[:80]}")
-        except OSError:
-            pass
-    return out
+            for tid in os.listdir("/proc/self/task"):
+                try:
+                    children.update(map(int, open(f"/proc/self/task/{tid}/children").read().split()))
+                except FileNotFoundError:
+                    # A vanished own thread can race enumeration. The main task's missing
+                    # children file is an observation failure, not evidence of no children.
+                    if tid == str(os.getpid()):
+                        raise
+        except (OSError, ValueError) as e:
+            error = f"owned children observation failed: {e}"
+            if error not in out:
+                out.append(error)
+        for child in children:
+            try:
+                fd = os.pidfd_open(child)
+                try:
+                    try:
+                        cl = open(f"/proc/{child}/cmdline", "rb").read().replace(b"\0", b" ").decode(errors="replace")
+                    except OSError as e:
+                        cl = f"cmdline observation failed: {e}"
+                    diagnostic = f"{child} {cl.strip()[:80]}"
+                    if diagnostic not in out:
+                        out.append(diagnostic)
+                    try:
+                        signal.pidfd_send_signal(fd, signal.SIGKILL)
+                    except ProcessLookupError:  # already exited; still must be waited for
+                        pass
+                finally:
+                    os.close(fd)
+            except OSError as e:
+                error = f"{child} owned pidfd cleanup failed: {e}"
+                if error not in out:
+                    out.append(error)
+        # An empty snapshot is not success. Drain deaths and newly adopted descendants
+        # until waitpid reports ECHILD, counting all their CPU in this process's caller.
+        if time.monotonic() >= cleanup_end:
+            out.append("owned cleanup incomplete: live children remain; complete CPU accounting not proved")
+            return out  # fatal, never presented as successful cleanup or complete accounting
+        time.sleep(0.02)
 
 
 def upper(up: str, lo: str) -> list[list[str]]:
