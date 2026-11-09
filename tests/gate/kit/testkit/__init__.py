@@ -340,8 +340,8 @@ def tool_homes() -> dict[str, str]:
     return {
         "MISE_DATA_DIR": os.environ.get("MISE_DATA_DIR") or f"{data}/mise",
         "MISE_CACHE_DIR": os.environ.get("MISE_CACHE_DIR") or f"{cache}/mise",
-        "UV_CACHE_DIR": asked("uv", "--color", "never", "cache", "dir"),
-        "UV_PYTHON_INSTALL_DIR": asked("uv", "--color", "never", "python", "dir"),
+        "UV_CACHE_DIR": asked("uv", "cache", "dir"),
+        "UV_PYTHON_INSTALL_DIR": asked("uv", "python", "dir"),
     }
 
 
