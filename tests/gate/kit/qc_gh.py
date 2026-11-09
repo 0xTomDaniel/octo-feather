@@ -138,6 +138,7 @@ def judge(s: Scratch, kit_dir: Path = ROOT) -> None:
 def world(s: Scratch, name: str = "qc-gh") -> None:
     """S filled with prepared NAME (build, or build_run), the fake judge its pi."""
     s.prepare(name, build if name == "qc-gh" else build_run)
+    s.env |= tool_homes()
     judge(s)
 
 
