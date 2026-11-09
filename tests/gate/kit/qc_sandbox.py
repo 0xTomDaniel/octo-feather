@@ -180,8 +180,11 @@ def live_survivor(s: Scratch) -> None:
     handle = None
     with (s.root / "stdout").open("w+") as out, (s.root / "stderr").open("w+") as err:
         p = subprocess.Popen(
-            [kit("octo-feather-qc-sandbox"), "--", "true"], cwd=r,
-            env={**s.env, **tool_homes()}, stdout=out, stderr=err,
+            [kit("octo-feather-qc-sandbox"), "--", "true"],
+            cwd=r,
+            env={**s.env, **tool_homes()},
+            stdout=out,
+            stderr=err,
         )
         try:
             deadline = time.monotonic() + 30
@@ -203,8 +206,11 @@ def live_survivor(s: Scratch) -> None:
             print(proof, flush=True)
             assert SRT in proof, proof
             assert rc == 66, (rc, proof)
-            records = [json.loads(ln.split("record ", 1)[1]) for ln in proof.splitlines()
-                       if ln.startswith("qc sandbox: record ")]
+            records = [
+                json.loads(ln.split("record ", 1)[1])
+                for ln in proof.splitlines()
+                if ln.startswith("qc sandbox: record ")
+            ]
             survivors = [v for rec in records for v in rec.get("orphans_left", [])]
             assert any(v.startswith(f"{pid} ") for v in survivors), (pid, survivors, proof)
             assert poll.poll(0), "owned survivor was not terminated"
@@ -233,7 +239,10 @@ def live_survivor(s: Scratch) -> None:
                     while True:
                         try:
                             adopted, status = os.waitpid(-1, 0)
-                            print(f"CLEANUP fixture: reaped owned child={adopted} status={status}", flush=True)
+                            print(
+                                f"CLEANUP fixture: reaped owned child={adopted} status={status}",
+                                flush=True,
+                            )
                         except ChildProcessError:
                             print("CLEANUP fixture: all owned children reaped (ECHILD)", flush=True)
                             break
