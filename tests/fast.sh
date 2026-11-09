@@ -29,7 +29,7 @@ rm "$t/tests/g.sh"; cp "$kit/tests/fixtures/fast/test_f.py" "$t/tests/gate/kit/"
 chmod +x "$t"/scripts/fixture-? "$t"/tests/?.sh
 g init -q; g add -A; g commit -qm base
 # fast WANT: just fast, green, ran exactly the static check plus the items WANT (sorted, space-separated).
-fast() { : > "$FAST_RAN"; set +e; out="$(cd "$t" && just --set GATE_RECIPES check-dashes fast 2>&1)"; rc=$?; set -e
+fast() { : > "$FAST_RAN"; set +e; out="$(cd "$t" && PYTEST_ADDOPTS="${PYTEST_ADDOPTS:+$PYTEST_ADDOPTS }--color=no" just --set GATE_RECIPES check-dashes fast 2>&1)"; rc=$?; set -e
   [[ "$rc" == 0 ]] || { echo "fast test: just fast exited $rc: $out" >&2; exit 1; }
   local got n; got="$(sort "$FAST_RAN" | paste -sd' ' -)"; n=$(( $(wc -w <<<"$1") + 1 ))
   [[ "$got" == "$1" && "$out" == *"=== $n passed in "* ]] || { echo "fast test: want the static check and items '$1', ran '$got': $out" >&2; exit 1; }; }

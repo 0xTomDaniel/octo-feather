@@ -11,7 +11,7 @@ source "$(dirname "$0")/lib/qc.sh"
 # mise's shim would resolve no version there, for the sandbox's `uv cache dir` and for the judge alike.
 uvb="$(cd "$kit" && mise which uv 2>/dev/null)" || uvb="$(command -v uv)" || fail "no uv: the uv-cache case needs it"
 PATH="$(dirname "$uvb"):$PATH"; export PATH
-uc="$(uv cache dir)"; [[ "$uc" == "$HOME/.cache/uv" ]] || fail "uv cache dir $uc, want $HOME/.cache/uv (the masked cache dir)"
+uc="$(uv --color never cache dir)"; [[ "$uc" == "$HOME/.cache/uv" ]] || fail "uv cache dir $uc, want $HOME/.cache/uv (the masked cache dir)"
 # A one-file wheel, built here (zipfile: no build backend, no network), a project locking it from a find-links dir.
 p="$HOME/uvp"; mkdir -p "$p/links"
 python3 - "$p/links" <<'PY'
