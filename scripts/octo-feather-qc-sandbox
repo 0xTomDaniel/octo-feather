@@ -162,6 +162,10 @@ PI_HOSTS = {
     "github-copilot": "api.githubcopilot.com",
 }
 INPUTS = (
+    "QC_NATIVE_SECRET",
+    "QC_NATIVE_SOCKET",
+    "QC_NATIVE_PYTHON",
+    "QC_NATIVE_COMMAND",
     "QC_PI",
     "QC_BROWSER",
     "QC_SHOTS",
@@ -192,15 +196,50 @@ SRT_PKG = "@anthropic-ai/sandbox-runtime"
 # the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
 # reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
 # "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
+# Stock Node numeric bridge kills cannot reserve identity across asynchronous reap.
+# The maintained SDK adapter therefore uses this existing Recorder's self-pidfd
+# channel; it adds only the lifetime/completion capability the SDK cannot supply.
 SRT_SHIM = r"""
 const [pkg, settings, , ...args] = process.argv.slice(1)
 const { SandboxManager } = await import(`${pkg}/dist/index.js`)
 const { loadConfig } = await import(`${pkg}/dist/utils/config-loader.js`)
 const { quote } = await import(`${pkg}/dist/utils/shell-quote.js`)
 const { spawn } = await import('node:child_process')
+const { randomBytes } = await import('node:crypto')
+if (SandboxManager.nativeBridgeLifecycleABI !== 1) {
+  throw new Error('qc sandbox: retained native lifecycle ABI1 required before initialize; stock SDK refused')
+}
+const names = ['QC_NATIVE_SECRET', 'QC_NATIVE_SOCKET', 'QC_NATIVE_PYTHON', 'QC_NATIVE_COMMAND']
+const control = Object.fromEntries(names.map(k => [k, process.env[k]]))
+if (names.some(k => !control[k])) throw new Error('qc sandbox: native lifecycle setup unavailable')
+for (const k of names) delete process.env[k] // never forward authority into wrapped payload
+const lifecycle = {
+  abi: 1,
+  start(file, argv, options) {
+    const lease = randomBytes(32).toString('hex')
+    const child = spawn(control.QC_NATIVE_PYTHON, [control.QC_NATIVE_COMMAND, 'native-relay', lease, file, ...argv],
+      { ...options, env: { ...(options.env ?? process.env), ...control } })
+    return { child, lease }
+  },
+  stop(lease) { return this.request('native-control', lease) },
+  ready(lease) { return this.request('native-ready', lease) },
+  signal(lease, sig) { return this.request('native-signal', lease, sig) },
+  request(mode, lease, sig) {
+    return new Promise((resolve, reject) => {
+      const client = spawn(control.QC_NATIVE_PYTHON, [control.QC_NATIVE_COMMAND, mode, lease, ...(sig ? [sig] : [])],
+        { env: { ...process.env, ...control }, stdio: 'ignore' })
+      const timer = setTimeout(() => reject(new Error('qc native control completion timeout')), 10000)
+      client.once('error', err => { clearTimeout(timer); reject(err) })
+      client.once('close', code => {
+        clearTimeout(timer)
+        if (code === 0) resolve(); else reject(new Error(`qc native capability stop failed (client exit ${code})`))
+      })
+    })
+  }
+}
 const loaded = loadConfig(settings)
 if (loaded.kind !== 'ok') { console.error(`qc sandbox: srt settings ${settings}: ${loaded.reason ?? loaded.kind}`); process.exit(1) }
-await SandboxManager.initialize(loaded.config)
+await SandboxManager.initialize(loaded.config, undefined, false, { nativeBridgeLifecycle: lifecycle })
 const store = SandboxManager.getSandboxViolationStore()
 let seen = store.getTotalCount()
 store.subscribe(vs => {
@@ -209,8 +248,12 @@ store.subscribe(vs => {
   seen = total
   for (const v of fresh) process.stderr.write(`QC-SRT-VIOLATION ${JSON.stringify({ line: v.line })}\n`)
 })
-const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
+const payload = lifecycle.start('/bin/sh', ['-c', await SandboxManager.wrapWithSandbox(quote(args))], { stdio: 'inherit' })
+const child = payload.child
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => {
+  // Delivery ACK is not completion. The real ChildProcess exit still drives reset.
+  lifecycle.signal(payload.lease, sig).catch(() => process.exit(1))
+})
 child.on('exit', async (code, sig) => {
   SandboxManager.cleanupAfterCommand()
   // srt's own teardown, awaited: its proxy bridges (socat, started outside the sandbox) killed and waited for, so
@@ -327,6 +370,12 @@ class Recorder:
         self.conns: dict[socket.socket, dict[str, Any]] = {}
         self.net: set[str] = set()
         self.hello = False
+        # Lifecycle auth is an explicit extension; ordinary attempts stay unchanged.
+        self.native_secret = secrets.token_hex(32)
+        self.native: dict[str, dict[str, Any]] = {}
+        self.native_closing = False
+        self.native_done = threading.Event()
+        self.native_errors: list[str] = []
         self.wr, self.ww = os.pipe()
         self.stop = False
         self.sel = selectors.DefaultSelector()
@@ -401,6 +450,90 @@ class Recorder:
         )
         return None
 
+    def native_arm(self, state: dict[str, Any]) -> None:
+        if "deadline" not in state:
+            now = time.monotonic()
+            state.update(kill_at=now + 1.5, deadline=now + 5.0)
+            with contextlib.suppress(ProcessLookupError):
+                signal.pidfd_send_signal(state["fd"], signal.SIGTERM)
+
+    def native_message(self, c: socket.socket, m: dict[str, Any], received: list[int]) -> None:
+        _, uid, _ = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        lease, op, secret = m.get("lease"), m.get("op"), m.get("secret")
+        if (uid != os.getuid() or not isinstance(secret, str)
+                or re.fullmatch("[0-9a-f]{64}", secret) is None
+                or not secrets.compare_digest(secret, self.native_secret)
+                or not isinstance(lease, str) or re.fullmatch("[0-9a-f]{64}", lease) is None
+                or set(m) != ({"t", "lease", "op", "secret", "signal"} if op == "signal" else {"t", "lease", "op", "secret"})):
+            raise OSError("native lifecycle authentication refused")
+        if op == "register" and len(received) == 1 and lease not in self.native and not self.native_closing:
+            signal.pidfd_send_signal(received[0], 0)  # kernel validates actual live pidfd, no numeric lookup
+            fd = os.dup(received[0])  # Python duplicates non-inheritable, retained across sender exit/reap
+            self.native[lease] = {"fd": fd, "waiters": [], "done": False, "exec_crossed": False}
+            self.conns[c]["native_lease"] = lease
+            self.sel.register(fd, selectors.EVENT_READ)
+            c.send(b"registered")
+        elif op == "ready" and not received and lease in self.native:
+            state = self.native[lease]
+            poll = selectors.DefaultSelector()
+            try:
+                poll.register(state["fd"], selectors.EVENT_READ)
+                dead = bool(poll.select(0))
+            finally:
+                poll.close()
+            c.send(b"error" if dead or self.native_errors else (b"live" if state["exec_crossed"] else b"pending"))
+        elif op == "stop" and not received and lease in self.native:
+            state = self.native[lease]
+            state["waiters"].append(c)
+            self.native_arm(state)
+        elif op == "signal" and not received and lease in self.native and m.get("signal") in ("SIGINT", "SIGTERM"):
+            # Signal forwarding preserves intent; this ACK is NOT a death witness.
+            try:
+                signal.pidfd_send_signal(self.native[lease]["fd"], getattr(signal, m["signal"]))
+            except ProcessLookupError:
+                c.send(b"not-signallable")  # not a death/completion claim
+            else:
+                c.send(b"signalled")
+        elif op == "exec-error" and not received and lease in self.native:
+            self.native_errors.append("native relay exec failed")
+            self.native_arm(self.native[lease])
+        else:
+            raise OSError("native lifecycle operation refused")
+
+    def native_tick(self) -> None:
+        now = time.monotonic()
+        for state in self.native.values():
+            if not state["done"]:
+                poll = selectors.DefaultSelector()
+                try:
+                    poll.register(state["fd"], selectors.EVENT_READ)
+                    dead = bool(poll.select(0))
+                finally:
+                    poll.close()
+                if dead:
+                    state["done"] = True
+                    self.sel.unregister(state["fd"])
+                elif "deadline" in state:
+                    if now >= state["kill_at"] and not state.get("killed"):
+                        with contextlib.suppress(ProcessLookupError):
+                            signal.pidfd_send_signal(state["fd"], signal.SIGKILL)
+                        state["killed"] = True
+                    if now >= state["deadline"] and not state.get("expired"):
+                        state["expired"] = True
+                        self.native_errors.append("native retained-task cleanup incomplete")
+            if state["done"] or state.get("expired"):
+                reply = b"exited" if state["done"] and not self.native_errors else b"error native cleanup incomplete"
+                for peer in state["waiters"]:
+                    with contextlib.suppress(OSError):
+                        peer.send(reply)
+                state["waiters"].clear()
+        if self.native_closing and all(s["done"] or s.get("expired") for s in self.native.values()):
+            self.native_done.set()
+
+    def finalize_native(self) -> bool:
+        os.write(self.ww, b"n")
+        return self.native_done.wait(10) and not self.native_errors
+
     def message(self, c: socket.socket, raw: bytes, received: list[int]) -> None:
         st = self.conns[c]
         try:
@@ -411,6 +544,9 @@ class Recorder:
             return
         m = cast("dict[str, Any]", got)
         t = m.get("t")
+        if t == "native":
+            self.native_message(c, m, received)
+            return
         if t == "mask" and not self.hello and len(received) == 1:
             masks = st.setdefault("masks", [])
             if len(masks) < len(self.watch):
@@ -501,6 +637,8 @@ class Recorder:
                 self.opens()
                 self.sel.unregister(c)
                 st = self.conns.pop(c)
+                if (lease := st.get("native_lease")) is not None:
+                    self.native[lease]["exec_crossed"] = True
                 self.call_end(st)
                 for fd in st.get("masks", []):
                     os.close(fd)
@@ -566,16 +704,23 @@ class Recorder:
 
     def loop(self) -> None:
         while not self.stop:
-            for k, _ in self.sel.select():
+            stopping = self.native_closing or any("deadline" in s and not s["done"] for s in self.native.values())
+            for k, _ in self.sel.select(0.05 if stopping else None):
                 f = k.fileobj
                 if f is self.srv:
                     self.accept()
                 elif f == self.wr:
-                    self.stop = True
+                    if os.read(self.wr, 1) == b"n":
+                        self.native_closing = True
+                        for state in self.native.values():
+                            self.native_arm(state)
+                    else:
+                        self.stop = True
                 elif f == self.ino:
                     self.opens()
                 elif isinstance(f, socket.socket) and f in self.conns:
                     self.conn(f)
+            self.native_tick()
             # the inner waits for this answer before the judge starts
             if self.go is not None and not self.live:
                 self.drain()
@@ -594,7 +739,10 @@ class Recorder:
             for fd in st.get("masks", []):
                 os.close(fd)
             c.close()
+        for state in self.native.values():
+            os.close(state["fd"])
         return {
+            "native_cleanup_errors": self.native_errors,
             "attempts": self.recs,
             "recorded": len(self.recs),
             "gh_misses": len(self.misses),
@@ -1315,7 +1463,8 @@ def setup(judge: list[str]) -> NoReturn:
     # This process the child subreaper of everything the run starts: bubblewrap's monitor exits before the sandbox's
     # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
     # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
-    libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
+    if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        die("native lifecycle requires the owning child subreaper")
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1326,6 +1475,8 @@ def setup(judge: list[str]) -> NoReturn:
         PATH=E.get("PATH", ""),
         TMPDIR=f"{SCR}/srt",
         NODE_COMPILE_CACHE=f"{E.get('XDG_CACHE_HOME') or HOME + '/.cache'}/octo-feather/node-compile-cache",
+        QC_NATIVE_SECRET=rec.native_secret, QC_NATIVE_SOCKET=f"{SCR}/rec/sock",
+        QC_NATIVE_PYTHON=py, QC_NATIVE_COMMAND=SELF,
     )
     # srt runs from an empty dir of the private /tmp, which the judge cannot write: its built-in write denies (shell rc
     # files, .git/hooks and .git/config, .vscode ... in and below its working dir, within the writable paths) would
@@ -1353,14 +1504,39 @@ def setup(judge: list[str]) -> NoReturn:
         stderr=subprocess.PIPE,
         close_fds=True,
     )
+    node_fd = None
     early: list[str] = []
-    th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
-    th.start()
-    rc = p.wait()
-    th.join(10)
+    try:
+        # Direct Node root still unreaped: never acquire from a later numeric snapshot.
+        node_fd = os.pidfd_open(p.pid)
+        th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
+        th.start()
+        rc = p.wait()
+        th.join(10)
+    except BaseException:
+        with contextlib.suppress(ProcessLookupError):
+            if node_fd is not None:
+                signal.pidfd_send_signal(node_fd, signal.SIGKILL)
+            else:
+                os.kill(p.pid, signal.SIGKILL)  # direct root, no wait/reap yet
+        p.wait(timeout=5)
+        rec.finalize_native()
+        orphans()
+        rec.finish()
+        raise
+    finally:
+        if node_fd is not None:
+            os.close(node_fd)
     if not rec.hello:
         sys.stderr.write("".join(early))
+    # Independent of Node's async reset/exit handlers. Keep Recorder alive until
+    # all accepted leases and adopted native descendants have been finalized.
+    native_ok = rec.finalize_native()
+    left = orphans()
     fin = rec.finish()
+    if not native_ok or fin["native_cleanup_errors"]:
+        say("FAIL retained native lifecycle completion unproved")
+        rc = 66
     if not rec.hello:
         say(f"FAIL srt sandbox did not start the inner (srt exit {rc})")
         say("proof failed; judge not started (exit 66)")
@@ -1368,7 +1544,6 @@ def setup(judge: list[str]) -> NoReturn:
     post(fin)
     say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
     post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
-    left = orphans()
     if (
         left
     ):  # a process the run started still running outside the sandbox's PID namespace: never silent
@@ -2142,7 +2317,70 @@ def reap(base: set[str], herdr: str, session: str) -> list[str]:
     return killed
 
 
+def native_client(mode: str, args: list[str]) -> None:
+    """One-shot client of the SAME Recorder, never a second listener/manager."""
+    names = ("QC_NATIVE_SECRET", "QC_NATIVE_SOCKET", "QC_NATIVE_PYTHON", "QC_NATIVE_COMMAND")
+    if ((mode in ("native-control", "native-ready") and len(args) != 1)
+            or (mode == "native-signal" and (len(args) != 2 or args[1] not in ("SIGINT", "SIGTERM")))
+            or (mode == "native-relay" and len(args) < 2)):
+        sys.exit(print("qc native: missing operation arguments", file=sys.stderr) or 64)
+    lease = args[0]
+    if re.fullmatch("[0-9a-f]{64}", lease) is None:
+        sys.exit(print("qc native: invalid lease", file=sys.stderr) or 64)
+    authority = {k: os.environ[k] for k in names}
+    clean = {k: v for k, v in os.environ.items() if k not in names}
+    message = {"t": "native", "secret": authority["QC_NATIVE_SECRET"], "lease": lease}
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
+        peer.settimeout(8)
+        peer.connect(authority["QC_NATIVE_SOCKET"])
+        if mode == "native-ready":
+            end = time.monotonic() + 5
+            while time.monotonic() < end:
+                peer.send(json.dumps(message | {"op": "ready"}).encode())
+                reply = peer.recv(256)
+                if reply == b"live":
+                    return
+                if reply != b"pending":
+                    sys.exit(print("qc native: exec/liveness readiness refused", file=sys.stderr) or 70)
+                time.sleep(0.02)
+            raise TimeoutError("native exec readiness")
+        if mode in ("native-control", "native-signal"):
+            operation = {"op": "stop"} if mode == "native-control" else {"op": "signal", "signal": args[1]}
+            peer.send(json.dumps(message | operation).encode())
+            expected = b"exited" if mode == "native-control" else b"signalled"
+            reply = peer.recv(256)
+            if reply != expected and not (mode == "native-signal" and reply == b"not-signallable"):
+                sys.exit(print("qc native: retained-task request incomplete", file=sys.stderr) or 71)
+            return
+        executable = shutil.which(args[1], path=clean.get("PATH"))
+        if not executable:
+            sys.exit(print("qc native: native executable unavailable", file=sys.stderr) or 69)
+        fd = os.pidfd_open(os.getpid())
+        try:
+            socket.send_fds(peer, [json.dumps(message | {"op": "register"}).encode()], [fd])
+        finally:
+            os.close(fd)
+        if peer.recv(256) != b"registered":
+            sys.exit(print("qc native: registration refused; native not executed", file=sys.stderr) or 70)
+        # Python sockets are CLOEXEC. EOF alone is not successful exec evidence;
+        # failed exec reports explicitly, and SDK still requires real socket readiness.
+        try:
+            os.execve(executable, args[1:], clean)
+        except OSError:
+            with contextlib.suppress(OSError):
+                peer.send(json.dumps(message | {"op": "exec-error"}).encode())
+            sys.exit(print("qc native: exec failed", file=sys.stderr) or 127)
+
+
 def main(a: list[str]) -> None:
+    if a[:1] in (["native-relay"], ["native-control"], ["native-signal"], ["native-ready"]):
+        try:
+            native_client(a[0], a[1:])
+        except TimeoutError:
+            sys.exit(print("qc native: authenticated transport timeout", file=sys.stderr) or 75)
+        except OSError:
+            sys.exit(print("qc native: authenticated transport failed", file=sys.stderr) or 74)
+        return
     if a[:1] == ["inner"]:
         cfgp, rest = a[1], a[2:]
         inner(cfgp, rest[1:] if rest[:1] == ["--"] else rest)

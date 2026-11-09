@@ -1,0 +1,265 @@
+diff --git a/dist/sandbox/linux-sandbox-utils.d.ts b/dist/sandbox/linux-sandbox-utils.d.ts
+index 9a16855..a84bf10 100644
+--- a/dist/sandbox/linux-sandbox-utils.d.ts
++++ b/dist/sandbox/linux-sandbox-utils.d.ts
+@@ -1,8 +1,18 @@
+-import type { ChildProcess } from 'node:child_process';
++import type { ChildProcess, SpawnOptions } from 'node:child_process';
++export declare const NATIVE_BRIDGE_LIFECYCLE_ABI: 1;
++export interface NativeBridgeLifecycle {
++    readonly abi: 1;
++    start(file: string, args: string[], options: SpawnOptions): { child: ChildProcess; lease: unknown };
++    /** Resolve only after exec crossing and retained-task liveness at readiness. */
++    ready(lease: unknown): Promise<void>;
++    /** Resolve only after retained-task death, never on signal delivery alone. */
++    stop(lease: unknown): Promise<void>;
++}
+ import { type RipgrepConfig } from '../utils/ripgrep.js';
+ import type { FsReadRestrictionConfig, FsWriteRestrictionConfig } from './sandbox-schemas.js';
+ import type { SeccompConfig } from './sandbox-config.js';
+ export interface LinuxNetworkBridgeContext {
++    stopNativeBridges?: () => Promise<void>;
+     httpSocketPath: string;
+     socksSocketPath: string;
+     httpBridgeProcess: ChildProcess;
+@@ -292,7 +302,7 @@ export declare function uid0SandboxError({ euid, hasSetfcap, bwrap, }: {
+  *
+  * DEPENDENCIES: Requires bwrap (bubblewrap) and socat
+  */
+-export declare function initializeLinuxNetworkBridge(httpProxyPort: number, socksProxyPort: number, socatPath?: string): Promise<LinuxNetworkBridgeContext>;
++export declare function initializeLinuxNetworkBridge(httpProxyPort: number, socksProxyPort: number, socatPath?: string, lifecycle?: NativeBridgeLifecycle): Promise<LinuxNetworkBridgeContext>;
+ /**
+  * Whether this bubblewrap lists --disable-userns (0.8.0 and later) and can
+  * honour it: a setuid bubblewrap refuses the option outright.
+@@ -345,4 +355,4 @@ export declare function bwrapCanDisableUserns(bwrap: string): boolean;
+  * inheritable sets.
+  */
+ export declare function wrapCommandWithSandboxLinux(params: LinuxSandboxParams): Promise<string>;
+-//# sourceMappingURL=linux-sandbox-utils.d.ts.map
+\ No newline at end of file
++// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
+\ No newline at end of file
+diff --git a/dist/sandbox/linux-sandbox-utils.js b/dist/sandbox/linux-sandbox-utils.js
+index b3acba6..93cf53d 100644
+--- a/dist/sandbox/linux-sandbox-utils.js
++++ b/dist/sandbox/linux-sandbox-utils.js
+@@ -1193,7 +1193,34 @@ function probeUid0UserNamespace(bwrap) {
+  *
+  * DEPENDENCIES: Requires bwrap (bubblewrap) and socat
+  */
+-export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, socatPath) {
++export const NATIVE_BRIDGE_LIFECYCLE_ABI = 1;
++export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, socatPath, lifecycle) {
++    // The configured adapter never falls back to numeric signaling.
++    const owned = new Map();
++    const startNative = (file, args, options) => {
++        if (!lifecycle) return spawn(file, args, options);
++        const handle = lifecycle.start(file, args, options);
++        if (!handle?.child || handle.lease === undefined)
++            throw new Error('Native lifecycle returned no child/lease');
++        const closed = new Promise(resolve => handle.child.once('close', resolve));
++        owned.set(handle.child, { lease: handle.lease, closed });
++        return handle.child;
++    };
++    let stopping;
++    const stopOwned = () => stopping ??= (async () => {
++        const results = await Promise.allSettled([...owned.values()].map(async ({ lease, closed }) => {
++            await lifecycle.stop(lease);
++            let timer;
++            try {
++                await Promise.race([closed, new Promise((_, reject) => {
++                    timer = setTimeout(() => reject(new Error('Native ChildProcess close incomplete')), 5000);
++                })]);
++            } finally { clearTimeout(timer); }
++        }));
++        const failed = results.find(r => r.status === 'rejected');
++        if (failed) throw failed.reason;
++    })();
++    try {
+     const socat = socatPath ?? 'socat';
+     const socketId = randomBytes(8).toString('hex');
+     const httpSocketPath = join(tmpdir(), `claude-http-${socketId}.sock`);
+@@ -1206,7 +1233,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+         `TCP:localhost:${httpProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
+     ];
+     logForDebugging(`Starting HTTP bridge: ${socat} ${httpSocatArgs.join(' ')}`);
+-    const httpBridgeProcess = spawn(socat, httpSocatArgs, {
++    const httpBridgeProcess = startNative(socat, httpSocatArgs, {
+         stdio: 'ignore',
+     });
+     // Add error and exit handlers to monitor bridge health. These must be
+@@ -1243,7 +1270,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+             `TCP:localhost:${socksProxyPort},keepalive,keepidle=10,keepintvl=5,keepcnt=3`,
+         ];
+         logForDebugging(`Starting SOCKS bridge: ${socat} ${socksSocatArgs.join(' ')}`);
+-        socksBridgeProcess = spawn(socat, socksSocatArgs, {
++        socksBridgeProcess = startNative(socat, socksSocatArgs, {
+             stdio: 'ignore',
+         });
+         // Add error and exit handlers to monitor bridge health — registered
+@@ -1256,7 +1283,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+         });
+         if (!socksBridgeProcess.pid) {
+             // Clean up HTTP bridge
+-            if (httpBridgeProcess.pid) {
++            if (!lifecycle && httpBridgeProcess.pid) {
+                 try {
+                     process.kill(httpBridgeProcess.pid, 'SIGTERM');
+                 }
+@@ -1271,9 +1298,9 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+     const maxAttempts = 5;
+     for (let i = 0; i < maxAttempts; i++) {
+         if (!httpBridgeProcess.pid ||
+-            httpBridgeProcess.killed ||
++            httpBridgeProcess.killed || httpBridgeProcess.exitCode !== null || httpBridgeProcess.signalCode !== null ||
+             !socksBridgeProcess.pid ||
+-            socksBridgeProcess.killed) {
++            socksBridgeProcess.killed || socksBridgeProcess.exitCode !== null || socksBridgeProcess.signalCode !== null) {
+             throw new Error('Linux bridge process died unexpectedly');
+         }
+         try {
+@@ -1290,7 +1317,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+         }
+         if (i === maxAttempts - 1) {
+             // Clean up both processes
+-            if (httpBridgeProcess.pid) {
++            if (!lifecycle && httpBridgeProcess.pid) {
+                 try {
+                     process.kill(httpBridgeProcess.pid, 'SIGTERM');
+                 }
+@@ -1298,7 +1325,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+                     // Ignore errors
+                 }
+             }
+-            if (socksBridgeProcess.pid) {
++            if (!lifecycle && socksBridgeProcess.pid) {
+                 try {
+                     process.kill(socksBridgeProcess.pid, 'SIGTERM');
+                 }
+@@ -1310,6 +1337,7 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+         }
+         await new Promise(resolve => setTimeout(resolve, i * 100));
+     }
++    if (lifecycle) await Promise.all([...owned.values()].map(({ lease }) => lifecycle.ready(lease)));
+     return {
+         httpSocketPath,
+         socksSocketPath: socksSockPath,
+@@ -1317,7 +1345,12 @@ export async function initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort
+         socksBridgeProcess,
+         httpProxyPort,
+         socksProxyPort,
++        stopNativeBridges: lifecycle ? stopOwned : undefined,
+     };
++    } catch (error) {
++        if (lifecycle) await stopOwned();
++        throw error;
++    }
+ }
+ /**
+  * Read by the seccomp helper, never by this process. The write denies are
+@@ -3144,4 +3177,4 @@ export async function wrapCommandWithSandboxLinux(params) {
+         throw error;
+     }
+ }
+-//# sourceMappingURL=linux-sandbox-utils.js.map
+\ No newline at end of file
++// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
+\ No newline at end of file
+diff --git a/dist/sandbox/sandbox-manager.d.ts b/dist/sandbox/sandbox-manager.d.ts
+index e4839e2..541dbcb 100644
+--- a/dist/sandbox/sandbox-manager.d.ts
++++ b/dist/sandbox/sandbox-manager.d.ts
+@@ -4,7 +4,7 @@ import { AwsPairRegistry } from './credential-aws-pairs.js';
+ import { type MitmCA } from './mitm-ca.js';
+ import type { SandboxRuntimeConfig } from './sandbox-config.js';
+ import type { SandboxAskCallback, FsReadRestrictionConfig, FsWriteRestrictionConfig, NetworkRestrictionConfig } from './sandbox-schemas.js';
+-import { type SandboxDependencyCheck } from './linux-sandbox-utils.js';
++import { type NativeBridgeLifecycle, type SandboxDependencyCheck } from './linux-sandbox-utils.js';
+ import { type WindowsProfileGrantItem, type WindowsProfileGrantStatus, type WindowsBinShell } from './windows-sandbox-utils.js';
+ import { SandboxViolationStore } from './sandbox-violation-store.js';
+ /** Something about the profile read grant that the user should be shown. */
+@@ -35,6 +35,7 @@ export declare function resolveCommandText(decodedKey: string): string;
+  * set, not part of the configuration a user writes.
+  */
+ export interface SandboxInitializeOptions {
++    nativeBridgeLifecycle?: NativeBridgeLifecycle;
+     /**
+      * Windows: profile exclusions this session may still be granted READ on.
+      * Never applies to a write root or to a path above an exclusion.
+@@ -74,6 +75,7 @@ export type WrapWithSandboxOptions = {
+  * Interface for the sandbox manager API
+  */
+ export interface ISandboxManager {
++    readonly nativeBridgeLifecycleABI: 1;
+     initialize(runtimeConfig: SandboxRuntimeConfig, sandboxAskCallback?: SandboxAskCallback, enableLogMonitor?: boolean, options?: SandboxInitializeOptions): Promise<void>;
+     isSupportedPlatform(): boolean;
+     isSandboxingEnabled(): boolean;
+@@ -185,4 +187,4 @@ export interface ISandboxManager {
+  * for this session. This runs outside of the sandbox, on the host machine.
+  */
+ export declare const SandboxManager: ISandboxManager;
+-//# sourceMappingURL=sandbox-manager.d.ts.map
+\ No newline at end of file
++// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
+\ No newline at end of file
+diff --git a/dist/sandbox/sandbox-manager.js b/dist/sandbox/sandbox-manager.js
+index d475e55..d916d3b 100644
+--- a/dist/sandbox/sandbox-manager.js
++++ b/dist/sandbox/sandbox-manager.js
+@@ -14,7 +14,7 @@ import { whichSync } from '../utils/which.js';
+ import { getPlatform, getWslVersion } from '../utils/platform.js';
+ import * as fs from 'fs';
+ import { randomBytes } from 'node:crypto';
+-import { WorkingDirectoryChanged, wrapCommandWithSandboxLinux, initializeLinuxNetworkBridge, checkLinuxDependencies, cleanupBwrapMountPoints, linuxGetCwdMandatoryDenyPaths, } from './linux-sandbox-utils.js';
++import { WorkingDirectoryChanged, wrapCommandWithSandboxLinux, NATIVE_BRIDGE_LIFECYCLE_ABI, initializeLinuxNetworkBridge, checkLinuxDependencies, cleanupBwrapMountPoints, linuxGetCwdMandatoryDenyPaths, } from './linux-sandbox-utils.js';
+ import { expandReadDenyGlobLinuxSteps } from './read-deny-glob.js';
+ import { wrapCommandWithSandboxMacOS, startMacOSSandboxLogMonitor, } from './macos-sandbox-utils.js';
+ import { startLinuxSandboxViolationMonitor, } from './linux-violation-monitor.js';
+@@ -775,6 +775,9 @@ async function startMuxProxyServer(sandboxAskCallback, portRange) {
+     return muxPort;
+ }
+ async function initialize(runtimeConfig, sandboxAskCallback, enableLogMonitor = false, options) {
++    const lifecycle = options?.nativeBridgeLifecycle;
++    if (lifecycle && (lifecycle.abi !== 1 || typeof lifecycle.start !== 'function' || typeof lifecycle.stop !== 'function' || typeof lifecycle.ready !== 'function'))
++        throw new Error('Unsupported native bridge lifecycle adapter');
+     try {
+         await initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonitor, options);
+     }
+@@ -1170,7 +1173,7 @@ async function initializeSteps(runtimeConfig, sandboxAskCallback, enableLogMonit
+             // Initialize platform-specific infrastructure
+             let linuxBridge;
+             if (getPlatform() === 'linux') {
+-                linuxBridge = await initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, config.socatPath);
++                linuxBridge = await initializeLinuxNetworkBridge(httpProxyPort, socksProxyPort, config.socatPath, options?.nativeBridgeLifecycle);
+             }
+             const context = {
+                 httpProxyPort,
+@@ -2448,8 +2451,10 @@ async function reset() {
+     }
+     if (managerContext?.linuxBridge) {
+         const { httpSocketPath, socksSocketPath, httpBridgeProcess, socksBridgeProcess, } = managerContext.linuxBridge;
+-        // Kill both bridges and wait for them to exit
+-        await Promise.all([
++        // Configured capability cleanup includes the real ChildProcess close.
++        if (managerContext.linuxBridge.stopNativeBridges) {
++            await managerContext.linuxBridge.stopNativeBridges();
++        } else await Promise.all([
+             killBridgeProcess(httpBridgeProcess, 'HTTP'),
+             killBridgeProcess(socksBridgeProcess, 'SOCKS'),
+         ]);
+@@ -2601,6 +2606,7 @@ function getLinuxGlobPatternWarnings() {
+  * for this session. This runs outside of the sandbox, on the host machine.
+  */
+ export const SandboxManager = {
++    nativeBridgeLifecycleABI: NATIVE_BRIDGE_LIFECYCLE_ABI,
+     initialize,
+     isSupportedPlatform,
+     isSandboxingEnabled,
+@@ -2639,4 +2645,4 @@ export const SandboxManager = {
+     getConfig,
+     updateConfig,
+ };
+-//# sourceMappingURL=sandbox-manager.js.map
+\ No newline at end of file
++// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
+\ No newline at end of file
