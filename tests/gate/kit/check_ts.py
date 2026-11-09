@@ -19,6 +19,7 @@ Two runs, as eslint reports unused suppressions only in a run with no other find
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -65,8 +66,9 @@ def other_fs(s: Scratch) -> None:
     if shm.is_dir() and shm.stat().st_dev != ROOT.stat().st_dev:
         fs = str(shm)
     with tempfile.TemporaryDirectory(prefix="check-ts.", dir=fs) as x:
-        for f in ("package.json", "pnpm-lock.yaml"):
+        for f in ("package.json", "pnpm-lock.yaml", "pnpm-workspace.yaml"):
             (Path(x) / f).write_bytes((c.dir / f).read_bytes())
+        shutil.copytree(c.dir / "patches", Path(x) / "patches")
         # The kit's pnpm (its mise.toml), as that dir has no mise.toml of its own.
         pnpm = s.run(
             [tool("mise"), "which", "pnpm"],
