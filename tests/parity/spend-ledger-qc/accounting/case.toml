@@ -1,0 +1,14 @@
+# Source definition only; no runtime/parity GO.
+old = "tests/spend-ledger-qc.sh"
+old_at = "835f76de2d31f371c3cfb88d523d73b4a4039001"
+needs = [
+    "tests/lib/spend-ledger.sh",
+    "tests/spend-out",
+    "tests/gate/kit/testkit/provider.py",
+    "tests/fixtures/spec-status/good/demo.spec.html",
+    "tests/fixtures/spend-ledger/nested-tool.ts",
+]
+new = "tests/gate/kit/test_spend_ledger_qc.py::test_spend_ledger_qc_accounting"
+
+[ran]
+"scripts/octo-feather-qc" = "coverage"

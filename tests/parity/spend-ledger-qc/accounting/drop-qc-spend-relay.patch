@@ -1,0 +1,11 @@
+Seeded defect: QC discards actual sandbox spend instead of forwarding it through the public outer writer. No criterion or fixture label.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -289,5 +289,5 @@
+     for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
+         record.update(json.loads(line))
+-    record_spend(record.get("spend") or [], f"sandbox {session}")
++    record_spend([], f"sandbox {session}")
+     if "agents_started" not in record:
+         return None, record

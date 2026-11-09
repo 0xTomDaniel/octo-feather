@@ -1,0 +1,14 @@
+Seeded defect: QC treats any nonzero public spend writer status as fatal, so native directory-at-ledger failure gates an otherwise passing QC result.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -302,7 +302,6 @@
+     try:
+         subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input="".join(l + "\n" for l in lines),
+-                       text=True, stdout=subprocess.DEVNULL, timeout=60)
++                       text=True, stdout=subprocess.DEVNULL, timeout=60, check=True)
+     except (OSError, subprocess.SubprocessError) as e:
+-        print(f"octo-feather-qc: spend unrecorded ({len(lines)} call(s), {what}): octo-feather-lane spend record "
+-              f"did not run ({type(e).__name__})", file=sys.stderr)
++        raise
+ 
