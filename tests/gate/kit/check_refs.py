@@ -262,7 +262,7 @@ def in_gate(s: Scratch) -> None:
         s.git(k, "add", "-f", rel)
     env = {
         "XDG_STATE_HOME": str(s.root / "state"),
-        "PYTEST_ADDOPTS": f"-k 'test_recipe and ({' or '.join(IN_GATE)})'",
+        "PYTEST_ADDOPTS": f"--color=no -k 'test_recipe and ({' or '.join(IN_GATE)})'",
         "npm_config_store_dir": pnpm_store(),  # the caller's, never the scratch HOME's
         "PATH": os.environ["PATH"],  # the real pi check-skills asks, not testkit's stand-in
         "GATE_WORKERS": "0",  # one process, as a nested gate runs

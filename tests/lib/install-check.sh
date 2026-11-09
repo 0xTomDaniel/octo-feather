@@ -42,7 +42,7 @@ printf '#!/bin/sh\necho "linear 3.0.0"\n' >"$t/old/linear"; chmod +x "$t/bin/"* 
 # resolves to mise's install, so install-check's PATH rule holds.
 ln -s "$(mise which just)" "$t/bin/just"
 export MISE_DATA_DIR="${MISE_DATA_DIR:-$HOME/.local/share/mise}"
-UV_PYTHON_INSTALL_DIR="$(uv python dir --color never)"; export UV_PYTHON_INSTALL_DIR
+UV_PYTHON_INSTALL_DIR="$(uv --color never python dir)"; export UV_PYTHON_INSTALL_DIR
 ppin="$(tr -d '[:space:]' <"$kit/.python-version")"; real_py3="$(command -v python3)"; real_unshare="$(command -v unshare)"
 shims="$(mise doctor --json | python3 -c 'import json, sys; print(json.load(sys.stdin)["dirs"]["shims"])')"
 mpin="$(tr -d '[:space:]' <"$kit/mise-version")"

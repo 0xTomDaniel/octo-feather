@@ -1586,15 +1586,33 @@ def drive_qc_sandbox(f: Feature) -> None:
            'cat "$HOME/.git-credentials" "${XDG_CONFIG_HOME:-$HOME/.config}/git/credentials" "${XDG_CONFIG_HOME:-$HOME/.config}/gh/hosts.yml" '
            '> stolen 2>/dev/null; cp stolen /tmp/stolen; echo "creds $(wc -c < stolen) bytes"; '
            'touch "$HOME/x"; echo "touch $?"; echo w > newfile; echo "wrote $?"; '
-           f'setsid sleep {tok} < /dev/null > /dev/null 2>&1 & '
+           f"setsid sh -c 'echo \"owned-child-start $$ {tok}\"; exec sleep {tok}' < /dev/null & "
            'if [ -n "$OCTO_FEATHER_QC_HERDR" ]; then "$OCTO_FEATHER_QC_HERDR" --session default workspace list > /dev/null 2>&1; '
            'echo "live herdr $?"; else echo "live herdr none"; fi')
-    f.pre = ["env", "-C", str(r)]
+    # Feature.run writes regular evidence files. This public-command wrapper supplies actual
+    # capture pipes, so the child's inherited stdout must close before communicate succeeds.
+    capture = """import subprocess, sys
+p = subprocess.Popen(sys.argv[1:], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+try:
+    out, err = p.communicate(timeout=120)
+except subprocess.TimeoutExpired:
+    try:
+        p.kill()
+        p.wait(timeout=10)
+        print('owned launcher killed and waited after pipe timeout; descendant cleanup/accounting unproved', file=sys.stderr)
+    finally:
+        if p.stdout is not None: p.stdout.close()
+        if p.stderr is not None: p.stderr.close()
+    sys.exit(66)
+sys.stdout.buffer.write(out)
+sys.stderr.buffer.write(err)
+sys.exit(p.returncode)
+"""
+    f.pre = ["env", "-C", str(r), "python3", "-c", capture]
     f.run("by-hand", "octo-feather-qc-sandbox", "--", "sh", "-c", cmd)
     f.pre = []
-    left = subprocess.run(["pgrep", "-f", f"sleep {tok}"], capture_output=True, text=True, check=False).stdout.split()
     f.obs("by-hand", "after", f"{(home / 'x').exists()} {(r / 'newfile').exists()} {(r / 'stolen').exists()} "
-                              f"{len(left)} {git('status', '--porcelain') or 'clean'}\n")
+                              f"{git('status', '--porcelain') or 'clean'}\n")
 
     def mask_ok(out: str) -> bool:   # the mask shows only what the run's own Herdr server makes there
         m = re.search(r"(?m)^mask shows \[(.*)\]$", out)
@@ -1602,7 +1620,14 @@ def drive_qc_sandbox(f: Feature) -> None:
 
     def holds(c: Case) -> bool:
         live = re.search(r"(?m)^live herdr (\S+)$", c.out)
-        return (c.code == 0 and "qc sandbox: FAIL" not in c.err and c.o["after"] == "False False False 0 clean\n"
+        started = re.findall(rf"(?m)^owned-child-start (\d+) {tok}$", c.out)
+        cleanup = [json.loads(ln.split("record ", 1)[1]) for ln in c.err.splitlines()
+                   if ln.startswith("qc sandbox: record ")]
+        child_reaped = (len(started) == 1 and any(
+            rec.get("left_after_kill") == 0 and f"{started[0]} sleep {tok}" in rec.get("killed", [])
+            for rec in cleanup))
+        return (c.code == 0 and "qc sandbox: FAIL" not in c.err and child_reaped
+                and c.o["after"] == "False False False clean\n"
                 and re.search(r"(?m)^umount [1-9][0-9]*$", c.out) is not None   # the mask stays
                 and mask_ok(c.out)
                 and re.search(r"(?m)^creds 0 bytes$", c.out) is not None   # nothing to copy out

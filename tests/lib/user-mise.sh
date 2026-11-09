@@ -35,8 +35,8 @@ case "${USER_MISE_STAGE:-0}" in
     d() { jq -r --arg k "$1" '.dirs[$k] // empty' <<<"$md"; }
     USER_MISE_RDATA="$(d data)"; USER_MISE_RCACHE="$(d cache)"; USER_MISE_RCONFIG="$(d config)"; USER_MISE_RSTATE="$(d state)"
     [[ -d "$USER_MISE_RDATA/installs" ]] || fail "mise's data dir has no installs ($USER_MISE_RDATA): run mise install --locked in the kit"
-    USER_MISE_MISE="$(realpath "$(command -v mise)")"; USER_MISE_UVPY="$(uv python dir --color never)"; USER_MISE_UVCACHE="$(uv cache dir --color never)"
-    USER_MISE_PY="$(cd "$kit" && uv python find --system)"; USER_MISE_PNPM="$(cd "$kit" && pnpm store path)"
+    USER_MISE_MISE="$(realpath "$(command -v mise)")"; USER_MISE_UVPY="$(uv --color never python dir)"; USER_MISE_UVCACHE="$(uv --color never cache dir)"
+    USER_MISE_PY="$(cd "$kit" && uv --color never python find --system)"; USER_MISE_PNPM="$(cd "$kit" && pnpm store path)"
     USER_MISE_VC="${XDG_CACHE_HOME:-$HOME/.cache}/octo-feather/skillfile"; USER_MISE_PI="$(command -v pi || true)"
     USER_MISE_UID="$(id -u)"; USER_MISE_GID="$(id -g)"; USER_MISE_NAME="$(id -un)"; USER_MISE_HOME="$(cd "$HOME" && pwd -P)";
     export USER_MISE_HOME USER_MISE_RDATA USER_MISE_RCACHE USER_MISE_RCONFIG USER_MISE_RSTATE USER_MISE_MISE USER_MISE_UVPY USER_MISE_UVCACHE USER_MISE_PY \

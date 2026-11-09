@@ -29,7 +29,6 @@ from pathlib import Path
 from testkit import FIXTURES, ROOT, Scratch, main, pnpm_store, tool_homes
 
 TAG = "fast test"
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 # Not copied: the kit's own tests.
 TESTS = re.compile(r"tests/[^/]*\.sh|tests/gate/test_cpu\.py|tests/gate/kit/(.*/)?test_[^/]*\.py")
 ITEM = (
@@ -99,13 +98,13 @@ def just(s: Scratch, k: Path, *args: str) -> tuple[int, str]:
     p = subprocess.run(
         ["just", *args],  # noqa: S607
         cwd=k,
-        env=s.env,
+        env={**s.env, "PYTEST_ADDOPTS": f"{s.env.get('PYTEST_ADDOPTS', '')} --color=no"},
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
         text=True,
         check=False,
     )
-    return p.returncode, ANSI.sub("", p.stdout)
+    return p.returncode, p.stdout
 
 
 def copy(s: Scratch) -> Path:
