@@ -381,7 +381,16 @@ class Recorder:
         self.sel = selectors.DefaultSelector()
         for f in (self.srv, self.wr) + ((self.ino,) if self.ino >= 0 else ()):
             self.sel.register(f, selectors.EVENT_READ)
-        self.th = threading.Thread(target=self.loop, daemon=True)
+        self.quiescent = threading.Event()
+
+        def run() -> None:
+            try:
+                self.loop()
+            finally:
+                # Sole worker publication, after its last Recorder state/FD use.
+                self.quiescent.set()
+
+        self.th = threading.Thread(target=run, daemon=True)
 
     def watches(self, masks: list[int]) -> int:
         """Watch retained inner directory capabilities, never a peer PID lookup."""
@@ -731,34 +740,47 @@ class Recorder:
     def finish(self) -> dict[str, Any]:
         """The record whole: the judge's namespace is gone, every call still open ended without its exit."""
         errors: list[tuple[str, BaseException]] = []
+        quiescent = False
         try:
             os.write(self.ww, b"x")
             self.th.join(10)
-            if self.th.is_alive():
-                raise RuntimeError("Recorder thread completion unproved")
+            # An interrupted join/is_alive observation is not ownership transfer.
+            if not self.quiescent.is_set():
+                raise RuntimeError(
+                    "Recorder quiescence unproved; retaining worker descriptors "
+                    "for process exit/outer QC ownership"
+                )
+            quiescent = True
             self.drain()
             for st in self.conns.values():
                 self.call_end(st)
         except BaseException as error:
+            if not quiescent:
+                error.add_note(
+                    "Recorder resources retained untouched: quiescence not established; "
+                    "process exit/outer QC cleanup required"
+                )
             errors.append(("Recorder record completion", error))
         finally:
-            # A failed record/drain or close must not strand the other retained FDs.
-            for c, st in list(self.conns.items()):
-                for fd in st.get("masks", []):
+            # Without positive quiescence leave the worker's state/FDs untouched.
+            # Fatal process exit, not unsafe close, is the ownership fallback.
+            if quiescent:
+                for c, st in list(self.conns.items()):
+                    for fd in st.get("masks", []):
+                        try:
+                            os.close(fd)
+                        except BaseException as error:
+                            errors.append(("Recorder mask descriptor close", error))
                     try:
-                        os.close(fd)
+                        c.close()
                     except BaseException as error:
-                        errors.append(("Recorder mask descriptor close", error))
-                try:
-                    c.close()
-                except BaseException as error:
-                    errors.append(("Recorder connection close", error))
-                self.conns.pop(c, None)
-            for state in list(self.native.values()):
-                try:
-                    os.close(state["fd"])
-                except BaseException as error:
-                    errors.append(("Recorder native descriptor close", error))
+                        errors.append(("Recorder connection close", error))
+                    self.conns.pop(c, None)
+                for state in list(self.native.values()):
+                    try:
+                        os.close(state["fd"])
+                    except BaseException as error:
+                        errors.append(("Recorder native descriptor close", error))
         if errors:
             stage, primary = errors[0]
             primary.add_note(f"qc sandbox cleanup phase: {stage}")

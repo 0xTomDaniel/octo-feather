@@ -223,7 +223,7 @@ pnpm, codebase-design and implement-spec loaded for this step.
 Evidence: none
 Check: scripts/octo-feather-qc-sandbox: require retained lifecycle ABI before SDK initialization (accepted owned-native rule) | reads: imported SDK lifecycle ABI and private setup authority availability | class: exact
 Check: scripts/octo-feather-qc-sandbox: authenticate lifecycle operations before capability registration/signaling (authorized same-Recorder extension) | reads: peer UID, private secret, lease, operation, fields and received descriptors | class: exact
-Check: scripts/octo-feather-qc-sandbox: incomplete owned cleanup remains fatal (quality#acceptance-qc-sandbox-maintained) | reads: actual Node wait errors, native completion result, owned-child wait/ECHILD, Recorder thread/record/descriptor outcomes | class: exact
+Check: scripts/octo-feather-qc-sandbox: incomplete owned cleanup remains fatal and worker resources transfer only after positive quiescence (quality#acceptance-qc-sandbox-maintained) | reads: actual Node wait errors, native completion result, owned-child wait/ECHILD, worker-published terminal Event and Recorder record/descriptor outcomes | class: exact
 Owners: none
 Prior art: @anthropic-ai/sandbox-runtime 0.0.81 | released: not reverified in source-only unit | activity: not reverified in source-only unit | adoption: not measured | license: Apache-2.0 | reason: existing pinned maintained sandbox retained; current bridge API lacks before-reap capability acquisition, so draft extends its generic lifecycle seam rather than replacing the manager
 Prior art: Node.js 22.23.3 | released: not reverified in source-only unit | activity: not reverified in source-only unit | adoption: not measured | license: not rechecked in source-only unit | reason: existing runtime retained; documented kill/close contract does not reserve a reaped numeric PID, so child-origin kernel capability is required
@@ -296,18 +296,20 @@ With Recorder and retained Node FD still alive, independent attempts are:
 2. orphans(), existing bounded5s grace plus5s cleanup, requiring observed ECHILD;
    timeout/interrupt is fatal, not an empty-list substitute. It may also reap Node
    after failed direct wait, without inventing a successful Popen return status.
-3. rec.finish(), existing bounded10s thread join followed by record completion.
-   Still-live thread is now explicitly fatal, not falsely called joined/drained.
+3. rec.finish(), existing bounded10s join plus positive worker-published quiescence
+   Event before record completion or resource ownership transfer. Missing Event
+   or interrupted/failed join is fatal, not falsely called joined/drained.
 4. Close retained Node FD in finally, even if Recorder finish failed.
 
 Recorder finish independently attempts remaining mask/connection/native-pidfd
-closes even if stop/join/drain/recording or another descriptor close raises. First
-local exception remains primary; subsequent close failures become labelled notes.
+closes ONLY after positive quiescence and a non-interrupted bounded join. Then a
+drain/record/individual-close error cannot skip remaining descriptor attempts.
+First local exception remains primary; subsequent failures become labelled notes.
 It returns no complete record on such an exception. Ordinary successful record
-order stays unchanged; descriptor closure is in finally after recording.
-A still-live thread is an incomplete/fatal condition; descriptor close attempts
-are not a guarantee the thread stopped or a certification against arbitrary
-concurrent interruption. Setup exit/outer ownership remain the narrower fallback.
+order stays unchanged; quiescent descriptor closure is in finally after recording.
+Without proven quiescence, main retains worker-owned descriptors and state
+UNTOUCHED, rather than closing beneath a live owner and merely reporting fatal.
+Setup exit/outer ownership are the explicit narrower fallback, not local completion.
 
 Only after ALL independent cleanup attempts, setup adds labelled secondary errors
 and nested Recorder notes to the original exception and explicitly emits notes
@@ -327,6 +329,46 @@ No new fixture hook, source checker, manager, mandatory fault-RED or test change
 Later finite proof at a REAL owning wait/finalization edge needs separate shape,
 public reachability, actual materialization/profile and a NEW execution grant;
 this unit supplies none. Unchanged proposed public capture command above NOT RUN.
+
+### F3 worker resource quiescence correction
+
+Independent exact-df9 review identified concrete FD-number reuse/double-close
+risk: its main finally closed worker-owned resources even after live/failed join.
+A subsequent fatal report cannot reserve a closed descriptor's identity. This
+correction changes ownership transfer, not just diagnostics or timeout status.
+
+Recorder constructs one initially unset stdlib Event. Its sole thread target wraps
+the EXISTING loop in try/finally; only the worker publishes that terminal Event
+AFTER loop returns/unwinds past its last Recorder state/FD access. No later worker
+body can poll/signal/recv/close these resources. The thread's interpreter teardown
+may remain; the marker attests resource-use quiescence, not arbitrary OS-thread
+termination. No main setter, restart/reset, new manager, lock hierarchy or listener.
+
+Finish starts a local transfer guard false. A successful bounded10s join followed
+by positive worker Event sets it true. is_alive and possibly interrupted join
+bookkeeping are NOT proof. Missing Event raises fatal. Write/join/check exceptions
+leave transfer false EVEN IF the worker later happens to finish. On false, main
+performs NO drain/call_end, connection/native-map mutation or mask/socket/native
+FD closure. Existing references retain live-thread-owned resource lifetimes until
+setup process exit/outer QC51 containment; no unsafe close to avoid a temporary
+leak. No fin/capture/ECHILD receipt follows this branch. The actual worker can
+still operate its OWN resources, which are not closed or reassigned by main.
+
+On positive transfer, existing ordered recording plus independent per-descriptor
+close attempts and primary/secondary diagnostics remain. Event is never reset and
+the Thread has one start, so transfer cannot become false through restart. Existing
+F2 setup still independently attempts native finalization, adoption drainage and
+finish after earlier failures, and closes its SEPARATELY main-owned Node pidfd.
+Primary and labelled secondary errors, false-native66 and unknown-result refusal
+are unchanged. SDK draft/private outputs/F1 rationale/rootQC51/tests/control and
+installed inputs remain untouched.
+
+This is source-only control flow, not observed thread/descriptor-race proof. No
+unbounded join, signal-mask trick, numeric reacquisition, fixture hook or fault-RED.
+Uninterruptible tasks, partial Popen, external SIGKILL or repeated interruption
+still require narrower process/outer ownership boundary; local thread stop/death/
+ECHILD/CPU/capture are NOT guaranteed. Fresh exact-head source review and later
+separately granted materialized finite public proofs remain pending, no runtimeGO.
 Validation: readonly inputs/hash/source, real private Git diff, Python AST only.
 Hooks bypassed for CODEPREP. No installs, actual pnpm application, manifests/lock
 edits, reviewed project/helper/library/model/native execution, tests/statics/
