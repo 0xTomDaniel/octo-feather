@@ -240,6 +240,23 @@ a = sys.argv[1:]
 if a[:1] == ["--version"]:
     sys.exit(0)
 if hang := os.environ.get("FAKE_PI_HANG"):
+    if observer := os.environ.get("FAKE_PI_HANG_SOCKET"):
+        import socket  # noqa: PLC0415
+
+        with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
+            peer.settimeout(30)
+            peer.connect(observer)
+            handle = os.pidfd_open(os.getpid())
+            try:
+                socket.send_fds(
+                    peer,
+                    [json.dumps({"pid": os.getpid(), "token": os.environ["FAKE_PI_HANG_TOKEN"]}).encode()],
+                    [handle],
+                )
+            finally:
+                os.close(handle)
+            if peer.recv(1) != b"!":
+                sys.exit("fake judge: owned observer did not acknowledge readiness")
     os.execvp("sleep", ["sleep", hang])  # noqa: S606, S607
 if qc := os.environ.get("FAKE_QC"):
     qc_mode(qc, a)

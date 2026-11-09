@@ -13,14 +13,18 @@ unmodified; a copy of the kit judges itself. One judged run is prepared once per
 
 from __future__ import annotations
 
+import contextlib
 import json
 import os
-import queue
 import re
+import secrets
+import select
 import shutil
 import signal
+import socket
+import struct
 import subprocess
-import threading
+import tempfile
 import time
 from pathlib import Path
 from typing import Any
@@ -237,80 +241,115 @@ def snapshot_read_only(s: Scratch) -> None:
 
 
 def killed(s: Scratch) -> None:
-    """A run killed mid-judge as a timeout kills it (TERM to it, then to its process group, the 2nd
-    send landing during qc's cleanup as on a loaded box, #235) leaves no snapshot behind, and its
-    judge does not survive. The kill waits on readiness (the proof line said, the judge started),
-    never a sleep."""
+    """Cancel a live judge, observing only its child-origin connection and retained pidfd."""
     world(s)
-    mark = f"9{os.getpid()}{time.monotonic_ns() % 1000}"  # the judge's sleep, unique to this run
-    cmd = [
-        "unshare",
-        "-cn",
-        "timeout",
-        "-k",
-        "5",
-        LIMIT_S,
-        kit("octo-feather-qc"),
-        STATUS,
-        "5",
-        "acceptance-a",
-    ]
-    p = subprocess.Popen(
-        cmd,
-        cwd=s.root / "repo",
-        env={**s.env, "FAKE_PI_HANG": mark},
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
-    lines: queue.Queue[str | None] = queue.Queue()
-    said: list[str] = []
-
-    def read() -> None:
-        assert p.stderr
-        for ln in p.stderr:
-            lines.put(ln)
-        lines.put(None)
-
-    threading.Thread(target=read, daemon=True).start()
-    while True:
-        ln = lines.get(timeout=float(LIMIT_S))
-        assert ln is not None, f"the judge never started: {''.join(said)}"
-        said.append(ln)
-        if ln.startswith(PROOF):
-            break
-    while not alive(mark):
-        assert p.poll() is None, f"qc ended before its judge started: {''.join(said)}"
-        time.sleep(0.01)  # a process-state wait: the judge's sleep is running
-    os.kill(p.pid, signal.SIGTERM)
-    while True:  # until the group is gone: its leader reaped (poll) and every member exited
-        p.poll()
+    mark = f"9{os.getpid()}{time.monotonic_ns() % 1000}"
+    nonce = secrets.token_hex(16)
+    observer = s.root / "observer"
+    observer.mkdir(mode=0o700)
+    address = observer / "judge.sock"
+    handle: int | None = None
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as listener, tempfile.TemporaryFile(
+        mode="w+t"
+    ) as err:
+        listener.bind(str(address))
+        listener.listen(1)
+        listener.settimeout(30)
+        cmd = [
+            "unshare",
+            "-cn",
+            "timeout",
+            "-k",
+            "5",
+            LIMIT_S,
+            kit("octo-feather-qc"),
+            STATUS,
+            "5",
+            "acceptance-a",
+        ]
+        p = subprocess.Popen(
+            cmd,
+            cwd=s.root / "repo",
+            env={
+                **s.env,
+                "FAKE_PI_HANG": mark,
+                "FAKE_PI_HANG_SOCKET": str(address),
+                "FAKE_PI_HANG_TOKEN": nonce,
+                "OCTO_FEATHER_QC_RO_BINDS": str(observer),
+            },
+            stdout=subprocess.DEVNULL,
+            stderr=err,
+            start_new_session=True,
+        )
         try:
-            os.killpg(p.pid, signal.SIGTERM)
-        except ProcessLookupError:
-            break
-        time.sleep(0.0005)
-    rc = p.wait()
-    assert rc != 0, "the killed run exited 0"
-    left = [f.name for f in (s.root / "tmp").iterdir()]
-    assert left == [], f"the killed run left scratch: {left}"
-    end = time.monotonic() + 10
-    while alive(mark):
-        assert time.monotonic() < end, "the killed run's judge survived"
-        time.sleep(0.01)
-
-
-def alive(mark: str) -> bool:
-    """Whether a process `sleep MARK` runs."""
-    want = f"sleep\0{mark}\0".encode()
-
-    def cmdline(d: Path) -> bytes:
-        try:
-            return (d / "cmdline").read_bytes()
-        except OSError:  # gone meanwhile
-            return b""
-
-    return any(cmdline(d) == want for d in Path("/proc").iterdir() if d.name.isdigit())
+            with listener.accept()[0] as peer:
+                peer.settimeout(30)
+                # Kernel peer credentials are host-namespace diagnostics only. The judge
+                # transfers a pidfd opened on ITSELF: no numeric PID lookup/reuse race.
+                host_pid, uid, _ = struct.unpack(
+                    "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+                )
+                assert uid == os.getuid(), (host_pid, uid)
+                message, handles, flags, _ = socket.recv_fds(peer, 4096, 1)
+                if handles:
+                    handle = handles[0]
+                assert len(handles) == 1 and not flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC), (
+                    handles, flags
+                )
+                started = json.loads(message)
+                assert started["token"] == nonce and started["pid"] > 0, started
+                live = select.poll()
+                live.register(handle, select.POLLIN)
+                assert not live.poll(0), "judge exited before cancellation"
+                peer.sendall(b"!")
+                print(
+                    f"START owned judge host_pid={host_pid} namespace_pid={started['pid']} "
+                    f"uid={uid} token={nonce} pidfd={handle}; live before cancellation",
+                    flush=True,
+                )
+            # p is still unreaped: its session/group ID cannot be reused by another process.
+            os.kill(p.pid, signal.SIGTERM)
+            with contextlib.suppress(ProcessLookupError):
+                os.killpg(p.pid, signal.SIGTERM)
+            rc = p.wait(timeout=30)
+            err.seek(0)
+            proof = err.read()
+            print(f"PRODUCT cancelled QC rc={rc}\n{proof}", flush=True)
+            assert PROOF in proof, proof
+            assert rc != 0, "the killed run exited 0"
+            exited = bool(live.poll(10_000))
+            print(
+                f"PRODUCT host_pid={host_pid} token={nonce} pidfd={handle} "
+                f"after bounded cancellation: {'EXITED' if exited else 'LIVE'}",
+                flush=True,
+            )
+            assert exited, "killed run's actual judge survived cancellation"
+            left = [f.name for f in (s.root / "tmp").iterdir()]
+            assert left == [], f"the killed run left scratch: {left}"
+        finally:
+            try:
+                if handle is not None:
+                    try:
+                        try:
+                            signal.pidfd_send_signal(handle, signal.SIGKILL)
+                            print("CLEANUP owned judge pidfd SIGKILL", flush=True)
+                        except ProcessLookupError:
+                            print("CLEANUP owned judge pidfd already exited", flush=True)
+                        poll = select.poll()
+                        poll.register(handle, select.POLLIN)
+                        assert poll.poll(10_000), "owned judge cleanup did not terminate it"
+                    finally:
+                        os.close(handle)
+            finally:
+                if p.returncode is None:
+                    # No poll/reap before this group signal: its numeric ID stays reserved.
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(p.pid, signal.SIGKILL)
+                    print(f"CLEANUP owned launcher waited rc={p.wait(timeout=10)}", flush=True)
+                else:
+                    print(f"CLEANUP owned launcher already waited rc={p.returncode}", flush=True)
+                err.seek(0)
+                print(f"CLEANUP captured QC stderr:\n{err.read()}", flush=True)
 
 
 def fetch_fails(s: Scratch) -> None:
