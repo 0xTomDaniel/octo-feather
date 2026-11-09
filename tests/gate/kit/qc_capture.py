@@ -15,6 +15,7 @@ from __future__ import annotations
 import contextlib
 import hashlib
 import json
+import os
 import re
 import secrets
 import select
@@ -133,7 +134,9 @@ def cancelled_capture(s: Scratch) -> None:
             rc = p.wait(timeout=15)
             log.seek(0)
             output = log.read().decode(errors="replace")
-            assert rc != 0, output
+            assert rc == 143, f"root TERM status lost (expected143, got{rc}): {output}"
+            note = json.loads((s.root / "capture.json").read_text())
+            assert note["cancelled"] and note["exit"] == 143 and note["ran"] is None, note
             assert live.poll(5000), f"actual detached capture descendant survived: {output}"
             assert not list((s.root / "tmp").iterdir()), output
         finally:

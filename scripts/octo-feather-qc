@@ -81,6 +81,7 @@ run it; 0, or 3 when a record could not be written). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
 import base64, contextlib, ctypes, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
+from collections.abc import Iterator
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
@@ -215,6 +216,45 @@ def oauth_warning():
     return None
 
 
+@contextlib.contextmanager
+def defer_termination() -> Iterator[None]:
+    """Enroll a new root before delivering an installed TERM/HUP unwind handler.
+
+    No signal mask or preexec_fn: exec children retain ordinary signal delivery.
+    Default/ignored dispositions stay unchanged. The selected CLI has installed
+    callable unwind handlers for both signals before reaching sandboxed().
+    """
+    handlers = {s: h for s in (signal.SIGTERM, signal.SIGHUP)
+                if callable(h := signal.getsignal(s))}
+    pending: tuple[int, types.FrameType | None] | None = None
+    arming, delivered = True, False
+
+    def deliver() -> None:
+        nonlocal delivered
+        if pending is not None and not delivered:
+            delivered = True
+            handlers[pending[0]](*pending)
+
+    def defer(n: int, frame: types.FrameType | None) -> None:
+        nonlocal pending
+        if pending is None:
+            pending = (n, frame)
+        if not arming:
+            deliver()
+
+    try:
+        for s in handlers:
+            signal.signal(s, defer)
+        yield
+    finally:
+        try:
+            arming = False
+            deliver()  # first pending signal, never replaced by a later one
+        finally:
+            for s, handler in handlers.items():
+                signal.signal(s, handler)
+
+
 def reap_cancelled() -> None:
     """Drain this invocation's adopted children, not a reaped process-group number.
 
@@ -306,26 +346,30 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     # setup dies, its children remain ours until waited, preserving PID ownership.
     if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
         raise OSError(ctypes.get_errno(), "qc cancellation requires child subreaper")
-    p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
-                         env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
-                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
-    # Open while the directly owned child is unreaped. Keep this capability even
-    # across p.wait(): a pidfd signals only that task, never a recycled numeric PID.
+    # Arm cleanup BEFORE creating a child, including Popen's unassigned interval.
+    p: subprocess.Popen[bytes] | None = None
     root_fd = None
     try:
-        root_fd = os.pidfd_open(p.pid)
+        with defer_termination():
+            p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
+                                 env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
+                                 pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
+            # Open while the direct child is unreaped, then deliver pending
+            # cancellation INSIDE the cleanup scope with this root enrolled.
+            root_fd = os.pidfd_open(p.pid)
         for n in names:
             os.close(pipes[n][1])
         stdout = p.stdout.read().decode(errors="replace"); p.wait()
     except BaseException:
-        with contextlib.suppress(ProcessLookupError):
-            if root_fd is None:
-                # Acquisition failed before any wait: the direct child is still
-                # ours and unreaped, so this one numeric signal cannot hit reuse.
-                os.kill(p.pid, signal.SIGKILL)
-            else:
-                signal.pidfd_send_signal(root_fd, signal.SIGKILL)
-        p.wait(timeout=5)
+        if p is not None:
+            with contextlib.suppress(ProcessLookupError):
+                if root_fd is None:
+                    # Acquisition failed before any wait: this owned child is
+                    # still unreaped, so its number cannot have been reused.
+                    os.kill(p.pid, signal.SIGKILL)
+                else:
+                    signal.pidfd_send_signal(root_fd, signal.SIGKILL)
+            p.wait(timeout=5)
         reap_cancelled()  # adopted descendants, including detached sessions
         raise
     finally:
@@ -615,8 +659,8 @@ COMPLETED = ("passed", "failed")   # a case outcome that ran to its end; any oth
 def capture_case(note: Path, cmd: list[str]) -> int:
     """--capture-case NOTE -- CMD: one tagged case of a capturing gate run (quality spec #qc-capture), CMD run at the
     head in its own qc sandbox as a declared demo is (no Pi, no GitHub, no lane history), its stdout and stderr passed
-    through for the test runner, its exit status returned; NOTE (JSON) says whether it ran there, with the sandbox's
-    proof and cleanup and any screenshots. Runs inside a check run by design: it calls no model and decides nothing
+    through for the test runner, its exit status returned; NOTE (JSON) says whether it ran there (ran null when
+    cancellation leaves that unknown), with the sandbox's proof and cleanup and any screenshots. Runs inside a check run by design: it calls no model and decides nothing
     (the judgment, below, still refuses there)."""
     root, head = git("rev-parse", "--show-toplevel"), git("rev-parse", "HEAD")
     rec: dict[str, Any] = {"command": cmd, "ran": False}
@@ -624,7 +668,13 @@ def capture_case(note: Path, cmd: list[str]) -> int:
     try:
         run, sandbox = sandboxed(wrapped, f"qc-{head[:12]}-{secrets.token_hex(3)}-t", {"off": "github: none (a tagged test)"},
                                  history=False, shots=True, pi=False)
-    except SystemExit as e:   # die(): no sandbox on this box (its message above)
+    except SystemExit as e:
+        if e.code in (128 + signal.SIGTERM, 128 + signal.SIGHUP):
+            # Any armed root cleanup completed before re-raising cancellation;
+            # cleanup failures are not caught here. Command completion is unknown.
+            note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": e.code,
+                                              "why": f"qc capture cancelled; completion unknown (exit {e.code})"}))
+            return int(e.code)
         note.write_text(json.dumps(rec | {"why": f"qc sandbox unavailable (exit {e.code})"}))
         return 66
     if run is None:
