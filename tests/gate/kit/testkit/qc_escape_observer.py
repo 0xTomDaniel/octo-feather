@@ -97,9 +97,16 @@ def supervise(argv: list[str]) -> int:
                             label = record.get("label")
                             counts = {name: sum(n == name for n, _ in handles) for name in LABELS}
                             if label == "ready" and not fds:
+                                servers = [fd for name, fd in handles if name == "herdr-server"]
+                                current = [(name, fd) for name, fd in handles if name != "herdr-server"]
+                                if servers:
+                                    current.append(("herdr-server", servers[-1]))
                                 ready = all(counts[name] >= 1 for name in LABELS) and all(
-                                    not exited(fd) for name, fd in handles if name != "herdr-server"
+                                    not exited(fd) for _, fd in current
                                 )
+                                if ready:
+                                    for name, fd in current:
+                                        print(f"OWNED in-flight {name} pidfd={fd} LIVE after exec", flush=True)
                                 peer.sendall(b"!" if ready else b"pending")
                             elif label == "check" and not fds:
                                 if counts["herdr-server"] < 1 or counts["escape-unshare"] != 1 or counts["escape-setsid"] != 1:
