@@ -223,10 +223,110 @@ pnpm, codebase-design and implement-spec loaded for this step.
 Evidence: none
 Check: scripts/octo-feather-qc-sandbox: require retained lifecycle ABI before SDK initialization (accepted owned-native rule) | reads: imported SDK lifecycle ABI and private setup authority availability | class: exact
 Check: scripts/octo-feather-qc-sandbox: authenticate lifecycle operations before capability registration/signaling (authorized same-Recorder extension) | reads: peer UID, private secret, lease, operation, fields and received descriptors | class: exact
+Check: scripts/octo-feather-qc-sandbox: incomplete owned cleanup remains fatal (quality#acceptance-qc-sandbox-maintained) | reads: actual Node wait errors, native completion result, owned-child wait/ECHILD, Recorder thread/record/descriptor outcomes | class: exact
 Owners: none
-Prior art: none
-Existing maintained SRT/Node/pnpm and kit-stdlib Recorder/JSON/SCM/pidfd/selector/
-subreaper mechanisms extended, not replaced or newly selected infrastructure.
+Prior art: @anthropic-ai/sandbox-runtime 0.0.81 | released: not reverified in source-only unit | activity: not reverified in source-only unit | adoption: not measured | license: Apache-2.0 | reason: existing pinned maintained sandbox retained; current bridge API lacks before-reap capability acquisition, so draft extends its generic lifecycle seam rather than replacing the manager
+Prior art: Node.js 22.23.3 | released: not reverified in source-only unit | activity: not reverified in source-only unit | adoption: not measured | license: not rechecked in source-only unit | reason: existing runtime retained; documented kill/close contract does not reserve a reaped numeric PID, so child-origin kernel capability is required
+Prior art: pnpm 10.7.0 | released: not reverified in source-only unit | activity: not reverified in source-only unit | adoption: not measured | license: not rechecked in source-only unit | reason: existing official patch/patch-commit owns eventual generated consumer wiring; no replacement manager or hand-edited lock
+
+### F1 durable writer determination, extending hand-built infrastructure
+
+The preceding bare Prior art:none was insufficient under quality
+#acceptance-prior-art-extends. This is the writer's corrected determination,
+not a relabelled independent review. Extending existing Recorder protocol does
+NOT exempt that infrastructure from explaining whether a maintained pinned tool
+now performs its job. Source rationale also remains next to SRT_SHIM.
+
+Existing maintained SRT0.0.81 owns real sandbox/network/filesystem/bwrap/bridge
+behavior and remains the consumer. Its inspected native bridge error/reset paths
+use numeric signaling and timed cleanup before actual completion; its initialize
+options lack the retained-lifetime seam required here. Thus this pinned SDK does
+not currently provide the needed bridge identity reservation across Node reap.
+Its actual package metadata reports Apache-2.0. The draft adds that narrow generic
+seam, not an alternate manager or sandbox implementation.
+
+The selected Node ChildProcess contract warns numeric PID reassignment can redirect
+kill; killed is not terminated. Actual close supplies completion/stdio evidence,
+not retroactive identity reservation. The inspected maintained Node contract has
+no Python-style SCM_RIGHTS/seqpacket retained-pidfd lifecycle interface:
+https://nodejs.org/download/release/v22.23.0/docs/api/child_process.html
+https://nodejs.org/docs/v22.11.0/api/child_process.html
+These official contracts and actual SDK source were the previous source unit's
+comparison, not new tool execution or a claim about all possible libraries.
+
+Linux retained pidfds and Python stdlib supply the missing primitives: self pidfd
+before exec, SCM_RIGHTS on the existing seqpacket socket, pidfd_send_signal,
+selector readiness, owning wait and subreaper/ECHILD. AGENTS expressly permits
+kit scripts to use stdlib where it covers the job. Extend the SAME Recorder and
+child-origin capability mechanism, not a new FFI/transport/daemon, parser/store
+or replacement process manager. Authentication proves authority, not SELF
+identity; trusted relay source plus retained kernel handle supplies identity.
+Death, actual Node close and ECHILD remain distinct completion obligations.
+
+The existing pinned pnpm10.7.0 already supplies maintained patch/patch-commit:
+https://pnpm.io/10.x/cli/patch
+https://pnpm.io/10.x/cli/patch-commit
+Actual local help/application/private materialization/generated config and lock
+remain unverified and separately authorized. The committed consumer patch is a
+PRIVATE Git diff DRAFT, never pnpm-produced/applied or a deployed repair.
+No replacement package resolver or hand-invented lock is justified.
+
+This determination compares the actual selected maintained pinned components and
+observed lifetime gap, not an exhaustive market search or an assertion no package
+anywhere could help. Release recency, activity, adoption and unchecked licenses
+are explicitly not fabricated. Independent prior-art adequacy judgment remains
+pending; these facts are not a quality-green verdict.
+
+### F2 local exceptional cleanup continuation
+
+New bounded SOURCE correction based on independent exact-a643 finding F2.
+Only sandbox script and this evidence change; draft/private outputs/rootQC51/
+all tests/control a643/installed bytes/manifest/lock remain frozen.
+
+Setup now has one shared finally for normal and exceptional Node completion.
+On a primary enrollment/wait/join exception it retains that ORIGINAL exception,
+independently attempts retained Node KILL (still-unreaped direct-root fallback
+only if pidfd acquisition never succeeded), then bounded Node wait5s. Either
+stop/wait failure is labelled secondary and cannot skip the remaining phases.
+No numeric signal occurs after adoption drainage can reap Node.
+
+With Recorder and retained Node FD still alive, independent attempts are:
+1. rec.finalize_native(), existing bounded10s wait for actual native completion;
+   false is NOT success and still yields existing normal-path66 when no exception.
+2. orphans(), existing bounded5s grace plus5s cleanup, requiring observed ECHILD;
+   timeout/interrupt is fatal, not an empty-list substitute. It may also reap Node
+   after failed direct wait, without inventing a successful Popen return status.
+3. rec.finish(), existing bounded10s thread join followed by record completion.
+   Still-live thread is now explicitly fatal, not falsely called joined/drained.
+4. Close retained Node FD in finally, even if Recorder finish failed.
+
+Recorder finish independently attempts remaining mask/connection/native-pidfd
+closes even if stop/join/drain/recording or another descriptor close raises. First
+local exception remains primary; subsequent close failures become labelled notes.
+It returns no complete record on such an exception. Ordinary successful record
+order stays unchanged; descriptor closure is in finally after recording.
+A still-live thread is an incomplete/fatal condition; descriptor close attempts
+are not a guarantee the thread stopped or a certification against arbitrary
+concurrent interruption. Setup exit/outer ownership remain the narrower fallback.
+
+Only after ALL independent cleanup attempts, setup adds labelled secondary errors
+and nested Recorder notes to the original exception and explicitly emits notes
+(including for SystemExit), then raises the same exception object/type/code.
+A diagnostic write failure is itself noted without replacing the original fatal.
+Native incompletion and observed survivor diagnostics are retained on this path.
+Optional results start unknown, not fabricated fin/ECHILD successes; unknown
+results cannot enter post(fin). No timeout, kill ACK, timer or close attempt is
+promoted to completed capture or PASS. Primary fatal remains fatal even when all
+later cleanup succeeds. Cleanup is attempted, not guaranteed against external
+SIGKILL, uninterruptible tasks, partial Popen or repeated asynchronous interruption.
+
+Source-only validation cannot prove these runtime interleavings, descriptor races,
+Node startup/readiness/close, accounting, gross CPU or public capture. Fresh exact
+head independent review follows. SDK diagnostic N1 remains nonblocking/unmodified.
+No new fixture hook, source checker, manager, mandatory fault-RED or test change.
+Later finite proof at a REAL owning wait/finalization edge needs separate shape,
+public reachability, actual materialization/profile and a NEW execution grant;
+this unit supplies none. Unchanged proposed public capture command above NOT RUN.
 Validation: readonly inputs/hash/source, real private Git diff, Python AST only.
 Hooks bypassed for CODEPREP. No installs, actual pnpm application, manifests/lock
 edits, reviewed project/helper/library/model/native execution, tests/statics/

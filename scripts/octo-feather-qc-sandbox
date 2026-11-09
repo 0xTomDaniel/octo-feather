@@ -730,17 +730,41 @@ class Recorder:
 
     def finish(self) -> dict[str, Any]:
         """The record whole: the judge's namespace is gone, every call still open ended without its exit."""
-        os.write(self.ww, b"x")
-        self.th.join(10)
-        self.drain()
-        for c in list(self.conns):
-            st = self.conns.pop(c)
-            self.call_end(st)
-            for fd in st.get("masks", []):
-                os.close(fd)
-            c.close()
-        for state in self.native.values():
-            os.close(state["fd"])
+        errors: list[tuple[str, BaseException]] = []
+        try:
+            os.write(self.ww, b"x")
+            self.th.join(10)
+            if self.th.is_alive():
+                raise RuntimeError("Recorder thread completion unproved")
+            self.drain()
+            for st in self.conns.values():
+                self.call_end(st)
+        except BaseException as error:
+            errors.append(("Recorder record completion", error))
+        finally:
+            # A failed record/drain or close must not strand the other retained FDs.
+            for c, st in list(self.conns.items()):
+                for fd in st.get("masks", []):
+                    try:
+                        os.close(fd)
+                    except BaseException as error:
+                        errors.append(("Recorder mask descriptor close", error))
+                try:
+                    c.close()
+                except BaseException as error:
+                    errors.append(("Recorder connection close", error))
+                self.conns.pop(c, None)
+            for state in list(self.native.values()):
+                try:
+                    os.close(state["fd"])
+                except BaseException as error:
+                    errors.append(("Recorder native descriptor close", error))
+        if errors:
+            stage, primary = errors[0]
+            primary.add_note(f"qc sandbox cleanup phase: {stage}")
+            for stage, error in errors[1:]:
+                primary.add_note(f"secondary cleanup failure ({stage}): {type(error).__name__}: {error}")
+            raise primary
         return {
             "native_cleanup_errors": self.native_errors,
             "attempts": self.recs,
@@ -1506,6 +1530,20 @@ def setup(judge: list[str]) -> NoReturn:
     )
     node_fd = None
     early: list[str] = []
+    primary: BaseException | None = None
+    secondary: list[tuple[str, BaseException]] = []
+    native_ok = False
+    left: list[str] | None = None
+    fin: dict[str, Any] | None = None
+
+    def cleanup_error(stage: str, error: BaseException) -> None:
+        nonlocal primary
+        if primary is None:
+            primary = error
+            primary.add_note(f"qc sandbox cleanup phase: {stage}")
+        else:
+            secondary.append((stage, error))
+
     try:
         # Direct Node root still unreaped: never acquire from a later numeric snapshot.
         node_fd = os.pidfd_open(p.pid)
@@ -1513,27 +1551,61 @@ def setup(judge: list[str]) -> NoReturn:
         th.start()
         rc = p.wait()
         th.join(10)
-    except BaseException:
-        with contextlib.suppress(ProcessLookupError):
-            if node_fd is not None:
-                signal.pidfd_send_signal(node_fd, signal.SIGKILL)
-            else:
-                os.kill(p.pid, signal.SIGKILL)  # direct root, no wait/reap yet
-        p.wait(timeout=5)
-        rec.finalize_native()
-        orphans()
-        rec.finish()
-        raise
+    except BaseException as error:
+        primary = error
+        try:
+            with contextlib.suppress(ProcessLookupError):
+                if node_fd is not None:
+                    signal.pidfd_send_signal(node_fd, signal.SIGKILL)
+                else:
+                    os.kill(p.pid, signal.SIGKILL)  # direct root, no wait/reap yet
+        except BaseException as error:
+            cleanup_error("Node stop", error)
+        try:
+            p.wait(timeout=5)
+        except BaseException as error:
+            cleanup_error("bounded Node wait", error)
     finally:
-        if node_fd is not None:
-            os.close(node_fd)
+        # Keep Recorder and the retained Node FD alive across every independent
+        # attempt. Failed waits/finalization do not prove completion or ECHILD.
+        try:
+            native_ok = rec.finalize_native()
+        except BaseException as error:
+            cleanup_error("native finalization", error)
+        try:
+            left = orphans()
+        except BaseException as error:
+            cleanup_error("adopted-child drainage; ECHILD unproved", error)
+        try:
+            fin = rec.finish()
+        except BaseException as error:
+            cleanup_error("Recorder finish/descriptor closure", error)
+        finally:
+            if node_fd is not None:
+                try:
+                    os.close(node_fd)
+                except BaseException as error:
+                    cleanup_error("Node descriptor close", error)
+    if primary is not None:
+        if not native_ok:
+            primary.add_note("retained native completion unproved")
+        if left:
+            primary.add_note(f"adopted-child survivors observed: {', '.join(left)}")
+        for stage, error in secondary:
+            primary.add_note(f"secondary cleanup failure ({stage}): {type(error).__name__}: {error}")
+            for note in getattr(error, "__notes__", []):
+                primary.add_note(note)
+        # SystemExit does not normally display notes. Emit them explicitly too,
+        # only after all cleanup attempts, without replacing the original fatal.
+        try:
+            sys.stderr.write("\n".join(getattr(primary, "__notes__", [])) + "\n")
+        except BaseException as error:
+            primary.add_note(f"cleanup diagnostics failed: {type(error).__name__}: {error}")
+        raise primary
+    if left is None or fin is None:
+        raise RuntimeError("owned cleanup completion unproved")
     if not rec.hello:
         sys.stderr.write("".join(early))
-    # Independent of Node's async reset/exit handlers. Keep Recorder alive until
-    # all accepted leases and adopted native descendants have been finalized.
-    native_ok = rec.finalize_native()
-    left = orphans()
-    fin = rec.finish()
     if not native_ok or fin["native_cleanup_errors"]:
         say("FAIL retained native lifecycle completion unproved")
         rc = 66
