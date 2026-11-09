@@ -1,6 +1,6 @@
 # Agents hand off through Herdr, with no workflow engine
 
-Superseded by ADR 0026 (2026-11-09).
+Superseded by ADR 0028 (2026-11-09).
 
 The director, supervisors and workers are Pi sessions in Herdr panes that message each other through `herdr-comms` (`herdr-spawn`, `herdr-say`, `herdr-close`, `herdr-wake`); there is no daemon, scheduler or tracker-driven state machine. Decided by Tom, 2026-10-18.
 

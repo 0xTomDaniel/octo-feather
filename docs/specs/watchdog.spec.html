@@ -80,7 +80,7 @@ Coverage distinguishes scheduled trigger, actual wake, completed response and de
 <section data-anchor="schedule-decisions" id="schedule-decisions">
 <h2>Schedule and ownership</h2>
 <p data-anchor="scheduler-choice">A maintained systemd user timer schedules watchdog every five minutes, independently of factory activity.
-This is a watchdog-only observational scheduling exception, not a workflow engine, tracker-driven state machine or director sweep launcher; see <a href="../adr/0026-independent-observational-watchdog-wakes.md">ADR 0026</a>.</p>
+This is a watchdog-only observational scheduling exception, not a workflow engine, tracker-driven state machine or director sweep launcher; see <a href="../adr/0028-independent-observational-watchdog-wakes.md">ADR 0028</a>.</p>
 <p data-anchor="lifecycle-choice">Each enabled factory session owns its recurring watchdog schedule until explicit factory shutdown, independently of shaping or research chats.
 No automatic extra-agent creation or default-model fallback is permitted; missing agents, wrong configuration and resource pressure are visible coverage failures.
 Schedule execution and reporting preserve the explicitly selected factory session and parent authority.</p>
