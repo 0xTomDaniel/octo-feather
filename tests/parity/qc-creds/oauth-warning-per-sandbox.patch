@@ -1,0 +1,13 @@
+Seeded defect: print the OAuth warning for every Pi sandbox rather than once per QC run; mixed fallback plus advisory must reject duplicates.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -253,7 +253,7 @@
+                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
+                QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
+                QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
+-    if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
++    if pi and (w := oauth_warning()):   # once per qc run, of the sandboxes given copies (ADR 0022)
+         WARNED.add(w)
+         print(w, file=sys.stderr)
+ 

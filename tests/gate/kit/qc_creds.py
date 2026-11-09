@@ -83,7 +83,7 @@ def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, t
 def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
     r, head, source = world(s, incomplete)
     ids = ("acceptance-a", "acceptance-b") if mixed else ("acceptance-a",)
-    q = qc(s, r, "9", *ids, want=2 if incomplete else 0)
+    q = qc(s, r, "9", *ids, want=2 if incomplete else 0, recipe=True)
     print(q.out)
     print(q.err)
     for p, before in source.items():
@@ -124,6 +124,7 @@ def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
         assert block(q.out, "INSUFFICIENT EVIDENCE acceptance-a: "), q.out
         assert a["missing"], a
         assert "advisory" not in q.err and "advisory" not in a, (q.err, a)
+        assert WARN not in q.err, q.err
         assert rep.get("fallback", {}) == {}, rep
         assert s.git(r, "rev-parse", "HEAD") == head
         return

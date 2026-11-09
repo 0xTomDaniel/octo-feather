@@ -1,0 +1,13 @@
+Seeded defect: the real just qc recipe drops its first CLI argument rather than forwarding the complete status/PR/criterion vector.
+diff --git a/justfile b/justfile
+--- a/justfile
++++ b/justfile
+@@ -885,7 +885,7 @@
+ # Arguments reach bash as "$@" and exported variables, never as interpolated source (#30, #61).
+ [no-cd]
+ qc $status $pr +$ids:
+-    octo-feather-qc "$@"
++    shift; octo-feather-qc "$@"
+ 
+ # Factory QA: each eval case (evals/) runs its role headless in the qc sandbox; PASS/FAIL per case from transcript facts (octo-feather-qa --help). Never inside `just check`.
+ qa *args:

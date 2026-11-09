@@ -81,10 +81,22 @@ def target(s: Scratch, files: Mapping[str, str] = {}) -> Path:
     return r
 
 
-def qc(s: Scratch, repo: Path, *args: str, want: int, env: Mapping[str, str] | None = None) -> Ran:
-    """`octo-feather-qc STATUS ARGS...` (what `just qc` runs) in REPO, bounded by LIMIT_S."""
+def qc(
+    s: Scratch,
+    repo: Path,
+    *args: str,
+    want: int,
+    env: Mapping[str, str] | None = None,
+    recipe: bool = False,
+) -> Ran:
+    """QC in REPO, bounded by LIMIT_S; recipe=True also crosses the real kit just qc seam."""
+    command = (
+        ["just", "--justfile", str(ROOT / "justfile"), "qc"]
+        if recipe
+        else [kit("octo-feather-qc")]
+    )
     return s.run(
-        ["timeout", "-k", "5", LIMIT_S, kit("octo-feather-qc"), STATUS, *args],
+        ["timeout", "-k", "5", LIMIT_S, *command, STATUS, *args],
         want=want,
         cwd=repo,
         env=env,
