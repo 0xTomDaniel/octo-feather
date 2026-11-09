@@ -14,13 +14,15 @@ from that same ungranted agent runs."""
 
 from __future__ import annotations
 
+import select
+import shlex
 import shutil
 import subprocess
 import sys
 import time
 from pathlib import Path
 
-from testkit import ROOT, Scratch, kit, main, pnpm_store, tool_homes
+from testkit import HERE, ROOT, Scratch, kit, main, pnpm_store, tool_homes
 from testkit.qc import qc, target
 
 SLOT = kit("octo-feather-slot")
@@ -111,6 +113,60 @@ def refused(s: Scratch) -> None:
     small = run_gate(s, suite(s, "small", 30), want=0, env=AGENT)
     assert "heavy slot: free: 30 items" in small, small
     assert "30 passed" in small, small
+
+
+def initial(s: Scratch) -> None:
+    """Actual slot CLI/flocks: empty default acquisition, fresh contention refusal,
+    EOF release and fresh reacquisition. External ps calls must remain absent."""
+    world(s)
+    calls = s.root / "ps.calls"
+    rows = s.root / "ps.rows"
+    rows.write_text("")
+    # Compose existing finite external stand-ins; never delegate to native ps.
+    ps = s.bin / "ps"
+    ps.write_text(
+        "#!/bin/sh\n"
+        f"{shlex.quote(str(HERE / 'argv_recorder.sh'))} \"$@\"\n"
+        f"exec {shlex.quote(str(HERE / 'ps.py'))} \"$@\"\n"
+    )
+    ps.chmod(0o755)
+    s.env |= {"ARGV_LOG": str(calls), "FAKE_PS_ROWS": str(rows)}
+    s.run([SLOT, "grant", "gh7", "--kind", "heavy"], env=DIRECTOR)
+    cmd = [SLOT, "hold", "--kind", "heavy", "--items", "99"]
+    with subprocess.Popen(
+        cmd,
+        env={**s.env, **AGENT},
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    ) as p:
+        try:
+            assert p.stdout is not None and p.stdin is not None
+            assert select.select([p.stdout], [], [], 5)[0], "slot sent no bounded ACK"
+            ack = p.stdout.readline()
+            assert ack.startswith("held: the heavy slot for lane gh7"), ack
+            assert p.poll() is None, "slot did not retain its lock until EOF"
+            assert not calls.exists(), "empty-holder acquisition invoked ps"
+            no = s.run([*cmd, "--fresh"], want=REFUSED, env=AGENT)
+            assert "fresh acquisition requires no live heavy holder" in no.out, no.out
+            assert "nested:" not in no.out, no.out
+            assert not calls.exists(), "fresh contention invoked ps"
+        finally:
+            if p.stdin is not None:
+                p.stdin.close()
+            try:
+                p.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                p.kill()
+                p.wait(timeout=5)
+                raise
+    assert p.returncode == 0, p.returncode
+    assert "run holding it now: none" in s.run([SLOT, "status"]).out
+    again = s.run([*cmd, "--fresh"], env=AGENT, stdin="")
+    assert again.out.startswith("held: the heavy slot for lane gh7"), again.out
+    assert not calls.exists(), "fresh reacquisition invoked ps"
+    assert "run holding it now: none" in s.run([SLOT, "status"]).out
 
 
 def granted(s: Scratch) -> None:
@@ -204,4 +260,4 @@ def sandboxed(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(refused, granted, sandboxed, user_mise_gate)
+    main(refused, granted, sandboxed, user_mise_gate, initial)

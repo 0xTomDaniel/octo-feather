@@ -13,7 +13,7 @@
   octo-feather-slot status
       Each kind: its count, every grant (holder lane, since, expiry, granted by), and whether a
       run holds it now (the run's pid, lane, since, items).
-  octo-feather-slot hold --kind heavy|eval [--items N]
+  octo-feather-slot hold --kind heavy|eval [--items N] [--fresh]
       Run by the heavy run's own process (the gate's pytest plugin, tests/gate/heavy_slot.py;
       octo-feather-qa for eval; tests/lib/user-mise.sh for `just check-user-mise` in its
       fixture's pane), never by hand. Prints one line on stdout: `free: ...` (exit 0, no
@@ -21,6 +21,9 @@
       `held: ...` (the lock is taken; the command then stays, holding it, until its stdin closes:
       the caller keeps the pipe open for its life, and its exit or crash closes it, so the lock
       goes with the caller); else the refusal (exit 75), nothing run.
+      --fresh requests a new, non-nested acquisition: any observed live holder refuses without
+      ancestor inspection. With no holders, both modes skip ancestry. Default nonempty nesting
+      still uses ancestor inspection; --fresh does not certify that default path safe.
 
 The rule (owner ruling #660 2026-11-06, director design, #668). Two independent kinds, each with
 its own grants and locks; they may run together:
@@ -265,7 +268,7 @@ def ask(lane: str | None, kind: str) -> str:
     )
 
 
-def hold(kind: str, items: int | None) -> int:
+def hold(kind: str, items: int | None, *, fresh: bool = False) -> int:
     b = budget()
     if not in_agent():
         say(f"free: outside a Herdr agent (no HERDR_PANE_ID or OCTO_FEATHER_ROLE), no {kind} slot")
@@ -276,11 +279,19 @@ def hold(kind: str, items: int | None) -> int:
         if items <= b["heavy_items"]:
             say(f"free: {items} items, heavy_items {b['heavy_items']}: no heavy slot needed")
             return 0
-    mine = set(ancestors())
-    for r in runs(kind):
-        if r.pid in mine:
-            say(f"nested: under the {kind} run {r.show()}, which holds the slot")
-            return 0
+    active = runs(kind)
+    if fresh and active:
+        say(
+            f"octo-feather-slot: refused, nothing ran: fresh acquisition requires no live {kind} "
+            f"holder; held now by {'; '.join(r.show() for r in active)}"
+        )
+        return REFUSED
+    if active and not fresh:
+        mine = set(ancestors())
+        for r in active:
+            if r.pid in mine:
+                say(f"nested: under the {kind} run {r.show()}, which holds the slot")
+                return 0
     lane = caller_lane()
     what = (
         f"this heavy run selects {items} items, over heavy_items {b['heavy_items']} ({BUDGET.name})"
@@ -394,6 +405,9 @@ def main(argv: list[str]) -> int:
     h = sub.add_parser("hold")
     h.add_argument("--kind", choices=KINDS, required=True)
     h.add_argument("--items", type=int)
+    h.add_argument(
+        "--fresh", action="store_true", help="refuse live holders without ancestor inspection"
+    )
     a = p.parse_args(argv)
     cmd, kind = cast("str", a.cmd), cast("str", getattr(a, "kind", ""))
     try:
@@ -403,7 +417,7 @@ def main(argv: list[str]) -> int:
             return revoke(cast("str", a.lane), kind)
         if cmd == "status":
             return status()
-        return hold(kind, cast("int | None", a.items))
+        return hold(kind, cast("int | None", a.items), fresh=cast("bool", a.fresh))
     except RefusedError as e:
         (sys.stdout if cmd == "hold" else sys.stderr).write(f"{e}\n")
         return e.code

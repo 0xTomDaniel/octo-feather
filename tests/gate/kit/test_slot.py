@@ -5,13 +5,17 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from slot import granted, refused, sandboxed, user_mise_gate
+from slot import granted, initial, refused, sandboxed, user_mise_gate
 
 Case = Callable[..., None]
 
 
 def test_refused(case: Case) -> None:
     case(refused)
+
+
+def test_initial(case: Case) -> None:
+    case(initial)
 
 
 def test_granted(case: Case) -> None:
