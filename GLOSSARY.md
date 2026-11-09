@@ -32,6 +32,10 @@ _Avoid_: Fixer
 A fresh agent, from a different model family than the implementer, that judges one change and returns a verdict, changing nothing. Code review is QC on code (product quality, spec quality `#quality-reviewer`), run in parallel with `just qc` on one head; it is not QA, which judges the factory.
 _Avoid_: Reviewer (alone), QA, approver
 
+**Watchdog**:
+The factory's independently scheduled observer that judges progress from evidence and reports needed intervention to the director, without directing lane work.
+_Avoid_: Sweep director, worker manager
+
 **Shaper**:
 The agent that shapes what the owner wants into a spec with them, before the factory sees it (`just shape`). A utility of the factory, not part of it: it talks with the owner directly, builds nothing and has no lane.
 _Avoid_: Shaping chat, spec writer

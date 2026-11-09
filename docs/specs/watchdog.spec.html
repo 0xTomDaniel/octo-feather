@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Watchdog - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+<header data-anchor="header">
+<h1 data-anchor="title">Watchdog</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / watchdog.spec.html</nav>
+<p class="lede" data-anchor="context">An independent scheduled backstop: deterministic delivery wakes Luna; Luna judges actual progress; the director intervenes within existing authority.</p>
+<p data-anchor="governing-links">Session scope and messaging: <a href="./comms.spec.html#session-state">comms</a>.
+Agent launch: <a href="./roles.spec.html#boundary-pi-role">roles</a>.
+Owner gates: <a href="./issue-lifecycle.spec.html#gates-merge">lifecycle</a>.</p>
+</header>
+<section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-anchor="story-independent" data-user-facing="true" data-guided-journey="no">As the owner, I have scheduled watchdog coverage even when the director and supervisors are idle and no callback arrives.</p>
+<p data-user-story data-anchor="story-judgment" data-user-facing="false">As the director, I receive evidence-backed findings about unfinished mandates and lost results without legitimate waits being treated as stalls.</p>
+<p data-user-story data-anchor="story-coverage" data-user-facing="true" data-guided-journey="no">As the owner, I can distinguish demonstrated monitoring from a configured timer, an idle agent, or failed delivery.</p>
+</section>
+<section data-spec-section="acceptance" data-anchor="acceptance" id="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-independent" data-story="story-independent"><span data-acceptance-scenario>Given the director with an enabled watchdog and idle supervisors receiving no factory events, When the director leaves the factory idle through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog receives a scheduled wake and returns a Luna assessment independently of the director's activity.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-lost-callback" data-story="story-judgment"><span data-acceptance-scenario>Given the director with an idle supervisor awaiting a completed job whose callback was not delivered, needs an induced failure: callback delivery fails, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then the director receives an escalation identifying the lane, the completed result, the missed callback, elapsed context and a suggested intervention.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-unfinished" data-story="story-judgment"><span data-acceptance-scenario>Given the director with a supervisor idle on an unfinished mandate and no supporting wait evidence, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then the director receives an escalation identifying the unfinished outcome, the evidence and elapsed context, and a suggested intervention.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-progress" data-story="story-judgment"><span data-acceptance-scenario>Given the director with a lane producing the outcomes its mandate calls for, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog records an assessment of progress supported by those outcomes without issuing a stall alert for the lane.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-owner-wait" data-story="story-judgment"><span data-acceptance-scenario>Given the director with a lane legitimately waiting at an unanswered owner gate, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog records the owner gate and its elapsed context as a legitimate wait without issuing a stall alert solely for silence.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-long-job" data-story="story-judgment"><span data-acceptance-scenario>Given the director with a quiet lane awaiting a verified long-running job, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog records the job evidence and expected outcome as a legitimate wait without issuing a stall alert solely for silence.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-repeat" data-story="story-judgment"><span data-acceptance-scenario>Given the director with an unresolved watchdog finding and unchanged supporting evidence, When the director leaves watchdog enabled through another configured schedule interval,</span> <span data-acceptance-observable>Then watchdog records the repeated assessment without delivering a duplicate alert.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-new-evidence" data-story="story-judgment"><span data-acceptance-scenario>Given the director with an unresolved watchdog finding whose evidence materially changes, When the director leaves watchdog enabled through another configured schedule interval,</span> <span data-acceptance-observable>Then the director receives an updated finding that identifies the new evidence.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-runtime" data-story="story-independent story-coverage"><span data-acceptance-scenario>Given the director with an enabled watchdog configured for its required model and thinking level, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then the completed assessment identifies the actual runtime model and thinking level as matching watchdog's required configuration.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-failed-wake" data-story="story-coverage"><span data-acceptance-scenario>Given the director with an enabled watchdog whose agent cannot receive a prompt, needs an induced failure: watchdog prompt delivery fails, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog coverage shows a failed wake with its time and reason, rather than a completed assessment.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-failed-escalation" data-story="story-coverage"><span data-acceptance-scenario>Given the director with a watchdog finding whose escalation cannot be delivered, needs an induced failure: director prompt delivery fails, When the director leaves watchdog enabled through a configured schedule interval,</span> <span data-acceptance-observable>Then watchdog coverage shows the undelivered finding with its time and delivery failure, rather than a delivered escalation.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-no-overlap" data-story="story-independent story-coverage"><span data-acceptance-scenario>Given the director with an enabled watchdog already assessing the factory, When the director leaves the assessment running through the next configured schedule interval,</span> <span data-acceptance-observable>Then watchdog coverage identifies the ongoing assessment without starting a concurrent assessment.</span></p>
+</section>
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries" id="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-scheduler"><span data-boundary-responsibility>The scheduler owns independent wake delivery, bounded execution, overlap control and visible execution failures, never factory-health classification.</span> <span data-boundary-seam>Caller-facing seam: enabling and disabling a session's schedule and inspecting its scheduled runs, wake outcomes and delivery failures.</span> <span data-boundary-dependency>Dependency direction: external-provider; the scheduler invokes the existing agent transport in the explicitly selected factory session.</span> <span data-boundary-scope>Observable scope: scheduled wakes, actual responses, non-overlapping runs and coverage failures.</span></p>
+<p data-modular-boundary data-anchor="boundary-luna"><span data-boundary-responsibility>Luna owns judgment from source evidence and the resulting finding.</span> <span data-boundary-seam>Caller-facing seam: a scheduled observation mandate and an evidence-backed assessment or escalation.</span> <span data-boundary-dependency>Dependency direction: external-provider; Luna reads factory evidence and reports through scoped Herdr transport to the director, never to workers.</span> <span data-boundary-scope>Observable scope: assessments and delivered findings, not changes to lane work.</span></p>
+<p data-modular-boundary data-anchor="boundary-director"><span data-boundary-responsibility>The director owns consuming findings and unblocking or redirecting supervisors within existing authority.</span> <span data-boundary-seam>Caller-facing seam: delivered watchdog findings through the director's session-scoped message channel.</span> <span data-boundary-dependency>Dependency direction: external-provider; the director consumes watchdog output but its cooperation and relays are never prerequisites for scheduled wakes.</span> <span data-boundary-scope>Observable scope: director intervention and escalation through existing gates.</span></p>
+</section>
+<section data-anchor="observation" id="observation">
+<h2>Evidence, not activity</h2>
+<div class="table-scroll" data-anchor="evidence-wrap">
+<table data-anchor="evidence-table">
+<caption>Each scheduled observation follows mandates to outcomes</caption>
+<thead><tr><th>Evidence</th><th>Judgment it supports</th><th>Insufficient by itself</th></tr></thead>
+<tbody>
+<tr data-anchor="evidence-mandate"><td>Supervisor dialogue, unfinished mandates and durable handoffs</td><td>Whether the requested outcome is advancing</td><td>Repeated planning, process existence, output volume or Herdr working state</td></tr>
+<tr data-anchor="evidence-result"><td>Expected results, actual job receipts and callback outcomes</td><td>Whether a result exists but has not reached its supervisor</td><td>A live process or an assertion that a callback should arrive</td></tr>
+<tr data-anchor="evidence-wait"><td>Owner gates, dependency gates and verified running jobs</td><td>Whether silence reflects a legitimate wait</td><td>Elapsed silence alone</td></tr>
+</tbody>
+</table>
+</div>
+<p data-anchor="scope">Watchdog observes supervisors one layer below the director across that session's target repositories.
+It does not take over worker management.</p>
+<p data-anchor="runtime">Watchdog's required runtime is <code>openai/gpt-6-luna</code> at <code>xhigh</code>.
+A configured value alone does not establish the runtime actually used.
+An implicit default-model resume is not permitted.</p>
+<p data-anchor="authority">Watchdog is observational: no implementation, merges, owner acceptance, traffic shifts or bypassing gates.
+Its observational contract is trusted policy, not a claimed technical sandbox; Bash and codemode do not become read-only by omitting edit and write tools.</p>
+<p data-anchor="operational-proof">A configured timer and a live or idle agent are not operational proof.
+Coverage distinguishes scheduled trigger, actual wake, completed response and delivered escalation, with times and failures visible.</p>
+</section>
+<section data-anchor="schedule-decisions" id="schedule-decisions">
+<h2>Schedule and ownership</h2>
+<p data-anchor="scheduler-choice" data-spec-tbd="open">Permit a systemd user timer solely to wake watchdog every five minutes, without adding a workflow engine?
+This choice requires an explicit successor to <a href="../adr/0003-herdr-handoffs-no-workflow-engine.md">ADR 0003</a> and reconciliation of the director's no-sweep contract before implementation.
+<button type="button" data-spec-choice="Use systemd every five minutes with a watchdog-only scheduling exception">Use systemd every five minutes (recommended)</button>
+<button type="button" data-spec-choice="Choose another scheduler or cadence">Choose another scheduler or cadence</button>
+</p>
+<p data-anchor="lifecycle-choice" data-spec-tbd="open">Should each enabled factory session own its recurring watchdog schedule, independent of shaping or research chats, until explicit factory shutdown?
+No automatic extra-agent creation or default-model fallback; missing agents, wrong configuration and resource pressure must be visible coverage failures.
+<button type="button" data-spec-choice="Use session-owned coverage until explicit factory shutdown">Session-owned coverage (recommended)</button>
+<button type="button" data-spec-choice="Choose a different watchdog lifecycle">Choose another lifecycle</button>
+</p>
+<p data-anchor="failure-route-choice" data-spec-tbd="open">When a wake or director notification fails, retain a visible unresolved failure and retry on subsequent scheduled runs without bypassing the director to contact the owner?
+An attempted notification is not delivered escalation.
+<button type="button" data-spec-choice="Retain failures and retry without bypassing the director">Retain and retry (recommended)</button>
+<button type="button" data-spec-choice="Choose a different failure-reporting route">Choose another failure route</button>
+</p>
+</section>
+</article>
+</body>
+</html>
