@@ -6,9 +6,9 @@ Parent: `w62:p2`; worker `w62:p6`; session `3b044a3d-c904-454a-bf92-725b02001a9e
 Scope: existing #677/#678, quality `#test-kinds` and `#acceptance-test-cpu-budget`.
 
 **This is not an acceptance, green gate, parity receipt or retirement decision.**
-There are 15 authored pytest IDs, not 15 converted legacy IDs. All 18 legacy
-scripts and their pytest representations remain. Only validation/usage and the
-stored-review input contract are authored here. Most actual eval execution
+There are 16 authored pytest IDs, not 16 converted legacy IDs. All 18 legacy
+scripts and their pytest representations remain. Validation/usage, the stored-review input contract, and the pre-agent
+missing-role failure/artifacts are authored here. Most actual eval execution
 oracles remain unconverted. No runtime, test collection, typecheck, formatter,
 model, Pi, network, install, just recipe, gate or parity lever was run.
 
@@ -178,9 +178,21 @@ response is needed to validate the original input-shape contract.
 
 ### 10. `qa-kit-ref.sh`
 
-New partial: `tests/gate/kit/test_qa_selection.py::test_selection_refusals`:
-unknown kit ref ->64, named missing commit, no run.
-UNCONVERTED: c0 role missing named; c1 FAIL before tdd change, c2/head PASS with
+New partial:
+- `tests/gate/kit/test_qa_selection.py::test_selection_refusals`:
+  unknown kit ref ->64, named missing commit, no run.
+- `tests/gate/kit/test_qa_selection.py::test_missing_role`: the real public CLI
+  selects a genuine archived c0 kit lacking agents/implementer.md, while the
+  running head retains that role. Exit1 and the original named missing-role
+  FAIL oracle are asserted. Additional assertions read actual CLI-generated
+  input/result/summary artifacts with c0 SHA and0/1, no transcript, and archive
+  cleanup. They are NOT supplied result fixtures. Uses the existing prepared
+  `testkit.kit_repo` owner, no second copier. Existing `Scratch.without("pi")`
+  removes both the default testkit stand-in and real Pi from scenario PATH;
+  no replacement response is supplied. Source walk reaches the missing-role
+  return before launch. Exact original oracle: `tests/qa-kit-ref.sh:42-43`.
+  This is still source-only and neither execution nor its CPU is certified.
+UNCONVERTED: c1 FAIL before tdd change, c2/head PASS with
 full SHAs; readonly extra bind; transcript argv skills from archived qa-kit
 only and input/result SHAs; archive cleanup; sibling and head-kit repo masks,
 exact bind-back proof/path counts; no sibling secret or head role leak; ENOENT
@@ -335,6 +347,30 @@ Searches were read-only, within this checkout:
   cannot prove a classifier/model/Pi tool lifecycle. No second replay store,
   missing-response fallback or recording fetch was authored.
 
+Additional genuine HTTP cassette candidates actually read during needs intake:
+`templates/python/tests/testkit/recordings/uuid.json` and
+`templates/typescript/tests/testkit/recordings/uuid.json` each contain only
+`GET https://httpbin.org/uuid` with a200 application/json response. The Python
+`uuid-body.json` asset is used for the body assertion, not a model tape. These
+cannot answer provider requests, stream model tool calls or account for two
+QA runs. The existing VCR/MSW template replay tests consume those HTTP
+fixtures, not QA recordings. Paths outside the stated searches remain UNKNOWN.
+
+First concrete blocked positive intake, sent immediately to parent:
+`tests/qa-runs.sh:49-51`, reads2/2: exit0 and the exact PASS line with rate1.00,
+stddev0.00 and deciding skill-read evidence. Planned production command:
+`/home/exedev/src/octo-feather-gh653-qa18/scripts/octo-feather-qa --evals "$t/alt" --case reads --runs 2 --model openai/gpt-6.1-sol`.
+Here `$t/alt` is the original temporary input suite from qa-runs/lib/qa, NOT
+materialized or executed in this source-only work. This command would use real
+Pi, never a replacement owned stage. Endpoint, complete provider request body,
+byte stream and replay binding for that model are UNKNOWN; the model identity
+is not a captured response or a runtime certificate. Required eventual Pi
+capacity is one child at a time for two sequential runs, grounded in QA's
+public --runs contract. No capacity/access grant or capture was requested or
+consumed. Auth/capture prerequisites beyond actual existing recording data
+remain UNKNOWN, not invented. Current native-session proof is not provider
+tape provenance.
+
 Missing data must identify the actual model/API/SDK operation, request body,
 response status/headers and complete byte stream, plus every sequential tool
 turn for the named cases above. There is no established real-provider endpoint
@@ -351,7 +387,9 @@ error in a nested input-dict comprehension was observed and corrected, then
 all14 parsed. This does not import, collect or run those files. Git diff
 whitespace/path/baseline checks are recorded in the worker's final report.
 Ruff, basedpyright, import contracts and runtime remain UNRUN. No TDD red or
-green is claimed. Source formatting/typing is not certified by AST parsing.
+green is claimed. Source formatting/typing is not certified by AST parsing. A later source-only
+pass added the independently executable missing-role artifact path and16th
+source-defined pytest ID; it remains entirely UNRUN.
 
 Safety fact: no product, shared testkit, conftest, dependency, legacy assertion,
 spec, skill, duty or marker file is changed. Existing public behavior and old
