@@ -136,7 +136,7 @@ rm -rf "$h"
 # It selects only its own recipe item (PYTEST_ADDOPTS -k, pytest's own selection, #507), so no recipe before it runs.
 find "$t/tests" -maxdepth 1 -name '*.sh' ! -name check-skills.sh -delete; g add -A
 plant "---\ndescription: Does a thing.\n---\n$body"
-set +e; out="$(cd "$t" && env -u CI CHECK_SKILLS_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="-k 'test_recipe and check-skills'" just check 2>&1)"; rc=$?; set -e
+set +e; out="$(cd "$t" && env -u CI CHECK_SKILLS_TEST_COPY=1 XDG_STATE_HOME="$t.home" PYTEST_ADDOPTS="--color=no -k 'test_recipe and check-skills'" just check 2>&1)"; rc=$?; set -e
 [[ "$rc" != 0 ]] || { echo "check-skills test: a skill with no name passed just check" >&2; exit 1; }
 grep -qF "check-skills: $sk" <<<"$out" || { echo "check-skills test: just check did not report $sk" >&2; echo "$out" >&2; exit 1; }
 # Only its own item ran (#507): pytest's own selection, through the real `just check`.

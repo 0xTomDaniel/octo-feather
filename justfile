@@ -456,7 +456,7 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
         except (OSError, subprocess.SubprocessError): return 1, ""
         return r.returncode, r.stdout.strip()
     bad = 0
-    rc, exe = run("uv", "python", "find", "--system")
+    rc, exe = run("uv", "--color", "never", "python", "find", "--system")
     probe = "import importlib.util as u, os, platform; print(platform.python_version(), *[n for n in (\"venv\", \"ensurepip\") if u.find_spec(n) is None], *([] if hasattr(os, \"pidfd_open\") else [\"os.pidfd_open\"]))"
     got = run(exe, "-c", probe)[1].split() if not rc and exe else []
     if not got: print(f"python gate {pin} MISSING (.python-version); {fix}"); bad = 1
