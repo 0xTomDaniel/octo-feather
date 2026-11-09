@@ -516,8 +516,18 @@ install-check target=invocation_directory() $CALLER_PATH=env_var('PATH') $CALLER
     except (OSError, ValueError): pin = None
     try: got = json.load(open(os.path.join(root, "node_modules", srt, "package.json"))).get("version")
     except (OSError, ValueError): got = None
-    if pin and got == pin: print(f"srt ok {srt} {got} (package.json pin, the qc sandbox)")
-    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {got or 'none'} in {root}/node_modules; pnpm install --frozen-lockfile --dir {root}"); bad = 1
+    found = got or "none"
+    how = f"restore the generated pinned consumer lock/patch inputs for this kit revision, then pnpm install --frozen-lockfile --dir {root}; without generated consumer patch wiring this revision remains incomplete (stock version alone is insufficient)"
+    if pin and got == pin:
+        entry = os.path.realpath(os.path.join(root, "node_modules", srt, "dist", "cli.js"))
+        js = os.path.join(os.path.dirname(os.path.dirname(entry)), "dist", "index.js")
+        # Same static capability as the qc producer; never initialize the sandbox to probe it.
+        probe = "import { pathToFileURL } from \"node:url\"; const { SandboxManager } = await import(pathToFileURL(process.argv[1]).href); if (SandboxManager.nativeBridgeLifecycleABI !== 1) process.exitCode = 65; else process.stdout.write(\"1\");"
+        rc, abi, _ = run("node", "--input-type=module", "-e", probe, js) if os.path.isfile(entry) else (127, "", "")
+        if not rc and abi == "1": print(f"srt ok {srt} {got} (package.json pin, the qc sandbox; retained native lifecycle ABI 1)")
+        elif rc == 65: print(f"srt ABI MISSING {srt} {got}: SandboxManager.nativeBridgeLifecycleABI must be 1 (stock version is insufficient); {how}"); bad = 1
+        else: print(f"srt ABI UNREADABLE {srt} {got}: capability import/entry unavailable (exit {rc}); {how}"); bad = 1
+    else: print(f"srt MISSING {srt} {pin} (package.json pin, the qc sandbox), found {found} in {root}/node_modules; {how}"); bad = 1
     rc, st, _ = run(os.path.join(root, "scripts", "octo-feather-state"))
     lanes = os.path.join(st, "lanes")
     if rc or not st: print(f"state  UNREADABLE octo-feather-state failed (exit {rc}); set HOME, or XDG_STATE_HOME, to a writable folder"); bad = 1
