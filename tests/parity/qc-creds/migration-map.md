@@ -31,13 +31,14 @@ External seams: shared `testkit/herdr.py`, `testkit/credential_pi.py` and existi
 
 Additional report assertions retain exact claimed criterion IDs, per-result source heads,
 record IDs joined to actual evidence, and built status for passing criteria. Each of the three
-old paths remains its own item with one QC invocation. Target preparation is shared through
-existing Scratch.prepare; all preparation CPU remains gross item CPU.
+old paths remains its own item with one QC invocation. The fourth built-status sequence below
+adds actual D/reset/M/contract-change/I in one world; it does not replace those items. Target
+preparation is shared through existing Scratch.prepare; all preparation CPU remains gross item CPU.
 
 ## Transition and deferred proof
 
 The legacy script is intentionally retained. Normal gate discovery temporarily collects both
-it and the three new items. This is code preparation, not a full gate handoff; remove legacy
+it and the four new items. This is code preparation, not a full gate handoff; remove legacy
 only after authorized parity. Do not treat temporary duplicate gate cost as final calibration.
 No user-facing behavior or verify feature drive changed, so no feature-map edit is needed.
 
@@ -96,11 +97,12 @@ There is NO whole-item redundancy or retirement proof here. Modern assertions be
 old predicates are identified as strengthening, not retroactive legacy coverage. Three
 normal cases were proved at historical2a/835-compatible source; changing the route to real
 just and the incomplete warning assertion requires a NEW exact-head proof. That historical
-GREEN is not relabeled to this commit. No new case, marker or budget exemption is added.
+GREEN is not relabeled to this commit. The fourth source-only case below adds built-state
+coverage, not a marker or budget exemption.
 
 ## Genuine defect definitions and named detectors, NOT executed sensitivity
 
-All six patch files are source definitions against the fixed product. No patch was applied
+All seven patch files are source definitions against the fixed product. No patch was applied
 or checked by executing git apply, no source under review imported, no helper/test run.
 
 | Patch | Genuine product defect | Required old/new response and exact fact |
@@ -111,6 +113,7 @@ or checked by executing git apply, no source under review imported, no helper/te
 | oauth-warning-per-sandbox.patch | Dedup condition removed, warning per Pi sandbox | Old mixed and M reject count2 instead of1; demo-only alone is not this detector |
 | no-pi-context-warning.patch | Every no-Pi sandbox wrongly emits contextual OAuth notice, retaining normal Pi warning | Old D/M exact counts still1; legacy I substring exclusion and modern I new assertion reject contextual WARN. Previous modern exact-line count0 alone would not detect it; this is the narrow source-derived preservation gap |
 | recipe-drops-status.patch | Actual just qc recipe shifts away first CLI argument | Old qcrun and modern recipe=True D both reject changed status/PR/ID vector before valid QC result |
+| stale-built-demo-carried.patch | A prior passing demo ignores every rejudge reason and reuses stale evidence | Legacy final built-state I and new test_qc_creds_built_status_carry must reject exit0/stale record instead of actual incomplete77. Independent planned-I alone cannot enter carry. Source-defined only; no seed applied or runtime equivalence established |
 
 `ran` now requires both actual QC coverage and actual `just qc` execution for justfile
 mutation (`run just qc`, existing strace trace format). These are owed observed facts, not
@@ -137,14 +140,15 @@ Future launch proposals, NOT commands executed here:
 1. Prepared-only focused smoke: actual just PATH/GATE_RECIPES, CI=true FORCE_COLOR=1,
    GATE_WORKERS=0, private mise state, fresh canonical live HOLD ACK, serial -n0/-x.
    Run D first; report launch/child/hold/callback before any expansion. Then independently
-   authorize all3 modern cases and legacy test_script[tests/qc-creds.sh] baseline. NO old
+   authorize all3 planned cases, separately the fourth built-state sequence, and legacy
+   test_script[tests/qc-creds.sh] baseline. NO old
    qc-escapes or directory-wide selection. No model, advisory bypass, install or fake srt.
 2. One-seed pipeline smoke using existing `tests/parity/lever.py ABSOLUTE_CASE_DIR`: a
    temporary case containing SAME case.toml and ONLY no-pi-context-warning.patch. Its existing
    public interface supports absolute case dirs. Expect clean old/new both0, seeded old/new
    both nonzero from the named incomplete warning assertions, not setup errors. Report smoke
-   before asking for full six-seed run. No new runner/config format or permanent case registry.
-3. Separately authorized full `tests/parity/lever.py qc-creds`:2 clean children plus12 seeded
+   before asking for full seven-seed run. No new runner/config format or permanent case registry.
+3. Separately authorized full `tests/parity/lever.py qc-creds`:2 clean children plus14 seeded
    children, real old coverage/just trace facts, exact paired failures and restored checks.
    Finite Pi/classifier seam and scratch privacy preserved. Keep legacy until full criterion
    evidence, gross waited-descendant CPU and handoff gate are separately established.
@@ -160,9 +164,67 @@ Source prerequisites still UNKNOWN/unproved, not a request to silently patch bey
 - Legacy scratch HOME lacks modern world tool_homes reuse. Future caller must preserve only
   approved installed/cache/Python paths (not host HOME/XDG/credentials), with private mise
   state; preflight failure is not a semantic baseline or genuine seed failure.
-- Legacy I starts after mixed status commits; modern I uses independent planned target.
-  Legacy output predicates are mapped, but fixture-state equivalence/any relevant stale-status
-  behavior is NOT proved. No extra speculative scenario or fake product state is introduced.
+- Legacy I starts after mixed status commits; the original modern I uses an independent
+  planned target and remains so. The fourth source-only sequence below creates actual built
+  state through public QC before I; its runtime correctness and state equivalence remain unproved.
 - Unresolved native marker/ancestor/OS/backend source boundaries remain routed in canonical
   audit. Passing the focused credential smoke alone would not clear them or the whole suite.
+
+## Built-status carry gap: full legacy sequence, source design before edits
+
+New675 source unit05:03:08-06:03:08. Legacy remains intact; existing three planned-world
+scenarios remain intact, including mode snapshots as stronger EXTRA. The following is a
+fourth public scenario source implementation, NOT an equivalence or execution claim.
+Public item: test_qc_creds.py::test_qc_creds_built_status_carry; scenario: built_status_carry.
+D/M controls, actual source bytes/modes after each run, real records and ancestry, and I's
+fresh incomplete record are source-defined assertions, not reported observations.
+
+Let H0 be the initial committed target contract/planned status; Da/Ma/Mb are actual public
+records, never invented IDs. HD/HM/H77/HF below are observed Git heads, not fixture constants.
+
+| Legacy operation, tests/qc-creds.sh | Actual predecessor state and unique consequence | New public prelude / observable |
+| --- | --- | --- |
+| qcrun begins git reset --hard head, then D: just qc STATUS9 a | Both planned atH0; real demo0 plus one classify call, A built atHD with Da; B remains planned | world once, actual bounded recipe=True QC D; assert report/capture/advice, source bytes/modes, built A/planned B; record actual HD/Da and call log [advice] |
+| qcrun M resets original H0, NOT HD | D's status commit is removed from target ancestry; Da remains in external evidence store | Real git reset --hard H0, assert planned A/B; retain SAME scratch HOME/store/call observer, no world()/prepare() second time |
+| M: just qc STATUS9 a b | Real mixed capture Ma/fallback Mb, advice for both; real status-only HM makes both built with judged commitH0, records Ma/Mb | Actual public M0; exact claimed IDs/verdicts/advice/store links; inspect both real status rows, H0 commit and Ma/Mb record links; call log [advice,fallback,advice] (one classify process batches both criteria) |
+| sed changes echo to exit77, then commit -qam demo stops ON HM, updates head | New H77 contains BOTH built rows and previous evidence links, but changed contract invalidates prior demo evidence. Not a planned fixture with an arbitrary built label | Edit ONLY qc.toml, real Git commit; prove parentHM, changed path only qc.toml, status bytes identical to HM, both still built, earlier real records still readable; do NOT call status built command or hand-edit JSON |
+| want2 qcrun a resets new H77 | Explicitly claimed previously built A must be judged again and capture new77, not carry Ma, fall back or advise | Real reset H77 then public QC2; actual capture record atH77 distinct from Da/Ma; stored demo.exit77, empty stdout, both credential errors/no secret and no-Pi proof |
+| Legacy I checks INSUFFICIENT stdout, no advisory stderr and NO WARN substring; qcrun compares credential bytes | Legacy does NOT explicitly assert post-I status/head or call log. Those must not be retroactively claimed | Preserve those exact outputs, source bytes; add EXTRA independent before/after external Pi call log equality around77 (positive D/M controls) |
+| Product settle/restore after incomplete, scripts/octo-feather-qc:1087-1130/1043 | settle rewrites only claimed A to planned and may COMMIT it; restore only reverts UNCOMMITTED changes. Built-state I must NOT reuse planned-I HEAD-unchanged assertion | Expect public post-I A planned/prNone, B exact prior built row unchanged; clean tree, HF parentH77, status-only commit. These are new explicit strengthening, source-derived, not old asserted facts |
+
+Source carry graph: octo-feather-qc:801-846 checks prior built row, PR/ancestor/prior passing
+record, coverage/staleness, contract+fixture versions before carrying; judge:884/927 handles
+carried results versus actual captures. advise:478-513 excludes incomplete/carried records;
+its one classify request batches all eligible IDs. settle writes failed/incomplete A planned,
+then status-check/commit; finally restore(status) does NOT undo an already committed result.
+No specific rejudge-reason string is assumed: missing covered paths may precede version checks.
+
+Fourth-case seam: existing public scenario CLI and real just qc/evidence/status/Git commands,
+not importing or calling product internals. Existing finite credential_pi remains the only
+external model seam. Its --version probe remains ignored; every non-probe request is logged
+BEFORE credential validation, classify delegation or fallback response, so rejected requests
+also count. No real model, no advice opt-out, no production hook, no marker/budget exemption.
+
+Call-log source plan: reuse existing fixture invocation-private AF_UNIX SOCK_SEQPACKET,
+0700 directory/UID+nonce protocol used by qc_gh; only model-call receipts, NOT process
+identity/lifetime observation. Listener and log belong to this scenario; no global PID scan,
+new broker/daemon, external writable mount or replicated credential/model implementation.
+The tiny finite packets are queued by the real socket; parent drains after each synchronous
+QC return. No server process/thread needed, bounded connect/read and finite expected counts.
+Existing OCTO_FEATHER_QC_RO_BINDS exposes the same read-only socket directory through private
+tmp, as the owned judge protocol. Different receipt data is necessary here because credential
+Pi's private per-sandbox used-file dies with that namespace and cannot prove cross-phase
+absence to the parent. Transport availability/queue semantics remain UNPROVEN until separately
+authorized runtime; logging failure must fail the fake, never silently invent zero calls.
+No PID in a receipt is used for lookup or signaling; accepted socket peer UID is connection
+metadata only. No socket/server/helper was run during this source unit.
+
+Source-defined sensitivity proposal: suppress the actual final rejudge-reason branch for
+prior passing demo results in carry(), so stale built demos are wrongly carried. It applies
+generally to such demos, not acceptance-a or a test label. Existing three planned starts
+cannot reach that branch. Legacy I and the new fourth case must reject actual old Ma carry
+instead of fresh incomplete77. This is genuinely distinct from the existing warning seed;
+no RED/GREEN or parity result is asserted now. Before runtime, prove exact reachable source
+ownership including just parse-time guards and use a fresh owned native hold/grant. Full,
+map and parity remain blocked; no unsafe historical product or helper baseline.
 

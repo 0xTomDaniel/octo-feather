@@ -1,4 +1,4 @@
-"""Three qc-creds.sh paths through real octo-feather-qc and evidence read, with the shared
+"""Three planned qc-creds.sh paths plus its actual built-state carry sequence, with shared
 external Pi/Herdr stand-ins. The legacy script stays until authorized parity and CPU proof.
 No actual model, credential-copy simulator or sprint advisory substitution.
 """
@@ -6,9 +6,14 @@ No actual model, credential-copy simulator or sprint advisory substitution.
 from __future__ import annotations
 
 import json
+import os
 import re
+import secrets
 import shutil
+import socket
 import stat
+import struct
+import tempfile
 from pathlib import Path
 
 from testkit import HERE, ROOT, Scratch, kit, main, tool_homes
@@ -42,6 +47,7 @@ def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, t
         "PI_CODING_AGENT_DIR", "STUB_KIT", "STUB_WANT", "STUB_WANT_EXACT",
         "STUB_CONFIDENCE", "STUB_ALSO", "STUB_LAUNCHED", "FAKE_HERDR",
         "FAKE_QC", "FAKE_PI_HANG", "OCTO_FEATHER_QC_MODEL", "OCTO_FEATHER_QC_ARGS",
+        "CREDENTIAL_PI_SOCKET", "CREDENTIAL_PI_NONCE",
         "OCTO_FEATHER_QC_ADVISORY_AUTHORITY", "OCTO_FEATHER_QC_ADVISORY_SCOPE",
     ):
         s.env.pop(name, None)
@@ -170,5 +176,152 @@ def incomplete(s: Scratch) -> None:
     run(s, incomplete=True)
 
 
+def built_status_carry(s: Scratch) -> None:
+    """Legacy D/reset/M/contract-change/I through actual QC records and status commits.
+    The receipt socket observes only the external Pi call seam, not process identity.
+    """
+    r, head, source = world(s)
+    with tempfile.TemporaryDirectory(prefix="creds-calls-") as directory:
+        endpoint = str(Path(directory) / "socket")
+        nonce = secrets.token_hex(32)
+        binds = s.env.get("OCTO_FEATHER_QC_RO_BINDS", "")
+        s.env |= {
+            "CREDENTIAL_PI_SOCKET": endpoint,
+            "CREDENTIAL_PI_NONCE": nonce,
+            "OCTO_FEATHER_QC_RO_BINDS": ":".join(filter(None, [binds, directory])),
+        }
+        with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as server:
+            server.bind(endpoint)
+            server.listen(8)
+            server.setblocking(False)
+            calls: list[str] = []
+
+            def drain() -> list[str]:
+                batch: list[str] = []
+                while True:
+                    try:
+                        peer, _ = server.accept()
+                    except BlockingIOError:
+                        break
+                    with peer:
+                        peer.settimeout(3)
+                        _, uid, _ = struct.unpack(
+                            "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+                        )
+                        event = json.loads(peer.recv(4096))
+                        assert uid == os.getuid(), event
+                        assert set(event) == {"token", "kind"} and event["token"] == nonce, event
+                        assert event["kind"] in ("advisory", "fallback"), event
+                        batch.append(event["kind"])
+                        calls.append(event["kind"])
+                        print(f"CREDENTIAL model-call {len(calls)} {event['kind']}")
+                return batch
+
+            # D really builds A, then the legacy M resets H0, not D's built head.
+            demo = qc(s, r, "9", "acceptance-a", want=0, recipe=True)
+            dr = report(demo)
+            da = dr["results"][0]
+            assert dr["head"] == head and da["verdict"] == "pass", dr
+            assert da["decision"] == "demo checks" and da["advisory"]["answer"] == "shows", da
+            assert drain() == ["advisory"], calls
+            hd = s.git(r, "rev-parse", "HEAD")
+            drows = json.loads((r / STATUS).read_text())["criteria"]
+            assert hd != head and s.git(r, "rev-parse", "HEAD^") == head
+            assert (drows["acceptance-a"]["status"], drows["acceptance-a"]["commit"],
+                    drows["acceptance-a"]["record"]) == ("built", head, da["record"]), drows
+            assert drows["acceptance-b"]["status"] == "planned", drows
+            for p, before in source.items():
+                assert (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) == before, p
+            s.git(r, "reset", "--hard", head)
+            assert all(row["status"] == "planned" for row in
+                       json.loads((r / STATUS).read_text())["criteria"].values())
+            mixed_run = qc(s, r, "9", "acceptance-a", "acceptance-b", want=0, recipe=True)
+            mr = report(mixed_run)
+            prior = {row["id"]: row for row in mr["results"]}
+            assert mr["head"] == head and set(prior) == {"acceptance-a", "acceptance-b"}, mr
+            assert drain() == ["fallback", "advisory"], calls
+            assert mr["fallback"]["acceptance-b"]["exit"] == 0, mr
+            assert COPIES in mr["fallback"]["acceptance-b"]["sandbox"]["proof"], mr
+            for cid, decision in (("acceptance-a", "demo checks"), ("acceptance-b", "agent fallback")):
+                row = prior[cid]
+                assert (row["head"], row["verdict"], row["evidence"], row["decision"]) == (
+                    head, "pass", "complete", decision,
+                ), row
+                assert row["advisory"]["answer"] == "shows", row
+            assert prior["acceptance-a"]["record"] != da["record"], prior
+            hm = s.git(r, "rev-parse", "HEAD")
+            assert hm != head and s.git(r, "rev-parse", "HEAD^") == head
+            status_before = (r / STATUS).read_bytes()
+            built = json.loads(status_before)["criteria"]
+            for cid, row in prior.items():
+                assert (built[cid]["status"], built[cid]["commit"], built[cid]["record"]) == (
+                    "built", head, row["record"],
+                ), built
+            for q in (demo, mixed_run):
+                assert q.err.splitlines().count(WARN) == 1, q.err
+                assert "SECRET-pi" not in q.out + q.err
+            for p, before in source.items():
+                assert (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) == before, p
+
+            # The real built rows and real evidence survive the contract-only commit.
+            (r / "qc.toml").write_text(CONTRACT.replace("; echo neither readable", "; exit 77"))
+            s.git(r, "commit", "-qam", "demo stops")
+            stopped = s.git(r, "rev-parse", "HEAD")
+            assert s.git(r, "rev-parse", "HEAD^") == hm
+            assert s.git(r, "diff", "--name-only", hm, stopped) == "qc.toml"
+            assert (r / STATUS).read_bytes() == status_before
+            history = json.loads(s.run([
+                kit("octo-feather-evidence"), "read", "--repo", ".", "--commit", head, "--json",
+            ], cwd=r).out)
+            assert {da["record"], *(row["record"] for row in prior.values())} <= {
+                row["record"]["id"] for row in history
+            }, history
+            s.git(r, "reset", "--hard", stopped)
+            before_calls = list(calls)
+            short = qc(s, r, "9", "acceptance-a", want=2, recipe=True)
+            print(short.out)
+            print(short.err)
+            assert drain() == [] and calls == before_calls, calls
+            ir = report(short)
+            assert ir["head"] == stopped and len(ir["results"]) == 1, ir
+            result = ir["results"][0]
+            assert (result["id"], result["head"], result["decision"], result["evidence"], result["verdict"]) == (
+                "acceptance-a", stopped, "demo checks", "incomplete", "insufficient evidence",
+            ), result
+            assert result["missing"] and not result.get("carried"), result
+            assert re.fullmatch(RID, result["record"]), result
+            assert result["record"] not in (da["record"], prior["acceptance-a"]["record"]), result
+            assert block(short.out, "INSUFFICIENT EVIDENCE acceptance-a: "), short.out
+            assert "advisory" not in short.err and "advisory" not in result, (short.err, result)
+            assert WARN not in short.err and ir.get("fallback", {}) == {}, ir
+            assert "SECRET-pi" not in short.out + short.err
+            records = json.loads(s.run([
+                kit("octo-feather-evidence"), "read", "--repo", ".", "--commit", stopped, "--json",
+            ], cwd=r).out)
+            stored = next(row for row in records if row["record"]["id"] == result["record"])
+            outputs = Path(stored["dir"]) / "outputs"
+            assert (outputs / "demo.exit").read_text() == "77\n"
+            assert (outputs / "demo.stdout").read_text() == ""
+            err = (outputs / "demo.stderr").read_text()
+            for name in ("auth.json", "models.json"):
+                assert f"/.pi/agent/{name}: No such file or directory" in err, err
+            cap = ir["captures"]
+            assert len(cap) == 1 and cap[0]["record"] == result["record"], cap
+            assert any(line.startswith(
+                "qc sandbox: ok   no Pi model credentials (no Pi runs here): auth.json and models.json absent from "
+            ) for line in cap[0]["sandbox"]["proof"]), cap
+            for p in Path(stored["dir"]).rglob("*"):
+                if p.is_file():
+                    assert b"SECRET-pi" not in p.read_bytes(), p
+            for p, before in source.items():
+                assert (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) == before, p
+            settled = json.loads((r / STATUS).read_text())["criteria"]
+            assert settled["acceptance-a"] == {"status": "planned", "pr": None}, settled
+            assert settled["acceptance-b"] == built["acceptance-b"], settled
+            assert s.git(r, "rev-parse", "HEAD^") == stopped
+            assert s.git(r, "diff", "--name-only", stopped, "HEAD") == STATUS
+            assert s.git(r, "status", "--porcelain") == ""
+
+
 if __name__ == "__main__":
-    main(demo_only, mixed, incomplete)
+    main(demo_only, mixed, incomplete, built_status_carry)

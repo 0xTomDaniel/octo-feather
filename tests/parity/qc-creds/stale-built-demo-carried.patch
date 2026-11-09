@@ -1,0 +1,12 @@
+Seeded defect: a prior passing declared demo is carried despite any rejudge reason, so a changed contract can silently reuse stale evidence instead of the actual new incomplete capture. General demo rule, not a fixture ID.
+diff --git a/scripts/octo-feather-qc b/scripts/octo-feather-qc
+--- a/scripts/octo-feather-qc
++++ b/scripts/octo-feather-qc
+@@ -840,5 +840,7 @@
+                 moved += [f"gate configuration moved since {at[:12]}"] if any(was.get(k) != v for k, v in now_gate.items()) else []
+             why = "; ".join(moved) if found else f"record {row['record']} not in the evidence store"
++        if prior is not None and prior.get("decision") == "demo checks":
++            why = ""
+         if why:
+             print(f"qc: judging {cid} again: {why}", file=sys.stderr)
+             continue

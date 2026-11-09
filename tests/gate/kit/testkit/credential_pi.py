@@ -8,12 +8,23 @@ refuse. No owned QC, credential-copy or sandbox logic is replaced here.
 
 import json
 import os
+import socket
 import sys
 from pathlib import Path
 
 argv = sys.argv[1:]
 if argv == ["--version"]:
     sys.exit(0)
+# The optional carry scenario's invocation-private receipt survives sandbox disposal.
+# Queue BEFORE validation so rejected calls also count. Never log briefs or credentials.
+if endpoint := os.environ.get("CREDENTIAL_PI_SOCKET"):
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
+        peer.settimeout(3)
+        peer.connect(endpoint)
+        peer.sendall(json.dumps({
+            "token": os.environ["CREDENTIAL_PI_NONCE"],
+            "kind": "advisory" if "-e" in argv else "fallback",
+        }).encode())
 for name in ("auth.json", "models.json"):
     path = Path.home() / ".pi" / "agent" / name
     if not path.is_file() or "SECRET-pi" not in path.read_text():
