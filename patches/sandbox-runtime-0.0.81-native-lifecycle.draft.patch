@@ -1,5 +1,5 @@
 diff --git a/dist/sandbox/linux-sandbox-utils.d.ts b/dist/sandbox/linux-sandbox-utils.d.ts
-index 9a16855..a84bf10 100644
+index 9a16855dff76efea64af8516a38d079c105a2ffb..a84bf10f7dc8848b05dd305df6f3e6e377399968 100644
 --- a/dist/sandbox/linux-sandbox-utils.d.ts
 +++ b/dist/sandbox/linux-sandbox-utils.d.ts
 @@ -1,8 +1,18 @@
@@ -40,7 +40,7 @@ index 9a16855..a84bf10 100644
 +// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
 \ No newline at end of file
 diff --git a/dist/sandbox/linux-sandbox-utils.js b/dist/sandbox/linux-sandbox-utils.js
-index b3acba6..93cf53d 100644
+index b3acba671fe6356ad5d9e187ca13753f345f931b..93cf53d35c8024877f501e66953e88d159e863f2 100644
 --- a/dist/sandbox/linux-sandbox-utils.js
 +++ b/dist/sandbox/linux-sandbox-utils.js
 @@ -1193,7 +1193,34 @@ function probeUid0UserNamespace(bwrap) {
@@ -166,7 +166,7 @@ index b3acba6..93cf53d 100644
 +// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
 \ No newline at end of file
 diff --git a/dist/sandbox/sandbox-manager.d.ts b/dist/sandbox/sandbox-manager.d.ts
-index e4839e2..541dbcb 100644
+index e4839e23f8cfa60c1cabfc338c73c684743ff53b..541dbcb2384fdde769a16afb8bfbc278d853cd17 100644
 --- a/dist/sandbox/sandbox-manager.d.ts
 +++ b/dist/sandbox/sandbox-manager.d.ts
 @@ -4,7 +4,7 @@ import { AwsPairRegistry } from './credential-aws-pairs.js';
@@ -203,7 +203,7 @@ index e4839e2..541dbcb 100644
 +// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
 \ No newline at end of file
 diff --git a/dist/sandbox/sandbox-manager.js b/dist/sandbox/sandbox-manager.js
-index d475e55..d916d3b 100644
+index d475e55977bf54a2fe00a0c6aba38313761d55aa..a866f092e7eb0b2bd11c0cdb41230f5780b12156 100644
 --- a/dist/sandbox/sandbox-manager.js
 +++ b/dist/sandbox/sandbox-manager.js
 @@ -14,7 +14,7 @@ import { whichSync } from '../utils/which.js';
@@ -262,4 +262,3 @@ index d475e55..d916d3b 100644
 -//# sourceMappingURL=sandbox-manager.js.map
 \ No newline at end of file
 +// Consumer lifecycle draft: upstream source map no longer matches these edited lines.
-\ No newline at end of file
