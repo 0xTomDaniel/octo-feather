@@ -1398,10 +1398,9 @@ def orphans(wait_s: float = 5.0) -> list[str]:
                     diagnostic = f"{child} {cl.strip()[:80]}"
                     if diagnostic not in out:
                         out.append(diagnostic)
-                    try:
+                    # Already exited children still must be waited for.
+                    with contextlib.suppress(ProcessLookupError):
                         signal.pidfd_send_signal(fd, signal.SIGKILL)
-                    except ProcessLookupError:  # already exited; still must be waited for
-                        pass
                 finally:
                     os.close(fd)
             except OSError as e:

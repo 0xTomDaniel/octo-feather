@@ -20,6 +20,7 @@ import select
 import shutil
 import signal
 import subprocess
+import sys
 import threading
 import time
 from typing import TYPE_CHECKING
@@ -151,7 +152,40 @@ def reaped(s: Scratch) -> None:
         pid, _ = os.waitpid(-1, os.WNOHANG)
     except ChildProcessError:
         return
-    raise AssertionError(f"run left an owned child to its caller (0 means still live): {pid}")
+    message = f"run left an owned child to its caller (0 means still live): {pid}"
+    raise AssertionError(message)
+
+
+def _cleanup_survivor(handle: int | None, p: subprocess.Popen[bytes]) -> None:
+    """Release this scenario's retained child pidfd and wait only its owned children."""
+    try:
+        if handle is not None:
+            try:
+                signal.pidfd_send_signal(handle, signal.SIGKILL)
+                sys.stdout.write("CLEANUP fixture: SIGKILL sent through owned pidfd\n")
+                sys.stdout.flush()
+            except ProcessLookupError:
+                sys.stdout.write("CLEANUP fixture: owned pidfd already exited\n")
+                sys.stdout.flush()
+            finally:
+                os.close(handle)
+    finally:
+        try:
+            if p.poll() is None:
+                p.kill()
+            sys.stdout.write(f"CLEANUP fixture: launcher waited rc={p.wait()}\n")
+            sys.stdout.flush()
+        finally:
+            try:
+                while True:
+                    adopted, status = os.waitpid(-1, 0)
+                    sys.stdout.write(
+                        f"CLEANUP fixture: reaped owned child={adopted} status={status}\n"
+                    )
+                    sys.stdout.flush()
+            except ChildProcessError:
+                sys.stdout.write("CLEANUP fixture: all owned children reaped (ECHILD)\n")
+                sys.stdout.flush()
 
 
 def live_survivor(s: Scratch) -> None:
@@ -197,13 +231,14 @@ def live_survivor(s: Scratch) -> None:
             poll.register(handle, select.POLLIN)
             assert not poll.poll(0), "survivor already exited before launcher deadline"
             assert p.poll() is None, "launcher exited before live-child observation"
-            print(f"START live owned survivor pid={pid}; launcher={p.pid}", flush=True)
+            sys.stdout.write(f"START live owned survivor pid={pid}; launcher={p.pid}\n")
+            sys.stdout.flush()
             rc = p.wait(timeout=30)
             out.seek(0)
             err.seek(0)
             proof = err.read()
-            print(f"PRODUCT launcher rc={rc}", flush=True)
-            print(proof, flush=True)
+            sys.stdout.write(f"PRODUCT launcher rc={rc}\n{proof}\n")
+            sys.stdout.flush()
             assert SRT in proof, proof
             assert rc == 66, (rc, proof)
             records = [
@@ -219,33 +254,10 @@ def live_survivor(s: Scratch) -> None:
             except ChildProcessError:
                 pass
             else:
-                raise AssertionError(f"launcher failed complete reaping: {adopted}")
+                message = f"launcher failed complete reaping: {adopted}"
+                raise AssertionError(message)
         finally:
-            try:
-                if handle is not None:
-                    try:
-                        signal.pidfd_send_signal(handle, signal.SIGKILL)
-                        print("CLEANUP fixture: SIGKILL sent through owned pidfd", flush=True)
-                    except ProcessLookupError:
-                        print("CLEANUP fixture: owned pidfd already exited", flush=True)
-                    finally:
-                        os.close(handle)
-            finally:
-                try:
-                    if p.poll() is None:
-                        p.kill()
-                    print(f"CLEANUP fixture: launcher waited rc={p.wait()}", flush=True)
-                finally:
-                    while True:
-                        try:
-                            adopted, status = os.waitpid(-1, 0)
-                            print(
-                                f"CLEANUP fixture: reaped owned child={adopted} status={status}",
-                                flush=True,
-                            )
-                        except ChildProcessError:
-                            print("CLEANUP fixture: all owned children reaped (ECHILD)", flush=True)
-                            break
+            _cleanup_survivor(handle, p)
 
 
 def nested(s: Scratch) -> None:
