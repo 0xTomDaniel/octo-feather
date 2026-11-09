@@ -124,7 +124,7 @@ def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
         assert block(q.out, "INSUFFICIENT EVIDENCE acceptance-a: "), q.out
         assert a["missing"], a
         assert "advisory" not in q.err and "advisory" not in a, (q.err, a)
-        assert not rep["fallback"], rep
+        assert rep.get("fallback", {}) == {}, rep
         assert s.git(r, "rev-parse", "HEAD") == head
         return
     for cid in ids:
@@ -152,7 +152,7 @@ def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
         assert b["exit"] == 0 and b["record"] == results["acceptance-b"]["record"], b
         assert COPIES in b["sandbox"]["proof"], b
     else:
-        assert not rep["fallback"], rep
+        assert rep.get("fallback", {}) == {}, rep
     built = json.loads((r / STATUS).read_text())["criteria"]
     assert all(built[cid]["status"] == "built" for cid in ids), built
 
