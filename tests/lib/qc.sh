@@ -95,10 +95,22 @@ case "${a[*]}" in   # one pane per workspace; `pane run` starts its command deta
 esac
 echo "{\"session\":\"$(cat "$sock")\"}"
 EOF
+if [[ -n "${QC_ESCAPE_HELPER:-}" ]]; then
+  export QC_ESCAPE_CLASSIFIER="$kit/tests/fixtures/classify-stub/pi"
+fi
 cat > "$t/bin/pi" <<'EOF'
 #!/usr/bin/env bash
 # Fake judge: FAKE_QC picks the reply; `escape` tries every way out and prints ESCAPE per success.
 [[ "${1:-}" == --version ]] && exit 0
+# The supported extension invocation is a classifier, not a second escape judge.
+# Reuse the existing finite classifier adapter and real extension protocol.
+if [[ -n "${QC_ESCAPE_CLASSIFIER:-}" ]]; then
+  for arg in "$@"; do
+    if [[ "$arg" == -e ]]; then
+      exec python3 "$QC_ESCAPE_HELPER" classifier "$@"
+    fi
+  done
+fi
 [[ -z "${LINEAR_API_KEY+x}" ]] || echo "LINEAR KEY IN JUDGE ENV"   # remote#acceptance-linear-key-qc
 h="$(grep -o 'head [0-9a-f]\{40\}' <<< "$*" | head -1 | cut -d' ' -f2)"   # the judged head, from the brief
 ok='```json\n{"head": "'"$h"'", "criteria": [{"id": "acceptance-a", "verdict": "pass", "command": "app a --json", "output": "ok", "why": "shown"}]}\n```\n'

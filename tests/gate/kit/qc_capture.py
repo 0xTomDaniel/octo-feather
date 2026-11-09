@@ -12,9 +12,17 @@ before anything runs. The target with its two demos is prepared once per gate ru
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
 import json
 import re
+import secrets
+import select
+import signal
+import socket
+import subprocess
+import sys
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -70,6 +78,84 @@ def record(lines: list[str], why: str) -> str:
 def evidence(s: Scratch, r: Path, *args: str) -> list[dict[str, Any]]:
     out = s.run([kit("octo-feather-evidence"), "read", "--repo", ".", *args, "--json"], cwd=r).out
     return json.loads(out)
+
+
+def cancelled_capture(s: Scratch) -> None:
+    """Cancel the public capture root while its actual detached descendant is live.
+
+    The descendant hands over its own pidfd before exec sleep. No numeric lookup,
+    report-derived liveness or unrelated substitute process establishes cleanup.
+    """
+    r, _ = world(s)
+    observer = s.root / "capture-observer"
+    observer.mkdir(mode=0o700)
+    address = observer / "sock"
+    token = secrets.token_hex(24)
+    sleeper = (
+        "import os,socket,sys; "
+        "c=socket.socket(socket.AF_UNIX,socket.SOCK_SEQPACKET); "
+        "c.connect(sys.argv[1]); f=os.pidfd_open(os.getpid()); "
+        "socket.send_fds(c,[sys.argv[2].encode()],[f]); "
+        "assert c.recv(1)==b'!'; c.close(); os.close(f); "
+        "os.execvp('sleep',['sleep','300'])"
+    )
+    payload = (
+        "import subprocess,sys; "
+        "p=subprocess.Popen([sys.executable,'-c',sys.argv[1],*sys.argv[2:]],"
+        "start_new_session=True); p.wait()"
+    )
+    handle = None
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as listener, tempfile.TemporaryFile() as log:
+        listener.bind(str(address))
+        listener.listen(1)
+        listener.settimeout(30)
+        p = subprocess.Popen(
+            [kit("octo-feather-qc"), "--capture-case", str(s.root / "capture.json"),
+             "--", sys.executable, "-c", payload, sleeper, str(address), token],
+            cwd=r, env={**s.env, "OCTO_FEATHER_QC_RO_BINDS": str(observer)},
+            stdout=log, stderr=log, start_new_session=True,
+        )
+        try:
+            with listener.accept()[0] as peer:
+                peer.settimeout(30)
+                message, handles, flags, _ = socket.recv_fds(peer, 4096, 1)
+                if handles:
+                    handle = handles[0]
+                assert len(handles) == 1 and not flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC)
+                assert message.decode() == token
+                live = select.poll()
+                live.register(handle, select.POLLIN)
+                assert not live.poll(0), "actual capture descendant not live before cancellation"
+                peer.sendall(b"!")
+            # The actual root is still unreaped; signal ONLY it, not the descendant
+            # session or the launcher's group. Product cancellation must clean those.
+            p.send_signal(signal.SIGTERM)
+            rc = p.wait(timeout=15)
+            log.seek(0)
+            output = log.read().decode(errors="replace")
+            assert rc != 0, output
+            assert live.poll(5000), f"actual detached capture descendant survived: {output}"
+            assert not list((s.root / "tmp").iterdir()), output
+        finally:
+            try:
+                if handle is not None:
+                    try:
+                        with contextlib.suppress(ProcessLookupError):
+                            signal.pidfd_send_signal(handle, signal.SIGKILL)
+                        dead = select.poll()
+                        dead.register(handle, select.POLLIN)
+                        assert dead.poll(5000), "owned capture descendant cleanup failed"
+                    finally:
+                        os.close(handle)
+            finally:
+                # Retain the root until bounded graceful cleanup, then escalate.
+                if p.returncode is None:
+                    p.terminate()
+                    try:
+                        p.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        p.kill()
+                        p.wait(timeout=10)
 
 
 def twice(s: Scratch) -> None:
@@ -212,4 +298,4 @@ def invalid_demo(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(twice, fallback_beside, invalid_demo)
+    main(twice, fallback_beside, invalid_demo, cancelled_capture)

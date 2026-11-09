@@ -334,11 +334,13 @@ class Recorder:
             self.sel.register(f, selectors.EVENT_READ)
         self.th = threading.Thread(target=self.loop, daemon=True)
 
-    def watches(self, pid: int) -> int:
-        """The masks as the judge's mount namespace holds them, through the inner's /proc root."""
+    def watches(self, masks: list[int]) -> int:
+        """Watch retained inner directory capabilities, never a peer PID lookup."""
         n = 0
-        for kind, path, kept in self.watch:
-            p = f"/proc/{pid}/root{path}"
+        for (kind, path, kept), fd in zip(self.watch, masks, strict=True):
+            if not stat.S_ISDIR(os.fstat(fd).st_mode):
+                raise OSError("mask capability is not a directory")
+            p = f"/proc/self/fd/{fd}"
             w = (
                 libc.inotify_add_watch(self.ino, p.encode(), 0x20) if self.ino >= 0 else -1
             )  # IN_OPEN
@@ -399,7 +401,7 @@ class Recorder:
         )
         return None
 
-    def message(self, c: socket.socket, raw: bytes) -> None:
+    def message(self, c: socket.socket, raw: bytes, received: list[int]) -> None:
         st = self.conns[c]
         try:
             got: object = json.loads(raw)
@@ -409,11 +411,21 @@ class Recorder:
             return
         m = cast("dict[str, Any]", got)
         t = m.get("t")
-        if t == "hello" and not self.hello:
-            # the inner, before any judge exists: its pipes, then the mask watches
+        if t == "mask" and not self.hello and len(received) == 1:
+            masks = st.setdefault("masks", [])
+            if len(masks) < len(self.watch):
+                masks.append(os.dup(received[0]))
+        elif t == "hello" and not self.hello:
+            masks = st.get("masks", [])
+            if len(received) != 1 or len(masks) != len(self.watch):
+                raise OSError("missing inner namespace or mask capabilities")
+            own, peer = os.stat("/proc/self/ns/pid"), os.fstat(received[0])
+            if (own.st_dev, own.st_ino) == (peer.st_dev, peer.st_ino):
+                raise OSError("inner did not enter a separate PID namespace")
+            if fcntl.ioctl(received[0], 0xb703) != 0x20000000:  # NS_GET_NSTYPE, CLONE_NEWPID
+                raise OSError("inner capability is not a PID namespace")
             self.hello = True
-            pid = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
-            n = self.watches(pid) if self.ino >= 0 else None
+            n = self.watches(masks) if self.ino >= 0 else None
             socket.send_fds(
                 c, [(f"ready {n}" if n is not None else "ready no-inotify").encode()], self.fds
             )
@@ -476,7 +488,11 @@ class Recorder:
     def conn(self, c: socket.socket) -> None:
         while True:
             try:
-                m = c.recv(1 << 18)
+                m, received, flags, _ = socket.recv_fds(c, 1 << 18, 1, socket.MSG_CMSG_CLOEXEC)
+                if flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC):
+                    for fd in received:
+                        os.close(fd)
+                    raise OSError("truncated recorder capability message")
             except BlockingIOError:
                 return
             except OSError:
@@ -484,10 +500,21 @@ class Recorder:
             if not m:  # the sender is done: its entries, and any open queued before, written before the close it waits for
                 self.opens()
                 self.sel.unregister(c)
-                self.call_end(self.conns.pop(c))
+                st = self.conns.pop(c)
+                self.call_end(st)
+                for fd in st.get("masks", []):
+                    os.close(fd)
                 c.close()
                 return
-            self.message(c, m)
+            try:
+                self.message(c, m, received)
+            except OSError:
+                # No ready response: fail closed before starting a judge.
+                with contextlib.suppress(OSError):
+                    c.shutdown(socket.SHUT_RDWR)
+            finally:
+                for fd in received:
+                    os.close(fd)
 
     def accept(self) -> None:
         while True:
@@ -562,7 +589,10 @@ class Recorder:
         self.th.join(10)
         self.drain()
         for c in list(self.conns):
-            self.call_end(self.conns.pop(c))
+            st = self.conns.pop(c)
+            self.call_end(st)
+            for fd in st.get("masks", []):
+                os.close(fd)
             c.close()
         return {
             "attempts": self.recs,
@@ -1265,6 +1295,7 @@ def setup(judge: list[str]) -> NoReturn:
         "browser": E.get("QC_BROWSER", ""),
         "shots": bool(E.get("QC_SHOTS")),
         "recs": recs,
+        "watch": [path for _, path, _ in watch],
         "env": jenv,
         "srt": srtv,
         "hosts": hosts,
@@ -1593,14 +1624,38 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     env.setdefault("NODE_USE_ENV_PROXY", "1")
     os.environ.clear()
     os.environ.update(env)
-    base = {str(os.getpid())} | {
-        p for p in os.listdir("/proc") if p.isdigit()
-    }  # srt's own processes and ours
+    # NSpid is self metadata relative to the procfs mount's PID namespace.
+    # Exactly our one coordinate excludes an ancestor procfs. The recorder checks
+    # a distinct actual namespace FD before allowing process enumeration.
+    nspid = next((line.split()[1:] for line in open("/proc/self/status")
+                  if line.startswith("NSpid:")), [])
+    if nspid != [str(os.getpid())]:
+        sys.exit(print("qc sandbox: FAIL procfs not scoped to inner PID namespace (exit 66)",
+                       file=sys.stderr) or 66)
     sk = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
     try:
         sk.connect(f"{SCR}/rec/sock")
-        sk.send(b'{"t": "hello"}')
-        msg, fds, _, _ = socket.recv_fds(sk, 64, 6)
+        for path in c["watch"]:
+            # O_PATH retains even a mode-000 mask; setup opens its own received
+            # capability for listing, under the same credentials as before.
+            fd = os.open(path, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
+            try:
+                socket.send_fds(sk, [b'{"t":"mask"}'], [fd])
+            finally:
+                os.close(fd)
+        fd = os.open("/proc/self/ns/pid", os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            socket.send_fds(sk, [b'{"t":"hello"}'], [fd])
+        finally:
+            os.close(fd)
+        msg, fds, flags, _ = socket.recv_fds(sk, 64, 6, socket.MSG_CMSG_CLOEXEC)
+        if not msg.startswith(b"ready ") or len(fds) != 6 or flags & socket.MSG_CTRUNC:
+            for fd in fds:
+                os.close(fd)
+            raise OSError("missing recorder readiness or descriptors")
+        base = {str(os.getpid())} | {
+            p for p in os.listdir("/proc") if p.isdigit()
+        }  # verified private procfs: srt's own processes and ours
         # the caller's stderr, stdin and stdout for this process and its children (srt's own stdio aside), blocking
         for f, to in ((fds[3], 2), (fds[4], 0), (fds[5], 1)):
             os.dup2(f, to)

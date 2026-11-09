@@ -80,7 +80,7 @@ run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate sta
 run it; 0, or 3 when a record could not be written). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
+import base64, contextlib, ctypes, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, NoReturn
@@ -215,6 +215,42 @@ def oauth_warning():
     return None
 
 
+def reap_cancelled() -> None:
+    """Drain this invocation's adopted children, not a reaped process-group number.
+
+    Same retained-task mechanism as qc-sandbox.orphans: no concurrent wait(-1)
+    consumer, only own task children, pidfds acquired before those children reap.
+    ECHILD alone proves completion and accounts every adopted child's CPU.
+    """
+    end = time.monotonic() + 5
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return
+        if pid:
+            if time.monotonic() >= end:
+                raise RuntimeError("qc owned cancellation exceeded cleanup bound; completion unproved")
+            continue
+        children: set[int] = set()
+        for tid in os.listdir("/proc/self/task"):
+            try:
+                children.update(map(int, Path(f"/proc/self/task/{tid}/children").read_text().split()))
+            except FileNotFoundError:
+                if tid == str(os.getpid()):
+                    raise
+        for child in children:
+            fd = os.pidfd_open(child)
+            try:
+                with contextlib.suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+            finally:
+                os.close(fd)
+        if time.monotonic() >= end:
+            raise RuntimeError("qc owned cancellation incomplete: children remain; CPU accounting unproved")
+        time.sleep(0.01)
+
+
 def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
               kit: Path | None = None, browser: str | None = None,
               shots: bool = False, pi: bool = True) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
@@ -266,22 +302,35 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     threads = [threading.Thread(target=drain, args=(n,), daemon=True) for n in names]
     for th in threads:
         th.start()
+    # Become the existing run graph's subreaper BEFORE setup can fork. Even if
+    # setup dies, its children remain ours until waited, preserving PID ownership.
+    if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "qc cancellation requires child subreaper")
     p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
                          env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
                          pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
-    for n in names:
-        os.close(pipes[n][1])
+    # Open while the directly owned child is unreaped. Keep this capability even
+    # across p.wait(): a pidfd signals only that task, never a recycled numeric PID.
+    root_fd = None
     try:
+        root_fd = os.pidfd_open(p.pid)
+        for n in names:
+            os.close(pipes[n][1])
         stdout = p.stdout.read().decode(errors="replace"); p.wait()
-    except BaseException:   # qc killed (timeout, ^C): its PID 1 and unshare --fork ignore SIGTERM, so take the
-        os.killpg(p.pid, signal.SIGKILL); p.wait()   # sandbox's group down here, or it judges on unwatched
-        for _ in range(300):   # and exit only once that group is gone, its judge included (issue #235)
-            try:
-                os.killpg(p.pid, 0)
-            except OSError:
-                break
-            time.sleep(0.01)
+    except BaseException:
+        with contextlib.suppress(ProcessLookupError):
+            if root_fd is None:
+                # Acquisition failed before any wait: the direct child is still
+                # ours and unreaped, so this one numeric signal cannot hit reuse.
+                os.kill(p.pid, signal.SIGKILL)
+            else:
+                signal.pidfd_send_signal(root_fd, signal.SIGKILL)
+        p.wait(timeout=5)
+        reap_cancelled()  # adopted descendants, including detached sessions
         raise
+    finally:
+        if root_fd is not None:
+            os.close(root_fd)
     for th in threads:
         th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
     read = lambda n: b"".join(got[n]).decode(errors="replace")
@@ -851,6 +900,13 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, 
 
 
 def main(argv: list[str]) -> int:
+    def killed(n, _f):   # capture and ordinary QC both unwind owned cleanup
+        if not killed.once:   # duplicate timeout/group signals must not interrupt it
+            killed.once = True
+            sys.exit(128 + n)
+    killed.once = False
+    for s in (signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, killed)
     if argv[:1] in (["--capture-case"], ["--capture-store"]):
         return captured(argv)
     gate_free()
@@ -900,13 +956,6 @@ def main(argv: list[str]) -> int:
         die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
 
     runid = secrets.token_hex(3)
-    def killed(n, _f):   # a timeout or a closed pane: exit through the finally blocks, so this run's scratch
-        if not killed.once:   # (snapshot, miss log) is removed; a 2nd signal (timeout sends one to the child
-            killed.once = True   # and one to its group) must not cut that short
-            sys.exit(128 + n)
-    killed.once = False
-    for s in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(s, killed)
     gh: dict[str, Any] = {}
     try:
         gh = (github_snapshot(nogh, runid) if len(demos) + len(tests) + len(carried) < len(ids) else

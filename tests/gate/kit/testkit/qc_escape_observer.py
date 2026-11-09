@@ -22,6 +22,20 @@ import time
 LABELS = {"herdr-server", "escape-unshare", "escape-setsid"}
 
 
+def classifier(argv: list[str]) -> None:
+    """Only the actual public classify extension argv, never ordinary judge work."""
+    flags = ["--no-session", "--no-skills", "--no-mcp", "--no-context-files",
+             "--no-prompt-templates", "--no-extensions", "--no-tools", "-e"]
+    if len(argv) != 11 or argv[:8] != flags or argv[9] != "-p":
+        sys.exit("escape classifier: unexpected extension argv")
+    extension = Path(argv[8])
+    if (not extension.is_absolute() or extension.name != "bench-extension.js"
+            or argv[10] != f"/octo-feather-bench {extension.with_name('bench-input.json')}"):
+        sys.exit("escape classifier: unexpected extension command")
+    stub = os.environ["QC_ESCAPE_CLASSIFIER"]
+    os.execve(stub, [stub, *argv], dict(os.environ, STUB_ANSWER="shows"))
+
+
 def exited(fd: int, seconds: float = 0) -> bool:
     return bool(select.select([fd], [], [], seconds)[0])
 
@@ -177,6 +191,9 @@ def stopped(number: int, _frame: object) -> None:
 
 
 if __name__ == "__main__":
+    if sys.argv[1] == "classifier":
+        classifier(sys.argv[2:])
+        sys.exit(2)
     if sys.argv[1] == "supervise":
         signal.signal(signal.SIGTERM, stopped)
         signal.signal(signal.SIGINT, stopped)

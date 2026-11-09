@@ -5,10 +5,14 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_capture import fallback_beside, invalid_demo, twice
+from qc_capture import cancelled_capture, fallback_beside, invalid_demo, twice
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
+
+
+def test_qc_capture_cancelled(case: Case) -> None:
+    case(cancelled_capture)
 
 
 def test_qc_capture_twice(case: Case) -> None:

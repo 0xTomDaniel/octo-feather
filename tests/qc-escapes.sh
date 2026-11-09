@@ -49,4 +49,6 @@ ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \
   || fail "judge wrote live state"
 [[ ! -e "$HOME/.config/herdr/sessions" ]] || fail "sandbox Herdr session left in the real config dir"
+grep -q 'advisory model judgment (no gate reads it): shows, confidence ' <<< "$out" \
+  || fail "classifier continuation did not answer through its extension seam: $out"
 echo "qc-escapes: ok (proof abort, sandbox escapes, other repos masked (listing recorded and refused; a failed mask aborts), cleanup count, live state untouched; offline, runs bounded)"
