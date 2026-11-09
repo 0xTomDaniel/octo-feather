@@ -4,6 +4,10 @@
 # trying each escape (#33) fails at every one, masks cannot be unmounted, leftovers are killed and agents counted,
 # another repo's listing is recorded and refused, and no live record is written.
 # Run by `just check`; offline and bounded, in its own namespace and throwaway HOME (tests/lib/qc.sh).
+# The observer owns this invocation before the harness enters its existing namespaces.
+if [[ "$(uname -s)" != Darwin && -z "${QC_ESCAPE_SOCKET:-}" ]]; then
+  exec python3 "$(dirname "$0")/gate/kit/testkit/qc_escape_observer.py" supervise bash "$0" "$@"
+fi
 # shellcheck source=tests/lib/qc.sh
 source "$(dirname "$0")/lib/qc.sh"
 # A failed proof check aborts before the judge: here raw herdr still reaches a live session.
@@ -39,7 +43,7 @@ grep -q "cleanup: agents started 1 (headless pi 1, Herdr panes 0)" <<< "$out" ||
 for p in "sleep 3012" "sleep 302921"; do
   jr '["sandbox"]["killed"]' | grep -q "$p" || fail "leftover '$p' not killed and counted: $(jr '["sandbox"]')"
 done
-! pgrep -fx "sleep (301[12]|302921)$tok" >/dev/null || fail "sandbox processes survived the run"
+python3 "$QC_ESCAPE_HELPER" check || fail "sandbox processes survived the run"
 [[ ! -e "$HOME/qc-saved" ]] || fail "judge wrote into HOME"
 ls -d /tmp/qc-escape-* 2>/dev/null && fail "judge's /tmp writes survived"
 [[ ! -e "$live/lanes/escaped" && "$(cat "$live/lanes/archive/gh1.toml")" == ARCHIVED && "$(wc -l < "$live/director.handoffs.jsonl")" == 1 ]] \

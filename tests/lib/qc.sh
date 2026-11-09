@@ -80,7 +80,9 @@ C="${XDG_CONFIG_HOME:-$HOME/.config}/herdr"; s=default; a=()
 while (($#)); do case "$1" in --session) s="$2"; shift 2;; --remote|--machine) shift 2;; *) a+=("$1"); shift;; esac; done
 [[ "$s" == default ]] && sock="$C/herdr.sock" || sock="$C/sessions/$s/herdr.sock"
 case "${a[*]}" in
-  server) mkdir -p "${sock%/*}"; echo "$s" > "$sock"; exec sleep 3011@TOK@;;
+  server) mkdir -p "${sock%/*}"; echo "$s" > "$sock"
+    if [[ -n "${QC_ESCAPE_HELPER:-}" ]]; then exec python3 "$QC_ESCAPE_HELPER" herdr-server 3011@TOK@; fi
+    exec sleep 3011@TOK@;;
   "session stop "*) rm -f "$C/sessions/${a[2]}/herdr.sock"; exit 0;;
   "session delete "*) rm -rf "${C:?}/sessions/${a[2]}"; exit 0;;
 esac
@@ -211,14 +213,23 @@ P
       umount "$m" 2>/dev/null; unshare -rm sh -c 'umount "$1" 2>/dev/null; cat "$1/../.git-credentials" "$1/herdr.sock" "$1/gh9.toml" 2>/dev/null' _ "$m" | grep -q 'SECRET\|default\|LIVE' && echo "ESCAPE umount $m"
     done
     grep -q SECRET "$HOME/.git-credentials" 2>/dev/null && echo "ESCAPE umount revealed git creds"
-    unshare -rm env -u HERDR_SESSION sh -c 'exec sleep 302921@TOK@' < /dev/null > /dev/null 2>&1 &
+    if [[ -n "${QC_ESCAPE_HELPER:-}" ]]; then
+      unshare -rm env -u HERDR_SESSION sh -c 'exec python3 "$QC_ESCAPE_HELPER" escape-unshare 302921@TOK@' < /dev/null > /dev/null 2>&1 &
+    else
+      unshare -rm env -u HERDR_SESSION sh -c 'exec sleep 302921@TOK@' < /dev/null > /dev/null 2>&1 &
+    fi
     mkdir -p "$HOME/qc-saved" 2>/dev/null && cp -p "$HOME/.pi/agent/auth.json" "$HOME/.pi/agent/models.json" "$HOME/qc-saved/" 2>/dev/null
-    setsid sleep 3012@TOK@ < /dev/null > /dev/null 2>&1 &
+    if [[ -n "${QC_ESCAPE_HELPER:-}" ]]; then
+      setsid python3 "$QC_ESCAPE_HELPER" escape-setsid 3012@TOK@ < /dev/null > /dev/null 2>&1 &
+    else
+      setsid sleep 3012@TOK@ < /dev/null > /dev/null 2>&1 &
+    fi
     pi --version
+    if [[ -n "${QC_ESCAPE_HELPER:-}" ]]; then python3 "$QC_ESCAPE_HELPER" ready || exit 1; fi
     printf "$ok" ;;
 esac
 EOF
-# Survivor checks key on a per-run token in the sleeps' argv, so concurrent test runs never collide.
+# Preserve original sleep argv/report facts; qc-escapes observes actual self-pidfds, not argv discovery.
 tok="$(od -An -N4 -tu4 /dev/urandom | tr -d ' ')$$"; sed -i "s/@TOK@/$tok/g" "$t/bin/pi" "$t/fakeherdr/herdr"
 chmod +x "$t/bin/pi" "$t/fakeherdr/herdr"; base="$t/bin:$kit/scripts:$PATH"; export PATH="$t/bin:$t/fakeherdr:$kit/scripts:$PATH"
 # Sandbox Herdr mode for the pane test: the fake, on every box and in CI; the box's real herdr
