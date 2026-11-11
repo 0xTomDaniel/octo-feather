@@ -1,0 +1,85 @@
+"""Fake model seam: read public reflection references, never production code."""
+
+import hashlib
+import json
+import pathlib
+import sys
+from typing import cast
+
+
+def window_bytes(record: object) -> bytes:
+    assert isinstance(record, dict)
+    presentation = cast("dict[str, object]", record)
+    pattern, count = presentation["pattern"], presentation["count"]
+    source_id = presentation["source_id"]
+    assert isinstance(pattern, str)
+    assert isinstance(count, int)
+    assert isinstance(source_id, str)
+    assert source_id.split("-", 1)[1].isdigit()
+    assert presentation["encoded_bytes"] == 32768
+    result = bytearray()
+    for index in range(count):
+        raw = pathlib.Path(pattern.format(index=index)).read_bytes()
+        assert len(raw) <= 32768
+        assert raw.endswith(b"\n")
+        assert len(raw.splitlines()) == 1
+        window: object = json.loads(raw)
+        assert isinstance(window, dict)
+        fields = cast("dict[str, object]", window)
+        text = fields["text"]
+        assert isinstance(text, str)
+        assert text
+        chunk = text.encode("utf-8", errors="surrogateescape")
+        assert fields["source_id"] == source_id
+        assert fields["index"] == index
+        assert fields["start_byte"] == len(result)
+        start_line = 1 + result.count(b"\n")
+        assert fields["start_line"] == start_line
+        result.extend(chunk)
+        assert fields["end_byte"] == len(result)
+        assert fields["end_line"] == 1 + result.count(b"\n") - int(chunk.endswith(b"\n"))
+    return bytes(result)
+
+
+prompt = sys.stdin.read()
+line = next(line for line in prompt.splitlines() if line.startswith("Read source manifest: "))
+manifest_path = pathlib.Path(line.removeprefix("Read source manifest: "))
+manifest = json.loads(manifest_path.read_text())
+sys.stdout.write(json.dumps(manifest) + "\n")
+for source in manifest["sources"]:
+    sys.stdout.write(f"{source['identity']}: {source['original']}\n")
+    if not source["available"]:
+        continue
+    data = window_bytes(source["presentation"])
+    assert data == pathlib.Path(source["snapshot"]).read_bytes()
+    assert len(data) == source["bytes"]
+    assert hashlib.sha256(data).hexdigest() == source["sha256"]
+    assert len(data.splitlines()) == source["lines"]
+    # Invalid-byte diagnostic escapes only; exact raw-byte identity was asserted above.
+    lines: list[str] = data.decode(errors="backslashreplace").splitlines()
+    if "selected_lines" in source:
+        selected: list[int] = source["selected_lines"]
+        lines = [lines[i - 1] for i in selected]
+    elif "start_line" in source:
+        lines = lines[source["start_line"] - 1 : source["end_line"]]
+    sys.stdout.write("\n".join(lines) + "\n")
+    if source["original"].endswith(".handoffs.jsonl") and source["identity"].startswith("gh"):
+        reflections = [json.loads(line) for line in data.splitlines() if line.strip()]
+        description = (
+            ", ".join(
+                f"{d.get('at')} {d.get('findings')} findings"
+                for d in reflections
+                if d.get("kind") == "reflection"
+            )
+            or "none"
+        )
+        sys.stdout.write(
+            f"{source['identity']}: {source['original']}; lane reflections: {description}\n",
+        )
+for source in manifest["derived"].values():
+    assert source["kind"] == "DERIVED"
+    assert source["captured_at"]
+    data = window_bytes(source["presentation"])
+    assert data == pathlib.Path(source["snapshot"]).read_bytes()
+    assert hashlib.sha256(data).hexdigest() == source["sha256"]
+    sys.stdout.write(data.decode() + "\n")

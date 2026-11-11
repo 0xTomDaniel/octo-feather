@@ -13,24 +13,34 @@ set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 L="$kit/scripts/octo-feather-lane"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
-export HOME="$t/home" XDG_STATE_HOME="$t/state" HERDR_SESSION="" STUB_DIR="$t"
+export HOME="$t/home" XDG_STATE_HOME="$t/state" HERDR_SESSION="" STUB_DIR="$t" REFLECT_READER="$kit/tests/fixtures/reflection-input"
 "$kit/scripts/pi-role" --set-identity t t@t >/dev/null   # the commit identity a role launch needs (#665)
 unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
 fail() { echo "director-reflect test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
-import os, sys, time
+import os, sys, time, subprocess
 prompt = sys.stdin.read() or sys.argv[-1]
+inputs = subprocess.check_output([sys.executable, os.environ['REFLECT_READER']], input=prompt, text=True)
 d = os.environ["STUB_DIR"]; who = "director" if "Director reflection" in prompt else "lane"
 open(f"{d}/argv.{who}", "w").write("\0".join([*sys.argv[1:], prompt]))
 open(f"{d}/prompt.{who}", "w").write(prompt)
+open(f"{d}/inputs.{who}", "w").write(inputs)
+if who == 'director' and os.environ.get('STUB_DIRECTOR_BIND_MUTATE'):
+    import json, pathlib
+    manifest = json.loads(inputs.splitlines()[0])
+    record = pathlib.Path(next(s['original'] for s in manifest['sources'] if s['identity'] == 'director record'))
+    open(f'{d}/director.phase', 'w').write(json.dumps({'binding': manifest['director'], 'record_before': record.read_text()}))
+    record.write_text('pane = "changed-after-director-model-start"\n')
 time.sleep(float(os.environ.get("STUB_SLEEP", "0")) if who == "director" else 0)
 if who == "director" and os.environ.get("STUB_DRC", "0") != "0":
     print("Error: 503 model openai/gpt-6.1-sol unreachable", file=sys.stderr); sys.exit(1)
 sys.stdout.write(open(f"{d}/reply.{who}").read())
 EOF
-printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"
+export REFLECT_DIRECTOR_FILE="$t/director-source.jsonl"
+cp "$kit/tests/fixtures/reflection-director" "$t/bin/herdr"
+python3 "$kit/tests/fixtures/reflection-director" seed "$XDG_STATE_HOME/octo-feather"
 chmod +x "$t/bin/pi" "$t/bin/herdr"
 export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh: a due correction lane files there (tests/lane-correction.sh)
 state="$XDG_STATE_HOME/octo-feather"; lanes="$state/lanes"; dlog="$state/director.handoffs.jsonl"
@@ -56,7 +66,10 @@ printf '%s\n' '{"at":"2026-10-19T00:00:00Z","kind":"note","text":"before-last-re
 python3 - "$dlog" "$t/large-line" <<'PY'
 import json, sys
 line = json.dumps({"kind": "note", "text": "BEGIN synthetic " + "é transport | " * 20000 + " END synthetic"}, ensure_ascii=False)
-open(sys.argv[1], "a").write(line + "\n")
+with open(sys.argv[1], "a") as source:
+    source.write(json.dumps({'kind': 'note', 'text': 'EARLY beyond400 relevant history'}) + '\n')
+    source.write(''.join(json.dumps({'kind': 'note', 'text': f'history-{i}'}) + '\n' for i in range(410)))
+    source.write(line + '\n')
 open(sys.argv[2], "w").write(line)
 PY
 # acceptance-reflect-writer-route, -missed: reflect --director on its own.
@@ -77,14 +90,20 @@ assert "3 code-review findings in 3 lanes" in f1["summary"], f1
 assert (f2["class"], f2["question"]) == ("reflection-missed", "director-reflection-missed"), f2
 assert r["kind"] == "reflection" and r["findings"] == 2 and len(r["questions"]) == 9, r
 EOF
-python3 - "$t/large-line" "$t/prompt.director" <<'PY'
+python3 - "$t/large-line" "$t/prompt.director" "$t/inputs.director" <<'PY'
 import sys
 line = open(sys.argv[1]).read()
 prompt = open(sys.argv[2]).read()
 assert len(line.encode()) > 131072
-assert prompt.count(line) == 1, "oversized evidence changed, truncated or duplicated"
+inputs = open(sys.argv[3]).read()
+assert len(prompt.encode()) < 10000 and line not in prompt
+assert inputs.count(line) == 1, "source evidence changed, truncated or duplicated"
+assert 'EARLY beyond400 relevant history' in inputs
+import json, pathlib
+manifest = json.loads(inputs.splitlines()[0])
+assert all(not pathlib.Path(s['snapshot']).exists() for s in manifest['sources'] if s['available'])
 PY
-argv="$(tr '\0' '\n' <"$t/argv.director")"
+argv="$(tr '\0' '\n' <"$t/argv.director"; cat "$t/inputs.director")"
 for want in "openai/gpt-6.1-sol" "$kit/.agents/skills/reflect" "last director reflection ($old)" \
   "owner-caught-stranded-worker" "class duplicated-rule, source code-review: 3 findings in 3 lanes (gh1, gh2, gh3), last 2026-10-22T00:00:00Z" \
   "class bad-fixture, source qc: 1 finding in 1 lane (gh3)" "gh1: $lanes/archive/gh1.handoffs.jsonl; lane reflections: 2026-10-20T01:00:00Z 0 findings" \
@@ -109,9 +128,13 @@ out="$("$L" archive gh4 2>&1)" || fail "archive gh4 failed: $out"
 [[ -f "$lanes/archive/gh4.toml" && ! -e "$lanes/gh4.toml" ]] || fail "gh4 not archived: $out"
 grep -qF "reflection: lane gh4" <<<"$out" && grep -qF "reflection: director, 1 finding" <<<"$out" || fail "archive did not run both reflections: $out"
 [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$((b + 1))" ]] || fail "director log did not gain one reflection line: $(cat "$dlog")"
-tail -2 "$dlog" | head -1 | grep -qF '"question": "owner-asked"' || fail "no owner-asked finding: $(tail -2 "$dlog")"
-grep -qF "owner-caught-merge-order" <(tr '\0' '\n' <"$t/argv.director") || fail "director brief lacks the owner-caught line"
-grep -qF "gh4: $lanes/gh4.handoffs.jsonl" <(tr '\0' '\n' <"$t/argv.director") || fail "director brief lacks the archiving lane's log"
+python3 - "$dlog" <<'PY' || fail "no owner-asked finding: $(tail -2 "$dlog")"
+import json, pathlib, sys
+finding = json.loads(pathlib.Path(sys.argv[1]).read_text().splitlines()[-2])
+assert finding['kind'] == 'finding' and finding['question'] == 'owner-asked', finding
+PY
+grep -qF "owner-caught-merge-order" "$t/inputs.director" || fail "director brief lacks the owner-caught line"
+grep -qF "gh4: $lanes/gh4.handoffs.jsonl" "$t/inputs.director" || fail "director brief lacks the archiving lane's log"
 
 # The director reflection cannot run: archive refuses naming it, every file as it was.
 tree() { (cd "$XDG_STATE_HOME" && find . -printf '%p %y %s\n' | sort && find . -type f -print0 | sort -z | xargs -0r sha256sum); }
@@ -135,11 +158,34 @@ for failure in malformed timeout; do
   [[ "$rc" == 1 ]] && grep -qF "director reflection failed" <<<"$out" && grep -qF "$want" <<<"$out" || fail "$failure did not refuse: $out"
   after="$(tree)"; [[ "$after" == "$before" ]] || fail "$failure changed archive state"
 done
+# Explicit binding changes DURING the SECOND model: undo the first reflection too.
+record_before="$(cat "$state/director.toml")"
+printf '%s\nFindings: none\n' "$DQ" >"$t/reply.director"
+set +e
+out="$(STUB_DIRECTOR_BIND_MUTATE=1 "$L" archive gh5 --director-source w9:p99 "$REFLECT_DIRECTOR_FILE" 2>&1)"; rc=$?
+set -e
+[[ "$rc" == 1 ]] && grep -qF 'director reflection failed' <<<"$out" && grep -qF 'invalid --director-source' <<<"$out" || fail "second-model binding change not refused: $out"
+python3 - "$t/director.phase" <<'PY'
+import json, sys
+phase = json.load(open(sys.argv[1]))
+assert phase['binding']['mode'] == 'explicit-director-handoff'
+assert phase['binding']['pane'] == 'w9:p99'
+assert phase['record_before'] == 'pane = "w9:p99"\n'
+PY
+# Restore only the external mutation, then prove every transactional file stayed identical.
+printf '%s\n' "$record_before" >"$state/director.toml"
+after="$(tree)"; [[ "$after" == "$before" ]] || fail "second-model refusal failed rollback"
 rm "$lanes/gh5.toml" "$lanes/gh5.handoffs.jsonl"
 
 # acceptance-reflect-daily: a lane start when the last director reflection ran two days ago runs one in the
 # background; the start returns before the reflector does.
-mkdir -p "$t/hbin"; cp "$kit/tests/fixtures/herdr-say/herdr" "$t/hbin/"; chmod +x "$t/hbin/herdr"
+mkdir -p "$t/hbin"; cp "$kit/tests/fixtures/herdr-say/herdr" "$t/hbin/herdr.real"; chmod +x "$t/hbin/herdr.real"
+cat >"$t/hbin/herdr" <<'SH'
+#!/bin/sh
+if [ "${3:-}" = w9:p99 ]; then exec "$(dirname "$0")/../bin/herdr" "$@"; fi
+exec "$(dirname "$0")/herdr.real" "$@"
+SH
+chmod +x "$t/hbin/herdr"
 git -c init.defaultBranch=main init -q "$t/target"
 echo '{"at":"'"$(ago 48)"'","kind":"reflection","findings":0,"questions":["owner-asked"]}' >>"$dlog"
 b="$(grep -c '"kind": "reflection"' "$dlog")"; rm -f "$t/argv.director"

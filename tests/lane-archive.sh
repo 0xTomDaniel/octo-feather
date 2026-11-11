@@ -22,7 +22,8 @@ case "$prompt" in
 esac
 echo "Findings: none"
 EOF
-printf '#!/bin/sh\nexit 1\n' >"$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh (tests/lane-correction.sh)
+export REFLECT_DIRECTOR_FILE="$t/director-source.jsonl"
+cp "$kit/tests/fixtures/reflection-director" "$t/bin/herdr"; chmod +x "$t/bin/pi" "$t/bin/herdr"; export PATH="$t/bin:$kit/tests/fixtures/tracker-gh:$PATH" FAKE_GH_STORE="$t/gh.json"   # the offline gh (tests/lane-correction.sh)
 unset HERDR_PANE_ID PI_SESSION_FILE OCTO_FEATHER_REFLECT_ARGS
 reflected() { # ARCHIVED-LOG ORIGINAL-LOG-COPY: the original bytes, a newline if they lacked one, then one reflection line
   python3 - "$1" "$2" <<'PY'
@@ -37,6 +38,7 @@ PY
 sums() { (cd "$1" && find . -type f -print0 | sort -z | xargs -0r sha256sum); }
 seed() { # DIR NAME [nolog]
   mkdir -p "$1"
+  python3 "$kit/tests/fixtures/reflection-director" seed "$(dirname "$1")"
   printf 'issue = "gh0"\nsupervisor = "w1:p2"\ngoal = "x \xc3\xa9"\n' >"$1/$2.toml"   # non-ASCII, no final edit
   [[ "${3:-}" == nolog ]] || printf '{"at":"2026-10-20T00:00:00Z","kind":"attempt"}\n{"kind":"integration"}' >"$1/$2.handoffs.jsonl"
 }

@@ -397,7 +397,18 @@ def scratch_state(f: Feature) -> Path:
 def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
     """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
     store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
-    return {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+    # All four callers drive reflection: its required director is synthetic, not the box's.
+    env = {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+    fixture = Path(kit) / "tests/fixtures/reflection-director"
+    binary = sc / "reflection-bin"
+    binary.mkdir(exist_ok=True)
+    shutil.copy2(fixture, binary / "herdr")
+    (binary / "herdr").chmod(0o755)
+    env["REFLECT_DIRECTOR_FILE"] = str(sc / "director-source.jsonl")
+    subprocess.run([sys.executable, str(fixture), "seed", str(sc / "state/octo-feather")],
+                   env=os.environ | env, check=True, capture_output=True, text=True)
+    env["PATH"] = f"{binary}:{env['PATH']}"
+    return env
 
 
 def fresh_path(p: Path) -> None:

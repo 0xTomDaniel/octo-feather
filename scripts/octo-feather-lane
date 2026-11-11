@@ -40,6 +40,16 @@ runs at a time (a lock on the state dir). --due runs it only when one is due at 
 #reflection-director; `octo-feather-start` runs that in the background) and the director log has lines, else
 prints `director reflection: not due ...`, exit 0; also exit 0, nothing run, while another one runs.
 
+Reflection source option (last): `--director-source CURRENT_DIRECTOR_PANE EXACT_ABSOLUTE_PI_SESSION_FILE`
+is shared by `reflect NAME`, `reflect --director [--due]`, and `archive NAME`. A supervisor closes a
+lane with `octo-feather-lane archive NAME --director-source PANE FILE`; both reflections use that
+source. Native Herdr agent_session (id/path) is authoritative when present. Otherwise the option is
+an explicit-director-handoff declaration through existing comms, not independently proven current
+session ownership: an undetectably old same-pane/cwd declaration cannot be rejected. Record, live
+Pi pane, source header/cwd and source prefix are validated/rechecked; native conflict or invalid
+explicit input refuses atomically. Missing required director source is an unknown sourcegap and
+refuses reflection/archive, never completion. --due's existing not-due cases still run no reflection.
+
 After its reflection, `reflect NAME`, `reflect --director` (when it ran) and `archive` (after both, before any file
 moves) file the correction lanes due (spec comms #reflection-correction; the rule: issue-lifecycle #lanes-correction)
 through the tracker skill's `issue-create`: a lane's in its target's tracker (the current directory's tracker skill,
@@ -486,7 +496,17 @@ def lane_name(args: list[str], cmd: str = "archive") -> str:
     return args[0]
 
 
+def director_source_args(args: list[str]) -> tuple[list[str], tuple[str, Path] | None]:
+    if "--director-source" not in args:
+        return args, None
+    at = args.index("--director-source")
+    if at + 3 != len(args) or not args[at + 1] or not Path(args[at + 2]).is_absolute():
+        raise Refuse("usage: --director-source CURRENT_DIRECTOR_PANE EXACT_ABSOLUTE_PI_SESSION_FILE (last option)")
+    return args[:at], (args[at + 1], Path(args[at + 2]))
+
+
 def cmd_archive(args: list[str]) -> int:
+    args, source = director_source_args(args)
     name = lane_name(args)
     lanes = lanes_dir(); archive = lanes / "archive"
     record, log = lanes / f"{name}.toml", lanes / f"{name}.handoffs.jsonl"
@@ -508,11 +528,11 @@ def cmd_archive(args: list[str]) -> int:
         if (archive / f.name).exists() or (archive / f.name).is_symlink():
             raise Refuse(f"archive target exists: {archive / f.name}; compare it with {f}, then remove or rename the archived one by hand")
     pre = log.stat().st_size if log in files else None   # the log's length before the reflection appends
-    reflect_lane(name, lanes)   # spec comms #reflection-lane: before any file moves
+    reflect_lane(name, lanes, source)   # spec comms #reflection-lane: before any file moves
     dlog = lanes.parent / DIRECTOR_LOG
     dpre = dlog.stat().st_size if dlog.is_file() else None
     try:
-        reflect_director(lanes)
+        reflect_director(lanes, source=source)
     except Refuse as e:
         unreflect(log, pre)   # every file left as it was: the lane reflection's lines cut too
         raise Refuse(f"{e}; the lane reflection's lines undone, every file left in {lanes}") from e
@@ -565,7 +585,7 @@ def reflect_module():
     return mod
 
 
-def reflect_lane(name: str, lanes: Path) -> None:
+def reflect_lane(name: str, lanes: Path, source: tuple[str, Path] | None = None) -> None:
     """Run the lane reflection of lane NAME and append its lines to the lane's hand-off log; Refuse when it fails."""
     import datetime, tomllib
     r = reflect_module()
@@ -574,8 +594,6 @@ def reflect_lane(name: str, lanes: Path) -> None:
         rec = tomllib.loads(record.read_text(encoding="utf-8"))
         lines = read_log(log)[0] if log.exists() else []
         dlog = state / "director.handoffs.jsonl"
-        dlines = read_log(dlog)[0] if dlog.exists() else []
-        dl = [json.dumps(d, ensure_ascii=False) for d in dlines if r.about_lane(d, name, rec.get("issue"))]
         qs = r.questions("lane")
         now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
         unread: list[str] = []
@@ -584,10 +602,14 @@ def reflect_lane(name: str, lanes: Path) -> None:
         except Refuse as e:
             agents, why = None, str(e)
         report = report_lane(record, agents, why, now, unread, [], ReportSources(state, unread))
-        talk = r.lane_transcripts(lines, rec.get("supervisor")) + [r.director_transcript(state)]
-        brief = r.brief(r.LaneRecords(name, record, log, dlog, dl, report, talk), qs)
+        binding = r.director_binding(state, source)
+        binding.require()
+        talk = r.lane_transcripts(lines, rec.get("supervisor")) + [binding.description]
+        brief = r.brief(r.LaneRecords(name, record, log, dlog, report, talk), qs)
+        brief.director = binding
         found, ids = r.parse(r.run(brief, Path.cwd()), qs)
-        r.append(log, r.log_lines(found, ids))
+        brief.verify()
+        r.append(log, r.log_lines(found, ids, inputs=brief.provenance))
     except r.FailedError as e:
         raise Refuse(f"lane reflection of {name} failed ({e}); nothing appended, every file left in {lanes}: fix the cause, then rerun") from e
     except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as e:
@@ -601,7 +623,7 @@ DIRECTOR_LOG = "director.handoffs.jsonl"
 DAY = 86400   # when a start's director reflection is due: spec comms #reflection-director
 
 
-def reflect_director(lanes: Path, due: bool = False) -> bool:
+def reflect_director(lanes: Path, due: bool = False, source: tuple[str, Path] | None = None) -> bool:
     """Run the director reflection and append its lines to the director log; Refuse when it fails. DUE: only when
     one is due at a start (DAY), and not while another runs. Whether it ran."""
     import contextlib, datetime, fcntl, io
@@ -625,7 +647,7 @@ def reflect_director(lanes: Path, due: bool = False) -> bool:
                 print("director reflection: not due, " + (f"last ran {stamp(f'{last:%Y-%m-%dT%H:%M:%SZ}', now)}" if last
                                                          else f"no director log lines to reflect on ({dlog})"))
                 return False
-            since, recent = r.since_last_reflection(dlines)
+            since, _ = r.since_last_reflection(dlines)
             logs: dict[str, list[dict[str, object]]] = {}
             listed: list[str] = []
             for lane, p, lines in lane_logs(lanes):
@@ -634,11 +656,16 @@ def reflect_director(lanes: Path, due: bool = False) -> bool:
             buf = io.StringIO()
             with contextlib.redirect_stdout(buf):
                 cmd_report([])
-            rec = r.DirectorRecords(dlog, since, [json.dumps(d, ensure_ascii=False) for d in recent], buf.getvalue().splitlines(),
-                                    r.director_transcript(state), listed, r.class_counts(logs))
+            binding = r.director_binding(state, source)
+            binding.require()
+            rec = r.DirectorRecords(dlog, since, buf.getvalue().splitlines(),
+                                    binding.description, listed, r.class_counts(logs))
             qs = r.questions("director")
-            found, ids = r.parse(r.run(r.director_brief(rec, qs), Path.cwd()), qs)
-            r.append(dlog, r.log_lines(found, ids, lane=False))
+            brief = r.director_brief(rec, qs)
+            brief.director = binding
+            found, ids = r.parse(r.run(brief, Path.cwd()), qs)
+            brief.verify()
+            r.append(dlog, r.log_lines(found, ids, lane=False, inputs=brief.provenance))
         finally:
             os.close(lock)   # releases the lock
     except r.FailedError as e:
@@ -784,18 +811,19 @@ def cmd_intake(args: list[str]) -> int:
 
 
 def cmd_reflect(args: list[str]) -> int:
+    args, source = director_source_args(args)
     if args[:1] == ["--director"]:
         if args[1:] not in ([], ["--due"]):
             raise Refuse(f"usage: octo-feather-lane reflect --director [--due] (got {' '.join(args)})")
         lanes = lanes_dir()
-        if reflect_director(lanes, due=args[1:] == ["--due"]):
+        if reflect_director(lanes, due=args[1:] == ["--due"], source=source):
             file_corrections(lanes)
         return 0
     name = lane_name(args, "reflect")
     lanes = lanes_dir()
     if not (lanes / f"{name}.toml").is_file():
         raise Refuse(f"no lane record {lanes / f'{name}.toml'}: name an open lane (ls {lanes}), and check HERDR_SESSION is the lane's session")
-    reflect_lane(name, lanes)
+    reflect_lane(name, lanes, source)
     file_corrections(lanes)
     return 0
 
@@ -1612,10 +1640,83 @@ def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]
     out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
              f"read the check runs of {sha[:12]}, {what} (gh auth status)")
     try:
-        got = cast("list[object]", json.loads(out)["check_runs"])
+        data = json.loads(out)
+        got = cast("list[object]", data["check_runs"])
+        if data.get("total_count", len(got)) > len(got):
+            raise ValueError("incomplete check runs")
     except (ValueError, KeyError, TypeError):
         raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
     return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+
+
+def current_checks(rollup: list[dict[str, object]], head: str, repo: str | None) -> list[dict[str, object]]:
+    """Project repeated checks through GitHub's actual head runs, retaining app/workflow/context identity."""
+    def obj(value: object) -> dict[str, object]:
+        if not isinstance(value, dict):
+            raise ValueError("expected an object")
+        return cast("dict[str, object]", value)
+
+    def number(value: object) -> int:
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ValueError("expected a positive integer identity")
+        return value
+
+    def text(value: object) -> str:
+        if not isinstance(value, str) or not value:
+            raise ValueError("expected nonempty text")
+        return value
+
+    checks = [c for c in rollup if c.get("__typename") == "CheckRun"]
+    keys = [(str(c.get("name")), str(c.get("workflowName"))) for c in checks]
+    if len(keys) == len(set(keys)):
+        return rollup
+    runs = check_runs(head, repo, "the PR head")
+    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/actions/runs?head_sha={head}&per_page=100"],
+             f"read workflow identities on {head[:12]} (gh auth status)")
+    try:
+        data = obj(json.loads(out))
+        raw = data["workflow_runs"]
+        if not isinstance(raw, list):
+            raise ValueError("expected workflow runs")
+        workflows = [obj(w) for w in cast("list[object]", raw)]
+        if number(data.get("total_count", len(workflows))) > len(workflows):
+            raise ValueError("incomplete workflow runs")
+        suites: dict[int, int] = {}
+        latest: dict[int, tuple[int, int]] = {}
+        for w in workflows:
+            if w["head_sha"] != head:
+                raise ValueError("workflow on another head")
+            suite, workflow, rid = number(w["check_suite_id"]), number(w["workflow_id"]), number(w["id"])
+            suites[suite] = workflow
+            latest[workflow] = max(latest.get(workflow, (0, 0)), (rid, suite))
+        identities: dict[str, tuple[int, int, str]] = {}
+        grouped: dict[tuple[int, int, str], list[dict[str, object]]] = {}
+        for r in runs:
+            if r["head_sha"] != head:
+                raise ValueError("check on another head")
+            suite, app = number(obj(r["check_suite"])["id"]), number(obj(r["app"])["id"])
+            number(r["id"])
+            text(r["status"])
+            if r["conclusion"] is not None:
+                text(r["conclusion"])
+            key = (app, suites[suite], text(r["name"]))
+            identities[text(r["html_url"])] = key
+            grouped.setdefault(key, []).append(r)
+        projected = [c for c in rollup if c.get("__typename") != "CheckRun"]
+        seen: set[tuple[int, int, str]] = set()
+        for c in checks:
+            key = identities[text(c["detailsUrl"])]
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates = [r for r in grouped[key] if number(obj(r["check_suite"])["id"]) == latest[key[1]][1]]
+            r = max(candidates, key=lambda r: number(r["id"]), default=None)
+            projected.append({"__typename": "CheckRun", "name": key[2],
+                              "status": r["status"] if r else "QUEUED",
+                              "conclusion": r["conclusion"] if r else None})
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"current check identities on {head[:12]} unavailable ({e}): reread GitHub's complete head checks") from e
+    return projected
 
 
 @no_traceback
@@ -1894,6 +1995,10 @@ def cmd_merge_ask(args: list[str]) -> int:
     if not field(lines, "Checks"):
         miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
     rollup = d["statusCheckRollup"] or []
+    try:
+        rollup = current_checks(cast("list[dict[str, object]]", rollup), cast("str", head), repo)
+    except Refuse as e:
+        miss.append(f"Checks: {e}")
     failed, pending = bad_checks(rollup)
     no_ci = ""
     if not rollup:   # the rule: --help, merge-ask Checks line
