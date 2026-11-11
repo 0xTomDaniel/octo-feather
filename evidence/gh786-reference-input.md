@@ -190,3 +190,53 @@ call: instruction+example docs/owed-evals/786.md: replay source-read evidence; i
 ADR0008 prompt eval owed in docs/owed-evals/786.md even if scanner sees no role edit.
 No criterion pass/QC receipt/final readiness claimed. Combined-head QA/fresh review/
 actual CI remain supervisor work. Family eligibility is OWNER decision, unresolved.
+
+## Tracked-file integration correction
+
+Integration of `6c2bfbf` exposed a real validation gap after its earlier green:
+`/tmp/gh786-integrate-final/{exit,output}` recorded exit2,4 failed/224 passed in
+304.17s. Existing check-refs and its public CLI test rejected the retired synthetic
+fixture word; existing check-languages and its CLI test rejected the extensionless
+Python director fixture missing from ruff's own file list. Integration reset the
+supervisor branch to b10eb4c clean. Earlier gate ran before those NEW fixtures were
+tracked, so tracked-file inventory did not see them. That earlier green was NOT
+complete tracked/indexed-state proof. No pre-existing waiver is claimed.
+
+Followup scope: add BOTH real Python fixtures, reflection-director and
+reflection-input, to existing pyproject.toml ruff extend-include registry. The
+reader is invoked as Python even without a shebang, so it also belongs in the
+lint/format/type set. No ignore/exclude/baseline growth or inventory rewrite.
+Replace only the synthetic retired-word text with glossary owner terminology.
+Registering files exposed three type diagnostics and two format spots: fix the
+fixture dictionary/list type annotations and apply the real formatter. No
+production guard, API, prompt, binding, source selection, identity/nonce/byte/
+cutoff assertions or rollback oracle changed. Existing source/required-binding
+Check calls above belong to the earlier reference unit; this metadata delta adds
+NO checks or instructions and changes NO owned rule.
+
+Tracked fixtures already exist in commit6c2bfbf before this followup's gate.
+Public acceptance demonstration `just check-refs && just check-languages &&
+just python-files` passes: refs1294 files, languages559 tracked files scanned;
+Python inventory now103 files, including both fixtures. Existing `just check-lint`,
+`just check-format`, `just check-types` pass with103 files and no new ignores.
+Artifacts `/tmp/gh786-metadata-{files,lint,format,types}.log`.
+
+Public check-refs.sh/languages.sh plus all eight affected reflection/CI consumers
+pass:10 passed49.95s, exit0, `/tmp/gh786-metadata-targeted/{output,exit}`.
+Report-only CPU over10s: merge-ask41.199, qc-carry22.347, check-refs13.960,
+lane-reflect10.572; no budget waiver. All content/as-of/binding/failure/phase/
+rollback oracles retained and green.
+
+Temporary supervisor runner `/tmp/gh786-integration-gate.py` changed ONLY callback:
+`herdr-say` targets current HERDR_PANE_ID (supervisor self), not --parent/director.
+Arguments, resource safeguards and command unchanged. Not executed here; no
+supervisor-worktree write or integration performed by this worker.
+
+This update is finalized BEFORE tracked-state full recovery gate. Runner
+`/tmp/gh786-metadata-run.py /tmp/gh786-metadata-full just check`; new artifacts
+`/tmp/gh786-metadata-full/`. Existing current-user/caps0 real-/usr/bin overlay,
+offline wrapper-only exclusion, GOMAXPROCS2/Nodeheap1536, fresh4096MiB floor,
+one owned PGID, cleanup and --parent callback. Deadline is
+min(1800, grant2026-11-11T22:24:59Z remaining TTL minus30s). Final result belongs
+in handoff, with no post-pass source/evidence edit. Canonical four-field Git
+identity remains command-scoped. CI940d603 stays independently reviewable.

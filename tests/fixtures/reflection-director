@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Synthetic director source and public Herdr double, never production internals."""
+
 import json
 import os
 import sys
@@ -13,24 +14,35 @@ if sys.argv[1:2] == ["seed"]:
     header = {"type": "session", "id": "synthetic-director", "cwd": "/synthetic/director"}
     message = {
         "type": "message",
-        "message": {"role": "user", "content": [
-            {"type": "text", "text": "Synthetic director conversation, no operator data."},
-        ]},
+        "message": {
+            "role": "user",
+            "content": [
+                {"type": "text", "text": "Synthetic director conversation, no owner data."},
+            ],
+        },
     }
     source.write_text(json.dumps(header) + "\n" + json.dumps(message) + "\n")
     sys.exit()
 pane = os.environ.get("REFLECT_DIRECTOR_PANE", "w9:p99")
-if (len(sys.argv) != 4 or sys.argv[1] not in ("agent", "pane")
-        or sys.argv[2] != "get" or sys.argv[3] != pane):
+if (
+    len(sys.argv) != 4
+    or sys.argv[1] not in ("agent", "pane")
+    or sys.argv[2] != "get"
+    or sys.argv[3] != pane
+):
     sys.exit(1)
-info = {
-    "pane_id": pane, "agent": "pi", "cwd": "/synthetic/director",
-    "terminal_id": "synthetic-terminal", "agent_status": "working",
+info: dict[str, object] = {
+    "pane_id": pane,
+    "agent": "pi",
+    "cwd": "/synthetic/director",
+    "terminal_id": "synthetic-terminal",
+    "agent_status": "working",
 }
 native = os.environ.get("REFLECT_NATIVE", "1")
 if native in ("1", "id"):
     info["agent_session"] = {
-        "source": "synthetic-api", "agent": "pi",
+        "source": "synthetic-api",
+        "agent": "pi",
         "kind": "id" if native == "id" else "path",
         "value": "synthetic-director" if native == "id" else str(source),
     }

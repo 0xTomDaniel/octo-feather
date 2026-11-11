@@ -1,4 +1,5 @@
 """Fake model seam: read public reflection references, never production code."""
+
 import hashlib
 import json
 import pathlib
@@ -10,27 +11,32 @@ manifest_path = pathlib.Path(line.removeprefix("Read source manifest: "))
 manifest = json.loads(manifest_path.read_text())
 sys.stdout.write(json.dumps(manifest) + "\n")
 for source in manifest["sources"]:
-    sys.stdout.write(f'{source["identity"]}: {source["original"]}\n')
+    sys.stdout.write(f"{source['identity']}: {source['original']}\n")
     if not source["available"]:
         continue
     data = pathlib.Path(source["snapshot"]).read_bytes()
     assert len(data) == source["bytes"]
     assert hashlib.sha256(data).hexdigest() == source["sha256"]
     assert len(data.splitlines()) == source["lines"]
-    lines = data.decode().splitlines()
+    lines: list[str] = data.decode().splitlines()
     if "selected_lines" in source:
-        lines = [lines[i - 1] for i in source["selected_lines"]]
+        selected: list[int] = source["selected_lines"]
+        lines = [lines[i - 1] for i in selected]
     elif "start_line" in source:
-        lines = lines[source["start_line"] - 1:source["end_line"]]
+        lines = lines[source["start_line"] - 1 : source["end_line"]]
     sys.stdout.write("\n".join(lines) + "\n")
     if source["original"].endswith(".handoffs.jsonl") and source["identity"].startswith("gh"):
         reflections = [json.loads(line) for line in data.splitlines() if line.strip()]
-        description = ", ".join(
-            f'{d.get("at")} {d.get("findings")} findings'
-            for d in reflections if d.get("kind") == "reflection"
-        ) or "none"
+        description = (
+            ", ".join(
+                f"{d.get('at')} {d.get('findings')} findings"
+                for d in reflections
+                if d.get("kind") == "reflection"
+            )
+            or "none"
+        )
         sys.stdout.write(
-            f'{source["identity"]}: {source["original"]}; lane reflections: {description}\n',
+            f"{source['identity']}: {source['original']}; lane reflections: {description}\n",
         )
 for source in manifest["derived"].values():
     data = pathlib.Path(source["snapshot"]).read_bytes()
