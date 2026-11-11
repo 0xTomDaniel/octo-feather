@@ -15,7 +15,8 @@ fail() { echo "lane-archive test: $*" >&2; exit 1; }
 mkdir -p "$t/bin"
 cat >"$t/bin/pi" <<'EOF'
 #!/bin/sh
-case "$*" in
+prompt="$(cat)"
+case "$prompt" in
   *"Director reflection"*) echo "Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed" ;;
   *) echo "Questions: caught-by-hand, slow-or-from-memory, undetected-rule, check-misfired, mechanical-step, writer-mistake, reflection-missed" ;;
 esac

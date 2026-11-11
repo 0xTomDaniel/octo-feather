@@ -21,8 +21,10 @@ mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
 import os, sys, time
-d = os.environ["STUB_DIR"]; who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
-open(f"{d}/argv.{who}", "w").write("\0".join(sys.argv[1:]))
+prompt = sys.stdin.read() or sys.argv[-1]
+d = os.environ["STUB_DIR"]; who = "director" if "Director reflection" in prompt else "lane"
+open(f"{d}/argv.{who}", "w").write("\0".join([*sys.argv[1:], prompt]))
+open(f"{d}/prompt.{who}", "w").write(prompt)
 time.sleep(float(os.environ.get("STUB_SLEEP", "0")) if who == "director" else 0)
 if who == "director" and os.environ.get("STUB_DRC", "0") != "0":
     print("Error: 503 model openai/gpt-6.1-sol unreachable", file=sys.stderr); sys.exit(1)
@@ -50,6 +52,13 @@ printf '%s\n' '{"at":"2026-10-19T00:00:00Z","kind":"note","text":"before-last-re
   '{"at":"'"$old"'","kind":"reflection","findings":0,"questions":["owner-asked"]}' \
   '{"at":"2026-10-27T00:00:00Z","kind":"finding","class":"owner-caught-stranded-worker","issue":3,"summary":"owner found implementer-gh3 stranded at a prompt"}' >"$dlog"
 
+# Generated evidence exceeds Linux's single-argument limit, including multibyte content.
+python3 - "$dlog" "$t/large-line" <<'PY'
+import json, sys
+line = json.dumps({"kind": "note", "text": "BEGIN synthetic " + "é transport | " * 20000 + " END synthetic"}, ensure_ascii=False)
+open(sys.argv[1], "a").write(line + "\n")
+open(sys.argv[2], "w").write(line)
+PY
 # acceptance-reflect-writer-route, -missed: reflect --director on its own.
 printf '%s\n' "$DQ" \
   'Finding: class: duplicated-rule | question: writer-route | route: agents/implementer.md Rules | summary: 3 code-review findings in 3 lanes (gh1, gh2, gh3); writers restate rules' \
@@ -68,6 +77,13 @@ assert "3 code-review findings in 3 lanes" in f1["summary"], f1
 assert (f2["class"], f2["question"]) == ("reflection-missed", "director-reflection-missed"), f2
 assert r["kind"] == "reflection" and r["findings"] == 2 and len(r["questions"]) == 9, r
 EOF
+python3 - "$t/large-line" "$t/prompt.director" <<'PY'
+import sys
+line = open(sys.argv[1]).read()
+prompt = open(sys.argv[2]).read()
+assert len(line.encode()) > 131072
+assert prompt.count(line) == 1, "oversized evidence changed, truncated or duplicated"
+PY
 argv="$(tr '\0' '\n' <"$t/argv.director")"
 for want in "openai/gpt-6.1-sol" "$kit/.agents/skills/reflect" "last director reflection ($old)" \
   "owner-caught-stranded-worker" "class duplicated-rule, source code-review: 3 findings in 3 lanes (gh1, gh2, gh3), last 2026-10-22T00:00:00Z" \
@@ -105,6 +121,20 @@ set +e; out="$(STUB_DRC=1 "$L" archive gh5 2>&1)"; rc=$?; set -e
 [[ "$rc" == 1 ]] && grep -qF "director reflection failed (reflector exited 1: Error: 503" <<<"$out" || fail "archive did not refuse naming the director reflection ($rc): $out"
 ! grep -q Traceback <<<"$out" || fail "traceback: $out"
 after="$(tree)"; [[ "$after" == "$before" ]] || fail "refusal changed files: $(diff <(echo "$before") <(echo "$after"))"
+for failure in malformed timeout; do
+  if [[ "$failure" == malformed ]]; then
+    printf 'Malformed synthetic reply\n' >"$t/reply.director"
+    want="0 Questions lines"; delay=0; deadline=30
+  else
+    printf '%s\nFindings: none\n' "$DQ" >"$t/reply.director"
+    want="reflector ran past"; delay=2; deadline=0.5
+  fi
+  set +e
+  out="$(STUB_SLEEP="$delay" OCTO_FEATHER_REFLECT_TIMEOUT="$deadline" "$L" archive gh5 2>&1)"; rc=$?
+  set -e
+  [[ "$rc" == 1 ]] && grep -qF "director reflection failed" <<<"$out" && grep -qF "$want" <<<"$out" || fail "$failure did not refuse: $out"
+  after="$(tree)"; [[ "$after" == "$before" ]] || fail "$failure changed archive state"
+done
 rm "$lanes/gh5.toml" "$lanes/gh5.handoffs.jsonl"
 
 # acceptance-reflect-daily: a lane start when the last director reflection ran two days ago runs one in the

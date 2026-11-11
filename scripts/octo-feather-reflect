@@ -355,7 +355,6 @@ def run(text: str, cwd: Path) -> str:
         str(ROLE),
         *shlex.split(os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")),
         "-p",
-        text,
     ]
     timeout = float(os.environ.get("OCTO_FEATHER_REFLECT_TIMEOUT") or 1800)
     try:
@@ -365,7 +364,7 @@ def run(text: str, cwd: Path) -> str:
             text=True,
             cwd=cwd,
             timeout=timeout,
-            stdin=subprocess.DEVNULL,
+            input=text,
             check=False,
         )
     except subprocess.TimeoutExpired as e:
