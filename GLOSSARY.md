@@ -17,7 +17,7 @@ An agent that performs one finite assignment and reports the result to its actua
 _Avoid_: Agent (too broad), subagent
 
 **Task-scoped worker**:
-A worker assigned a finite outcome under a contract fitted to that task, without requiring a named specialist role. Its authority comes from the delegation envelope, not from being available for reassignment.
+A worker for one finite authorized host-cleanup operation under a task-fitting contract, without requiring a named specialist role. Its authority comes from that cleanup envelope, not from being available for reassignment or from a general ad hoc launch capability.
 _Avoid_: Unroled agent, unrestricted agent
 
 **Implementer**:

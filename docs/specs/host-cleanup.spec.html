@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Host cleanup - octo-feather spec</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="./.style/spec.css">
+<script defer src="./.viz/runtime.js"></script>
+</head>
+<body>
+<article class="spec" data-spec-version="1" data-spec-contract="shaped-sections-v1">
+<header data-anchor="header">
+<h1 data-anchor="title">Host cleanup</h1>
+<nav data-anchor="breadcrumbs">docs / <a href="./index.spec.html">specs</a> / host-cleanup.spec.html</nav>
+<p class="lede" data-anchor="context">One finite, explicitly authorized host-cleanup operation, delegated to a fresh Pi worker under a task-fitting contract.
+The director is its parent; a product implementer's isolation is never widened.
+This contract owns only that non-product operation, not general ad hoc agents, product workflows or the parent-notification policy.
+The scoped launch decision is <a href="../adr/0029-task-scoped-host-cleanup-contract.md">ADR 0029</a>.</p>
+</header>
+<section data-spec-section="user-stories" data-anchor="user-stories">
+<h2>User stories</h2>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-cleanup-launch">As the owner, my director delegates authorized host cleanup to a fresh task-fitting executor without selecting a standing specialist or asking me for another routine cleanup Go.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-cleanup-result">As the owner, I get an accounted cleanup outcome that preserves live and parked work, leases and evidence and credits only verified removals.</p>
+</section>
+<section data-spec-section="acceptance" data-anchor="acceptance">
+<h2>Acceptance criteria</h2>
+<p data-acceptance-criterion data-anchor="acceptance-task-contract-fit" data-story="story-cleanup-launch"><span data-acceptance-scenario>Given a director with a fixture to be added containing authorized host maintenance and an available implementer restricted to product-worktree writes, When the director prepares the delegation,</span> <span data-acceptance-observable>Then the mismatch is identified before dispatch, without assigning host writes to that implementer or asking for routine approval to override its contract.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-task-scoped-worker" data-story="story-cleanup-launch"><span data-acceptance-scenario>Given a director with a fixture to be added containing authorized host cleanup and admitted worker capacity, When the director delegates that finite task without selecting a named specialist role,</span> <span data-acceptance-observable>Then a fresh Pi worker starts under a host-cleanup contract with the director as parent and the authorized GPT model from its first process, without inheriting an unrelated implementer contract.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-contract-ceiling" data-story="story-cleanup-launch"><span data-acceptance-scenario>Given a director with a fixture to be added containing a cleanup contract requesting product-edit capabilities, When the director submits that contract for launch,</span> <span data-acceptance-observable>Then launch is refused before an executor starts, naming the authority mismatch.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-task-worker-route" data-story="story-cleanup-launch"><span data-acceptance-scenario>Given a host-cleanup worker with a fixture to be added containing a reachable director parent and a peer lane, When the worker tries to send its result to that peer lane,</span> <span data-acceptance-observable>Then the message is refused as outside its parent route, without treating the missing specialist role name as unrestricted messaging authority.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-cleanup-protected-data" data-story="story-cleanup-result"><span data-acceptance-scenario>Given a host-cleanup worker with a fixture to be added containing an active evidence lease inside its inventory scope, When the worker inventories that candidate then completes its bounded cleanup assignment,</span> <span data-acceptance-observable>Then the leased evidence is retained and the result identifies its protection, without treating cleanup intent as release authority.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-cleanup-measured-outcome" data-story="story-cleanup-result"><span data-acceptance-scenario>Given a host-cleanup worker with a fixture to be added containing verified unused unleased scratch inside its permitted deletion scope, When the worker performs its cleanup assignment,</span> <span data-acceptance-observable>Then eligible scratch is removed and the director receives an itemized outcome with measured free-space change, without an extra routine approval gate.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-parent-unreachable" data-story="story-cleanup-result"><span data-acceptance-scenario>Given a host-cleanup worker with a fixture to be added containing a completed result and an unreachable director parent, When the worker attempts its required return,</span> <span data-acceptance-observable>Then the result remains recoverable under its worker identity with the delivery failure recorded, rather than being lost, sent to a peer or treated as consumed.</span></p>
+</section>
+<section data-spec-section="modular-boundaries" data-anchor="modular-boundaries">
+<h2>Modular boundaries</h2>
+<p data-modular-boundary data-anchor="boundary-cleanup"><span data-boundary-responsibility>The cleanup executor owns bounded inventory, eligible removals and its itemized result; the director owns task scope, actual admission and result consumption.</span> <span data-boundary-seam>The caller-facing seam is a finite cleanup contract through existing herdr-spawn/pi-role and the existing parent result route.</span> <span data-boundary-dependency>Dependency direction: cleanup calls the kit launcher, which uses external-provider Pi/Herdr surfaces; current ownership/lease evidence constrains removal, and product lanes do not depend on this execution contract.</span> <span data-boundary-scope>Observable scope: a fresh authorized worker, protected candidates retained, verified eligible removals and an accounted terminal result.</span></p>
+</section>
+<section data-anchor="task-scoped-workers-choice">
+<h2>Task-scoped host cleanup</h2>
+<p data-anchor="task-scoped-workers-intent">For explicitly authorized host cleanup, the director launches a fresh worker without selecting a named specialist role or creating a permanent maintenance role.
+The same controlled herdr-spawn/pi-role seam applies the task contract, rather than appending permissions to an unrelated worker's contract.
+A new independent operation never reuses an unrelated worker session.</p>
+<div class="table-scroll" data-anchor="cleanup-contract-wrap">
+<table data-anchor="cleanup-contract"><caption>Required host-cleanup launch envelope</caption>
+<thead><tr><th>Concern</th><th>Contract</th></tr></thead><tbody>
+<tr data-anchor="cleanup-parent"><td>Parent and lifetime</td><td>The director directly supervises one finite worker assignment in its workspace and consumes its result before closing it. No product lane or extra supervisor is required.</td></tr>
+<tr data-anchor="cleanup-tools"><td>Tools and runtime</td><td>Pi through the same controlled launcher, with the authorized GPT model from its first process. Bash for scoped metadata inventory and verified removal, normal codemode and Herdr communications only. No product-edit tools, web/browser/tracker capabilities or unnecessary credentials. Shell availability does not widen task authority.</td></tr>
+<tr data-anchor="cleanup-scope"><td>Allowed work</td><td>Bounded metadata inventory within declared roots, then removal of exact candidates proven unused, unleased and permitted by the contract. No product/source changes, blanket cache purge, global prune, service restart or mechanism implementation.</td></tr>
+<tr data-anchor="cleanup-protection"><td>Data and leases</td><td>Preserve current and parked sessions, worktrees, branches, evidence, review spools, previews, active toolchains and borrower leases. An old manifest, old timestamp or unreachable pane is not release proof. Check current candidate ownership and protection before deletion; retain ambiguous candidates with reasons.</td></tr>
+<tr data-anchor="cleanup-resources"><td>Admission</td><td>Actual actor, memory, disk and job constraints still apply. Assess this bounded operation, not automatically the larger workload it may unblock. No forecast waiver, borrowed reservation, assumed capacity credit or waiver of integration safety guards.</td></tr>
+<tr data-anchor="cleanup-result"><td>Evidence and return</td><td>Return completion, partial result or a genuine blocked action directly to the director through existing Herdr communications. Itemize removals and retained candidates with reasons, and measure before/after free space. Concurrent free-space changes are not cleanup credit.</td></tr>
+</tbody></table></div>
+<p data-anchor="task-scoped-workers-controls">The launcher validates the cleanup-specific authority ceiling before starting any process.
+Task parameters can narrow roots, candidates, tools and budgets, not grant product edits, a different runtime, an unauthorized model or unrestricted routes.
+Missing or invalid scope, parent, runtime or tool authority fails closed before dispatch.
+Worker-class parent-routing restrictions apply without relying on a specialist role name.</p>
+<p data-anchor="task-scoped-workers-ownership">The director records the assignment, worker identity, unresolved need and consumed result using its existing note facility and the native conversation.
+A bounded wait stays with that identity; this contract introduces no director-parented parking mechanism.
+An unreachable parent or uncertain send leaves the result recoverable and unconsumed, never authorizes a peer route or a fallback to the same unreachable director.
+Replacement requires reconciling partial removals and late results and ending the prior writer's authority first.</p>
+<p data-anchor="task-scoped-workers-reconcile">No agent launches uncontracted or bypasses the controlled launcher.
+If a candidate needs access, ownership release or a destructive-risk decision outside admitted authority, retain it and identify that exact missing action and its authority holder.
+Do not turn the already-authorized cleanup into another routine permission request.
+Spec acceptance permits factory delivery of this contract, not immediate use of an unavailable launch mode or unverified host deletion.
+Product worker isolation, supervisor PR/integration ownership, owner merge gates and existing provider recovery remain unchanged.</p>
+</section>
+</article>
+</body>
+</html>
