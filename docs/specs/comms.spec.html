@@ -123,7 +123,8 @@ The <a href="#parent-notifications">parent notification table</a> governs which 
 <p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
 An activity label or pending final gate alone is not a reason to park ready work.
 Record the exact blocker, its authority holder and the condition that wakes the wait in existing lane evidence.
-Waiting agents hold no memory: the director parks a genuinely waiting supervisor at an owner gate, on another lane or held back for actual load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
+Waiting agents hold no memory: the director parks a genuinely waiting supervisor at an owner gate, on another lane or held back for actual load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message continuing the same unfinished assignment resumes the parked agent under the same name with its conversation intact; parking is not permission to reuse a worker session for independent work.
+A new independent assignment uses a fresh worker as <a href="./roles.spec.html#context-handoff-choice">roles</a> requires. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
 </section>
 <section data-anchor="parent-notifications" id="parent-notifications">
 <h2>Parent notifications</h2>
