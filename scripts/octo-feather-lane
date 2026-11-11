@@ -1612,10 +1612,83 @@ def check_runs(sha: str, repo: str | None, what: str) -> "list[dict[str, object]
     out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/commits/{sha}/check-runs?per_page=100"],
              f"read the check runs of {sha[:12]}, {what} (gh auth status)")
     try:
-        got = cast("list[object]", json.loads(out)["check_runs"])
+        data = json.loads(out)
+        got = cast("list[object]", data["check_runs"])
+        if data.get("total_count", len(got)) > len(got):
+            raise ValueError("incomplete check runs")
     except (ValueError, KeyError, TypeError):
         raise Refuse(f"gh api check-runs of {sha[:12]} printed no check runs: check the gh on PATH ({out[:100]!r})")
     return [cast("dict[str, object]", r) for r in got if isinstance(r, dict)]
+
+
+def current_checks(rollup: list[dict[str, object]], head: str, repo: str | None) -> list[dict[str, object]]:
+    """Project repeated checks through GitHub's actual head runs, retaining app/workflow/context identity."""
+    def obj(value: object) -> dict[str, object]:
+        if not isinstance(value, dict):
+            raise ValueError("expected an object")
+        return cast("dict[str, object]", value)
+
+    def number(value: object) -> int:
+        if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
+            raise ValueError("expected a positive integer identity")
+        return value
+
+    def text(value: object) -> str:
+        if not isinstance(value, str) or not value:
+            raise ValueError("expected nonempty text")
+        return value
+
+    checks = [c for c in rollup if c.get("__typename") == "CheckRun"]
+    keys = [(str(c.get("name")), str(c.get("workflowName"))) for c in checks]
+    if len(keys) == len(set(keys)):
+        return rollup
+    runs = check_runs(head, repo, "the PR head")
+    out = gh(["api", f"repos/{repo or '{owner}/{repo}'}/actions/runs?head_sha={head}&per_page=100"],
+             f"read workflow identities on {head[:12]} (gh auth status)")
+    try:
+        data = obj(json.loads(out))
+        raw = data["workflow_runs"]
+        if not isinstance(raw, list):
+            raise ValueError("expected workflow runs")
+        workflows = [obj(w) for w in cast("list[object]", raw)]
+        if number(data.get("total_count", len(workflows))) > len(workflows):
+            raise ValueError("incomplete workflow runs")
+        suites: dict[int, int] = {}
+        latest: dict[int, tuple[int, int]] = {}
+        for w in workflows:
+            if w["head_sha"] != head:
+                raise ValueError("workflow on another head")
+            suite, workflow, rid = number(w["check_suite_id"]), number(w["workflow_id"]), number(w["id"])
+            suites[suite] = workflow
+            latest[workflow] = max(latest.get(workflow, (0, 0)), (rid, suite))
+        identities: dict[str, tuple[int, int, str]] = {}
+        grouped: dict[tuple[int, int, str], list[dict[str, object]]] = {}
+        for r in runs:
+            if r["head_sha"] != head:
+                raise ValueError("check on another head")
+            suite, app = number(obj(r["check_suite"])["id"]), number(obj(r["app"])["id"])
+            number(r["id"])
+            text(r["status"])
+            if r["conclusion"] is not None:
+                text(r["conclusion"])
+            key = (app, suites[suite], text(r["name"]))
+            identities[text(r["html_url"])] = key
+            grouped.setdefault(key, []).append(r)
+        projected = [c for c in rollup if c.get("__typename") != "CheckRun"]
+        seen: set[tuple[int, int, str]] = set()
+        for c in checks:
+            key = identities[text(c["detailsUrl"])]
+            if key in seen:
+                continue
+            seen.add(key)
+            candidates = [r for r in grouped[key] if number(obj(r["check_suite"])["id"]) == latest[key[1]][1]]
+            r = max(candidates, key=lambda r: number(r["id"]), default=None)
+            projected.append({"__typename": "CheckRun", "name": key[2],
+                              "status": r["status"] if r else "QUEUED",
+                              "conclusion": r["conclusion"] if r else None})
+    except (ValueError, KeyError, TypeError) as e:
+        raise Refuse(f"current check identities on {head[:12]} unavailable ({e}): reread GitHub's complete head checks") from e
+    return projected
 
 
 @no_traceback
@@ -1894,6 +1967,10 @@ def cmd_merge_ask(args: list[str]) -> int:
     if not field(lines, "Checks"):
         miss.append("Checks: missing; add `Checks: <the head's checks, all passing>`")
     rollup = d["statusCheckRollup"] or []
+    try:
+        rollup = current_checks(cast("list[dict[str, object]]", rollup), cast("str", head), repo)
+    except Refuse as e:
+        miss.append(f"Checks: {e}")
     failed, pending = bad_checks(rollup)
     no_ci = ""
     if not rollup:   # the rule: --help, merge-ask Checks line
