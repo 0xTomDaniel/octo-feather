@@ -94,7 +94,9 @@
 <text x="185" y="100" text-anchor="middle" font-size="11">try first</text><text x="385" y="100" text-anchor="middle" font-size="11">try first</text><text x="585" y="100" text-anchor="middle" font-size="11">try first</text>
 </g>
 </svg>
-<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed. No level skips past a reachable level, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
+<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed.
+Lane workers escalate through their supervisor; the finite host-cleanup worker's direct parent is the director (<a href="./roles.spec.html#task-scoped-workers-choice">task-scoped cleanup</a>, ADR 0029).
+Neither skips a reachable parent, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
 </figure>
 </section>
 <section data-anchor="messages" id="messages">
@@ -115,6 +117,8 @@
 A sender does not poll for an acknowledgement or stop ready work after a notification.
 Each supervisor retains its lane goal and reconciles every outstanding assignment from results, artifacts, dependencies and native state.
 It consumes a recoverable finished result before considering restart; a DONE label alone proves neither completion nor death.
+The director has the same outstanding-result reconciliation duty for its directly parented finite host-cleanup worker, not for another lane's workers.
+That assignment and its terminal disposition stay in the existing director log and native worker identity, without fabricating a product lane record or adding another inbox.
 The <a href="#parent-notifications">parent notification table</a> governs which outcomes wake a parent.</p>
 <p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
 An activity label or pending final gate alone is not a reason to park ready work.
@@ -132,11 +136,11 @@ No per-read, per-command, per-trial, ACK or routine renewal gate is introduced.<
 <table data-anchor="notification-table"><caption>Who wakes, who decides, and what stops</caption>
 <thead><tr><th>Event</th><th>Route and decision owner</th><th>Sender continuation</th></tr></thead>
 <tbody>
-<tr data-anchor="notify-blocked"><td>BLOCKED: a needed next action is outside the sender's authority after bounded attempts within it</td><td>Worker to supervisor; unresolved lane need to director; only owner-held decisions to owner through director. Name blocked scope, attempts, evidence and options.</td><td>Stop only the affected action. Continue independent ready work.</td></tr>
-<tr data-anchor="notify-done"><td>DONE: assigned deliverable complete, including review verdict, merge report and lane close</td><td>Worker to supervisor with result and exact revision/evidence; supervisor consumes results and sends a consolidated lane outcome to director; director reports lane completion to owner.</td><td>No ACK wait. Completion does not authorize integration, acceptance or merge.</td></tr>
+<tr data-anchor="notify-blocked"><td>BLOCKED: a needed next action is outside the sender's authority after bounded attempts within it</td><td>Lane worker to supervisor; unresolved lane need to director; task-scoped host-cleanup worker directly to its director parent; only owner-held decisions to owner through director. Name blocked scope, attempts, evidence and options.</td><td>Stop only the affected action. Continue independent ready work.</td></tr>
+<tr data-anchor="notify-done"><td>DONE: assigned deliverable complete, including review verdict, merge report and lane close</td><td>Lane worker to supervisor with result and exact revision/evidence; supervisor consumes results and sends a consolidated lane outcome to director; director reports lane completion to owner. The finite host-cleanup worker returns its bounded outcome directly to its director parent.</td><td>No ACK wait. Completion does not authorize integration, acceptance or merge.</td></tr>
 <tr data-anchor="notify-gates"><td>Required owner review and merge asks</td><td>Supervisor to director to owner, with current head and required evidence. Spec acceptance stays outside the factory.</td><td>Wait only at the actual gate; preserve independent work and safe parking.</td></tr>
 <tr data-anchor="notify-spec"><td>Spec calls requiring immediate notice</td><td>Supervisor to director to owner exactly as <a href="./issue-lifecycle.spec.html#gates-call-loudness">spec call loudness</a> requires. Other calls stay in the merge ask.</td><td>Nonblocking notice, with owner approval or denial at merge.</td></tr>
-<tr data-anchor="notify-risk"><td>Material security exposure or cross-lane impact, even after local containment</td><td>Worker to supervisor to director; director coordinates affected supervisors and brings owner-held risk decisions to owner. Name impact, containment and needed decision without exposing secrets.</td><td>Contain within authority; stop unsafe or conflicting actions, not unrelated safe work.</td></tr>
+<tr data-anchor="notify-risk"><td>Material security exposure or cross-lane impact, even after local containment</td><td>Worker through its actual parent chain to director; director coordinates affected supervisors and brings owner-held risk decisions to owner. Name impact, containment and needed decision without exposing secrets.</td><td>Contain within authority; stop unsafe or conflicting actions, not unrelated safe work.</td></tr>
 <tr data-anchor="notify-delivery"><td>Worker result cannot reach an actually unreachable supervisor</td><td>Worker sends its durable result once to director with the unreachable parent and delivery evidence; director restores the supervisor route and reconciles before forwarding.</td><td>Worker stops sending. Unconfirmed or queued is not proof the supervisor is unreachable.</td></tr>
 <tr data-anchor="notify-terminal"><td>Provider recovery exhausted</td><td>Existing runtime recovery sends the terminal stopped notice to parent under ADR 0023; headless failure returns to its caller.</td><td>Do not silently suppress terminal failure or invent an outage from one failed session.</td></tr>
 </tbody></table></div>

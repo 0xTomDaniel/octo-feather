@@ -9,12 +9,16 @@ The one agent that owns the whole program: it opens work items, puts a superviso
 _Avoid_: Orchestrator, manager
 
 **Supervisor**:
-The agent that owns one work item until it merges, breaking it into tickets, assigning workers, getting every result independently reviewed, and running the merge the owner approved. It directs the work and never does it.
+The delegated goal owner for one work item and its PR until merge, planning its delivery, assigning workers, getting every result independently reviewed, and running the merge the owner approved. It directs the work and never does it.
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that does one assigned piece of work (a ticket, a review, a correction) inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
+An agent that performs one finite assignment and reports the result to its actual parent. Product workers use isolated copies of the work and report to their supervisor; a task-scoped host-cleanup worker reports to the director. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
+
+**Task-scoped worker**:
+A worker assigned a finite outcome under a contract fitted to that task, without requiring a named specialist role. Its authority comes from the delegation envelope, not from being available for reassignment.
+_Avoid_: Unroled agent, unrestricted agent
 
 **Implementer**:
 A worker that produces the change for one ticket.
@@ -99,7 +103,7 @@ The owner telling the director to build one or more accepted specs. The director
 _Avoid_: Launch, go
 
 **Escalation**:
-A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
+A problem passed to the next authority in the sender's actual parent chain after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. A lane's chain is worker, supervisor, director, owner; a task-scoped host-cleanup worker's parent is the director. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
