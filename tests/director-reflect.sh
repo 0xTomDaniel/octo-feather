@@ -128,7 +128,11 @@ out="$("$L" archive gh4 2>&1)" || fail "archive gh4 failed: $out"
 [[ -f "$lanes/archive/gh4.toml" && ! -e "$lanes/gh4.toml" ]] || fail "gh4 not archived: $out"
 grep -qF "reflection: lane gh4" <<<"$out" && grep -qF "reflection: director, 1 finding" <<<"$out" || fail "archive did not run both reflections: $out"
 [[ "$(grep -c '"kind": "reflection"' "$dlog")" == "$((b + 1))" ]] || fail "director log did not gain one reflection line: $(cat "$dlog")"
-tail -2 "$dlog" | head -1 | grep -qF '"question": "owner-asked"' || fail "no owner-asked finding: $(tail -2 "$dlog")"
+python3 - "$dlog" <<'PY' || fail "no owner-asked finding: $(tail -2 "$dlog")"
+import json, pathlib, sys
+finding = json.loads(pathlib.Path(sys.argv[1]).read_text().splitlines()[-2])
+assert finding['kind'] == 'finding' and finding['question'] == 'owner-asked', finding
+PY
 grep -qF "owner-caught-merge-order" "$t/inputs.director" || fail "director brief lacks the owner-caught line"
 grep -qF "gh4: $lanes/gh4.handoffs.jsonl" "$t/inputs.director" || fail "director brief lacks the archiving lane's log"
 

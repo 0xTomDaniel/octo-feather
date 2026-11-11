@@ -117,6 +117,26 @@ out="$(HERDR_PANE_ID=w9:p2 PI_SESSION_FILE="$own" "$L" reflect gh901 2>&1)" || f
 [[ "$(wc -l <"$lanes/gh901.handoffs.jsonl")" == 3 ]] || fail "no-gap reflection appended a finding"
 grep -qF "supervisor w9:p2: $own" "$STUB_ARGV.inputs" || fail "sources lack the supervisor's own transcript"
 
+# Public presentation: astral worst-case JSON escaping, >2000 physical source lines,
+# and a capture ending mid-UTF8 codepoint all reconstruct byte-for-byte through bounded windows.
+python3 - "$own" <<'PY'
+import json, pathlib, sys
+pathlib.Path(sys.argv[1]).write_bytes(
+    (json.dumps({'text': '🚀' * 3072}, ensure_ascii=False) + '\n' * 2100).encode()
+    + b'\xf0\x9f'
+)
+PY
+out="$(HERDR_PANE_ID=w9:p2 PI_SESSION_FILE="$own" "$L" reflect gh901 2>&1)" || fail "partial UTF8 windows failed: $out"
+python3 - "$STUB_ARGV.inputs" "$own" <<'PY'
+import json, pathlib, sys
+manifest = json.loads(pathlib.Path(sys.argv[1]).read_text().splitlines()[0])
+source = next(s for s in manifest['sources'] if s['original'] == sys.argv[2])
+raw = pathlib.Path(sys.argv[2]).read_bytes()
+assert source['bytes'] == len(raw) and raw.endswith(b'\xf0\x9f')
+assert source['presentation']['count'] == 2
+assert not pathlib.Path(source['presentation']['pattern']).parent.exists()
+PY
+
 # Appending after capture is excluded; changing/removing a captured prefix refuses before append.
 for mutation in append rewrite truncate replace disappear; do
   printf '{}' >"$own" # partial final line: later bytes still cannot leak into snapshot
@@ -135,6 +155,8 @@ for mutation in append rewrite truncate replace disappear; do
 import json, pathlib, sys
 manifest = json.loads(open(sys.argv[1]).readline())
 assert all(not pathlib.Path(s['snapshot']).exists() for s in manifest['sources'] if s['available'])
+assert all(not pathlib.Path(s['presentation']['pattern']).parent.exists() for s in manifest['sources'] if s['available'])
+assert all(not pathlib.Path(s['presentation']['pattern']).parent.exists() for s in manifest['derived'].values())
 PY
 done
 
@@ -254,6 +276,8 @@ refuse() { # WANT: archive gh902 refuses saying WANT, every file left as it was,
 import json, pathlib, sys
 manifest = json.loads(open(sys.argv[1]).readline())
 assert all(not pathlib.Path(s['snapshot']).exists() for s in manifest['sources'] if s['available'])
+assert all(not pathlib.Path(s['presentation']['pattern']).parent.exists() for s in manifest['sources'] if s['available'])
+assert all(not pathlib.Path(s['presentation']['pattern']).parent.exists() for s in manifest['derived'].values())
 PY
 }
 # acceptance-reflect-before-archive: the reflector's model unreachable (pi exits non-zero).
