@@ -110,6 +110,10 @@ _Avoid_: Test gate, unit test
 A rule the gate enforces on the repo's own code or text: lint, types, structure, a scan, a banned pattern, an eval grader judging an agent. A file under `tests/` that scans the repo's own text (lane #82's former `tests/tracker-prose.sh`) is a check and is judged as one. Only an exact check is allowed (docs/adr/0008); who builds one is ruled there too.
 _Avoid_: Test (for a scan), guard, lint (for anything that is not a linter)
 
+**Delegation envelope**:
+The outcome, scope, resources, decision rights and constraints assigned to a factory role for one piece of work. A choice inside that envelope belongs to the assigned role; a choice outside it belongs to the authority that can grant it.
+_Avoid_: Blanket permission, command approval
+
 **Gate**:
 A point where work stops until the owner decides, such as accepting a spec or a merge.
 _Avoid_: Checkpoint, approval step

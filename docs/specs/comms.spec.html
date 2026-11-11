@@ -22,7 +22,7 @@
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-one-voice">As the owner, I hear from the factory only through the director, so asks reach me filtered and in context instead of fragmented from every agent.</p>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-autonomous-outcomes">As the owner, delegated work advances without routine permission requests, while decisions I own and reliable completion still reach me.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-no-wrong-pane">As a supervisor, a worker that follows a wrong habit cannot type into another lane or straight to the director while its supervisor is reachable.</p>
-<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: a worker that ends without reporting is noticed, recovered and reported up.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: outstanding worker results are accounted for, and required completion and outside-authority blockers reach the parent.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-lane-state">As the director, I read every lane's current state and history, findings included, from plain files, so I can audit lanes and count repeated finding classes without asking each supervisor.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-factory-report">As the director, I read the whole factory in one report built only from what already records it, so I answer the owner from facts, waits on the owner included, instead of reading each lane's panes.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-reflection">As the owner, the factory reviews each closed lane and the director's own work, routes what it finds to where the work is written, and sharpens its own questions when a gap slips past them, so I am no longer the one who catches what it missed.</p>
@@ -116,7 +116,10 @@ A sender does not poll for an acknowledgement or stop ready work after a notific
 Each supervisor retains its lane goal and reconciles every outstanding assignment from results, artifacts, dependencies and native state.
 It consumes a recoverable finished result before considering restart; a DONE label alone proves neither completion nor death.
 The <a href="#parent-notifications">parent notification table</a> governs which outcomes wake a parent.</p>
-<p data-anchor="roles-park">Waiting agents hold no memory: the director parks a supervisor idle at an owner gate, waiting on another lane or held back for load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
+<p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
+An activity label or pending final gate alone is not a reason to park ready work.
+Record the exact blocker, its authority holder and the condition that wakes the wait in existing lane evidence.
+Waiting agents hold no memory: the director parks a genuinely waiting supervisor at an owner gate, on another lane or held back for actual load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
 </section>
 <section data-anchor="parent-notifications" id="parent-notifications">
 <h2>Parent notifications</h2>
@@ -137,6 +140,14 @@ No per-read, per-command, per-trial, ACK or routine renewal gate is introduced.<
 <tr data-anchor="notify-delivery"><td>Worker result cannot reach an actually unreachable supervisor</td><td>Worker sends its durable result once to director with the unreachable parent and delivery evidence; director restores the supervisor route and reconciles before forwarding.</td><td>Worker stops sending. Unconfirmed or queued is not proof the supervisor is unreachable.</td></tr>
 <tr data-anchor="notify-terminal"><td>Provider recovery exhausted</td><td>Existing runtime recovery sends the terminal stopped notice to parent under ADR 0023; headless failure returns to its caller.</td><td>Do not silently suppress terminal failure or invent an outage from one failed session.</td></tr>
 </tbody></table></div>
+<p data-anchor="notification-records">Routine details and recovery evidence remain in existing lane records, hand-off logs, tracker results and revision-bound artifacts, not a second status store.
+A partial branch blocker does not mark every independent assignment blocked.
+The supervisor keeps each outstanding result accounted for until consumed or explicitly reconciled into a replacement's scope.</p>
+<p data-anchor="notification-allowlist-choice" data-spec-tbd>Does this table completely capture the mandatory parent events, with routine pilot, smoke and recovered local validation details retained locally rather than sent up?
+Existing owner gates, immediate spec calls, terminal failures, delivery fallback and material security/cross-lane notices remain mandatory.
+<button type="button" data-spec-choice="Use the enumerated events as the complete parent notification allowlist">Use this allowlist (recommended)</button>
+<button type="button" data-spec-choice="Revise the mandatory event list before acceptance">Revise the event list</button>
+</p>
 <p data-anchor="notification-granularity">Each message names the lane or assignment, outcome, evidence pointer and any required decision with its owner.
 Consolidate worker details at the supervisor; do not relay raw chatter.
 Report a changed blocker or a resolved previously escalated blocker once, not repeated reminders without new evidence.
@@ -154,10 +165,16 @@ Successful ordinary local recovery stays local; terminal provider failures, lost
 <thead><tr><th>Evidence</th><th>What may be concluded</th><th>Safe next action</th></tr></thead><tbody>
 <tr data-anchor="delivery-confirmed"><td>Native send confirms a state change</td><td>Transport confirmation only, not semantic consumption</td><td>Continue under existing delegation; no ACK gate.</td></tr>
 <tr data-anchor="delivery-queued"><td>Bounded authorized native observation shows the content queued during compaction</td><td>Queued, not consumed; preserve the original unsuccessful send result</td><td>No replay or disruptive recovery while compaction is observed.</td></tr>
-<tr data-anchor="delivery-unknown"><td>Timeout or prompt-stalled with no decisive queue or consumption evidence</td><td>Unknown, not rejected, delivered or unreachable</td><td>Retain the durable result and inspect native state before any replay.</td></tr>
+<tr data-anchor="delivery-unknown"><td>Timeout or prompt-stalled with no decisive queue or consumption evidence</td><td>Unknown, not rejected, delivered or unreachable</td><td>Retain the durable result for the supervisor's outstanding-work reconciliation and inspect native state before any replay.</td></tr>
 <tr data-anchor="delivery-rejected"><td>Native refusal explicitly proves nothing was typed</td><td>Rejected without delivery</td><td>Correct the cause within authority, then send when the target is eligible.</td></tr>
 <tr data-anchor="delivery-consumed"><td>The recipient's resulting artifact or action demonstrates use of this result</td><td>Consumed to the extent that evidence proves</td><td>Reconcile against current head; never demand a separate read receipt.</td></tr>
 </tbody></table></div>
+<p data-anchor="terminal-retry-choice" data-spec-tbd>ADR 0023 permits repeated detached sends of a terminal stopped notice, while safe uncertain-delivery recovery forbids blind replay.
+Apply the same evidence-led delivery rule to terminal notices while preserving the notice obligation and bounded runtime recovery?
+This needs a superseding decision before acceptance, not an unannounced waiver of ADR 0023.
+<button type="button" data-spec-choice="Apply evidence-led delivery to terminal notices and supersede the conflicting ADR decision">Same delivery rule for terminal notices (recommended)</button>
+<button type="button" data-spec-choice="Retain the ADR 0023 terminal retry exception and explicitly scope the replay restriction">Keep an explicit terminal retry exception</button>
+</p>
 <p data-anchor="delivery-safety">Recovery is cause-based and bounded by the existing runtime and resource constraints.
 No blind retry, Enter, cancellation, restart, model change or replacement follows solely from DONE, timeout or compaction.
 Before replacement account for partial commits, uncommitted work and late results, establish a single writer, and verify current assignment and head.
@@ -165,6 +182,7 @@ A late result is compared with current artifacts before unique findings are reus
 No custom inbox, daemon, scheduler or new message protocol is added.</p>
 <p data-anchor="delivery-unknown-choice" data-spec-tbd>When native evidence cannot settle an uncertain required send, should the sender retain the result locally and escalate delivery uncertainty through the existing reachable chain, with any replay requiring evidence of absence or ended recovery?
 The transport cause and an authoritative native consumption signal are not assumed.
+An uncertain send does not unlock the unreachable-parent fallback; use only routes the existing chain permits.
 <button type="button" data-spec-choice="Preserve uncertainty, escalate through existing chain, replay only on evidence">Evidence-led recovery (recommended)</button>
 <button type="button" data-spec-choice="Hold uncertain delivery locally until native recovery settles">Hold locally until native recovery settles</button>
 </p>
