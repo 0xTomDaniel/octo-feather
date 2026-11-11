@@ -798,7 +798,7 @@ def drive_correction_lane(f: Feature) -> None:
 # reflection asked (the director's when its brief says Director reflection, else the lane's).
 REFLECT_STUB_PI = r"""#!/usr/bin/env python3
 import os, sys
-who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+who = "director" if "Director reflection" in sys.stdin.read() else "lane"
 sys.stdout.write(open(os.path.join(os.environ["REFLECT_STUB_DIR"], f"reply.{who}")).read())
 """
 

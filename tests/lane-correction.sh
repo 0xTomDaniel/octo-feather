@@ -18,7 +18,7 @@ mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
 import os, sys
-who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+who = "director" if "Director reflection" in sys.stdin.read() else "lane"
 sys.stdout.write(open(f"{os.environ['STUB_DIR']}/reply.{who}").read())
 EOF
 printf '#!/bin/sh\necho "herdr: no server" >&2; exit 1\n' >"$t/bin/herdr"

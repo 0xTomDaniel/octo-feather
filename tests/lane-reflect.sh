@@ -17,12 +17,14 @@ fail() { echo "lane-reflect test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
-import os, sys
-if not any("Director reflection" in a for a in sys.argv):
-    open(os.environ["STUB_ARGV"], "w").write("\0".join(sys.argv[1:]))
+import os, sys, time
+prompt = sys.stdin.read()
+if "Director reflection" not in prompt:
+    open(os.environ["STUB_ARGV"], "w").write("\0".join([*sys.argv[1:], prompt]))
+time.sleep(float(os.environ.get("STUB_SLEEP", "0")))
 if os.environ.get("STUB_RC", "0") != "0":
     print("Error: 503 model openai/gpt-6.1-sol unreachable", file=sys.stderr); sys.exit(int(os.environ["STUB_RC"]))
-if any("Director reflection" in a for a in sys.argv):   # the director reflection archive runs next: tests/director-reflect.sh
+if "Director reflection" in prompt:   # the director reflection archive runs next: tests/director-reflect.sh
     print("Questions: owner-asked, answered-from-memory, rework-decision, unblocking-first, outside-owner-gates, fact-already-recorded, writer-route, director-mechanical-step, director-reflection-missed\nFindings: none"); sys.exit()
 sys.stdout.write(open(os.environ["STUB_REPLY"]).read())
 EOF
@@ -100,6 +102,13 @@ refuse() { # WANT: archive gh902 refuses saying WANT, every file left as it was,
 }
 # acceptance-reflect-before-archive: the reflector's model unreachable (pi exits non-zero).
 STUB_RC=1 refuse "reflector exited 1: Error: 503 model openai/gpt-6.1-sol unreachable"
+# Launch and timeout failures also leave every state byte unchanged.
+printf '%s\nFindings: none\n' "$Q" >"$STUB_REPLY"
+STUB_SLEEP=2 OCTO_FEATHER_REFLECT_TIMEOUT=0.2 refuse "reflector ran past"
+mv "$t/bin/pi" "$t/bin/pi.saved"
+printf '#!/missing-gh786-python\n' >"$t/bin/pi"; chmod +x "$t/bin/pi"
+refuse "reflector exited"
+mv "$t/bin/pi.saved" "$t/bin/pi"
 # Replies outside the form: nothing appended either.
 printf 'Looks fine to me.\n' >"$STUB_REPLY"; refuse "0 Questions lines"
 printf 'Questions: caught-by-hand\nFindings: none\n' >"$STUB_REPLY"; refuse "want each of"
