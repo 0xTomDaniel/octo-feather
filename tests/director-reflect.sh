@@ -20,7 +20,11 @@ fail() { echo "director-reflect test: $*" >&2; exit 1; }
 mkdir -p "$t/bin" "$HOME"
 cat >"$t/bin/pi" <<'EOF'
 #!/usr/bin/env python3
-import os, sys, time, subprocess
+import os, sys, time, subprocess, pathlib
+network = pathlib.Path(os.environ['STUB_DIR']) / 'model-netns'
+if network.exists() and os.readlink('/proc/self/ns/net') != network.read_text().strip():
+    print('Error: 503 synthetic model unreachable', file=sys.stderr)
+    sys.exit(1)
 prompt = sys.stdin.read() or sys.argv[-1]
 inputs = subprocess.check_output([sys.executable, os.environ['REFLECT_READER']], input=prompt, text=True)
 d = os.environ["STUB_DIR"]; who = "director" if "Director reflection" in prompt else "lane"
@@ -203,4 +207,58 @@ grep -qF "reflection: director, 0 findings" "$state/director-reflection.out" || 
 rm -f "$t/argv.director"; out="$(start 13 2>&1)" || fail "second start failed: $out"
 for _ in $(seq 20); do grep -qF "not due, last ran" "$state/director-reflection.out" && break; sleep 0.5; done
 grep -qF "director reflection: not due, last ran" "$state/director-reflection.out" && [[ ! -e "$t/argv.director" ]] || fail "a fresh reflection ran again: $(cat "$state/director-reflection.out")"
+# The public verify command judges literal replies from the same external-model seam.
+readlink /proc/self/ns/net >"$t/model-netns"
+verify="$kit/.agents/skills/verify-octo-feather/scripts/verify-octo-feather"
+for variant in capital mixed lower digit missing two two-digit fallback-only review-route; do
+  case "$variant" in
+    capital) count=Three; expected=0 ;;
+    mixed) count=ThReE; expected=0 ;;
+    lower) count=three; expected=0 ;;
+    digit) count=3; expected=0 ;;
+    missing) count=Several; expected=1 ;;
+    two) count=two; expected=1 ;;
+    two-digit) count=2; expected=1 ;;
+    fallback-only) count=none; expected=1 ;;
+    review-route) count=Three; expected=1 ;;
+  esac
+  route='writer templates'
+  [[ "$variant" != review-route ]] || route='code-review'
+  if [[ "$count" == none ]]; then
+    printf '%s\nFindings: none\n' "$DQ" >"$t/reply.director"
+  else
+    printf '%s\nFinding: class: duplicated-rule | question: writer-route | route: %s | summary: %s blocking code-review findings across gh911, gh912 and gh913.\n' "$DQ" "$route" "$count" >"$t/reply.director"
+  fi
+  set +e
+  out="$(VERIFY_OCTO_FEATHER_RUN_DIR="$t/verify-$variant/run" VERIFY_OCTO_FEATHER_EVIDENCE_DIR="$t/verify-$variant/evidence" "$verify" run director-reflection 2>&1)"; rc=$?
+  set -e
+  [[ "$rc" == "$expected" ]] || fail "public verify count $variant expected $expected got $rc: $out"
+  python3 - "$t/verify-$variant/evidence/director-reflection" "$variant" <<'PY'
+import json, pathlib, sys
+proof = pathlib.Path(sys.argv[1])
+assert (proof / 'reflect-live.exit').read_text().strip() == '0'
+seeded = (proof / 'reflect-live.obs.seeded').read_text()
+log = (proof / 'reflect-live.obs.director-log').read_text()
+assert log.startswith(seeded)
+added = [json.loads(line) for line in log[len(seeded):].splitlines()]
+findings, reflection = added[:-1], added[-1]
+expected_findings = 0 if sys.argv[2] == 'fallback-only' else 1
+assert len(findings) == reflection['findings'] == expected_findings
+assert reflection['kind'] == 'reflection'
+assert reflection['questions'] == ['owner-asked', 'answered-from-memory', 'rework-decision', 'unblocking-first',
+    'outside-owner-gates', 'fact-already-recorded', 'writer-route', 'director-mechanical-step', 'director-reflection-missed']
+assert all(f['kind'] == 'finding' and f['source'] == 'reflection' and f['class'] == 'duplicated-rule' for f in findings)
+if sys.argv[2] == 'fallback-only':
+    # Three seeded code-review records and the correction counter are not model findings.
+    assert '3 findings; route: none given by a reflection' in (proof / 'reflect-live.stdout').read_text()
+PY
+  if [[ "$expected" == 0 ]]; then
+    grep -qF 'PASS reflect-live:' <<<"$out" || fail "public count $variant did not pass live: $out"
+  else
+    grep -qF 'FAIL reflect-live:' <<<"$out" || fail "public count $variant did not reject live: $out"
+  fi
+  grep -qF 'PASS refuse-unreachable:' <<<"$out" || fail "public count $variant lost unreachable proof: $out"
+  grep -qF 'PASS due-fresh:' <<<"$out" || fail "public count $variant lost due proof: $out"
+done
+
 echo "director-reflect: ok (writer-route counts by source in 3 lanes, reflection-missed, lines since the last reflection, director log lines; --due skips a fresh one; archive runs lane then director reflection; director failure refuses with every file in place; start runs a two-day-old one in the background, not a fresh one)"
