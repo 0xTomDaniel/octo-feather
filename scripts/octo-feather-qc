@@ -80,6 +80,7 @@ run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate sta
 run it; 0, or 3 when a record could not be written). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
+import mmap
 import base64, contextlib, ctypes, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
 from collections.abc import Iterator
 from html.parser import HTMLParser
@@ -216,6 +217,175 @@ def oauth_warning():
     return None
 
 
+# Operational capability carried by the existing trusted FD bootstrap only.
+# The anonymous bytes have no path/cache/store; POSIX process locks serialize first mint.
+# One anonymous capability in the existing FD bootstrap. No unlocked snapshot readers.
+# Python threads use a nonblocking local lock; processes use POSIX record locks.
+# Linux memfd seals distinguish idle, in-progress/failed publication, immutable commit.
+CANCEL_FD: int | None = None
+CANCEL_SIGNAL = 0
+CANCEL_END = 0
+CANCEL_FAULT: BaseException | None = None
+CANCEL_LOCK = threading.Lock()
+CANCEL_ARMED = True
+CANCEL_SIZE = 4096
+CANCEL_BASE_SEALS = fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK
+CANCEL_CLAIM_SEAL = 0x10  # Linux UAPI F_SEAL_FUTURE_WRITE (kernel >=5.1; kit requires >=6.6)
+CANCEL_FINAL_SEALS = CANCEL_BASE_SEALS | CANCEL_CLAIM_SEAL | fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL
+
+
+class Cancelled(BaseException):
+    def __init__(self, signum: int) -> None:
+        self.signum = signum
+        super().__init__(f"cancelled by signal {signum}")
+
+
+def cancel_fault(error: BaseException) -> None:
+    global CANCEL_FAULT
+    if CANCEL_FAULT is None:
+        CANCEL_FAULT = error  # irreversible for this invocation; never retry it into grace
+    elif CANCEL_FAULT is not error:
+        CANCEL_FAULT.add_note(f"secondary capability failure: {type(error).__name__}: {error}")
+
+
+def cancel_image(state: str, end: int, signum: int) -> bytes:
+    raw = json.dumps({"v": 1, "state": state, "end_ns": f"{end:020d}", "signal": signum},
+                     sort_keys=True, separators=(",", ":")).encode()
+    return raw + b"\0" * (CANCEL_SIZE - len(raw))
+
+
+def cancel_create() -> int:
+    fd = os.memfd_create("qc-cancellation", os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+    try:
+        image = cancel_image("idle", 0, 0)
+        if os.write(fd, image) != len(image) or os.pread(fd, CANCEL_SIZE + 1, 0) != image:
+            raise OSError("cancellation capability initialization incomplete")
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, CANCEL_BASE_SEALS)
+        if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != CANCEL_BASE_SEALS:
+            raise OSError("cancellation capability initialization seals invalid")
+        return fd
+    except BaseException as error:
+        try:
+            os.close(fd)
+        except BaseException as close_error:
+            error.add_note(f"initial capability close failed: {close_error}")
+        raise
+
+
+def cancel_decode(fd: int) -> tuple[int, int]:
+    seals = fcntl.fcntl(fd, fcntl.F_GET_SEALS)
+    raw = os.pread(fd, CANCEL_SIZE + 1, 0)
+    if len(raw) != CANCEL_SIZE:
+        raise OSError("cancellation capability size invalid")
+    row = json.loads(raw.rstrip(b"\0"))
+    if (not isinstance(row, dict) or set(row) != {"v", "state", "end_ns", "signal"}
+            or type(row["v"]) is not int or row["v"] != 1
+            or not isinstance(row["end_ns"], str) or re.fullmatch("[0-9]{20}", row["end_ns"]) is None
+            or type(row["signal"]) is not int or row["signal"] not in (0, 1, 2, 15)):
+        raise OSError("cancellation capability codec invalid")
+    end, sig = int(row["end_ns"]), row["signal"]
+    state = "idle" if seals == CANCEL_BASE_SEALS and end == 0 and sig == 0 else "committed"
+    if (state == "committed" and (seals != CANCEL_FINAL_SEALS or not end or sig not in (1, 2, 15))) or raw != cancel_image(state, end, sig):
+        raise OSError("cancellation capability publication incomplete/poisoned")
+    if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != seals:
+        raise OSError("cancellation publication changed during validation")
+    return end, sig
+
+
+def cancel_stamp(signum: int = 0, *, mint: bool = False) -> tuple[int, int]:
+    global CANCEL_END
+    if CANCEL_FAULT is not None:
+        raise CANCEL_FAULT
+    if CANCEL_FD is None:
+        if mint:
+            error = OSError("cancellation capability unavailable")
+            cancel_fault(error)
+            raise error
+        return CANCEL_END, signum
+    locked = False
+    primary = None
+    mapping = None
+    try:
+        if not CANCEL_LOCK.acquire(blocking=False):
+            raise BlockingIOError("cancellation capability thread contention")
+        locked = True
+        fcntl.lockf(CANCEL_FD, (fcntl.LOCK_EX if mint else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        end, sig = cancel_decode(CANCEL_FD)
+        if mint and not end:
+            # Claim BEFORE publication. A failed/partial commit is never an idle retry:
+            # future writes/maps are prohibited once the kernel accepts this seal.
+            end, sig = time.monotonic_ns() + 12_000_000_000, signum
+            CANCEL_END = end  # original attempt bound, retained even if publication fails
+            mapping = mmap.mmap(CANCEL_FD, CANCEL_SIZE, access=mmap.ACCESS_WRITE)
+            fcntl.fcntl(CANCEL_FD, fcntl.F_ADD_SEALS, CANCEL_CLAIM_SEAL)
+            mapping[:] = cancel_image("committed", end, sig)
+            mapping.close()
+            mapping = None
+            fcntl.fcntl(CANCEL_FD, fcntl.F_ADD_SEALS, CANCEL_FINAL_SEALS)
+            if cancel_decode(CANCEL_FD) != (end, sig):
+                raise OSError("cancellation capability commit readback failed")
+        CANCEL_END = end
+        return end, sig
+    except BaseException as error:
+        primary = error
+        cancel_fault(error)
+        # Best effort terminal poison. If even seals fail, local poison and forced
+        # ownership remain authoritative; no failed actor can retry/forward grace.
+        if mapping is not None:
+            try:
+                mapping.close()
+            except BaseException as close_error:
+                error.add_note(f"capability mapping close: {close_error}")
+        if mint and CANCEL_FD is not None:
+            try:
+                fcntl.fcntl(CANCEL_FD, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL)
+            except BaseException as poison_error:
+                error.add_note(f"shared terminal poison unproved: {poison_error}")
+        raise
+    finally:
+        if locked:
+            try:
+                fcntl.lockf(CANCEL_FD, fcntl.LOCK_UN)
+            except BaseException as unlock_error:
+                cancel_fault(unlock_error)
+                if primary is None:
+                    raise
+                primary.add_note(f"capability unlock failed: {unlock_error}")
+            finally:
+                CANCEL_LOCK.release()
+
+
+def cancel_budget(limit: float, reserve: float = 0) -> float:
+    if CANCEL_FD is None:
+        # Terminal caller closure consumes only the original bound, never re-mints.
+        if CANCEL_END:
+            return min(limit, max(0, (CANCEL_END-time.monotonic_ns())/1e9-reserve))
+        return 0 if CANCEL_SIGNAL or CANCEL_FAULT is not None else limit
+    try:
+        end, _ = cancel_stamp()
+    except BaseException as error:
+        cancel_fault(error)
+        end = CANCEL_END  # only a previously validated bound; never a new relative remedy
+    if end:
+        return min(limit, max(0, (end-time.monotonic_ns())/1e9-reserve))
+    return 0 if CANCEL_SIGNAL or CANCEL_FAULT is not None else limit
+
+
+def cancel_entry(n: int, _frame: object) -> None:
+    global CANCEL_SIGNAL
+    if not CANCEL_SIGNAL:
+        CANCEL_SIGNAL = n
+        try:
+            cancel_stamp(n, mint=True)
+        except BaseException as error:
+            cancel_fault(error)
+            if CANCEL_ARMED:
+                raise  # actual mint/lock/read/write failure remains primary
+        else:
+            if CANCEL_ARMED:
+                raise Cancelled(n)
+
+
 @contextlib.contextmanager
 def defer_termination() -> Iterator[None]:
     """Enroll a new root before delivering an installed TERM/HUP unwind handler.
@@ -224,7 +394,7 @@ def defer_termination() -> Iterator[None]:
     Default/ignored dispositions stay unchanged. The selected CLI has installed
     callable unwind handlers for both signals before reaching sandboxed().
     """
-    handlers = {s: h for s in (signal.SIGTERM, signal.SIGHUP)
+    handlers = {s: h for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
                 if callable(h := signal.getsignal(s))}
     pending: tuple[int, types.FrameType | None] | None = None
     arming, delivered = True, False
@@ -255,19 +425,20 @@ def defer_termination() -> Iterator[None]:
                 signal.signal(s, handler)
 
 
-def reap_cancelled() -> None:
+def reap_cancelled() -> bool:
     """Drain this invocation's adopted children, not a reaped process-group number.
 
     Same retained-task mechanism as qc-sandbox.orphans: no concurrent wait(-1)
     consumer, only own task children, pidfds acquired before those children reap.
     ECHILD alone proves completion and accounts every adopted child's CPU.
     """
-    end = time.monotonic() + 5
+    end = time.monotonic() + cancel_budget(5)
+    forced = False
     while True:
         try:
             pid, _ = os.waitpid(-1, os.WNOHANG)
         except ChildProcessError:
-            return
+            return forced
         if pid:
             if time.monotonic() >= end:
                 raise RuntimeError("qc owned cancellation exceeded cleanup bound; completion unproved")
@@ -284,6 +455,7 @@ def reap_cancelled() -> None:
             try:
                 with contextlib.suppress(ProcessLookupError):
                     signal.pidfd_send_signal(fd, signal.SIGKILL)
+                    forced = True
             finally:
                 os.close(fd)
         if time.monotonic() >= end:
@@ -307,10 +479,17 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
         die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
     # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write
     # fd on a file would pin its mount and the sandbox's read-only remount would fail with EBUSY.
+    global CANCEL_FD, CANCEL_SIGNAL, CANCEL_ARMED
+    if CANCEL_SIGNAL or CANCEL_FAULT is not None:
+        raise CANCEL_FAULT or Cancelled(CANCEL_SIGNAL)
+    CANCEL_ARMED = True  # EVERY active sandbox, including declared demo2
+    if CANCEL_FD is None:
+        CANCEL_FD = cancel_create()
     names = ("proof", "post", "err", "stderr")
     pipes = {n: os.pipe() for n in names}
     for n in names:   # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
         r, w = pipes[n]; pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100)); os.close(w)
+    write_ends = {n: pipes[n][1] for n in names}
     got = {n: [] for n in names}
     state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
     top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
@@ -328,7 +507,7 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
                QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
                QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
                QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
-               QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
+               QC_FD_CANCEL=str(CANCEL_FD), QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
     if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
         WARNED.add(w)
         print(w, file=sys.stderr)
@@ -349,40 +528,114 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     # Arm cleanup BEFORE creating a child, including Popen's unassigned interval.
     p: subprocess.Popen[bytes] | None = None
     root_fd = None
+    caller_errors: list[str] = []
     try:
         with defer_termination():
             p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
                                  env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
-                                 pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
+                                 pass_fds=[CANCEL_FD, *[pipes[n][1] for n in ("proof", "post", "err")]], process_group=0)
             # Open while the direct child is unreaped, then deliver pending
             # cancellation INSIDE the cleanup scope with this root enrolled.
             root_fd = os.pidfd_open(p.pid)
         for n in names:
-            os.close(pipes[n][1])
+            os.close(write_ends.pop(n))
         stdout = p.stdout.read().decode(errors="replace"); p.wait()
-    except BaseException:
-        if p is not None:
-            with contextlib.suppress(ProcessLookupError):
+    except BaseException as error:
+        interrupted = isinstance(error, Cancelled)
+        owner_forced = False
+        if interrupted and CANCEL_FAULT is None and p is not None and root_fd is not None:
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            try:
+                cancel_end, cancel_sig = cancel_stamp()
+                with contextlib.suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(root_fd, cancel_sig)
+                p.wait(timeout=cancel_budget(10, 2))
+            except BaseException:
+                owner_forced = True
+            finally:
+                signal.signal(signal.SIGINT, previous)
+        if p is not None and p.returncode is None:
+            owner_forced = True
+            try:
                 if root_fd is None:
                     # Acquisition failed before any wait: this owned child is
                     # still unreaped, so its number cannot have been reused.
                     os.kill(p.pid, signal.SIGKILL)
                 else:
                     signal.pidfd_send_signal(root_fd, signal.SIGKILL)
-            p.wait(timeout=5)
-        reap_cancelled()  # adopted descendants, including detached sessions
-        raise
+            except ProcessLookupError:
+                pass
+            except BaseException as stop_error:
+                caller_errors.append(f"root stop: {stop_error}")
+            try:
+                p.wait(timeout=cancel_budget(5))
+            except BaseException as wait_error:
+                caller_errors.append(str(wait_error))
+        try:
+            owner_forced = reap_cancelled() or owner_forced  # adopted descendants are forced disposition too
+        except BaseException as drain_error:
+            caller_errors.append(str(drain_error))
+        if not interrupted:
+            caller_errors.append(f"{type(error).__name__}: {error}")
+        stdout = ""  # partial stdout read is not invented successful output
     finally:
+        CANCEL_ARMED = False  # no later signal can interrupt post/drain/report persistence
+        for fd in write_ends.values():
+            try:
+                os.close(fd)
+            except BaseException as close_error:
+                caller_errors.append(f"report descriptor close: {close_error}")
         if root_fd is not None:
-            os.close(root_fd)
+            try:
+                os.close(root_fd)
+            except BaseException as close_error:
+                caller_errors.append(f"root descriptor close: {close_error}")
     for th in threads:
-        th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
+        th.join(timeout=cancel_budget(10))   # a writer outliving the PID namespace cannot exist; do not hang if it did
     read = lambda n: b"".join(got[n]).decode(errors="replace")
     record = {"session": session, "proof": read("proof").splitlines()}
-    for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
-        record.update(json.loads(line))
-    record_spend(record.get("spend") or [], f"sandbox {session}")
-    if "agents_started" not in record:
+    for line in read("post").splitlines():   # trusted pipe; truncated/invalid evidence stays negative
+        try:
+            record.update(json.loads(line))
+        except (ValueError, TypeError) as post_error:
+            caller_errors.append(f"invalid post record: {post_error}")
+    record["caller_received_signal"] = CANCEL_SIGNAL or None
+    record["owner_exit"] = p.returncode if p is not None else None
+    try:
+        end, canonical_signal = cancel_stamp()
+        if end:
+            CANCEL_SIGNAL = canonical_signal
+    except BaseException as metadata_error:
+        caller_errors.append(f"capability: {metadata_error}")
+    if CANCEL_FAULT is not None:
+        caller_errors.append(f"capability primary: {type(CANCEL_FAULT).__name__}: {CANCEL_FAULT}")
+    if "native_lifecycle" in record:
+        record["native_lifecycle"]["caller_forced"] = locals().get("owner_forced", False)
+    record["cancel_signal"] = CANCEL_SIGNAL or None
+    record["cancel_deadline_ns"] = CANCEL_END or None
+    record["caller_errors"] = caller_errors
+    record["capability_error"] = str(CANCEL_FAULT) if CANCEL_FAULT is not None else None
+    record["drain_complete"] = all(not th.is_alive() for th in threads)
+    record["deadline_ok"] = CANCEL_FAULT is None and cancel_budget(1) > 0
+    if not CANCEL_SIGNAL:
+        record_spend(record.get("spend") or [], f"sandbox {session}")
+    record["deadline_ok"] = CANCEL_FAULT is None and cancel_budget(1) > 0
+    if CANCEL_SIGNAL and not record.get("cancel_signal"):
+        record["cancel_signal"] = CANCEL_SIGNAL
+        record["cancel_deadline_ns"] = CANCEL_END or None
+    if CANCEL_FD is not None:
+        try:
+            os.close(CANCEL_FD)
+        except BaseException as close_error:
+            caller_errors.append(f"capability descriptor close: {close_error}")
+            cancel_fault(close_error)
+        finally:
+            CANCEL_FD = None
+    record["capability_error"] = str(CANCEL_FAULT) if CANCEL_FAULT is not None else None
+    record["deadline_ok"] = cancel_budget(1) > 0 and CANCEL_FAULT is None
+    if CANCEL_FAULT is not None and not any("capability primary:" in e for e in caller_errors):
+        caller_errors.append(f"capability primary: {type(CANCEL_FAULT).__name__}: {CANCEL_FAULT}")
+    if "agents_started" not in record or caller_errors or p is None or p.returncode is None:
         return None, record
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
 
@@ -393,12 +646,38 @@ def record_spend(lines, what):
     (spec spend#rule-lane; its failures, never the caller's: `octo-feather-lane --help`, spend record)."""
     if not lines:
         return
+    p = None
+    fd = None
+    end = time.monotonic() + 60
     try:
-        subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input="".join(l + "\n" for l in lines),
-                       text=True, stdout=subprocess.DEVNULL, timeout=60)
+        with defer_termination():
+            p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"],
+                                 text=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
+            fd = os.pidfd_open(p.pid)
+        data: str | None = "".join(l + "\n" for l in lines)
+        while True:
+            left = min(max(0, end-time.monotonic()), cancel_budget(60))
+            if not left:
+                raise subprocess.TimeoutExpired(p.args, 0)
+            try:
+                p.communicate(data, timeout=min(.05, left))
+                break
+            except subprocess.TimeoutExpired:
+                data = None
     except (OSError, subprocess.SubprocessError) as e:
         print(f"octo-feather-qc: spend unrecorded ({len(lines)} call(s), {what}): octo-feather-lane spend record "
               f"did not run ({type(e).__name__})", file=sys.stderr)
+    finally:
+        if p is not None and p.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                if fd is not None:
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+                else:
+                    os.kill(p.pid, signal.SIGKILL)  # direct unreaped child, enrollment failure
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                p.wait(timeout=cancel_budget(1))
+        if fd is not None:
+            os.close(fd)
 
 
 def worktree_writes(upper):
@@ -494,6 +773,12 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
         shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
         caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
+        if isinstance(sandbox, dict) and (sandbox.get("cancel_signal") or CANCEL_SIGNAL or CANCEL_FAULT is not None):
+            caps[-1].update(ran=None, cancelled=True, exit=None, observed_owner_exit=sandbox.get("owner_exit"))
+            report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
+            sig = sandbox.get("cancel_signal") or CANCEL_SIGNAL
+            die(128 + sig if sig and CANCEL_FAULT is None else 70,
+                f"qc demo cancelled; completion unknown (report {report_path})")
         if run is None:
             report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
             die(66, f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})")
@@ -516,6 +801,7 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
             report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
             die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
         caps[-1]["record"] = rid = p.stdout.strip()
+        report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
         done[i] = judged(i, cid, rid, head, text[i], root)
         if done[i]["evidence"] == "incomplete":   # a result, never a failure to triage (quality spec #qc-results)
             done[i] |= {"verdict": "insufficient evidence", "command": line, "why": f"missing: {'; '.join(done[i]['missing'])}"}
@@ -668,8 +954,13 @@ def capture_case(note: Path, cmd: list[str]) -> int:
     try:
         run, sandbox = sandboxed(wrapped, f"qc-{head[:12]}-{secrets.token_hex(3)}-t", {"off": "github: none (a tagged test)"},
                                  history=False, shots=True, pi=False)
+    except Cancelled as error:
+        rc = 128 + error.signum
+        note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": rc,
+                                          "why": "qc capture cancelled before enrollment; completion unknown"}))
+        return rc
     except SystemExit as e:
-        if e.code in (128 + signal.SIGTERM, 128 + signal.SIGHUP):
+        if e.code in (128 + signal.SIGINT, 128 + signal.SIGTERM, 128 + signal.SIGHUP):
             # Any armed root cleanup completed before re-raising cancellation;
             # cleanup failures are not caught here. Command completion is unknown.
             note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": e.code,
@@ -677,6 +968,20 @@ def capture_case(note: Path, cmd: list[str]) -> int:
             return int(e.code)
         note.write_text(json.dumps(rec | {"why": f"qc sandbox unavailable (exit {e.code})"}))
         return 66
+    except BaseException as error:
+        if CANCEL_SIGNAL or CANCEL_FAULT is not None:
+            note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": 70,
+                                              "signal": CANCEL_SIGNAL or None,
+                                              "why": f"qc capture cancellation failure; completion unknown: {type(error).__name__}: {error}"}))
+            return 70
+        raise
+    if sandbox.get("cancel_signal") or CANCEL_SIGNAL or CANCEL_FAULT is not None:
+        sig = sandbox.get("cancel_signal") or CANCEL_SIGNAL
+        rc = 128 + sig if sig and CANCEL_FAULT is None else 70
+        note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": rc,
+                                          "owner_exit": sandbox.get("owner_exit"), "sandbox": sandbox,
+                                          "why": "qc capture cancelled; command completion unknown"}))
+        return rc
     if run is None:
         note.write_text(json.dumps(rec | {"why": "qc sandbox proof failed", "sandbox": sandbox}))
         print(f"qc capture: sandbox proof failed; {shlex.join(cmd)} not run:\n" + "\n".join(sandbox.get("proof", [])), file=sys.stderr)
@@ -689,6 +994,10 @@ def capture_case(note: Path, cmd: list[str]) -> int:
     said = [l.strip() for l in (run.stdout + "\n" + run.stderr).splitlines() if l.strip()]
     note.write_text(json.dumps(rec | {"ran": True, "exit": rc, "said": said[-1][:300] if said else "", "sandbox": sandbox,
                                       "shots": shots, "wrote": wrote(upper)}))
+    if CANCEL_SIGNAL or CANCEL_FAULT is not None:
+        rc = 128 + CANCEL_SIGNAL if CANCEL_SIGNAL and CANCEL_FAULT is None else 70
+        note.write_text(json.dumps(rec | {"ran": None, "cancelled": True, "exit": rc, "sandbox": sandbox,
+                                          "why": "qc capture interrupted during publication; completion unknown"}))
     return rc
 
 
@@ -950,13 +1259,16 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, 
 
 
 def main(argv: list[str]) -> int:
+    global CANCEL_FD
+    if CANCEL_FD is None and hasattr(os, "memfd_create"):
+        CANCEL_FD = cancel_create()
     def killed(n, _f):   # capture and ordinary QC both unwind owned cleanup
         if not killed.once:   # duplicate timeout/group signals must not interrupt it
             killed.once = True
             sys.exit(128 + n)
     killed.once = False
-    for s in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(s, killed)
+    for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, cancel_entry)
     if argv[:1] in (["--capture-case"], ["--capture-store"]):
         return captured(argv)
     gate_free()
@@ -1092,6 +1404,16 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: 
     raw["github"]["misses"] += misses
     rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode in CAPPED, "seconds": round(time.time() - t0),
                                 "gh_misses": len(misses), "sandbox": sandbox, "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    report_path.write_text(json.dumps(raw, indent=2))  # preserve cancellation before verdict parsing
+    if sandbox and (sandbox.get("cancel_signal") or CANCEL_SIGNAL):
+        with report_path.open("r+") as persisted:
+            persisted.flush()
+            os.fsync(persisted.fileno())
+        if not cancel_budget(1):
+            die(70, f"qc cancellation reporting exceeded deadline; report {report_path}")
+        die(128 + (sandbox.get("cancel_signal") or CANCEL_SIGNAL), f"qc cancelled; report {report_path}")
+    global CANCEL_ARMED
+    CANCEL_ARMED = True
     rep = verdict(i, head, run, rec, raw, report_path)
     capped = f"the judge hit its {FALLBACK_CAP_S} s time cap before reporting"
     if nosb:
@@ -1140,6 +1462,14 @@ def fell_back(i: str, cid: str, rid: str, head: str, text: str, root: str, cappe
 
 
 def restore(status: Path) -> None:
+    global CANCEL_ARMED
+    if CANCEL_SIGNAL:
+        changed = subprocess.run(["git", "status", "--porcelain", "--", str(status)], capture_output=True, text=True,
+                                 check=True, timeout=cancel_budget(5))
+        if changed.stdout:
+            subprocess.run(["git", "checkout", "HEAD", "--", str(status)], check=True, timeout=cancel_budget(5))
+        return
+    CANCEL_ARMED = True  # first late signal may unwind normal helpers; existing raw report is already durable
     if git("status", "--porcelain", "--", str(status)):
         git("checkout", "HEAD", "--", str(status))
         print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
@@ -1233,4 +1563,14 @@ def decided(v: Result) -> str:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "qc cancellation requires child subreaper")
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Cancelled as error:
+        reap_cancelled()
+        sys.exit(128 + error.signum)
+    except SystemExit:
+        if CANCEL_SIGNAL and not cancel_budget(1):
+            sys.exit(70)
+        raise

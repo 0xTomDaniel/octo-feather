@@ -24,11 +24,13 @@ import socket
 import subprocess
 import sys
 import tempfile
+import time
 from pathlib import Path
 from typing import Any
 
 from testkit import FIXTURES, Ran, Scratch, kit, main
 from testkit.qc import RID, STATUS, block, clean, qc, report, target
+from qc_sandbox import _h_signals, _h_restore, _h_subreaper, _h_cleanup
 
 CONTRACT = """format = 1
 [entry]
@@ -81,7 +83,7 @@ def evidence(s: Scratch, r: Path, *args: str) -> list[dict[str, Any]]:
     return json.loads(out)
 
 
-def cancelled_capture(s: Scratch) -> None:
+def cancelled_capture(s: Scratch, signame: str = "SIGTERM", second_demo: bool = False) -> None:
     """Cancel the public capture root while its actual detached descendant is live.
 
     The descendant hands over its own pidfd before exec sleep. No numeric lookup,
@@ -105,18 +107,34 @@ def cancelled_capture(s: Scratch) -> None:
         "p=subprocess.Popen([sys.executable,'-c',sys.argv[1],*sys.argv[2:]],"
         "start_new_session=True); p.wait()"
     )
+    signum = {"SIGINT": signal.SIGINT, "SIGTERM": signal.SIGTERM}[signame]
+    expected_exit = 128 + signum
+    argv = [kit("octo-feather-qc"), "--capture-case", str(s.root / "capture.json"),
+            "--", sys.executable, "-c", payload, sleeper, str(address), token]
+    if second_demo:
+        import shlex
+        (r / "cancel-demo.py").write_text(payload)
+        command = shlex.join([sys.executable, "cancel-demo.py", sleeper, str(address), token])
+        (r / "qc.toml").write_text(CONTRACT + DEMO_B.replace('command = "echo b checks fail >&2; exit 3"', 'command = ' + json.dumps(command)))
+        s.git(r, "add", "-A")
+        s.git(r, "commit", "-qm", "second demo cancellation fixture")
+        argv = [kit("octo-feather-qc"), STATUS, "9", "acceptance-a", "acceptance-b", "--no-github"]
     handle = None
+    p = None
+    root_fd = None
+    end = time.monotonic() + 40
+    pending, saved = _h_signals()
     with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as listener, tempfile.TemporaryFile() as log:
         listener.bind(str(address))
         listener.listen(1)
-        listener.settimeout(30)
-        p = subprocess.Popen(
-            [kit("octo-feather-qc"), "--capture-case", str(s.root / "capture.json"),
-             "--", sys.executable, "-c", payload, sleeper, str(address), token],
-            cwd=r, env={**s.env, "OCTO_FEATHER_QC_RO_BINDS": str(observer)},
-            stdout=log, stderr=log, start_new_session=True,
-        )
+        listener.settimeout(max(0, min(30,end-5-time.monotonic())))
         try:
+            _h_subreaper()
+            p = subprocess.Popen(argv, cwd=r, env={**s.env, "OCTO_FEATHER_QC_RO_BINDS": str(observer)},
+                                 stdout=log, stderr=log, start_new_session=True)
+            root_fd = os.pidfd_open(p.pid)
+            if pending:
+                raise InterruptedError(str(pending))
             with listener.accept()[0] as peer:
                 peer.settimeout(30)
                 message, handles, flags, _ = socket.recv_fds(peer, 4096, 1)
@@ -130,14 +148,19 @@ def cancelled_capture(s: Scratch) -> None:
                 peer.sendall(b"!")
             # The actual root is still unreaped; signal ONLY it, not the descendant
             # session or the launcher's group. Product cancellation must clean those.
-            p.send_signal(signal.SIGTERM)
-            rc = p.wait(timeout=15)
+            signal.pidfd_send_signal(root_fd, signum)
+            rc = p.wait(timeout=max(0,min(15,end-3-time.monotonic())))
             log.seek(0)
             output = log.read().decode(errors="replace")
-            assert rc == 143, f"root TERM status lost (expected143, got{rc}): {output}"
-            note = json.loads((s.root / "capture.json").read_text())
-            assert note["cancelled"] and note["exit"] == 143 and note["ran"] is None, note
-            assert live.poll(5000), f"actual detached capture descendant survived: {output}"
+            assert rc == expected_exit and not pending, (rc, pending, output)
+            if second_demo:
+                captures = report(s)["captures"]
+                assert len(captures) == 2 and captures[0].get("record"), captures
+                assert captures[1]["ran"] is None and captures[1]["cancelled"] is True and captures[1]["exit"] is None, captures
+            else:
+                note = json.loads((s.root / "capture.json").read_text())
+                assert note["cancelled"] and note["exit"] == expected_exit and note["ran"] is None, note
+            assert live.poll(max(0,min(5000,int((end-time.monotonic())*1000)))), f"actual detached capture descendant survived: {output}"
             assert not list((s.root / "tmp").iterdir()), output
         finally:
             try:
@@ -147,18 +170,14 @@ def cancelled_capture(s: Scratch) -> None:
                             signal.pidfd_send_signal(handle, signal.SIGKILL)
                         dead = select.poll()
                         dead.register(handle, select.POLLIN)
-                        assert dead.poll(5000), "owned capture descendant cleanup failed"
+                        assert dead.poll(max(0,min(5000,int((end-time.monotonic())*1000)))), "owned capture descendant cleanup failed"
                     finally:
                         os.close(handle)
             finally:
                 # Retain the root until bounded graceful cleanup, then escalate.
-                if p.returncode is None:
-                    p.terminate()
-                    try:
-                        p.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        p.kill()
-                        p.wait(timeout=10)
+                cleanup = _h_cleanup(p,root_fd,end)
+                _h_restore(saved)
+                assert cleanup["complete"] and not cleanup["forced"], cleanup
 
 
 def twice(s: Scratch) -> None:
@@ -300,5 +319,10 @@ def invalid_demo(s: Scratch) -> None:
     assert len(evidence(s, r)) == before, "invalid contract: a record was appended"
 
 
+def second_demo_cancel(s: Scratch, signame: str = "SIGTERM") -> None:
+    """Demo1 completes/records, then actual demo2 self-pidfd proves active cancellation."""
+    cancelled_capture(s, signame, second_demo=True)
+
+
 if __name__ == "__main__":
-    main(twice, fallback_beside, invalid_demo, cancelled_capture)
+    main(twice, fallback_beside, invalid_demo, cancelled_capture, second_demo_cancel)
