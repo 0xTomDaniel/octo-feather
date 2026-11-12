@@ -495,3 +495,24 @@ actual assistant metadata remain valid for that run; no literal-first-PATH or
 per-launch re-prefix claim. No further QA/model probe, neutral trailer, gate
 weakening, new check/instruction/policy/producer edit. Adequacy of this caller-side
 smoke is review judgment; model-facing guide consumption is not claimed.
+
+Fresh review of adbfe7e identified a test-oracle defect, not a production failure:
+the reader's expected LF spans cloned the producer's LF-count/end-newline formula.
+After clean fast-forward, this test-only correction deletes that generic formula
+and adds independently known literal spans for four known raw inputs only:
+{} plus LF has [(1,1)]; {} LF {} without final LF has [(1,2)]; {} LF {} LF has
+[(1,2)]; {} LF plus a70kASCII JSON text record LF plus {} LF spans three windows
+[(1,2),(2,2),(2,3)]. The existing real lane-reflect CLI scenario checks captured
+own-source SHA and a source-ID receipt proving the literal oracle actually ran.
+Unknown inputs no longer claim generic independent LF-span coverage; exact raw
+byte/SHA reconstruction, byte-range continuity, serialized cap/newline metadata,
+Unicode/partial UTF8, DERIVED distinction, source guards and cleanup remain.
+No production failure, mutant RED, new Check, policy/instruction or model run is
+claimed. Public test artifacts /tmp/gh786-literal-targeted/output and exit show
+1passed12.28s/rc0, CPU11.852s report-only over10s, no waiver. Cumulative runtime
+checks/instruction calls unchanged; the existing public test-assertion call now
+uses literal LF oracles instead of the copied calculation. This factual note is
+final before three-file staged/frozen full; actual output/commit will be reported
+separately. Official source-verified grant00:42:03Z..00:59:59Z, fresh4096MiB and
+one owned group, min1800/remainingTTL-30 deadline and awaited cleanup, background
+runner/callback/end-turn; no post-pass evidence edit or acceptance claim.
