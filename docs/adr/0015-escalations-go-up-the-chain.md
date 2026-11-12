@@ -1,6 +1,6 @@
 # Escalations go up the chain, and only the director talks to the owner
 
-Superseded by ADR 0029 (2026-11-11), for task-scoped host-cleanup workers only.
+Superseded by ADR 0029 (2026-11-11), for general-purpose workers directly parented by the director only.
 
 Every escalation moves one level up the org chart, never straight to the owner: worker (implementer, code reviewer, corrector) to supervisor, supervisor to director, director to owner. Each level first tries to solve the problem within its own authority. Every escalation names what is blocked, what was tried, and the options or what is needed. Only the director talks to the owner. That includes owner gates: a spec review link for a behavior change (ADR 0021), a QA evidence review and a merge ask go from the supervisor to the director, and the director relays them. Decided by Tom, 2026-10-18.
 

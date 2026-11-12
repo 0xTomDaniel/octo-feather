@@ -13,12 +13,12 @@ The delegated goal owner for one work item and its PR until merge, planning its 
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that performs one finite assignment and reports the result to its actual parent. Product workers use isolated copies of the work and report to their supervisor; a task-scoped host-cleanup worker reports to the director. Implementers, correctors and code reviewers are specialist workers.
+An agent that performs one finite assignment and reports its result to its actual parent. Product implementation workers report to their supervisor; a general-purpose worker reports to the director or supervisor that assigned its task. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
 
-**Task-scoped worker**:
-A worker for one finite authorized host-cleanup operation under a task-fitting contract, without requiring a named specialist role. Its authority comes from that cleanup envelope, not from being available for reassignment or from a general ad hoc launch capability.
-_Avoid_: Unroled agent, unrestricted agent
+**General-purpose worker**:
+A finite-task executor using one reusable role contract for varied research, diagnosis, preparation and operational tasks. Its parent is the director or supervisor that owns the task; it is neither a lane goal owner nor an unrestricted agent.
+_Avoid_: Task-specific specialist, unroled agent, unrestricted agent
 
 **Implementer**:
 A worker that produces the change for one ticket.
@@ -103,7 +103,7 @@ The owner telling the director to build one or more accepted specs. The director
 _Avoid_: Launch, go
 
 **Escalation**:
-A problem passed to the next authority in the sender's actual parent chain after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. A lane's chain is worker, supervisor, director, owner; a task-scoped host-cleanup worker's parent is the director. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
+A problem passed to the next authority in the sender's actual parent chain after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. A lane's chain is worker, supervisor, director, owner; a director-owned general-purpose worker's parent is the director. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
