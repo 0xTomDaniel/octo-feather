@@ -2,7 +2,7 @@
 """prepared.py: the template installs gate items share, each prepared once per gate run (#509).
 
 A test helper run as a command (tests/gate/kit/evidence_store.py, contract.py, testkit/template.py);
-in tests/lib/ so the gate's tests/*.sh glob does not collect it.
+in testkit/ with the shared executable test support.
 
   prepared.py typescript DIR
       prints the path of templates/typescript's tracked files with its packages installed offline
@@ -23,7 +23,7 @@ import shutil
 import subprocess
 import sys
 
-KIT = pathlib.Path(__file__).resolve().parents[2]
+KIT = pathlib.Path(__file__).resolve().parents[4]
 
 
 def tool(name: str) -> str:

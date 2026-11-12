@@ -119,6 +119,35 @@ class Gh:
         return sum(ln.startswith("api -X ") for ln in self.log())
 
 
+def cpu_read() -> float | None:
+    # Process-local reads are needed before the parent waits; the portable root gate stays
+    # standalone. Its cpu_s alone decides the budget; these stdlib reads only attribute it.
+    try:
+        import resource  # noqa: PLC0415
+
+        s, c = resource.getrusage(resource.RUSAGE_SELF), resource.getrusage(resource.RUSAGE_CHILDREN)
+    except (ImportError, OSError):
+        return None
+    return s.ru_utime + s.ru_stime + c.ru_utime + c.ru_stime
+
+
+@contextlib.contextmanager
+def cpu_stage(name: str) -> Generator[None]:
+    start = cpu_read()
+    completed = False
+    try:
+        yield
+        completed = True
+    finally:
+        end = cpu_read()
+        value = end - start if start is not None and end is not None else None
+        status = "completed" if completed and value is not None else "unavailable"
+        if not completed:
+            status = "incomplete"
+            value = None
+        print("cpu_stage " + json.dumps({"stage": name, "cpu_s": value, "status": status}))
+
+
 class Scratch:
     """One scenario's world under a fresh temp dir: HOME, TMPDIR, mise's state dir
     (MISE_STATE_DIR, ROOT/mise-state: what mise trusts and tracks, never the caller's, #683), the
@@ -154,7 +183,7 @@ class Scratch:
     def prepare(self, name: str, build: Callable[[Scratch], None]) -> None:
         """This scratch filled with prepared NAME: a scratch BUILD fills once per gate run under
         GATE_RUN_DIR (the run's shared dir: tests/gate/test_gate.py), the first caller under an
-        exclusive lock, every later one waiting on it, as tests/lib/prepared.py prepares template
+        exclusive lock, every later one waiting on it, as tests/gate/kit/testkit/prepared.py prepares template
         installs; read-only by contract, copied here (its bin and tmp aside). Outside a gate run,
         BUILD fills this scratch itself."""
         import fcntl  # noqa: PLC0415 (lazy: a scenario's start pays only what it uses)

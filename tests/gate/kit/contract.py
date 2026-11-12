@@ -201,7 +201,7 @@ def ts_drive(s: Scratch) -> None:
     marker) and its entry, driven with the contract's value. It reads qc.toml with the TOML
     package smol-toml: with the repo's packages not installed, launch fails naming it and `just
     setup`, before any setup; then the packages are copied from the run's one offline install of
-    the template from the pnpm store (tests/lib/prepared.py), as `just setup` installs them."""
+    the template from the pnpm store (tests/gate/kit/testkit/prepared.py), as `just setup` installs them."""
     t = s.root.resolve()
     repo = t / "ts-app"
     src = ROOT / "templates" / "typescript"
@@ -249,7 +249,12 @@ def ts_drive(s: Scratch) -> None:
     assert not (repo / "setup-ran").exists(), f"{TAG}: setup ran before the refusal"
     s.env["npm_config_store_dir"] = pnpm_store()  # the caller's, never the scratch HOME's
     # The install with the caller's HOME: pnpm's own metadata cache, never fetched again (#509).
-    prep = [sys.executable, str(ROOT / "tests" / "lib" / "prepared.py"), "typescript", str(t)]
+    prep = [
+        sys.executable,
+        str(ROOT / "tests" / "gate" / "kit" / "testkit" / "prepared.py"),
+        "typescript",
+        str(t),
+    ]
     p = s.run(prep, env={"HOME": os.environ["HOME"]})
     subprocess.run(["cp", "-a", f"{p.out}/node_modules", str(repo)], check=True)  # noqa: S607
     text = re.sub(r'(?m)^name = "Ada"', 'name = "Grace"', qc.read_text())

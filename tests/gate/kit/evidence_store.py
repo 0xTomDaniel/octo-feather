@@ -11,7 +11,7 @@ With records at two commits, reading the criterion at one commit shows only its 
 unknown commit is refused, naming it. The store lives under a throwaway XDG_STATE_HOME.
 
 Offline: typescript's packages copied from the run's one offline install of the template from the
-pnpm store (tests/lib/prepared.py) (its helper reads qc.toml with smol-toml), its setup then a
+pnpm store (tests/gate/kit/testkit/prepared.py) (its helper reads qc.toml with smol-toml), its setup then a
 no-op; python's setup a bare venv (the helper's python; no pip: nothing is installed in it), the
 entry the source on PYTHONPATH."""
 
@@ -84,7 +84,12 @@ class Target:
         self.repo = copy(s, lang)
         if lang == "typescript":
             # The install with the caller's HOME: pnpm's own metadata cache, never fetched again.
-            prep = [sys.executable, str(ROOT / "tests" / "lib" / "prepared.py"), lang, str(s.root)]
+            prep = [
+                sys.executable,
+                str(ROOT / "tests" / "gate" / "kit" / "testkit" / "prepared.py"),
+                lang,
+                str(s.root),
+            ]
             p = s.run(prep, env={"HOME": os.environ["HOME"]})
             subprocess.run(["cp", "-a", f"{p.out}/node_modules", str(self.repo)], check=True)  # noqa: S607
         commit(s, self.repo)
@@ -172,7 +177,7 @@ def evidence(s: Scratch, lang: str) -> None:
     # The edited text: the second commit's record hashes it, not the first text.
     c = json.loads(g.read("--criterion", CRIT, "--commit", c2, "--json"))[0]["record"]["criterion"]
     assert c["text_from"] == "spec", c
-    assert c["text_sha256"] == sha(TEXT2.encode()) != sha(TEXT1.encode()), c
+    assert c["text_sha256"] == "d9e250e1415b09e55f35a8a806d80dc5e1bce0d98a52649a68a9d760eda4e279", c
     # No text for the criterion in the repo's specs: the drive fails naming it, keeps no record.
     spec.rename(t / "app.spec.html")
     rc, vout = g.launch_drive()
@@ -203,7 +208,10 @@ def first_read(g: Target, c1: str, id1: str) -> None:
     assert r["dirty"] is False, r
     assert r["criterion"]["id"] == CRIT, r
     assert r["criterion"]["text_from"] == "spec", r
-    assert r["criterion"]["text_sha256"] == sha(TEXT1.encode()), r
+    assert (
+        r["criterion"]["text_sha256"]
+        == "da401510e8a4b51c868b888e1d69a94b6e9756fbd99eae4d2e4b8378ac2991ec"
+    ), r
     assert r["contract"] == {"format": 2, "sha256": sha((g.repo / "qc.toml").read_bytes())}, r
     assert r["fixture"] is None, r["fixture"]
     outs = r["outputs"]

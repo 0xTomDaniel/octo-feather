@@ -3,6 +3,8 @@ each run as that file's command through `case` (tests/gate/kit/conftest.py)."""
 
 from collections.abc import Callable
 
+import pytest
+
 from check_ts import empty_store, findings, other_fs, unused_suppression
 
 Case = Callable[..., None]
@@ -12,6 +14,7 @@ def test_empty_store(case: Case) -> None:
     case(empty_store)
 
 
+@pytest.mark.e2e
 def test_other_fs(case: Case) -> None:
     case(other_fs)
 

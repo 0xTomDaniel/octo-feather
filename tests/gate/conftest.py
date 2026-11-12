@@ -56,7 +56,7 @@ OCTO_FEATHER_GATE_ITEMS=FILE (octo-feather-gate select, with --collect-only): th
 collected item there as JSON, {node id: {"e2e": whether it carries pytest's e2e marker}}, so one collection names the
 items and their tier.
 """
-import datetime, functools, hashlib, json, os, re, shutil, subprocess, sys, tempfile
+import datetime, functools, hashlib, json, math, os, re, shutil, subprocess, sys, tempfile
 try:
     import resource
 except ImportError:   # not POSIX: no CPU measure
@@ -378,6 +378,62 @@ def _cpu() -> float:
 
 
 _CPU_START = pytest.StashKey[float]()
+_CPU_STAGES = pytest.StashKey[dict[str, float | str]]()
+_STAGE_TOP = ("prep", "claimedgate", "budget_clis", "justqc")
+_STAGE_NAMES = (*_STAGE_TOP, "build", "install_cp")
+
+
+def _stage_cpu(output: str) -> dict[str, float | str]:
+    stages: dict[str, float | str] = {}
+    count = 0
+    for line in output.splitlines():
+        if not line.startswith("cpu_stage "):
+            continue
+        count += 1
+        if count > len(_STAGE_NAMES) or len(line) > 256 or not line.isascii():
+            return {"status": "invalid: overflow"}
+        try:
+            pairs = json.loads(line[len("cpu_stage "):], object_pairs_hook=list)
+        except ValueError:
+            return {"status": "invalid: malformed"}
+        if (
+            not isinstance(pairs, list)
+            or len(pairs) != 3
+            or not all(isinstance(pair, tuple) and len(pair) == 2 for pair in pairs)
+        ):
+            return {"status": "invalid: fields"}
+        record = dict(pairs)
+        if len(record) != 3 or record.keys() != {"stage", "cpu_s", "status"}:
+            return {"status": "invalid: fields or duplicate keys"}
+        name, value, status = record["stage"], record["cpu_s"], record["status"]
+        if not isinstance(name, str) or name not in _STAGE_NAMES or name in stages:
+            return {"status": "invalid: label or duplicate"}
+        if status == "completed":
+            if (
+                isinstance(value, bool)
+                or not isinstance(value, (int, float))
+                or not math.isfinite(value)
+                or value < 0
+            ):
+                return {"status": "invalid: CPU value"}
+            stages[name] = float(value)
+        elif status in ("unavailable", "incomplete") and value is None:
+            stages[name] = status
+        else:
+            return {"status": "invalid: completion"}
+    missing = [name for name in _STAGE_NAMES if name not in stages]
+    stages["status"] = "partial: missing " + ",".join(missing) if missing else "reported"
+    return stages
+
+
+def _stage_residual(
+    stages: dict[str, float | str], names: tuple[str, ...], total: float
+) -> float | str:
+    values = [stages.get(name) for name in names]
+    if not all(isinstance(value, float) for value in values):
+        return "unavailable: missing/incomplete spans"
+    residual = total - sum(cast("float", value) for value in values)
+    return residual if math.isfinite(residual) else "unavailable: residual overflow"
 
 
 @pytest.hookimpl(wrapper=True)
@@ -391,8 +447,28 @@ def pytest_runtest_makereport(item: pytest.Item, call: pytest.CallInfo[None]) ->
     if call.when == "teardown":   # before its report copies them
         item.user_properties.append((NODE, item.nodeid))
         if resource is not None and _CPU_START in item.stash:
-            item.user_properties.append((CPU, round(_cpu() - item.stash[_CPU_START], 3)))
-    return (yield)
+            total = _cpu() - item.stash[_CPU_START]
+            item.user_properties.append((CPU, round(total, 3)))
+            if _CPU_STAGES in item.stash:
+                stages = dict(item.stash[_CPU_STAGES])
+                stages["accounting"] = (
+                    "inclusive nested spans; delayed reap shifts charge; unwaited CPU unknown"
+                )
+                stages["item_cpu_s"] = total
+                stages["item_residual_s"] = _stage_residual(stages, _STAGE_TOP, total)
+                prep = stages.get("prep")
+                stages["prep_residual_s"] = (
+                    _stage_residual(stages, ("build", "install_cp"), prep)
+                    if isinstance(prep, float)
+                    else "unavailable: prep"
+                )
+                item.user_properties.append(("cpu_stages", json.dumps(stages, sort_keys=True)))
+        elif _CPU_STAGES in item.stash:
+            item.user_properties.append(("cpu_stages", '{"status":"unavailable: parent CPU"}'))
+    report = cast("pytest.TestReport", (yield))
+    if call.when == "call" and ("cpu_stage_source", "scenario-stdout") in item.user_properties:
+        item.stash[_CPU_STAGES] = _stage_cpu(report.capstdout)
+    return report
 
 
 def _secs(x: float) -> str:
@@ -412,6 +488,8 @@ class _CpuShown:
         for k, v in report.user_properties:
             if k == CPU and report.when == "teardown" and isinstance(v, (int, float)):
                 r["cpu"] = float(v)
+            elif k == "cpu_stages" and report.when == "teardown" and isinstance(v, str):
+                r["stages"] = v
 
     def budget(self) -> tuple[float | None, str]:
         """test_cpu_seconds from the root's gate-budget.toml, or None and why."""
@@ -437,6 +515,8 @@ class _CpuShown:
         tr.write_sep("=", "CPU seconds per item (its processes and their waited-for children)")
         for n, r in shown:
             tr.write_line(f"{_secs(r['cpu']):>9} cpu {_secs(r['wall']):>9} wall  {n}" + ("  (e2e)" if r["e2e"] else ""))
+            if "stages" in r:
+                tr.write_line(f"cpu stages {n}: {r['stages']}")
         b, why = self.budget()
         if b is None:
             tr.write_line(f"cpu budget: none ({why})")

@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import tempfile
+import xml.etree.ElementTree as ET
 from collections.abc import Callable
 from pathlib import Path
 from typing import cast
@@ -78,6 +79,33 @@ def test_cpu_shown(
         )
 
 
+def test_cpu_stage_records() -> None:
+    """The public gate retains bounded stage input and rejects invalid attribution, not the test."""
+    env = {k: v for k, v in os.environ.items() if not k.startswith("HERDR_") and k not in PANE}
+    p = subprocess.run(
+        [sys.executable, str(Path(__file__).resolve()), "--stages"],
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert p.returncode == 0, p.stdout + p.stderr
+    for run in json.loads(p.stdout.strip().splitlines()[-1]):
+        assert run["exit"] == 0, run["out"]
+        stages = run["stages"]
+        valid = stages["valid"]
+        assert valid["status"] == "reported", valid
+        assert valid["prep_residual_s"] == 0.5, valid
+        assert valid["item_residual_s"] == valid["item_cpu_s"] - 1.5, valid
+        for name in ("duplicate", "malformed", "overflow", "nonfinite", "bad_keys"):
+            assert stages[name]["status"].startswith("invalid:"), stages[name]
+            assert isinstance(stages[name]["item_residual_s"], str), stages[name]
+        assert stages["unavailable"]["prep"] == "unavailable", stages["unavailable"]
+        assert isinstance(stages["unavailable"]["item_residual_s"], str)
+        assert "cpu_stage " in run["out"], "the gate lost original scenario stdout"
+
+
 def scenario() -> None:
     """The throwaway suite, run with -n 1 then -n 0; prints [{workers, exit, out, trend}]."""
     with tempfile.TemporaryDirectory() as t:
@@ -94,6 +122,33 @@ def scenario() -> None:
             body = "echo light\n" if name == "light" else f"python3 -c '{BURN}'\n"
             (s / "tests" / f"{name}.sh").write_text(f"#!/usr/bin/env bash\n{head}{body}")
             (s / "tests" / f"{name}.sh").chmod(0o755)
+        stage_mode = sys.argv[1:] == ["--stages"]
+        if stage_mode:
+            values = {
+                "prep": 1.0, "build": 0.25, "install_cp": 0.25,
+                "claimedgate": 0.25, "budget_clis": 0.125, "justqc": 0.125,
+            }
+            rows = [
+                "cpu_stage " + json.dumps({"stage": name, "cpu_s": value, "status": "completed"})
+                for name, value in values.items()
+            ]
+            inputs = {
+                "valid": "\n".join(rows),
+                "duplicate": "\n".join([rows[0], rows[0]]),
+                "malformed": "cpu_stage {broken",
+                "overflow": "\n".join(rows + [rows[0]]),
+                "nonfinite": 'cpu_stage {"stage":"prep","cpu_s":NaN,"status":"completed"}',
+                "bad_keys": 'cpu_stage {"stage":"prep","stage":"prep","cpu_s":0,"status":"completed"}',
+                "unavailable": 'cpu_stage {"stage":"prep","cpu_s":null,"status":"unavailable"}',
+            }
+            (s / "tests" / "gate" / "test_stage_inputs.py").write_text(
+                "import pytest\n"
+                f"INPUTS = {inputs!r}\n"
+                "@pytest.mark.parametrize('name', INPUTS)\n"
+                "def test_inputs(name, record_property):\n"
+                "    record_property('cpu_stage_source', 'scenario-stdout')\n"
+                "    print(INPUTS[name])\n"
+            )
         drop = ("HERDR_SESSION", "OCTO_FEATHER_QC_CLAIMS", "OCTO_FEATHER_QC_CAPTURE_DIR")
         env = {k: v for k, v in os.environ.items() if k not in drop}
         env |= {"XDG_STATE_HOME": str(Path(t, "xdg")), "GATE_RECIPES": ""}
@@ -102,7 +157,7 @@ def scenario() -> None:
         runs: list[dict[str, object]] = []
         for workers in (1, 0):
             p = subprocess.run(
-                [*pytest_cmd, "pytest", "-n", str(workers)],
+                [*pytest_cmd, "pytest", "-n", str(workers), *(["-rA"] if stage_mode else [])],
                 cwd=s,
                 env=env,
                 capture_output=True,
@@ -110,12 +165,21 @@ def scenario() -> None:
                 check=False,
             )
             last = trend.read_text().splitlines()[-1] if trend.is_file() else "{}"
+            stage_reports: dict[str, object] = {}
+            if stage_mode:
+                suite = ET.parse(s / ".pytest_cache" / "junit.xml")
+                for case in suite.iter("testcase"):
+                    prop = case.find("properties/property[@name='cpu_stages']")
+                    if prop is not None:
+                        name = (case.get("name") or "").split("[", 1)[1].removesuffix("]")
+                        stage_reports[name] = json.loads(prop.get("value") or "{}")
             runs.append(
                 {
                     "workers": workers,
                     "exit": p.returncode,
                     "out": p.stdout + p.stderr,
                     "trend": json.loads(last),
+                    "stages": stage_reports,
                 }
             )
     sys.stdout.write(json.dumps(runs) + "\n")

@@ -2,7 +2,7 @@
 the shared support of tests/gate/kit/template_languages*.py (what they prove: their docstrings).
 
 Offline: the Python repo syncs from the uv cache, the TypeScript repo copies its packages from
-the run's one install of the template (tests/lib/prepared.py); CI's uv and pnpm steps fill both.
+the run's one install of the template (tests/gate/kit/testkit/prepared.py); CI's uv and pnpm steps fill both.
 The base repo, a second module and its test beside the starter's, and the spec's status file,
 committed on main, is prepared once per gate run (Scratch.prepare), without its packages, which
 hold absolute paths (a uv editable install), so each scratch installs its own. Its commands run
@@ -21,7 +21,7 @@ import shutil
 import subprocess
 from typing import TYPE_CHECKING, Any
 
-from testkit import FAKES, ROOT, Ran, Scratch, kit, tool_homes
+from testkit import FAKES, ROOT, Ran, Scratch, cpu_stage, kit, tool_homes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -58,16 +58,25 @@ CRITERION = "app#acceptance-hello-json"
 class Repo:
     """The prepared repo of LANG at SCRATCH/repo, its packages installed."""
 
-    def __init__(self, s: Scratch, lang: str, *, ran: bool = False, base: bool = False) -> None:
+    def __init__(
+        self,
+        s: Scratch,
+        lang: str,
+        *,
+        ran: bool = False,
+        base: bool = False,
+        homes: Mapping[str, str] | None = None,
+    ) -> None:
         """RAN: the base repo after one full tier with its static steps cut to ShellCheck's
         (gate_recipes), prepared once too: what the Python repo's just fast selects from
         (pytest-testmon's record of that run). BASE: the base repo build is making in S."""
         self.s, self.lang = s, lang
         self.dir = s.root / "repo"
         self.nopy = s.root / "nopy"
+        homes = tool_homes() if homes is None else dict(homes)
         s.env |= (
             IDENT
-            | tool_homes()
+            | homes
             | {
                 "MISE_STATE_DIR": str(s.root / "mise-state"),
                 "MISE_TRUSTED_CONFIG_PATHS": str(self.dir),
@@ -79,7 +88,10 @@ class Repo:
         uncoloured(s)
         if base:
             return
-        s.prepare(f"template-{lang}{'-ran' if ran else ''}", lambda p: build(p, lang, ran=ran))
+        s.prepare(
+            f"template-{lang}{'-ran' if ran else ''}",
+            lambda p: build(p, lang, ran=ran, homes=homes),
+        )
         if lang == "python":
             shutil.rmtree(self.dir / ".venv", ignore_errors=True)  # the prepared tree's paths
             self.sync()
@@ -87,10 +99,16 @@ class Repo:
             # One pnpm store for the kit and its test copies (owner ruling #422): the kit's, as
             # the caller's HOME finds it, never the scratch HOME's empty one.
             home = {"HOME": os.environ["HOME"]}
-            tree = s.run(
-                [str(ROOT / "tests" / "lib" / "prepared.py"), "typescript", str(s.root)], env=home
-            )
-            s.run(["cp", "-a", f"{tree.out}/node_modules", str(self.dir)])
+            with cpu_stage("install_cp"):
+                tree = s.run(
+                    [
+                        str(ROOT / "tests" / "gate" / "kit" / "testkit" / "prepared.py"),
+                        "typescript",
+                        str(s.root),
+                    ],
+                    env=home,
+                )
+                s.run(["cp", "-a", f"{tree.out}/node_modules", str(self.dir)])
         self.nopy.mkdir()
         for x in NOPY:
             stub = self.nopy / x
@@ -323,9 +341,10 @@ def plant_rules(r: Repo) -> list[str]:
     return want
 
 
-def build(p: Scratch, lang: str, *, ran: bool) -> None:
+@cpu_stage("build")
+def build(p: Scratch, lang: str, *, ran: bool, homes: Mapping[str, str] | None = None) -> None:
     """The base repo of LANG under P, RAN or not (Repo's docstring)."""
-    r = Repo(p, lang, base=True)
+    r = Repo(p, lang, base=True, homes=homes)
     d = r.dir
     p.run(
         ["just", "--justfile", str(ROOT / "justfile"), "new-repo", lang, str(d), "--no-spec-chat"]

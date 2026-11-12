@@ -6,7 +6,7 @@ GATE_RECIPES. Items see TMPDIR as its real path (macOS: mktemp paths under the /
 match the pwd -P paths tests compare them with). Items are pane-neutral (#493 AC6): none inherits the
 variables a Herdr pane gives its shell (every HERDR_* one, as HERDR_SESSION names a named session) or the
 route pi-role and herdr-spawn export to a pane, so a gate run in a pane of any session runs every item as
-one outside Herdr does. Items share one dir per gate run, GATE_RUN_DIR, where tests/lib/prepared.py prepares the
+one outside Herdr does. Items share one dir per gate run, GATE_RUN_DIR, where tests/gate/kit/testkit/prepared.py prepares the
 template installs several items repeat, once per run (pytest-xdist's documented "session fixture once" pattern: the
 xdist workers' shared tmp dir, the parent of each worker's basetemp; pytest keeps its last 3 basetemps).
 Each item's processes carry its name, GATE_ITEM (a recipe, or a tests/*.sh path), unless a gate this item runs

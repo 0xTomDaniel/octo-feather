@@ -23,7 +23,7 @@ import re
 import shutil
 from typing import TYPE_CHECKING
 
-from testkit import Scratch, main
+from testkit import Scratch, cpu_stage, main
 from testkit.template import Repo, plant_rules
 
 if TYPE_CHECKING:
@@ -108,14 +108,17 @@ def claims_gate(s: Scratch) -> None:
     `octo-feather-lane report` (fake gh and herdr) shows the repo's gate budget block from it
     against the template's gate-budget.toml, `merge-ask` on its head its Gate time block; then
     just qc judges the criterion from its record (Repo.qc_judges)."""
-    r = Repo(s, "typescript")
+    with cpu_stage("prep"):
+        r = Repo(s, "typescript")
     r.gate_recipes("check-scripts")
     h = r.git("rev-parse", "HEAD")
-    ran, rec = r.claims_gate(TEST, "just", "check-tests", "--no-color")  # just check, uncoloured
+    with cpu_stage("claimedgate"):
+        ran, rec = r.claims_gate(TEST, "just", "check-tests", "--no-color")  # just check, uncoloured
     full_tier(r, ran.out, h)
-    gate_budget(r, h)
-    r.qc_judges(rec, TEST)
-    r.no_python()
+    with cpu_stage("budget_clis"):
+        gate_budget(r, h)
+    with cpu_stage("justqc"):
+        r.qc_judges(rec, TEST)
 
 
 def gate_budget(r: Repo, h: str) -> None:
@@ -185,7 +188,6 @@ def gate_budget(r: Repo, h: str) -> None:
 def refusals(s: Scratch) -> None:
     r = Repo(s, "typescript")
     r.refuses_claims("just", "check-tests", "--project", "e2e")
-    r.no_python()
 
 
 def one_file(r: Repo) -> None:

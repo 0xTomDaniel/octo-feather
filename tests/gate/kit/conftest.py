@@ -32,6 +32,7 @@ def case(
 
     def go(scenario: Callable[..., None], *args: str) -> None:
         cmd = [sys.executable, inspect.getfile(scenario), scenario.__name__, *args]
+        node.user_properties.append(("cpu_stage_source", "scenario-stdout"))
         test_gate.run(cmd, run_dir, node.nodeid, qc_command)
 
     return go
