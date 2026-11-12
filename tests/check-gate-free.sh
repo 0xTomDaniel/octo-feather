@@ -65,8 +65,8 @@ set +e; out="$(cd "$w" && PATH="$t/scripts:$PATH" CHECK_GATE_FREE_TEST_COPY=1 ju
 printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
 [[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'qa: run ' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
 # Script forms: a repo script a gate recipe runs reaches qa or the judge at run time, through just or directly.
-# A fake `pi` first on the check run's PATH (the justfile keeps the caller's PATH ahead of ~/.local/bin) logs any launch.
-sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
+# The kit's Pi stand-in first on the check run's PATH (the justfile keeps the caller's PATH ahead of ~/.local/bin) logs any launch under STUB_LAUNCHED.
+sb="$t.pi"; mkdir -p "$sb/home"; sp="$kit/tests/fixtures/classify-stub"
 # script_form BODY [BODY2]: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
 # With BODY2, the justfile also has check-probe, which runs scripts/quality-probe2 (BODY2).
 # Each recipe reaches its script both relative and through the exported "$root" (#61's convention).
@@ -81,7 +81,7 @@ script_form() {
       extra=$'\ncheck-probe:\n    @'"${probe}2"
     fi
     plant "${c/check:/check: probe}" $'probe:\n    @'"$probe$extra"
-    set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
+    set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sp:$PATH" STUB_LAUNCHED="$sb/launched" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
     printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
     [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
     grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
@@ -95,7 +95,7 @@ script_form() {
 # body_form RECIPE EXTRA: the justfile plus EXTRA; `just RECIPE` fails with the message; no stub, no pi.
 body_form() {
   plant "$c" "$2"
-  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sp:$PATH" STUB_LAUNCHED="$sb/launched" CHECK_GATE_FREE_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
   printf '%s\n' "$orig" > "$t/justfile"
   [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just $1: $2" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: just $1: $2" >&2; echo "$out" >&2; exit 1; }
