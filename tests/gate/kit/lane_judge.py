@@ -459,7 +459,7 @@ STATUS = {
 
 def threshold(s: Scratch, which: str) -> None:
     """test-quality's threshold accepted, its held-out score below it or meeting it (a copy of the
-    kit, the suite edited; a malformed edit fails the judge naming it): the answer still shown,
+    kit, the suite edited): the answer still shown,
     labelled a model judgment, with the status; merge-ask ready with and without it (spec
     judgment#acceptance-judge-advisory)."""
     k = s.root / "kit"
