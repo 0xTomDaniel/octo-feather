@@ -96,10 +96,7 @@ EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
 CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
 DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
 FALLBACK_CAP_S = 900  # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
-CAPPED = (
-    124,
-    137,
-)  # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
+CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
 
 
 def die(code: int, msg: str) -> NoReturn:
@@ -974,14 +971,8 @@ def capture(
                 False,
             )
         else:
-            run, sandbox = sandboxed(
-                cmd,
-                f"qc-{head[:12]}-{runid}-d{n}",
-                {"off": "github: none (a declared demo, no agent judge)"},
-                browser=br,
-                shots=True,
-                pi=False,
-            )
+            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
+                                     browser=br, shots=True, pi=False)
             assert isinstance(sandbox, dict)
             upper = sandbox.pop("upper", [])
             sandbox["discarded_writes"] = len(upper)  # the demo's writes died with its overlay
