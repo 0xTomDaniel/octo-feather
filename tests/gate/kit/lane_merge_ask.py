@@ -136,6 +136,13 @@ class Lane:
         self.attach(s)
         (self.r / "docs" / "specs").mkdir(parents=True)
         self.git("init", "-q", "-b", "main", ".")
+        # the repo's own identity: every git process here reads it, octo-feather-gate's note too
+        for k, v in (
+            ("user.email", "t@example.com"),
+            ("user.name", "t"),
+            ("commit.gpgsign", "false"),
+        ):
+            self.git("config", k, v)
         self.status("planned", "null")
         self.write("app.py", "".join(f"{i}\n" for i in range(1, 21)))
         self.write("notes.txt", "notes\n")
@@ -182,15 +189,7 @@ class Lane:
 
     # --- the repo ---
     def git(self, *args: str, want: int = 0) -> str:
-        ident = [
-            "-c",
-            "user.email=t@example.com",
-            "-c",
-            "user.name=t",
-            "-c",
-            "commit.gpgsign=false",
-        ]
-        return self.s.run(["git", *ident, *args], cwd=self.r, want=want).out
+        return self.s.run(["git", *args], cwd=self.r, want=want).out
 
     def write(self, rel: str, text: str) -> None:
         (self.r / rel).write_text(text)
