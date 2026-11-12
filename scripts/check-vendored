@@ -109,7 +109,7 @@ class Objects:
         self.p = subprocess.Popen(["git", "--git-dir", gd, "cat-file", "--batch"], env=env,
                                   stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL)
 
-    def get(self, oid, kind):
+    def get(self, oid: str, kind: str) -> bytes:
         try:
             self.p.stdin.write(oid.encode() + b"\n"); self.p.stdin.flush()
             head = self.p.stdout.readline().split()
@@ -139,7 +139,8 @@ def tree_entries(raw):
         i = nul + 21
 
 
-def upstream(source, path, modes=None, single=None):
+def upstream(source: str, path: str, modes: dict[str, str] | None = None,
+             single: set[str] | None = None) -> dict[str, bytes]:
     """rel path -> bytes of the entry's folder at the pin, authenticated from the pin SHA down.
     A path naming one file (a single-file entry, #792) gives {its file name: bytes}, as skillfile
     caches it, and adds the entry's path to single when given. modes, when given, gets rel path -> git file mode."""
@@ -152,7 +153,7 @@ def upstream(source, path, modes=None, single=None):
             raise Unauthentic(f"commit {sha} has no tree")
         tree = first[1].decode()
         comps = path.split("/")
-        out = {}
+        out: dict[str, bytes] = {}
         for i, comp in enumerate(comps):
             ents = list(tree_entries(o.get(tree, "tree")))
             hit = [oid for mode, n, oid in ents if n == comp and mode == "40000"]
@@ -355,7 +356,7 @@ def gate(ents, vendored):
         for kind, name, src, _ in ents:  # local entries deploy onto themselves; give them their source
             if kind == "local" and os.path.isdir(os.path.join(root, src)):
                 shutil.copytree(os.path.join(root, src), os.path.join(work, src), symlinks=True)
-        upmodes, single = {}, set()
+        upmodes, single = {}, set[str]()
         for _, name, source, path in vendored:
             if not os.path.isdir(gitdir(source)):
                 die(f"{name}: upstream {source} is not cached at {gitdir(source)}; {FETCH}")
@@ -427,7 +428,7 @@ def extract(name, dest):
     if not hit:
         die(f"no `{FETCH_ONLY} github skill {name} ...` line in {os.path.join(root, 'Skillfile')}")
     source, path = hit[0]
-    modes = {}
+    modes: dict[str, str] = {}
     try:
         tree = upstream(source, path, modes)
     except Unauthentic as e:
