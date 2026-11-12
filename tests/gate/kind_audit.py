@@ -108,6 +108,9 @@ def main() -> None:
            "see evidence/2026-11-09-gh749-owned-judge.md. This audit executes no test body.",
            "Source ownership/setup findings and routing: evidence/2026-11-09-gh653-fixture-tool-home-gaps.md. "
            "Current qc-escapes host-wide pgrep is a separate execution blocker, NOT repaired by749.",
+           "Ownership source appendix: [process inventory](2026-11-09-gh653-process-ownership.md); "
+           "full file manifest/sites/hashes: [machine JSON](2026-11-09-gh653-process-ownership.json). "
+           "Mechanical source coverage is NOT semantic completeness or an execution grant.",
            "#731: gh576 by_hand/network currently marked with genuine isolation purpose. gh577 analyst "
            "stub now uses readiness-pipe draining instead of fixed turn sleeps; no clock-only exemption. Issue remains open.",
            "Regenerate (metadata only, from this worktree):", "```sh",
