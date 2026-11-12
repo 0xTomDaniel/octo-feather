@@ -88,7 +88,8 @@
 <text x="185" y="100" text-anchor="middle" font-size="11">try first</text><text x="385" y="100" text-anchor="middle" font-size="11">try first</text><text x="585" y="100" text-anchor="middle" font-size="11">try first</text>
 </g>
 </svg>
-<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed. No level skips past a reachable level, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
+<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed. Product workers escalate through their supervisor; the finite <a href="./host-cleanup.spec.html">host-cleanup worker</a> has the director as its direct parent (ADR 0029).
+No level skips past a reachable parent, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
 </figure>
 </section>
 <section data-anchor="messages" id="messages">
@@ -106,7 +107,8 @@
 </table>
 </div>
 <p data-anchor="roles-goal">Every report goes to its recipient through <code>herdr-say</code>; text left in the sender's own pane is not reported. A sender ends its turn after sending instead of polling for a reply; the reply arrives as a new message, and Herdr reports the sender done. Each supervisor runs under a goal for its lane; at each check-in it reads the Herdr state of every worker it waits on, consumes a finished result left on a worker's pane, otherwise recovers or restarts the worker, and tells the director which worker ended without reporting and what it did.</p>
-<p data-anchor="roles-park">Waiting agents hold no memory: the director parks a supervisor idle at an owner gate, waiting on another lane or held back for load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
+<p data-anchor="roles-park">Waiting agents hold no memory: the director parks a supervisor idle at an owner gate, waiting on another lane or held back for load; a supervisor parks a product worker it would otherwise keep idle through a long wait.
+The finite <a href="./host-cleanup.spec.html#task-scoped-workers-ownership">host-cleanup contract</a> has no parked record or parked-resume route. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
 </section>
 <section data-anchor="lane-record" id="lane-record">
 <h2>Lane state</h2>

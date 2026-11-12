@@ -13,8 +13,12 @@ The agent that owns one work item until it merges, breaking it into tickets, ass
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that does one assigned piece of work (a ticket, a review, a correction) inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
+An agent that does one assigned piece of work. Product workers (a ticket, a review, a correction) use their own isolated copy of the work and report to their supervisor; a host-cleanup worker reports directly to the director. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
+
+**Host-cleanup worker**:
+A fresh worker for one finite authorized host-cleanup operation, under the kit-owned cleanup ceiling and bounded task data, not a selectable standing specialist role. It reports to the director and has no product-edit authority.
+_Avoid_: Unroled agent, unrestricted agent
 
 **Implementer**:
 A worker that produces the change for one ticket.
@@ -99,7 +103,7 @@ The owner telling the director to build one or more accepted specs. The director
 _Avoid_: Launch, go
 
 **Escalation**:
-A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
+A problem passed one level up the actual parent chain (product worker, supervisor, director, owner; host-cleanup worker, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
