@@ -3,7 +3,13 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from herdr_messaging import post_merge_busy, say_lookup_fails, say_stalled, spawn_ready_late
+from herdr_messaging import (
+    post_merge_busy,
+    say_lookup_fails,
+    say_stalled,
+    spawn_ready_late,
+    tell_supervisors,
+)
 
 Case = Callable[..., None]
 
@@ -22,3 +28,7 @@ def test_say_stalled(case: Case) -> None:
 
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
+
+
+def test_post_merge_tell_supervisors(case: Case) -> None:
+    case(tell_supervisors)
