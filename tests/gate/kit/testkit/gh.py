@@ -4,7 +4,11 @@
 A store, no logic of the kit's: PR N is $FAKE_GH/pr/N.json, as `gh pr view --json` returns it
 (as real gh, every field asked: the stored value, or null), its diff pr/N.diff; issue N
 issue/N.json, workflow run N run/N.json, the repo repo.json, each `--json` answered the same
-way, `issue|pr|run list` every one stored (by number); `gh api [--paginate --slurp] PATH`, a
+way, `issue|pr|run list` every one stored (by number), `pr list` only those on --base B and in
+--state S when given (GitHub's state, OPEN for open); `pr edit N --base B` stores B as PR N's
+base and prints its URL; `repo view OWNER/NAME|URL`, for a repo other than o/r, answers
+api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
+unresolved repository; `gh api [--paginate --slurp] PATH`, a
 GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404.
 `gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
 repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each prints the comment URL
@@ -63,8 +67,38 @@ def view(a: list[str]) -> None:
 def listed(a: list[str]) -> None:
     """`issue|pr|run list --json F`: every one stored, by number."""
     rows = [json.loads(p.read_text()) for p in (STORE / a[0]).glob("*.json")]
+    if a[0] == "pr":
+        base, state = opt(a, "--base"), opt(a, "--state")
+        rows = [d for d in rows if base in (None, d.get("baseRefName"))]
+        rows = [d for d in rows if state in (None, "all") or d.get("state") == state.upper()]
     key = "databaseId" if a[0] == "run" else "number"
     out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+
+
+def opt(a: list[str], flag: str) -> str | None:
+    return a[a.index(flag) + 1] if flag in a else None
+
+
+def edit(a: list[str]) -> None:
+    """`pr edit N --base B`."""
+    p, base = pr_file(a[2]), opt(a, "--base")
+    if not p.is_file():
+        die(f"GraphQL: Could not resolve to a PullRequest with the number of {a[2]}.")
+    if base is None:
+        die(f"fake gh: unexpected {a}", 2)
+    d = json.loads(p.read_text())
+    d["baseRefName"] = base
+    p.write_text(json.dumps(d))
+    sys.stdout.write(f"https://github.com/o/r/pull/{a[2]}\n")
+
+
+def repo_view(a: list[str]) -> None:
+    """`repo view [OWNER/NAME|URL] --json F`."""
+    name = re.sub(r"^https://github\.com/|\.git$", "", a[2]) if a[2:3] != ["--json"] else "o/r"
+    p = STORE / ("repo.json" if name == "o/r" else f"api/repos/{name}.json")
+    if not p.is_file():
+        die(f"GraphQL: Could not resolve to a Repository with the name '{name}'.")
+    out(pick(json.loads(p.read_text()), a))
 
 
 def diff(a: list[str]) -> None:
@@ -128,7 +162,9 @@ def main(a: list[str]) -> None:
     elif two in (("issue", "list"), ("pr", "list"), ("run", "list")):
         listed(a)
     elif two == ("repo", "view"):
-        out(pick(json.loads((STORE / "repo.json").read_text()), a))
+        repo_view(a)
+    elif two == ("pr", "edit"):
+        edit(a)
     elif two == ("pr", "diff"):
         diff(a)
     elif a[:1] == ["api"] and "-X" not in a:

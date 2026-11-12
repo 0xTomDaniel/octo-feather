@@ -11,7 +11,9 @@ With FAKE_HERDR set, it stands for Herdr's agents instead (#666): a world in tha
 line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id, workspace_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
 a scenario may write it. `tab create --workspace W` makes tab W:tN, pane W:pN; `tab close T` drops
-T's agents; `agent start NAME --pane P` starts NAME there, ready (idle) the seconds in the file
+T's agents; `workspace close W` drops W's agents, `workspace get W` finds W while an agent is in
+it, as Herdr 0.9.5 prints it (else workspace_not_found on stderr, exit 1, as does a close of
+it); `agent start NAME --pane P` starts NAME there, ready (idle) the seconds in the file
 `ready_after` later (0 without one). `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
 fail plain (`herdr: server not reachable`, exit 1). `agent wait T --until S... --timeout MS`
@@ -87,6 +89,17 @@ class World:
         self.save()
         return 0
 
+    def workspace(self, a: list[str]) -> int:
+        """`workspace get|close W`."""
+        w = a[2]
+        if not any(g["workspace_id"] == w for g in self.agents.values()):
+            return fail("workspace_not_found")
+        if a[1] == "get":
+            return say({"type": "workspace_info", "workspace": {"workspace_id": w}})
+        self.agents = {p: g for p, g in self.agents.items() if g["workspace_id"] != w}
+        self.save()
+        return 0
+
     def agent_start(self, a: list[str]) -> int:
         after = self.dir / "ready_after"
         delay = float(after.read_text()) if after.exists() else 0.0
@@ -147,6 +160,8 @@ class World:
         verbs = {
             ("tab", "create"): self.tab_create,
             ("tab", "close"): self.tab_close,
+            ("workspace", "close"): self.workspace,
+            ("workspace", "get"): self.workspace,
             ("agent", "start"): self.agent_start,
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
