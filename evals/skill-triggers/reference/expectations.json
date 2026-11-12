@@ -245,5 +245,13 @@
   "impl-refactor-fold-goodbye": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
   "impl-refactor-split-count": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
   "impl-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
-  "impl-refactor-near-binary": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]}
+  "impl-refactor-near-binary": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "sup-refactor-cut-fold": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "sup-refactor-brief-count": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "sup-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "sup-refactor-near-binary": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "rev-refactor-fold": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "rev-refactor-name-check": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "rev-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "rev-refactor-near-inner-space": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]}
 }

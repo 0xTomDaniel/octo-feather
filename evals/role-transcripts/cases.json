@@ -264,5 +264,24 @@
     "fixture": "python-app-refactor",
     "branch": "implementer-t3",
     "task": "Ticket T3 (lane gh3, parent #3): `app goodbye` was added by copying `app hello`, and it shows: src/app/cli.py and src/app/core.py carry two copies of the same name check, error printing and JSON output, each written its own way. Leave the code with one way of doing each. What `app hello` and `app goodbye` accept, print and exit with stays exactly as it is today.\nAcceptance criterion: one-greeting-path. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t3, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "supervisor-refactor-lane",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "branch": "gh3",
+    "fake_gh": true,
+    "task": "Lane gh3 (parent issue #3, \"one path for hello and goodbye\"), branch gh3 in this directory, cut from main. The owner's ruling on #3 is its canonical source; you have read it, and its body is:\n> `app goodbye` was added by copying `app hello`, and it shows: src/app/cli.py and src/app/core.py carry two copies of the same name check, error printing and JSON output, each written its own way. Leave the code with one way of doing each. What `app hello` and `app goodbye` accept, print and exit with stays exactly as it is today. Criterion: one-greeting-path.\nYour step now: cut the lane's tickets, file them as sub-issues of #3, and write the pilot ticket's implementer brief. Only that step: no workers, no push, no PR, no code change.\nSandbox run: there is no Herdr and no octo-feather-state; skip every herdr-say step and lane-record write; GitHub is reachable through gh. Put the brief and your report as your final message."
+  },
+  {
+    "id": "reviewer-refactor-diff",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor",
+    "head": {
+      "fixture": "python-app-refactor-folded",
+      "branch": "implementer-t3",
+      "message": "refactor(app): one path for hello and goodbye (T3, one-greeting-path)"
+    },
+    "task": "Review lane gh3, ticket T3 (`app goodbye` was added by copying `app hello`; leave one way of checking the name, printing errors and printing JSON, with what `app hello` and `app goodbye` accept, print and exit with exactly as today; criterion one-greeting-path).\nDiff: base main, head implementer-t3 in this directory (`git diff main...implementer-t3`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
   }
 ]
