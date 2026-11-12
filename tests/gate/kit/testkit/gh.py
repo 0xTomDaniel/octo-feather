@@ -9,7 +9,8 @@ way, `issue|pr|run list` every one stored (by number), `pr list` only those on -
 base and prints its URL; `repo view OWNER/NAME|URL`, for a repo other than o/r, answers
 api/repos/OWNER/NAME.json the same way (gh reads the URL itself), an unstored one GitHub's
 unresolved repository; `gh api [--paginate --slurp] PATH`, a
-GET, prints api/PATH.json (one page; slurped, a list of it), a path not stored is GitHub's 404.
+GET, prints api/PATH.json (one page; slurped, a list of it; {owner}/{repo} in PATH is o/r, as gh
+fills it from this dir's repo), a path not stored is GitHub's 404.
 `gh api -X POST repos/o/r/issues/N/comments` appends a comment, `-X PATCH
 repos/o/r/issues/comments/ID` replaces one's body (PR 7's comments); each prints the comment URL
 (`--jq .html_url`). `gh api repos/o/r/commits?...` prints $FAKE_GH/commits.json (the default
@@ -17,6 +18,10 @@ branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.githu
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
+A call whose answer changes between calls (a run list while runs start and end, a run watch, a
+compare) is a recording, never computed: $FAKE_GH/tape.json maps its exact argv, one line as the
+log writes it, to its recorded answers in order, each its stdout (a string) or {"out", "err",
+"exit"}; the Nth such call replays the Nth (counts in tape.n.json), an exhausted one exits 2.
 Anything else exits 2 naming it.
 """
 
@@ -116,7 +121,7 @@ def get(a: list[str]) -> None:
     if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
         served(STORE / "contents" / m.group(1))
         return
-    p = STORE / "api" / f"{a[-1].lstrip('/')}.json"
+    p = STORE / "api" / f"{a[-1].lstrip('/').replace('{owner}/{repo}', 'o/r')}.json"
     if not p.is_file():
         die("gh: Not Found (HTTP 404)")
     page = json.loads(p.read_text())
@@ -149,6 +154,25 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
+def taped(call: str) -> bool:
+    """CALL's next recorded answer replayed and exited with, if tape.json records CALL."""
+    tape = STORE / "tape.json"
+    answers = json.loads(tape.read_text()).get(call) if tape.is_file() else None
+    if answers is None:
+        return False
+    count = STORE / "tape.n.json"
+    n: dict[str, int] = json.loads(count.read_text()) if count.is_file() else {}
+    k = n.get(call, 0)
+    count.write_text(json.dumps(n | {call: k + 1}))
+    if k >= len(answers):
+        die(f"fake gh: exhausted recording for: {call} (tape.json)", 2)
+    ans = answers[k]
+    d = {"out": ans} if isinstance(ans, str) else ans
+    sys.stdout.write(str(d.get("out", "")))
+    sys.stderr.write(str(d.get("err", "")))
+    sys.exit(int(d.get("exit", 0)))
+
+
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
         f.write(" ".join(a) + "\n")
@@ -156,6 +180,7 @@ def main(a: list[str]) -> None:
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
+    taped(" ".join(a))
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)
