@@ -477,3 +477,21 @@ manifest `/tmp/gh786-coherent-frozen.sha256`. Full result and commit in handoff,
 no post-pass source/evidence edits. Integration/QA/review/actual CI for the new H
 still supervisor work; OWNER family/material-risk decision pending, no readiness,
 criterion acceptance, merge or push claim.
+
+## Per-path guide smoke recovery
+
+Canonical integration of 0d03e1e failed only missing-behavior-smoke:
+`/tmp/gh786-integrate-coherent/output` records1failed227passed266.95s/rc2;
+supervisor rolled back clean0a7. The changed guide was not named by a Smoke line.
+
+Smoke: .agents/skills/verify-octo-feather/features/director-reflection.md loaded completely by the SAME live corrector/QA-caller context on2026-11-12, then its retained-trace inspection instructions exercised against the existing coherent public run, not a new model invocation. Caller inspected both native session files: unreachable session has four error attempts; live session has six approved openai/gpt-6.1-sol/openai-responses assistant messages, five ordinary tool turns and final stop. Caller verified actual source0..5/derived0..1 read loop and raw source result, full nine questions, duplicated-rule3 writer-side route and original lane citations in the reply. This exercises the guide's QA-caller trace-inspection behavior, not a claim the headless reflector loaded that guide.
+
+The previously recorded fresh --session-dir invocation retained distinct sessions
+outside cleanup. This inspection applies the updated guide to those actual files;
+it does not reuse them as a fresh headless run or retroactively label the old
+reflector as having loaded this guide. Existing record741ba7a4 remains DIRTYH0a7,
+not current0d03 or any upcoming commit. First-resolving approved wrapper plus
+actual assistant metadata remain valid for that run; no literal-first-PATH or
+per-launch re-prefix claim. No further QA/model probe, neutral trailer, gate
+weakening, new check/instruction/policy/producer edit. Adequacy of this caller-side
+smoke is review judgment; model-facing guide consumption is not claimed.
