@@ -53,6 +53,11 @@ cp "$r/.agents/skills/tdd/SKILL.md" "$t/keep"
 edit "$r/.agents/skills/tdd/SKILL.md" 's.replace("\n\n", "\ndrift\n", 1)'
 run 1; has "check-vendored: tdd: .agents/skills/tdd/SKILL.md differs from upstream mattpocock/skills@49dd158"
 cp "$t/keep" "$r/.agents/skills/tdd/SKILL.md"; run 0
+# A single-file entry (#792): refactoring is one upstream file, installed as SKILL.md; a hand edit fails naming it and its patch file.
+cp "$r/.agents/skills/refactoring/SKILL.md" "$t/keep"
+edit "$r/.agents/skills/refactoring/SKILL.md" 's.replace("\n\n", "\ndrift\n", 1)'
+run 1; has "check-vendored: refactoring: .agents/skills/refactoring/SKILL.md differs from upstream cursor/plugins@0b8e952 pstack/skills/poteto-mode/playbooks/refactoring.md plus .skillfile/patches/skills/refactoring.patch"
+cp "$t/keep" "$r/.agents/skills/refactoring/SKILL.md"; run 0
 # An extra file and a missing upstream file.
 echo x > "$r/.agents/skills/sharpen/EXTRA.md"; mv "$r/.agents/skills/tdd/mocking.md" "$t/"
 run 1; has "check-vendored: sharpen: .agents/skills/sharpen/EXTRA.md is not in upstream"
