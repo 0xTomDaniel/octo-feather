@@ -391,3 +391,107 @@ fresh4096MiB floor, one owned group with awaited TERM/KILL cleanup. Receipt
 22:43:53Z..23:15:00Z, no run holding it: extension SOURCE-verified, not assumed.
 Full result/commit belongs
 in handoff, no post-pass source/evidence edit; no acceptance/family/QC claim.
+
+## Coherent public director QA fixture and retained trace
+
+Packed checkpoint committed c84e5de, actual tracked full228passed262.58s, all six
+hashes unchanged; integration H0a7c7555b11ce0e3f08c17d489cb88c2f4d82ce8 contains it.
+This worktree fast-forwarded to that integration base before this separate repair.
+Actual old-H CI43118000831 later succeeded: historical if a new H is produced.
+
+Observed final-H public QA failed record20261111T231955Z-f4f77c37:
+`/tmp/gh786-finalh-director-qa-run/output` and corresponding evidence directory.
+Live app exit0 appended zero findings; fallback correction901 counted three
+reviews but had no model route. Strict reflected() oracle requires all nine
+questions, >0 findings and a writer-side duplicated-rule finding with count3.
+No oracle/pipe mismatch here. Native binding and manifest captured all lane logs
+and class counts, but capture alone did not prove consultation. Synthetic director
+source was only217bytes/two neutral lines. Previous reflection Nov9 was followed
+physically by an Oct27 owner finding; Oct20/22/26 reviews also predated that
+reflection. Forced no-session plus cleanup left no model read/reply trace. This
+establishes underspecified/incoherent fixture evidence, NOT the exclusive cause
+of the zero reply, a parser bug, a thinking-mode effect or a stochastic diagnosis.
+Failed f4f and prior timeout124 artifacts remain unchanged; no lucky retry.
+
+Released change ONLY public verify director scenario, invocation and guide:
+one UTC reference clock puts last reflection48h ago; matching lane reviews36/24/
+12h ago, gh911 no-gap reflection35h, owner intervention1h. Existing synthetic seed
+receives concrete fictional conversation describing the same episodes.
+It never instructs the model to emit an expected class/count/route; original
+review records retain their existing labels. Shared fixture unchanged. Existing
+strict reflected() oracle is byte-for-byte unchanged; production reflect/lane/
+parser/source binding/guards/roles/specs/provider/profile untouched.
+
+Approved `pi --help` captured in `/tmp/gh786-approved-pi-help` confirms existing
+--session-dir and --no-session. Director drive honors caller --session-dir in
+existing OCTO_FEATHER_REFLECT_ARGS rather than forcing --no-session; default
+remains ephemeral. Native Pi owns session files/fresh identity, not a custom
+wrapper/store/env API. Existing shlex preserves argument boundaries. Guide shows
+fresh directory outside cleanup; unreachable failure can leave a separate session.
+
+ONE public verify run from dirty H0a7, unchanged documented --thinking off:
+`/tmp/gh786-coherent-director-qa-run/{output,exit}` rc0, refuse-unreachable /
+reflect-live / due-fresh ALL PASS. Record20261111T233258Z-741ba7a4 names DIRTYH0a7,
+NOT the upcoming commit and NOT owner acceptance. Native app returned four findings,
+full nine questions, duplicated-rule3 routed to writer templates and producer
+Owner field, nonreview; source-not-consulted/stranded-worker/reflection-missed
+findings cite original conversation/record lines. No further model retry/probe.
+
+Actual live trace:
+`/tmp/gh786-coherent-director-qa/sessions/2026-11-11T23-32-26-218Z_01a1ccf4-9fe9-71d6-8f94-6a40912b5736.jsonl`.
+Six actual assistant messages, openai/gpt-6.1-sol/openai-responses, five tool turns.
+Ordinary nested tools.read read source0..5 and derived0..1 windows. Raw tool result
+contains full2345byte/11line synthetic conversation, all three lane review records,
+gh911 no-gap reflection and class count3. Final reply supplies exact count/writer
+route and original citations, not just a question tally. Earlier session
+2026-11-11T23-32-11-128Z_01a1ccf4-64f7-7410-8471-e8c6de6cc4da is the unreachable
+case's failed attempts, NOT additional successful live-model turns. Own temporary
+bundle and run state removed; retained sessions are synthetic only, outside cleanup.
+
+Command resolution verified, not inferred from PATH position: parsed exact
+reflect-live.cmd PATH plus contract entry's kit/scripts prefix, enumerated actual
+executable pi candidates with shutil.which/os.access. FIRST resolving executable
+is /home/varelaseb/.local/state/octo-feather/sessions/feather/gpt-only/bin/pi;
+only later candidate /home/varelaseb/.local/bin/pi points at installed native CLI.
+Earlier kit/fake-Herdr/tracker/mise entries contain no executable pi. The approved
+wrapper is late textually but first resolving; actual assistant metadata matches.
+No provider switch or role default change. Coherent-input PASS does not prove
+exclusive causality of the earlier zero; retained actual reads now make the new
+outcome inspectable. Model suggestions are findings, not newly adopted policy.
+
+Delta calls, in addition to the cumulative earlier runtime checks/instructions:
+call: instruction+example .agents/skills/verify-octo-feather/features/director-reflection.md: retain a fresh synthetic Pi trace through existing --session-dir opt-in outside cleanup; inspect actual live source reads/reply and distinguish unreachable sessions, never reused context as fresh proof.
+call: instruction+example docs/owed-evals/786.md: replay coherent relative chronology/conversation under the unchanged strict public oracle; zero-findings fallback correction and missing trace do not prove a routed model finding, and later PASS does not prove exclusive old cause.
+For this delta: no new runtime/repo-text Check, no weakened oracle,
+no ignore/baseline/budget/skip. Internal flag forwarding is invocation setup,
+not a new CLI/guard. Prior art: existing Python3.13.5 stdlib JSON/shlex and real
+Pi session CLI, pinned existing native tools; no invented session manager/parser.
+
+Evidence and owed case finalized BEFORE four-file staged/frozen full. Source and
+invocation unchanged since the actual smoke; documentation adds qualifications,
+not another model prompt. Verified official grant23:26:27Z..23:54:59Z, fresh4096MiB,
+one owned group and awaited TERM/KILL cleanup, background launch/parent callback,
+min1800/remainingTTL-30. Planned full artifacts `/tmp/gh786-coherent-full/`, runner
+`/tmp/gh786-coherent-full.py`, receipt `/tmp/gh786-coherent-full-runner.pid`, frozen
+manifest `/tmp/gh786-coherent-frozen.sha256`. Full result and commit in handoff,
+no post-pass source/evidence edits. Integration/QA/review/actual CI for the new H
+still supervisor work; OWNER family/material-risk decision pending, no readiness,
+criterion acceptance, merge or push claim.
+
+## Per-path guide smoke recovery
+
+Canonical integration of 0d03e1e failed only missing-behavior-smoke:
+`/tmp/gh786-integrate-coherent/output` records1failed227passed266.95s/rc2;
+supervisor rolled back clean0a7. The changed guide was not named by a Smoke line.
+
+Smoke: .agents/skills/verify-octo-feather/features/director-reflection.md loaded completely by the SAME live corrector/QA-caller context on2026-11-12, then its retained-trace inspection instructions exercised against the existing coherent public run, not a new model invocation. Caller inspected both native session files: unreachable session has four error attempts; live session has six approved openai/gpt-6.1-sol/openai-responses assistant messages, five ordinary tool turns and final stop. Caller verified actual source0..5/derived0..1 read loop and raw source result, full nine questions, duplicated-rule3 writer-side route and original lane citations in the reply. This exercises the guide's QA-caller trace-inspection behavior, not a claim the headless reflector loaded that guide.
+
+The previously recorded fresh --session-dir invocation retained distinct sessions
+outside cleanup. This inspection applies the updated guide to those actual files;
+it does not reuse them as a fresh headless run or retroactively label the old
+reflector as having loaded this guide. Existing record741ba7a4 remains DIRTYH0a7,
+not current0d03 or any upcoming commit. First-resolving approved wrapper plus
+actual assistant metadata remain valid for that run; no literal-first-PATH or
+per-launch re-prefix claim. No further QA/model probe, neutral trailer, gate
+weakening, new check/instruction/policy/producer edit. Adequacy of this caller-side
+smoke is review judgment; model-facing guide consumption is not claimed.
