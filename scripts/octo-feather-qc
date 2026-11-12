@@ -80,20 +80,26 @@ run, whatever pi it would launch (scripts/check-gate-free --refuse; the gate sta
 run it; 0, or 3 when a record could not be written). On 64 to 70 the judge never
 started; after it ran, the status file is never left modified and uncommitted.
 """
-import base64, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
+
+import mmap
+import base64, contextlib, ctypes, fcntl, hashlib, importlib.machinery, importlib.util, json, os, re, secrets, shlex, shutil, signal, subprocess, sys, tempfile, threading, time, tomllib, types
+from collections.abc import Callable, Generator
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Any, NoReturn
+from typing import Any, NoReturn, TypedDict, TypeGuard
 
-Result = dict[str, Any]   # one claimed criterion's result (quality spec #qc-results)
+Result = dict[str, Any]  # one claimed criterion's result (quality spec #qc-results)
 
 KIT = Path(__file__).resolve().parent.parent
 STATUS_TOOL = KIT / "scripts" / "octo-feather-spec-status"
 EVIDENCE_TOOL = KIT / "scripts" / "octo-feather-evidence"
 CONTRACT_TOOL = KIT / "scripts" / "octo-feather-contract"
 DEMO_OUTPUTS = ("demo.cmd", "demo.exit", "demo.stdout", "demo.stderr")
-FALLBACK_CAP_S = 900   # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
-CAPPED = (124, 137)   # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
+FALLBACK_CAP_S = 900  # each agent fallback judge's fixed time cap (quality spec #qc-fallback)
+CAPPED = (
+    124,
+    137,
+)  # timeout's exit when the cap stopped the judge: 124 by TERM, 137 once -k sent KILL (--foreground)
 
 
 def die(code: int, msg: str) -> NoReturn:
@@ -200,7 +206,7 @@ def pi_auth():
     return Path(os.environ.get("PI_CODING_AGENT_DIR") or Path.home() / ".pi" / "agent") / "auth.json"
 
 
-WARNED: set[str] = set()   # the warnings this run has printed
+WARNED: set[str] = set()  # the warnings this run has printed
 
 
 def oauth_warning():
@@ -215,9 +221,351 @@ def oauth_warning():
     return None
 
 
-def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bool = True,
-              kit: Path | None = None, browser: str | None = None,
-              shots: bool = False, pi: bool = True) -> tuple[subprocess.CompletedProcess[str] | None, dict[str, Any]]:
+# Operational capability carried by the existing trusted FD bootstrap only.
+# The anonymous bytes have no path/cache/store; POSIX process locks serialize first mint.
+# One anonymous capability in the existing FD bootstrap. No unlocked snapshot readers.
+# Python threads use a nonblocking local lock; processes use POSIX record locks.
+# Linux memfd seals distinguish idle, in-progress/failed publication, immutable commit.
+def is_json_object(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow an object from json.loads; JSON object keys are strings."""
+    return isinstance(value, dict)
+
+
+class CancellationState:
+    def __init__(self) -> None:
+        self.fd: int | None = None
+        self.signal = 0
+        self.end = 0
+        self.fault: BaseException | None = None
+        self.lock = threading.Lock()
+        self.armed = True
+
+
+_cancellation = CancellationState()
+CANCEL_SIZE = 4096
+CANCEL_BASE_SEALS = fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK
+CANCEL_CLAIM_SEAL = 0x10  # Linux UAPI F_SEAL_FUTURE_WRITE (kernel >=5.1; kit requires >=6.6)
+CANCEL_FINAL_SEALS = CANCEL_BASE_SEALS | CANCEL_CLAIM_SEAL | fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL
+
+
+class Cancelled(BaseException):
+    def __init__(self, signum: int) -> None:
+        self.signum = signum
+        super().__init__(f"cancelled by signal {signum}")
+
+
+def cancel_fault(error: BaseException) -> None:
+    if _cancellation.fault is None:
+        _cancellation.fault = error  # irreversible for this invocation; never retry it into grace
+    elif _cancellation.fault is not error:
+        _cancellation.fault.add_note(
+            f"secondary capability failure: {type(error).__name__}: {error}"
+        )
+
+
+def cancel_image(state: str, end: int, signum: int) -> bytes:
+    raw = json.dumps({"v": 1, "state": state, "end_ns": f"{end:020d}", "signal": signum},
+                     sort_keys=True, separators=(",", ":")).encode()
+    return raw + b"\0" * (CANCEL_SIZE - len(raw))
+
+
+def initialize_capability(fd: int) -> None:
+    image = cancel_image("idle", 0, 0)
+    if os.write(fd, image) != len(image) or os.pread(fd, CANCEL_SIZE + 1, 0) != image:
+        failure_message = "cancellation capability initialization incomplete"
+        raise OSError(failure_message)
+    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, CANCEL_BASE_SEALS)
+    if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != CANCEL_BASE_SEALS:
+        failure_message = "cancellation capability initialization seals invalid"
+        raise OSError(failure_message)
+
+
+def require_capability_lock(*, locked: bool) -> None:
+    if not locked:
+        failure_message = "cancellation capability thread contention"
+        raise BlockingIOError(failure_message)
+
+
+def validate_commit(fd: int, end: int, sig: int) -> None:
+    if cancel_decode(fd) != (end, sig):
+        failure_message = "cancellation capability commit readback failed"
+        raise OSError(failure_message)
+
+
+def cancel_create() -> int:
+    fd = os.memfd_create("qc-cancellation", os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+    try:
+        initialize_capability(fd)
+        # Return stays inside the owned FD close/poison enrollment, including fatal interruption.
+        return fd  # noqa: TRY300
+    except BaseException as error:
+        try:
+            os.close(fd)
+        # failed initial capability close must not replace the creating failure.
+        except BaseException as close_error:  # noqa: BLE001
+            error.add_note(f"initial capability close failed: {close_error}")
+        raise
+
+
+def cancel_decode(fd: int) -> tuple[int, int]:
+    seals = fcntl.fcntl(fd, fcntl.F_GET_SEALS)
+    raw = os.pread(fd, CANCEL_SIZE + 1, 0)
+    if len(raw) != CANCEL_SIZE:
+        failure_message = "cancellation capability size invalid"
+        raise OSError(failure_message)
+    row: object = json.loads(raw.rstrip(b"\0"))
+    if (
+        not is_json_object(row)
+        or set(row) != {"v", "state", "end_ns", "signal"}
+        or type(row["v"]) is not int
+        or row["v"] != 1
+        or not isinstance(row["end_ns"], str)
+        or re.fullmatch("[0-9]{20}", row["end_ns"]) is None
+        or type(row["signal"]) is not int
+        or row["signal"] not in (0, 1, 2, 15)
+    ):
+        failure_message = "cancellation capability codec invalid"
+        raise OSError(failure_message)
+    end, sig = int(row["end_ns"]), row["signal"]
+    state = "idle" if seals == CANCEL_BASE_SEALS and end == 0 and sig == 0 else "committed"
+    if (
+        state == "committed" and (seals != CANCEL_FINAL_SEALS or not end or sig not in (1, 2, 15))
+    ) or raw != cancel_image(state, end, sig):
+        failure_message = "cancellation capability publication incomplete/poisoned"
+        raise OSError(failure_message)
+    if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != seals:
+        failure_message = "cancellation publication changed during validation"
+        raise OSError(failure_message)
+    return end, sig
+
+
+def poison_optional(fd: int | None) -> None:
+    """Poison only the current optional capability, inside its owner's catch."""
+    if fd is not None:
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL)
+
+
+def require_unpoisoned() -> None:
+    if _cancellation.fault is not None:
+        raise _cancellation.fault
+
+
+def cancel_without_capability(signum: int, *, mint: bool) -> tuple[int, int]:
+    if mint:
+        error = OSError("cancellation capability unavailable")
+        cancel_fault(error)
+        raise error
+    return _cancellation.end, signum
+
+
+def cancel_stamp(signum: int = 0, *, mint: bool = False) -> tuple[int, int]:
+    # These preflight checks remain before acquiring either lock, as before.
+    require_unpoisoned()
+    if _cancellation.fd is None:
+        return cancel_without_capability(signum, mint=mint)
+    locked = False
+    primary = None
+    mapping = None
+    try:
+        locked = _cancellation.lock.acquire(blocking=False)
+        require_capability_lock(locked=locked)
+        fcntl.lockf(_cancellation.fd, (fcntl.LOCK_EX if mint else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        end, sig = cancel_decode(_cancellation.fd)
+        if mint and not end:
+            # Claim BEFORE publication. A failed/partial commit is never an idle retry:
+            # future writes/maps are prohibited once the kernel accepts this seal.
+            end, sig = time.monotonic_ns() + 12_000_000_000, signum
+            _cancellation.end = end  # original attempt bound, retained even if publication fails
+            mapping = mmap.mmap(_cancellation.fd, CANCEL_SIZE, access=mmap.ACCESS_WRITE)
+            fcntl.fcntl(_cancellation.fd, fcntl.F_ADD_SEALS, CANCEL_CLAIM_SEAL)
+            mapping[:] = cancel_image("committed", end, sig)
+            mapping.close()
+            mapping = None
+            fcntl.fcntl(_cancellation.fd, fcntl.F_ADD_SEALS, CANCEL_FINAL_SEALS)
+            validate_commit(_cancellation.fd, end, sig)
+        _cancellation.end = end
+        # Return stays inside the owned FD close/poison enrollment, including fatal interruption.
+        return end, sig  # noqa: TRY300
+    except BaseException as error:
+        primary = error
+        cancel_fault(error)
+        # Best effort terminal poison. If even seals fail, local poison and forced
+        # ownership remain authoritative; no failed actor can retry/forward grace.
+        if mapping is not None:
+            try:
+                mapping.close()
+            # failed writable mapping close is secondary to publication failure.
+            except BaseException as close_error:  # noqa: BLE001
+                error.add_note(f"capability mapping close: {close_error}")
+        if mint:
+            try:
+                poison_optional(_cancellation.fd)
+            # failed terminal poison is secondary, never retried into grace.
+            except BaseException as poison_error:  # noqa: BLE001
+                error.add_note(f"shared terminal poison unproved: {poison_error}")
+        raise
+    finally:
+        if locked:
+            try:
+                fcntl.lockf(_cancellation.fd, fcntl.LOCK_UN)
+            except BaseException as unlock_error:
+                cancel_fault(unlock_error)
+                if primary is None:
+                    raise
+                primary.add_note(f"capability unlock failed: {unlock_error}")
+            finally:
+                _cancellation.lock.release()
+
+
+def cancel_budget(limit: float, reserve: float = 0) -> float:
+    if _cancellation.fd is None:
+        # Terminal caller closure consumes only the original bound, never re-mints.
+        if _cancellation.end:
+            return min(limit, max(0, (_cancellation.end - time.monotonic_ns()) / 1e9 - reserve))
+        return 0 if _cancellation.signal or _cancellation.fault is not None else limit
+    try:
+        end, _ = cancel_stamp()
+    # budget validation latches fatal poison and uses only original validated bound.
+    except BaseException as error:  # noqa: BLE001
+        cancel_fault(error)
+        end = _cancellation.end  # only a previously validated bound; never a new relative remedy
+    if end:
+        return min(limit, max(0, (end - time.monotonic_ns()) / 1e9 - reserve))
+    return 0 if _cancellation.signal or _cancellation.fault is not None else limit
+
+
+def cancel_entry(n: int, _frame: object) -> None:
+    if not _cancellation.signal:
+        _cancellation.signal = n
+        try:
+            cancel_stamp(n, mint=True)
+        except BaseException as error:
+            cancel_fault(error)
+            if _cancellation.armed:
+                raise  # actual mint/lock/read/write failure remains primary
+        else:
+            if _cancellation.armed:
+                raise Cancelled(n)
+
+
+@contextlib.contextmanager
+def defer_termination() -> Generator[None]:
+    """Enroll a new root before delivering an installed TERM/HUP unwind handler.
+
+    No signal mask or preexec_fn: exec children retain ordinary signal delivery.
+    Default/ignored dispositions stay unchanged. The selected CLI has installed
+    callable unwind handlers for both signals before reaching sandboxed().
+    """
+    handlers: dict[int, Callable[[int, types.FrameType | None], object]] = {s: h for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP)
+                if callable(h := signal.getsignal(s))}
+    pending: tuple[int, types.FrameType | None] | None = None
+    arming, delivered = True, False
+
+    def deliver() -> None:
+        nonlocal delivered
+        if pending is not None and not delivered:
+            delivered = True
+            handlers[pending[0]](*pending)
+
+    def defer(n: int, frame: types.FrameType | None) -> None:
+        nonlocal pending
+        if pending is None:
+            pending = (n, frame)
+        if not arming:
+            deliver()
+
+    try:
+        for s in handlers:
+            signal.signal(s, defer)
+        yield
+    finally:
+        try:
+            arming = False
+            deliver()  # first pending signal, never replaced by a later one
+        finally:
+            for s, handler in handlers.items():
+                signal.signal(s, handler)
+
+
+def reap_cancelled() -> bool:
+    """Drain this invocation's adopted children, not a reaped process-group number.
+
+    Same retained-task mechanism as qc-sandbox.orphans: no concurrent wait(-1)
+    consumer, only own task children, pidfds acquired before those children reap.
+    ECHILD alone proves completion and accounts every adopted child's CPU.
+    """
+    end = time.monotonic() + cancel_budget(5)
+    forced = False
+    while True:
+        try:
+            pid, _ = os.waitpid(-1, os.WNOHANG)
+        except ChildProcessError:
+            return forced
+        if pid:
+            if time.monotonic() >= end:
+                failure_message = "qc owned cancellation exceeded cleanup bound; completion unproved"
+                raise RuntimeError(failure_message)
+            continue
+        children: set[int] = set()
+        for task in Path("/proc/self/task").iterdir():
+            tid = task.name
+            try:
+                children.update(map(int, Path(f"/proc/self/task/{tid}/children").read_text().split()))
+            except FileNotFoundError:
+                if tid == str(os.getpid()):
+                    raise
+        for child in children:
+            fd = os.pidfd_open(child)
+            try:
+                with contextlib.suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+                    forced = True
+            finally:
+                os.close(fd)
+        if time.monotonic() >= end:
+            failure_message = "qc owned cancellation incomplete: children remain; CPU accounting unproved"
+            raise RuntimeError(failure_message)
+        time.sleep(0.01)
+
+
+class SandboxRecord(TypedDict, total=False):
+    session: str
+    proof: list[str]
+    native_lifecycle: dict[str, object]
+    agents_started: object
+    caller_received_signal: int | None
+    owner_exit: int | None
+    cancel_signal: int | None
+    cancel_deadline_ns: int | None
+    caller_errors: list[str]
+    capability_error: str | None
+    drain_complete: bool
+    deadline_ok: bool
+    spend: list[str]
+    upper: list[list[str]]
+    shots: list[list[str]]
+    discarded_writes: int
+    gh_miss_log: list[object]
+
+
+def close_optional(fd: int | None) -> None:
+    """Close the actual optional FD, invoked inside the terminal close try."""
+    if fd is not None:
+        os.close(fd)
+
+
+# Keep Popen/pidfd enrollment and independent cleanup/finally in this owner.
+def sandboxed(  # noqa: PLR0912
+    judge: list[str],
+    session: str,
+    gh: dict[str, Any],
+    *,
+    history: bool = True,
+    kit: Path | None = None,
+    browser: str | None = None,
+    shots: bool = False,
+    pi: bool = True,
+) -> tuple[subprocess.CompletedProcess[str] | None, SandboxRecord]:
     """Run JUDGE inside octo-feather-qc-sandbox (srt, its own namespaces); return (run, sandbox record), run None if it never started.
     history False: no archived lanes or director log bound in (a factory eval, octo-feather-qa); kit: the kit under
     test (default this kit; what the sandbox shows of it: docs/adr/0022, sandbox paragraph); browser: the box's
@@ -226,34 +574,91 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
     models.json at all."""
     unshare = shutil.which("unshare")
     if not unshare and sys.platform == "darwin":
-        die(69, "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask")
+        die(
+            69,
+            "just qc: not on macOS (the judge's sandbox needs Linux unshare and /proc); run it on a Linux box, or say `just qc` not run (macOS) in the merge ask",
+        )
     if not unshare:
-        die(66, "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)")
+        die(
+            66,
+            "unshare not found; the judge runs only in its sandbox (or pass --no-sandbox to debug)",
+        )
     # Proof, post record, judge stderr and our stderr come back over pipes, drained by threads: a write
     # fd on a file would pin its mount and the sandbox's read-only remount would fail with EBUSY.
+    if _cancellation.signal or _cancellation.fault is not None:
+        raise (
+            _cancellation.fault
+            if _cancellation.fault is not None
+            else Cancelled(_cancellation.signal)
+        )
+    _cancellation.armed = True  # EVERY active sandbox, including declared demo2
+    if _cancellation.fd is None:
+        _cancellation.fd = cancel_create()
     names = ("proof", "post", "err", "stderr")
     pipes = {n: os.pipe() for n in names}
-    for n in names:   # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
-        r, w = pipes[n]; pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100)); os.close(w)
+    for n in names:  # write ends above 100 so the sandbox's dup onto fds 4-6 cannot clobber one
+        r, w = pipes[n]
+        pipes[n] = (r, fcntl.fcntl(w, fcntl.F_DUPFD, 100))
+        os.close(w)
+    write_ends = {n: pipes[n][1] for n in names}
     got = {n: [] for n in names}
-    state = Path(subprocess.run([str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True).stdout.strip())
-    top = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
-    ro = [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p] + ([gh["dir"]] if "dir" in gh else []) + ([browser] if browser else [])
+    state = Path(
+        subprocess.run(
+            [str(KIT / "scripts" / "octo-feather-state")], capture_output=True, text=True
+        ).stdout.strip()
+    )
+    top = (
+        Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state") / "octo-feather"
+    )
+    ro = (
+        [p for p in os.environ.get("OCTO_FEATHER_QC_RO_BINDS", "").split(":") if p]
+        + ([gh["dir"]] if "dir" in gh else [])
+        + ([browser] if browser else [])
+    )
     pre = [p for p in os.environ.get("OCTO_FEATHER_QC_PATH", "").split(":") if p]
     worktree = git("rev-parse", "--show-toplevel")
     # Paths under /tmp the run needs back after /tmp turns private (tests run repos from mktemp).
-    want = [worktree, KIT, state, top, Path.home(), *ro, *pre, *os.environ.get("PATH", "").split(":")]
+    want = [
+        worktree,
+        KIT,
+        state,
+        top,
+        Path.home(),
+        *ro,
+        *pre,
+        *os.environ.get("PATH", "").split(":"),
+    ]
     keep = sorted({str(Path(p).resolve()) for p in want if p and Path(p).exists()})
     keep = [p for p in keep if p.startswith("/tmp/")]
-    env = dict(os.environ, QC_SESSION=session, QC_STATE=str(state), QC_WORKTREE=worktree, QC_KIT=str(kit or KIT),
-               QC_UID=str(os.getuid()), QC_GID=str(os.getgid()),
-               # inside a qc sandbox `herdr` is its shim: wrap the real binary it names
-               QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "", QC_GH=shutil.which("gh") or "",
-               QC_KEEP="\n".join(keep), QC_RO_BINDS="\n".join(ro), QC_PATH_PREPEND=":".join(pre),
-               QC_GHSNAP=gh.get("dir", ""), QC_GHSNAP_LINE=gh.get("line", ""), QC_GHSNAP_OFF=gh.get("off", ""),
-               QC_HISTORY="" if history else "none", QC_PI="" if pi else "none", QC_BROWSER=browser or "", QC_SHOTS="1" if shots else "",
-               QC_FD_PROOF=str(pipes["proof"][1]), QC_FD_POST=str(pipes["post"][1]), QC_FD_ERR=str(pipes["err"][1]))
-    if pi and (w := oauth_warning()) and w not in WARNED:   # once per qc run, of the sandboxes given copies (ADR 0022)
+    env = dict(
+        os.environ,
+        QC_SESSION=session,
+        QC_STATE=str(state),
+        QC_WORKTREE=worktree,
+        QC_KIT=str(kit or KIT),
+        QC_UID=str(os.getuid()),
+        QC_GID=str(os.getgid()),
+        # inside a qc sandbox `herdr` is its shim: wrap the real binary it names
+        QC_HERDR=os.environ.get("OCTO_FEATHER_QC_HERDR") or shutil.which("herdr") or "",
+        QC_GH=shutil.which("gh") or "",
+        QC_KEEP="\n".join(keep),
+        QC_RO_BINDS="\n".join(ro),
+        QC_PATH_PREPEND=":".join(pre),
+        QC_GHSNAP=gh.get("dir", ""),
+        QC_GHSNAP_LINE=gh.get("line", ""),
+        QC_GHSNAP_OFF=gh.get("off", ""),
+        QC_HISTORY="" if history else "none",
+        QC_PI="" if pi else "none",
+        QC_BROWSER=browser or "",
+        QC_SHOTS="1" if shots else "",
+        QC_FD_CANCEL=str(_cancellation.fd),
+        QC_FD_PROOF=str(pipes["proof"][1]),
+        QC_FD_POST=str(pipes["post"][1]),
+        QC_FD_ERR=str(pipes["err"][1]),
+    )
+    if (
+        pi and (w := oauth_warning()) and w not in WARNED
+    ):  # once per qc run, of the sandboxes given copies (ADR 0022)
         WARNED.add(w)
         print(w, file=sys.stderr)
 
@@ -262,50 +667,200 @@ def sandboxed(judge: list[str], session: str, gh: dict[str, Any], *, history: bo
             for chunk in iter(lambda: f.read1(65536), b""):
                 got[n].append(chunk)
                 if n == "stderr":
-                    sys.stderr.buffer.write(chunk); sys.stderr.flush()
+                    sys.stderr.buffer.write(chunk)
+                    sys.stderr.flush()
+
     threads = [threading.Thread(target=drain, args=(n,), daemon=True) for n in names]
     for th in threads:
         th.start()
-    p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
-                         env=env, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=pipes["stderr"][1],
-                         pass_fds=[pipes[n][1] for n in ("proof", "post", "err")], process_group=0)
-    for n in names:
-        os.close(pipes[n][1])
+    # Become the existing run graph's subreaper BEFORE setup can fork. Even if
+    # setup dies, its children remain ours until waited, preserving PID ownership.
+    if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "qc cancellation requires child subreaper")
+    # Arm cleanup BEFORE creating a child, including Popen's unassigned interval.
+    p: subprocess.Popen[bytes] | None = None
+    root_fd = None
+    caller_errors: list[str] = []
     try:
-        stdout = p.stdout.read().decode(errors="replace"); p.wait()
-    except BaseException:   # qc killed (timeout, ^C): its PID 1 and unshare --fork ignore SIGTERM, so take the
-        os.killpg(p.pid, signal.SIGKILL); p.wait()   # sandbox's group down here, or it judges on unwatched
-        for _ in range(300):   # and exit only once that group is gone, its judge included (issue #235)
+        with defer_termination():
+            p = subprocess.Popen(
+                [str(KIT / "scripts" / "octo-feather-qc-sandbox"), "--", *judge],
+                env=env,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=pipes["stderr"][1],
+                pass_fds=[_cancellation.fd, *[pipes[n][1] for n in ("proof", "post", "err")]],
+                process_group=0,
+            )
+            # Open while the direct child is unreaped, then deliver pending
+            # cancellation INSIDE the cleanup scope with this root enrolled.
+            root_fd = os.pidfd_open(p.pid)
+        for n in names:
+            os.close(write_ends.pop(n))
+        stdout = p.stdout.read().decode(errors="replace")
+        p.wait()
+    # caller enrollment/read/wait fatal enters owned-root cleanup, never successful run.
+    except BaseException as error:  # noqa: BLE001
+        interrupted = isinstance(error, Cancelled)
+        owner_forced = False
+        if interrupted and _cancellation.fault is None and p is not None and root_fd is not None:
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
             try:
-                os.killpg(p.pid, 0)
-            except OSError:
-                break
-            time.sleep(0.01)
-        raise
+                _cancel_end, cancel_sig = cancel_stamp()
+                with contextlib.suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(root_fd, cancel_sig)
+                p.wait(timeout=cancel_budget(10, 2))
+            # graceful root wait failure must continue forced disposition.
+            except BaseException:  # noqa: BLE001
+                owner_forced = True
+            finally:
+                signal.signal(signal.SIGINT, previous)
+        if p is not None and p.returncode is None:
+            owner_forced = True
+            try:
+                if root_fd is None:
+                    # Acquisition failed before any wait: this owned child is
+                    # still unreaped, so its number cannot have been reused.
+                    os.kill(p.pid, signal.SIGKILL)
+                else:
+                    signal.pidfd_send_signal(root_fd, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+            # forced root-stop failure must not skip wait/descendant drainage.
+            except BaseException as stop_error:  # noqa: BLE001
+                caller_errors.append(f"root stop: {stop_error}")
+            try:
+                p.wait(timeout=cancel_budget(5))
+            # failed root wait must not skip descendant drainage/report closure.
+            except BaseException as wait_error:  # noqa: BLE001
+                caller_errors.append(str(wait_error))
+        try:
+            owner_forced = (
+                reap_cancelled() or owner_forced
+            )  # adopted descendants are forced disposition too
+        # failed adopted-child drainage is recorded, never ECHILD success.
+        except BaseException as drain_error:  # noqa: BLE001
+            caller_errors.append(str(drain_error))
+        if not interrupted:
+            caller_errors.append(f"{type(error).__name__}: {error}")
+        stdout = ""  # partial stdout read is not invented successful output
+    finally:
+        _cancellation.armed = False  # no later signal can interrupt post/drain/report persistence
+        for fd in write_ends.values():
+            try:
+                os.close(fd)
+            # report-writer close failure must not skip other closes.
+            except BaseException as close_error:  # noqa: BLE001
+                caller_errors.append(f"report descriptor close: {close_error}")
+        if root_fd is not None:
+            try:
+                os.close(root_fd)
+            # root pidfd close failure must not skip evidence/terminal handling.
+            except BaseException as close_error:  # noqa: BLE001
+                caller_errors.append(f"root descriptor close: {close_error}")
     for th in threads:
-        th.join(timeout=10)   # a writer outliving the PID namespace cannot exist; do not hang if it did
+        th.join(
+            timeout=cancel_budget(10)
+        )  # a writer outliving the PID namespace cannot exist; do not hang if it did
     read = lambda n: b"".join(got[n]).decode(errors="replace")
-    record = {"session": session, "proof": read("proof").splitlines()}
-    for line in read("post").splitlines():   # the cleanup record (only once the judge ran), then the overlay upper list
-        record.update(json.loads(line))
-    record_spend(record.get("spend") or [], f"sandbox {session}")
-    if "agents_started" not in record:
+    record: SandboxRecord = {"session": session, "proof": read("proof").splitlines()}
+    for line in read(
+        "post"
+    ).splitlines():  # trusted pipe; truncated/invalid evidence stays negative
+        try:
+            record.update(json.loads(line))
+        except (ValueError, TypeError) as post_error:
+            caller_errors.append(f"invalid post record: {post_error}")
+    record["caller_received_signal"] = _cancellation.signal or None
+    record["owner_exit"] = p.returncode if p is not None else None
+    try:
+        end, canonical_signal = cancel_stamp()
+        if end:
+            _cancellation.signal = canonical_signal
+    # terminal capability observation remains a negative record, not fresh grace.
+    except BaseException as metadata_error:  # noqa: BLE001
+        caller_errors.append(f"capability: {metadata_error}")
+    if _cancellation.fault is not None:
+        caller_errors.append(
+            f"capability primary: {type(_cancellation.fault).__name__}: {_cancellation.fault}"
+        )
+    if "native_lifecycle" in record:
+        record["native_lifecycle"]["caller_forced"] = locals().get("owner_forced", False)
+    record["cancel_signal"] = _cancellation.signal or None
+    record["cancel_deadline_ns"] = _cancellation.end or None
+    record["caller_errors"] = caller_errors
+    record["capability_error"] = (
+        str(_cancellation.fault) if _cancellation.fault is not None else None
+    )
+    record["drain_complete"] = all(not th.is_alive() for th in threads)
+    record["deadline_ok"] = _cancellation.fault is None and cancel_budget(1) > 0
+    if not _cancellation.signal:
+        record_spend(record.get("spend") or [], f"sandbox {session}")
+    record["deadline_ok"] = _cancellation.fault is None and cancel_budget(1) > 0
+    if _cancellation.signal and not record.get("cancel_signal"):
+        record["cancel_signal"] = _cancellation.signal
+        record["cancel_deadline_ns"] = _cancellation.end or None
+    try:
+        close_optional(_cancellation.fd)
+    # terminal cancellation-FD close failure is latched, never hides earlier errors.
+    except BaseException as close_error:  # noqa: BLE001
+        caller_errors.append(f"capability descriptor close: {close_error}")
+        cancel_fault(close_error)
+    finally:
+        _cancellation.fd = None
+    record["capability_error"] = (
+        str(_cancellation.fault) if _cancellation.fault is not None else None
+    )
+    record["deadline_ok"] = cancel_budget(1) > 0 and _cancellation.fault is None
+    if _cancellation.fault is not None and not any(
+        "capability primary:" in e for e in caller_errors
+    ):
+        caller_errors.append(
+            f"capability primary: {type(_cancellation.fault).__name__}: {_cancellation.fault}"
+        )
+    if "agents_started" not in record or caller_errors or p is None or p.returncode is None:
         return None, record
     return subprocess.CompletedProcess(judge, p.returncode, stdout, read("err")), record
 
 
-def record_spend(lines, what):
+def record_spend(lines: list[str], what: str) -> None:
     """LINES (ledger lines a run's call paths wrote where they could not reach the box ledger) appended through the
     ledger's one writer, `octo-feather-lane spend record`, run here in the caller's environment so its lane resolves
     (spec spend#rule-lane; its failures, never the caller's: `octo-feather-lane --help`, spend record)."""
     if not lines:
         return
+    p = None
+    fd = None
+    end = time.monotonic() + 60
     try:
-        subprocess.run([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"], input="".join(l + "\n" for l in lines),
-                       text=True, stdout=subprocess.DEVNULL, timeout=60)
+        with defer_termination():
+            p = subprocess.Popen([str(KIT / "scripts" / "octo-feather-lane"), "spend", "record"],
+                                 text=True, stdin=subprocess.PIPE, stdout=subprocess.DEVNULL)
+            fd = os.pidfd_open(p.pid)
+        data: str | None = "".join(l + "\n" for l in lines)
+        while True:
+            left = min(max(0, end-time.monotonic()), cancel_budget(60))
+            if not left:
+                raise subprocess.TimeoutExpired(p.args, 0)
+            try:
+                p.communicate(data, timeout=min(.05, left))
+                break
+            except subprocess.TimeoutExpired:
+                data = None
     except (OSError, subprocess.SubprocessError) as e:
         print(f"octo-feather-qc: spend unrecorded ({len(lines)} call(s), {what}): octo-feather-lane spend record "
               f"did not run ({type(e).__name__})", file=sys.stderr)
+    finally:
+        if p is not None and p.returncode is None:
+            with contextlib.suppress(ProcessLookupError):
+                if fd is not None:
+                    signal.pidfd_send_signal(fd, signal.SIGKILL)
+                else:
+                    os.kill(p.pid, signal.SIGKILL)  # direct unreaped child, enrollment failure
+            with contextlib.suppress(subprocess.TimeoutExpired):
+                p.wait(timeout=cancel_budget(1))
+        if fd is not None:
+            os.close(fd)
 
 
 def worktree_writes(upper):
@@ -372,8 +927,17 @@ def expected(cap: dict[str, Any], r: dict[str, Any]) -> list[str]:
             + [f"artifact {a['path']} not left by the run" for a in cap.get("artifacts", []) if not a["left"]])
 
 
-def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: dict[str, str], stem: str, runid: str,
-            report_path: Path, *, nosb: bool) -> tuple[dict[str, Result], list[dict[str, Any]]]:
+def capture(
+    ids: list[str],
+    demos: dict[str, dict[str, Any]],
+    head: str,
+    text: dict[str, str],
+    stem: str,
+    runid: str,
+    report_path: Path,
+    *,
+    nosb: bool,
+) -> tuple[dict[str, Result], list[dict[str, Any]]]:
     """Capture (quality spec #qc-capture), no model, deciding nothing: each declared demo run at HEAD in its own qc
     sandbox, what it captured appended to the target's evidence store; then each result judged from its stored
     record alone (judged). --no-sandbox: run with this shell's access, stored nowhere. Returns (results by id, captures)."""
@@ -383,49 +947,149 @@ def capture(ids: list[str], demos: dict[str, dict[str, Any]], head: str, text: d
     folder = browsers(root, [i for i in ids if i in demos and demos[i].get("browser")], stem)
     for n, i in enumerate(i for i in ids if i in demos):
         cid, line = f"{stem}#{i}", str(demos[i]["command"])
-        br = folder if demos[i].get("browser") else None   # never downloads one: the box's, read-only
-        cmd = ["env", f"QC_REPO={root}", *([f"PLAYWRIGHT_BROWSERS_PATH={br}", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"] if br else []),
-               "sh", "-c", 'cd "$QC_REPO" || exit 127; exec sh -c "$1"', "qc-demo", line]
+        br = (
+            folder if demos[i].get("browser") else None
+        )  # never downloads one: the box's, read-only
+        cmd = [
+            "env",
+            f"QC_REPO={root}",
+            *(
+                [f"PLAYWRIGHT_BROWSERS_PATH={br}", "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1"]
+                if br
+                else []
+            ),
+            "sh",
+            "-c",
+            'cd "$QC_REPO" || exit 127; exec sh -c "$1"',
+            "qc-demo",
+            line,
+        ]
         print(f"qc: demo {cid}: $ {line}", file=sys.stderr)
         run: subprocess.CompletedProcess[str] | None
-        sandbox: dict[str, Any] | bool
+        sandbox: SandboxRecord | bool
         upper: list[list[str]] = []
         if nosb:
-            run, sandbox = subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True), False
+            run, sandbox = (
+                subprocess.run(cmd, stdin=subprocess.DEVNULL, capture_output=True, text=True),
+                False,
+            )
         else:
-            run, sandbox = sandboxed(cmd, f"qc-{head[:12]}-{runid}-d{n}", {"off": "github: none (a declared demo, no agent judge)"},
-                                     browser=br, shots=True, pi=False)
+            run, sandbox = sandboxed(
+                cmd,
+                f"qc-{head[:12]}-{runid}-d{n}",
+                {"off": "github: none (a declared demo, no agent judge)"},
+                browser=br,
+                shots=True,
+                pi=False,
+            )
             assert isinstance(sandbox, dict)
             upper = sandbox.pop("upper", [])
-            sandbox["discarded_writes"] = len(upper)   # the demo's writes died with its overlay
-        shots: list[list[str]] = sandbox.pop("shots", []) if sandbox else []   # the screenshots it took, for the record
+            sandbox["discarded_writes"] = len(upper)  # the demo's writes died with its overlay
+        shots: list[list[str]] = (
+            sandbox.pop("shots", []) if sandbox else []
+        )  # the screenshots it took, for the record
         rc = None if run is None else 128 - run.returncode if run.returncode < 0 else run.returncode
-        caps.append({"id": cid, "command": line, "exit": rc, "sandbox": sandbox, "screenshots": [s for s, _ in shots]})
+        caps.append(
+            {
+                "id": cid,
+                "command": line,
+                "exit": rc,
+                "sandbox": sandbox,
+                "screenshots": [s for s, _ in shots],
+            }
+        )
+        if isinstance(sandbox, dict) and (
+            sandbox.get("cancel_signal") or _cancellation.signal or _cancellation.fault is not None
+        ):
+            caps[-1].update(
+                ran=None, cancelled=True, exit=None, observed_owner_exit=sandbox.get("owner_exit")
+            )
+            report_path.write_text(
+                json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2)
+            )
+            sig = sandbox.get("cancel_signal") or _cancellation.signal
+            die(
+                128 + sig if sig and _cancellation.fault is None else 70,
+                f"qc demo cancelled; completion unknown (report {report_path})",
+            )
         if run is None:
-            report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
-            die(66, f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})")
+            report_path.write_text(
+                json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2)
+            )
+            die(
+                66,
+                f"sandbox proof failed or sandbox unavailable; demo of {cid} not run (report {report_path})",
+            )
         if nosb:
-            done[i] = {"id": i, "verdict": "pass" if rc == 0 else "fail", "command": line, "exit": rc, "output": tail(run.stdout + run.stderr),
-                       "why": f"demo exit status {rc}", "evidence": "unrecorded (--no-sandbox)", "decision": "demo checks", "record": None, "head": head}
+            done[i] = {
+                "id": i,
+                "verdict": "pass" if rc == 0 else "fail",
+                "command": line,
+                "exit": rc,
+                "output": tail(run.stdout + run.stderr),
+                "why": f"demo exit status {rc}",
+                "evidence": "unrecorded (--no-sandbox)",
+                "decision": "demo checks",
+                "record": None,
+                "head": head,
+            }
             continue
         with tempfile.TemporaryDirectory(prefix=f"qc-demo-{runid}-") as d:
-            for name, body in zip(DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True):
+            for name, body in zip(
+                DEMO_OUTPUTS, (line + "\n", f"{rc}\n", run.stdout, run.stderr), strict=True
+            ):
                 Path(d, name).write_text(body)
             if "fixtures" in demos[i] or "artifacts" in demos[i]:
-                Path(d, EXPECT).write_text(json.dumps({"fixtures": demos[i].get("fixtures", []),
-                                                       "artifacts": left(wrote(upper), demos[i].get("artifacts", []))}, indent=2) + "\n")
+                Path(d, EXPECT).write_text(
+                    json.dumps(
+                        {
+                            "fixtures": demos[i].get("fixtures", []),
+                            "artifacts": left(wrote(upper), demos[i].get("artifacts", [])),
+                        },
+                        indent=2,
+                    )
+                    + "\n"
+                )
             for name, b64 in shots:
                 Path(d, "screenshots", name).parent.mkdir(parents=True, exist_ok=True)
                 Path(d, "screenshots", name).write_bytes(base64.b64decode(b64))
-            p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
-                                "--outputs", d], capture_output=True, text=True)
+            p = subprocess.run(
+                [
+                    str(EVIDENCE_TOOL),
+                    "append",
+                    "--repo",
+                    root,
+                    "--criterion",
+                    cid,
+                    "--criterion-text",
+                    text[i],
+                    "--outputs",
+                    d,
+                ],
+                capture_output=True,
+                text=True,
+            )
         if p.returncode:
-            report_path.write_text(json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2))
-            die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
+            report_path.write_text(
+                json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2)
+            )
+            die(
+                3,
+                f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}",
+            )
         caps[-1]["record"] = rid = p.stdout.strip()
+        report_path.write_text(
+            json.dumps({"head": head, "ids": ids, "run_id": runid, "captures": caps}, indent=2)
+        )
         done[i] = judged(i, cid, rid, head, text[i], root)
-        if done[i]["evidence"] == "incomplete":   # a result, never a failure to triage (quality spec #qc-results)
-            done[i] |= {"verdict": "insufficient evidence", "command": line, "why": f"missing: {'; '.join(done[i]['missing'])}"}
+        if (
+            done[i]["evidence"] == "incomplete"
+        ):  # a result, never a failure to triage (quality spec #qc-results)
+            done[i] |= {
+                "verdict": "insufficient evidence",
+                "command": line,
+                "why": f"missing: {'; '.join(done[i]['missing'])}",
+            }
     return done, caps
 
 
@@ -472,7 +1136,7 @@ def last_words(outputs: Path) -> str:
     return "no output"
 
 
-ADVICE = "criterion-evidence"   # the closed question each recorded result gets (judgment spec #question-criterion-evidence)
+ADVICE = "criterion-evidence"  # the closed question each recorded result gets (judgment spec #question-criterion-evidence)
 
 
 def advise(done: dict[str, Result], text: dict[str, str], stem: str, head: str, runid: str) -> None:
@@ -532,6 +1196,7 @@ def ask(qa: types.ModuleType, base: dict[str, Any], ids: list[str], states: list
                         {"unavailable": errors[ei] if ei is not None else f"answer {choice!r} is not one of {labels}"})
     return got, "no answer"
 
+
 def advised(a: dict[str, Any]) -> str:
     """The advisory line shown beside a result."""
     if a.get("status") == "NOT RUN":
@@ -558,38 +1223,153 @@ def gate_free():
         die(70, "refused inside just check, which stays deterministic and free (message above)")
 
 
-EXPECT = "qc.expect.json"   # a demo record's declared fixtures and artifacts, each artifact with whether the run left it
-TESTED = "test.capture.json"   # the output that makes a record a tagged test's capture from a gate (capture_store)
-COMPLETED = ("passed", "failed")   # a case outcome that ran to its end; any other leaves the record incomplete
+EXPECT = "qc.expect.json"  # a demo record's declared fixtures and artifacts, each artifact with whether the run left it
+TESTED = "test.capture.json"  # the output that makes a record a tagged test's capture from a gate (capture_store)
+COMPLETED = (
+    "passed",
+    "failed",
+)  # a case outcome that ran to its end; any other leaves the record incomplete
 
 
 def capture_case(note: Path, cmd: list[str]) -> int:
     """--capture-case NOTE -- CMD: one tagged case of a capturing gate run (quality spec #qc-capture), CMD run at the
     head in its own qc sandbox as a declared demo is (no Pi, no GitHub, no lane history), its stdout and stderr passed
-    through for the test runner, its exit status returned; NOTE (JSON) says whether it ran there, with the sandbox's
-    proof and cleanup and any screenshots. Runs inside a check run by design: it calls no model and decides nothing
+    through for the test runner, its exit status returned; NOTE (JSON) says whether it ran there (ran null when
+    cancellation leaves that unknown), with the sandbox's proof and cleanup and any screenshots. Runs inside a check run by design: it calls no model and decides nothing
     (the judgment, below, still refuses there)."""
     root, head = git("rev-parse", "--show-toplevel"), git("rev-parse", "HEAD")
     rec: dict[str, Any] = {"command": cmd, "ran": False}
-    wrapped = ["env", f"QC_REPO={root}", "sh", "-c", 'cd "$QC_REPO" || exit 127; exec "$@"', "qc-case", *cmd]
+    wrapped = [
+        "env",
+        f"QC_REPO={root}",
+        "sh",
+        "-c",
+        'cd "$QC_REPO" || exit 127; exec "$@"',
+        "qc-case",
+        *cmd,
+    ]
     try:
-        run, sandbox = sandboxed(wrapped, f"qc-{head[:12]}-{secrets.token_hex(3)}-t", {"off": "github: none (a tagged test)"},
-                                 history=False, shots=True, pi=False)
-    except SystemExit as e:   # die(): no sandbox on this box (its message above)
-        note.write_text(json.dumps(rec | {"why": f"qc sandbox unavailable (exit {e.code})"}))
-        return 66
+        run, sandbox = sandboxed(
+            wrapped,
+            f"qc-{head[:12]}-{secrets.token_hex(3)}-t",
+            {"off": "github: none (a tagged test)"},
+            history=False,
+            shots=True,
+            pi=False,
+        )
+    except Cancelled as error:
+        rc = 128 + error.signum
+        note.write_text(
+            json.dumps(
+                rec
+                | {
+                    "ran": None,
+                    "cancelled": True,
+                    "exit": rc,
+                    "why": "qc capture cancelled before enrollment; completion unknown",
+                }
+            )
+        )
+        return rc
+    except SystemExit as e:
+        if e.code in (128 + signal.SIGINT, 128 + signal.SIGTERM, 128 + signal.SIGHUP):
+            # Any armed root cleanup completed before re-raising cancellation;
+            # cleanup failures are not caught here. Command completion is unknown.
+            note.write_text(
+                json.dumps(
+                    rec
+                    | {
+                        "ran": None,
+                        "cancelled": True,
+                        "exit": e.code,
+                        "why": f"qc capture cancelled; completion unknown (exit {e.code})",
+                    }
+                )
+            )
+            rc = int(e.code)
+        else:
+            note.write_text(json.dumps(rec | {"why": f"qc sandbox unavailable (exit {e.code})"}))
+            rc = 66
+        return rc
+    except BaseException as error:
+        if _cancellation.signal or _cancellation.fault is not None:
+            note.write_text(
+                json.dumps(
+                    rec
+                    | {
+                        "ran": None,
+                        "cancelled": True,
+                        "exit": 70,
+                        "signal": _cancellation.signal or None,
+                        "why": f"qc capture cancellation failure; completion unknown: {type(error).__name__}: {error}",
+                    }
+                )
+            )
+            return 70
+        raise
+    if sandbox.get("cancel_signal") or _cancellation.signal or _cancellation.fault is not None:
+        sig = sandbox.get("cancel_signal") or _cancellation.signal
+        rc = 128 + sig if sig and _cancellation.fault is None else 70
+        note.write_text(
+            json.dumps(
+                rec
+                | {
+                    "ran": None,
+                    "cancelled": True,
+                    "exit": rc,
+                    "owner_exit": sandbox.get("owner_exit"),
+                    "sandbox": sandbox,
+                    "why": "qc capture cancelled; command completion unknown",
+                }
+            )
+        )
+        return rc
     if run is None:
         note.write_text(json.dumps(rec | {"why": "qc sandbox proof failed", "sandbox": sandbox}))
-        print(f"qc capture: sandbox proof failed; {shlex.join(cmd)} not run:\n" + "\n".join(sandbox.get("proof", [])), file=sys.stderr)
+        print(
+            f"qc capture: sandbox proof failed; {shlex.join(cmd)} not run:\n"
+            + "\n".join(sandbox.get("proof", [])),
+            file=sys.stderr,
+        )
         return 66
     upper = sandbox.pop("upper", [])
     sandbox["discarded_writes"] = len(upper)
     shots = sandbox.pop("shots", [])
-    sys.stdout.write(run.stdout); sys.stderr.write(run.stderr)
+    sys.stdout.write(run.stdout)
+    sys.stderr.write(run.stderr)
     rc = 128 - run.returncode if run.returncode < 0 else run.returncode
     said = [l.strip() for l in (run.stdout + "\n" + run.stderr).splitlines() if l.strip()]
-    note.write_text(json.dumps(rec | {"ran": True, "exit": rc, "said": said[-1][:300] if said else "", "sandbox": sandbox,
-                                      "shots": shots, "wrote": wrote(upper)}))
+    note.write_text(
+        json.dumps(
+            rec
+            | {
+                "ran": True,
+                "exit": rc,
+                "said": said[-1][:300] if said else "",
+                "sandbox": sandbox,
+                "shots": shots,
+                "wrote": wrote(upper),
+            }
+        )
+    )
+    if _cancellation.signal or _cancellation.fault is not None:
+        rc = (
+            128 + _cancellation.signal
+            if _cancellation.signal and _cancellation.fault is None
+            else 70
+        )
+        note.write_text(
+            json.dumps(
+                rec
+                | {
+                    "ran": None,
+                    "cancelled": True,
+                    "exit": rc,
+                    "sandbox": sandbox,
+                    "why": "qc capture interrupted during publication; completion unknown",
+                }
+            )
+        )
     return rc
 
 
@@ -850,7 +1630,24 @@ def carry(ids: list[str], data: dict[str, Any], pr: int, spec: Path, stem: str, 
     return out
 
 
+def require_unique_ids(ids: list[str]) -> None:
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if dup:
+        die(64, f"ids given twice: {' '.join(dup)}")
+
+
 def main(argv: list[str]) -> int:
+    if _cancellation.fd is None and hasattr(os, "memfd_create"):
+        _cancellation.fd = cancel_create()
+
+    def killed(n, _f):  # capture and ordinary QC both unwind owned cleanup
+        if not killed.once:  # duplicate timeout/group signals must not interrupt it
+            killed.once = True
+            sys.exit(128 + n)
+
+    killed.once = False
+    for s in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(s, cancel_entry)
     if argv[:1] in (["--capture-case"], ["--capture-store"]):
         return captured(argv)
     gate_free()
@@ -858,7 +1655,8 @@ def main(argv: list[str]) -> int:
     nosb, nogh = "--no-sandbox" in argv, "--no-github" in argv
     argv = [a for a in argv if a not in flags]
     if len(argv) < 3:
-        print(__doc__.strip(), file=sys.stderr); return 64
+        print((__doc__ or "").strip(), file=sys.stderr)
+        return 64
     if not re.fullmatch(r"[1-9][0-9]*", argv[1]):
         die(64, f"PR must be a positive integer, got {argv[1]!r}")
     status, pr, ids = Path(argv[0]), int(argv[1]), argv[2:]
@@ -866,9 +1664,7 @@ def main(argv: list[str]) -> int:
         die(65, "worktree is dirty; QC judges a committed head")
     head = git("rev-parse", "HEAD")
     data = json.loads(status.read_text(encoding="utf-8"))
-    dup = sorted({i for i in ids if ids.count(i) > 1})
-    if dup:
-        die(64, f"ids given twice: {' '.join(dup)}")
+    require_unique_ids(ids)
     missing = [i for i in ids if i not in data.get("criteria", {})]
     if missing:
         die(64, f"not in {status}: {' '.join(missing)}")
@@ -880,39 +1676,76 @@ def main(argv: list[str]) -> int:
     stem = spec.name.removesuffix(".spec.html")
     root = git("rev-parse", "--show-toplevel")
     declared = contract_demos(root)
-    tags = tagged_cases(root)   # the head's tagged cases, from the gate's own collector
+    tags = tagged_cases(root)  # the head's tagged cases, from the gate's own collector
     carried = carry(ids, data, pr, spec, stem, head, root, tags)
-    found = {i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", [])) for i in ids if i not in carried}
-    tests = {i: r for i, r in found.items() if r is not None}   # judged from the gate's record: no demo, no fallback
+    found = {
+        i: tested(i, f"{stem}#{i}", head, text[i], root, tags.get(f"{stem}#{i}", []))
+        for i in ids
+        if i not in carried
+    }
+    tests = {
+        i: r for i, r in found.items() if r is not None
+    }  # judged from the gate's record: no demo, no fallback
     tests |= unrecorded([i for i in ids if i not in tests and i not in carried], tags, stem, head)
-    demos = {i: d for i in ids if "command" in (d := declared.get(f"{stem}#{i}", {})) and i not in tests and i not in carried}
+    demos = {
+        i: d
+        for i in ids
+        if "command" in (d := declared.get(f"{stem}#{i}", {}))
+        and i not in tests
+        and i not in carried
+    }
 
     authority = os.environ.get("OCTO_FEATHER_QC_ADVISORY_AUTHORITY")
     scope = os.environ.get("OCTO_FEATHER_QC_ADVISORY_SCOPE")
     if (authority is not None or scope is not None) and (
-            authority != "gpt-only-sprint-2026-11-08" or scope not in
-            ("sandbox", "light-test", "revision-repair", "final-cleanup") or nosb or len(demos) != len(ids)):
-        die(64, "advisory authorization requires its named authority and authorized scope, sandboxed declared-demo-only QC; no fallback, tagged or carried results")
+        authority != "gpt-only-sprint-2026-11-08"
+        or scope not in ("sandbox", "light-test", "revision-repair", "final-cleanup")
+        or nosb
+        or len(demos) != len(ids)
+    ):
+        die(
+            64,
+            "advisory authorization requires its named authority and authorized scope, sandboxed declared-demo-only QC; no fallback, tagged or carried results",
+        )
 
     model = os.environ.get("OCTO_FEATHER_QC_MODEL") or front("qc-judge", "model")
     impl = front("implementer", "model")
-    if len(demos) + len(tests) + len(carried) < len(ids) and model.split("/")[0] == impl.split("/")[0]:
-        die(64, f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)")
+    if (
+        len(demos) + len(tests) + len(carried) < len(ids)
+        and model.split("/")[0] == impl.split("/")[0]
+    ):
+        die(
+            64,
+            f"judge {model} is the implementer's family ({impl}); QC needs another family (docs/adr/0022)",
+        )
 
     runid = secrets.token_hex(3)
-    def killed(n, _f):   # a timeout or a closed pane: exit through the finally blocks, so this run's scratch
-        if not killed.once:   # (snapshot, miss log) is removed; a 2nd signal (timeout sends one to the child
-            killed.once = True   # and one to its group) must not cut that short
-            sys.exit(128 + n)
-    killed.once = False
-    for s in (signal.SIGTERM, signal.SIGHUP):
-        signal.signal(s, killed)
     gh: dict[str, Any] = {}
     try:
-        gh = (github_snapshot(nogh, runid) if len(demos) + len(tests) + len(carried) < len(ids) else
-              {"off": "github: none (every criterion carried or has a tagged test's record or a declared demo: no judge)"})
+        gh = (
+            github_snapshot(nogh, runid)
+            if len(demos) + len(tests) + len(carried) < len(ids)
+            else {
+                "off": "github: none (every criterion carried or has a tagged test's record or a declared demo: no judge)"
+            }
+        )
         print(f"qc: {gh.get('off') or 'github: ' + gh['line']}", file=sys.stderr)
-        return judge(status, pr, ids, head, data, spec, text, model, runid, gh, demos, stem, tests | carried, nosb=nosb)
+        return judge(
+            status,
+            pr,
+            ids,
+            head,
+            data,
+            spec,
+            text,
+            model,
+            runid,
+            gh,
+            demos,
+            stem,
+            tests | carried,
+            nosb=nosb,
+        )
     finally:
         if "dir" in gh:
             drop(gh["dir"])
@@ -962,21 +1795,55 @@ def judge(status: Path, pr: int, ids: list[str], head: str, data: dict[str, Any]
         restore(status)
 
 
-def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: str, model: str, runid: str, gh: dict[str, Any],
-             raw: dict[str, Any], report_path: Path, *, nosb: bool) -> Result:
+def fallback(
+    i: str,
+    n: int,
+    head: str,
+    spec: Path,
+    text: dict[str, str],
+    stem: str,
+    model: str,
+    runid: str,
+    gh: dict[str, Any],
+    raw: dict[str, Any],
+    report_path: Path,
+    *,
+    nosb: bool,
+) -> Result:
     """The agent fallback for I, a criterion its contract declares no demo for (quality spec #qc-fallback): a fresh qc judge
     from its own role, in its own qc sandbox, judging I alone under the fixed time cap; its report appended to the evidence
     store as I's record, and I's result read back from that record alone (fell_back). --no-sandbox: stored nowhere."""
     cid = f"{stem}#{i}"
-    brief = BRIEF.format(repo=os.getcwd(), head=head, spec=spec, github=evidence(gh), criteria=f"- {i}: {text[i]}")
-    cmd = ["timeout", "--foreground", "-k", "10", str(FALLBACK_CAP_S),   # --foreground: a killed qc's group signal reaches the judge
-           str(KIT / "scripts" / "pi-role"), str(KIT / "agents" / "qc-judge.md"), "--model", model, *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")), "-p", brief]
-    print(f"qc: agent fallback {cid}: a fresh qc judge, time cap {FALLBACK_CAP_S} s", file=sys.stderr)
+    brief = BRIEF.format(
+        repo=os.getcwd(), head=head, spec=spec, github=evidence(gh), criteria=f"- {i}: {text[i]}"
+    )
+    cmd = [
+        "timeout",
+        "--foreground",
+        "-k",
+        "10",
+        str(FALLBACK_CAP_S),  # --foreground: a killed qc's group signal reaches the judge
+        str(KIT / "scripts" / "pi-role"),
+        str(KIT / "agents" / "qc-judge.md"),
+        "--model",
+        model,
+        *shlex.split(os.environ.get("OCTO_FEATHER_QC_ARGS", "")),
+        "-p",
+        brief,
+    ]
+    print(
+        f"qc: agent fallback {cid}: a fresh qc judge, time cap {FALLBACK_CAP_S} s", file=sys.stderr
+    )
     t0 = time.time()
     if nosb:
         miss = Path(tempfile.mkstemp(prefix=f"qc-ghmiss-{runid}-")[1])
-        env = dict(os.environ, PATH=f"{KIT / '.agents' / 'skills' / 'github-pr' / 'scripts'}:{os.environ.get('PATH', '')}", OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
-                   OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""), OCTO_FEATHER_GHSNAP_MISS=str(miss))
+        env = dict(
+            os.environ,
+            PATH=f"{KIT / '.agents' / 'skills' / 'github-pr' / 'scripts'}:{os.environ.get('PATH', '')}",
+            OCTO_FEATHER_GHSNAP=gh.get("dir", ""),
+            OCTO_FEATHER_GHSNAP_OFF=gh.get("off", ""),
+            OCTO_FEATHER_GHSNAP_MISS=str(miss),
+        )
         env.pop("LINEAR_API_KEY", None)
         try:
             run, sandbox = subprocess.run(cmd, capture_output=True, text=True, env=env), False
@@ -988,11 +1855,35 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: 
         if run is None:
             raw["fallback"][i] = {"sandbox": sandbox}
             report_path.write_text(json.dumps(raw, indent=2))
-            die(66, f"sandbox proof failed or sandbox unavailable; judge of {cid} not started (report {report_path})")
+            die(
+                66,
+                f"sandbox proof failed or sandbox unavailable; judge of {cid} not started (report {report_path})",
+            )
         misses = sandbox.get("gh_miss_log", [])
     raw["github"]["misses"] += misses
-    rec = raw["fallback"][i] = {"exit": run.returncode, "timed_out": run.returncode in CAPPED, "seconds": round(time.time() - t0),
-                                "gh_misses": len(misses), "sandbox": sandbox, "stdout": run.stdout, "stderr": run.stderr[-4000:]}
+    rec = raw["fallback"][i] = {
+        "exit": run.returncode,
+        "timed_out": run.returncode in CAPPED,
+        "seconds": round(time.time() - t0),
+        "gh_misses": len(misses),
+        "sandbox": sandbox,
+        "stdout": run.stdout,
+        "stderr": run.stderr[-4000:],
+    }
+    report_path.write_text(
+        json.dumps(raw, indent=2)
+    )  # preserve cancellation before verdict parsing
+    if sandbox and (sandbox.get("cancel_signal") or _cancellation.signal):
+        with report_path.open("r+") as persisted:
+            persisted.flush()
+            os.fsync(persisted.fileno())
+        if not cancel_budget(1):
+            die(70, f"qc cancellation reporting exceeded deadline; report {report_path}")
+        die(
+            128 + (sandbox.get("cancel_signal") or _cancellation.signal),
+            f"qc cancelled; report {report_path}",
+        )
+    _cancellation.armed = True
     rep = verdict(i, head, run, rec, raw, report_path)
     capped = f"the judge hit its {FALLBACK_CAP_S} s time cap before reporting"
     if nosb:
@@ -1000,15 +1891,33 @@ def fallback(i: str, n: int, head: str, spec: Path, text: dict[str, str], stem: 
         if rep is None:
             return res | {"evidence": "incomplete", "missing": [capped]}
         c = rep["criteria"][0]
-        return res | {k: c[k] for k in ("verdict", "command", "output")} | {"why": c.get("why", ""), "evidence": "unrecorded (--no-sandbox)"}
+        return (
+            res
+            | {k: c[k] for k in ("verdict", "command", "output")}
+            | {"why": c.get("why", ""), "evidence": "unrecorded (--no-sandbox)"}
+        )
     root = git("rev-parse", "--show-toplevel")
     with tempfile.TemporaryDirectory(prefix=f"qc-judge-{runid}-") as d:
         Path(d, "judge.exit").write_text(f"{run.returncode}\n")
         Path(d, "judge.stdout").write_text(run.stdout)
         if rep is not None:
             Path(d, "judge.report.json").write_text(json.dumps(rep, indent=2) + "\n")
-        p = subprocess.run([str(EVIDENCE_TOOL), "append", "--repo", root, "--criterion", cid, "--criterion-text", text[i],
-                            "--outputs", d], capture_output=True, text=True)
+        p = subprocess.run(
+            [
+                str(EVIDENCE_TOOL),
+                "append",
+                "--repo",
+                root,
+                "--criterion",
+                cid,
+                "--criterion-text",
+                text[i],
+                "--outputs",
+                d,
+            ],
+            capture_output=True,
+            text=True,
+        )
     if p.returncode:
         report_path.write_text(json.dumps(raw, indent=2))
         die(3, f"evidence record for {cid} not appended: {p.stderr.strip()}; report {report_path}")
@@ -1041,6 +1950,22 @@ def fell_back(i: str, cid: str, rid: str, head: str, text: str, root: str, cappe
 
 
 def restore(status: Path) -> None:
+    if _cancellation.signal:
+        changed = subprocess.run(
+            ["git", "status", "--porcelain", "--", str(status)],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=cancel_budget(5),
+        )
+        if changed.stdout:
+            subprocess.run(
+                ["git", "checkout", "HEAD", "--", str(status)], check=True, timeout=cancel_budget(5)
+            )
+        return
+    _cancellation.armed = (
+        True  # first late signal may unwind normal helpers; existing raw report is already durable
+    )
     if git("status", "--porcelain", "--", str(status)):
         git("checkout", "HEAD", "--", str(status))
         print(f"qc: {status} restored to HEAD (not committed by this run)", file=sys.stderr)
@@ -1134,4 +2059,14 @@ def decided(v: Result) -> str:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    if ctypes.CDLL(None, use_errno=True).prctl(36, 1, 0, 0, 0) != 0:
+        raise OSError(ctypes.get_errno(), "qc cancellation requires child subreaper")
+    try:
+        sys.exit(main(sys.argv[1:]))
+    except Cancelled as error:
+        reap_cancelled()
+        sys.exit(128 + error.signum)
+    except SystemExit:
+        if _cancellation.signal and not cancel_budget(1):
+            sys.exit(70)
+        raise

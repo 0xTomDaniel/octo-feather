@@ -27,8 +27,9 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, TextIO
 
 from testkit import HERE, ROOT, Ran, Scratch, kit, main, pnpm_store, tool_homes
 from testkit.qc import LIMIT_S, STATUS, target
@@ -242,6 +243,199 @@ def snapshot_read_only(s: Scratch) -> None:
     assert "ESCAPE" not in j, f"snapshot writable inside the sandbox: {j}"
 
 
+@dataclass
+class Cancellation:
+    s: Scratch
+    listener: socket.socket
+    nonce: str
+    expected: list[str]
+    child_env: dict[str, str]
+    fault: bool
+    err: TextIO
+    handle: int | None = None
+    delegated: subprocess.Popen[bytes] | None = None
+
+    def delegate_timeout(self, p: subprocess.Popen[bytes]) -> None:
+        with self.listener.accept()[0] as peer:
+            peer.settimeout(30)
+            sender, uid, _ = struct.unpack(
+                "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+            )
+            assert (sender, uid) == (p.pid, os.getuid()), (sender, uid, p.pid)
+            message, handles, flags, _ = socket.recv_fds(peer, 16384, 1)
+            for fd in handles:
+                os.close(fd)
+            assert not handles, (handles, flags)
+            assert not flags, (handles, flags)
+            assert json.loads(message) == {
+                "kind": "delegate-timeout",
+                "token": self.nonce,
+                "argv": self.expected,
+                "cwd": str(self.s.root / "repo"),
+            }, message
+            # Launch ONLY our independently known argv/cwd, never peer-supplied values.
+            # Direct Popen ownership is retained until bounded cleanup/wait below.
+            # Match the primary launcher's controlled Scratch env/cwd and namespace prefix.
+            # Preserve PATH lookup and this independently known argv, never peer-supplied argv.
+            self.delegated = subprocess.Popen(
+                ["unshare", "-cn", *self.expected],  # noqa: S607
+                cwd=self.s.root / "repo",
+                env=self.child_env,
+                stdout=subprocess.DEVNULL,
+                stderr=self.err,
+                start_new_session=True,
+            )
+            sys.stdout.writelines(
+                (
+                    (
+                        f"DELEGATED owned launcher pid={self.delegated.pid} shim={p.pid} "
+                        f"token={self.nonce} argv={self.expected!r}"
+                    ),
+                    "\n",
+                )
+            )
+            sys.stdout.flush()
+            peer.sendall(b"!")
+
+    def observe_judge(self) -> tuple[select.poll, int]:
+        with self.listener.accept()[0] as peer:
+            peer.settimeout(30)
+            # Kernel peer credentials are host-namespace diagnostics only. The judge
+            # transfers a pidfd opened on ITSELF: no numeric PID lookup/reuse race.
+            host_pid, uid, _ = struct.unpack(
+                "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
+            )
+            assert uid == os.getuid(), (host_pid, uid)
+            message, handles, flags, _ = socket.recv_fds(peer, 4096, 1)
+            if handles:
+                self.handle = handles[0]
+            assert len(handles) == 1, (handles, flags)
+            assert not flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC), (handles, flags)
+            started = json.loads(message)
+            assert started["token"] == self.nonce, started
+            assert started["pid"] > 0, started
+            assert self.handle is not None, (handles, flags)
+            live = select.poll()
+            live.register(self.handle, select.POLLIN)
+            assert not live.poll(0), "judge exited before cancellation"
+            peer.sendall(b"!")
+            sys.stdout.writelines(
+                (
+                    (
+                        f"START owned judge host_pid={host_pid} namespace_pid={started['pid']} "
+                        f"uid={uid} token={self.nonce} pidfd={self.handle}; "
+                        "live before cancellation"
+                    ),
+                    "\n",
+                )
+            )
+            sys.stdout.flush()
+        return live, host_pid
+
+    def cancel_judge(self, p: subprocess.Popen[bytes], live: select.poll, host_pid: int) -> None:
+        # p is still unreaped: its session/group ID cannot be reused by another process.
+        os.kill(p.pid, signal.SIGTERM)
+        with contextlib.suppress(ProcessLookupError):
+            os.killpg(p.pid, signal.SIGTERM)
+        rc = p.wait(timeout=30)
+        self.err.seek(0)
+        proof = self.err.read()
+        sys.stdout.writelines((f"PRODUCT cancelled QC rc={rc}\n{proof}", "\n"))
+        sys.stdout.flush()
+        if self.fault:
+            sys.stdout.writelines(
+                ("FAULT rc above is the timeout facade, not the delegated QC exit", "\n")
+            )
+            sys.stdout.flush()
+        assert PROOF in proof, proof
+        assert rc != 0, "the killed run exited 0"
+        exited = bool(live.poll(10_000))
+        sys.stdout.writelines(
+            (
+                (
+                    f"PRODUCT host_pid={host_pid} token={self.nonce} pidfd={self.handle} "
+                    f"after bounded cancellation: {'EXITED' if exited else 'LIVE'}"
+                ),
+                "\n",
+            )
+        )
+        sys.stdout.flush()
+        assert exited, "killed run's actual judge survived cancellation"
+        left = [f.name for f in (self.s.root / "tmp").iterdir()]
+        assert left == [], f"the killed run left scratch: {left}"
+
+    def cleanup(self, p: subprocess.Popen[bytes]) -> None:
+        try:
+            if self.handle is not None:
+                try:
+                    try:
+                        signal.pidfd_send_signal(self.handle, signal.SIGKILL)
+                        sys.stdout.writelines(("CLEANUP owned judge pidfd SIGKILL", "\n"))
+                        sys.stdout.flush()
+                    except ProcessLookupError:
+                        sys.stdout.writelines(("CLEANUP owned judge pidfd already exited", "\n"))
+                        sys.stdout.flush()
+                    poll = select.poll()
+                    poll.register(self.handle, select.POLLIN)
+                    terminated = bool(poll.poll(10_000))
+                    sys.stdout.writelines(
+                        (
+                            (
+                                f"CLEANUP token={self.nonce} pidfd={self.handle} "
+                                f"observed {'EXITED' if terminated else 'LIVE'}"
+                            ),
+                            "\n",
+                        )
+                    )
+                    sys.stdout.flush()
+                    assert terminated, "owned judge cleanup did not terminate it"
+                finally:
+                    os.close(self.handle)
+        finally:
+            try:
+                if self.delegated is not None:
+                    # No poll/wait has reaped this direct child. Its group ID is reserved.
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(self.delegated.pid, signal.SIGTERM)
+                    try:
+                        self.delegated.wait(timeout=30)
+                    except subprocess.TimeoutExpired:
+                        with contextlib.suppress(ProcessLookupError):
+                            os.killpg(self.delegated.pid, signal.SIGKILL)
+                        self.delegated.wait(timeout=10)
+                    sys.stdout.writelines(
+                        (
+                            (
+                                f"CLEANUP delegated launcher pid={self.delegated.pid} "
+                                f"waited rc={self.delegated.returncode}"
+                            ),
+                            "\n",
+                        )
+                    )
+                    sys.stdout.flush()
+            finally:
+                if p.returncode is None:
+                    # No poll/reap before this group signal: its numeric ID stays reserved.
+                    with contextlib.suppress(ProcessLookupError):
+                        os.killpg(p.pid, signal.SIGKILL)
+                    sys.stdout.writelines(
+                        (f"CLEANUP owned launcher waited rc={p.wait(timeout=10)}", "\n")
+                    )
+                    sys.stdout.flush()
+                else:
+                    sys.stdout.writelines(
+                        (f"CLEANUP owned launcher already waited rc={p.returncode}", "\n")
+                    )
+                    sys.stdout.flush()
+                self.err.seek(0)
+                sys.stdout.writelines((f"CLEANUP captured QC stderr:\n{self.err.read()}", "\n"))
+                sys.stdout.flush()
+                left = sorted(f.name for f in (self.s.root / "tmp").iterdir())
+                sys.stdout.writelines((f"CLEANUP scratch left={left}", "\n"))
+                sys.stdout.flush()
+                assert left == [], f"cleanup left scratch: {left}"
+
+
 def killed(s: Scratch) -> None:
     """Cancel a live judge, observing only its child-origin connection and retained pidfd."""
     world(s)
@@ -250,12 +444,11 @@ def killed(s: Scratch) -> None:
     observer = s.root / "observer"
     observer.mkdir(mode=0o700)
     address = observer / "judge.sock"
-    handle: int | None = None
-    delegated: subprocess.Popen[bytes] | None = None
     fault = s.env.get("FAKE_QC_TIMEOUT_FAULT") == "1"
-    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as listener, tempfile.TemporaryFile(
-        mode="w+t"
-    ) as err:
+    with (
+        socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as listener,
+        tempfile.TemporaryFile(mode="w+t") as err,
+    ):
         listener.bind(str(address))
         listener.listen(1)
         listener.settimeout(30)
@@ -284,6 +477,15 @@ def killed(s: Scratch) -> None:
             "FAKE_PI_HANG_TOKEN": nonce,
             "OCTO_FEATHER_QC_RO_BINDS": str(observer),
         }
+        cancellation = Cancellation(
+            s=s,
+            listener=listener,
+            nonce=nonce,
+            expected=expected,
+            child_env=child_env,
+            fault=fault,
+            err=err,
+        )
         p = subprocess.Popen(
             cmd,
             cwd=s.root / "repo",
@@ -294,126 +496,11 @@ def killed(s: Scratch) -> None:
         )
         try:
             if fault:
-                with listener.accept()[0] as peer:
-                    peer.settimeout(30)
-                    sender, uid, _ = struct.unpack(
-                        "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
-                    )
-                    assert (sender, uid) == (p.pid, os.getuid()), (sender, uid, p.pid)
-                    message, handles, flags, _ = socket.recv_fds(peer, 16384, 1)
-                    for fd in handles:
-                        os.close(fd)
-                    assert not handles and not flags, (handles, flags)
-                    assert json.loads(message) == {
-                        "kind": "delegate-timeout", "token": nonce,
-                        "argv": expected, "cwd": str(s.root / "repo"),
-                    }, message
-                    # Launch ONLY our independently known argv/cwd, never peer-supplied values.
-                    # Direct Popen ownership is retained until bounded cleanup/wait below.
-                    delegated = subprocess.Popen(
-                        ["unshare", "-cn", *expected],
-                        cwd=s.root / "repo", env=child_env,
-                        stdout=subprocess.DEVNULL, stderr=err, start_new_session=True,
-                    )
-                    print(
-                        f"DELEGATED owned launcher pid={delegated.pid} shim={p.pid} "
-                        f"token={nonce} argv={expected!r}", flush=True,
-                    )
-                    peer.sendall(b"!")
-            with listener.accept()[0] as peer:
-                peer.settimeout(30)
-                # Kernel peer credentials are host-namespace diagnostics only. The judge
-                # transfers a pidfd opened on ITSELF: no numeric PID lookup/reuse race.
-                host_pid, uid, _ = struct.unpack(
-                    "3i", peer.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12)
-                )
-                assert uid == os.getuid(), (host_pid, uid)
-                message, handles, flags, _ = socket.recv_fds(peer, 4096, 1)
-                if handles:
-                    handle = handles[0]
-                assert len(handles) == 1 and not flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC), (
-                    handles, flags
-                )
-                started = json.loads(message)
-                assert started["token"] == nonce and started["pid"] > 0, started
-                live = select.poll()
-                live.register(handle, select.POLLIN)
-                assert not live.poll(0), "judge exited before cancellation"
-                peer.sendall(b"!")
-                print(
-                    f"START owned judge host_pid={host_pid} namespace_pid={started['pid']} "
-                    f"uid={uid} token={nonce} pidfd={handle}; live before cancellation",
-                    flush=True,
-                )
-            # p is still unreaped: its session/group ID cannot be reused by another process.
-            os.kill(p.pid, signal.SIGTERM)
-            with contextlib.suppress(ProcessLookupError):
-                os.killpg(p.pid, signal.SIGTERM)
-            rc = p.wait(timeout=30)
-            err.seek(0)
-            proof = err.read()
-            print(f"PRODUCT cancelled QC rc={rc}\n{proof}", flush=True)
-            if fault:
-                print("FAULT rc above is the timeout facade, not the delegated QC exit", flush=True)
-            assert PROOF in proof, proof
-            assert rc != 0, "the killed run exited 0"
-            exited = bool(live.poll(10_000))
-            print(
-                f"PRODUCT host_pid={host_pid} token={nonce} pidfd={handle} "
-                f"after bounded cancellation: {'EXITED' if exited else 'LIVE'}",
-                flush=True,
-            )
-            assert exited, "killed run's actual judge survived cancellation"
-            left = [f.name for f in (s.root / "tmp").iterdir()]
-            assert left == [], f"the killed run left scratch: {left}"
+                cancellation.delegate_timeout(p)
+            live, host_pid = cancellation.observe_judge()
+            cancellation.cancel_judge(p, live, host_pid)
         finally:
-            try:
-                if handle is not None:
-                    try:
-                        try:
-                            signal.pidfd_send_signal(handle, signal.SIGKILL)
-                            print("CLEANUP owned judge pidfd SIGKILL", flush=True)
-                        except ProcessLookupError:
-                            print("CLEANUP owned judge pidfd already exited", flush=True)
-                        poll = select.poll()
-                        poll.register(handle, select.POLLIN)
-                        terminated = bool(poll.poll(10_000))
-                        print(
-                            f"CLEANUP token={nonce} pidfd={handle} "
-                            f"observed {'EXITED' if terminated else 'LIVE'}", flush=True,
-                        )
-                        assert terminated, "owned judge cleanup did not terminate it"
-                    finally:
-                        os.close(handle)
-            finally:
-                try:
-                    if delegated is not None:
-                        # No poll/wait has reaped this direct child. Its group ID is reserved.
-                        with contextlib.suppress(ProcessLookupError):
-                            os.killpg(delegated.pid, signal.SIGTERM)
-                        try:
-                            delegated.wait(timeout=30)
-                        except subprocess.TimeoutExpired:
-                            with contextlib.suppress(ProcessLookupError):
-                                os.killpg(delegated.pid, signal.SIGKILL)
-                            delegated.wait(timeout=10)
-                        print(
-                            f"CLEANUP delegated launcher pid={delegated.pid} "
-                            f"waited rc={delegated.returncode}", flush=True,
-                        )
-                finally:
-                    if p.returncode is None:
-                        # No poll/reap before this group signal: its numeric ID stays reserved.
-                        with contextlib.suppress(ProcessLookupError):
-                            os.killpg(p.pid, signal.SIGKILL)
-                        print(f"CLEANUP owned launcher waited rc={p.wait(timeout=10)}", flush=True)
-                    else:
-                        print(f"CLEANUP owned launcher already waited rc={p.returncode}", flush=True)
-                    err.seek(0)
-                    print(f"CLEANUP captured QC stderr:\n{err.read()}", flush=True)
-                    left = sorted(f.name for f in (s.root / "tmp").iterdir())
-                    print(f"CLEANUP scratch left={left}", flush=True)
-                    assert left == [], f"cleanup left scratch: {left}"
+            cancellation.cleanup(p)
 
 
 def fetch_fails(s: Scratch) -> None:

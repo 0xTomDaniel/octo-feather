@@ -4,13 +4,18 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  '@anthropic-ai/sandbox-runtime@0.0.81':
+    hash: 77080bdb4488f9e9c72877f0aca5660e8059834cb46c4f52a31b115f217854de
+    path: patches/@anthropic-ai__sandbox-runtime@0.0.81.patch
+
 importers:
 
   .:
     devDependencies:
       '@anthropic-ai/sandbox-runtime':
         specifier: 0.0.81
-        version: 0.0.81
+        version: 0.0.81(patch_hash=77080bdb4488f9e9c72877f0aca5660e8059834cb46c4f52a31b115f217854de)
       '@tsconfig/node22':
         specifier: ^22.0.6
         version: 22.0.6
@@ -474,7 +479,7 @@ packages:
 
 snapshots:
 
-  '@anthropic-ai/sandbox-runtime@0.0.81':
+  '@anthropic-ai/sandbox-runtime@0.0.81(patch_hash=77080bdb4488f9e9c72877f0aca5660e8059834cb46c4f52a31b115f217854de)':
     dependencies:
       '@pondwader/socks5-server': 1.0.10
       commander: 12.1.0

@@ -241,7 +241,7 @@ if a[:1] == ["--version"]:
     sys.exit(0)
 if hang := os.environ.get("FAKE_PI_HANG"):
     if observer := os.environ.get("FAKE_PI_HANG_SOCKET"):
-        import socket  # noqa: PLC0415
+        import socket
 
         with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
             peer.settimeout(30)
@@ -250,7 +250,11 @@ if hang := os.environ.get("FAKE_PI_HANG"):
             try:
                 socket.send_fds(
                     peer,
-                    [json.dumps({"pid": os.getpid(), "token": os.environ["FAKE_PI_HANG_TOKEN"]}).encode()],
+                    [
+                        json.dumps(
+                            {"pid": os.getpid(), "token": os.environ["FAKE_PI_HANG_TOKEN"]}
+                        ).encode()
+                    ],
                     [handle],
                 )
             finally:

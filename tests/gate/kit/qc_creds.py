@@ -9,15 +9,22 @@ import json
 import re
 import shutil
 import stat
+import sys
 from pathlib import Path
 
-from testkit import HERE, ROOT, Scratch, kit, main, tool_homes
+from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
 from testkit.qc import MODEL, RID, STATUS, block, clean, qc, report, target
 
-AUTH = '{"anthropic": {"type": "oauth", "refresh": "SECRET-pi-oauth-r", "access": "SECRET-pi-oauth-a", "expires": 1}}\n'
+AUTH = (
+    '{"anthropic": {"type": "oauth", "refresh": "SECRET-pi-oauth-r", '
+    '"access": "SECRET-pi-oauth-a", "expires": 1}}\n'
+)
 MODELS = '{"providers": {"p": {"apiKey": "SECRET-pi-models-0123456789"}}}\n'
-DEMO = 'for f in auth.json models.json; do cat "$HOME/.pi/agent/$f" && exit 1; done; echo neither readable'
-CONTRACT = f'''format = 1
+DEMO = (
+    'for f in auth.json models.json; do cat "$HOME/.pi/agent/$f" && exit 1; '
+    "done; echo neither readable"
+)
+CONTRACT = f"""format = 1
 [entry]
 command = "true"
 [services]
@@ -27,22 +34,37 @@ command = "true"
 command = '{DEMO}'
 covers = ["src/a"]
 tests = ["tests/a.sh"]
-'''
+"""
 WARN = "qc: warning: auth.json has OAuth credentials: a token refresh during this run is discarded"
-COPIES = "qc sandbox: ok   Pi model credentials: auth.json models.json per-run copies on the hidden run tmpfs, never written back"
+COPIES = (
+    "qc sandbox: ok   Pi model credentials: auth.json models.json per-run copies "
+    "on the hidden run tmpfs, never written back"
+)
 
 
 def build(p: Scratch) -> None:
     target(p, {"qc.toml": CONTRACT})
 
 
-def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, tuple[bytes, int]]]:
+def world(
+    s: Scratch, *, incomplete: bool = False
+) -> tuple[Path, str, dict[Path, tuple[bytes, int]]]:
     clean(s)
     for name in (
-        "PI_CODING_AGENT_DIR", "STUB_KIT", "STUB_WANT", "STUB_WANT_EXACT",
-        "STUB_CONFIDENCE", "STUB_ALSO", "STUB_LAUNCHED", "FAKE_HERDR",
-        "FAKE_QC", "FAKE_PI_HANG", "OCTO_FEATHER_QC_MODEL", "OCTO_FEATHER_QC_ARGS",
-        "OCTO_FEATHER_QC_ADVISORY_AUTHORITY", "OCTO_FEATHER_QC_ADVISORY_SCOPE",
+        "PI_CODING_AGENT_DIR",
+        "STUB_KIT",
+        "STUB_WANT",
+        "STUB_WANT_EXACT",
+        "STUB_CONFIDENCE",
+        "STUB_ALSO",
+        "STUB_LAUNCHED",
+        "FAKE_HERDR",
+        "FAKE_QC",
+        "FAKE_PI_HANG",
+        "OCTO_FEATHER_QC_MODEL",
+        "OCTO_FEATHER_QC_ARGS",
+        "OCTO_FEATHER_QC_ADVISORY_AUTHORITY",
+        "OCTO_FEATHER_QC_ADVISORY_SCOPE",
     ):
         s.env.pop(name, None)
     for name in tuple(s.env):
@@ -64,6 +86,7 @@ def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, t
     path = s.run(["just", "--justfile", str(ROOT / "justfile"), "--evaluate", "PATH"]).out
     for name, expected in (("pi", HERE / "credential_pi.py"), ("herdr", HERE / "herdr.py")):
         resolved = shutil.which(name, path=path)
+        assert resolved is not None, (name, resolved, path)
         assert resolved == str(s.bin / name), (name, resolved, path)
         assert Path(resolved).resolve() == expected
         assert stat.S_IMODE(expected.stat().st_mode) == 0o755, expected
@@ -72,58 +95,96 @@ def world(s: Scratch, incomplete: bool = False) -> tuple[Path, str, dict[Path, t
         (r / "qc.toml").write_text(CONTRACT.replace("; echo neither readable", "; exit 77"))
         s.git(r, "commit", "-qam", "demo stops")
     head = s.git(r, "rev-parse", "HEAD")
-    s.env["CREDENTIAL_PI_REPLY"] = json.dumps({
-        "head": head,
-        "criteria": [{"id": "acceptance-b", "verdict": "pass", "command": "judge b",
-                      "output": "ok", "why": "model reached: auth.json and models.json copies"}],
-    })
+    s.env["CREDENTIAL_PI_REPLY"] = json.dumps(
+        {
+            "head": head,
+            "criteria": [
+                {
+                    "id": "acceptance-b",
+                    "verdict": "pass",
+                    "command": "judge b",
+                    "output": "ok",
+                    "why": "model reached: auth.json and models.json copies",
+                }
+            ],
+        }
+    )
     return r, head, source
 
 
-def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
-    r, head, source = world(s, incomplete)
-    ids = ("acceptance-a", "acceptance-b") if mixed else ("acceptance-a",)
-    q = qc(s, r, "9", *ids, want=2 if incomplete else 0)
-    print(q.out)
-    print(q.err)
-    for p, before in source.items():
-        assert (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) == before, p
-    assert "SECRET-pi" not in q.out + q.err
-    assert q.err.splitlines().count(WARN) == (0 if incomplete else 1), q.err
-    rep = report(q)
-    assert rep["head"] == head, rep
-    results = {x["id"]: x for x in rep["results"]}
-    assert set(results) == set(ids), results
-    records = json.loads(s.run([
-        kit("octo-feather-evidence"), "read", "--repo", ".", "--commit", head, "--json",
-    ], cwd=r).out)
-    a = results["acceptance-a"]
-    assert re.fullmatch(RID, a["record"]), a
-    assert (a["head"], a["decision"], a["evidence"], a["verdict"]) == (
-        head, "demo checks", "incomplete" if incomplete else "complete",
-        "insufficient evidence" if incomplete else "pass",
-    ), a
-    stored = next(x for x in records if x["record"]["id"] == a["record"])
-    outputs = Path(stored["dir"]) / "outputs"
+def demo_outputs(stored_dir: Path, *, incomplete: bool) -> None:
+    outputs = stored_dir / "outputs"
     assert (outputs / "demo.exit").read_text() == ("77\n" if incomplete else "0\n")
     assert (outputs / "demo.stdout").read_text() == ("" if incomplete else "neither readable\n")
     err = (outputs / "demo.stderr").read_text()
     for name in ("auth.json", "models.json"):
         assert f"/.pi/agent/{name}: No such file or directory" in err, err
-    for f in Path(stored["dir"]).rglob("*"):
+    for f in stored_dir.rglob("*"):
         if f.is_file():
             assert b"SECRET-pi" not in f.read_bytes(), f
+
+
+def credentials_unchanged(
+    source: dict[Path, tuple[bytes, int]], q: Ran, *, incomplete: bool
+) -> None:
+    sys.stdout.write(q.out + "\n")
+    sys.stdout.write(q.err + "\n")
+    for p, before in source.items():
+        assert (p.read_bytes(), stat.S_IMODE(p.stat().st_mode)) == before, p
+    assert "SECRET-pi" not in q.out + q.err
+    assert q.err.splitlines().count(WARN) == (0 if incomplete else 1), q.err
+
+
+def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
+    r, head, source = world(s, incomplete=incomplete)
+    ids = ("acceptance-a", "acceptance-b") if mixed else ("acceptance-a",)
+    q = qc(s, r, "9", *ids, want=2 if incomplete else 0)
+    credentials_unchanged(source, q, incomplete=incomplete)
+    rep = report(q)
+    assert rep["head"] == head, rep
+    results = {x["id"]: x for x in rep["results"]}
+    assert set(results) == set(ids), results
+    records = json.loads(
+        s.run(
+            [
+                kit("octo-feather-evidence"),
+                "read",
+                "--repo",
+                ".",
+                "--commit",
+                head,
+                "--json",
+            ],
+            cwd=r,
+        ).out
+    )
+    a = results["acceptance-a"]
+    assert re.fullmatch(RID, a["record"]), a
+    assert (a["head"], a["decision"], a["evidence"], a["verdict"]) == (
+        head,
+        "demo checks",
+        "incomplete" if incomplete else "complete",
+        "insufficient evidence" if incomplete else "pass",
+    ), a
+    stored = next(x for x in records if x["record"]["id"] == a["record"])
+    demo_outputs(Path(stored["dir"]), incomplete=incomplete)
     cap = rep["captures"]
-    assert len(cap) == 1 and cap[0]["record"] == a["record"], cap
+    assert len(cap) == 1, cap
+    assert cap[0]["record"] == a["record"], cap
     proof = cap[0]["sandbox"]["proof"]
-    assert any(line.startswith(
-        "qc sandbox: ok   no Pi model credentials (no Pi runs here): auth.json and models.json absent from "
-    ) for line in proof), proof
+    assert any(
+        line.startswith(
+            "qc sandbox: ok   no Pi model credentials (no Pi runs here): "
+            "auth.json and models.json absent from "
+        )
+        for line in proof
+    ), proof
     assert "SECRET-pi" not in json.dumps(proof), proof
     if incomplete:
         assert block(q.out, "INSUFFICIENT EVIDENCE acceptance-a: "), q.out
         assert a["missing"], a
-        assert "advisory" not in q.err and "advisory" not in a, (q.err, a)
+        assert "advisory" not in q.err, (q.err, a)
+        assert "advisory" not in a, (q.err, a)
         assert rep.get("fallback", {}) == {}, rep
         assert s.git(r, "rev-parse", "HEAD") == head
         return
@@ -133,23 +194,33 @@ def run(s: Scratch, *, mixed: bool = False, incomplete: bool = False) -> None:
         cmd = DEMO if cid == "acceptance-a" else "judge b"
         lines = block(q.out, f"PASS {cid}: ", 4)
         assert lines[0] == f"PASS {cid}: $ {cmd}", lines
-        assert f"  evidence complete; decision {decision}; record {result['record']}" in lines, lines
+        assert f"  evidence complete; decision {decision}; record {result['record']}" in lines, (
+            lines
+        )
         assert re.fullmatch(RID, result["record"]), result
         assert (result["head"], result["verdict"], result["evidence"], result["decision"]) == (
-            head, "pass", "complete", decision,
+            head,
+            "pass",
+            "complete",
+            decision,
         ), result
         assert (
             "  advisory model judgment (no gate reads it): shows, confidence 0.910 "
             f"(criterion-evidence by {MODEL}; uncalibrated)"
         ) in lines, lines
         advice = result["advisory"]
-        assert (advice["answer"], advice["confidence"], advice["model"]) == ("shows", 0.91, MODEL), advice
+        assert (advice["answer"], advice["confidence"], advice["model"]) == (
+            "shows",
+            0.91,
+            MODEL,
+        ), advice
         assert any(x["record"]["id"] == result["record"] for x in records), result
     if mixed:
         fallback = rep["fallback"]
         assert set(fallback) == {"acceptance-b"}, fallback
         b = fallback["acceptance-b"]
-        assert b["exit"] == 0 and b["record"] == results["acceptance-b"]["record"], b
+        assert b["exit"] == 0, b
+        assert b["record"] == results["acceptance-b"]["record"], b
         assert COPIES in b["sandbox"]["proof"], b
     else:
         assert rep.get("fallback", {}) == {}, rep

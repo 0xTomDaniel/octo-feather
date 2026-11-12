@@ -98,6 +98,7 @@ import glob
 import importlib.machinery
 import importlib.util
 import json
+import mmap
 import os
 import re
 import secrets
@@ -113,8 +114,8 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Mapping
-from typing import Any, NoReturn, cast
+from collections.abc import Mapping, Sequence
+from typing import Any, Literal, NoReturn, NotRequired, TypedDict, TypeGuard, cast
 
 import tomllib
 
@@ -162,6 +163,10 @@ PI_HOSTS = {
     "github-copilot": "api.githubcopilot.com",
 }
 INPUTS = (
+    "QC_NATIVE_SECRET",
+    "QC_NATIVE_SOCKET",
+    "QC_NATIVE_PYTHON",
+    "QC_NATIVE_COMMAND",
     "QC_PI",
     "QC_BROWSER",
     "QC_SHOTS",
@@ -178,6 +183,7 @@ INPUTS = (
     "QC_UID",
     "QC_GID",
     "QC_WORKTREE",
+    "QC_FD_CANCEL",
     "QC_FD_PROOF",
     "QC_FD_POST",
     "QC_FD_ERR",
@@ -192,15 +198,128 @@ SRT_PKG = "@anthropic-ai/sandbox-runtime"
 # the CLI's for the same settings (checked: /proc/1/cmdline alike but for per-run ids and ports). Why not the CLI: it
 # reports no violation; the library's violation store does (getSandboxViolationStore, subscribe), each event one line
 # "QC-SRT-VIOLATION {json}" on this process's stderr, which the setup reads (srt_log).
+# Stock Node numeric bridge kills cannot reserve identity across asynchronous reap.
+# The maintained SDK adapter therefore uses this existing Recorder's self-pidfd
+# channel; it adds only the lifetime/completion capability the SDK cannot supply.
 SRT_SHIM = r"""
 const [pkg, settings, , ...args] = process.argv.slice(1)
 const { SandboxManager } = await import(`${pkg}/dist/index.js`)
 const { loadConfig } = await import(`${pkg}/dist/utils/config-loader.js`)
 const { quote } = await import(`${pkg}/dist/utils/shell-quote.js`)
 const { spawn } = await import('node:child_process')
+const { randomBytes } = await import('node:crypto')
+if (SandboxManager.nativeBridgeLifecycleABI !== 1) {
+  throw new Error('qc sandbox: retained native lifecycle ABI1 required before initialize; stock SDK refused')
+}
+const names = ['QC_NATIVE_SECRET', 'QC_NATIVE_SOCKET', 'QC_NATIVE_PYTHON', 'QC_NATIVE_COMMAND', 'QC_FD_CANCEL']
+const control = Object.fromEntries(names.map(k => [k, process.env[k]]))
+if (names.some(k => !control[k])) throw new Error('qc sandbox: native lifecycle setup unavailable')
+const cancelFD = Number(control.QC_FD_CANCEL)
+for (const k of names) delete process.env[k]
+let deadline = 0n
+function remaining() {
+  // Node NEVER decodes the shared mutable FD. Existing Python control clients
+  // validate the entire sealed publication under supported synchronization.
+  // Linux CLOCK_MONOTONIC/hrtime correspondence remains a platform assumption.
+  return deadline ? Math.max(0, Number(deadline-process.hrtime.bigint())/1e6) : null
+}
+function acceptBudget(text) {
+  const row = JSON.parse(text)
+  if (!row || Object.keys(row).sort().join(',') !== 'end_ns,signal' ||
+      typeof row.end_ns !== 'string' || !/^[0-9]{20}$/.test(row.end_ns) ||
+      !Number.isInteger(row.signal) || ![0,1,2,15].includes(row.signal)) throw new Error('invalid control budget')
+  const end = BigInt(row.end_ns)
+  if ((!end && row.signal) || (deadline && end !== deadline) || (cancelSig && !end)) throw new Error('unknown/changed cancellation budget')
+  if (end) deadline = end
+}
+function spawnControl(mode, args, options = {}) {
+  const io = Array.isArray(options.stdio) ? options.stdio : Array(3).fill(options.stdio ?? 'pipe')
+  return spawn(control.QC_NATIVE_PYTHON, [control.QC_NATIVE_COMMAND, mode, ...args], {
+    ...options, env: { ...(options.env ?? process.env), ...control, QC_FD_CANCEL: '7' },
+    stdio: [...io.slice(0,3), 'ignore', 'ignore', 'ignore', 'ignore', cancelFD]
+  })
+}
+const lifecycle = {
+  abi: 1,
+  start(file, argv, options, role = 'bridge') {
+    const lease = randomBytes(32).toString('hex')
+    const child = spawnControl('native-relay', [lease, role, file, ...argv], options)
+    if (role === 'payload') {
+      child.on('error', error => { rememberError(error); void completePayload() })
+      child.once('close', (code, sig) => { void completePayload({ code, signal: sig }) })
+    }
+    return { child, lease }
+  },
+  stop(lease) { return this.request('native-control', lease) },
+  ready(lease) { return this.request('native-ready', lease) },
+  signal(lease, sig) { return this.request('native-signal', lease, sig) },
+  request(mode, lease, phase, result) {
+    return new Promise((resolve, reject) => {
+      const args = [lease, ...(phase ? [phase] : []), ...(mode === 'native-progress' ? [JSON.stringify(result ?? null)] : [])]
+      const client = spawnControl(mode, args, { stdio: ['ignore','pipe','ignore'] })
+      let budget = ''
+      client.stdout.setEncoding('utf8')
+      client.stdout.on('data', chunk => { budget += chunk; if (budget.length > 4096) { clearInterval(timer); reject(new Error('control budget overflow')) } })
+      const end = process.hrtime.bigint()+10000000000n
+      const timer = setInterval(() => {
+        const left = remaining()
+        if ((left !== null && left <= 0) || process.hrtime.bigint() >= end) {
+          clearInterval(timer); reject(new Error('qc native control completion timeout'))
+        }
+      }, 10)
+      client.once('error', err => { clearInterval(timer); reject(err) })
+      client.once('close', code => {
+        clearInterval(timer)
+        if (code !== 0) { reject(new Error(`qc native capability failed (client exit ${code})`)); return }
+        try { acceptBudget(budget); resolve() } catch (err) { reject(err) }
+      })
+    })
+  }
+}
+let budgetPromise = null
+function requireBudget() {
+  // No local grace is minted. Until full FD validation by the existing client,
+  // the retained Python owner's original canonical deadline is the hard bound.
+  return budgetPromise ??= lifecycle.request('native-budget', '').then(() => {
+    const left = remaining()
+    if (left === null || left <= 0) throw new Error('unknown/expired canonical cancellation budget')
+  })
+}
+async function withinBudget(action) {
+  let timer
+  try {
+    if (cancelSig && remaining() === null) await requireBudget()
+    return await Promise.race([action(), new Promise((_, reject) => {
+      timer = setInterval(() => {
+        const left = remaining()
+        if (left !== null && left <= 0) reject(new Error('SDK cancellation deadline exceeded'))
+        else if (cancelSig && left === null) requireBudget().catch(reject)
+      }, 10)
+    })])
+  } finally { clearInterval(timer) }
+}
+const UNSET = {} // private fresh identity, never exported or thrown
+let progressError = UNSET
+const secondaryErrors = []
+function rememberError(error) {
+  if (progressError === UNSET) progressError = error
+  else secondaryErrors.push(error)
+}
+let cancelSig = null, payload = null, initialized = null, signalPromise = null
+let completionPromise = null
+function deliver() {
+  if (payload && initialized && cancelSig && !signalPromise) {
+    signalPromise = initialized.then(() => {
+      if (progressError === UNSET) return lifecycle.signal(payload.lease, cancelSig)
+    }).catch(rememberError)
+  }
+}
+for (const sig of ['SIGINT','SIGTERM']) process.on(sig, () => {
+  if (!cancelSig) { cancelSig = sig; deliver() }
+})
 const loaded = loadConfig(settings)
 if (loaded.kind !== 'ok') { console.error(`qc sandbox: srt settings ${settings}: ${loaded.reason ?? loaded.kind}`); process.exit(1) }
-await SandboxManager.initialize(loaded.config)
+await withinBudget(() => SandboxManager.initialize(loaded.config, undefined, false, { nativeBridgeLifecycle: lifecycle }))
 const store = SandboxManager.getSandboxViolationStore()
 let seen = store.getTotalCount()
 store.subscribe(vs => {
@@ -209,16 +328,42 @@ store.subscribe(vs => {
   seen = total
   for (const v of fresh) process.stderr.write(`QC-SRT-VIOLATION ${JSON.stringify({ line: v.line })}\n`)
 })
-const child = spawn(await SandboxManager.wrapWithSandbox(quote(args)), { shell: true, stdio: 'inherit' })
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => child.kill(sig))
-child.on('exit', async (code, sig) => {
-  SandboxManager.cleanupAfterCommand()
-  // srt's own teardown, awaited: its proxy bridges (socat, started outside the sandbox) killed and waited for, so
-  // every process the run started is reaped up to this one and counted in its CPU; exiting first would leave them.
-  await SandboxManager.reset()
-  process.exit(sig ? 1 : (code ?? 0))
-})
+function completePayload(closed = null) {
+  return completionPromise ??= (async () => {
+  try {
+    await initialized
+    if (signalPromise) await signalPromise
+    if (progressError === UNSET && closed !== null) await lifecycle.request('native-progress', payload.lease, 'payload_exit', closed)
+  } catch (err) { rememberError(err) }
+  try { SandboxManager.cleanupAfterCommand() } catch (err) { rememberError(err) }
+  try {
+    await withinBudget(() => SandboxManager.reset()) // attempted even if command cleanup failed
+    if (progressError === UNSET) await lifecycle.request('native-progress', payload.lease, 'reset_completed')
+  } catch (err) { rememberError(err) }
+  if (progressError !== UNSET) {
+    const errors = [progressError, ...secondaryErrors]
+    function report(index) {
+      if (index === errors.length) return
+      try { console.error(index ? 'qc lifecycle secondary:' : 'qc lifecycle primary:', errors[index]) }
+      finally { report(index + 1) }
+    }
+    try { report(0) } finally { process.exit(70) }
+  }
+  process.exit(closed === null ? 70 : (cancelSig ? 128 + (cancelSig === 'SIGINT' ? 2 : 15) : (closed.signal ? 1 : (closed.code ?? 0))))
+  })()
+}
+payload = lifecycle.start('/bin/sh', ['-c', await withinBudget(() => SandboxManager.wrapWithSandbox(quote(args)))], { stdio: 'inherit' }, 'payload')
+initialized = lifecycle.ready(payload.lease).then(() => {
+  if (progressError === UNSET) return lifecycle.request('native-progress', payload.lease, 'initialized')
+}).catch(rememberError)
+deliver()
 """
+PAYLOAD_EXIT_PHASE = 3
+PID_NAMESPACE_TYPE = 0x20000000
+BOOTSTRAP_FD_COUNT = 6
+NATIVE_SIGNAL_ARITY = 2
+NATIVE_PROGRESS_ARITY = 3
+NATIVE_RELAY_MIN_ARITY = 3
 REPO_DEPTH = 3  # other repos: git repos up to this many levels below HOME (docs/adr/0022)
 OUT: dict[str, int | None] = {"proof": None, "post": None, "err": None}
 
@@ -231,7 +376,7 @@ def say(m: str) -> None:
     sys.stderr.flush()
 
 
-def post(rec: dict[str, Any]) -> None:
+def post(rec: Mapping[str, object]) -> None:
     line = json.dumps(rec) + "\n"
     if OUT["post"] is not None:
         os.write(OUT["post"], line.encode())
@@ -303,6 +448,39 @@ AT = {
 }
 
 
+class NativeTask(TypedDict):
+    fd: int
+    waiters: list[socket.socket]
+    done: bool
+    exec_crossed: bool
+    role: object
+    kill_at: NotRequired[float]
+    deadline: NotRequired[float]
+    killed: NotRequired[bool]
+    expired: NotRequired[bool]
+
+
+class NativeProgress(TypedDict):
+    initialized: bool | None
+    ready: int
+    signal_acked: bool | None
+    payload_exit: bool | None
+    reset_completed: bool | None
+    signal: str | None
+    payload_code: object
+    payload_signal: object
+    native_forced: bool
+
+
+class NativeRecord(TypedDict):
+    native_lifecycle: dict[str, object]
+    native_cleanup_errors: list[str]
+    attempts: Sequence[Mapping[str, object]]
+    recorded: int
+    gh_misses: int
+    gh_miss_log: Sequence[Mapping[str, object]]
+
+
 class Recorder:
     """The attempt record (R): one thread, outside the judge's namespaces; it alone writes $SCR/rec/attempts.jsonl."""
 
@@ -327,18 +505,49 @@ class Recorder:
         self.conns: dict[socket.socket, dict[str, Any]] = {}
         self.net: set[str] = set()
         self.hello = False
+        # Lifecycle auth is an explicit extension; ordinary attempts stay unchanged.
+        self.native_secret = secrets.token_hex(32)
+        self.native: dict[str, NativeTask] = {}
+        self.native_closing = False
+        self.native_done = threading.Event()
+        self.native_errors: list[str] = []
+        self.native_progress: NativeProgress = {
+            "initialized": None,
+            "ready": 0,
+            "signal_acked": None,
+            "payload_exit": None,
+            "reset_completed": None,
+            "signal": None,
+            "payload_code": None,
+            "payload_signal": None,
+            "native_forced": False,
+        }
+        self.native_payload: str | None = None
+        self.native_phase = 0
         self.wr, self.ww = os.pipe()
         self.stop = False
         self.sel = selectors.DefaultSelector()
         for f in (self.srv, self.wr) + ((self.ino,) if self.ino >= 0 else ()):
             self.sel.register(f, selectors.EVENT_READ)
-        self.th = threading.Thread(target=self.loop, daemon=True)
+        self.quiescent = threading.Event()
 
-    def watches(self, pid: int) -> int:
-        """The masks as the judge's mount namespace holds them, through the inner's /proc root."""
+        def run() -> None:
+            try:
+                self.loop()
+            finally:
+                # Sole worker publication, after its last Recorder state/FD use.
+                self.quiescent.set()
+
+        self.th = threading.Thread(target=run, daemon=True)
+
+    def watches(self, masks: list[int]) -> int:
+        """Watch retained inner directory capabilities, never a peer PID lookup."""
         n = 0
-        for kind, path, kept in self.watch:
-            p = f"/proc/{pid}/root{path}"
+        for (kind, path, kept), fd in zip(self.watch, masks, strict=True):
+            if not stat.S_ISDIR(os.fstat(fd).st_mode):
+                failure_message = "mask capability is not a directory"
+                raise OSError(failure_message)
+            p = f"/proc/self/fd/{fd}"
             w = (
                 libc.inotify_add_watch(self.ino, p.encode(), 0x20) if self.ino >= 0 else -1
             )  # IN_OPEN
@@ -399,21 +608,294 @@ class Recorder:
         )
         return None
 
-    def message(self, c: socket.socket, raw: bytes) -> None:
+    def native_deadlines(self, state: NativeTask) -> tuple[float, float] | None:
+        if "deadline" not in state and "kill_at" not in state:
+            return None
+        if "deadline" not in state or "kill_at" not in state:
+            self.native_errors.append("native stopping deadline pair incomplete")
+            failure_message = "native stopping deadline pair incomplete"
+            raise OSError(failure_message)
+        return state["kill_at"], state["deadline"]
+
+    def native_arm(self, state: NativeTask) -> None:
+        if self.native_deadlines(state) is None:
+            now = time.monotonic()
+            state.update(kill_at=now + cancel_budget(1.5, 2), deadline=now + cancel_budget(5, 1))
+            with contextlib.suppress(ProcessLookupError):
+                signal.pidfd_send_signal(state["fd"], signal.SIGTERM)
+
+    def native_message(self, c: socket.socket, m: dict[str, object], received: list[int]) -> None:
+        _, uid, _ = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
+        lease, op, secret = m.get("lease"), m.get("op"), m.get("secret")
+        signal_name = m.get("signal")
+        if (
+            uid != os.getuid()
+            or not isinstance(secret, str)
+            or re.fullmatch("[0-9a-f]{64}", secret) is None
+            or not secrets.compare_digest(secret, self.native_secret)
+            or not isinstance(lease, str)
+            or re.fullmatch("[0-9a-f]{64}", lease) is None
+            or set(m)
+            != (
+                {"t", "lease", "op", "secret"}
+                | (
+                    {"signal"}
+                    if op == "signal"
+                    else {"phase", "result"}
+                    if op == "progress"
+                    else {"role"}
+                    if op == "register"
+                    else set()
+                )
+            )
+        ):
+            failure_message = "native lifecycle authentication refused"
+            raise OSError(failure_message)
+        if (
+            op == "register"
+            and len(received) == 1
+            and lease not in self.native
+            and not self.native_closing
+        ):
+            role = m.get("role")
+            if role not in ("bridge", "payload") or (
+                role == "payload" and self.native_payload is not None
+            ):
+                failure_message = "duplicate or invalid native role"
+                raise OSError(failure_message)
+            if role == "payload":
+                self.native_payload = lease
+            signal.pidfd_send_signal(
+                received[0], 0
+            )  # kernel validates actual live pidfd, no numeric lookup
+            fd = os.dup(
+                received[0]
+            )  # Python duplicates non-inheritable, retained across sender exit/reap
+            self.native[lease] = {
+                "fd": fd,
+                "waiters": [],
+                "done": False,
+                "exec_crossed": False,
+                "role": role,
+            }
+            self.conns[c]["native_lease"] = lease
+            self.sel.register(fd, selectors.EVENT_READ)
+            c.send(b"registered")
+        elif op == "progress" and not received:
+            if lease not in self.native:
+                c.send(b"pending")
+                return
+            phase = m.get("phase")
+            if lease != self.native_payload or phase not in (
+                "initialized",
+                "payload_exit",
+                "reset_completed",
+            ):
+                self.native_errors.append("mixed native progress role/lease")
+                failure_message = "progress is not from the designated payload"
+                raise OSError(failure_message)
+            self.native_tick()
+            state = self.native[lease]
+            if phase == "initialized":
+                valid = (
+                    self.native_phase == 0
+                    and state["exec_crossed"]
+                    and not state["done"]
+                    and m["result"] is None
+                )
+                next_phase = 1
+            elif phase == "payload_exit":
+                result = m["result"]
+                valid = (
+                    self.native_phase in (1, 2)
+                    and state["done"]
+                    and is_json_object(result)
+                    and set(result) == {"code", "signal"}
+                )
+                if valid and is_json_object(result):
+                    self.native_progress["payload_code"] = result["code"]
+                    self.native_progress["payload_signal"] = result["signal"]
+                    sig = self.native_progress["signal"]
+                    if sig:
+                        n = getattr(signal, sig)
+                        valid = (result["signal"] == sig and result["code"] is None) or (
+                            result["signal"] is None
+                            and type(result["code"]) is int
+                            and result["code"] in (0, 128 + n)
+                        )
+                next_phase = 3
+            else:
+                valid = (
+                    self.native_phase == PAYLOAD_EXIT_PHASE
+                    and m["result"] is None
+                    and not self.native_errors
+                    and all(s["done"] and not s.get("killed") for s in self.native.values())
+                )
+                next_phase = 4
+            if not valid or not cancel_budget(1):
+                self.native_errors.append("invalid/replayed/out-of-order native progress")
+                failure_message = "native phase transition refused"
+                raise OSError(failure_message)
+            self.native_phase = next_phase
+            if phase == "initialized":
+                self.native_progress["initialized"] = True
+            elif phase == "payload_exit":
+                self.native_progress["payload_exit"] = True
+            else:
+                self.native_progress["reset_completed"] = True
+            c.send(b"recorded")
+        elif op == "ready" and not received and lease not in self.native:
+            # Authentication and exact operation keys were checked above. A relay
+            # may not yet be enrolled; only the existing bounded client may retry.
+            c.send(b"error" if self.native_closing or self.native_errors else b"pending")
+        elif op == "ready" and not received and lease in self.native:
+            state = self.native[lease]
+            if (
+                self.native_closing
+                or self.native_errors
+                or self.native_deadlines(state) is not None
+                or state["done"]
+            ):
+                c.send(b"error")
+                return
+            poll = selectors.DefaultSelector()
+            try:
+                poll.register(state["fd"], selectors.EVENT_READ)
+                dead = bool(poll.select(0))
+            finally:
+                poll.close()
+            if (
+                not dead
+                and not self.native_errors
+                and state["exec_crossed"]
+                and lease == self.native_payload
+            ):
+                self.native_progress["ready"] = 1
+            c.send(
+                b"error"
+                if dead or self.native_errors
+                else (b"live" if state["exec_crossed"] else b"pending")
+            )
+        elif op == "stop" and not received and lease in self.native:
+            state = self.native[lease]
+            state["waiters"].append(c)
+            self.native_arm(state)
+        elif (
+            op == "signal"
+            and not received
+            and lease in self.native
+            and isinstance(signal_name, str)
+            and signal_name in ("SIGINT", "SIGTERM")
+        ):
+            if lease != self.native_payload or self.native_phase != 1:
+                self.native_errors.append("replayed/mixed native signal")
+                failure_message = "signal is not for the initialized payload"
+                raise OSError(failure_message)
+            _end, sig = cancel_stamp()
+            if sig != getattr(signal, signal_name) or not cancel_budget(1):
+                failure_message = "signal/deadline mismatch"
+                raise OSError(failure_message)
+            # Signal forwarding preserves intent; this ACK is NOT a death witness.
+            try:
+                signal.pidfd_send_signal(self.native[lease]["fd"], getattr(signal, signal_name))
+            except ProcessLookupError:
+                c.send(b"not-signallable")  # not a death/completion claim
+            else:
+                self.native_progress["signal_acked"] = True
+                self.native_progress["signal"] = signal_name
+                self.native_phase = 2
+                c.send(b"signalled")
+        elif op == "exec-error" and not received and lease in self.native:
+            self.native_errors.append("native relay exec failed")
+            self.native_arm(self.native[lease])
+        else:
+            failure_message = "native lifecycle operation refused"
+            raise OSError(failure_message)
+
+    def native_tick(self) -> None:
+        now = time.monotonic()
+        for state in self.native.values():
+            stopping = self.native_deadlines(state)
+            if not state["done"]:
+                poll = selectors.DefaultSelector()
+                try:
+                    poll.register(state["fd"], selectors.EVENT_READ)
+                    dead = bool(poll.select(0))
+                finally:
+                    poll.close()
+                if dead:
+                    state["done"] = True
+                    self.sel.unregister(state["fd"])
+                elif stopping is not None:
+                    kill_at, deadline = stopping
+                    if now >= kill_at and not state.get("killed"):
+                        with contextlib.suppress(ProcessLookupError):
+                            signal.pidfd_send_signal(state["fd"], signal.SIGKILL)
+                        state["killed"] = True
+                        self.native_errors.append("native bridge forced SIGKILL")
+                        self.native_progress["native_forced"] = True
+                    if now >= deadline and not state.get("expired"):
+                        state["expired"] = True
+                        self.native_errors.append("native retained-task cleanup incomplete")
+            if state["done"] or state.get("expired"):
+                reply = (
+                    b"exited"
+                    if state["done"] and not self.native_errors
+                    else b"error native cleanup incomplete"
+                )
+                for peer in state["waiters"]:
+                    with contextlib.suppress(OSError):
+                        peer.send(reply)
+                state["waiters"].clear()
+        if self.native_closing and all(s["done"] or s.get("expired") for s in self.native.values()):
+            self.native_done.set()
+
+    def finalize_native(self) -> bool:
+        os.write(self.ww, b"n")
+        return self.native_done.wait(cancel_budget(10, 0.5)) and not self.native_errors
+
+    def message(self, c: socket.socket, raw: bytes, received: list[int]) -> None:
         st = self.conns[c]
         try:
             got: object = json.loads(raw)
-        except ValueError:
+        except (ValueError, RecursionError) as error:
+            if "native_lease" in st:
+                failure_message = "invalid registered native relay frame"
+                raise OSError(failure_message) from error
             return
         if not isinstance(got, dict):
+            if "native_lease" in st:
+                failure_message = "invalid registered native relay object"
+                raise OSError(failure_message)
             return
         m = cast("dict[str, Any]", got)
+        if "native_lease" in st and (m.get("t") != "native" or m.get("op") != "exec-error"):
+            failure_message = "unexpected registered native relay frame"
+            raise OSError(failure_message)
         t = m.get("t")
-        if t == "hello" and not self.hello:
-            # the inner, before any judge exists: its pipes, then the mask watches
+        if t == "native":
+            self.native_message(c, m, received)
+            return
+        if t == "mask" and not self.hello and len(received) == 1:
+            masks = st.setdefault("masks", [])
+            if len(masks) < len(self.watch):
+                masks.append(os.dup(received[0]))
+        elif t == "hello" and not self.hello:
+            masks = st.get("masks", [])
+            if len(received) != 1 or len(masks) != len(self.watch):
+                failure_message = "missing inner namespace or mask capabilities"
+                raise OSError(failure_message)
+            own, peer = os.stat("/proc/self/ns/pid"), os.fstat(received[0])
+            if (own.st_dev, own.st_ino) == (peer.st_dev, peer.st_ino):
+                failure_message = "inner did not enter a separate PID namespace"
+                raise OSError(failure_message)
+            if (
+                fcntl.ioctl(received[0], 0xB703) != PID_NAMESPACE_TYPE
+            ):  # NS_GET_NSTYPE, CLONE_NEWPID
+                failure_message = "inner capability is not a PID namespace"
+                raise OSError(failure_message)
             self.hello = True
-            pid = struct.unpack("3i", c.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))[0]
-            n = self.watches(pid) if self.ino >= 0 else None
+            n = self.watches(masks) if self.ino >= 0 else None
             socket.send_fds(
                 c, [(f"ready {n}" if n is not None else "ready no-inotify").encode()], self.fds
             )
@@ -473,21 +955,52 @@ class Recorder:
                 }
             )
 
+    def disconnect(self, c: socket.socket, *, provenance: Literal["eof", "uncertain"]) -> None:
+        # Only normal descriptor-free EOF on the authenticated relay is the
+        # existing trusted CLOEXEC witness. Transport uncertainty is negative.
+        if provenance == "uncertain":
+            self.native_errors.append("uncertain Recorder transport completion")
+        self.opens()
+        self.sel.unregister(c)
+        st = self.conns.pop(c)
+        if (
+            provenance == "eof"
+            and not self.native_errors
+            and (lease := st.get("native_lease")) is not None
+        ):
+            self.native[lease]["exec_crossed"] = True
+        self.call_end(st)
+        for fd in st.get("masks", []):
+            os.close(fd)
+        c.close()
+
     def conn(self, c: socket.socket) -> None:
         while True:
             try:
-                m = c.recv(1 << 18)
+                m, received, flags, _ = socket.recv_fds(c, 1 << 18, 1, socket.MSG_CMSG_CLOEXEC)
             except BlockingIOError:
                 return
             except OSError:
-                m = b""
-            if not m:  # the sender is done: its entries, and any open queued before, written before the close it waits for
-                self.opens()
-                self.sel.unregister(c)
-                self.call_end(self.conns.pop(c))
-                c.close()
+                self.disconnect(c, provenance="uncertain")
                 return
-            self.message(c, m)
+            # Only actual successful recv descriptors enter this finally, including
+            # truncation and empty frames. Never fabricate an empty received set.
+            try:
+                if flags & (socket.MSG_TRUNC | socket.MSG_CTRUNC) or (not m and received):
+                    self.disconnect(c, provenance="uncertain")
+                    return
+                if not m:
+                    self.disconnect(c, provenance="eof")
+                    return
+                try:
+                    self.message(c, m, received)
+                except OSError:
+                    # Protocol refusal cannot later become a trusted exec EOF.
+                    self.disconnect(c, provenance="uncertain")
+                    return
+            finally:
+                for fd in received:
+                    os.close(fd)
 
     def accept(self) -> None:
         while True:
@@ -539,16 +1052,25 @@ class Recorder:
 
     def loop(self) -> None:
         while not self.stop:
-            for k, _ in self.sel.select():
+            stopping = self.native_closing or any(
+                "deadline" in s and not s["done"] for s in self.native.values()
+            )
+            for k, _ in self.sel.select(0.05 if stopping else None):
                 f = k.fileobj
                 if f is self.srv:
                     self.accept()
                 elif f == self.wr:
-                    self.stop = True
+                    if os.read(self.wr, 1) == b"n":
+                        self.native_closing = True
+                        for state in self.native.values():
+                            self.native_arm(state)
+                    else:
+                        self.stop = True
                 elif f == self.ino:
                     self.opens()
                 elif isinstance(f, socket.socket) and f in self.conns:
                     self.conn(f)
+            self.native_tick()
             # the inner waits for this answer before the judge starts
             if self.go is not None and not self.live:
                 self.drain()
@@ -556,15 +1078,69 @@ class Recorder:
                 with contextlib.suppress(OSError):
                     self.go.send(b"live")
 
-    def finish(self) -> dict[str, Any]:
+    def require_quiescent(self) -> None:
+        if not self.quiescent.is_set():
+            failure_message = (
+                "Recorder quiescence unproved; retaining worker descriptors "
+                "for process exit/outer QC ownership"
+            )
+            raise RuntimeError(failure_message)
+
+    def finish(self) -> NativeRecord:
         """The record whole: the judge's namespace is gone, every call still open ended without its exit."""
-        os.write(self.ww, b"x")
-        self.th.join(10)
-        self.drain()
-        for c in list(self.conns):
-            self.call_end(self.conns.pop(c))
-            c.close()
+        errors: list[tuple[str, BaseException]] = []
+        quiescent = False
+        try:
+            os.write(self.ww, b"x")
+            self.th.join(cancel_budget(10, 0.25))
+            # An interrupted join/is_alive observation is not ownership transfer.
+            self.require_quiescent()
+            quiescent = True
+            self.drain()
+            for st in self.conns.values():
+                self.call_end(st)
+        # completion/drain failure is primary; retain resources if quiescence is absent.
+        except BaseException as error:  # noqa: BLE001
+            if not quiescent:
+                error.add_note(
+                    "Recorder resources retained untouched: quiescence not established; "
+                    "process exit/outer QC cleanup required"
+                )
+            errors.append(("Recorder record completion", error))
+        finally:
+            # Without positive quiescence leave the worker's state/FDs untouched.
+            # Fatal process exit, not unsafe close, is the ownership fallback.
+            if quiescent:
+                for c, st in list(self.conns.items()):
+                    for fd in st.get("masks", []):
+                        try:
+                            os.close(fd)
+                        # mask-FD close failure must not skip connection/native closes.
+                        except BaseException as error:  # noqa: BLE001
+                            errors.append(("Recorder mask descriptor close", error))
+                    try:
+                        c.close()
+                    # connection-close failure must not skip other connection/native closes.
+                    except BaseException as error:  # noqa: BLE001
+                        errors.append(("Recorder connection close", error))
+                    self.conns.pop(c, None)
+                for state in list(self.native.values()):
+                    try:
+                        os.close(state["fd"])
+                    # one retained native-FD close failure must not skip remaining closes.
+                    except BaseException as error:  # noqa: BLE001
+                        errors.append(("Recorder native descriptor close", error))
+        if errors:
+            stage, primary = errors[0]
+            primary.add_note(f"qc sandbox cleanup phase: {stage}")
+            for stage, error in errors[1:]:
+                primary.add_note(
+                    f"secondary cleanup failure ({stage}): {type(error).__name__}: {error}"
+                )
+            raise primary
         return {
+            "native_lifecycle": dict(self.native_progress),
+            "native_cleanup_errors": self.native_errors,
             "attempts": self.recs,
             "recorded": len(self.recs),
             "gh_misses": len(self.misses),
@@ -765,7 +1341,264 @@ def srt_log(p: subprocess.Popen[bytes], sock: str, early: list[str], rec: Record
             c.close()
 
 
+# Operational capability carried by the existing trusted FD bootstrap only.
+# The anonymous bytes have no path/cache/store; POSIX process locks serialize first mint.
+# One anonymous capability in the existing FD bootstrap. No unlocked snapshot readers.
+# Python threads use a nonblocking local lock; processes use POSIX record locks.
+# Linux memfd seals distinguish idle, in-progress/failed publication, immutable commit.
+def is_json_object(value: object) -> TypeGuard[dict[str, object]]:
+    """Narrow an object from json.loads; JSON object keys are strings."""
+    return isinstance(value, dict)
+
+
+class CancellationState:
+    def __init__(self) -> None:
+        self.fd: int | None = None
+        self.signal = 0
+        self.end = 0
+        self.fault: BaseException | None = None
+        self.lock = threading.Lock()
+        self.armed = False
+
+
+_cancellation = CancellationState()
+CANCEL_SIZE = 4096
+CANCEL_BASE_SEALS = fcntl.F_SEAL_GROW | fcntl.F_SEAL_SHRINK
+CANCEL_CLAIM_SEAL = 0x10  # Linux UAPI F_SEAL_FUTURE_WRITE (kernel >=5.1; kit requires >=6.6)
+CANCEL_FINAL_SEALS = CANCEL_BASE_SEALS | CANCEL_CLAIM_SEAL | fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL
+
+
+class Cancelled(BaseException):
+    def __init__(self, signum: int) -> None:
+        self.signum = signum
+        super().__init__(f"cancelled by signal {signum}")
+
+
+def cancel_fault(error: BaseException) -> None:
+    if _cancellation.fault is None:
+        _cancellation.fault = error  # irreversible for this invocation; never retry it into grace
+    elif _cancellation.fault is not error:
+        _cancellation.fault.add_note(
+            f"secondary capability failure: {type(error).__name__}: {error}"
+        )
+
+
+def cancel_image(state: str, end: int, signum: int) -> bytes:
+    raw = json.dumps(
+        {"v": 1, "state": state, "end_ns": f"{end:020d}", "signal": signum},
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return raw + b"\0" * (CANCEL_SIZE - len(raw))
+
+
+def initialize_capability(fd: int) -> None:
+    image = cancel_image("idle", 0, 0)
+    if os.write(fd, image) != len(image) or os.pread(fd, CANCEL_SIZE + 1, 0) != image:
+        failure_message = "cancellation capability initialization incomplete"
+        raise OSError(failure_message)
+    fcntl.fcntl(fd, fcntl.F_ADD_SEALS, CANCEL_BASE_SEALS)
+    if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != CANCEL_BASE_SEALS:
+        failure_message = "cancellation capability initialization seals invalid"
+        raise OSError(failure_message)
+
+
+def require_capability_lock(*, locked: bool) -> None:
+    if not locked:
+        failure_message = "cancellation capability thread contention"
+        raise BlockingIOError(failure_message)
+
+
+def validate_commit(fd: int, end: int, sig: int) -> None:
+    if cancel_decode(fd) != (end, sig):
+        failure_message = "cancellation capability commit readback failed"
+        raise OSError(failure_message)
+
+
+def cancel_create() -> int:
+    fd = os.memfd_create("qc-cancellation", os.MFD_CLOEXEC | os.MFD_ALLOW_SEALING)
+    try:
+        initialize_capability(fd)
+        # Return stays inside the owned FD close/poison enrollment, including fatal interruption.
+        return fd  # noqa: TRY300
+    except BaseException as error:
+        try:
+            os.close(fd)
+        # failed initial capability close must not replace creation failure.
+        except BaseException as close_error:  # noqa: BLE001
+            error.add_note(f"initial capability close failed: {close_error}")
+        raise
+
+
+def cancel_decode(fd: int) -> tuple[int, int]:
+    seals = fcntl.fcntl(fd, fcntl.F_GET_SEALS)
+    raw = os.pread(fd, CANCEL_SIZE + 1, 0)
+    if len(raw) != CANCEL_SIZE:
+        failure_message = "cancellation capability size invalid"
+        raise OSError(failure_message)
+    row: object = json.loads(raw.rstrip(b"\0"))
+    if (
+        not is_json_object(row)
+        or set(row) != {"v", "state", "end_ns", "signal"}
+        or type(row["v"]) is not int
+        or row["v"] != 1
+        or not isinstance(row["end_ns"], str)
+        or re.fullmatch("[0-9]{20}", row["end_ns"]) is None
+        or type(row["signal"]) is not int
+        or row["signal"] not in (0, 1, 2, 15)
+    ):
+        failure_message = "cancellation capability codec invalid"
+        raise OSError(failure_message)
+    end, sig = int(row["end_ns"]), row["signal"]
+    state = "idle" if seals == CANCEL_BASE_SEALS and end == 0 and sig == 0 else "committed"
+    if (
+        state == "committed" and (seals != CANCEL_FINAL_SEALS or not end or sig not in (1, 2, 15))
+    ) or raw != cancel_image(state, end, sig):
+        failure_message = "cancellation capability publication incomplete/poisoned"
+        raise OSError(failure_message)
+    if fcntl.fcntl(fd, fcntl.F_GET_SEALS) != seals:
+        failure_message = "cancellation publication changed during validation"
+        raise OSError(failure_message)
+    return end, sig
+
+
+def poison_optional(fd: int | None) -> None:
+    """Poison only the current optional capability, inside its owner's catch."""
+    if fd is not None:
+        fcntl.fcntl(fd, fcntl.F_ADD_SEALS, fcntl.F_SEAL_WRITE | fcntl.F_SEAL_SEAL)
+
+
+def require_unpoisoned() -> None:
+    if _cancellation.fault is not None:
+        raise _cancellation.fault
+
+
+def cancel_without_capability(signum: int, *, mint: bool) -> tuple[int, int]:
+    if mint:
+        error = OSError("cancellation capability unavailable")
+        cancel_fault(error)
+        raise error
+    return _cancellation.end, signum
+
+
+def cancel_stamp(signum: int = 0, *, mint: bool = False) -> tuple[int, int]:
+    # These preflight checks remain before acquiring either lock, as before.
+    require_unpoisoned()
+    if _cancellation.fd is None:
+        return cancel_without_capability(signum, mint=mint)
+    locked = False
+    primary = None
+    mapping = None
+    try:
+        locked = _cancellation.lock.acquire(blocking=False)
+        require_capability_lock(locked=locked)
+        fcntl.lockf(_cancellation.fd, (fcntl.LOCK_EX if mint else fcntl.LOCK_SH) | fcntl.LOCK_NB)
+        end, sig = cancel_decode(_cancellation.fd)
+        if mint and not end:
+            # Claim BEFORE publication. A failed/partial commit is never an idle retry:
+            # future writes/maps are prohibited once the kernel accepts this seal.
+            end, sig = time.monotonic_ns() + 12_000_000_000, signum
+            _cancellation.end = end  # original attempt bound, retained even if publication fails
+            mapping = mmap.mmap(_cancellation.fd, CANCEL_SIZE, access=mmap.ACCESS_WRITE)
+            fcntl.fcntl(_cancellation.fd, fcntl.F_ADD_SEALS, CANCEL_CLAIM_SEAL)
+            mapping[:] = cancel_image("committed", end, sig)
+            mapping.close()
+            mapping = None
+            fcntl.fcntl(_cancellation.fd, fcntl.F_ADD_SEALS, CANCEL_FINAL_SEALS)
+            validate_commit(_cancellation.fd, end, sig)
+        _cancellation.end = end
+        # Return stays inside the owned FD close/poison enrollment, including fatal interruption.
+        return end, sig  # noqa: TRY300
+    except BaseException as error:
+        primary = error
+        cancel_fault(error)
+        # Best effort terminal poison. If even seals fail, local poison and forced
+        # ownership remain authoritative; no failed actor can retry/forward grace.
+        if mapping is not None:
+            try:
+                mapping.close()
+            # mapping-close failure must not replace publication failure.
+            except BaseException as close_error:  # noqa: BLE001
+                error.add_note(f"capability mapping close: {close_error}")
+        if mint:
+            try:
+                poison_optional(_cancellation.fd)
+            # terminal-poison failure remains secondary, no renewal.
+            except BaseException as poison_error:  # noqa: BLE001
+                error.add_note(f"shared terminal poison unproved: {poison_error}")
+        raise
+    finally:
+        if locked:
+            try:
+                fcntl.lockf(_cancellation.fd, fcntl.LOCK_UN)
+            except BaseException as unlock_error:
+                cancel_fault(unlock_error)
+                if primary is None:
+                    raise
+                primary.add_note(f"capability unlock failed: {unlock_error}")
+            finally:
+                _cancellation.lock.release()
+
+
+def cancel_budget(limit: float, reserve: float = 0) -> float:
+    if _cancellation.fd is None:
+        # Terminal caller closure consumes only the original bound, never re-mints.
+        if _cancellation.end:
+            return min(limit, max(0, (_cancellation.end - time.monotonic_ns()) / 1e9 - reserve))
+        return 0 if _cancellation.signal or _cancellation.fault is not None else limit
+    try:
+        end, _ = cancel_stamp()
+    # budget validation latches any fatal and keeps only original bound.
+    except BaseException as error:  # noqa: BLE001
+        cancel_fault(error)
+        end = _cancellation.end  # only a previously validated bound; never a new relative remedy
+    if end:
+        return min(limit, max(0, (end - time.monotonic_ns()) / 1e9 - reserve))
+    return 0 if _cancellation.signal or _cancellation.fault is not None else limit
+
+
+def cancel_entry(n: int, _frame: object) -> None:
+    if not _cancellation.signal:
+        _cancellation.signal = n
+        try:
+            cancel_stamp(n, mint=True)
+        except BaseException as error:
+            cancel_fault(error)
+            if _cancellation.armed:
+                raise  # actual mint/lock/read/write failure remains primary
+        else:
+            if _cancellation.armed:
+                raise Cancelled(n)
+
+
+def raise_if_cancelled() -> None:
+    if _cancellation.signal:
+        raise (
+            _cancellation.fault
+            if _cancellation.fault is not None
+            else Cancelled(_cancellation.signal)
+        )
+
+
+def require_owned_node(node: subprocess.Popen[bytes] | None) -> subprocess.Popen[bytes]:
+    if node is None:
+        failure_message = "owned Node process identity unavailable"
+        raise RuntimeError(failure_message)
+    return node
+
+
+def validate_readiness(msg: bytes, fds: list[int], flags: int) -> None:
+    if not msg.startswith(b"ready ") or len(fds) != BOOTSTRAP_FD_COUNT or flags & socket.MSG_CTRUNC:
+        for fd in fds:
+            os.close(fd)
+        failure_message = "missing recorder readiness or descriptors"
+        raise OSError(failure_message)
+
+
 def setup(judge: list[str]) -> NoReturn:
+    if _cancellation.fd is None:
+        _cancellation.fd = int(E["QC_FD_CANCEL"]) if E.get("QC_FD_CANCEL") else cancel_create()
+    raise_if_cancelled()
     hand = "QC_SESSION" not in E  # by hand: every input defaulted
     S = E.get("QC_SESSION") or f"qc-hand-{secrets.token_hex(3)}"
     for k, n in (("proof", "QC_FD_PROOF"), ("post", "QC_FD_POST"), ("err", "QC_FD_ERR")):
@@ -1265,6 +2098,7 @@ def setup(judge: list[str]) -> NoReturn:
         "browser": E.get("QC_BROWSER", ""),
         "shots": bool(E.get("QC_SHOTS")),
         "recs": recs,
+        "watch": [path for _, path, _ in watch],
         "env": jenv,
         "srt": srtv,
         "hosts": hosts,
@@ -1284,7 +2118,8 @@ def setup(judge: list[str]) -> NoReturn:
     # This process the child subreaper of everything the run starts: bubblewrap's monitor exits before the sandbox's
     # init (the inner, the proof, the judge) is reaped, and that init would go to the box's init, its CPU counted by no
     # caller (quality #acceptance-qc-sandbox-cost: every process); here each orphan is reaped (orphans(), below).
-    libc.prctl(36, 1, 0, 0, 0)  # PR_SET_CHILD_SUBREAPER
+    if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+        die("native lifecycle requires the owning child subreaper")
     rec = Recorder(f"{SCR}/rec", watch, S, fds)
     rec.th.start()
     os.makedirs(f"{SCR}/srt")
@@ -1295,6 +2130,11 @@ def setup(judge: list[str]) -> NoReturn:
         PATH=E.get("PATH", ""),
         TMPDIR=f"{SCR}/srt",
         NODE_COMPILE_CACHE=f"{E.get('XDG_CACHE_HOME') or HOME + '/.cache'}/octo-feather/node-compile-cache",
+        QC_NATIVE_SECRET=rec.native_secret,
+        QC_NATIVE_SOCKET=f"{SCR}/rec/sock",
+        QC_NATIVE_PYTHON=py,
+        QC_NATIVE_COMMAND=SELF,
+        QC_FD_CANCEL=str(_cancellation.fd),
     )
     # srt runs from an empty dir of the private /tmp, which the judge cannot write: its built-in write denies (shell rc
     # files, .git/hooks and .git/config, .vscode ... in and below its working dir, within the writable paths) would
@@ -1303,41 +2143,186 @@ def setup(judge: list[str]) -> NoReturn:
     os.makedirs(f"{SCR}/cwd")
     # srt's violations (SRT_SHIM) on its stderr, read here, each sent to the recorder. The inner takes this process's
     # stderr over the recorder's socket, so what reaches srt's stderr past its start is srt's own.
-    p = subprocess.Popen(
-        [
-            *srt,
-            f"{SCR}/srt.json",
-            "--",
-            py,
-            SELF,
-            "inner",
-            f"{SCR}/bin/run.json",
-            "--",
-            *judge,
-        ],
-        env=senv,
-        cwd=f"{SCR}/cwd",
-        stdin=subprocess.DEVNULL,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.PIPE,
-        close_fds=True,
-    )
+    node: subprocess.Popen[bytes] | None = None
+    node_fd = None
+    rc: int | None = None
+    th: threading.Thread | None = None
     early: list[str] = []
-    th = threading.Thread(target=srt_log, args=(p, f"{SCR}/rec/sock", early, rec), daemon=True)
-    th.start()
-    rc = p.wait()
-    th.join(10)
+    primary: BaseException | None = None
+    secondary: list[tuple[str, BaseException]] = []
+    native_ok = False
+    owner_forced = False
+    left: list[str] | None = None
+    fin: NativeRecord | None = None
+
+    def cleanup_error(stage: str, error: BaseException) -> None:
+        nonlocal primary
+        if primary is None:
+            primary = error
+            primary.add_note(f"qc sandbox cleanup phase: {stage}")
+        else:
+            secondary.append((stage, error))
+
+    try:
+        raise_if_cancelled()
+        node = subprocess.Popen(
+            [
+                *srt,
+                f"{SCR}/srt.json",
+                "--",
+                py,
+                SELF,
+                "inner",
+                f"{SCR}/bin/run.json",
+                "--",
+                *judge,
+            ],
+            env=senv,
+            cwd=f"{SCR}/cwd",
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            close_fds=True,
+            pass_fds=(_cancellation.fd,),
+        )
+        # Deliver deferred early/repeated signals only after BOTH Popen and pidfd enrollment.
+        node_fd = os.pidfd_open(node.pid)
+        _cancellation.armed = True
+        raise_if_cancelled()
+        th = threading.Thread(
+            target=srt_log, args=(node, f"{SCR}/rec/sock", early, rec), daemon=True
+        )
+        th.start()
+        rc = node.wait()
+        th.join(cancel_budget(10, 1))
+    # setup primary captures ANY fatal after ownership enrollment.
+    except BaseException as error:  # noqa: BLE001
+        primary = error
+        if (
+            isinstance(error, Cancelled)
+            and _cancellation.fault is None
+            and node_fd is not None
+            and node is not None
+        ):
+            previous = signal.signal(signal.SIGINT, signal.SIG_IGN)
+            try:
+                _cancel_end, cancel_sig = cancel_stamp()
+                with contextlib.suppress(ProcessLookupError):
+                    signal.pidfd_send_signal(node_fd, cancel_sig)
+                node.wait(timeout=cancel_budget(9, 3))
+            # graceful Node cancellation failure is secondary, forced cleanup continues.
+            except BaseException as graceful_error:  # noqa: BLE001
+                cleanup_error("graceful Node cancellation", graceful_error)
+            finally:
+                signal.signal(signal.SIGINT, previous)
+        owner_forced = node is not None and node.returncode is None
+        try:
+            with contextlib.suppress(ProcessLookupError):
+                if owner_forced and node_fd is not None:
+                    signal.pidfd_send_signal(node_fd, signal.SIGKILL)
+                elif owner_forced:
+                    os.kill(
+                        require_owned_node(node).pid, signal.SIGKILL
+                    )  # direct root, no wait/reap yet
+        # Node-stop failure must not skip bounded wait/finalization.
+        except BaseException as error:  # noqa: BLE001
+            cleanup_error("Node stop", error)
+        try:
+            if node is not None:
+                node.wait(timeout=cancel_budget(5, 1))
+        # bounded Node-wait failure must not skip native/descendant cleanup.
+        except BaseException as error:  # noqa: BLE001
+            cleanup_error("bounded Node wait", error)
+    finally:
+        _cancellation.armed = (
+            False  # first late/repeated signal records intent, never interrupts handoff
+        )
+        # Keep Recorder and the retained Node FD alive across every independent
+        # attempt. Failed waits/finalization do not prove completion or ECHILD.
+        try:
+            native_ok = rec.finalize_native()
+        # native-finalization failure must not skip adopted-child drainage.
+        except BaseException as error:  # noqa: BLE001
+            cleanup_error("native finalization", error)
+        try:
+            left = orphans()
+        # failed adopted-child drainage must not skip Recorder finish/FD close.
+        except BaseException as error:  # noqa: BLE001
+            cleanup_error("adopted-child drainage; ECHILD unproved", error)
+        try:
+            fin = rec.finish()
+        # Recorder finish failure must not skip Node-FD close/publication.
+        except BaseException as error:  # noqa: BLE001
+            cleanup_error("Recorder finish/descriptor closure", error)
+        finally:
+            if node_fd is not None:
+                try:
+                    os.close(node_fd)
+                # Node-FD close failure must not replace primary or skip publication.
+                except BaseException as error:  # noqa: BLE001
+                    cleanup_error("Node descriptor close", error)
+    if _cancellation.signal and primary is None:
+        primary = Cancelled(_cancellation.signal)
+    try:
+        if fin is not None:
+            fin["native_lifecycle"].update(
+                owner_forced=owner_forced or bool(left),
+                native_finalized=native_ok,
+                adopted_reaped=left == [],
+                node_exit=node.returncode if node is not None else None,
+                deadline_ok=cancel_budget(1) > 0 and _cancellation.fault is None,
+                cancel_deadline_ns=_cancellation.end or None,
+            )
+            fin["native_lifecycle"]["capability_error"] = (
+                str(_cancellation.fault) if _cancellation.fault is not None else None
+            )
+            fin["native_lifecycle"]["owner_received_signal"] = _cancellation.signal or None
+            owner_errors = [f"{stage}: {error}" for stage, error in secondary]
+            fin["native_lifecycle"]["owner_errors"] = owner_errors
+            if primary is not None and not isinstance(primary, Cancelled):
+                owner_errors.append(str(primary))
+            fin["native_lifecycle"]["node_log_drained"] = th is not None and not th.is_alive()
+            post(fin)  # existing trusted report pipe, including actual cancellation
+    # terminal publication failure must retain original primary identity.
+    except BaseException as error:  # noqa: BLE001
+        cleanup_error("terminal publication", error)
+    if _cancellation.signal and primary is None:
+        primary = Cancelled(
+            _cancellation.signal
+        )  # intent arriving during publication is still observed
+    if primary is not None:
+        if not native_ok:
+            primary.add_note("retained native completion unproved")
+        if left:
+            primary.add_note(f"adopted-child survivors observed: {', '.join(left)}")
+        for stage, error in secondary:
+            primary.add_note(
+                f"secondary cleanup failure ({stage}): {type(error).__name__}: {error}"
+            )
+            for note in getattr(error, "__notes__", []):
+                primary.add_note(note)
+        # SystemExit does not normally display notes. Emit them explicitly too,
+        # only after all cleanup attempts, without replacing the original fatal.
+        try:
+            sys.stderr.write("\n".join(getattr(primary, "__notes__", [])) + "\n")
+        # failed diagnostic write must not replace the retained fatal.
+        except BaseException as error:  # noqa: BLE001
+            primary.add_note(f"cleanup diagnostics failed: {type(error).__name__}: {error}")
+        raise primary
+    if left is None or fin is None or rc is None:
+        failure_message = "owned cleanup or actual Node wait completion unproved"
+        raise RuntimeError(failure_message)
     if not rec.hello:
         sys.stderr.write("".join(early))
-    fin = rec.finish()
+    if not native_ok or fin["native_cleanup_errors"]:
+        say("FAIL retained native lifecycle completion unproved")
+        rc = 66
     if not rec.hello:
         say(f"FAIL srt sandbox did not start the inner (srt exit {rc})")
         say("proof failed; judge not started (exit 66)")
         rc = 66
-    post(fin)
     say(f"attempt record: {len(fin['attempts'])} entries; offline gh refusals {fin['gh_misses']}")
     post({"upper": upper(f"{OV}/u", f"/proc/self/fd/{wfd}")})
-    left = orphans()
     if (
         left
     ):  # a process the run started still running outside the sandbox's PID namespace: never silent
@@ -1351,8 +2336,9 @@ def orphans(wait_s: float = 5.0) -> list[str]:
     """Reap every process the run left to this subreaper (its CPU then counted by whoever waits for this one), for up
     to WAIT_S s; terminate and reap survivors, returning each "PID CMDLINE" as a fatal diagnostic.
     Only ECHILD proves completion: Linux's task children snapshots can omit children during exits."""
-    end = time.monotonic() + wait_s
-    cleanup_end = end + wait_s
+    now = time.monotonic()
+    end = now + cancel_budget(wait_s, 1)
+    cleanup_end = now + cancel_budget(2 * wait_s)
     out: list[str] = []
     while True:
         try:
@@ -1593,14 +2579,42 @@ def inner(cfgp: str, judge: list[str]) -> NoReturn:
     env.setdefault("NODE_USE_ENV_PROXY", "1")
     os.environ.clear()
     os.environ.update(env)
-    base = {str(os.getpid())} | {
-        p for p in os.listdir("/proc") if p.isdigit()
-    }  # srt's own processes and ours
+    # NSpid is self metadata relative to the procfs mount's PID namespace.
+    # Exactly our one coordinate excludes an ancestor procfs. The recorder checks
+    # a distinct actual namespace FD before allowing process enumeration.
+    nspid = next(
+        (line.split()[1:] for line in open("/proc/self/status") if line.startswith("NSpid:")),
+        list[str](),
+    )
+    if nspid != [str(os.getpid())]:
+        sys.exit(
+            print(
+                "qc sandbox: FAIL procfs not scoped to inner PID namespace (exit 66)",
+                file=sys.stderr,
+            )
+            or 66
+        )
     sk = socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET)
     try:
         sk.connect(f"{SCR}/rec/sock")
-        sk.send(b'{"t": "hello"}')
-        msg, fds, _, _ = socket.recv_fds(sk, 64, 6)
+        for path in c["watch"]:
+            # O_PATH retains even a mode-000 mask; setup opens its own received
+            # capability for listing, under the same credentials as before.
+            fd = os.open(path, os.O_PATH | os.O_DIRECTORY | os.O_CLOEXEC)
+            try:
+                socket.send_fds(sk, [b'{"t":"mask"}'], [fd])
+            finally:
+                os.close(fd)
+        fd = os.open("/proc/self/ns/pid", os.O_RDONLY | os.O_CLOEXEC)
+        try:
+            socket.send_fds(sk, [b'{"t":"hello"}'], [fd])
+        finally:
+            os.close(fd)
+        msg, fds, flags, _ = socket.recv_fds(sk, 64, BOOTSTRAP_FD_COUNT, socket.MSG_CMSG_CLOEXEC)
+        validate_readiness(msg, fds, flags)
+        base = {str(os.getpid())} | {
+            p for p in os.listdir("/proc") if p.isdigit()
+        }  # verified private procfs: srt's own processes and ours
         # the caller's stderr, stdin and stdout for this process and its children (srt's own stdio aside), blocking
         for f, to in ((fds[3], 2), (fds[4], 0), (fds[5], 1)):
             os.dup2(f, to)
@@ -2087,7 +3101,156 @@ def reap(base: set[str], herdr: str, session: str) -> list[str]:
     return killed
 
 
+def native_client(mode: str, args: list[str]) -> None:
+    """One-shot client of the SAME Recorder, never a second listener/manager."""
+    names = (
+        "QC_NATIVE_SECRET",
+        "QC_NATIVE_SOCKET",
+        "QC_NATIVE_PYTHON",
+        "QC_NATIVE_COMMAND",
+        "QC_FD_CANCEL",
+    )
+    _cancellation.fd = int(os.environ["QC_FD_CANCEL"])
+
+    def completed() -> None:
+        end, sig = cancel_stamp()
+        sys.stdout.write(json.dumps({"end_ns": f"{end:020d}", "signal": sig}))
+
+    if mode == "native-budget":
+        # Exact actual Node argv, deliberately lease-free, never a fake lease.
+        if args != [""]:
+            sys.exit(print("qc native: invalid budget arguments", file=sys.stderr) or 64)
+        completed()
+        return
+    if (
+        (mode in ("native-control", "native-ready") and len(args) != 1)
+        or (
+            mode == "native-signal"
+            and (len(args) != NATIVE_SIGNAL_ARITY or args[1] not in ("SIGINT", "SIGTERM"))
+        )
+        or (
+            mode == "native-progress"
+            and (
+                len(args) != NATIVE_PROGRESS_ARITY
+                or args[1] not in ("initialized", "payload_exit", "reset_completed")
+            )
+        )
+        or (
+            mode == "native-relay"
+            and (len(args) < NATIVE_RELAY_MIN_ARITY or args[1] not in ("bridge", "payload"))
+        )
+    ):
+        sys.exit(print("qc native: missing operation arguments", file=sys.stderr) or 64)
+    lease = args[0]
+    if re.fullmatch("[0-9a-f]{64}", lease) is None:
+        sys.exit(print("qc native: invalid lease", file=sys.stderr) or 64)
+    authority = {k: os.environ[k] for k in names}
+    clean = {k: v for k, v in os.environ.items() if k not in names}
+    message = {"t": "native", "secret": authority["QC_NATIVE_SECRET"], "lease": lease}
+    cancel_stamp()  # no relay or control operation on an invalid/uncertain capability
+
+    with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
+        peer.settimeout(cancel_budget(8))
+        peer.connect(authority["QC_NATIVE_SOCKET"])
+        if mode == "native-progress":
+            end = time.monotonic() + cancel_budget(5)
+            while time.monotonic() < end and cancel_budget(1):
+                peer.settimeout(cancel_budget(max(0, end - time.monotonic())))
+                peer.send(
+                    json.dumps(
+                        message
+                        | {"op": "progress", "phase": args[1], "result": json.loads(args[2])}
+                    ).encode()
+                )
+                reply = peer.recv(256)
+                if reply == b"recorded":
+                    completed()
+                    return
+                if reply != b"pending":
+                    failure_message = "native progress refused"
+                    raise OSError(failure_message)
+                time.sleep(0.01)
+            failure_message = "native progress registration"
+            raise TimeoutError(failure_message)
+        if mode == "native-ready":
+            end = time.monotonic() + cancel_budget(5)
+            while time.monotonic() < end and cancel_budget(1):
+                peer.settimeout(cancel_budget(max(0, end - time.monotonic())))
+                peer.send(json.dumps(message | {"op": "ready"}).encode())
+                reply = peer.recv(256)
+                if reply == b"live":
+                    completed()
+                    return
+                if reply != b"pending":
+                    sys.exit(
+                        print("qc native: exec/liveness readiness refused", file=sys.stderr) or 70
+                    )
+                time.sleep(0.02)
+            failure_message = "native exec readiness"
+            raise TimeoutError(failure_message)
+        if mode in ("native-control", "native-signal"):
+            operation = (
+                {"op": "stop"} if mode == "native-control" else {"op": "signal", "signal": args[1]}
+            )
+            peer.send(json.dumps(message | operation).encode())
+            expected = b"exited" if mode == "native-control" else b"signalled"
+            reply = peer.recv(256)
+            if reply != expected:
+                sys.exit(
+                    print("qc native: retained-task request incomplete", file=sys.stderr) or 71
+                )
+            completed()
+            return
+        executable = shutil.which(args[2], path=clean.get("PATH"))
+        if not executable:
+            sys.exit(print("qc native: native executable unavailable", file=sys.stderr) or 69)
+        fd = os.pidfd_open(os.getpid())
+        try:
+            socket.send_fds(
+                peer, [json.dumps(message | {"op": "register", "role": args[1]}).encode()], [fd]
+            )
+        finally:
+            os.close(fd)
+        if peer.recv(256) != b"registered":
+            sys.exit(
+                print("qc native: registration refused; native not executed", file=sys.stderr) or 70
+            )
+        # Python sockets are CLOEXEC. EOF alone is not successful exec evidence;
+        # failed exec reports explicitly, and SDK still requires real socket readiness.
+        try:
+            inherit_cancel_fd = False
+            os.set_inheritable(_cancellation.fd, inherit_cancel_fd)
+            # Same-task exec preserves the registered kernel identity after its
+            # self-pidfd ACK and CANCEL_FD CLOEXEC; not executable-origin approval.
+            os.execve(executable, args[2:], clean)  # noqa: S606
+        except OSError:
+            with contextlib.suppress(OSError):
+                peer.send(json.dumps(message | {"op": "exec-error"}).encode())
+            sys.exit(print("qc native: exec failed", file=sys.stderr) or 127)
+
+
 def main(a: list[str]) -> None:
+    if a[:1] in (
+        ["native-relay"],
+        ["native-control"],
+        ["native-signal"],
+        ["native-ready"],
+        ["native-progress"],
+        ["native-budget"],
+    ):
+        try:
+            native_client(a[0], a[1:])
+        except TimeoutError:
+            sys.exit(print("qc native: authenticated transport timeout", file=sys.stderr) or 75)
+        except (OSError, ValueError) as error:
+            sys.exit(
+                print(
+                    f"qc native: authenticated transport/capability failed ({type(error).__name__}: {error})",
+                    file=sys.stderr,
+                )
+                or 74
+            )
+        return
     if a[:1] == ["inner"]:
         cfgp, rest = a[1], a[2:]
         inner(cfgp, rest[1:] if rest[:1] == ["--"] else rest)
@@ -2098,7 +3261,17 @@ def main(a: list[str]) -> None:
         a = a[1:]
     if not a:
         sys.exit(print("usage: octo-feather-qc-sandbox [--] JUDGE_CMD...", file=sys.stderr) or 64)
-    setup(a)
+    _cancellation.fd = int(E["QC_FD_CANCEL"]) if E.get("QC_FD_CANCEL") else cancel_create()
+    for sig in (signal.SIGINT, signal.SIGTERM, signal.SIGHUP):
+        signal.signal(sig, cancel_entry)
+    try:
+        setup(a)
+    except Cancelled as _error:
+        if _cancellation.fault is not None:
+            # Rethrow the actual stored fault without overwriting its identity or cause.
+            raise _cancellation.fault  # noqa: B904
+        _, first_signal = cancel_stamp()
+        sys.exit(128 + first_signal)
 
 
 if __name__ == "__main__":
