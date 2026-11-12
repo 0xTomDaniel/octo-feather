@@ -75,7 +75,12 @@ def not_a_dir(s: Scratch) -> None:
     uc.write_text("")
     path = f"{uvd}{os.pathsep}{s.env['PATH']}"
     ran = qc(
-        s, s.root / "repo", "5", "acceptance-a", want=66, env={"UV_CACHE_DIR": str(uc), "PATH": path}
+        s,
+        s.root / "repo",
+        "5",
+        "acceptance-a",
+        want=66,
+        env={"UV_CACHE_DIR": str(uc), "PATH": path},
     )
     want = f"qc sandbox: FAIL uv --color never cache dir printed '{uc}': not a directory"
     assert want in ran.err.splitlines(), ran.err
