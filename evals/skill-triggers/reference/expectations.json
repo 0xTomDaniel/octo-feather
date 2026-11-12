@@ -249,5 +249,13 @@
   "impl-principles-one-result": {"facts": [{"fact": "skill_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_read", "skill": "principle-minimize-reader-load"}]},
   "impl-principles-trace-json": {"facts": [{"fact": "skill_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_read", "skill": "principle-minimize-reader-load"}]},
   "impl-principles-near-retire": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]},
-  "impl-principles-near-lines": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]}
+  "impl-principles-near-lines": {"facts": [{"fact": "skill_not_read", "skill": "principle-subtract-before-you-add"}, {"fact": "skill_not_read", "skill": "principle-laziness-protocol"}, {"fact": "skill_not_read", "skill": "principle-minimize-reader-load"}]},
+  "sup-refactor-cut-fold": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "sup-refactor-brief-count": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "sup-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "sup-refactor-near-binary": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "rev-refactor-fold": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "rev-refactor-name-check": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "rev-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "rev-refactor-near-inner-space": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]}
 }

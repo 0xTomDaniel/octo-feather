@@ -2054,5 +2054,69 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Ticket T11 (lane gh11): add `tally PATH --lines`, which prints the line count instead of the word count (under --json, a \"lines\" field in place of \"words\"). Keep the change small and easy to read; no new module. Commit."
+  },
+  {
+    "id": "sup-refactor-cut-fold",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Your lane is parent issue #3: `app goodbye` was made by copying `app hello`, so src/app/cli.py and src/app/core.py hold two versions of the same name check, error printing and JSON output. The issue asks for one way of doing each; what both commands accept, print and exit with stays exactly as today. Cut the lane's tickets and file them as sub-issues of #3."
+  },
+  {
+    "id": "sup-refactor-brief-count",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Lane gh5, parent issue #5: tally.count.count opens the file itself, so nothing can count a string without a file on disk. The issue asks to move the reading out to the CLI and have the counting take text; `tally PATH` and `tally PATH --json` print and exit exactly as now, errors included. Ticket #6 is that whole change. Write the implementer's brief for #6 into notes/brief-6.md."
+  },
+  {
+    "id": "sup-refactor-near-wave",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Your lane is parent issue #6: `app goodbye NAME --wave` appends \" o/\" to the farewell (`app goodbye Ada --wave` prints `Goodbye, Ada o/`; with --json the \"text\" field carries it). Without --wave nothing changes. Cut the lane's tickets and file them as sub-issues of #6."
+  },
+  {
+    "id": "sup-refactor-near-binary",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Lane gh7, parent issue #7: `tally` on a file that is not UTF-8 text (a PNG, say) dies with a Python traceback. It should fail like a missing file does: exit 2 with `error: cannot read PATH: not UTF-8 text` (and the JSON error object under --json). Ticket #8 is that fix. Write the implementer's brief for #8 into notes/brief-8.md."
+  },
+  {
+    "id": "rev-refactor-fold",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh3: review/fold.diff answers ticket T3, which said `app hello` and `app goodbye`, one copied from the other, must share one way of checking the name and printing, with what both accept, print and exit with exactly as today. Fit to merge? Verdict with reasons."
+  },
+  {
+    "id": "rev-refactor-name-check",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "lane gh4 wants review/name-check.diff merged: farewell had its own copy of greet's empty-name check and now both go through one. No output is meant to change. Would you let it in? Short verdict."
+  },
+  {
+    "id": "rev-refactor-near-wave",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Code review, lane gh6: review/wave.diff adds `app goodbye NAME --wave`, which appends \" o/\" to the farewell, with one new test. Verdict with reasons."
+  },
+  {
+    "id": "rev-refactor-near-inner-space",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Is review/inner-space.diff fit to merge? It fixes a bug: `app hello \"Ada   Lovelace\"` kept the run of inner spaces; names now collapse it to one. Verdict, with reasons."
   }
 ]
