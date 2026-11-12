@@ -55,7 +55,7 @@ The running state of one work item while its supervisor works on it: its record,
 _Avoid_: Worklane, track
 
 **Tracer bullet**:
-A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through the app's CLI, HTTP or UI, or the target's runnable script when it has none (ADR 0002). Every ticket is one.
+A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol), or the target's runnable script when it has none (ADR 0002). Every ticket is one.
 _Avoid_: Layer task, horizontal slice
 
 **Pilot**:
