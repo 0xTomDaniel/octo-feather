@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
-SOURCE = "21a1e4da9d9d49f26b278b0bcaf1eccf9cc61a67"
+SOURCE = "835f76de2d31f371c3cfb88d523d73b4a4039001"
 
 
 def run(*args: str) -> str:
@@ -41,7 +41,8 @@ def main() -> None:
     # Reports may be committed above the source, but audited source must stay byte-equivalent.
     changes = run("git", "diff", "--name-only", SOURCE, "--", "tests", "scripts", "templates",
                   ".agents", "justfile", "pyproject.toml").splitlines()
-    allowed = {"tests/gate/kind_audit.py", "tests/gate/kind-audit-judgments.json"}
+    allowed = {"tests/gate/kind_audit.py", "tests/gate/kind-audit-judgments.json",
+               "tests/gate/process_inventory.py"}
     if set(changes) - allowed:
         raise ValueError(f"audited source changed: {changes}")
     document = json.loads(args.judgments.read_text(), object_pairs_hook=pairs)
@@ -90,15 +91,23 @@ def main() -> None:
            f"Source: `{SOURCE}`. Metadata: existing OCTO_FEATHER_GATE_ITEMS pytest hook.",
            f"Inventory: {len(inventory)} items; kinds {dict(sorted(counts.items()))}.",
            f"Source-assessed counts: {dict(sorted(assessed.items()))}. Unassessed is NOT retain-kind approval.",
+           f"Unassessed counts: {dict(sorted((k, counts[k] - assessed[k]) for k in counts))}.",
            "No test body, fixture, model, gate recipe or performance measurement executed.",
            "No reclassification, retirement, budget adjustment or acceptance claim.",
            "Historical CPU/wall are integrate21 at 3cd67ebb, never current measurements.",
            "Integration overlap review remains incomplete; unknown does not mean unique or redundant.",
            "Historical unsafe observer exposure: integrate21 at 3cd67ebb ran test_qc_gh.py::test_killed "
            "(log line213: 1.223 CPU / 3.696 wall). qc_gh.py blob at historical3cd67ebb and runtime2a2271 "
-           "is 7f55997a5d3803b240bee758d45004ec02556e64. Current StageAB and audit did NOT execute it. "
-           "No future unsafe-helper/full/map/parity execution including it before owned-observation repair/proof. "
+           "is 7f55997a5d3803b240bee758d45004ec02556e64. This audit executes no test bodies; "
+           "the current owned-observer pair is recorded separately below. "
            "Historical execution is not historical safety proof; unrelated-process read exposure extent unknown.",
+           "Current inheritance is exact835f76d; inventory re-collected, not relabeled. Delta from prior21a1 "
+           "touches only qc_creds, qc_gh, judge and new faulty_timeout under the audited code paths. "
+           "Unchanged-source judgments carried by byte equivalence; changed rows re-read. "
+           "#749 same-judge RED/restored GREEN executed at e38 with identical runtime blobs at835; "
+           "see evidence/2026-11-09-gh749-owned-judge.md. This audit executes no test body.",
+           "Source ownership/setup findings and routing: evidence/2026-11-09-gh653-fixture-tool-home-gaps.md. "
+           "Current qc-escapes host-wide pgrep is a separate execution blocker, NOT repaired by749.",
            "#731: gh576 by_hand/network currently marked with genuine isolation purpose. gh577 analyst "
            "stub now uses readiness-pipe draining instead of fixed turn sleeps; no clock-only exemption. Issue remains open.",
            "Regenerate (metadata only, from this worktree):", "```sh",
