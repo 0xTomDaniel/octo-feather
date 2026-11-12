@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The qc sandbox test's OAuth and overlay section (#508; setup tests/lib/qc.sh): OAuth credentials on the box warn
 # once and are never written back; removing an ignored dir the real worktree holds (#395) succeeds in the overlay,
 # all discarded.
