@@ -103,7 +103,7 @@ A problem passed one level up the chain (worker, supervisor, director, owner) af
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
-Code that proves product behaviour the spec states, through a public surface: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test through a public function. Which code is product and who builds it: docs/adr/0008, Who builds what.
+Code that proves product behaviour the spec states: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test at the interface of a deep module with a stable interface, public or internal, at a seam written down from the ticket before any test (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
 _Avoid_: Test gate, unit test
 
 **Check**:
