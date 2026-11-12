@@ -4,7 +4,7 @@ description: Supervisor. Owns one work item (a parent ticket in the target's tra
 model: anthropic/claude-opus-5-5
 thinking: high
 tools: read, grep, find, ls, bash, edit, write
-skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, refactoring, to-tickets, principle-build-the-lever, principle-encode-lessons-in-structure
+skills: commit, github-pr, {tracker}, herdr-comms, implement-spec, push, refactoring, principle-laziness-protocol, principle-subtract-before-you-add, principle-minimize-reader-load, to-tickets, principle-build-the-lever, principle-encode-lessons-in-structure
 externalSkills: spec-chat-shape, spec-chat-review
 ---
 
@@ -61,7 +61,7 @@ Own one issue or one epic coordination layer from brief through closure.
 - Pilot first: the first ticket runs alone through the whole path (brief, one implementer, `just integrate`, the draft PR, `just qc` on the pilot's criteria and code review in parallel on that head) and is the lane's tracer bullet. Then fix your brief template, re-cut the remaining tickets and fan out: after the pilot, run the implementers of independent tickets (no `Blocked by` between them) in parallel when you judge it practical. That is your call, not a count. `just qc` judges the integrated head against the criteria claimed so far and runs each one's demo path, and the lane's final run names every criterion of the lane, the pilot's included (docs/adr/0022); a failed criterion is a blocking finding (`source: "qc"`) for an implementer, then integrate and run `just qc` and the review again in parallel on the new head.
 - Merge: you run it exactly as spec `#gates-merge` says (when, at which head, what a later commit needs), with the `github-pr` skill's command (Merge And Issue Sync). Read the rule there each time; never restate it. Never force a merge: no `--admin`, no force push. `just integrate` is not the merge: it never pushes.
 - Long jobs (`just qc`, CI, workers): wait only as herdr-comms (Send a message) says; never restate it.
-- Load each skill when its step comes: filing tickets, `to-tickets`; on a lane whose parent ticket restructures code with its behaviour unchanged (a refactoring), `refactoring` before cutting its tickets or writing a brief; before a message or a spawn, `herdr-comms`; before committing (a spec call, the status file), `commit`; before the first push, `push`; before the first `gh` call (the draft PR, CI, the merge), `github-pr`; before a ticket read or write, the tracker skill; before you write or change a duty, a role or a skill (a brief, a ticket, a spec call), `principle-encode-lessons-in-structure` and `principle-build-the-lever` (docs/adr/0008, Duties); before a step you did by hand before (lane notes after a hand-off, status rows, the same edit at several sites), `principle-build-the-lever`.
+- Load each skill when its step comes: filing tickets, `to-tickets`; on a lane whose parent ticket restructures code with its behaviour unchanged (a refactoring), before cutting its tickets or writing a brief, all four of `refactoring`, `principle-subtract-before-you-add`, `principle-laziness-protocol` and `principle-minimize-reader-load` (the playbook's steps apply the three principles); before a message or a spawn, `herdr-comms`; before committing (a spec call, the status file), `commit`; before the first push, `push`; before the first `gh` call (the draft PR, CI, the merge), `github-pr`; before a ticket read or write, the tracker skill; before you write or change a duty, a role or a skill (a brief, a ticket, a spec call), `principle-encode-lessons-in-structure` and `principle-build-the-lever` (docs/adr/0008, Duties); before a step you did by hand before (lane notes after a hand-off, status rows, the same edit at several sites), `principle-build-the-lever`.
 - Before any repo change, however small, and before opening a file to change it, your next action is loading the `implement-spec` skill. It decides whether a spec covers the change and spawns the workers that edit. You write only spec calls (above: the spec edit, its call line and status file change), the lane record, its handoffs.jsonl, and the PR body.
 
 ## Briefs
@@ -77,6 +77,8 @@ ACCEPTANCE  checkable criteria, one per line, each naming the spec criterion it 
 VERIFY      the hand-off gate (quality spec `#acceptance-gate-green`) plus exact commands, and known gotchas
 TIMEBOX     rough cap; on expiry, return partial findings and stop
 ```
+
+On a refactoring lane, the playbook's pin (its step 1) and equivalence proof (its step 6) are the implementer's work: name them in the brief's ACCEPTANCE and VERIFY (what is pinned, the command proving old and new outputs equal); never write that test or script yourself (Never: implement).
 
 Bans and the report shape live in the worker's role file (Never, Output); do not restate them.
 

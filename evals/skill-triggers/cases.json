@@ -2118,5 +2118,69 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Is review/inner-space.diff fit to merge? It fixes a bug: `app hello \"Ada   Lovelace\"` kept the run of inner spaces; names now collapse it to one. Verdict, with reasons."
+  },
+  {
+    "id": "sup-principles-one-result",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Lane gh9, parent issue #9: app.core has Greeting and Farewell, two frozen dataclasses with the same two fields, and greet and farewell each strip and check the name their own way. The issue wants core.py left with one of each; `app hello` and `app goodbye`, with and without --json, print and exit exactly as now, errors included. Ticket #10 is that whole change. Write the implementer's brief for #10 into notes/brief-10.md."
+  },
+  {
+    "id": "sup-principles-trace-json",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "you've got lane gh11 (parent #11). a new contributor took ages to work out where tally's JSON comes from: the error object is built by hand in cli.py, the counts come from asdict(Counts) in another branch. #11 asks to reshape that so it's obvious, with `tally PATH` and `tally PATH --json` byte for byte as today. Cut the lane's tickets and file them as sub-issues of #11."
+  },
+  {
+    "id": "sup-principles-near-retire",
+    "role": "supervisor",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Lane gh12, parent issue #12: we are retiring `app goodbye`, nobody calls it. The issue asks to delete the command, its core function and its tests, so `app goodbye Ada` fails the way argparse fails any unknown command; `app hello` stays as it is. Ticket #13 is that whole change. Write the implementer's brief for #13 into notes/brief-13.md."
+  },
+  {
+    "id": "sup-principles-near-lines",
+    "role": "supervisor",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Your lane is parent issue #14: add `tally PATH --lines`, which prints the line count instead of the word count (under --json, a \"lines\" field in place of \"words\"). The issue asks for a small change that stays easy to read, no new module. Cut the lane's tickets and file them as sub-issues of #14."
+  },
+  {
+    "id": "rev-principles-one-result",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "train",
+    "task": "Code review, lane gh9: review/one-result.diff answers ticket T10, which said Greeting and Farewell in app.core, two frozen dataclasses with the same fields, become one, with `app hello` and `app goodbye` printing and exiting exactly as today. Fit to merge? Verdict with reasons."
+  },
+  {
+    "id": "rev-principles-one-printer",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "can you look at review/one-printer.diff before it goes in? main() had a hello branch and a goodbye branch, each catching the error and printing text or JSON its own way; now both run through one. nothing users see should differ. merge or not, and why?"
+  },
+  {
+    "id": "rev-principles-near-retire",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Code review, lane gh12: review/retire.diff removes `app goodbye` (the command, farewell and Farewell, and its two tests), as ticket T13 asked: nobody calls it, and `app goodbye Ada` must now fail as argparse fails any unknown command. Verdict with reasons."
+  },
+  {
+    "id": "rev-principles-near-shout",
+    "role": "code-reviewer",
+    "fixture": "python-app-refactor-review",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Is review/shout.diff fit to merge? It adds `app hello NAME --shout`, which prints the greeting in capitals with a \"!\" (`HELLO, ADA!`), with one new test; the ticket asked for the smallest change that does it. Verdict, with reasons."
   }
 ]
