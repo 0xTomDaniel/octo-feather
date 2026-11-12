@@ -117,6 +117,29 @@ out="$(HERDR_PANE_ID=w9:p2 PI_SESSION_FILE="$own" "$L" reflect gh901 2>&1)" || f
 [[ "$(wc -l <"$lanes/gh901.handoffs.jsonl")" == 3 ]] || fail "no-gap reflection appended a finding"
 grep -qF "supervisor w9:p2: $own" "$STUB_ARGV.inputs" || fail "sources lack the supervisor's own transcript"
 
+# Known source records exercise literal LF citation spans through the public command.
+for boundary in final-lf no-final-lf two-records-final-lf multiwindow; do
+  python3 - "$own" "$boundary" <<'PY'
+import pathlib, sys
+cases = {
+    'final-lf': b'{}\n',
+    'no-final-lf': b'{}\n{}',
+    'two-records-final-lf': b'{}\n{}\n',
+    'multiwindow': b'{}\n{"text":"' + b'x' * 70000 + b'"}\n{}\n',
+}
+pathlib.Path(sys.argv[1]).write_bytes(cases[sys.argv[2]])
+PY
+  out="$(HERDR_PANE_ID=w9:p2 PI_SESSION_FILE="$own" "$L" reflect gh901 2>&1)" || fail "literal LF $boundary failed: $out"
+  python3 - "$STUB_ARGV.inputs" "$own" <<'PY'
+import hashlib, json, pathlib, sys
+inputs = pathlib.Path(sys.argv[1]).read_text()
+manifest = json.loads(inputs.splitlines()[0])
+source = next(s for s in manifest['sources'] if s['original'] == sys.argv[2])
+assert source['sha256'] == hashlib.sha256(pathlib.Path(sys.argv[2]).read_bytes()).hexdigest()
+assert f"Known literal LF spans: {source['presentation']['source_id']}\n" in inputs
+PY
+done
+
 # Public presentation: astral worst-case JSON escaping, >2000 physical source lines,
 # and a capture ending mid-UTF8 codepoint all reconstruct byte-for-byte through bounded windows.
 python3 - "$own" <<'PY'

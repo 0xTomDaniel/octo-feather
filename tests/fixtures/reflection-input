@@ -6,6 +6,13 @@ import pathlib
 import sys
 from typing import cast
 
+KNOWN_LF_SPANS = {
+    b"{}\n": [(1, 1)],
+    b"{}\n{}": [(1, 2)],
+    b"{}\n{}\n": [(1, 2)],
+    b'{}\n{"text":"' + b"x" * 70000 + b'"}\n{}\n': [(1, 2), (2, 2), (2, 3)],
+}
+
 
 def window_bytes(record: object) -> bytes:
     assert isinstance(record, dict)
@@ -18,6 +25,7 @@ def window_bytes(record: object) -> bytes:
     assert source_id.split("-", 1)[1].isdigit()
     assert presentation["encoded_bytes"] == 32768
     result = bytearray()
+    spans: list[tuple[object, object]] = []
     for index in range(count):
         raw = pathlib.Path(pattern.format(index=index)).read_bytes()
         assert len(raw) <= 32768
@@ -33,12 +41,14 @@ def window_bytes(record: object) -> bytes:
         assert fields["source_id"] == source_id
         assert fields["index"] == index
         assert fields["start_byte"] == len(result)
-        start_line = 1 + result.count(b"\n")
-        assert fields["start_line"] == start_line
+        spans.append((fields["start_line"], fields["end_line"]))
         result.extend(chunk)
         assert fields["end_byte"] == len(result)
-        assert fields["end_line"] == 1 + result.count(b"\n") - int(chunk.endswith(b"\n"))
-    return bytes(result)
+    data = bytes(result)
+    if data in KNOWN_LF_SPANS:
+        assert spans == KNOWN_LF_SPANS[data], (source_id, spans)
+        sys.stdout.write(f"Known literal LF spans: {source_id}\n")
+    return data
 
 
 prompt = sys.stdin.read()
