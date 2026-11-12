@@ -27,7 +27,9 @@ except FileExistsError:
     sys.exit("credential pi: recording exhausted")
 if "-e" in argv:
     classifier = Path(__file__).resolve().parents[3] / "fixtures" / "classify-stub" / "pi"
-    os.execv(str(classifier), [str(classifier), *argv])
+    # Trusted fixed source-relative classifier, argv vector, no shell: exec preserves
+    # the same PID, signal delivery and exit disposition of this delegation.
+    os.execv(str(classifier), [str(classifier), *argv])  # noqa: S606
 reply = json.loads(os.environ["CREDENTIAL_PI_REPLY"])
 brief = argv[-1] if argv else ""
 if f"head {reply['head']}" not in brief or "- acceptance-b:" not in brief:
