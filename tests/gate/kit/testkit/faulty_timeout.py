@@ -12,6 +12,7 @@ import os
 import signal
 import socket
 import sys
+from pathlib import Path
 
 
 def stopped(_number: int, _frame: object) -> None:
@@ -32,7 +33,7 @@ with socket.socket(socket.AF_UNIX, socket.SOCK_SEQPACKET) as peer:
         "kind": "delegate-timeout",
         "token": os.environ["FAKE_PI_HANG_TOKEN"],
         "argv": sys.argv[1:],
-        "cwd": os.getcwd(),
+        "cwd": str(Path.cwd()),
     }
     peer.sendall(json.dumps(request).encode())
     if peer.recv(1) != b"!":
