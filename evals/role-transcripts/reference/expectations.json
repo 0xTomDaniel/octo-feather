@@ -411,5 +411,6 @@
   "implementer-missing-recording-heldout": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "branch_paths", "untouched": ["tests/"]}]},
   "prior-art-extends": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/names.py"}]}]},
   "prior-art-extends-stated": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
-  "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]}
+  "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]},
+  "implementer-refactor-ticket": {"facts": [{"fact": "skill_read_before", "skill": "refactoring", "before": "edit"}]}
 }

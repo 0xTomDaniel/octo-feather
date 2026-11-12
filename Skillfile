@@ -35,6 +35,9 @@ github  skill  blast-radius     cursor/plugins@0b8e952052d482ee6de06deebf14d590d
 github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/sharpen
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
 github  skill  principle-build-the-lever cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-build-the-lever
+# refactoring: one file of pstack's poteto-mode (its refactoring playbook), never the folder; how a single-file
+# entry deploys and is patched: scripts/check-vendored (#792).
+github  skill  refactoring      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/poteto-mode/playbooks/refactoring.md
 github  skill  create-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/create-verification-skill
 github  skill  maintain-verification-skill cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/maintain-verification-skill
 # reflect: agents/reflector.md loads it (comms spec #reflection, roles spec #roles-reflector).

@@ -241,5 +241,9 @@
   "shaper-repair-near-clean-repo": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
   "shaper-repair-near-clean-version": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
   "shaper-repair-near-question-exit": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
-  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]}
+  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "impl-refactor-fold-goodbye": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "impl-refactor-split-count": {"facts": [{"fact": "skill_read", "skill": "refactoring"}]},
+  "impl-refactor-near-wave": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]},
+  "impl-refactor-near-binary": {"facts": [{"fact": "skill_not_read", "skill": "refactoring"}]}
 }

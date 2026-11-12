@@ -1990,5 +1990,37 @@
     "should_trigger": false,
     "split": "held-out",
     "task": "Quick check before I file something: what do our specs say `app hello Ada --json` prints? Point me at the anchor, nothing else."
+  },
+  {
+    "id": "impl-refactor-fold-goodbye",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": true,
+    "split": "train",
+    "task": "`app goodbye` was made by copy-pasting `app hello`, so src/app/cli.py and src/app/core.py now hold two versions of the same name check, error printing and JSON output, written two different ways. Fold them into one. Anyone running `app` must not be able to tell: same output, same exit codes. Commit."
+  },
+  {
+    "id": "impl-refactor-split-count",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": true,
+    "split": "held-out",
+    "task": "Ticket T5 (lane gh5): tally.count.count opens the file itself, so nothing can count a string without a file on disk. Move the reading out to the CLI and have the counting take text. `tally PATH` and `tally PATH --json` print and exit exactly as they do now, errors included. Commit when done."
+  },
+  {
+    "id": "impl-refactor-near-wave",
+    "role": "implementer",
+    "fixture": "python-app-refactor",
+    "should_trigger": false,
+    "split": "train",
+    "task": "Ticket T6 (lane gh6): `app goodbye NAME --wave` appends \" o/\" to the farewell (`app goodbye Ada --wave` prints `Goodbye, Ada o/`; with --json the \"text\" field carries it). Without --wave nothing changes. Implement it and commit."
+  },
+  {
+    "id": "impl-refactor-near-binary",
+    "role": "implementer",
+    "fixture": "tally-tiers",
+    "should_trigger": false,
+    "split": "held-out",
+    "task": "Ticket T7 (lane gh7): `tally` on a file that is not UTF-8 text (a PNG, say) dies with a Python traceback. It should fail like a missing file does: exit 2 with `error: cannot read PATH: not UTF-8 text` (and the JSON error object under --json). Fix it and commit."
   }
 ]
