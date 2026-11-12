@@ -119,7 +119,7 @@ A sender does not poll for an acknowledgement or stop ready work after a notific
 Each supervisor retains its lane goal and reconciles every outstanding assignment from results, artifacts, dependencies and native state.
 It consumes a recoverable finished result before considering restart; a DONE label alone proves neither completion nor death.
 The director has the same reconciliation duty for its directly parented general workers, not another lane's workers.
-Assignments and their disposition stay in the existing parent log and native worker identity, without a fabricated product lane or new inbox.
+Assignments and their disposition stay in the existing parent log and native worker identity: lane attempt lines for lane children, director note entries for its own general workers, without a fabricated product lane or new inbox.
 The open notification choices below explicitly govern any alternative that also requires a director notice after local recovery.</p>
 <p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
 An activity label or pending final gate alone is not a reason to park ready work.
@@ -155,7 +155,7 @@ Owner acceptance, merge, consequential product/risk, security, immediate spec ca
 A partial branch blocker does not mark every independent assignment blocked.
 The supervisor keeps each outstanding result accounted for until consumed or explicitly reconciled into a replacement's scope.</p>
 <p data-anchor="notification-allowlist-choice" data-spec-tbd>Does the proposed table completely capture mandatory parent events, keeping routine pilot, smoke and recovered local validation details in existing evidence?
-Affected anchors: notification-default and notification-granularity, plus lifecycle acceptance-pilot-pr and delivery-parallel.
+Affected anchors: notification-default and notification-granularity, plus <a href="./issue-lifecycle.spec.html#acceptance-pilot-pr">lifecycle#acceptance-pilot-pr</a>, <a href="./issue-lifecycle.spec.html#lanes-pilot">lifecycle#lanes-pilot</a> and <a href="./issue-lifecycle.spec.html#lc-draft-pr">lifecycle#lc-draft-pr</a>.
 Using the table makes the pilot result a local record and keeps consolidated completion mandatory.
 Revising the list changes those clauses together; retaining mandatory pilot/smoke notices restores their explicit send-up steps without making them permission gates.
 <button type="button" data-spec-choice="Use the enumerated events as the complete parent notification allowlist">Use this allowlist (recommended)</button>
@@ -165,7 +165,7 @@ Consolidate worker details at the supervisor; do not relay raw chatter.
 Report a changed blocker or a resolved previously escalated blocker once, not repeated reminders without new evidence.
 Owner dialogue does not suspend required risk, decision or completion delivery; routine updates do not interrupt it.</p>
 <p data-anchor="recovery-notice-choice" data-spec-tbd>Should successful recovery of an unreported worker ending stay local unless another mandatory event applies?
-Affected anchors: acceptance-worker-ended and roles-goal, and the attempt-result accounting in handoff-kind-attempt.
+Affected anchors: story-never-stalls, acceptance-worker-ended and roles-goal, and the attempt-result accounting in handoff-kind-attempt.
 Local-only records an attempt with result ended-unreported and the partial result, recovery and replacement identity; report and reflection can count it without a new store.
 The notify-every-recovery alternative adds one supervisor-to-director notice identifying that ending and recovery; these anchors must then explicitly include that send.
 Existing terminal runtime notices, actual lost-parent delivery and material security/cross-lane impact remain mandatory either way.

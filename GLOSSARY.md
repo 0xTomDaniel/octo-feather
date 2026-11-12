@@ -115,7 +115,7 @@ A rule the gate enforces on the repo's own code or text: lint, types, structure,
 _Avoid_: Test (for a scan), guard, lint (for anything that is not a linter)
 
 **Delegation envelope**:
-The outcome, scope, resources, decision rights and constraints assigned to a factory role for one piece of work. A choice inside that envelope belongs to the assigned role; a choice outside it belongs to the authority that can grant it.
+The authority a role holds for one piece of work: its role contract, accepted spec, applicable ADRs and recorded owner delegation, narrowed by the assignment's brief. A choice inside it belongs to the assigned role; outside it, to the authority that can grant it.
 _Avoid_: Blanket permission, command approval
 
 **Gate**:
