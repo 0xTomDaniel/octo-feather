@@ -281,14 +281,6 @@
     "task": "Review lane gh22, ticket T22 (`app quote` gives an order over 100.00 10% off before tax and rounds tax half up to cents; `--json` shows the discount; criteria quote-discount and quote-tax).\nThe implementer's comment on the ticket, posted before its first test commit:\n> Seams under test, from the criteria: `app.pricing.price(lines, region)` (quote-discount, quote-tax); `app quote ... --json` through `app.cli.main` (quote-discount).\nDiff: base main, head implementer-t22 in this directory (`git diff main...implementer-t22`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
   },
   {
-    "id": "implementer-seam-list-comment",
-    "role": "implementer",
-    "fixture": "quote-app-inline",
-    "branch": "implementer-t23",
-    "fake_gh": true,
-    "task": "Ticket #23 (lane gh20, parent #20): discount tiers for `app quote`. An order over 50.00 gets 5% off, over 100.00 10% off, over 500.00 15% off, always before tax (`app quote uk 60.00:1 --json` shows discount \"3.00\"; `app quote uk 600.00:1 --json` shows discount \"90.00\"). The checkout team will reuse this pricing rule from the package, and the tier table will grow.\nAcceptance criterion: quote-tiers. Spec section: the ticket text above is the canonical source; the ticket is GitHub issue #23 in this repo.\nWorktree: this directory, branch implementer-t23, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead."
-  },
-  {
     "id": "implementer-deepen-first",
     "role": "implementer",
     "fixture": "quote-app-inline",

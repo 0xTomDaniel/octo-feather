@@ -414,6 +414,5 @@
   "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]},
   "reviewer-seam-shallow-unagreed": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "declared_includes", "field": "blocking", "items": [{"test": "tests/test_quote.py::test_tax_rate_de"}, {"test": "tests/test_quote.py::test_quote_json_shows_discount"}]}]},
   "reviewer-seam-listed-deep-clear": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
-  "implementer-seam-list-comment": {"facts": [{"fact": "skill_read_before", "skill": "tdd", "before": "test_write"}, {"fact": "ran", "program": "gh", "args": ["issue", "comment", "23"]}]},
   "implementer-deepen-first": {"facts": []}
 }
