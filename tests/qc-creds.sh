@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # Integration test for who gets the owner's model credentials in `just qc` (owner ruling 2026-10-29, #438; docs/adr/0022,
 # the sandbox paragraph), through `just qc` with a fake herdr and a fake pi at the model boundary, no model: a scratch
 # target declares one demo that tries to read Pi's auth.json and models.json; a second criterion has none and goes to the
