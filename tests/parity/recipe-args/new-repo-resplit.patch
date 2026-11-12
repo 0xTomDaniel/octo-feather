@@ -1,0 +1,14 @@
+Seeded defect: just new-repo re-splits its arguments (an unquoted $@): a DEST with a space reaches octo-feather-new-repo as several.
+diff --git a/justfile b/justfile
+index 27a4ed48..e7a09a01 100644
+--- a/justfile
++++ b/justfile
+@@ -891,7 +891,7 @@ state:
+ # Arguments reach bash as "$@" and exported variables, never as interpolated source (#61).
+ [no-cd]
+ new-repo $lang $dest *$flags:
+-    octo-feather-new-repo "$@"
++    octo-feather-new-repo $@
+ 
+ # Opt-in, never part of `just check`: tests/qc.sh with the box's real herdr (QC_TEST_HERDR=real) for the
+ # sandbox pane proof: a judge's pane runs in its PID namespace, reaches no live session and dies with the run.
