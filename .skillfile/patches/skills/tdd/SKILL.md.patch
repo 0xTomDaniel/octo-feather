@@ -1,4 +1,4 @@
-# reason: ADR 0002: seams are public surfaces only, taken from the ticket's acceptance criteria, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; issue #107 description triggers on writing, changing or reviewing tests, not on a user asking; issue #558 description double-quoted: a plain YAML value holding ": " makes Pi drop the skill
+# reason: ADR 0002: seams are deep modules with stable interfaces, written down from the ticket before any test, deepened first when none exists, one or two tests each; no test leak into production code; issue #107 Pi has no Skill tool: a skill loads by reading its SKILL.md by path; issue #107 description triggers on writing, changing or reviewing tests, not on a user asking; issue #558 description double-quoted: a plain YAML value holding ": " makes Pi drop the skill
 --- a/SKILL.md
 +++ b/SKILL.md
 @@ -1,6 +1,6 @@
@@ -14,7 +14,7 @@
  A **seam** is the public boundary you test at: the interface where you observe behavior without reaching inside. Tests live at seams, never against internals.
  
 -**Test only at pre-agreed seams.** Before writing any test, write down the seams under test and confirm them with the user. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
-+**Test only at pre-agreed seams.** Before writing any test, write down the seams under test: public surfaces only (docs/adr/0002), taken from the ticket's acceptance criteria, one or two tests per criterion; confirm with the user only seams the ticket does not name. No test is written at an unconfirmed seam. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
++**Test only at pre-agreed seams.** Before writing any test, write down the seams under test from the ticket's acceptance criteria, one or two tests per criterion, and post the list where review reads it (a comment on the ticket) before the first test commit; confirm with the user any seam the criteria do not name. Two hard guards (docs/adr/0002): each seam is the interface of a deep module with a stable interface, public or internal, never a private helper or a shallow wrapper whose interface mirrors its implementation; and no test is written at a seam missing from that list. End-to-end tests drive only the CLI, HTTP or UI. When no deep module with a stable interface exists at the seam a criterion needs, deepen it first as its own step: pin current behavior, deepen the module ([DEEPENING.md](../codebase-design/DEEPENING.md)), then test at the new interface. You can't test everything, so agreeing the seams up front is how testing effort lands on the critical paths and complex logic instead of every edge case.
  
  Ask: "What's the public interface, and which seams should we test?" Give each proposed seam a one-line note on what it catches and what it misses.
  
@@ -25,7 +25,7 @@
  
  - **Implementation-coupled**: mocks internal collaborators, tests private methods, or verifies through a side channel (querying the database instead of using the interface). The tell: the test breaks when you refactor but behavior hasn't changed.
  - **Tautological**: the assertion recomputes the expected value the way the code does (`expect(add(a, b)).toBe(a + b)`, a snapshot derived by hand the same way, a constant asserted equal to itself), so it passes by construction and can never disagree with the code. Expected values must come from an independent source of truth: a known-good literal, a worked example, the spec.
-+- **Test leak**: production code carries something only a test uses: a test-only flag, env var, hook, parameter or branch. Reach the state from the test instead, mocking at the boundary (see [mocking.md](mocking.md)).
++- **Test leak**: production code carries something only a test uses: a test-only flag, env var, hook, parameter or branch. Reach the state from the test instead, mocking at the boundary (see [mocking.md](mocking.md)). Product code changed to give a real deep interface is no test leak.
  - **Horizontal slicing**: writing all tests first, then all implementation. Bulk tests verify _imagined_ behavior: you test the _shape_ of things rather than user-facing behavior, the tests go insensitive to real changes, and you commit to test structure before understanding the implementation. Work in **vertical slices** instead: one test → one implementation → repeat, each test a **tracer bullet** that responds to what the last cycle taught you.
  
  ## Rules of the loop

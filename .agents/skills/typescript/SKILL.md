@@ -56,9 +56,10 @@ new TypeScript surfaces.
 ## Testing Stack
 
 - Use Vitest for new tests.
-- Tests are integration and end-to-end only, through public surfaces (the app
-  CLI, HTTP, UI; an integration test may also enter through a public library
-  function, docs/adr/0002). Follow the target repo's documented test placement
+- Tests are integration and end-to-end only, at the seams quality spec
+  `#acceptance-public-surfaces` allows (docs/adr/0002): end-to-end through the
+  app CLI, HTTP or UI; integration at the interface of a deep module with a
+  stable interface, written down from the ticket before any test. Follow the target repo's documented test placement
   (`templates/typescript`: `tests/*.test.ts`).
 - How a test stands in for what the repo does not own, replays a recording and
   shares its support: the `tdd` skill's mocking guide (`../tdd/mocking.md`).
