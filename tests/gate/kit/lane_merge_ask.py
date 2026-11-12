@@ -108,14 +108,32 @@ def verdict_says(old: str, new: str) -> Edit:
 
 class Lane:
     """The lane worktree R (B, J, H; `on` adds a commit off any of them) and PR #7 in the fake
-    gh, `keep` its state with the clear verdict comment at `url`, each case a copy of it."""
+    gh, `keep` its state with the clear verdict comment at `url`, each case a copy of it. Built
+    once per gate run (testkit Scratch.prepare) and copied into each item: `pr8` the variant
+    whose PR #7 holds no comment and PR #8 its own (Pr8)."""
 
-    def __init__(self, s: Scratch, *, verdict: bool = True) -> None:
-        self.s, self.t = s, s.root
+    def __init__(self, s: Scratch, *, pr8: bool = False) -> None:
+        self.attach(s)
+        name = "lane-merge-ask-pr8" if pr8 else "lane-merge-ask"
+        s.prepare(name, lambda p: Lane.__new__(Lane).build(p, pr8=pr8))
+        heads = json.loads((self.t / "lane.json").read_text())
+        self.b, self.j, self.h, self.url = heads["b"], heads["j"], heads["h"], heads["url"]
+        self.heads = heads
+        self.keep: dict[str, Any] = self.pr(7)
+        self.js = self.j[:7]
+        self.proof = f"{self.j[:12]} to {self.h[:12]}: qc status commits {self.h[:12]} {ONLY}"
+        self.report = str(self.t / "report")
+
+    def attach(self, s: Scratch) -> None:
+        self.s, self.t, self.r = s, s.root, s.root / "repo"
         s.env.pop("HERDR_SESSION", None)
         s.env["XDG_STATE_HOME"] = str(self.t / "xdg")  # the state dir's check-runs.jsonl
         s.env["OCTO_FEATHER_QC_DIR"] = str(self.t / "qc")  # qc reports (octo-feather-qc --help)
-        self.r = self.t / "repo"
+
+    def build(self, s: Scratch, *, pr8: bool) -> None:
+        """The lane in S, its heads in lane.json: B, J (its full pass recorded), H, PR #7 with
+        the clear verdict on J; with PR8, PR #7 with no comment and PR #8 at N with its own."""
+        self.attach(s)
         (self.r / "docs" / "specs").mkdir(parents=True)
         self.git("init", "-q", "-b", "main", ".")
         self.status("planned", "null")
@@ -128,18 +146,16 @@ class Lane:
         other = {"acceptance-x": {"status": "built", "pr": 7}}
         spec = {"spec": "other.spec.html", "accepted_commit": "0123abc", "criteria": other}
         self.write("docs/specs/other.status.json", json.dumps(spec) + "\n")
-        b = self.b = self.commit("base")
+        b = self.commit("base")
         self.main(b)
         self.git("checkout", "-q", "-b", "lane")
         self.line(1, "one")
-        j = self.j = self.commit("feat: x")
+        j = self.commit("feat: x")
         self.record()
         self.status("built", "7")
         qc = f"qc: built acceptance-a acceptance-b (judged {j[:12]})"
-        h = self.h = self.commit(qc)
-        self.js = j[:7]
-        self.proof = f"{j[:12]} to {h[:12]}: qc status commits {h[:12]} {ONLY}"
-        self.keep: dict[str, Any] = {
+        h = self.commit(qc)
+        pr7 = {
             "number": 7,
             "baseRefName": "main",
             "headRefName": "gh6",
@@ -152,15 +168,17 @@ class Lane:
                 {"oid": h, "messageHeadline": qc, "messageBody": ""},
             ],
         }
-        s.gh.put(7, self.keep)
+        s.gh.put(7, pr7)
         self.ci(h, workflows=True)
         s.gh.store(f"{API}/branches/main.json", UNPROTECTED)
         s.gh.store(f"{API}/rules/branches/main.json", [])
-        self.report = self.file("report", REPORT)
-        self.url = ""
-        if verdict:
-            self.url = self.lane("verdict", "7", j, self.report).out
-            self.keep = self.pr(7)
+        report = self.file("report", REPORT)
+        heads = {"b": b, "j": j, "h": h, "url": ""}
+        if pr8:
+            heads |= Pr8.build(self, b, report)
+        else:
+            heads["url"] = self.lane("verdict", "7", j, report).out
+        (self.t / "lane.json").write_text(json.dumps(heads))
 
     # --- the repo ---
     def git(self, *args: str, want: int = 0) -> str:
@@ -354,8 +372,10 @@ def proof_line(err: str) -> str:
 def verdict_posts(s: Scratch) -> None:
     """verdict creates the one marker comment, updates it in place, reads stdin, and an
     unchanged rerun writes nothing."""
-    ln = Lane(s, verdict=False)
+    ln = Lane(s)
     j, h = ln.j, ln.h
+    s.gh.put(7, {**ln.keep, "comments": []})
+    (s.gh.dir / "log").write_text("")
     url = ln.lane("verdict", "7", ln.js, ln.report).out  # the review judged J, while qc made H
     assert url == "https://github.com/o/r/pull/7#issuecomment-1001", url
     post = "api -X POST repos/{owner}/{repo}/issues/7/comments "
@@ -1210,19 +1230,23 @@ class Pr8:
     lane's PR #7 holds no comment: PR #8's is the one a verdict updates."""
 
     def __init__(self, s: Scratch) -> None:
-        ln = self.ln = Lane(s, verdict=False)
+        ln = self.ln = Lane(s, pr8=True)
+        self.n, self.url = ln.heads["n"], ln.heads["url8"]
+        self.keep: dict[str, Any] = ln.pr(8)
+
+    @staticmethod
+    def build(ln: Lane, b: str, report: str) -> dict[str, str]:
+        """PR #8 in the lane LN being built: N off B, its pass recorded, its verdict posted."""
 
         def fix() -> None:
             ln.line(2, "two")
             ln.git("commit", "-qam", "fix: a rule")
             ln.record()
 
-        n = self.n = ln.on(ln.b, fix)
-        self.keep: dict[str, Any] = {"comments": []}
-        self.url = ""
-        self.put(n, self.body())
-        self.url = ln.lane("verdict", "8", n, ln.report).out
-        self.keep = ln.pr(8)
+        p = Pr8.__new__(Pr8)
+        p.ln, p.n, p.url, p.keep = ln, ln.on(b, fix), "", {"comments": []}
+        p.put(p.n, p.body())
+        return {"n": p.n, "url8": ln.lane("verdict", "8", p.n, report).out}
 
     def body(self, **o: str) -> str:
         """Its section, a line overridden by each of O: parent head judged table built failed."""
