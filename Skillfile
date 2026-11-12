@@ -35,6 +35,9 @@ github  skill  blast-radius     cursor/plugins@0b8e952052d482ee6de06deebf14d590d
 github  skill  sharpen          cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/sharpen
 github  skill  principle-encode-lessons-in-structure cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-encode-lessons-in-structure
 github  skill  principle-build-the-lever cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-build-the-lever
+github  skill  principle-laziness-protocol cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-laziness-protocol
+github  skill  principle-subtract-before-you-add cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-subtract-before-you-add
+github  skill  principle-minimize-reader-load cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/principle-minimize-reader-load
 # refactoring: one file of pstack's poteto-mode (its refactoring playbook), never the folder; how a single-file
 # entry deploys and is patched: scripts/check-vendored (#792).
 github  skill  refactoring      cursor/plugins@0b8e952052d482ee6de06deebf14d590d77b1b34  pstack/skills/poteto-mode/playbooks/refactoring.md
