@@ -768,7 +768,7 @@ def drive_director_reflection(f: Feature) -> None:
                 and last["kind"] == "reflection" and sorted(last["questions"]) == sorted(ids)
                 and all(x["kind"] == "finding" and x["source"] == "reflection" and "blocking" not in x
                         and x["question"] in ids and x["route"] and x["summary"] and x["class"] for x in found)
-                and any("duplicated-rule" in x["class"] + x["summary"] and re.search(r"\b(3|three)\b", x["summary"])
+                and any("duplicated-rule" in x["class"] + x["summary"] and re.search(r"\b(3|three)\b", x["summary"], re.IGNORECASE)
                         and not re.fullmatch(r"(code[- ])?review.*", x["route"], re.IGNORECASE) for x in found))
 
     f.check("reflect-live", reflected)

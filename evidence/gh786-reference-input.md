@@ -516,3 +516,47 @@ final before three-file staged/frozen full; actual output/commit will be reporte
 separately. Official source-verified grant00:42:03Z..00:59:59Z, fresh4096MiB and
 one owned group, min1800/remainingTTL-30 deadline and awaited cleanup, background
 runner/callback/end-turn; no post-pass evidence edit or acceptance claim.
+
+## Public director count-case oracle regression
+
+After clean FF47064031dc5dbf963f9eda1f8dc5f063837a8a53, the real QA record
+20261112T010441Z-d00e3a66 remained FAIL: app exit0 had three model findings/full
+nine questions/intact seeded prefix and a valid writer route, but its summary
+began Three. Existing count alternative3|three was case-sensitive. This is an
+observed driver-oracle spelling-case rejection, NOT a production/model outage or
+zero-finding failure; the old record and `/tmp/gh786-lf-final-qa-run/output` remain
+RED. Beforearchive record20261112T010350Z-7721ca27 remains its separate old-H proof.
+Only the existing stdlib regex gets IGNORECASE: same count3/three, no whitespace
+normalization, general number parser, changed routing or other strictness.
+
+Smoke: .agents/skills/verify-octo-feather/scripts/verify-octo-feather exercised as the real PUBLIC verify run director-reflection command by tests/director-reflect.sh, using its existing external Pi reply/source-reference stand-in and real app reflection/parser/recording. Old predicate public Three case actually RED: /tmp/gh786-count-case-targeted/red/output and exit1,1failed15.23s; app liveexit0/valid one-model finding/Three summary/full9questions/writer route, while driver rejected; unreachable and due passed. No driver imports/reads/internal function execution or real model probe, and no claim the headless reflector loaded the guide.
+
+The public command regression now tests four literal positives Three/ThReE/three/3
+and five negatives missing count/word two/numeral2/fallback-only/nonreview-route
+violation. The fallback-only case has three seeded non-model code-review records
+and correction count3 but NO model finding, and must still fail. Every negative
+also checks actual live app exit0, unchanged seed prefix, literal full nine
+questions, expected model record count and source=reflection/class=duplicated-rule
+for any fresh finding: unrelated setup/namespace/parser refusal cannot pass as a
+count rejection. Namespace identity comparison exists ONLY in the external model
+stand-in to emulate unavailable transport under the existing network namespace;
+no app-mode flag or test-only production branch. Public matrix GREEN after the
+one-line fix: `/tmp/gh786-count-case-targeted/green/output` and exit0,
+1passed22.90s, CPU13.039s report-only over10s, no waiver. Existing source/binding/
+window/rawprefix/count/routing/cleanup/atomicity assertions remain. Old actual
+model provenance is unchanged; no new actual model result or relabelled record.
+
+call: check .agents/skills/verify-octo-feather/scripts/verify-octo-feather: existing public director QA assertion accepts case variants of its exact count3|three alternative, preserving all seeded-prefix/questions/model-source/class/count/routing requirements (product-output assertion, NOT a new GLOSSARY repo-text/runtime Check).
+The existing tests/director-reflect.sh public assertion call additionally covers
+this literal positive/negative matrix and validates that the real live parser/
+recording path was reached. Exactly12 cumulative calls now, four runtime Checks
+unchanged; no new Owner/policy/instruction/role/guide/eval budget change. Existing
+stdlib re/JSON plus native namespaces and the existing external-model stand-in,
+not a new parser/harness/store/framework. Factual evidence is FINAL before the
+three-file staged/frozen full. Planned artifacts `/tmp/gh786-count-case-full/`,
+runner `/tmp/gh786-count-case-run.py`, receipt `/tmp/gh786-count-case-full-runner.pid`,
+hashes `/tmp/gh786-count-case-frozen.sha256`. Official source-verified grant
+01:12:48Z..03:12:48Z; fresh4096MiB, min1800/remainingTTL-30, one owned PGID,
+awaited TERM/KILL cleanup, GOMAXPROCS2/Node1536/current-user native overlay,
+background callback/end-turn. No post-pass edit; final result/commit in handoff,
+not acceptance or final-H QA/review/CI/family approval.
