@@ -18,10 +18,14 @@ branch's commits), `gh api repos/o/r/contents/F -H Accept: application/vnd.githu
 $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)` when absent. As
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
-A call whose answer changes between calls (a run list while runs start and end, a run watch, a
-compare) is a recording, never computed: $FAKE_GH/tape.json maps its exact argv, one line as the
-log writes it, to its recorded answers in order, each its stdout (a string) or {"out", "err",
-"exit"}; the Nth such call replays the Nth (counts in tape.n.json), an exhausted one exits 2.
+`run list` keeps only the runs on --commit (headSha), --branch (headBranch), --event (event) and
+--workflow (workflowName) when given, a run storing no such field kept, and none whose createdAt
+(GitHub's ISO time) is still to come; --limit N the N newest. `run watch N --exit-status` waits
+for run N as gh does: completed, it prints gh's own line on it; in progress, it completes it with
+its stored `completes` conclusion (no line); exit 1 unless it concluded success. A file
+$FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
+`gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
+run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
 Anything else exits 2 naming it.
 """
 
@@ -29,10 +33,18 @@ import json
 import os
 import re
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
+from typing import Any
 
 STORE = Path(os.environ["FAKE_GH"])
 RAW = ["-H", "Accept: application/vnd.github.raw"]
+FILTERS = {
+    "--commit": "headSha",
+    "--branch": "headBranch",
+    "--event": "event",
+    "--workflow": "workflowName",
+}
 
 
 def pr_file(n: str) -> Path:
@@ -76,8 +88,56 @@ def listed(a: list[str]) -> None:
         base, state = opt(a, "--base"), opt(a, "--state")
         rows = [d for d in rows if base in (None, d.get("baseRefName"))]
         rows = [d for d in rows if state in (None, "all") or d.get("state") == state.upper()]
+    if a[0] == "run":
+        rows = runs(rows, a)
     key = "databaseId" if a[0] == "run" else "number"
     out([pick(d, a) for d in sorted(rows, key=lambda d: d[key])])
+
+
+def runs(rows: list[Any], a: list[str]) -> list[Any]:
+    """`run list`: the runs created by now on each filter given (a run without the field kept)."""
+    rows = [d for d in rows if not to_come(str(d.get("createdAt", "")))]
+    for flag, field in FILTERS.items():
+        v = opt(a, flag)
+        rows = [d for d in rows if v is None or d.get(field, v) == v]
+    n = opt(a, "--limit")
+    return sorted(rows, key=lambda d: int(str(d["databaseId"])))[-int(n) :] if n else rows
+
+
+def to_come(at: str) -> bool:
+    """Whether AT is a time (GitHub's ISO form) still to come; anything else is not."""
+    try:
+        return datetime.fromisoformat(at) > datetime.now(UTC)
+    except ValueError:
+        return False
+
+
+def watch(a: list[str]) -> None:
+    """`run watch N --exit-status [-R O/R]`, as gh 2.102.0 answers it (vuejs/core, 2026-11-13),
+    exiting; any other call returns."""
+    if a[:2] != ["run", "watch"] or "--exit-status" not in a:
+        return
+    n, repo = a[2], opt(a, "-R") or "o/r"
+    api = f"https://api.github.com/repos/{repo}/actions/runs/{n}?exclude_pull_requests=true"
+    p = STORE / "run" / f"{n}.json"
+    if (
+        STORE / "watch-fails"
+    ).exists():  # `GH_TOKEN=bogus gh run watch 43337488098 --exit-status -R vuejs/core`
+        die(
+            f"failed to get run: HTTP 401: Bad credentials ({api})\n"
+            "Try authenticating with:  gh auth login -h github.com"
+        )
+    if not p.is_file():  # `gh run watch 1 --exit-status -R vuejs/core`
+        die(f"failed to get run: HTTP 404: Not Found ({api})")
+    d = json.loads(p.read_text())
+    if d["status"] == "completed":  # `gh run watch 41994021141 --exit-status -R vuejs/core`
+        sys.stdout.write(
+            f"Run {d['workflowName']} ({n}) has already completed with '{d['conclusion']}'\n"
+        )
+    else:
+        d |= {"status": "completed", "conclusion": d["completes"]}
+        p.write_text(json.dumps(d))
+    sys.exit(0 if d["conclusion"] == "success" else 1)
 
 
 def opt(a: list[str], flag: str) -> str | None:
@@ -121,11 +181,18 @@ def get(a: list[str]) -> None:
     if a[2:] == RAW and (m := re.fullmatch(r"repos/o/r/contents/(.+)", a[1])):
         served(STORE / "contents" / m.group(1))
         return
-    p = STORE / "api" / f"{a[-1].lstrip('/').replace('{owner}/{repo}', 'o/r')}.json"
+    jq = opt(a, "--jq")
+    path = a[1] if jq else a[-1]
+    p = STORE / "api" / f"{path.lstrip('/').replace('{owner}/{repo}', 'o/r')}.json"
     if not p.is_file():
         die("gh: Not Found (HTTP 404)")
     page = json.loads(p.read_text())
-    out([page] if "--slurp" in a else page)
+    if jq is None:
+        out([page] if "--slurp" in a else page)
+    elif re.fullmatch(r"\.\w+", jq) and isinstance(page.get(jq[1:]), str):
+        sys.stdout.write(page[jq[1:]] + "\n")
+    else:
+        die(f"fake gh: unexpected {a}", 2)
 
 
 def write(a: list[str]) -> None:
@@ -154,25 +221,6 @@ def write(a: list[str]) -> None:
     sys.stdout.write(url + "\n")
 
 
-def taped(call: str) -> bool:
-    """CALL's next recorded answer replayed and exited with, if tape.json records CALL."""
-    tape = STORE / "tape.json"
-    answers = json.loads(tape.read_text()).get(call) if tape.is_file() else None
-    if answers is None:
-        return False
-    count = STORE / "tape.n.json"
-    n: dict[str, int] = json.loads(count.read_text()) if count.is_file() else {}
-    k = n.get(call, 0)
-    count.write_text(json.dumps(n | {call: k + 1}))
-    if k >= len(answers):
-        die(f"fake gh: exhausted recording for: {call} (tape.json)", 2)
-    ans = answers[k]
-    d = {"out": ans} if isinstance(ans, str) else ans
-    sys.stdout.write(str(d.get("out", "")))
-    sys.stderr.write(str(d.get("err", "")))
-    sys.exit(int(d.get("exit", 0)))
-
-
 def main(a: list[str]) -> None:
     with (STORE / "log").open("a") as f:
         f.write(" ".join(a) + "\n")
@@ -180,7 +228,7 @@ def main(a: list[str]) -> None:
         die("error connecting to api.github.com")
     if not os.environ.get("GH_TOKEN"):
         die("To get started with GitHub CLI, please run:  gh auth login", 4)
-    taped(" ".join(a))
+    watch(a)
     two = tuple(a[:2])
     if two in (("pr", "view"), ("issue", "view")):
         view(a)

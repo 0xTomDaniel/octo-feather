@@ -99,13 +99,6 @@ class Gh:
         p.parent.mkdir(parents=True, exist_ok=True)
         p.write_text(d if isinstance(d, str) else json.dumps(d))
 
-    def tape(self, tapes: Mapping[str, Sequence[object]]) -> None:
-        """The store's recordings (testkit/gh.py) set to TAPES, each call's answers in order,
-        replayed from the first; the call log emptied."""
-        (self.dir / "tape.json").write_text(json.dumps(tapes))
-        (self.dir / "tape.n.json").unlink(missing_ok=True)
-        (self.dir / "log").write_text("")
-
     def log(self) -> list[str]:
         return (self.dir / "log").read_text().splitlines()
 
