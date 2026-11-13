@@ -63,6 +63,8 @@ bad 'e["fnone"]["facts"][3] = {"fact": "branch_paths"}' "case fnone fact #4: fie
 bad 'del e["rpass"]["facts"][0]["program"]' "case rpass fact #1: field program: missing" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["program"] = "a/b"' "case rpass fact #1: field program: must be a command name" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["args"] = "lane show"' "case rpass fact #1: field args: must be a list of strings" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["count"] = -1' "case rpass fact #1: field count: must be an integer >= 0, got -1" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["count"] = True' "case rpass fact #1: field count: must be an integer >= 0, got True" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["exit"] = 0' "case rpass fact #1: field exit: unknown field for ran" "$t/ran-good" ran
 bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
 bad 'e["fweb"]["facts"][0]["tools"] = ["web a"]' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
