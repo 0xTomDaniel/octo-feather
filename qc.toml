@@ -228,10 +228,13 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 
 # Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py, queued_completion) and this demo, herdr-say against the
 # testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
-# after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent.
+# after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent. The worker half (#883),
+# a worker sending once on that uncertain result, is a model eval, not a qc demo (the eval slot, 18 runs of minutes each):
+# scripts/octo-feather-qa --suite worker-uncertain-send --runs 3 --baseline origin/main, read by the agent fallback judge in
+# evidence/2026-11-13-gh840-worker-uncertain-send.md (pass rates on both kits).
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py", "agents/implementer.md", "agents/code-reviewer.md", "evals/worker-uncertain-send", "evidence/2026-11-13-gh840-worker-uncertain-send.md"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
