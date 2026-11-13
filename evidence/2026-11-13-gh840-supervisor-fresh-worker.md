@@ -73,11 +73,25 @@ Held-out cases are written and scored by their separate author, not here.
 
 ## gh754 train cases
 
-GH754_PENDING
+Frozen gh754 train cases (review cases on history fixtures, copied for this lane at /tmp/gh840/gh754-train; evidence 35d01c7, evidence/2026-11-12-gh754-supervisor-preintervention.md), run as the brief asks: `scripts/octo-feather-qa --evals /tmp/gh840/gh754-train --runs 1 --baseline origin/main`, run 20261113T123439Z-adbfe9, kit dad85635 (agents/supervisor.md identical to the proof head c7e915e9) beside baseline 7bb5c70399dc. Both cases end REVIEW on both kits: no verdict is recorded here; a reviewer records it with `scripts/octo-feather-qa --review`. Kept outputs: $(octo-feather-state)/qa/20261113T123439Z-adbfe9/<suite>/<case>/{baseline,current}/run-1/ (transcript.jsonl, its final message the handoff judged; review.json).
+
+What each kept handoff proposes, stated as fact, not judged:
+
+- gh754-practical-parallelism/supervisor-nov9-ready-work (admission confirms room for two more workers): baseline (14 calls) and head (15 calls) both keep the existing inventory worker and brief two new workers, an audit (reports only) and repair751 (qc-escapes files), with an ownership table of disjoint write sets and heavy validation kept serial.
+- gh754-preintervention/supervisor-original-0336-checkpoint (no capacity or admission supplied): baseline (11 calls) and head (10 calls) both keep the one existing implementer, brief it the next source-only tranche at the 03:56:54 checkpoint, and start no second worker (baseline: 751's proof needs a heavy regrant and one writer keeps the audit consistent; head: the next tranche is "the same unfinished audit, so it does not need a new spawn"). Neither proposes a disjoint cut or asks for capacity; the case's question does not fail a justified resource escalation, and requires capacity before new starts.
+
+The held-out gh754 cases stay with their author and were not run here.
 
 ## Commits after the proof head
 
-COMMITS_PENDING
+`git diff --stat c7e915e9..HEAD` (PROOF c7e915e9; evidence, docs and the qc.toml metadata entry only, before the merge of the gh840 tip that follows):
+
+```
+ docs/owed-evals/876.md                               |   5 +
+ evidence/2026-11-13-gh840-supervisor-fresh-worker.md | 393 +++++++++++++++++++++++++++++++++++++++
+ qc.toml                                              |   7 +
+ 3 files changed, 405 insertions(+)
+```
 
 ## Every herdr-spawn and herdr-say run, per case, kit and run
 
