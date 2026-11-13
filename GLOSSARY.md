@@ -5,7 +5,7 @@ A factory of agents that turns accepted work items into finished, verified work,
 ## Roles
 
 **Director**:
-The one agent that owns the whole program: it opens work items, puts a supervisor on each, removes blockers, and brings the owner only the decisions that need an owner. It never does the work itself.
+The one agent accountable for the whole factory's outcome, as a chief executive to the owner's board: it opens work items, puts a supervisor on each, keeps the factory running, removes blockers without the owner, and brings the owner only the decisions that need an owner. It never does the work itself.
 _Avoid_: Orchestrator, manager
 
 **Supervisor**:
@@ -41,7 +41,7 @@ The agent that shapes what the owner wants into a spec with them, before the fac
 _Avoid_: Shaping chat, spec writer
 
 **Owner**:
-The person the factory works for, who accepts specs and results at gates. Acceptance is never delegated to an agent. Spec Chat's `--owner` flag is that tool's own name for the pane it wakes, not this term.
+The person the factory works for, holding its board-level decisions: spec acceptance, merge approval, owner-held access and consequential product or risk decisions. Acceptance is never delegated to an agent. Spec Chat's `--owner` flag is that tool's own name for the pane it wakes, not this term.
 _Avoid_: Human, user, operator
 
 ## Work
