@@ -37,6 +37,14 @@ What the supervisor receives: the real `herdr-say --parent MESSAGE` hands MESSAG
 
 Baseline workers replay the queued report (2 or 3 runs exiting 124, as "send it again, 3 sends in all" says); head workers send it once, keep the result and end. Both kits correct a native refusal and send once more. Seen beside the grade: workers often first pipe the report on stdin (`herdr-say --parent < file`), which real herdr-say refuses (64); head workers then corrected the call once, baseline run 1 of the implementer case looped on it three times first (raised with the director by the supervisor, not this ticket).
 
+Commits after PROOF (11513990) are evidence and qc.toml metadata only (`git diff --stat 11513990..HEAD`, before this note):
+
+```
+ evidence/2026-11-13-gh840-worker-uncertain-send.md | 373 +++++++++++++++++++++
+ qc.toml                                            |   7 +-
+ 2 files changed, 378 insertions(+), 2 deletions(-)
+```
+
 ## Recorded herdr-say runs (sandbox.json `attempts`, kind run, whole argv)
 
 ### queued-timeout-sent-once
