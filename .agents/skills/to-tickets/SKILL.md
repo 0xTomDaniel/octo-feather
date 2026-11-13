@@ -98,7 +98,7 @@ The end-to-end behaviour this ticket makes work, from the user's perspective, no
 
 - [ ] <spec slug>#<anchor>: what proves the criterion this ticket serves (the anchor from the accepted spec, docs/specs/<spec slug>.spec.html)
 - [ ] <spec slug>#<anchor>: another criterion it serves, if any
-- [ ] demo: `<command>` and what it shows: the behaviour run through the app's own CLI (a program the repo declares), HTTP or UI, never the gate alone (`just check`) or a generic tool (`printf`, `echo`)
+- [ ] demo: `<command>` and what it shows: the behaviour run through a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol) (a program the repo declares, or its runnable script when it has none), never the gate alone (`just check`) or a generic tool (`printf`, `echo`)
 
 For one step of a wide refactor, replace the demo item with the line `Expand-contract: expand`, `migrate` or `contract`.
 

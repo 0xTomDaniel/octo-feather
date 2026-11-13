@@ -1,0 +1,14 @@
+Seeded defect: a just command line just cannot answer for (just -q check) counts as no check run, so qa and the judge run unrefused under it (check-gate-free --help, --run fails closed).
+diff --git a/scripts/check-gate-free b/scripts/check-gate-free
+index 3e116f2e..3f69358f 100755
+--- a/scripts/check-gate-free
++++ b/scripts/check-gate-free
+@@ -111,7 +111,7 @@ def asks_check(argv, cwd=None):
+     except (OSError, subprocess.TimeoutExpired) as e:
+         return True, f"{type(e).__name__}: {e}"
+     if names is None:
+-        return True, why
++        return False, why
+     return any(CHECK_RECIPE.fullmatch(n) for n in names), ""
+ 
+ 

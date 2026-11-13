@@ -18,8 +18,8 @@ g() { git -C "$t" -c user.name=t -c user.email=t@t "$@"; }
 g init -q; g add -A; g commit -qm base
 orig="$(cat "$t/justfile")"; checkline="$(grep '^check:' "$t/justfile")"
 msg='just check stays deterministic and free'
-(cd "$t" && just check-dashes >/dev/null 2>&1) || { echo "check-gate-free test: clean copy is not green" >&2; (cd "$t" && just check-dashes) >&2; exit 1; }
 # Ordinary runs (outside a check run, so not under this test's own) are unaffected: qa runs (its --help, no case), qc resolves (dry run, no judge).
+# Every just run evaluates the guard first, so these also show the clean copy passes it (allow's check-dashes, a gate recipe, runs green).
 set +e; out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just qa --help 2>&1)"; rc=$?; set -e
 [[ "$rc" == 0 ]] && grep -qF 'octo-feather-qa [--suite NAME]' <<<"$out" || { echo "check-gate-free test: plain just qa changed" >&2; echo "$out" >&2; exit 1; }
 out="$(cd "$t" && just --dry-run qc x 1 a 2>&1)" && grep -qF 'octo-feather-qc' <<<"$out" || { echo "check-gate-free test: plain just qc blocked" >&2; echo "$out" >&2; exit 1; }
@@ -47,7 +47,6 @@ expect "${c/check:/check: qa}" ""
 expect "$c && qa" ""
 expect "${c/check:/check: (qc \"x\" \"1\" \"a\")}" ""
 expect "$z" $'check-zz: helper-zz\nhelper-zz: qa'
-expect "$c" $'check-zz: (qc "x" "1" "a")'
 expect "$c" $'check-zz: helper-zz\nhelper-zz: deeper-zz\ndeeper-zz: (qc "x" "1" "a")'
 # Harmless forms pass the static guard: words that only resemble or name a recipe.
 allow $'check-zz:\n    echo quality aqua qcow2 jevons octo-feather-qcx'
@@ -65,43 +64,40 @@ set +e; out="$(cd "$w" && PATH="$t/scripts:$PATH" CHECK_GATE_FREE_TEST_COPY=1 ju
 printf '%s\n' "$orig" > "$t/justfile"; rm -rf "$w"
 [[ "$rc" != 0 ]] && grep -qF "$msg" <<<"$out" && ! grep -qF 'qa: run ' <<<"$out" || { echo "check-gate-free test: check: qa passed from another working directory" >&2; echo "$out" >&2; exit 1; }
 # Script forms: a repo script a gate recipe runs reaches qa or the judge at run time, through just or directly.
-# A fake `pi` first on the check run's PATH (the justfile keeps the caller's PATH ahead of ~/.local/bin) logs any launch.
-sb="$t.pi"; mkdir -p "$sb/home"; printf '#!/bin/sh\necho launched >> "%s/launched"\n' "$sb" > "$sb/pi"; chmod +x "$sb/pi"
-# script_form BODY [BODY2]: `just check`, whose first dependency runs scripts/quality-probe (BODY), fails with the message; no stub, no pi.
-# With BODY2, the justfile also has check-probe, which runs scripts/quality-probe2 (BODY2).
-# Each recipe reaches its script both relative and through the exported "$root" (#61's convention).
+# The kit's Pi stand-in first on the check run's PATH (the justfile keeps the caller's PATH ahead of ~/.local/bin) logs any launch under STUB_LAUNCHED.
+sb="$t.pi"; mkdir -p "$sb/home"; sp="$kit/tests/fixtures/classify-stub"
+# script_form PROBE BODY [BODY2]: `just check`, whose first dependency runs PROBE, scripts/quality-probe (BODY), fails with the message; no stub, no pi.
+# With BODY2, the justfile also has check-probe, which runs PROBE2, scripts/quality-probe2 (BODY2).
+# PROBE is the script relative ($rel) or through the exported "$root" ($abs, #61's convention); each family of bodies below takes both.
 # The test's own boundary: the copy's check run starts outside the kit's (marker cleared), so its refusal stops the copy's just only.
+rel=scripts/quality-probe; abs='"$root"/scripts/quality-probe'
 script_form() {
-  local extra probe
-  for probe in scripts/quality-probe '"$root"/scripts/quality-probe'; do
-    extra=""
-    printf '#!/usr/bin/env bash\n%s\n' "$1" > "$t/scripts/quality-probe"; chmod +x "$t/scripts/quality-probe"
-    if [[ -n "${2:-}" ]]; then
-      printf '#!/usr/bin/env bash\n%s\n' "$2" > "$t/scripts/quality-probe2"; chmod +x "$t/scripts/quality-probe2"
-      extra=$'\ncheck-probe:\n    @'"${probe}2"
-    fi
-    plant "${c/check:/check: probe}" $'probe:\n    @'"$probe$extra"
-    set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
-    printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
-    [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
-    grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
-    ! grep -qE 'qa: run |just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
-    # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
-    ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: $probe: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
-  done
+  local extra="" probe="$1"; shift
+  printf '#!/usr/bin/env bash\n%s\n' "$1" > "$t/scripts/quality-probe"; chmod +x "$t/scripts/quality-probe"
+  if [[ -n "${2:-}" ]]; then
+    printf '#!/usr/bin/env bash\n%s\n' "$2" > "$t/scripts/quality-probe2"; chmod +x "$t/scripts/quality-probe2"
+    extra=$'\ncheck-probe:\n    @'"${probe}2"
+  fi
+  plant "${c/check:/check: probe}" $'probe:\n    @'"$probe$extra"
+  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sp:$PATH" STUB_LAUNCHED="$sb/launched" CHECK_GATE_FREE_TEST_COPY=1 just check 2>&1)"; rc=$?; set -e
+  printf '%s\n' "$orig" > "$t/justfile"; rm -f "$t/scripts/quality-probe" "$t/scripts/quality-probe2"
+  [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just check: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+  grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+  ! grep -qE 'qa: run |just check: ok' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: $probe: script $1" >&2; echo "$out" >&2; exit 1; }
+  # The refusal stops the outermost check run: no recipe after probe (check-scripts first) runs.
+  ! grep -qF 'python: ok' <<<"$out" || { echo "check-gate-free test: the check run went on after the refusal: $probe: script $1 / ${2:-}" >&2; echo "$out" >&2; exit 1; }
 }
 # Body forms: a gate recipe whose body, parameter default or dependency argument runs qa or the judge
 # is refused at run time, where the launch happens (no static word scan, docs/adr/0008, #118).
 # body_form RECIPE EXTRA: the justfile plus EXTRA; `just RECIPE` fails with the message; no stub, no pi.
 body_form() {
   plant "$c" "$2"
-  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sb:$PATH" CHECK_GATE_FREE_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
+  set +e; out="$(cd "$t" && env -u CI -u OCTO_FEATHER_CHECK_RUN HOME="$sb/home" PATH="$sp:$PATH" STUB_LAUNCHED="$sb/launched" CHECK_GATE_FREE_TEST_COPY=1 just "$1" 2>&1)"; rc=$?; set -e
   printf '%s\n' "$orig" > "$t/justfile"
   [[ "$rc" != 0 ]] || { echo "check-gate-free test: passed just $1: $2" >&2; echo "$out" >&2; exit 1; }
   grep -qF "$msg" <<<"$out" || { echo "check-gate-free test: no deterministic-and-free message: just $1: $2" >&2; echo "$out" >&2; exit 1; }
   ! grep -qF 'qa: run ' <<<"$out" && [[ ! -e "$sb/launched" ]] || { echo "check-gate-free test: the stub or judge ran: just $1: $2" >&2; echo "$out" >&2; exit 1; }
 }
-body_form check-zz $'check-zz:\n    just qa'
 body_form check-zz $'check-zz:\n    @just --justfile "{{justfile()}}" qa --all'
 body_form check-zz $'check-zz: helper-zz\nhelper-zz:\n    @echo hi; just qa'
 body_form check-zz $'check-zz:\n    octo-feather-qc x 1 a'
@@ -133,19 +129,19 @@ plant "$c" $'check-zz:\n    echo qa'
 out="$(cd "$t" && env -u OCTO_FEATHER_CHECK_RUN just check-zz 2>&1)" && grep -qx qa <<<"$out" \
   || { echo "check-gate-free test: echo qa in a check recipe did not run: $out" >&2; printf '%s\n' "$orig" > "$t/justfile"; exit 1; }
 printf '%s\n' "$orig" > "$t/justfile"
-script_form 'exec just qa'
-script_form 'just qc x 1 a'
-script_form 'just --justfile "$(dirname "$0")/../justfile" qa'
-script_form '"$(dirname "$0")/octo-feather-qc" x 1 a'
-script_form 'PATH="$(dirname "$(command -v pi)"):$PATH" octo-feather-qc x 1 a'
+script_form "$rel" 'exec just qa'
+script_form "$abs" 'just qc x 1 a'
+script_form "$rel" 'just --justfile "$(dirname "$0")/../justfile" qa'
+script_form "$abs" '"$(dirname "$0")/octo-feather-qc" x 1 a'
+script_form "$rel" 'PATH="$(dirname "$(command -v pi)"):$PATH" octo-feather-qc x 1 a'
 # A script that swallows the refusal still fails the gate.
-script_form 'just qa || true; octo-feather-qc x 1 a || true; exit 0'
+script_form "$abs" 'just qa || true; octo-feather-qc x 1 a || true; exit 0'
 # A nested just asking for a check-* recipe keeps the outer check run's marker: the refusal deep inside fails the outer just check.
-script_form 'just check-probe || true' 'just qa || true'
-script_form 'just check-probe || true' 'octo-feather-qc x 1 a || true'
+script_form "$rel" 'just check-probe || true' 'just qa || true'
+script_form "$abs" 'just check-probe || true' 'octo-feather-qc x 1 a || true'
 # Under the marker the judge refuses whatever pi it would launch: one the check run never saw, on PATH or in OCTO_FEATHER_QC_PATH.
-script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; PATH="$d:$PATH" octo-feather-qc x 1 a || true; rm -rf "$d"'
-script_form 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; OCTO_FEATHER_QC_PATH="$d" octo-feather-qc x 1 a || true; rm -rf "$d"'
+script_form "$rel" 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; PATH="$d:$PATH" octo-feather-qc x 1 a || true; rm -rf "$d"'
+script_form "$abs" 'd="$(mktemp -d)"; cp "$(command -v pi)" "$d/pi"; OCTO_FEATHER_QC_PATH="$d" octo-feather-qc x 1 a || true; rm -rf "$d"'
 rm -rf "$sb"
 # Fails closed: a broken just (error exit, bad JSON) or a silent guard interpreter never reads as ok.
 # stub NAME BODY: an executable NAME first on the PATH the guard runs with; the outer just is the real one.

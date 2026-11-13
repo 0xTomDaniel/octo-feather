@@ -47,6 +47,11 @@ expect "$pj" 'export GATE_RECIPES := "check-languages check-scripts check-lint c
   'export GATE_RECIPES := "check-scripts check-lint check-format check-types check-imports"' 'the gate never runs check-languages'
 expect "$tj" 'export GATE_RECIPES := "check-languages check-scripts check-ts check-arch check-dead-code"' \
   'export GATE_RECIPES := "check-scripts check-ts check-arch check-dead-code"' 'the gate never runs check-languages'
+# check-languages out of GATE_RECIPES and one recipe below check (check: check-static: check-languages) still counts.
+cp "$t/$pj" "$t/.pj-old"; perl -i -pe 's/^(export GATE_RECIPES := ")check-languages /$1/' "$t/$pj"
+! cmp -s "$t/$pj" "$t/.pj-old" || { echo "check-templates test: check-languages not found in $pj's GATE_RECIPES" >&2; exit 1; }
+allow "$pj" 'check: (check-tests "--testmon-noselect")' $'check: check-static (check-tests "--testmon-noselect")\ncheck-static: check-languages'
+mv "$t/.pj-old" "$t/$pj"
 expect templates/python/mise-version "$(cat "$t/mise-version")" '2000.1.1' "templates/python/mise-version is 2000.1.1, the kit's is $(cat "$t/mise-version")"
 expect templates/typescript/mise.toml 'just = "1.21.0"' 'just = "1.20.0"' "templates/typescript/mise.toml pins just 1.20.0, the kit 1.21.0: set just = '1.21.0' there, then mise lock"
 mv "$t/templates/python/mise.lock" "$t/.lock-old"
@@ -62,4 +67,4 @@ for pair in tests/conftest.py:tests/gate/conftest.py scripts/check-languages:scr
   mv "$t/.copy-old" "$t/$copy"
   [[ "$rc" != 0 ]] && grep -qF "$copy differs from the kit's ${pair#*:}; fix: cp" <<<"$out" || { echo "check-templates test: a drifted $copy passed or was not named" >&2; echo "$out" >&2; exit 1; }
 done
-echo "check-templates: ok (hook run against a recording just: echo-only, commented, wrong recipe, called twice, exit swallowed fail; a fast recipe in each; #362 check-languages in each gate, mise files and versions, trend hook and checker copies)"
+echo "check-templates: ok (hook run against a recording just: echo-only, commented, wrong recipe, called twice, exit swallowed fail; a fast recipe in each; #362 check-languages in each gate, nested below check too, mise files and versions, trend hook and checker copies)"
