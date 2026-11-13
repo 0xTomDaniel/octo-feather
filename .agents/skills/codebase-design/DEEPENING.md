@@ -31,7 +31,7 @@ Third-party services (Stripe, Twilio, etc.) you don't control. The deepened modu
 
 ## Testing strategy: replace, don't layer
 
-- **Deepen first, as its own step**, when no deep module with a stable interface exists at the seam a ticket's criterion needs: pin current behavior through a surface that exists today (pstack's refactoring playbook, step 1: cursor/plugins@0b8e952 `pstack/skills/poteto-mode/playbooks/refactoring.md`), then deepen the module, each its own commit, then write the tests at the new interface (the `tdd` skill's Seams steps). Product code changed to give a real deep interface is no test leak; a test-only flag, hook or branch still is.
+- **Deepen first**, when no deep module with a stable interface exists at the seam a ticket's criterion needs: follow the `tdd` skill's Seams steps ([../tdd/SKILL.md](../tdd/SKILL.md)), which order the pin, the deepening and the tests. Product code changed to give a real deep interface is no test leak; a test-only flag, hook or branch still is.
 - Old unit tests on shallow modules become waste once tests at the deepened module's interface exist; delete them.
 - Write new tests at the deepened module's interface once it is deep and stable, at a seam written down from the ticket's criteria before any test (docs/adr/0002): both are hard requirements, never a private helper or a shallow wrapper whose interface mirrors its implementation. The **interface is the test surface**.
 - Tests assert on observable outcomes through the interface, not internal state.
