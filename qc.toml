@@ -232,3 +232,12 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
+# in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
+[demo."roles#acceptance-supervisor-delegates-execution"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+
+[demo."roles#acceptance-delegated-pr"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
