@@ -104,7 +104,8 @@ def build_repo(s: Scratch) -> None:
     for p in (ROOT / "docs" / "specs").glob("*.spec.html"):
         shutil.copy(p, sp)
     shutil.copy(FIXTURES / "spec-status" / "good" / "demo.spec.html", sp)
-    # Its declared surface: bin/demo (tracked executable), pyproject's `app`, justfile `serve`;
+    # Its declared surface: bin/demo (tracked executable), pyproject's `app`, justfile `serve` and
+    # `mcp-call` (the repo's own MCP client: a recipe running the protocol's client on its server);
     # tests/demo.sh is tracked and executable but a test, not the app's surface.
     for d in ("bin", "tests", "scripts", "docs/adr"):
         (r / d).mkdir(parents=True, exist_ok=True)
@@ -124,7 +125,8 @@ def build_repo(s: Scratch) -> None:
         "</ol>\n"
     )
     (r / "justfile").write_text(
-        'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n'
+        'check:\n    true\n\nserve port="8000":\n    true\n\n'
+        "mcp-call *args:\n    true\n\nqc:\n    true\n"
     )
     s.git(r, "init", "-q", "-b", "main")
     s.git(r, "add", "-A")
@@ -536,27 +538,19 @@ def scripts(s: Scratch) -> None:
 
 
 def mcp_demos(s: Scratch) -> None:
-    """A demo through the official MCP client (spec issue-lifecycle #acceptance-tracer-tickets:
-    MCP or another public protocol): the inspector's --cli over the repo's declared server
-    passes, whatever the order of the client's options and its server or URL; over a server the
-    repo does not declare it fails naming that server."""
+    """A demo through MCP or another public protocol (spec issue-lifecycle
+    #acceptance-tracer-tickets) runs a client the repo declares: the repo's `just mcp-call`
+    recipe passes; the protocol's client run directly is no surface the repo declares, and the
+    fix names the declared-client route."""
     lt = Lt(s)
-    mcp = "npx -y @modelcontextprotocol/inspector@0.17.2 --cli"
-    call = "--method tools/call --tool-name quote --tool-arg region=uk"
-    out = lt.lane(0, "ticket", "-", stdin=jd(f"{mcp} uv run app {call}"))
+    out = lt.lane(0, "ticket", "-", stdin=jd("just mcp-call --method tools/list"))
     assert out == "stdin: ok", out
-    # Options before the server, in the orders the client itself accepts (review round 4).
-    for demo in (
-        f"{mcp} --transport http https://example.test/mcp --method tools/list",
-        f"{mcp} -e REGION=uk uv run app {call}",
-    ):
-        out = lt.lane(0, "ticket", "-", stdin=jd(demo))
-        assert out == "stdin: ok", out
-    out = lt.lane(1, "ticket", "-", stdin=jd(f"{mcp} uv run ghost-server {call}"))
+    direct = "npx -y @modelcontextprotocol/inspector@0.17.2 --cli uv run app --method tools/list"
+    out = lt.lane(1, "ticket", "-", stdin=jd(direct))
     has(
         out,
         "stdin: class: layer-only-ticket: demo runs no surface the repo declares",
-        "ghost-server is not a program the repo declares",
+        "a demo through MCP or another public protocol runs a client the repo declares",
     )
     lt.read_only()
 
