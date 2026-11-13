@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The qc sandbox test's vendored-cache section (#508; setup tests/lib/qc.sh): a warm vendored-skill cache (#69) is
 # bound read-only (check-vendored green in the sandbox, writes refused); new-repo's mise trust (#428) lands in an
 # empty per-run state dir, nothing persists.

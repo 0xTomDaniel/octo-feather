@@ -16,7 +16,8 @@ it, as Herdr 0.9.5 prints it (else workspace_not_found on stderr, exit 1, as doe
 it); `agent start NAME --pane P` starts NAME there, ready (idle) the seconds in the file
 `ready_after` later (0 without one). `agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
-fail plain (`herdr: server not reachable`, exit 1). `agent wait T --until S... --timeout MS`
+fail plain (`herdr: server not reachable`, exit 1), for the targets it lists, one a line, or for
+every target when it is empty. `agent wait T --until S... --timeout MS`
 returns once T reads a state S, else `timeout`. `agent prompt T TEXT --wait [--until S...]
 [--timeout MS]`: blocked is `agent_blocked`, nothing sent; a booting agent gets TEXT typed,
 unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted (a line
@@ -109,7 +110,8 @@ class World:
         return 0
 
     def agent_get(self, a: list[str]) -> int:
-        if (self.dir / "get-down").exists():
+        down = self.dir / "get-down"
+        if down.exists() and a[2] in (down.read_text().split() or [a[2]]):
             sys.stderr.write("herdr: server not reachable\n")
             return 1
         g = self.find(a[2])

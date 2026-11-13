@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""spend-out: reads `octo-feather-lane spend` output for the spend tests (tests/lane-spend.sh, spend-ledger*.sh,
+"""spend-out: reads `octo-feather-lane spend` output for the spend tests (tests/gate/kit/lane_spend.py, spend-ledger*.sh,
 gate/kit/test_lane_judge.py, qa-bench.sh). A test helper run as a command; it never reads the ledger, only `spend`'s output.
 
   spend-out row TITLE KEY USD CALLS UNKNOWN IN OUT < OUTPUT

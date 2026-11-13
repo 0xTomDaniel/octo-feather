@@ -5,14 +5,10 @@ import sys
 from collections.abc import Callable
 
 import pytest
-from qc_sandbox_cost import cost, over_target, selection
+from qc_sandbox_cost import cost, over_target
 
 Case = Callable[..., None]
 pytestmark = pytest.mark.skipif(sys.platform == "darwin", reason="the qc sandbox needs Linux")
-
-
-def test_installed_herdr(case: Case) -> None:
-    case(selection)
 
 
 @pytest.mark.e2e  # a CPU check over real sandbox runs (quality spec #test-kinds)
