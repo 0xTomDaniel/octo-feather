@@ -5,6 +5,7 @@ from collections.abc import Callable
 
 import pytest
 from herdr_messaging import (
+    director_worker_resume,
     parent_gone,
     post_merge_busy,
     say_lookup_fails,
@@ -42,3 +43,10 @@ def test_worker_route(case: Case) -> None:
 @pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
 def test_parent_gone(case: Case) -> None:
     case(parent_gone)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-director-worker-resume", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_director_worker_resume(case: Case) -> None:
+    case(director_worker_resume)

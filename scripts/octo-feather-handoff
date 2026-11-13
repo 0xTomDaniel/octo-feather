@@ -1,9 +1,15 @@
 #!/usr/bin/env python3
-"""Encode a handoff record, or find a parked record in the caller's lane logs.
+"""Encode a handoff record, or find a parked record in the caller's director and lane logs.
 
 Kit-only stdlib json suffices; Herdr still owns transport. Encode prints one JSON
 line for redirection, with string fields via --field KEY VALUE and arbitrary JSON
 fields via --json-field KEY JSON. No handoff schema or policy is imposed.
+
+parked TARGET LANES prints the latest parked line naming TARGET by pane or name, among
+LANES/*.handoffs.jsonl and the director log beside LANES (director.handoffs.jsonl; comms spec
+#session-state, #roles-park), or exits 1 when none does. A lane line gains `lane` (its log's
+stem), and one without a name is the supervisor: the lane's name. A director line names its
+own general worker and gains no lane.
 
 spawn [--ticket T] reads herdr-spawn's printed line on stdin (name= role= tab= pane=
 cwd= contract= provider_session_id=) and prints one spawn line for redirection into
@@ -30,6 +36,7 @@ from typing import cast
 from handoff_log import encode, read_log
 
 SPAWN_KINDS = ("spawn", "worker-spawn")
+DIRECTOR_LOG = "director.handoffs.jsonl"
 
 
 def now() -> str:
@@ -151,16 +158,24 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
         sys.stdout.write(encode(record) + "\n")
         return 0
     matches: list[dict[str, object]] = []
-    for path in sorted(args.lanes.glob("*.handoffs.jsonl")):
+    logs: list[tuple[Path, str | None]] = [
+        (path, path.name.removesuffix(".handoffs.jsonl"))
+        for path in sorted(args.lanes.glob("*.handoffs.jsonl"))
+    ]
+    director = cast("Path", args.lanes).parent / DIRECTOR_LOG
+    if director.is_file():
+        logs.append((director, None))
+    for path, lane in logs:
         records, bad = read_log(path)
         for number in bad:
             sys.stderr.write(f"herdr-say: {path}:{number}: skipping malformed handoff line\n")
         for record in records:
             if record.get("kind") != "parked":
                 continue
-            record["lane"] = path.name.removesuffix(".handoffs.jsonl")
-            if record.get("name") is None or record.get("name") is False:
-                record["name"] = record["lane"]
+            if lane is not None:
+                record["lane"] = lane
+                if record.get("name") is None or record.get("name") is False:
+                    record["name"] = lane
             if args.target in (record.get("pane"), record.get("name")):
                 matches.append(record)
     if not matches:
