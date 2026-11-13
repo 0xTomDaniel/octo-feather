@@ -30,8 +30,8 @@
 # comes from `octo-feather-handoff parked` (that command's docstring owns which
 # line counts). A live agent under the line's name gets the message; otherwise
 # the agent is resumed first, with the line's role, session and parent: a
-# supervisor through octo-feather-start (which owns its workspace), a worker in
-# its recorded parent's workspace while that parent is live, else the caller's.
+# supervisor through octo-feather-start (which owns its workspace), a worker
+# through herdr-spawn in the workspace `octo-feather-handoff resume-workspace` names.
 # Its new pane= is printed, and the message it receives starts
 # "Resumed from park as pane=PANE. ".
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
@@ -50,8 +50,7 @@ set -euo pipefail
 usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
 here="$(dirname "$(readlink -f "$0")")"
 
-# The latest parked line naming TARGET by pane or name. A line without name is
-# the supervisor: the lane's name, its log's stem.
+# TARGET's parked line: octo-feather-handoff parked (its docstring).
 parked() {
   "$here/../../../../scripts/octo-feather-handoff" parked "$1" \
     "$("$here/../../../../scripts/octo-feather-state")/lanes"
@@ -124,8 +123,8 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
-      space="$(herdr agent get "$(jq -r '.parent // empty' <<<"$line")" 2>/dev/null | jq -r '.result.agent.workspace_id // empty' 2>/dev/null || true)"
-      started="$("$here/herdr-spawn" --workspace "${space:-${HERDR_WORKSPACE_ID:-}}" --label "$(jq -r '.label // .name' <<<"$line")" \
+      space="$("$here/../../../../scripts/octo-feather-handoff" resume-workspace <<<"$line")"
+      started="$("$here/herdr-spawn" --workspace "$space" --label "$(jq -r '.label // .name' <<<"$line")" \
         --role "$(jq -r '.role // empty' <<<"$line")" "${resume[@]}" -- pi)"
     fi
     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"
