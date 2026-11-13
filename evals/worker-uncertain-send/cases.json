@@ -84,6 +84,52 @@
     }
   },
   {
+    "id": "reviewer-queued-timeout-sent-once",
+    "role": "code-reviewer",
+    "fixture": "python-app",
+    "head": {
+      "fixture": "python-app-shout",
+      "branch": "implementer-t1",
+      "message": "feat(hello): --shout (T1, hello-shout)"
+    },
+    "task": "Review lane gh1, ticket T1 (`app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\"; with --json the \"text\" field is the shouted text; criterion hello-shout).\nDiff: base main, head implementer-t1 in this directory (`git diff main...implementer-t1`).\nYour parent is the gh1 supervisor (herdr-say --parent).\nSandbox run: GitHub is offline.",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"gh1\", \"pane_id\": \"w1:p1\", \"tab_id\": \"w1:t1\", \"workspace_id\": \"w1\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "read"
+          ],
+          "stdout": " pi\n\nAuto-compacting... (escape to cancel)\nSteering: Review T1 (hello-shout): verdict\n > \n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "pane",
+            "read"
+          ],
+          "stdout": " pi\n\nAuto-compacting... (escape to cancel)\nSteering: Review T1 (hello-shout): verdict\n > \n",
+          "exit": 0
+        }
+      ]
+    }
+  },
+  {
     "id": "blocked-refusal-sent-again",
     "role": "implementer",
     "fixture": "python-app-tiers",
