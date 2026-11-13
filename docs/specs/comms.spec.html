@@ -36,7 +36,7 @@
 <p data-acceptance-criterion data-anchor="acceptance-worker-ended" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor waiting on a worker that exits mid-ticket without reporting, needs an induced failure: the worker session exits, When the supervisor reconciles its outstanding work,</span> <span data-acceptance-observable>Then an attempt records the unreported ending, partial result and diagnosed recovery; a replacement has a different provider-session identity and no competing writer remains.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-autonomous-local" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing a recoverable local validation failure and independent ready work within its delegation, When the supervisor assigns the repair then advances the independent work,</span> <span data-acceptance-observable>Then both assignments advance within the lane without a director permission request, and their evidence is retained locally.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-real-blocker" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing an owner-held access blocker and independent ready work, When the supervisor escalates the access need then advances the independent work,</span> <span data-acceptance-observable>Then the director receives one actionable access decision naming the blocked branch, attempts and options, while the independent assignment advances.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-no-routine-traffic" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing routine worker progress and a completed deliverable, When the supervisor consumes those worker results then reports the deliverable,</span> <span data-acceptance-observable>Then the director receives a consolidated completion with evidence pointers, not the routine worker chatter.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-no-routine-traffic" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing routine worker progress, several finished ticket results and a lane ready for its merge ask, When the supervisor consumes those results then sends the merge ask,</span> <span data-acceptance-observable>Then the director receives the merge ask with evidence pointers as its only message from that lane, and no individual worker or ticket result.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-queued-completion" data-story="story-never-stalls"><span data-acceptance-scenario>Given a worker with a fixture to be added containing a completed result and a compacting supervisor, needs an induced failure: native delivery confirmation is unavailable while the result is visibly queued, When the worker sends its completion then reconciles the uncertain send,</span> <span data-acceptance-observable>Then the supervisor receives the completion once after compaction and the worker's action history contains one completion-send attempt, without a duplicate replay.</span></p>
 <p data-acceptance-criterion data-story="story-never-stalls" data-anchor="acceptance-director-worker-resume"><span data-acceptance-scenario>Given a director with a fixture to be added containing its general worker waiting on the same unfinished assignment, When the director parks that worker then continues its assignment,</span> <span data-acceptance-observable>Then the worker resumes with its recorded role and provider-session identity and returns its result to that director, without starting an independent assignment in the old context.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-artifact-supervision" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a director with a fixture to be added containing a supervisor whose activity label disagrees with its live deliverable evidence, When the director reconciles that lane,</span> <span data-acceptance-observable>Then its intervention names the evidence mismatch and the needed next action to the supervisor, rather than issuing a purposeless status nudge.</span></p>
@@ -120,7 +120,7 @@ Each supervisor retains its lane goal and reconciles every outstanding assignmen
 It consumes a recoverable finished result before considering restart; a DONE label alone proves neither completion nor death.
 The director has the same reconciliation duty for its directly parented general workers, not another lane's workers.
 Assignments and their disposition stay in the existing parent log and native worker identity: lane attempt lines for lane children, director note entries for its own general workers, without a fabricated product lane or new inbox.
-The open notification choices below explicitly govern any alternative that also requires a director notice after local recovery.</p>
+A successfully recovered unreported ending stays local: an attempt line with result ended-unreported records it, so reports and reflection can count it, and no director notice is sent unless another table event applies.</p>
 <p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
 An activity label or pending final gate alone is not a reason to park ready work.
 Record the exact blocker, authority holder and wake condition in existing parent evidence.
@@ -135,8 +135,9 @@ The resume message names the new pane and the same assignment.</p>
 <section data-anchor="parent-notifications" id="parent-notifications">
 <h2>Parent notifications</h2>
 <p data-anchor="notification-default">BLOCKED and DONE are the normal parent outcomes.
-The proposed event table is the bounded parent-notification contract, not a report-everything fallback.
-The allowlist choice below also controls whether routine pilot and smoke results stay local or remain mandatory messages.
+The event table is the complete parent-notification allowlist, not a report-everything fallback.
+Routine pilot, smoke and recovered local validation results stay in existing evidence, not messages.
+The director receives lane milestones, never individual worker or ticket results: a lane's merge ask, its close, and blockers, gates, spec calls and risks the table routes to it.
 Notification supplies information; permission is needed only outside durable delegation or at an actual owner gate.
 Owner acceptance, merge, consequential product/risk, security, immediate spec calls and cross-lane needs retain their own gates.</p>
 <div class="table-scroll" data-anchor="notification-table-wrap">
@@ -144,7 +145,7 @@ Owner acceptance, merge, consequential product/risk, security, immediate spec ca
 <thead><tr><th>Event</th><th>Route and decision owner</th><th>Sender continuation</th></tr></thead>
 <tbody>
 <tr data-anchor="notify-blocked"><td>BLOCKED: an action is outside authority after bounded owned attempts; a previously escalated need changes materially or resolves</td><td>Product worker to supervisor; unresolved lane need to director; director-owned general worker to its director parent; only owner-held decisions to owner through director. Name scope, attempts, evidence and options, or the resolved condition.</td><td>Stop only the affected action. Continue independent ready work. Send the changed or resolved condition once, not repeated reminders.</td></tr>
-<tr data-anchor="notify-done"><td>DONE: assigned result complete, including review verdict, merge report and lane close</td><td>Worker to actual parent with result and current revision/evidence. Supervisor consumes its workers and reports a consolidated lane outcome to director. Director consumes its general workers and reports meaningful owner outcomes.</td><td>No ACK wait. A completion report does not close an implementation assignment before its required review and verification, or authorize integration, acceptance or merge.</td></tr>
+<tr data-anchor="notify-done"><td>DONE: assigned result complete, including review verdict, merge report and lane close</td><td>Worker to actual parent with result and current revision/evidence. Supervisor consumes every worker result itself and reports to director only the lane milestone: its merge ask and its close. Director consumes its general workers and reports meaningful owner outcomes.</td><td>No ACK wait. A completion report does not close an implementation assignment before its required review and verification, or authorize integration, acceptance or merge.</td></tr>
 <tr data-anchor="notify-gates"><td>Required owner review and merge asks</td><td>Supervisor to director to owner, with current head and required evidence. Spec acceptance stays outside the factory.</td><td>Wait only at the actual gate; preserve independent work and safe parking.</td></tr>
 <tr data-anchor="notify-spec"><td>Spec calls requiring immediate notice</td><td>Supervisor to director to owner exactly as <a href="./issue-lifecycle.spec.html#gates-call-loudness">spec call loudness</a> requires. Other calls stay in the merge ask.</td><td>Nonblocking notice, with owner approval or denial at merge.</td></tr>
 <tr data-anchor="notify-risk"><td>Material security exposure or cross-lane impact, even after local containment</td><td>Worker through its actual parent chain to director; director coordinates affected supervisors and brings owner-held risk decisions to owner. Name impact, containment and needed decision without exposing secrets.</td><td>Contain within authority; stop unsafe or conflicting actions, not unrelated safe work.</td></tr>
@@ -154,23 +155,10 @@ Owner acceptance, merge, consequential product/risk, security, immediate spec ca
 <p data-anchor="notification-records">Routine details and recovery evidence remain in existing lane records, hand-off logs, tracker results and revision-bound artifacts, not a second status store.
 A partial branch blocker does not mark every independent assignment blocked.
 The supervisor keeps each outstanding result accounted for until consumed or explicitly reconciled into a replacement's scope.</p>
-<p data-anchor="notification-allowlist-choice" data-spec-tbd>Does the proposed table completely capture mandatory parent events, keeping routine pilot, smoke and recovered local validation details in existing evidence?
-Affected anchors: notification-default and notification-granularity, plus <a href="./issue-lifecycle.spec.html#acceptance-pilot-pr">lifecycle#acceptance-pilot-pr</a>, <a href="./issue-lifecycle.spec.html#lanes-pilot">lifecycle#lanes-pilot</a> and <a href="./issue-lifecycle.spec.html#lc-draft-pr">lifecycle#lc-draft-pr</a>.
-Using the table makes the pilot result a local record and keeps consolidated completion mandatory.
-Revising the list changes those clauses together; retaining mandatory pilot/smoke notices restores their explicit send-up steps without making them permission gates.
-<button type="button" data-spec-choice="Use the enumerated events as the complete parent notification allowlist">Use this allowlist (recommended)</button>
-<button type="button" data-spec-choice="Revise the mandatory event list before acceptance">Revise the event list</button></p>
 <p data-anchor="notification-granularity">Each message names the lane or assignment, outcome, evidence pointer and any required decision with its owner.
 Consolidate worker details at the supervisor; do not relay raw chatter.
 Report a changed blocker or a resolved previously escalated blocker once, not repeated reminders without new evidence.
 Owner dialogue does not suspend required risk, decision or completion delivery; routine updates do not interrupt it.</p>
-<p data-anchor="recovery-notice-choice" data-spec-tbd>Should successful recovery of an unreported worker ending stay local unless another mandatory event applies?
-Affected anchors: story-never-stalls, acceptance-worker-ended and roles-goal, and the attempt-result accounting in handoff-kind-attempt.
-Local-only records an attempt with result ended-unreported and the partial result, recovery and replacement identity; report and reflection can count it without a new store.
-The notify-every-recovery alternative adds one supervisor-to-director notice identifying that ending and recovery; these anchors must then explicitly include that send.
-Existing terminal runtime notices, actual lost-parent delivery and material security/cross-lane impact remain mandatory either way.
-<button type="button" data-spec-choice="Keep recovered missing-report incidents local unless a mandatory event applies">Local recovery record only (recommended)</button>
-<button type="button" data-spec-choice="Notify director once for every recovered missing-report incident">Notify director once per recovered missing-report incident</button></p>
 </section>
 <section data-anchor="delivery-recovery" id="delivery-recovery">
 <h2>Delivery evidence and recovery</h2>
@@ -179,39 +167,16 @@ Existing terminal runtime notices, actual lost-parent delivery and material secu
 <thead><tr><th>Evidence</th><th>What may be concluded</th><th>Safe next action</th></tr></thead><tbody>
 <tr data-anchor="delivery-confirmed"><td>Native send confirms a state change</td><td>Transport confirmation only, not semantic consumption</td><td>Continue under existing delegation; no ACK gate.</td></tr>
 <tr data-anchor="delivery-queued"><td>Bounded authorized native observation shows the content queued during compaction</td><td>Queued, not consumed; preserve the original unsuccessful send result</td><td>No replay or disruptive recovery while compaction is observed.</td></tr>
-<tr data-anchor="delivery-unknown"><td>Timeout or prompt-stalled with no decisive queue or consumption evidence</td><td>Unknown, not rejected, delivered or unreachable</td><td>Retain the result for the parent's outstanding-work reconciliation. No replay just because confirmation is absent; inspect native state before any further delivery action.</td></tr>
+<tr data-anchor="delivery-unknown"><td>Timeout or prompt-stalled with no decisive queue or consumption evidence</td><td>Unknown, not rejected, delivered or unreachable</td><td>Retain the result for the parent's outstanding-work reconciliation. No replay just because confirmation is absent; replay once only after compaction has ended and inspection shows the result absent. Uncertain delivery never unlocks the unreachable-parent route.</td></tr>
 <tr data-anchor="delivery-rejected"><td>Native refusal explicitly proves nothing was typed</td><td>Rejected without delivery</td><td>Correct the cause within authority, then send when the target is eligible.</td></tr>
 <tr data-anchor="delivery-consumed"><td>The recipient's resulting artifact or action demonstrates use of this result</td><td>Consumed to the extent that evidence proves</td><td>Reconcile against current head; never demand a separate read receipt.</td></tr>
 </tbody></table></div>
-<p data-anchor="terminal-retry-choice" data-spec-tbd>Keep ADR 0023's existing bounded terminal stopped-notice retries as an explicit exception to the ordinary evidence-led replay rule?
-Affected anchors: notify-terminal and delivery-safety.
-Keeping the exception preserves the runtime's terminal notice obligation and needs no superseding ADR.
-Applying the ordinary rule to those runtime notices requires a superseding ADR and reconciled runtime delivery behavior before acceptance.
-Terminal notice duplication is distinct from replaying executable work or a worker result; no new episode protocol is proposed.
-<button type="button" data-spec-choice="Retain the ADR 0023 terminal retry exception and explicitly scope the replay restriction">Keep the terminal retry exception (recommended)</button>
-<button type="button" data-spec-choice="Apply evidence-led delivery to terminal notices and supersede the conflicting ADR decision">Use the ordinary rule for terminal notices</button></p>
 <p data-anchor="delivery-safety">Recovery is cause-based and bounded by existing runtime and resource constraints.
 Ordinary task instructions and worker results are not blindly replayed, cancelled or restarted solely because of DONE, timeout or compaction.
-Existing ADR 0023 runtime terminal stopped-notice retries are the explicit exception addressed by the terminal-notice choice above.
+Existing ADR 0023 runtime terminal stopped-notice retries are the one explicit exception; duplicating a terminal notice differs from replaying executable work or a worker result.
 Before replacement account for partial commits, uncommitted work and late results, establish a single writer, and verify current assignment and head.
 A late result is compared with current artifacts before unique findings are reused.
 No custom inbox, daemon, scheduler or new message protocol is added.</p>
-<p data-anchor="delivery-unknown-choice" data-spec-tbd>For a required send whose delivery remains unknown, retain the result for parent pull-reconciliation rather than inventing an escalation route?
-Affected anchors: delivery-unknown, roles-goal and acceptance-queued-completion.
-The recommended rule keeps an unknown send local, forbids replay solely on timeout and permits one evidence-led replay only after compaction has ended and inspection shows the result absent.
-A confirmed queued result is never replayed while compaction is observed; its queued-completion criterion is the known-queue case.
-A supervisor's parent is already the director, and a worker cannot use unreachable-parent fallback merely because delivery is uncertain.
-The alternate requires an explicitly revised permitted recovery route before acceptance, not a route assumed to exist.
-<button type="button" data-spec-choice="Hold uncertain delivery locally for parent reconciliation; replay only after compaction ends and absence is shown">Hold for parent reconciliation (recommended)</button>
-<button type="button" data-spec-choice="Revise permitted recovery routing before accepting the uncertain-send rule">Revise the permitted recovery route</button></p>
-</section>
-<section data-anchor="comms-domain-choice" id="comms-domain-choice">
-<h2>Contract homes</h2>
-<p data-anchor="comms-split-choice" data-spec-tbd>Keep messaging, lane state, factory reporting and reflection in this spec while changing their shared notification and recovery contract?
-The alternative moves existing story groups, criteria and boundaries into comms.spec.html, factory-report.spec.html and reflection.spec.html, preserving anchors and updating links.
-This is an information-architecture choice, not another runtime or messaging mechanism.
-<button type="button" data-spec-choice="Keep comms, factory reporting and reflection in one spec">Keep one spec (recommended)</button>
-<button type="button" data-spec-choice="Split comms, factory reporting and reflection into separate specs">Split the three domains</button></p>
 </section>
 <section data-anchor="lane-record" id="lane-record">
 <h2>Lane state</h2>
