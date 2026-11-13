@@ -1,0 +1,14 @@
+Seeded defect: a hand-off sending comments counts as an Accept (octo-feather-accepted).
+diff --git a/scripts/octo-feather-accepted b/scripts/octo-feather-accepted
+index 3206382..36a450d 100755
+--- a/scripts/octo-feather-accepted
++++ b/scripts/octo-feather-accepted
+@@ -152,7 +152,7 @@ def main(argv):
+         if newest is None:
+             why.append(f"{slug}: no hand-off from the review page yet; press Accept spec"); continue
+         name, event = newest
+-        if isinstance(event.get("events"), list):
++        if isinstance(event.get("events"), dict):
+             why.append(f"{slug}: the newest hand-off sends comments, not Accept spec; answer them, then press Accept spec"); continue
+         blob = subprocess.run(["git", "-C", repo, "show", f"{base}:{spec}"], capture_output=True)
+         if blob.returncode != 0:
