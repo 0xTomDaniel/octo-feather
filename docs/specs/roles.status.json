@@ -31,8 +31,13 @@
       "pr": 271
     },
     "acceptance-codemode-every-role": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261113T022909Z-d2b9e276",
+      "commit": "c69d91ef3394ef2142c5360367993b7420d9597c",
+      "tests": [
+        "tests/web-tools.sh"
+      ]
     },
     "acceptance-reflector-tools": {
       "status": "planned",
@@ -54,8 +59,8 @@
     "acceptance-web-roles": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T020542Z-8b6a047c",
-      "commit": "e43b44713dbfdc6264b74e047e0fce693c9f7bf9",
+      "record": "20261113T023344Z-050d3c4c",
+      "commit": "c69d91ef3394ef2142c5360367993b7420d9597c",
       "tests": []
     },
     "acceptance-web-no-other-mcp": {
