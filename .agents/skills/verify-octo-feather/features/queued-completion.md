@@ -27,7 +27,7 @@ Run all cases: `.agents/skills/verify-octo-feather/scripts/verify-octo-feather d
 Herdr is the one stand-in: the kit's testkit Herdr (`tests/gate/kit/testkit/herdr.py`, its header says what it answers) as `herdr` first on PATH, one FAKE_HERDR world per case under `$VERIFY_OCTO_FEATHER_RUN_DIR/scratch/queued-completion/`, holding supervisor gh9 at `w9:p1` (idle, compacting). The worker's env: OCTO_FEATHER_ROLE=implementer, OCTO_FEATHER_PARENT=w9:p1, HERDR_PANE_ID=w9:p3, HERDR_WORKSPACE_ID=w9. No live Herdr pane is touched.
 
 - **Delivered once** (`delivered-once`). Compaction 2 s. Run `herdr-say --parent 'DONE commit abc123: the completion'`. Observe exit 0, `took the message queued during its compaction; delivered once, not resent` on stderr, `.obs.delivered` 1 (the world's `prompts`), `.obs.attempts` 1 (`agent prompt` lines in its `log`); the drive prints `delivered-once: delivered 1, attempts 1`.
-- **Still queued** (`still-queued`). Compaction 1 h, `--timeout 1`. Observe exit 1, the last stderr line `still holds the message queued after 1s (compacting): queued, not consumed; not resent, do not resend`, delivered 0, attempts 1.
+- **Still queued** (`still-queued`). Compaction 1 h, `--timeout 1`. Observe exit 1, the last stderr line `still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend`, delivered 0, attempts 1.
 - **Side effects.** Every cwd stays empty and the kit's `git status` unchanged.
 
 ## Gotchas

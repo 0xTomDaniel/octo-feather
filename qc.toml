@@ -231,7 +231,7 @@ covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/
 # after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent.
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-queued", "tests/gate/kit/testkit/herdr.py"]
 
 # No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
 # origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
