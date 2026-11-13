@@ -197,7 +197,9 @@ evaluating no backtick; every option, parameter and default is just's to read, a
 -q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's mise.toml is
 the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
-when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright. A demo
+through MCP or another public protocol runs a client the repo declares by the same rule, e.g. a justfile recipe
+`mcp-call` that runs the protocol's client against the repo's server; never the gate alone
 or a generic tool (printf, echo). The
 wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
 command the ticket itself creates when the ticket declares it exactly in a line
@@ -2347,7 +2349,9 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
                "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
-               "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
+               "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); a demo through MCP or another "
+               "public protocol runs a client the repo declares, e.g. a justfile recipe `mcp-call` that runs the protocol's "
+               "client (for MCP, `npx @modelcontextprotocol/inspector --cli ...`) against the repo's server; not printf, echo or another "
                "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
                + ", the demo running that path; or, for one step of a wide refactor, add the line "
                "`Expand-contract: expand|migrate|contract`")
