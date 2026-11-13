@@ -1,0 +1,3 @@
+#!/usr/bin/env bash
+# The same gate agents and CI run (AGENTS.md).
+exec just check

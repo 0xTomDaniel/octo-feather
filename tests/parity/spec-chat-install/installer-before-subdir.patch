@@ -1,0 +1,13 @@
+Seeded defect: the installer runs against the work tree top before the subdir refusal, so a refused subdir REPO still installs (the refusal looks the same).
+diff --git a/scripts/octo-feather-spec-chat b/scripts/octo-feather-spec-chat
+index 4ff884eb..3166505a 100755
+--- a/scripts/octo-feather-spec-chat
++++ b/scripts/octo-feather-spec-chat
+@@ -16,6 +16,7 @@ repo="$(cd "$1" && pwd -P)"
+   || { echo "$me: $repo is not a git work tree; run git init $repo, or pass the repo's checkout" >&2; exit 1; }
+ # pi-role finds repo skills only at a checkout top's .agents/skills.
+ top="$(git -C "$repo" rev-parse --show-toplevel)"; top="$(cd "$top" && pwd -P)"
++i="${SPEC_CHAT_CLONE:-$HOME/src/spec-chat}/scripts/install-spec-chat"; [[ ! -x "$i" ]] || "$i" --agents-only --prefix "$top"
+ [[ "$repo" == "$top" ]] \
+   || { echo "$me: $repo is below its work tree top; pi-role looks for skills only at the top, so pass $top" >&2; exit 1; }
+ 

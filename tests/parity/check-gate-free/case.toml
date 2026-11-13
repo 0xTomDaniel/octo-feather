@@ -1,0 +1,11 @@
+# The parity lever's case for tests/check-gate-free.sh, kept as a shell script and moved onto the kit's one Pi stand-in (#813; tests/parity/lever.py --help).
+old = "tests/check-gate-free.sh"
+old_at = "644fad70"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/check-gate-free.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the copy's scripts/check-gate-free, run by its justfile's backticks, outside the kit's own path, which coverage.py's map does not name.
+[ran]
+"scripts/check-gate-free" = "exec scripts/check-gate-free"

@@ -908,6 +908,120 @@ def ci_status_only(s: Scratch) -> None:
     )
 
 
+# gh786 (PR #788): suite 10, the draft's skipped runs; suite 20, the eligible run; workflow 5
+JOBS = [
+    (1, "scope", 10, "skipped"),
+    (2, "check", 10, "skipped"),
+    (3, "scope", 20, "success"),
+    (4, "check", 20, "success"),
+]
+
+
+class CurrentHead:
+    """PR #7's head H with JOBS' check runs (a draft's skips, then the eligible run's success),
+    its rollup showing them all, and J's own green run as the status-only case left it."""
+
+    def __init__(self, s: Scratch) -> None:
+        self.s, self.ln = s, Lane(s)
+        h, j = self.ln.h, self.ln.j
+        self.hh, self.jj = h[:12], j[:12]
+        run: dict[str, object] = {"name": "check", "status": "completed"}
+        green, skip = (
+            run | {"id": 3, "conclusion": "success"},
+            run | {"id": 1, "conclusion": "skipped"},
+        )
+        self.ln.runs(j, [green, skip])
+        self.rollup = [
+            {
+                "__typename": "CheckRun",
+                "name": r["name"],
+                "status": "COMPLETED",
+                "conclusion": r["conclusion"].upper(),
+                "workflowName": "check",
+                "detailsUrl": r["html_url"],
+            }
+            for r in self.runs()
+        ]
+        self.head(self.runs())
+        self.ln.setpr(self.projection)
+        assert first(self.ln.ask()) == "## Merge ask", "draft skips beside a success on H"
+
+    def runs(self, **last: object) -> list[dict[str, Any]]:
+        """GitHub's check runs on H (REST check-runs), the eligible check's updated by LAST."""
+        rs: list[dict[str, Any]] = [
+            {
+                "id": i,
+                "name": name,
+                "head_sha": self.ln.h,
+                "app": {"id": 1},
+                "check_suite": {"id": suite},
+                "html_url": f"https://github.com/o/r/actions/runs/{suite}/job/{i}",
+                "status": "completed",
+                "conclusion": conclusion,
+            }
+            for i, name, suite, conclusion in JOBS
+        ]
+        rs[-1].update(last)
+        return rs
+
+    def projection(self, d: dict[str, Any]) -> None:
+        d["statusCheckRollup"] = copy.deepcopy(self.rollup)
+
+    def head(self, rs: list[dict[str, Any]], workflow: int = 5) -> None:
+        """H's check runs RS and its workflow runs (actions/runs), suite 20's of WORKFLOW."""
+        h = self.ln.h
+        self.ln.runs(h, rs)
+        wf = [{"id": 10, "check_suite_id": 10, "workflow_id": 5, "head_sha": h}]
+        wf.append({"id": 20, "check_suite_id": 20, "workflow_id": workflow, "head_sha": h})
+        page = f"{API}/actions/runs?head_sha={h}&per_page=100.json"
+        self.s.gh.store(page, {"total_count": 2, "workflow_runs": wf})
+
+    def refused(self, want: str, *edits: Edit) -> None:
+        self.ln.bad(want, self.projection, *edits)
+
+
+def current_head_checks(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-ci-status-only (gh786, PR #788): a draft's skipped runs and the
+    eligible run's success on the SAME PR head pass; the current run failing, pending, cancelled
+    or unknown, or a red legacy status context beside it, each refuses naming it."""
+    c = CurrentHead(s)
+    failing = f"Checks: failing on head {c.hh}: check"
+    c.head(c.runs(conclusion="failure"))
+    c.refused(f"{failing} failure; fix them")
+    c.head(c.runs(status="in_progress", conclusion=None))
+    c.refused(f"Checks: pending on head {c.hh}: check in_progress; wait for them")
+    c.head(c.runs(conclusion="cancelled"))
+    c.refused(f"{failing} cancelled; fix them")
+    c.head(c.runs(conclusion="unknown"))
+    c.refused(f"{failing} unknown; fix them")
+    c.head(c.runs())
+    legacy = {"__typename": "StatusContext", "context": "required/security", "state": "FAILURE"}
+    c.refused(
+        f"Checks: failing on head {c.hh}: required/security failure",
+        lambda d: d["statusCheckRollup"].append(legacy),
+    )
+
+
+def current_head_identity(s: Scratch) -> None:
+    """issue-lifecycle#acceptance-ci-status-only (gh786): the head's check runs are matched to
+    its workflow runs by app and workflow; the eligible run missing, on another head, from
+    another app or workflow, or without its app, each refuses naming it."""
+    c = CurrentHead(s)
+    unavailable = f"Checks: current check identities on {c.hh} unavailable"
+    c.head(c.runs()[:-1])  # the eligible check run missing
+    c.refused(f"{unavailable} ('https://github.com/o/r/actions/runs/20/job/4')")
+    c.head(c.runs(head_sha="0" * 40))
+    c.refused(f"{unavailable} (check on another head)")
+    c.head(c.runs(app={"id": 2}))  # another app's run: the workflow's own is not there yet
+    c.refused(f"Checks: pending on head {c.hh}: check queued")
+    c.head(c.runs(), workflow=6)  # the success from another workflow: the skip is not carried
+    c.refused(f"Checks: scope skipped on head {c.hh}, carried from the judged head {c.jj}")
+    no_app = c.runs()
+    del no_app[-1]["app"]
+    c.head(no_app)
+    c.refused(f"{unavailable} ('app')")
+
+
 def rows_and_built(s: Scratch) -> None:
     """Rows against Built, Built against the status files and the PR's `qc: built` commits,
     read from git (BASE..head): each case a real lane head."""
@@ -1400,6 +1514,8 @@ if __name__ == "__main__":
         no_ci,
         no_ci_unread,
         ci_status_only,
+        current_head_checks,
+        current_head_identity,
         rows_and_built,
         review_link,
         one_judged_head,

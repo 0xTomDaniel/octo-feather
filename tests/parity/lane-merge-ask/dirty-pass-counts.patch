@@ -2,7 +2,7 @@ Seeded defect: a full gate pass recorded on a dirty tree (clean false) counts as
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -1244,7 +1244,7 @@ def full_pass(head: str, status_files: list[str], base: str) -> list[str]:
+@@ -1274,7 +1274,7 @@
          rec = cast("dict[str, object]", raw) if isinstance(raw, dict) else {}
          if rec.get("tier") != "full" or str(rec.get("head", "")).lower() != c.lower():
              continue

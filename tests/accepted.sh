@@ -14,6 +14,9 @@
 #   tests/fixtures/accepted/*.spec.html with ETags V1 and V2 below (the ETag names
 #   the served body, the version its events record), so a change in its version
 #   rule fails here. Through its HTTP surface, never its private helpers (#104);
+# - the hand-offs: each owner hand-off is written by a running pinned review-serve,
+#   POSTed to /api/events as the page posts it (#816), so a change in where or
+#   under which name it stores one fails here;
 # - the registry: pinned Spec Chat's review-host CLI registers a spec under an
 #   isolated XDG_STATE_HOME, and octo-feather-accepted finds that row and its Accept
 #   (#96, director finding 47: it once read an env var Spec Chat never reads).
@@ -26,16 +29,6 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
 sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
-mkdir -p "$t/x"; cp "$fx/a.spec.html" "$fx/a-edited.spec.html" "$t/x/"
-: > "$t/serve.log"   # exists before the first read below: the background redirect may not have opened it yet
-XDG_STATE_HOME="$t/xdg-serve" python3 "$sc/review-spec/assets/review-serve.py" "$t/x" --port 0 >"$t/serve.log" 2>&1 &
-serve=$!; trap 'kill "$serve" 2>/dev/null || true; rm -rf "$t"' EXIT
-for _ in $(seq 100); do url="$(sed -n 's|^spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done
-[[ -n "$url" ]] || fail "pinned review-serve did not start: $(cat "$t/serve.log")"
-etag() { curl -sf -D - -o /dev/null "$url/$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: "\(.*\)"$/\1/p'; }
-got="$(etag a.spec.html)"$'\n'"$(etag a-edited.spec.html)"
-kill "$serve"; wait "$serve" 2>/dev/null || true
-[[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
 
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 r="$t/repo"; s=docs/specs/a.spec.html
@@ -43,18 +36,32 @@ g init -q "$r"; mkdir -p "$r/docs/specs"; cp "$fx/a.spec.html" "$r/$s"
 g -C "$r" add -A; g -C "$r" commit -qm spec; c1="$(git -C "$r" rev-parse HEAD)"
 cp "$fx/a-edited.spec.html" "$r/$s"; g -C "$r" commit -qam edit; c2="$(git -C "$r" rev-parse HEAD)"
 
+# One server for the versions and the hand-offs: it serves the repo's spec dir (a narrow
+# collection strictly inside the repo), x/ holding the fixtures untracked.
+mkdir -p "$r/docs/specs/x"; cp "$fx/a.spec.html" "$fx/a-edited.spec.html" "$r/docs/specs/x/"
+: > "$t/serve.log"   # exists before the first read below: the background redirect may not have opened it yet
+XDG_STATE_HOME="$t/xdg-serve" python3 "$sc/review-spec/assets/review-serve.py" "$r/docs/specs" --port 0 >"$t/serve.log" 2>&1 &
+serve=$!; trap 'kill "$serve" 2>/dev/null || true; rm -rf "$t"' EXIT
+for _ in $(seq 100); do url="$(sed -n 's|^spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done
+[[ -n "$url" ]] || fail "pinned review-serve did not start: $(cat "$t/serve.log")"
+etag() { curl -sf -D - -o /dev/null "$url/$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: "\(.*\)"$/\1/p'; }
+got="$(etag x/a.spec.html)"$'\n'"$(etag x/a-edited.spec.html)"
+[[ "$got" == "$V1"$'\n'"$V2" ]] || fail "Spec Chat's served version rule changed (got $got); update scripts/octo-feather-accepted served_version and the pins here"
+
 export XDG_STATE_HOME="$t/xdg"; state="$t/xdg/spec-chat"   # fixture rows; the real registry case is last
 mkdir -p "$state/hosting/default" "$state/hosting/other"
 SPOOL_SIDE=human; spool="$r/$s.review/$SPOOL_SIDE"   # Spec Chat's owner side of the spool
+events="$url/api/events?dir=a.spec.html.review"   # the spool, as the page served from that dir names it
 row() { # base updated_at [extra line]
   printf '[[resource]]\nid = "spec:a-flow:p::%s"\nslug = "a-flow"\nroot = "%s"\nspec = "%s"\nbase = "%s"\nupdated_at = "%s"\n%s\n' \
     "$s" "$r" "$s" "$1" "$2" "${3:-}"; }
-# One hand-off as the review page writes it: stamp, id, version, and an events list for comments.
+# One hand-off as the review page sends it (review-state #live-save): POSTed to the running pinned
+# review-serve, named <stamp>-handoff-<id>.json; stamp, id, version, and an events list for comments.
 handoff() { # stamp id version [events-json]
-  mkdir -p "$spool"
-  local ev=""; [[ -z "${4:-}" ]] || ev=", \"events\": $4"
-  printf '{"id": "%s", "event": "handoff", "anchorId": "", "actor": "%s", "createdAt": "2026-10-20T15:%02d:00.000Z", "schemaVersion": 1, "version": "%s"%s}\n' \
-    "$2" "$SPOOL_SIDE" "$(( ${1: -2} % 60 ))" "$3" "$ev" > "$spool/$1-handoff-$2.json"; }
+  local ev="" name="$1-handoff-$2.json" res; [[ -z "${4:-}" ]] || ev=", \"events\": $4"
+  res="$(printf '{"id": "%s", "event": "handoff", "anchorId": "", "actor": "%s", "createdAt": "2026-10-20T15:%02d:00.000Z", "schemaVersion": 1, "version": "%s"%s}\n' \
+    "$2" "$SPOOL_SIDE" "$(( ${1: -2} % 60 ))" "$3" "$ev" | curl -s --data-binary @- "$events&actor=$SPOOL_SIDE&name=$name")"
+  [[ "$res" == "{\"ok\": true, \"name\": \"$name\"}" ]] || fail "pinned review-serve did not store hand-off $name: $res"; }
 A="$kit/scripts/octo-feather-accepted"
 run() { local want="$1"; shift; set +e; out="$("$A" "$@" --repo "$r" 2>&1)"; rc=$?; set -e
   [[ "$rc" == "$want" ]] || fail "'$*' want exit $want, got $rc: $out"; }
@@ -91,6 +98,7 @@ row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/host
 run 0 "$s"; [[ "$out" == "accepted $c2 "*"session=default"* ]] || fail "a missing commit in another session hid the accepted row: $out"
 row 0123456789abcdef0123456789abcdef01234567 2026-10-20T16:00:00Z > "$state/hosting/default/registry.toml"
 run 1 "$s"; [[ "$out" == *"is not in"* ]] || fail "registered commit missing from the repo: $out"
+kill "$serve"; wait "$serve" 2>/dev/null || true
 # The registry pinned Spec Chat's review-host writes (no --state-dir, no Herdr session),
 # under its own XDG_STATE_HOME: octo-feather-accepted finds the row, then its Accept.
 host="$sc/review-spec/scripts/review-host.py"; r0="$t/r0"
@@ -99,9 +107,10 @@ g -C "$r0" add -A; g -C "$r0" commit -qm spec; c0="$(git -C "$r0" rev-parse HEAD
 export XDG_STATE_HOME="$t/xdg-host" SPEC_CHAT_APPROVED_INGRESS_PORTS=""; unset HERDR_SESSION
 trap '(cd "$r0" && python3 "$host" stop >/dev/null 2>&1) || true; rm -rf "$t"' EXIT
 out="$(cd "$r0" && python3 "$host" register --owner t --slug a-flow --base "$c0" "$s" 2>&1)" || fail "pinned review-host register: $out"
+events="$(sed -n 's|^review URL: \(http://[^ ]*\)$|\1|p' <<<"$out")/api/events?dir=a-flow/$s.review"   # the review-serve review-host started
 real() { set +e; out="$("$A" "$s" --repo "$r0" 2>&1)"; rc=$?; set -e; }
 real; [[ "$rc" == 1 && "$out" == *"a-flow: no hand-off"* ]] || fail "row review-host wrote not found: rc=$rc $out"
-spool="$r0/$s.review/$SPOOL_SIDE"; handoff 1792509686764211301 real1 "$V1"
+handoff 1792509686764211301 real1 "$V1"
 real; [[ "$rc" == 0 && "$out" == "accepted $c0 slug=a-flow "*" session=default "*"handoff=real1" ]] || fail "Accept on the registered row: rc=$rc $out"
 (cd "$r0" && python3 "$host" stop >/dev/null) || fail "pinned review-host stop"
 echo "accepted: ok (unregistered, no hand-off, hand-written key, Accept at base, newer comments, stale base, re-accept, absolute/./subdir SPEC_PATH, unregistered reason, no argument, agent actor, missing commit; versions and registry from pinned Spec Chat: review-host register, then Accept)"
