@@ -1,6 +1,6 @@
 # The parity lever's case for tests/lane-merge-ask.sh, rewritten as tests/gate/kit/test_lane_merge_ask.py (tests/parity/lever.py --help).
 old = "tests/lane-merge-ask.sh"
-old_at = "9a4c8c0c"
+old_at = "940d603f"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
 needs = [
     "tests/fixtures/lane-merge-ask/pr16.json",

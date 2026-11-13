@@ -8,6 +8,8 @@ import pytest
 from lane_merge_ask import (
     ci_status_only,
     criterion_claimed,
+    current_head_checks,
+    current_head_identity,
     failed_triage,
     fields,
     full_pass,
@@ -87,6 +89,16 @@ def test_merge_ask_no_ci_unread(case: Case) -> None:
 @pytest.mark.criterion("issue-lifecycle#acceptance-ci-status-only", source=SOURCE)
 def test_merge_ask_ci_status_only(case: Case) -> None:
     case(ci_status_only)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-ci-status-only", source=SOURCE)
+def test_merge_ask_current_head_checks(case: Case) -> None:
+    case(current_head_checks)
+
+
+@pytest.mark.criterion("issue-lifecycle#acceptance-ci-status-only", source=SOURCE)
+def test_merge_ask_current_head_identity(case: Case) -> None:
+    case(current_head_identity)
 
 
 def test_merge_ask_rows_and_built(case: Case) -> None:

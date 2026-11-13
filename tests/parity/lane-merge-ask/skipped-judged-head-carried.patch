@@ -2,7 +2,7 @@ Seeded defect: a check skipped on the judged head too is carried to the status-o
 diff --git a/scripts/octo-feather-lane b/scripts/octo-feather-lane
 --- a/scripts/octo-feather-lane
 +++ b/scripts/octo-feather-lane
-@@ -1746,9 +1746,7 @@ def carried_checks(rollup: "list[dict[str, object]]", head: str, judged: str | N
+@@ -1849,9 +1849,7 @@
              why.append(f"{at} {j} has no {name} run; run `octo-feather-lane ci-start <PR>` on {j}, wait for its CI, then rerun")
          elif status != "completed":
              why.append(f"{at} pending on {j}: {name} {status or 'pending'}; wait for it to finish, then rerun")
