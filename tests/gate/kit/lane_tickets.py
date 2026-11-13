@@ -535,6 +535,24 @@ def scripts(s: Scratch) -> None:
     lt.read_only()
 
 
+def mcp_demos(s: Scratch) -> None:
+    """A demo through the official MCP client (spec issue-lifecycle #acceptance-tracer-tickets:
+    MCP or another public protocol): the inspector's --cli over the repo's declared server
+    passes; over a server the repo does not declare it fails naming that server."""
+    lt = Lt(s)
+    mcp = "npx -y @modelcontextprotocol/inspector@0.17.2 --cli"
+    call = "--method tools/call --tool-name quote --tool-arg region=uk"
+    out = lt.lane(0, "ticket", "-", stdin=jd(f"{mcp} uv run app {call}"))
+    assert out == "stdin: ok", out
+    out = lt.lane(1, "ticket", "-", stdin=jd(f"{mcp} uv run ghost-server {call}"))
+    has(
+        out,
+        "stdin: class: layer-only-ticket: demo runs no surface the repo declares",
+        "ghost-server is not a program the repo declares",
+    )
+    lt.read_only()
+
+
 def jd(cmd: str) -> str:
     return f"## Acceptance criteria\n\n- [ ] demo#acceptance-a: x\n- [ ] demo: `{cmd}` exits 0\n"
 
@@ -1012,4 +1030,5 @@ if __name__ == "__main__":
         just_demos,
         errors,
         linear,
+        mcp_demos,
     )

@@ -197,7 +197,10 @@ evaluating no backtick; every option, parameter and default is just's to read, a
 -q with --dry-run included, or a dry run naming no recipe (the just pinned in the kit's mise.toml is
 the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
-when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, or playwright; never the gate alone
+when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, playwright,
+or the MCP project's official client (`@modelcontextprotocol/inspector`) with --cli whose server
+is an http(s) URL or a command this rule accepts as the repo's own program (another protocol: a client the repo
+declares); never the gate alone
 or a generic tool (printf, echo). The
 wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
 command the ticket itself creates when the ticket declares it exactly in a line
@@ -2347,7 +2350,9 @@ SURFACE_FIX = ("make the demo a backticked command through the repo's own public
                "declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than "
                "check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked "
                "script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), "
-               "an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); not printf, echo or another "
+               "an HTTP request (`curl https://...`), a UI driver run (`npx playwright test ...`), or the official MCP client "
+               "over the repo's MCP server (`npx -y @modelcontextprotocol/inspector@VERSION --cli uv run SERVER --method "
+               "tools/list`); not printf, echo or another "
                "generic tool; or, for a command this ticket creates, declare it exactly with " + CREATES_FORM
                + ", the demo running that path; or, for one step of a wide refactor, add the line "
                "`Expand-contract: expand|migrate|contract`")
@@ -2358,6 +2363,11 @@ RUNNERS = {("uv", "run"), ("poetry", "run"), ("pnpm", "exec"), ("npm", "exec"), 
 # A target with no CLI, HTTP or UI demos through its runnable script (ADR 0002), e.g. `python harness.py`.
 INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno", "bun", "Rscript"}
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
+# The official MCP client (modelcontextprotocol.io), its CLI mode: a demo through a repo's MCP server. Another
+# protocol's demo runs a client the repo declares.
+MCP_OPTIONS = {"--method", "--tool-name", "--tool-arg", "--uri", "--prompt-name", "--prompt-args", "--log-level",
+               "--transport", "--header", "--config", "--server", "--target"}   # the client's own, after its server
+MCP_CLIENT = re.compile(r"(.*/)?(@modelcontextprotocol/inspector(@[^/\s]+)?|mcp-inspector)")
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
 
 
@@ -2500,6 +2510,8 @@ class Surface:
             return None if any(re.match(r"https?://", a) for a in args) else f"{prog} without an http(s) URL"
         if prog == "playwright" or prog.endswith("/playwright"):
             return None
+        if MCP_CLIENT.fullmatch(prog):
+            return self.mcp_why(prog, args)
         if prog == "just":
             return self.just_why(args)
         if "/" in prog:
@@ -2515,6 +2527,21 @@ class Surface:
         if prog in self.exec_names or prog in self.bins:
             return None
         return f"{prog} is not a program the repo declares"
+
+
+    def mcp_why(self, prog: str, args: list[str]) -> str | None:
+        """The MCP client's --cli target (its words up to the client's own next option): an http(s) URL, or a
+        server command this check accepts as the repo's own program."""
+        if "--cli" not in args:
+            return f"{prog} without --cli (the client's command-line mode)"
+        rest = args[args.index("--cli") + 1:]
+        target = rest[:next((i for i, a in enumerate(rest) if a.split("=", 1)[0] in MCP_OPTIONS), len(rest))]
+        if not target:
+            return f"{prog} --cli names no server"
+        if re.match(r"https?://", target[0]):
+            return None
+        why = self.word_why_not(program_words(shlex.join(target)))
+        return f"its MCP server `{shlex.join(target)}`: {why}" if why else None
 
 
 def program_words(stage: str) -> list[str]:
