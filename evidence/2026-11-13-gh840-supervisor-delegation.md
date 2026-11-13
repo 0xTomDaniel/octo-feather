@@ -74,7 +74,15 @@ Read honestly:
 `git diff --stat fc836bb0..HEAD` (evidence, docs, qc.toml, and a merge of gh840 if any):
 
 ```
-DIFFSTAT
+ docs/owed-evals/874.md                             |    5 +
+ evals/supervisor-autonomy/cases.json               | 1136 ++++++++++++++++++++
+ .../reference/expectations.json                    |   63 ++
+ evals/supervisor-autonomy/suite.json               |    7 +
+ evidence/2026-11-13-gh840-supervisor-autonomy.md   |  358 ++++++
+ evidence/2026-11-13-gh840-supervisor-delegation.md |  307 ++++++
+ qc.toml                                            |   19 +
+ 7 files changed, 1895 insertions(+)
+(the gh840 merge brings #875's supervisor-autonomy suite and evidence, and gh840's qc.toml entries; none touches this suite or agents/supervisor.md's delegation line)
 ```
 
 ## What the director and the worker received, per run
