@@ -11,6 +11,10 @@ LANES/*.handoffs.jsonl and the director log beside LANES (director.handoffs.json
 stem), and one without a name is the supervisor: the lane's name. A director line names its
 own general worker and gains no lane.
 
+resume-workspace reads a worker's parked line on stdin and prints the workspace it resumes in:
+its recorded parent's (`herdr agent get PARENT`) while that parent is live, else the caller's
+HERDR_WORKSPACE_ID (comms spec #roles-park); an empty line when neither.
+
 spawn [--ticket T] [--caller PANE] reads herdr-spawn's printed line on stdin (name= role= tab=
 pane= cwd= contract= provider_session_id=) and prints one spawn line for redirection into the
 lane hand-off log: {at, kind: spawn, name, role, pane, cwd, session, ticket: T, else the name's
@@ -32,6 +36,7 @@ exit 69 when that lookup fails another way.
 import argparse
 import datetime as dt
 import json
+import os
 import re
 import subprocess
 import sys
@@ -166,7 +171,29 @@ def ended_unreported(args: argparse.Namespace) -> int:
     return 0
 
 
-LEVERS = {"spawn": record_spawn, "attempt": ended_unreported}
+def resume_workspace(_: argparse.Namespace) -> int:
+    """Print the workspace a parked worker resumes in, or refuse (module docstring)."""
+    try:
+        line = json.loads(sys.stdin.read())
+    except ValueError:
+        line = None
+    if not isinstance(line, dict):
+        return refuse("stdin holds no parked JSON line", 65)
+    parent, space = str(cast("dict[str, object]", line).get("parent") or ""), ""
+    if parent:
+        get = ["herdr", "agent", "get", parent]
+        try:
+            got = subprocess.run(get, capture_output=True, text=True, check=False)
+            out = cast("dict[str, dict[str, dict[str, object]]]", json.loads(got.stdout))
+            if got.returncode == 0:
+                space = str(out["result"]["agent"].get("workspace_id") or "")
+        except (OSError, ValueError, KeyError, TypeError, AttributeError):
+            space = ""  # no live parent found: the caller's workspace
+    sys.stdout.write((space or os.environ.get("HERDR_WORKSPACE_ID", "")) + "\n")
+    return 0
+
+
+LEVERS = {"spawn": record_spawn, "attempt": ended_unreported, "resume-workspace": resume_workspace}
 
 
 def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
@@ -178,6 +205,7 @@ def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     parked = commands.add_parser("parked")
     parked.add_argument("target")
     parked.add_argument("lanes", type=Path)
+    commands.add_parser("resume-workspace")
     spawn = commands.add_parser("spawn")
     spawn.add_argument("--ticket")
     spawn.add_argument("--caller")
