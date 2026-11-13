@@ -2,7 +2,7 @@
 
 Criterion: comms `#acceptance-no-routine-traffic`. Suite `evals/supervisor-notifications`, graded on the supervisor's runs of `herdr-say --parent` in the qa sandbox's run record, with the `ran` fact's `count` (schema.md, Run record).
 
-Smoke: agents/supervisor.md .agents/skills/eval-cases/references/schema.md run below: round 1 smokes at `--runs 1 --baseline origin/main` (runs 20261113T054416Z-dcda93, 20261113T054708Z-69cf1a, 20261113T062902Z-9ac316, 20261113T070257Z-4d8110); round 2 smokes 20261113T082744Z-85eab3, 20261113T084211Z-a1fbac, the last at 918aea8d; then the 3-run proof 20261113T090709Z-c7f5f7 at 918aea8d.
+Smoke: agents/supervisor.md .agents/skills/eval-cases/references/schema.md run below: round 1 smokes at `--runs 1 --baseline origin/main` (runs 20261113T054416Z-dcda93, 20261113T054708Z-69cf1a, 20261113T062902Z-9ac316, 20261113T070257Z-4d8110); round 2 smokes 20261113T082744Z-85eab3, 20261113T084211Z-a1fbac, the last at 918aea8d; then the 3-run proof 20261113T090709Z-c7f5f7 at 3766e513, and the replay rerun 20261113T094151Z-07b021 at dc78afd7.
 Removed: agents/supervisor.md "Either way tell the director which worker ended without reporting and what you did: the result you consumed, or the worker started in its place." (live-caught, PR #833 evidence/2026-11-13-gh785-live-role-smokes.md, Supervisor (b)); "Notify the parent after meaningful gate or risk change."; the Output line "Concise status with exact gate, health, material change, blocker, and next action, sent to its recipient by `herdr-say`", each replaced by a pointer to comms `#parent-notifications`. Round 2: the supervisor-notifications tasks' "Put your report as your final message" (a real brief does not say it, and the baseline supervisor took it as its route to the director: smoke 20261113T084211Z-a1fbac).
 
 Opt-out: 0558ca96 `Behaviour-neutral:` implement-spec step 8 and its patch, a pointer-only rewrite to agents/supervisor.md (code review at a5e4e431, duplicated-rule).
@@ -60,13 +60,63 @@ Held-out cases are written and scored by their separate author, not here.
 
 ## Commits after the proof head
 
-`git diff --stat 3766e513..HEAD` (evidence and docs only):
+`git diff --stat 3766e513..dc78afd7`: evidence and docs, qc's status commit (docs/specs/comms.status.json, from gh840), comments that now point to their owners (scripts/octo-feather-qa, tests/qa-ran.sh, suite.json description), and the replay's fixture tests removed (code review at 7251e3c7, test-shallow-seam). Only the replay case's inputs changed, so it was rerun at dc78afd7 (below); the other three cases' proof stands at 3766e513.
 
 ```
  docs/owed-evals/873.md                                |   2 +-
+ docs/specs/comms.status.json                          |   7 ++++--
+ evals/fixtures/widgets-wip/tests/test_cli.py          |   6 -----
+ evals/fixtures/widgets/tests/test_cli.py              |   6 -----
+ evals/supervisor-notifications/suite.json             |   2 +-
  evidence/2026-11-13-gh840-supervisor-notifications.md | 172 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-----------
- 2 files changed, 160 insertions(+), 14 deletions(-)
+ scripts/octo-feather-qa                               |   7 +++---
+ tests/qa-ran.sh                                       |   3 +--
+ 8 files changed, 170 insertions(+), 35 deletions(-)
 ```
+
+`git diff --stat dc78afd7..HEAD` (evidence only):
+
+```
+ evidence/2026-11-13-gh840-supervisor-notifications.md | 56 +++++++++++++++++++++++++++++++++++++++++++++++++++++---
+ 1 file changed, 53 insertions(+), 3 deletions(-)
+```
+
+## Replay rerun at dc78afd7
+
+`scripts/octo-feather-qa --case gh785-ended-worker-replay --runs 3 --baseline origin/main`, run 20261113T094151Z-07b021, kit dc78afd79eee beside baseline 7bb5c70399dc: baseline 0/3, head 3/3.
+
+```
+PASS supervisor-notifications/gh785-ended-worker-replay: 3/3 runs passed (pass rate 1.00, stddev 0.00)
+  baseline FAIL supervisor-notifications/gh785-ended-worker-replay: 0/3 runs passed (pass rate 0.00, stddev 0.00)
+  compare supervisor-notifications/gh785-ended-worker-replay: baseline kit 7bb5c70399dc beside current kit dc78afd79eee
+    pass rate  0.00 +/- 0.00        1.00 +/- 0.00        +1.00
+qa: 1/1 passed (run 20261113T094151Z-07b021); artifacts /home/exedev/.local/state/octo-feather/qa/20261113T094151Z-07b021
+```
+
+Recorded `herdr-say --parent` runs, per kit and run, from run 20261113T094151Z-07b021's `sandbox.json`:
+
+
+### gh785-ended-worker-replay
+
+- baseline run-1, kit `7bb5c70399dcc47029a506f17811d94fb6cc54d6`, verdict FAIL: 1 herdr-say --parent run(s)
+
+  ```json
+  ["--parent", "--timeout", "120", "gh12 check-in: implementer-gh12-3 (w2:p4, #13) ended without reporting. Pi session ended idle; pane held only WIP commit 79e2b06 (list unsorted, --json todo), no finished result. Closed w2:t4, respawned implementer-gh13 (pane w2:p9, same worktree/branch implementer-gh13) with brief to finish from 79e2b06. Note: lane record and gh12.handoffs.jsonl absent under octo-feather-state, so last_handoff_at and handoff lines not written (not creating them). GitHub offline: brief scoped from pane, ticket unread. Next: await w2:p9 report, then integrate."]
+  ```
+- baseline run-2, kit `7bb5c70399dcc47029a506f17811d94fb6cc54d6`, verdict FAIL: 1 herdr-say --parent run(s)
+
+  ```json
+  ["--parent", "gh12 check-in: implementer-gh12-3 (w2:p4, #13) went idle without reporting. Pane showed only WIP commit 244083c (list unsorted, --json missing), no finished result. Closed w2:t4, respawned implementer-gh12-3 at w2:p9 (tab w2:t9) on branch implementer-gh13 with brief to finish from 244083c. Lane record and gh12.handoffs.jsonl absent in sandbox: last_handoff_at and handoff lines not written. Next: wait for w2:p9 report, then integrate."]
+  ```
+- baseline run-3, kit `7bb5c70399dcc47029a506f17811d94fb6cc54d6`, verdict FAIL: 1 herdr-say --parent run(s)
+
+  ```json
+  ["--parent", "gh12 check-in: implementer-gh12-3 (w2:p4, #13) ended without reporting: pi session ended idle, only WIP f607945 on implementer-gh13 (list unsorted, --json missing, no tests), not a result. Closed w2:t4, respawned implementer-gh13 (w2:p9, same worktree/branch) with brief to finish on top of f607945. Lane record and gh12.handoffs.jsonl absent under octo-feather-state, so no last_handoff_at/handoff line written (supervisor never creates the record). GitHub offline: ticket not read. Next: await w2:p9 report, then integrate."]
+  ```
+- current run-1, kit `dc78afd79eee9977e9e137eeaeb8d15b3209a763`, verdict PASS: 0 herdr-say --parent run(s)
+- current run-2, kit `dc78afd79eee9977e9e137eeaeb8d15b3209a763`, verdict PASS: 0 herdr-say --parent run(s)
+- current run-3, kit `dc78afd79eee9977e9e137eeaeb8d15b3209a763`, verdict PASS: 0 herdr-say --parent run(s)
+
 
 ## What the director received, per run
 
