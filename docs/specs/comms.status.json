@@ -1,6 +1,6 @@
 {
   "spec": "comms.spec.html",
-  "accepted_commit": "c4fd14f1b3d7003cee22db645b52429e60d0a3ab",
+  "accepted_commit": "2f2a4d696acc0fa2ffeb4a69ce4d556b6a86294c",
   "criteria": {
     "acceptance-guard-other-lane": {
       "status": "built",
@@ -11,12 +11,36 @@
       "pr": 24
     },
     "acceptance-parent-gone": {
-      "status": "built",
-      "pr": 24
+      "status": "planned",
+      "pr": null
     },
     "acceptance-worker-ended": {
-      "status": "built",
-      "pr": 24
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-autonomous-local": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-real-blocker": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-no-routine-traffic": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-queued-completion": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-director-worker-resume": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-artifact-supervision": {
+      "status": "planned",
+      "pr": null
     },
     "acceptance-resume-live-space": {
       "status": "built",
@@ -58,6 +82,13 @@
       "status": "built",
       "pr": 252
     },
+    "acceptance-report-gate-budget": {
+      "status": "built",
+      "pr": 614,
+      "record": "20261106T061241Z-cbe5c358",
+      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
+      "tests": []
+    },
     "acceptance-report-owner-caught": {
       "status": "built",
       "pr": 252
@@ -86,6 +117,10 @@
       "status": "built",
       "pr": 279
     },
+    "acceptance-reflect-daily": {
+      "status": "planned",
+      "pr": null
+    },
     "acceptance-reflect-writer-route": {
       "status": "built",
       "pr": 279
@@ -94,34 +129,17 @@
       "status": "built",
       "pr": 279
     },
-    "acceptance-report-reflection": {
-      "status": "built",
-      "pr": 279
-    },
-    "acceptance-reflect-daily": {
-      "status": "planned",
-      "pr": null
-    },
-    "acceptance-reflect-files-correction": {
-      "status": "built",
-      "pr": 545,
-      "record": "20261104T220546Z-ce40bf04",
-      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
-      "tests": [
-        "tests/lane-correction.sh"
-      ]
-    },
-    "acceptance-report-gate-budget": {
-      "status": "built",
-      "pr": 614,
-      "record": "20261106T061241Z-cbe5c358",
-      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
-      "tests": []
-    },
     "acceptance-report-owner-caught-headline": {
       "status": "built",
       "pr": 614,
       "record": "20261106T061245Z-7ec0b3a8",
+      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
+      "tests": []
+    },
+    "acceptance-report-skill-reach": {
+      "status": "built",
+      "pr": 614,
+      "record": "20261106T061237Z-3def0011",
       "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
       "tests": []
     },
@@ -134,12 +152,18 @@
         "tests/lane-intake.sh"
       ]
     },
-    "acceptance-report-skill-reach": {
+    "acceptance-reflect-files-correction": {
       "status": "built",
-      "pr": 614,
-      "record": "20261106T061237Z-3def0011",
-      "commit": "2080f6f7cc24479f2be34cb99d80363edb6141c6",
-      "tests": []
+      "pr": 545,
+      "record": "20261104T220546Z-ce40bf04",
+      "commit": "f3f94b3d92eab5d176d173261fd8cbbbe4642de6",
+      "tests": [
+        "tests/lane-correction.sh"
+      ]
+    },
+    "acceptance-report-reflection": {
+      "status": "built",
+      "pr": 279
     }
   }
 }
