@@ -251,3 +251,10 @@ covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11
 # As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message.
 [demo."comms#acceptance-real-blocker"]
 covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-fresh-worker --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run,
+# each case's pass rate on both kits and every recorded herdr-spawn and herdr-say argv, in
+# evidence/2026-11-13-gh840-supervisor-fresh-worker.md.
+[demo."roles#acceptance-fresh-independent-worker"]
+covers = ["agents/supervisor.md", "evals/supervisor-fresh-worker", "evidence/2026-11-13-gh840-supervisor-fresh-worker.md"]
