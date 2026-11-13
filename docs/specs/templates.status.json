@@ -62,8 +62,11 @@
       "tests": []
     },
     "acceptance-edge-rejects": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 899,
+      "record": "20261113T224606Z-04fe2376",
+      "commit": "d930d0c33887e6d20bdeb051210e7e8245a2ae0f",
+      "tests": []
     }
   }
 }
