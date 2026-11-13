@@ -8,8 +8,12 @@ per criterion naming each case, its outcome, fixtures and artifacts; octo-feathe
 acceptance-a pass from that record and acceptance-b insufficient evidence naming the skipped
 case, rerunning nothing (no new record, no demo, no judge). A gate without claims captures
 nothing; a claim naming no criterion, or a narrowed run with claims, stops the gate before any
-test runs. The fake herdr, a pi that only logs: no model. That target and its claims gate are
-prepared once per gate run (build, build_captured)."""
+test runs. Two specs (issue-lifecycle spec #qc-interim): the target gains other.spec.html, its
+acceptance-c tagged on tests/other.sh; one full gate claims both specs' criteria, and one qc run
+naming both status files judges each from that gate's records and commits both in one
+status-only commit; an id in no named status file or in two is a usage error before anything
+runs. The fake herdr, a pi that only logs: no model. Those targets and their claims gates are
+prepared once per gate run (build, build_captured, build_two)."""
 
 from __future__ import annotations
 
@@ -20,7 +24,7 @@ from pathlib import Path
 from typing import Any
 
 from testkit import FIXTURES, ROOT, Ran, Scratch, kit, main, tool_homes
-from testkit.qc import RID, STATUS, qc, target
+from testkit.qc import RID, STATUS, qc, reports, target
 
 JUSTFILE = """set positional-arguments
 export GATE_RECIPES := "check-ok"
@@ -83,7 +87,7 @@ def build(p: Scratch) -> None:
 def world(s: Scratch, name: str = "oe") -> Path:
     """S filled with prepared NAME (build, or build_captured), a pi that only logs (any judge or
     model call shows in pi.log), the box's uv cache kept while HOME moves; its repo."""
-    s.prepare(name, build if name == "oe" else build_captured)
+    s.prepare(name, {"oe": build, "oe-captured": build_captured, "oe-two": build_two}[name])
     (s.bin / "pi").unlink()
     (s.bin / "pi").write_text(
         f'#!/usr/bin/env bash\n[[ "${{1:-}}" == --version ]] && exit 0\n'
@@ -383,8 +387,122 @@ def artifacts_missing(s: Scratch) -> None:
     }, e
 
 
+OTHER = "docs/specs/other.status.json"
+TWIN = "docs/specs/twin.status.json"
+
+
+def spec_as(r: Path, s: Scratch, stem: str, anchors: dict[str, str]) -> None:
+    """docs/specs/STEM.spec.html in R: the demo spec with each anchor renamed by ANCHORS, then
+    its status file initialized at that commit; both committed."""
+    text = (r / "docs" / "specs" / "demo.spec.html").read_text()
+    for old, new in anchors.items():
+        text = text.replace(old, new)
+    (r / "docs" / "specs" / f"{stem}.spec.html").write_text(text)
+    s.git(r, "add", "-A")
+    s.git(r, "commit", "-qm", f"spec {stem}")
+    short = s.git(r, "rev-parse", "--short", "HEAD")
+    s.run([kit("octo-feather-spec-status"), "init", f"docs/specs/{stem}.spec.html", short], cwd=r)
+    s.git(r, "add", "-A")
+    s.git(r, "commit", "-qm", f"status {stem}")
+
+
+def build_two(p: Scratch) -> None:
+    """The target with a second spec, other (acceptance-c, acceptance-d), acceptance-c tagged on
+    tests/other.sh; its full gate told claims in both specs; its output in gate.json."""
+    r = world(p)
+    (r / "tests" / "other.sh").write_text(
+        "#!/usr/bin/env bash\n# criterion: other#acceptance-c\necho RAN-other\n"
+    )
+    (r / "tests" / "other.sh").chmod(0o755)
+    spec_as(r, p, "other", {"acceptance-a": "acceptance-c", "acceptance-b": "acceptance-d"})
+    g = gate(p, claims="demo#acceptance-a demo#acceptance-b other#acceptance-c")
+    (p.root / "gate.json").write_text(
+        json.dumps({"rc": g.rc, "out": g.out, "head": p.git(r, "rev-parse", "HEAD")})
+    )
+
+
+def two_specs(s: Scratch) -> None:
+    """One full gate claiming criteria of two specs, then one qc run naming both status files:
+    each id judged from that gate's record, not rerun, no demo, no judge, the store unchanged; one
+    report per spec; the new head's only change both status files, in one commit (passed built,
+    the insufficient one planned)."""
+    r = world(s, "oe-two")
+    g = json.loads((s.root / "gate.json").read_text())
+    assert g["rc"] == 0, f"capturing gate: exit {g['rc']}: {g['out']}"
+    head = g["head"]
+    ids = dict(
+        re.findall(rf"^qc capture: (\w+#acceptance-[abc]): record ({RID})", g["out"], re.MULTILINE)
+    )
+    assert sorted(ids) == ["demo#acceptance-a", "demo#acceptance-b", "other#acceptance-c"], g["out"]
+    q = qc(s, r, OTHER, "7", "acceptance-a", "acceptance-b", "acceptance-c", want=2)
+    ls = q.out.splitlines()
+    for i, cid, verdict, state in (
+        ("acceptance-a", "demo#acceptance-a", "PASS", "complete"),
+        ("acceptance-b", "demo#acceptance-b", "INSUFFICIENT EVIDENCE", "incomplete"),
+        ("acceptance-c", "other#acceptance-c", "PASS", "complete"),
+    ):
+        n = next(k for k, x in enumerate(ls) if x.startswith(f"{verdict} {i}: "))
+        want = f"  evidence {state}; decision tagged test assertions; record {ids[cid]}"
+        assert want in ls[n + 1 : n + 4], q.out
+        if verdict == "PASS":
+            assert f"in the gate's run at {head[:12]}, not rerun" in ls[n + 1], q.out
+    assert len(records(s)) == 3, "qc reran something"
+    assert not re.search(r"agent fallback|qc: demo ", q.err), q.err
+    log = s.root / "pi.log"
+    assert not (log.exists() and "qc-judge" in log.read_text()), log.read_text()
+    reps = [
+        json.loads(Path(x.rpartition("; report ")[2]).read_text())
+        for x in ls
+        if x.startswith("qc: ") and "; report " in x
+    ]
+    by = {rep["spec"]: [x["id"] for x in rep["results"]] for rep in reps}
+    assert by == {"demo": ["acceptance-a", "acceptance-b"], "other": ["acceptance-c"]}, by
+    assert s.git(r, "rev-list", "--count", f"{head}..HEAD") == "1", "want one commit"
+    changed = s.git(r, "diff", "--name-only", head, "HEAD").splitlines()
+    assert sorted(changed) == [STATUS, OTHER], changed
+    demo = json.loads(s.git(r, "show", f"HEAD:{STATUS}"))["criteria"]
+    other = json.loads(s.git(r, "show", f"HEAD:{OTHER}"))["criteria"]
+    for row, rid, test in (
+        (demo["acceptance-a"], ids["demo#acceptance-a"], "tests/accept.sh"),
+        (other["acceptance-c"], ids["other#acceptance-c"], "tests/other.sh"),
+    ):
+        assert row == {
+            "status": "built",
+            "pr": 7,
+            "record": rid,
+            "commit": head,
+            "tests": [test],
+        }, row
+    assert demo["acceptance-b"] == {"status": "planned", "pr": None}, demo
+    assert other["acceptance-d"] == {"status": "planned", "pr": None}, other
+
+
+def ids_refused(s: Scratch) -> None:
+    """Several status files: an id in none of them, or in two (twin, the demo spec's copy), is a
+    usage error naming it, before any capture or collection: no record, no report, no commit."""
+    r = world(s)
+    spec_as(r, s, "twin", {})
+    head = s.git(r, "rev-parse", "HEAD")
+    for args, said in (
+        ((TWIN, "7", "acceptance-z"), f"not in {STATUS} nor {TWIN}: acceptance-z"),
+        (
+            (TWIN, "7", "acceptance-a"),
+            f"in more than one named status file: acceptance-a ({STATUS} {TWIN})",
+        ),
+    ):
+        q = qc(s, r, *args, want=64)
+        assert said in q.err, q.err
+        assert not re.search(r"collecting|qc: demo |qc capture|qc: github", q.err), q.err
+    assert s.git(r, "rev-parse", "HEAD") == head, "a refused run committed"
+    assert s.git(r, "status", "--porcelain") == "", "a refused run left changes"
+    assert records(s) == [], "a refused run captured"
+    assert reports(s, head) == [], "a refused run wrote a report"
+
+
 if __name__ == "__main__":
     main(
+        two_specs,
+        ids_refused,
         claims_refused,
         capture,
         judged_from_records,
