@@ -204,8 +204,10 @@ cases = [
     {"fact": "skill_read", "skill": "github-issues"}]),
   (case("setup", [["bash", "echo branch=$(git branch --show-current); git log --format=msg=%s -1 hb; git rev-list --count hb;"
                            " echo repo={repo} cwd=$(pwd -P) head={head} rev=$(git rev-parse HEAD); ls tests;"
-                           " echo origin=$(git ls-remote origin main | wc -l); echo gh=$(command -v gh)"]],
-        head={"fixture": "fx2", "branch": "hb", "message": "head msg"}, branch="work", origin=True, fake_gh=True), [fx]),
+                           " echo origin=$(git ls-remote origin main | wc -l); echo gh=$(command -v gh);"
+                           " echo wb=$(git log --format=%s -1 wb) wbup=$(git rev-parse wb~1) hbrev=$(git rev-parse hb) wbtree=$(git ls-tree --name-only wb | tr '\\n' ,)"]],
+        head={"fixture": "fx2", "branch": "hb", "message": "head msg"}, branch="work", origin=True, fake_gh=True,
+        branches=[{"fixture": "fx", "branch": "wb", "message": "worker msg"}]), [fx]),
   (case("incl", [["say", blk({"blocking": [{"test": "t.py::a", "class": "c"}, {"test": "t.py::b"}], "criteria": [{"id": "x", "verdict": "fail"}]})]]),
    [{"fact": "declared_includes", "field": "blocking", "items": [{"test": "t.py::a"}, {"test": "t.py::b"}]}]),
   (case("inclmiss", [["say", blk({"blocking": [{"test": "t.py::a"}], "criteria": [{"id": "x", "verdict": "fail"}]})]]),
