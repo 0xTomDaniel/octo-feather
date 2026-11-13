@@ -1,8 +1,7 @@
 # gh795: integration-test seam rule, code reviewer smoke
 
 Smoke: agents/code-reviewer.md .agents/skills/tdd/SKILL.md .skillfile/patches/skills/tdd/SKILL.md.patch run once below (the reviewer loaded the patched tdd SKILL.md).
-Smoke: agents/implementer.md .agents/skills/codebase-design/DEEPENING.md .skillfile/patches/skills/codebase-design/DEEPENING.md.patch .agents/skills/typescript/SKILL.md not run: the lane brief allows one run, the reviewer's; owed in docs/owed-evals/795.md.
-Smoke: agents/supervisor.md agents/qc-judge.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch not run: round 2 widened their demo surface to any public interface the product offers its users (spec call 5); no live run yet, owed in docs/owed-evals/795.md. Seam rule cases for the reviewer and implementer: evals/role-transcripts, run by the supervisor with `just qa`.
+Smoke: round 2 and 3 paths (supervisor, qc-judge, to-tickets, implementer, tdd, DEEPENING): see `evidence/2026-11-13-gh795-public-interface-smoke.md`.
 Removed: the old rule "integration test may also enter through a public library function" (ADR 0002, AGENTS.md, tdd and codebase-design patches, implementer, code reviewer, typescript skill, GLOSSARY Test, kit-mini fixture, judgment-test-quality question) and the reviewer's block "a test that reaches past a public surface", replaced by the shallow-seam and unagreed-seam blocks.
 
 Issue #795, ticket #796, branch gh795-796. One headless run, no eval suite.
