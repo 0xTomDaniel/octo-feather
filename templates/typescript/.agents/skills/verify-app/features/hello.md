@@ -14,11 +14,12 @@ Drive criterion: `app#acceptance-hello-json`
 - `hello-empty-json` blank name with `--json`: JSON error, exit 2.
 - `hello-empty-text` blank name without `--json`: error on stderr, exit 2.
 - `hello-no-name` missing name: usage line on stderr, exit 64.
+- `hello-request` the input as a JSON request (`--request`), validated at the edge: greets on a valid request; a request holding an unknown field fails naming it, exit 2.
 
 ## How to get to it (user POV)
 
-- Run `app hello <name>` or `app hello <name> --json` in a terminal (inside the repo: `node src/cli.ts hello <name> --json`).
-- `app` with no command prints the usage line `usage: app hello NAME [--json]`. There is no `--help`.
+- Run `app hello <name>`, `app hello <name> --json` or `app hello --request '{"name": "<name>"}' --json` in a terminal (inside the repo: `node src/cli.ts hello <name> --json`).
+- `app` with no command prints the usage line `usage: app hello NAME [--json] | app hello --request JSON [--json]`. There is no `--help`.
 
 ## Driving it with verify-app
 
@@ -34,11 +35,14 @@ Run all cases: `.agents/skills/verify-app/scripts/verify-app drive hello`. Evide
 - **Blank name, JSON** (`empty-json`). Run `app hello "  " --json`. Observe exit code 2, an `error` object on stdout, empty stderr.
 - **Blank name, text** (`empty-text`). Run `app hello "  "`. Observe exit code 2, empty stdout, `error: ` on stderr.
 - **Missing name** (`no-name`). Run `app hello`. Observe exit code 64, empty stdout, `usage: app hello` on stderr.
+- **JSON request** (`request-json`). Run `app hello --request '{"name": "<name>"}' --json`. Observe exit code 0, the same greeting as `json`, empty stderr.
+- **Unknown field** (`request-unknown`). Run `app hello --request '{"name": "<name>", "mood": "glad"}' --json`. Observe exit code 2, one JSON document `{"error": "invalid request", "issues": [...]}` whose one issue's `field` is `mood`, empty stderr.
 - **Side effects.** Every case's `.files` is empty: the command writes nothing where it runs.
 
 ## Gotchas
 
 - An unquoted blank name never reaches the app: the shell drops it and the app sees a missing name (usage, exit 64). That is not the empty-name path; quote it (`"  "`).
 - `--help` or any unknown flag is not handled: Node's `parseArgs` throws, and the process exits 1 with a stack trace on stderr. Doctor uses `app` with no command (exit 64) instead.
+- A name and `--request` together, or neither, is the usage error (exit 64).
 - The missing-name usage error is text on stderr even with `--json`; only the empty-name error is JSON.
 - Node below `package.json` `engines.node` cannot run `src/cli.ts` (no type stripping); doctor fails on it.
