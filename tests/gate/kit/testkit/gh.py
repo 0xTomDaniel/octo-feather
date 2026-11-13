@@ -19,12 +19,12 @@ $FAKE_GH/contents/F (the default branch's file), each `gh: Not Found (HTTP 404)`
 the real gh: no GH_TOKEN (the caller's auth; the testkit's Scratch sets one) asks for `gh auth
 login`, and a file $FAKE_GH/down is the network down. Every call is one line in $FAKE_GH/log.
 `run list` keeps only the runs on --commit (headSha), --branch (headBranch), --event (event) and
---workflow (workflowName) when given, a run storing no such field kept, and none whose createdAt
-(GitHub's ISO time) is still to come; --limit N the N newest. `run watch N --exit-status` waits
-for run N as gh does: completed, it prints gh's own line on it; in progress, it completes it with
-its stored `completes` conclusion (no line), first blocking until its stored `completesAt` (GitHub's
-ISO time) when still to come, as gh blocks while the run goes on; exit 1 unless it concluded
-success. A file
+--workflow (workflowName) when given, a run storing no such field kept, and a run storing
+`from_list` N only from the Nth `run list --commit` call in the log on (a run created later, by
+call order, never the clock); --limit N the N newest. `run watch N --exit-status` waits for run N
+as gh does: completed, it prints gh's own line on it; in progress, it completes it with its
+stored `completes` conclusion (no line), so the next list reads it completed, as gh returns once
+the run ends; exit 1 unless it concluded success. A file
 $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
 `gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
@@ -35,8 +35,6 @@ import json
 import os
 import re
 import sys
-import time
-from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -98,8 +96,10 @@ def listed(a: list[str]) -> None:
 
 
 def runs(rows: list[Any], a: list[str]) -> list[Any]:
-    """`run list`: the runs created by now on each filter given (a run without the field kept)."""
-    rows = [d for d in rows if not to_come(str(d.get("createdAt", "")))]
+    """`run list`: the runs created by this call on each filter given (a run without the field
+    kept); `from_list` counts the `run list --commit` calls logged, this call already in."""
+    nth = sum(x.startswith("run list ") and " --commit " in x for x in log())
+    rows = [d for d in rows if int(str(d.get("from_list", 0))) <= nth]
     for flag, field in FILTERS.items():
         v = opt(a, flag)
         rows = [d for d in rows if v is None or d.get(field, v) == v]
@@ -107,12 +107,8 @@ def runs(rows: list[Any], a: list[str]) -> list[Any]:
     return sorted(rows, key=lambda d: int(str(d["databaseId"])))[-int(n) :] if n else rows
 
 
-def to_come(at: str) -> bool:
-    """Whether AT is a time (GitHub's ISO form) still to come; anything else is not."""
-    try:
-        return datetime.fromisoformat(at) > datetime.now(UTC)
-    except ValueError:
-        return False
+def log() -> list[str]:
+    return (STORE / "log").read_text().splitlines()
 
 
 def watch(a: list[str]) -> None:
@@ -138,9 +134,6 @@ def watch(a: list[str]) -> None:
             f"Run {d['workflowName']} ({n}) has already completed with '{d['conclusion']}'\n"
         )
     else:
-        if to_come(end := str(d.get("completesAt", ""))):
-            left = datetime.fromisoformat(end) - datetime.now(UTC)
-            time.sleep(max(0, left.total_seconds()))
         d |= {"status": "completed", "conclusion": d["completes"]}
         p.write_text(json.dumps(d))
     sys.exit(0 if d["conclusion"] == "success" else 1)
