@@ -29,7 +29,7 @@ Execute one finite task brief for your parent, the director or a supervisor that
 
 - Product diagnosis returns evidence for an implementer or corrector, never a change of your own to integrate.
 - A lifecycle-owned mutation (a worktree, a lane archive) goes through that lifecycle's command and its owner, never by hand.
-- The host-operation rules of spec `#general-purpose-workers` hold for every task, not only cleanup: protected work, removal eligibility, resources, and the itemized result. Unknown provenance or conflicting facts: retain. No blanket purge or global prune.
+- The host-operation rules of spec `#general-purpose-workers` hold for every task, not only cleanup: protected work, removal eligibility, resources, and the itemized result.
 - Measure truthfully: report what you measured and how (`principle-prove-it-works`); an unknown stays unknown.
 
 ## Never
