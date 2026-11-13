@@ -112,16 +112,26 @@ def say_stalled(s: Scratch) -> None:
 RESULT = "RESULT-TEXT commit abc123 done"
 
 
-def worker_world(s: Scratch, parent: str = "idle") -> tuple[Path, dict[str, str]]:
-    """Director w0:p1; lane gh7 (record lanes/gh7.toml) with supervisor w1:p1 (PARENT: its
-    status, or gone) and general worker w1:p2; peer lane gh8, supervisor w2:p1, worker w2:p2.
+def worker_world(
+    s: Scratch,
+    parent: str = "idle",
+    *,
+    director: bool = True,
+    resumed: str = "",
+) -> tuple[Path, dict[str, str]]:
+    """Director w0:p1 (live unless not DIRECTOR); lane gh7 (record lanes/gh7.toml) with
+    supervisor w1:p1 (PARENT: its status, or gone; RESUMED: a pane where its parked agent gh7
+    runs live again) and general worker w1:p2; peer lane gh8, supervisor w2:p1, worker w2:p2.
     The Herdr world and the general worker's env."""
     agents = {
-        "w0:p1": agent("w0:p1", "director", "idle"),
         "w1:p2": agent("w1:p2", "general-worker-gh7", "idle"),
         "w2:p1": agent("w2:p1", "gh8", "idle"),
         "w2:p2": agent("w2:p2", "implementer-gh8", "idle"),
     }
+    if director:
+        agents["w0:p1"] = agent("w0:p1", "director", "idle")
+    if resumed:
+        agents[resumed] = agent(resumed, "gh7", "idle")
     if parent != "gone":
         late = time.time() + 3600 if parent == "booting" else 0
         agents["w1:p1"] = agent("w1:p1", "gh7", parent, late)
@@ -201,10 +211,7 @@ def parent_gone(s: Scratch) -> None:
         show(f"parent {why}: exit {want}, director received: nothing")
 
     s2 = sub(s, "parked")
-    d, env = worker_world(s2, "gone")
-    agents = json.loads((d / "agents.json").read_text())
-    agents["w1:p5"] = agent("w1:p5", "gh7", "idle")  # the parked supervisor resumed as w1:p5
-    (d / "agents.json").write_text(json.dumps(agents))
+    d, env = worker_world(s2, "gone", resumed="w1:p5")
     log = s2.home / ".local" / "state" / "octo-feather" / "lanes" / "gh7.handoffs.jsonl"
     log.write_text(
         json.dumps({"at": "2026-11-13T00:00:00Z", "kind": "parked", "pane": "w1:p1"}) + "\n"
@@ -220,10 +227,7 @@ def parent_gone(s: Scratch) -> None:
     show(f"implementer to the director w0:p1: exit 77: {ran.err.strip()}")
 
     s2 = sub(s, "nodirector")
-    d, env = worker_world(s2, "gone")
-    agents = json.loads((d / "agents.json").read_text())
-    del agents["w0:p1"]
-    (d / "agents.json").write_text(json.dumps(agents))
+    d, env = worker_world(s2, "gone", director=False)
     ran = s2.run([say, "--parent", RESULT], want=68, env=env)
     assert "alert NOT delivered to the director (pane w0:p1" in ran.err, ran.err
     assert lines(d / "prompts") == [], lines(d / "prompts")

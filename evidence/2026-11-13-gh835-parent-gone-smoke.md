@@ -9,3 +9,9 @@ Smoke: roles#acceptance-task-worker-route, `python3 tests/gate/kit/herdr_messagi
 Red: both scenarios against HEAD's herdr-say: worker_route failed `w2:p2 ... exit 0, want 77`; parent_gone failed `--parent ... exit 1, want 68`.
 
 Removed: from agents/implementer.md and agents/code-reviewer.md Output, "If none exits 0, your supervisor is unreachable: send it once, naming your parent pane, one level up to the director pane (`pane` in `$(octo-feather-state)/director.toml`)."; the incident: ADR 0030, a worker-to-director route workers can use to bypass their supervisor (#835).
+
+## Follow-up (supervisor, 2026-11-13): the director's side of the gone-parent route
+
+Smoke: agents/director.md, the alert the changed sentence acts on, from the run above: `python3 tests/gate/kit/herdr_messaging.py parent_gone` exit 0, the director stand-in w0:p1 receiving exactly the one parent-gone alert naming lane gh7, gone parent w1:p1 and worker general-worker-gh7, which is now the only gone-parent message a director gets (a worker's own send to the director exits 77). No live Pi director run: box over capacity (supervisor instruction 2026-11-13, targeted checks only); owed eval docs/owed-evals/835.md.
+Removed: from agents/director.md, "A worker result sent to you names its unreachable supervisor pane (spec `#roles-goal`): forward it with `herdr-say <supervisor pane> <result>`, which resumes a parked supervisor; only when that pane is gone and no parked line names it, relaunch fresh as for dead above (spec `#roles-park`), then forward."; the incident: #835 removed the worker-to-director route that sentence handled (ADR 0030).
+Python skill review (follow-up): the two new scenarios' `json.loads` reads of agents.json (untyped) replaced by `worker_world` parameters (`director`, `resumed`); no pre-existing line reformatted.
