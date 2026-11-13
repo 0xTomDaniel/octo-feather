@@ -582,7 +582,16 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
             if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
     def show_(r: dict[str, object]) -> str:
         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-    hit = next((r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)), None)
+    hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)]
+    hit = hits[0] if hits else None
+    if "count" in fact:   # exactly that many matching runs, decided at the run's end (schema, Run record)
+        n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
+        seen = f"{len(hits)} matching runs" + (f": {'; '.join(show_(r) for r in hits)}" if hits else "")
+        if len(hits) > n:
+            return "fail", f"{name}: {seen}"
+        if not final:
+            return "open", f"{name}: {seen} so far"
+        return ("pass" if len(hits) == n else "fail"), f"{name}: {seen} ({len(record)} entries in the record)"
     if hit is not None:
         return "pass", f"{name}: recorded run {show_(hit)}"
     if not final:

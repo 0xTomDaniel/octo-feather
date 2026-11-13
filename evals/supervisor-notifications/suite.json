@@ -1,0 +1,7 @@
+{
+  "suite": "supervisor-notifications",
+  "kind": "role-transcript",
+  "description": "Does the supervisor send the director only the events comms spec #parent-notifications allows (comms #acceptance-no-routine-traffic, #873)? A lane supervisor at a goal check-in holds routine worker progress, finished ticket results and a worker that ended without reporting, which it recovers; graded on its runs of herdr-say --parent through the sandbox's run record (schema.md, Run record, count): none when the lane has no milestone, exactly the merge-ask section when the lane is ready for it, and at least one when a real owner-held blocker arrives. Stated limit: a message to the director by its pane id instead of --parent is not counted; the tasks never name the director's pane.",
+  "max_tool_calls": 40,
+  "timeout_s": 900
+}
