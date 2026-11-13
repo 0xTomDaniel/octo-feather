@@ -12,9 +12,9 @@ justfile recipes (vendored-fetch, install-check) and the real mise run; `uv sync
 install`, which would reach the package registries, are testkit/argv_recorder.sh (a plain seam
 stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
 the pinned Python absent, downloads off). Step 4 (issue 398, tests/gate/kit/herdr_messaging.py)
-reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5 (issue
-399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending and a
-green run exits 3.
+reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5
+(issue 399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending
+and a green run exits 3.
 
 The kit's origin (B, then the merge commit M with a pyproject, then P past it with a mise.toml; and
 M2 off B pinning a Python no one has), its install clone and the target repo are prepared once per
@@ -259,8 +259,8 @@ def merged_step(s: Scratch) -> None:
 
 
 def main_ci(s: Scratch) -> None:
-    """Step 2: a run in progress is watched to its end with --exit-status, a second workflow beside
-    it; every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
+    """Step 2: a run in progress is watched to its end with --exit-status, a second workflow joins;
+    every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
     not the install's leaves it unchanged; a rerun the same. A run appearing within the bound is
     waited for. A red run stops naming its URL; a watch failing while its run reads unfinished
     stops naming it."""
@@ -272,8 +272,14 @@ def main_ci(s: Scratch) -> None:
     busy = run1("check", "in_progress", "", 11, m, completes="success")
     red = run1("check", "completed", "failure", 13, m)
     lanes = lane.state / "octo-feather" / "lanes"
+
+    def joins() -> None:
+        """Busy ends 2-3s on (gh's whole seconds), lint created then: after the first run list."""
+        at = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 3))
+        lane.store([busy | {"completesAt": at}, lint | {"createdAt": at}])
+
     lane.repo = "o/r"
-    lane.store([busy, lint])
+    joins()
     for _ in range(2):  # the rerun: same result, still reads only
         r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--repo", "o/r")
         step1 = f"PR #7 (gh7) merged into main at head {H[:12]}, merge commit {m12}"
@@ -292,7 +298,7 @@ def main_ci(s: Scratch) -> None:
         log = s.gh.log()
         assert "run watch 11 --exit-status -R o/r" in log, f"run not watched in o/r: {log}"
         assert f"pr view 7 --json {PR_FIELDS} -R o/r" in log, f"pr view: {log}"
-        lane.store([busy, lint])
+        joins()
     lane.repo = ""
     # created 1-2s after the first run list (gh's createdAt, whole seconds), within --wait 4
     late = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 2))
