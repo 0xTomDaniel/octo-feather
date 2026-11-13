@@ -60,6 +60,10 @@
       "record": "20261105T172039Z-c6b3dc1c",
       "commit": "d83e0d111f5ec0132b2ca196a98043807a52bd34",
       "tests": []
+    },
+    "acceptance-edge-rejects": {
+      "status": "planned",
+      "pr": null
     }
   }
 }

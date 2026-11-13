@@ -288,6 +288,14 @@
       "record": "20261109T005939Z-67175a7f",
       "commit": "0bf82f59dc28baaa417704a81a9f303a4414b598",
       "tests": []
+    },
+    "acceptance-edge-validated": {
+      "status": "planned",
+      "pr": null
+    },
+    "acceptance-review-unvalidated-edge": {
+      "status": "planned",
+      "pr": null
     }
   }
 }
