@@ -1,8 +1,8 @@
 """The scenarios of tests/gate/kit/test_lane_post_merge.py (its items), this file their command
 (testkit.main): scripts/octo-feather-lane post-merge, the director's post-merge routine (owner
 ruling 2026-10-29 on issue 206; steps 1-2, issue 396), offline: the testkit's fake gh holds PR #7
-and the push runs of its merge commit (a tape per run list and run watch: the runs start and end
-between calls), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged at
+and push runs on main (a run in progress completes when watched; one created later is listed once
+its time comes), and logs every call. Step 1 stops, exit 1, on a PR not merged and on one merged at
 another head; step 2 stops on a red run naming its URL, on no run within the --wait bound, and on a
 watch that fails with its run unfinished; all runs concluded success passes. Every run ends with a
 one-line summary of each step's outcome, and only gh reads run (rerun safe), asserted after every
@@ -12,9 +12,9 @@ justfile recipes (vendored-fetch, install-check) and the real mise run; `uv sync
 install`, which would reach the package registries, are testkit/argv_recorder.sh (a plain seam
 stand-in for the registries), except where a refresh fails: the real uv fails for real (no lockfile;
 the pinned Python absent, downloads off). Step 4 (issue 398, tests/gate/kit/herdr_messaging.py)
-reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5
-(issue 399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending
-and a green run exits 3.
+reads a throwaway state dir (XDG_STATE_HOME) with no lane record, so it tells no pane; step 5 (issue
+399, tests/gate/kit/lane_post_merge_teardown.py) finds no archived record, so it is pending and a
+green run exits 3.
 
 The kit's origin (B, then the merge commit M with a pyproject, then P past it with a mise.toml; and
 M2 off B pinning a Python no one has), its install clone and the target repo are prepared once per
@@ -23,10 +23,10 @@ gate run (testkit Scratch.prepare); each case moves the install clone, never clo
 
 from __future__ import annotations
 
-import json
 import os
 import re
 import sys
+import time
 from typing import TYPE_CHECKING
 
 from testkit import HERE, ROOT, Ran, Scratch, kit, main, tool_homes
@@ -165,41 +165,25 @@ class Lane:
 
     def store(
         self,
-        lists: Sequence[Sequence[dict[str, object]]] = ((),),
-        watch: dict[int, dict[str, object]] | None = None,
-        base: Sequence[Sequence[dict[str, object]]] = (),
+        runs: Sequence[dict[str, object]] = (),
         compare: dict[str, str] | None = None,
         wf: Sequence[tuple[str, str]] | None = (("check.yml", "blob"),),
     ) -> None:
-        """PR #7 merged at H (self.pr); the merge commit's push runs, LISTS one answer per run
-        list (no repetition after exhaustion); each WATCH run's watch answer; BASE the base's later
-        push runs of `check` per list; COMPARE each sha's compare
-        status against the merge commit; the merge commit's .github/workflows entries WF (None: no
-        .github). With self.repo, gh is asked with -R it."""
-        g, m, repo = self.s.gh, self.merge, self.repo
+        """PR #7 merged at H (self.pr); gh's push runs RUNS (run1), on the merge commit or
+        another; COMPARE each sha's compare status against the merge commit; the merge commit's
+        .github/workflows entries WF (None: no .github); the call log emptied. With self.repo, gh
+        is asked with -R it."""
+        g, m = self.s.gh, self.merge
         self.pr()
-        r = f" -R {repo}" if repo else ""
-
-        def ans(runs: Sequence[dict[str, object]], fields: str) -> str:
-            return json.dumps([{f: x[f] for f in fields.split(",")} for x in runs]) + "\n"
-
-        ids = {int(str(x["databaseId"])) for ls in (*lists, *base) for x in ls}
-        tapes: dict[str, list[object]] = {
-            f"run list --commit {m} --event push --json {FIELDS}{r}": [
-                ans(ls, FIELDS) for ls in lists
-            ],
-            **{f"run watch {i} --exit-status{r}": [(watch or {}).get(i, "")] for i in ids},
-        }
-        if base:
-            key = "run list --branch main --event push --workflow check --limit 20 --json "
-            tapes[key + BASE_FIELDS + r] = [ans(ls, BASE_FIELDS) for ls in base]
+        for d in ("run", "api/repos/o/r/compare", TREES):
+            for f in (g.dir / d).glob("*.json") if (g.dir / d).is_dir() else ():
+                f.unlink()
+        (g.dir / "watch-fails").unlink(missing_ok=True)
+        for x in runs:
+            g.store(f"run/{x['databaseId']}.json", x)
         for sha, status in (compare or {}).items():
-            tapes[f"api repos/{{owner}}/{{repo}}/compare/{m}...{sha} --jq .status"] = [
-                status + "\n"
-            ]
-        g.tape(tapes)
-        for f in (g.dir / TREES).glob("*.json") if (g.dir / TREES).is_dir() else ():
-            f.unlink()
+            g.store(f"api/repos/o/r/compare/{m}...{sha}.json", {"status": status})
+        (g.dir / "log").write_text("")
 
         def tree(sha: str, entries: Sequence[tuple[str, str, str]]) -> None:
             t = [{"path": p, "type": k, "sha": x} for p, k, x in entries]
@@ -221,16 +205,20 @@ class Lane:
         return r
 
 
-def run1(name: str, status: str, conclusion: str, i: int, head: str = "") -> dict[str, object]:
-    """A push run as gh lists it."""
+def run1(
+    name: str, status: str, conclusion: str, i: int, head: str, **more: object
+) -> dict[str, object]:
+    """A push run on main as gh holds it; MORE: its createdAt, the conclusion it completes with."""
     return {
         "databaseId": i,
         "status": status,
         "conclusion": conclusion,
         "workflowName": name,
         "headSha": head,
+        "headBranch": "main",
+        "event": "push",
         "url": f"https://github.com/o/r/actions/runs/{i}",
-    }
+    } | more
 
 
 def last(r: Ran) -> str:
@@ -249,7 +237,7 @@ def merged_step(s: Scratch) -> None:
     run list. Usage: missing --lane, a HEAD that is no sha."""
     lane = Lane(s)
     green = run1("check", "completed", "success", 11, lane.m)
-    lane.store([[green]])
+    lane.store([green])
     lane.pr("OPEN")
     r = lane.run(1, "post-merge", "7", H[:7], "--lane", "gh7")
     assert "step 1 merged: stopped: PR #7 is OPEN, not merged" in r.out, f"not merged: {r.out}"
@@ -271,8 +259,8 @@ def merged_step(s: Scratch) -> None:
 
 
 def main_ci(s: Scratch) -> None:
-    """Step 2: a run in progress is watched to its end with --exit-status, a second workflow joins;
-    every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
+    """Step 2: a run in progress is watched to its end with --exit-status, a second workflow beside
+    it; every run success: exit 3 (step 5 pending), one line per step and the summary; the PR's repo
     not the install's leaves it unchanged; a rerun the same. A run appearing within the bound is
     waited for. A red run stops naming its URL; a watch failing while its run reads unfinished
     stops naming it."""
@@ -281,11 +269,11 @@ def main_ci(s: Scratch) -> None:
     m12 = m[:12]
     green = run1("check", "completed", "success", 11, m)
     lint = run1("lint", "completed", "success", 12, m)
-    busy = run1("check", "in_progress", "", 11, m)
+    busy = run1("check", "in_progress", "", 11, m, completes="success")
     red = run1("check", "completed", "failure", 13, m)
     lanes = lane.state / "octo-feather" / "lanes"
     lane.repo = "o/r"
-    lane.store(lists=[[busy], [green, lint]])
+    lane.store([busy, lint])
     for _ in range(2):  # the rerun: same result, still reads only
         r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--repo", "o/r")
         step1 = f"PR #7 (gh7) merged into main at head {H[:12]}, merge commit {m12}"
@@ -304,19 +292,20 @@ def main_ci(s: Scratch) -> None:
         log = s.gh.log()
         assert "run watch 11 --exit-status -R o/r" in log, f"run not watched in o/r: {log}"
         assert f"pr view 7 --json {PR_FIELDS} -R o/r" in log, f"pr view: {log}"
-        lane.store(lists=[[busy], [green, lint]])
+        lane.store([busy, lint])
     lane.repo = ""
-    lane.store(lists=[[], [green]])
-    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "1")
+    # created 1-2s after the first run list (gh's createdAt, whole seconds), within --wait 4
+    late = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime(time.time() + 2))
+    lane.store([green | {"createdAt": late}])
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "4")
     says(r, "late run", f"step 2 main CI: ok: 1 push run on {m12} concluded success")
-    lane.store(lists=[[red, lint]], watch={13: {"err": "run 13 failed\n", "exit": 1}})
+    lane.store([red, lint])
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
     red_line = f"step 2 main CI: stopped: main CI red on {m12}: check failure "
     says(r, "red", red_line + "https://github.com/o/r/actions/runs/13", summary=STOP2)
     assert "concluded success" not in r.out, f"red: {r.out}"
-    lane.store(
-        lists=[[busy], [busy]], watch={11: {"err": "failed to get run: HTTP 502\n", "exit": 1}}
-    )
+    lane.store([busy])
+    s.gh.store("watch-fails", "")  # gh's own failure (a rejected token) while the run goes on
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
     assert re.search(
         r"step 2 main CI: stopped: gh run watch 11 failed.*https://github.com/o/r/actions/runs/11",
@@ -373,7 +362,7 @@ def superseded(s: Scratch) -> None:
     cmp = {sn: "ahead", sp: "identical", so: "diverged"}
     gone = run1("check", "completed", "cancelled", 21, m)
     old = run1("check", "completed", "success", 20, so)
-    lint = run1("lint", "completed", "success", 12, m)
+    lint = run1("lint", "completed", "success", 24, m)  # listed after 21, gh by id
     via = (
         "check https://github.com/o/r/actions/runs/21 cancelled, superseded by "
         f"https://github.com/o/r/actions/runs/22 on {sn[:12]} (contains {m12})"
@@ -384,11 +373,11 @@ def superseded(s: Scratch) -> None:
         run1("check", "completed", "success", 22, sn),
         run1("check", "completed", "success", 23, so),
     ]
-    lane.store(lists=[[gone, lint]], base=[base], compare=cmp)
+    lane.store([gone, lint, *base], compare=cmp)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
     want = (
         f"step 2 main CI: ok: 2 push runs on {m12} concluded success: {via}, lint "
-        "https://github.com/o/r/actions/runs/12"
+        "https://github.com/o/r/actions/runs/24"
     )
     assert want in r.out.split("\n"), f"superseded: {r.out}"
     log = s.gh.log()
@@ -397,26 +386,16 @@ def superseded(s: Scratch) -> None:
         in log
     ), f"superseded reads: {log}"
     assert f"api repos/{{owner}}/{{repo}}/compare/{m}...{sn} --jq .status" in log, log
-    lane.store(
-        lists=[[gone]],
-        base=[
-            [run1("check", "in_progress", "", 22, sn)],
-            [run1("check", "completed", "success", 22, sn)],
-        ],
-        compare=cmp,
-    )
+    lane.store([gone, run1("check", "in_progress", "", 22, sn, completes="success")], compare=cmp)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
     want = f"step 2 main CI: ok: 1 push run on {m12} concluded success: {via}"
     assert want in r.out.split("\n"), f"superseded watched: {r.out}"
     assert "run watch 22 --exit-status" in s.gh.log(), f"superseded watched: {s.gh.log()}"
     lane.store(
-        lists=[[gone]],
-        base=[
-            [run1("check", "completed", "cancelled", 22, sn)],
-            [
-                run1("check", "completed", "cancelled", 22, sn),
-                run1("check", "completed", "success", 25, sp),
-            ],
+        [
+            gone,
+            run1("check", "completed", "cancelled", 22, sn),
+            run1("check", "completed", "success", 25, sp),
         ],
         compare=cmp,
     )
@@ -427,16 +406,14 @@ def superseded(s: Scratch) -> None:
         f"https://github.com/o/r/actions/runs/25 on {sp[:12]} (contains {m12})"
     )
     assert want in r.out.split("\n"), f"superseded twice: {r.out}"
-    lane.store(lists=[[gone]], base=[[run1("check", "completed", "failure", 22, sn)]], compare=cmp)
+    lane.store([gone, run1("check", "completed", "failure", 22, sn)], compare=cmp)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
     want = (
         f"step 2 main CI: stopped: main CI red on {m12}: {via}, failure; fix main first, nothing "
         "after this step runs"
     )
     assert want in r.out.split("\n"), f"superseded red: {r.out}"
-    lane.store(
-        lists=[[gone]], base=[[old, run1("check", "completed", "success", 23, so)]], compare=cmp
-    )
+    lane.store([gone, old, run1("check", "completed", "success", 23, so)], compare=cmp)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
     want = (
         f"step 2 main CI: stopped: main CI red on {m12}: check cancelled "
@@ -445,14 +422,17 @@ def superseded(s: Scratch) -> None:
     )
     assert want in r.out.split("\n"), f"no superseding run: {r.out}"
     lane.store(
-        lists=[[gone, run1("lint", "completed", "failure", 12, m)]],
-        base=[[run1("check", "completed", "success", 22, sn)]],
+        [
+            gone,
+            run1("lint", "completed", "failure", 24, m),
+            run1("check", "completed", "success", 22, sn),
+        ],
         compare=cmp,
     )
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", "--wait", "0")
     want = (
         f"step 2 main CI: stopped: main CI red on {m12}: lint failure "
-        "https://github.com/o/r/actions/runs/12;"
+        "https://github.com/o/r/actions/runs/24;"
     )
     assert want in r.out, f"red beside cancelled: {r.out}"
     assert not [x for x in s.gh.log() if "--branch" in x], f"red beside cancelled: {s.gh.log()}"
@@ -481,7 +461,7 @@ def kit_refresh(s: Scratch) -> None:
     ]
     ff = f"kit install {k} fast-forwarded {b12}..{m12}; just vendored-fetch ok; "
     stop3 = "step 3 kit refresh: stopped: "
-    lane.store(lists=[[green], [green], [green], [green]])  # behind, rerun, past, failing uv
+    lane.store([green])  # behind, rerun, past, failing uv
     lane.install(b)
     r = lane.run(3, "post-merge", "7", H, "--lane", "gh7")
     says(
@@ -525,7 +505,7 @@ def kit_refresh(s: Scratch) -> None:
     assert lane.calls() == refresh[:1], f"failing tool ran on: {lane.calls()}"
     # the real uv, M2's pin absent, downloads off
     lane.merge = lane.m2
-    lane.store(lists=[[run1("check", "completed", "success", 11, lane.m2)]])
+    lane.store([run1("check", "completed", "success", 11, lane.m2)])
     lane.install(b)
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7", tools="real-uv")
     says(
@@ -549,7 +529,7 @@ def install_stops(s: Scratch) -> None:
     m12, b, k = lane.m[:12], lane.b, lane.kit
     stop3 = "step 3 kit refresh: stopped: "
     green = run1("check", "completed", "success", 11, lane.m)
-    lane.store(lists=[[green], [green]])  # dirty, then diverged
+    lane.store([green])  # dirty, then diverged
     lane.install(b)
     (k / "stray").write_text("x\n")
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
