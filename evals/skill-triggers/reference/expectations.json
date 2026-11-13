@@ -241,5 +241,13 @@
   "shaper-repair-near-clean-repo": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
   "shaper-repair-near-clean-version": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
   "shaper-repair-near-question-exit": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
-  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]}
+  "shaper-repair-near-question-json": {"facts": [{"fact": "skill_not_read", "skill": "repair-specs"}]},
+  "gw-herdr-send-test-list": {"facts": [{"fact": "skill_read", "skill": "herdr-comms"}]},
+  "gw-herdr-director-ticket-count": {"facts": [{"fact": "skill_read", "skill": "herdr-comms"}]},
+  "gw-herdr-near-which-pane": {"facts": [{"fact": "skill_not_read", "skill": "herdr-comms"}]},
+  "gw-herdr-near-handoff-count": {"facts": [{"fact": "skill_not_read", "skill": "herdr-comms"}]},
+  "gw-prove-json-greeting": {"facts": [{"fact": "skill_read", "skill": "principle-prove-it-works"}]},
+  "gw-prove-measure-dirs": {"facts": [{"fact": "skill_read", "skill": "principle-prove-it-works"}]},
+  "gw-prove-near-gate-line": {"facts": [{"fact": "skill_not_read", "skill": "principle-prove-it-works"}]},
+  "gw-prove-near-diff-files": {"facts": [{"fact": "skill_not_read", "skill": "principle-prove-it-works"}]}
 }
