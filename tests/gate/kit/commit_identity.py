@@ -150,7 +150,9 @@ def no_commit(s: Scratch) -> None:
         [kit("pi-role"), "--print-env", str(ROOT / "agents" / "general-worker.md")], cwd=repo
     )
     assert ran.out == "", ran.out
-    s.run([kit("pi-role"), "--print-env", str(ROOT / "agents" / "implementer.md")], want=1, cwd=repo)
+    s.run(
+        [kit("pi-role"), "--print-env", str(ROOT / "agents" / "implementer.md")], want=1, cwd=repo
+    )
 
 
 if __name__ == "__main__":
