@@ -1,0 +1,7 @@
+{
+  "suite": "supervisor-delegation",
+  "kind": "role-transcript",
+  "description": "Does the supervisor delegate diagnosis and repair to a worker and own its lane's integration and PR without asking the director (roles #acceptance-supervisor-delegates-execution, #acceptance-delegated-pr, #874)? A lane supervisor on lane gh12 meets a failed `just qc` criterion with room for a worker, the repair worker's finished branch, and two finished ticket branches; Herdr and its kit wrappers are stand-ins answering delivered (schema.md, Case, stand_ins), worker branches stand beside gh12 (schema.md, Case, branches). Graded on runs (schema.md, Run record): herdr-spawn of an implementer and its brief to the spawned pane, octo-feather-integrate on the worker branches (`just integrate` runs it), no gh pr create, no herdr-say --parent; and branch_paths: no supervisor edit under src/ or tests/. owner-need-reaches-director is the negative: an owner-held need still reaches the director. Stated limits: gh12 starts at main's commit (branch_paths reads changes against main, so the lane's earlier tickets sit in main's tree); the merge ask itself is graded by supervisor-notifications/merge-ready-only-merge-ask; diagnosis by reading code is not recordable, only an edit is.",
+  "max_tool_calls": 40,
+  "timeout_s": 900
+}
