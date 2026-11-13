@@ -62,8 +62,7 @@ rf PASS rc0 | grep -q 'ran runme --role count 0: 0 matching runs (' || fail "ran
 rf FAIL rc1 | grep -q 'ran runme --role count 1: 2 matching runs: ' || fail "ran count 1: want FAIL on the second run: $out"
 rf FAIL rc0hit | grep -q 'ran runme --role count 0: [12] matching runs: ' || fail "ran count 0: want FAIL at the first run: $out"
 rf FAIL rclater | grep -q 'ran runme --role count 1: 2 matching runs: ' || fail "ran count 1: want FAIL on a later call's run after a fact beside it was decided: $out"
-# stand_ins (schema.md, Case): a stand-in answers by leading arguments, {repo} filled, an `after` answer only once
-# its call was answered, behind the ran shim, which records the call and its exit; a call no answer leads exits 1.
+# stand_ins (rule: schema.md, Case).
 python3 - "$t/rf/rf" <<'PY'
 import json, sys
 d = sys.argv[1]
