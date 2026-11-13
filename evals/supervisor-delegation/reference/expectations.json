@@ -10,13 +10,6 @@
         ]
       },
       {
-        "fact": "ran",
-        "program": "herdr-say",
-        "args": [
-          "w2:p9"
-        ]
-      },
-      {
         "fact": "branch_paths",
         "untouched": [
           "src/",
@@ -32,6 +25,9 @@
         "count": 0
       }
     ]
+  },
+  "qc-failure-brief-review": {
+    "facts": []
   },
   "repair-result-integrated": {
     "facts": [
