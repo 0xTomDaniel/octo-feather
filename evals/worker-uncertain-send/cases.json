@@ -28,7 +28,7 @@
             "--parent"
           ],
           "argc": 2,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -36,7 +36,7 @@
             "--timeout"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -44,7 +44,7 @@
             "--kind"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -52,7 +52,7 @@
             "--artifact"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -122,7 +122,7 @@
             "--parent"
           ],
           "argc": 2,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -130,7 +130,7 @@
             "--timeout"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -138,7 +138,7 @@
             "--kind"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
@@ -146,7 +146,7 @@
             "--artifact"
           ],
           "argc": 4,
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued (compacting) at the bound: queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
         },
         {
