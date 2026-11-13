@@ -21,3 +21,5 @@ verify-octo-feather: drive queued-completion PASS
 Before the fix (same stand-in, the tagged test `queued_completion` at e1d4d4da's herdr-say): exit 1, `agent_prompt_stalled ... it may sit unsent in that pane`, which the worker roles resend on ("on any other exit, send it again, 3 sends in all").
 
 Limits: Herdr is stood in; a live Pi compaction was not reproduced. The pane text herdr-say matches is Pi's own (`Auto-compacting... (... to cancel)`, `Compacting context...`, queued `Steering: TEXT` / `Follow-up: TEXT`, read from the pinned Pi binary); `herdr agent read PANE --source visible` answered exit 0 on Herdr 0.9.5 live.
+
+Round 2 (mid-lane review, shell-logic): the queued-during-compaction decision moved from herdr-say's Bash to `scripts/octo-feather-queued` (Python, stdlib) at 2049bd1a; herdr-say only calls it. Tests unchanged. Same drive at 2049bd1a: delivered-once delivered 1, attempts 1; still-queued delivered 0, attempts 1; PASS, evidence record 20261113T124947Z-6ea303f7.
