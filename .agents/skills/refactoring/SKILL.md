@@ -1,13 +1,13 @@
 ---
 name: refactoring
-description: "Refactoring playbook: change how code is structured while what it does stays the same. Load it before the first edit of a task that restructures code with behaviour unchanged: a cleanup, reshape, extraction, split, merge, move, rename or deduplication. Not for a feature, which adds behaviour, nor a bug fix, which corrects it."
+description: "Refactoring playbook: change how code is structured while what it does stays the same. For a task that restructures code with behaviour unchanged: a cleanup, reshape, extraction, split, merge, move, rename or deduplication. Not for a feature, which adds behaviour, nor a bug fix, which corrects it."
 ---
 
 ### Refactoring
 
 **You own the contract. The structure changes. The behavior does not.** Distinct from a feature, which adds behavior, and a bug fix, which corrects it.
 
-If the cleanup reveals a missing feature or a real bug, split it out and ship the structural change first against the pinned contract. A redesign is allowed, but name it and route it as a feature. Large or cross-cutting structural work is shaped before it is built: hand it back to the user. This playbook is the focused-to-medium change.
+If the cleanup reveals a missing feature or a real bug, split it out and ship the structural change first against the pinned contract. A redesign is allowed, but name it and route it as a feature. Large or cross-cutting structural work is shaped before it is built: escalate it to your parent (`herdr-say --parent`, docs/adr/0015). This playbook is the focused-to-medium change.
 
 1. Pin the behavior contract first. Read the affected subsystem to learn the contract, then write a characterization test, snapshot, or equivalence harness that captures current behavior before any structure moves (the **tdd** skill, `../tdd/SKILL.md`). If the area has no coverage, write the pin before touching structure. Type check and lint are not a pin.
 2. Name the structure the code is missing. Boring code stays when the shape is already clear and local. The reshape must delete branches or invalid states, not add indirection.
