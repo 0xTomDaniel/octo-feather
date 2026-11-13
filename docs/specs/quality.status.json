@@ -191,8 +191,8 @@
     "acceptance-one-execution": {
       "status": "built",
       "pr": 880,
-      "record": "20261113T065039Z-483f6b4c",
-      "commit": "34f6770e8532328bf81b58d759f36b6b793309cc",
+      "record": "20261113T071650Z-d6cc342d",
+      "commit": "ca9aa83bf4bd8c008c488869395e14e49a87bf6c",
       "tests": [
         "tests/gate/kit/test_qc_one_execution.py"
       ]
