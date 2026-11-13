@@ -9,7 +9,10 @@ its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send
 on to tell the others (director rule #619). A general worker routes like every worker (roles
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
 never messages the director: its parent proven gone, herdr-say itself sends the director one
-fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone)."""
+fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). The director parks
+its own general worker into the director log and its next message resumes it, with its recorded
+role, session and parent, in its parent's workspace (comms spec
+#acceptance-director-worker-resume); a parked lane worker still resumes as before."""
 
 from __future__ import annotations
 
@@ -18,12 +21,9 @@ import os
 import subprocess
 import sys
 import time
-from typing import TYPE_CHECKING
+from pathlib import Path
 
 from testkit import ROOT, Scratch, kit, main
-
-if TYPE_CHECKING:
-    from pathlib import Path
 
 ASSETS = ROOT / ".agents" / "skills" / "herdr-comms" / "assets"
 TELL_BOUND = 20  # post-merge step 4's bound on one send, seconds (octo-feather-lane --help)
@@ -234,6 +234,115 @@ def parent_gone(s: Scratch) -> None:
     show(f"no director reachable: exit 68: {ran.err.strip().splitlines()[-1]}")
 
 
+def state_dir(s: Scratch) -> Path:
+    """S's octo-feather state dir for its Herdr session (scripts/octo-feather-state)."""
+    base = s.home / ".local" / "state" / "octo-feather"
+    return base / "sessions" / s.env["HERDR_SESSION"] if "HERDR_SESSION" in s.env else base
+
+
+def tab_process(s: Scratch, d: Path, pane: str, cwd: Path) -> subprocess.Popen[bytes]:
+    """A process standing in for the agent at PANE: it runs in CWD under the env herdr-spawn gave
+    PANE's tab, with Herdr's own ids, as herdr-close --park reads them from /proc."""
+    g = json.loads((d / "agents.json").read_text())[pane]
+    ids = {"HERDR_PANE_ID": pane, "HERDR_TAB_ID": g["tab_id"]}
+    env = s.env | g["env"] | ids | {"HERDR_WORKSPACE_ID": g["workspace_id"]}
+    p = subprocess.Popen(["sleep", "300"], cwd=cwd, env=env, start_new_session=True)  # noqa: S607
+    for _ in range(100):  # until exec'd, so its environ is the tab's
+        if Path(f"/proc/{p.pid}/environ").read_bytes().find(b"HERDR_TAB_ID=") >= 0:
+            break
+        time.sleep(0.02)
+    return p
+
+
+def resumed_as(d: Path, out: str, space: str, session: str) -> tuple[str, dict[str, str]]:
+    """The pane herdr-say printed (pane=), asserted resumed in SPACE with SESSION; its tab env."""
+    pane = next(x.removeprefix("pane=") for x in out.split() if x.startswith("pane="))
+    g = json.loads((d / "agents.json").read_text())[pane]
+    assert g["workspace_id"] == space, (space, g)
+    assert g["env"]["OCTO_FEATHER_SESSION_ID"] == session, g
+    starts = [x for x in lines(d / "log") if x.startswith(f"agent start {g['name']} ")]
+    assert starts[-1].endswith(f"--session-id {session}"), starts
+    return pane, g["env"]
+
+
+DIRECTOR = {"OCTO_FEATHER_ROLE": "director", "HERDR_PANE_ID": "w0:p1", "HERDR_WORKSPACE_ID": "w0"}
+SAY = str(ASSETS / "herdr-say")
+
+
+def director_parks(s: Scratch, d: Path) -> dict[str, str]:
+    """The director spawns general-worker-a1 in w0 (a process standing in for it), parks it with
+    `herdr-close --park`, appending the line to the director log after a note line: that line."""
+    state = state_dir(s)
+    (state / "lanes").mkdir(parents=True)
+    (state / "director.toml").write_text('pane = "w0:p1"\n')
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w0", "--name", "general-worker-a1"]
+    spawn += ["--label", "a1", "--role", "general-worker", "--cwd", str(wt)]
+    got = dict(x.split("=", 1) for x in s.run(spawn, env=DIRECTOR).out.split())
+    worker = tab_process(s, d, got["pane"], wt)
+    try:
+        park = s.run([str(ASSETS / "herdr-close"), "--park", got["pane"]], env=DIRECTOR)
+        assert worker.wait(timeout=10) is not None
+    finally:
+        worker.kill()
+    dlog = state / "director.handoffs.jsonl"
+    note = {"at": "2026-11-13T00:00:00Z", "kind": "note", "text": "t"}
+    dlog.write_text(json.dumps(note) + "\n" + park.out + "\n")
+    show(f"herdr-close --park {got['pane']} >> director.handoffs.jsonl: {park.out}")
+    line = json.loads(park.out)
+    want = {"name": "general-worker-a1", "role": "general-worker", "parent": "w0:p1", "label": "a1"}
+    assert {k: line[k] for k in want} == want, line
+    assert line["session"] == got["provider_session_id"], (line, got)
+    return line
+
+
+def lane_worker_resumes(s: Scratch, caller: str, who: str) -> None:
+    """Lane gh7's worker implementer-gh7 parked (parent its supervisor w1:p1, session S7):
+    CALLER's herdr-say resumes it in w1 with its role, session and parent, as before."""
+    d, _ = worker_world(s)
+    s.identity()
+    parked = {"at": "2026-11-13T00:00:00Z", "kind": "parked", "pane": "w1:p3"}
+    parked |= {"name": "implementer-gh7", "label": "gh7", "role": "implementer"}
+    parked |= {"parent": "w1:p1", "cwd": str(s.root), "session": "S7"}
+    (state_dir(s) / "lanes" / "gh7.handoffs.jsonl").write_text(json.dumps(parked) + "\n")
+    env = SUPERVISOR | {"HERDR_PANE_ID": "w1:p1"} if caller == "w1:p1" else DIRECTOR
+    got = s.run([SAY, "implementer-gh7", "go on"], env=env)
+    new, tab = resumed_as(d, got.out, "w1", "S7")
+    assert (tab["OCTO_FEATHER_ROLE"], tab["OCTO_FEATHER_PARENT"]) == ("implementer", "w1:p1")
+    assert to(d, new) == [f"Resumed from park as pane={new}. go on"], lines(d / "prompts")
+    show(f"parked lane worker implementer-gh7, sent by {who}: {got.out}, in w1, session S7")
+
+
+def director_worker_resume(s: Scratch) -> None:
+    """comms #acceptance-director-worker-resume: the director w0:p1 parks its general worker
+    general-worker-a1 into the director log (director_parks); `herdr-say --parked
+    general-worker-a1` prints that line; the director's `herdr-say general-worker-a1 MSG` prints
+    the resumed pane=, in w0, with the recorded role, session and parent, and the worker receives
+    "Resumed from park as pane=..."; its `--parent RESULT` reaches the director. A parked lane
+    worker still resumes in its supervisor's workspace w1, by its supervisor or by the director.
+    Each observation printed, for the qc demo."""
+    d, _ = worker_world(s)
+    s.env["HERDR_SESSION"] = f"park-{os.getpid()}"  # only this scenario's processes count
+    line = director_parks(s, d)
+    got = s.run([SAY, "--parked", "general-worker-a1"], env=DIRECTOR)
+    assert json.loads(got.out) == line, got.out
+    show(f"herdr-say --parked general-worker-a1: {got.out}")
+    got = s.run([SAY, "general-worker-a1", "continue a1"], env=DIRECTOR)
+    new, env = resumed_as(d, got.out, "w0", line["session"])
+    assert env["OCTO_FEATHER_ROLE"] == "general-worker", env
+    assert env["OCTO_FEATHER_PARENT"] == "w0:p1", env
+    assert to(d, new) == [f"Resumed from park as pane={new}. continue a1"], lines(d / "prompts")
+    show(f"herdr-say general-worker-a1 from the director: {got.out}; {new} received: {to(d, new)}")
+    back = {k: env[k] for k in ("OCTO_FEATHER_ROLE", "OCTO_FEATHER_PARENT")}
+    s.run([SAY, "--parent", RESULT], env=back | {"HERDR_PANE_ID": new, "HERDR_WORKSPACE_ID": "w0"})
+    assert to(d, "w0:p1") == [RESULT], lines(d / "prompts")
+    show(f"resumed worker --parent: director w0:p1 received: {to(d, 'w0:p1')}")
+    for caller, who in (("w1:p1", "its supervisor"), ("w0:p1", "the director")):
+        lane_worker_resumes(sub(s, caller.replace(":", "-")), caller, who)
+
+
 def merged_repo(s: Scratch) -> tuple[Path, str]:
     """A repo whose main merged PR 7 (head H, changing a role file): its dir and H."""
     r = s.root / "repo"
@@ -331,5 +440,11 @@ def post_merge_busy(s: Scratch) -> None:
 
 if __name__ == "__main__":
     main(
-        spawn_ready_late, say_lookup_fails, say_stalled, post_merge_busy, worker_route, parent_gone
+        spawn_ready_late,
+        say_lookup_fails,
+        say_stalled,
+        post_merge_busy,
+        worker_route,
+        parent_gone,
+        director_worker_resume,
     )

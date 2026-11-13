@@ -27,11 +27,13 @@
 # Send a message.
 #
 # A target Herdr does not find may be parked: the latest parked line naming it,
-# in any lane hand-off log of the caller's Herdr session (octo-feather-state),
+# in the director log or any lane hand-off log of the caller's Herdr session
+# (octo-feather-state; octo-feather-handoff parked),
 # decides; another session's lanes repeat its ids. A live agent under the
 # line's name gets the message; otherwise the agent is resumed first (a supervisor,
 # the lane's name, in its lane workspace when that still exists, else a new one; a
-# worker in the caller's space), its new pane= is printed, and the message it
+# worker, a lane's or the director's own, in its recorded parent's workspace while
+# that parent is live, else the caller's), its new pane= is printed, and the message it
 # receives starts "Resumed from park as pane=PANE. ".
 # `herdr-say --parked TARGET` prints that line, or exits 1 when there is none.
 #
@@ -150,7 +152,9 @@ if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]
     if [[ "$name" == "$(jq -r .lane <<<"$line")" ]]; then
       started="$("$here/../../../../scripts/octo-feather-start" "${resume[@]}")"
     else
-      started="$("$here/herdr-spawn" --workspace "${HERDR_WORKSPACE_ID:-}" --label "$(jq -r '.label // .name' <<<"$line")" \
+      # A worker resumes beside its parent: the recorded parent's live workspace, else the caller's.
+      space="$(herdr agent get "$(jq -r '.parent // empty' <<<"$line")" 2>/dev/null | jq -r '.result.agent.workspace_id // empty' 2>/dev/null || true)"
+      started="$("$here/herdr-spawn" --workspace "${space:-${HERDR_WORKSPACE_ID:-}}" --label "$(jq -r '.label // .name' <<<"$line")" \
         --role "$(jq -r '.role // empty' <<<"$line")" "${resume[@]}" -- pi)"
     fi
     name="$(sed -n 's/.* pane=\([^ ]*\).*/\1/p' <<<"$started")"

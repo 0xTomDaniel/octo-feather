@@ -234,3 +234,12 @@ covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_m
 [demo."comms#acceptance-parent-gone"]
 command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+
+# Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py) and this demo, the kit's commands against the testkit's
+# Herdr stand-in: the director parks its general worker stand-in (herdr-close --park, appended to the director log),
+# herdr-say --parked prints that line, the director's herdr-say resumes it (pane=, recorded role, session and parent, in
+# the director's workspace) and it receives "Resumed from park as pane=..."; its --parent result reaches the director;
+# a parked lane worker still resumes in its supervisor's workspace.
+[demo."comms#acceptance-director-worker-resume"]
+command = "python3 tests/gate/kit/herdr_messaging.py director_worker_resume"
+covers = ["scripts/octo-feather-handoff", ".agents/skills/herdr-comms/assets/herdr-say", ".agents/skills/herdr-comms/assets/herdr-close", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
