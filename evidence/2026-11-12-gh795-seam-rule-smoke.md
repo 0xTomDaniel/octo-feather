@@ -2,6 +2,7 @@
 
 Smoke: agents/code-reviewer.md .agents/skills/tdd/SKILL.md .skillfile/patches/skills/tdd/SKILL.md.patch run once below (the reviewer loaded the patched tdd SKILL.md).
 Smoke: round 2 and 3 paths (supervisor, qc-judge, to-tickets, implementer, tdd, DEEPENING): see `evidence/2026-11-13-gh795-public-interface-smoke.md`.
+Smoke: .agents/skills/typescript/SKILL.md not run: its net change is a pointer to quality spec #acceptance-public-surfaces (Testing Stack); no TypeScript role run in this lane.
 Removed: the old rule "integration test may also enter through a public library function" (ADR 0002, AGENTS.md, tdd and codebase-design patches, implementer, code reviewer, typescript skill, GLOSSARY Test, kit-mini fixture, judgment-test-quality question) and the reviewer's block "a test that reaches past a public surface", replaced by the shallow-seam and unagreed-seam blocks.
 
 Issue #795, ticket #796, branch gh795-796. One headless run, no eval suite.
