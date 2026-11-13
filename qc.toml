@@ -219,3 +219,14 @@ covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skill
 [demo."skills#acceptance-skill-frontmatter"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
 covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
+
+# Proven by its tagged tests (tests/gate/kit/test_herdr_messaging.py) and this demo: herdr-say run as a general worker
+# against the testkit's Herdr stand-in: live parent delivered, peer lane refused (77), parent gone: the director stand-in
+# receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.
+[demo."roles#acceptance-task-worker-route"]
+command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+
+[demo."comms#acceptance-parent-gone"]
+command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]

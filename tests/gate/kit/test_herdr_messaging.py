@@ -3,7 +3,15 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from herdr_messaging import post_merge_busy, say_lookup_fails, say_stalled, spawn_ready_late
+import pytest
+from herdr_messaging import (
+    parent_gone,
+    post_merge_busy,
+    say_lookup_fails,
+    say_stalled,
+    spawn_ready_late,
+    worker_route,
+)
 
 Case = Callable[..., None]
 
@@ -22,3 +30,15 @@ def test_say_stalled(case: Case) -> None:
 
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
+
+
+@pytest.mark.criterion(
+    "roles#acceptance-task-worker-route", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_worker_route(case: Case) -> None:
+    case(worker_route)
+
+
+@pytest.mark.criterion("comms#acceptance-parent-gone", source="tests/gate/kit/herdr_messaging.py")
+def test_parent_gone(case: Case) -> None:
+    case(parent_gone)

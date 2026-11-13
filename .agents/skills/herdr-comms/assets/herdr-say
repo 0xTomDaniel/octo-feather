@@ -18,6 +18,8 @@
 #       the caller should retry once the target is free
 #   69  the up-chain guard's `herdr agent get` lookup failed (named on stderr)
 #   124 not confirmed within --timeout (named on stderr)
+#   68  a worker's parent is proven gone; not delivered; the director alert's
+#       fate named on stderr
 #   >0  anything else
 #
 # A send never hangs or fails silently (#666; owner rulings #585, #619): the
@@ -35,12 +37,16 @@
 #
 # Up-chain accident guard (docs/adr/0015, not security): a kit agent may message
 # only up its own chain. `--parent` targets the pane that spawned the caller
-# (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector) may
-# reach only its parent, or the director pane in director.toml when its parent
-# is unreachable; a supervisor only its parent (the director) and agents in its
-# own lane workspace, or a parked agent whose latest parked line sits in its
-# lane's hand-off log or names it as parent. Anything else exits 77. The director and callers that are
-# not kit agents (an owner shell, Spec Chat's wake) are not limited.
+# (OCTO_FEATHER_PARENT). A worker (implementer, code-reviewer, corrector,
+# general-worker) may reach only its parent, never the director unless it is
+# that parent; a supervisor only its parent, the director pane in director.toml,
+# agents in its own lane workspace, or a parked agent whose latest parked line
+# sits in its lane's hand-off log or names it as parent. Anything else exits 77.
+# The director and callers that are not kit agents (an owner shell, Spec Chat's
+# wake) are not limited.
+#
+# A worker's parent proven gone: exit 68 and the director alert, parent_gone
+# below (comms spec #say-parent-gone, docs/adr/0030).
 set -euo pipefail
 
 usage() { echo "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET" >&2; }
@@ -74,7 +80,7 @@ target="$1"; message="$2"; bound="${bound:-900}"
 allowed() {
   local role="${OCTO_FEATHER_ROLE:-}" parent="${OCTO_FEATHER_PARENT:-}" info pane space director line lane
   looked=""
-  case "$role" in implementer|code-reviewer|corrector|supervisor) ;; *) return 0 ;; esac
+  case "$role" in implementer|code-reviewer|corrector|general-worker|supervisor) ;; *) return 0 ;; esac
   [[ -n "$parent" && "$target" == "$parent" ]] && return 0
   info="$(herdr agent get "$target" 2>&1)" && looked="" || looked="$(tail -1 <<<"$info")"
   pane="$(jq -r '.result.agent.pane_id // empty' <<<"$info" 2>/dev/null || true)"
@@ -82,7 +88,7 @@ allowed() {
   space="$(jq -r '.result.agent.workspace_id // empty' <<<"$info" 2>/dev/null || true)"
   [[ -n "$pane" && "$pane" == "$parent" ]] && return 0
   director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$("$here/../../../../scripts/octo-feather-state")/director.toml" 2>/dev/null | head -1)"
-  [[ -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
+  [[ "$role" == supervisor && -n "$director" && ( "$target" == "$director" || "$pane" == "$director" ) ]] && return 0
   [[ "$role" == supervisor && -n "$space" && "$space" == "${HERDR_WORKSPACE_ID:-}" ]] && return 0
   # A supervisor's own parked agent: not live, its latest parked line in the
   # caller's lane log (the caller's agent name) or naming the caller as parent.
@@ -104,8 +110,39 @@ allowed || { echo "herdr-say: $OCTO_FEATHER_ROLE may message only up its chain (
 prompt() { rc=0; out="$(herdr agent prompt "$1" "$message" --wait --until working --until idle --timeout "$((bound * 1000))" 2>&1)" || rc=$?; }
 code() { jq -r '.error.code // empty' <<<"$out" 2>/dev/null || true; }
 
+# The fixed parent-gone alert to the director (comms spec #say-parent-gone):
+# composed here, no text from the worker. Exits 68 either way.
+parent_gone() {
+  local state director lane me arc=0 aout
+  state="$("$here/../../../../scripts/octo-feather-state")"
+  director="$(sed -n 's/^pane *= *"\(.*\)"/\1/p' "$state/director.toml" 2>/dev/null | head -1)"
+  lane="$(grep -lx "supervisor *= *\"$target\"" "$state"/lanes/*.toml 2>/dev/null | head -1)"
+  lane="$(basename "${lane:-unknown}" .toml)"
+  me="$(herdr agent get "${HERDR_PANE_ID:-}" 2>/dev/null | jq -r '.result.agent.name // empty' 2>/dev/null || true)"
+  local alert="parent-gone alert from herdr-say (comms spec #say-parent-gone): lane $lane: parent $target is gone (Herdr: agent_not_found; no parked line names it). Worker ${me:-unnamed} (pane ${HERDR_PANE_ID:-unknown}, role $OCTO_FEATHER_ROLE) holds its result, undelivered. Recover the parent; it reconciles the retained result."
+  echo "herdr-say: parent $target is gone (agent_not_found, no parked line names it): not delivered; keep your result and stop, do not re-send" >&2
+  if [[ -z "$director" ]]; then
+    echo "herdr-say: parent-gone alert NOT delivered: no director pane in $state/director.toml; your result stays retained for reconciliation" >&2
+    exit 68
+  fi
+  aout="$(herdr agent prompt "$director" "$alert" --wait --until working --until idle --timeout "$((bound * 1000))" 2>&1)" || arc=$?
+  if [[ "$arc" == 0 ]]; then
+    echo "herdr-say: parent-gone alert delivered to the director (pane $director)" >&2
+  else
+    echo "herdr-say: parent-gone alert NOT delivered to the director (pane $director, exit $arc: $(tail -1 <<<"$aout")); your result stays retained for reconciliation" >&2
+  fi
+  exit 68
+}
+
 prompt "$target"
-if [[ "$rc" != 0 && "$(code)" == agent_not_found ]] && line="$(parked "$target")"; then
+gone="" lrc=0
+if [[ "$rc" != 0 && "$(code)" == agent_not_found ]]; then
+  # Only "no parked line" (exit 1) proves the target gone; a failed lookup does not.
+  line="$(parked "$target")" || lrc=$?
+  [[ "$lrc" == 1 ]] && gone=1
+  [[ "$lrc" == 0 || "$lrc" == 1 ]] || echo "herdr-say: parked lookup for $target failed (exit $lrc): $target not proven gone" >&2
+fi
+if [[ "$rc" != 0 && "$(code)" == agent_not_found && -z "$gone" && "$lrc" == 0 ]]; then
   name="$(jq -r .name <<<"$line")"
   if ! herdr agent get "$name" >/dev/null 2>&1; then
     resume=(--cwd "$(jq -r .cwd <<<"$line")" --name "$name" --resume "$(jq -r .session <<<"$line")"
@@ -130,6 +167,10 @@ fi
   echo "herdr-say: $target is blocked on interactive input; not delivered" >&2; exit 75; }
 
 printf '%s\n' "$out" >&2
+# A worker's own parent proven gone: herdr-say, not the worker, alerts the director.
+case "${OCTO_FEATHER_ROLE:-}" in implementer|code-reviewer|corrector|general-worker)
+  [[ -n "$gone" && "$target" == "${OCTO_FEATHER_PARENT:-}" ]] && parent_gone ;;
+esac
 # Stalled or still unconfirmed at the bound: loud, naming the pane and its state.
 case "$(code)" in
   agent_prompt_stalled|timeout)

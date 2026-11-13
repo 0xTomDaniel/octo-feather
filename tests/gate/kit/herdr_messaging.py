@@ -6,13 +6,17 @@ delivered; a herdr-say whose `herdr agent get` lookup fails names that lookup (n
 refusal, 77); a prompt Herdr reports stalled exits non-zero naming the pane and its state; and
 `octo-feather-lane post-merge` step 4 to a busy (working) supervisor returns within its bound,
 its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send command) and going
-on to tell the others (director rule #619)."""
+on to tell the others (director rule #619). A general worker routes like every worker (roles
+spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
+never messages the director: its parent proven gone, herdr-say itself sends the director one
+fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone)."""
 
 from __future__ import annotations
 
 import json
 import os
 import subprocess
+import sys
 import time
 from typing import TYPE_CHECKING
 
@@ -103,6 +107,127 @@ def say_stalled(s: Scratch) -> None:
     assert "w1:p2" in last, ran.err
     assert "unknown" in last, ran.err
     assert lines(d / "typed") == ["w1:p2\thi"], lines(d / "typed")
+
+
+RESULT = "RESULT-TEXT commit abc123 done"
+
+
+def worker_world(s: Scratch, parent: str = "idle") -> tuple[Path, dict[str, str]]:
+    """Director w0:p1; lane gh7 (record lanes/gh7.toml) with supervisor w1:p1 (PARENT: its
+    status, or gone) and general worker w1:p2; peer lane gh8, supervisor w2:p1, worker w2:p2.
+    The Herdr world and the general worker's env."""
+    agents = {
+        "w0:p1": agent("w0:p1", "director", "idle"),
+        "w1:p2": agent("w1:p2", "general-worker-gh7", "idle"),
+        "w2:p1": agent("w2:p1", "gh8", "idle"),
+        "w2:p2": agent("w2:p2", "implementer-gh8", "idle"),
+    }
+    if parent != "gone":
+        late = time.time() + 3600 if parent == "booting" else 0
+        agents["w1:p1"] = agent("w1:p1", "gh7", parent, late)
+    d = herdr_world(s, agents)
+    state = s.home / ".local" / "state" / "octo-feather"
+    (state / "lanes").mkdir(parents=True)
+    (state / "director.toml").write_text('pane = "w0:p1"\n')
+    for lane, sup in (("gh7", "w1:p1"), ("gh8", "w2:p1")):
+        (state / "lanes" / f"{lane}.toml").write_text(f'supervisor = "{sup}"\ngoal = "g"\n')
+    env = {
+        "OCTO_FEATHER_ROLE": "general-worker",
+        "OCTO_FEATHER_PARENT": "w1:p1",
+        "HERDR_PANE_ID": "w1:p2",
+        "HERDR_WORKSPACE_ID": "w1",
+    }
+    return d, env
+
+
+def to(d: Path, pane: str) -> list[str]:
+    """What PANE received: each prompt submitted to it."""
+    return [x.split("\t", 1)[1] for x in lines(d / "prompts") if x.split("\t")[0] == pane]
+
+
+def show(line: str) -> None:
+    """One observation on stdout, for the qc demo's output."""
+    sys.stdout.write(line + "\n")
+
+
+def sub(s: Scratch, name: str) -> Scratch:
+    """A fresh Scratch NAME inside S, for one more world in the same scenario."""
+    (s.root / name).mkdir()
+    return Scratch(s.root / name)
+
+
+def worker_route(s: Scratch) -> None:
+    """A general worker (roles #acceptance-task-worker-route): a send to a peer lane's agent, by
+    pane or name, exits 77 and the peer receives nothing; `--parent RESULT` is delivered to its
+    parent. Each observation printed, for the qc demo."""
+    d, env = worker_world(s)
+    say = str(ASSETS / "herdr-say")
+    for peer in ("w2:p2", "implementer-gh8", "gh8"):
+        ran = s.run([say, peer, RESULT], want=77, env=env)
+        assert "may message only up its chain" in ran.err, ran.err
+        show(f"peer {peer}: exit 77: {ran.err.strip()}")
+    assert to(d, "w2:p1") == [], lines(d / "prompts")
+    assert to(d, "w2:p2") == [], lines(d / "prompts")
+    show("peer lane gh8 received: nothing")
+    s.run([say, "--parent", RESULT], env=env)
+    assert lines(d / "prompts") == [f"w1:p1\t{RESULT}"], lines(d / "prompts")
+    show(f"parent w1:p1: exit 0, received: {to(d, 'w1:p1')}")
+
+
+def parent_gone(s: Scratch) -> None:
+    """comms #acceptance-parent-gone: lane gh7's supervisor w1:p1 closed, no parked line: the
+    general worker's `--parent RESULT` exits 68 and the director receives exactly one fixed alert
+    naming lane, gone parent and worker, without RESULT; no other pane receives anything. A
+    parked line naming the parent, a timeout and a stall raise no alert; an implementer may not
+    reach the director; with no director reachable, the exit says the alert was not delivered."""
+    say = str(ASSETS / "herdr-say")
+    d, env = worker_world(s, "gone")
+    ran = s.run([say, "--parent", RESULT], want=68, env=env)
+    alerts = to(d, "w0:p1")
+    show(f"parent gone: exit 68: {ran.err.strip()}")
+    show(f"director w0:p1 received: {alerts}")
+    assert len(alerts) == 1, alerts
+    for named in ("lane gh7", "parent w1:p1 is gone", "general-worker-gh7", "w1:p2"):
+        assert named in alerts[0], alerts
+    assert "RESULT-TEXT" not in alerts[0], alerts
+    assert [x.split("\t")[0] for x in lines(d / "prompts")] == ["w0:p1"], lines(d / "prompts")
+    assert "alert delivered to the director" in ran.err, ran.err
+
+    for status, want, why in (("working", 124, "timeout"), ("booting", 1, "stalled")):
+        s2 = sub(s, why)
+        d, env = worker_world(s2, status)
+        s2.run([say, "--timeout", "1", "--parent", RESULT], want=want, env=env)
+        assert to(d, "w0:p1") == [], lines(d / "prompts")
+        show(f"parent {why}: exit {want}, director received: nothing")
+
+    s2 = sub(s, "parked")
+    d, env = worker_world(s2, "gone")
+    agents = json.loads((d / "agents.json").read_text())
+    agents["w1:p5"] = agent("w1:p5", "gh7", "idle")  # the parked supervisor resumed as w1:p5
+    (d / "agents.json").write_text(json.dumps(agents))
+    log = s2.home / ".local" / "state" / "octo-feather" / "lanes" / "gh7.handoffs.jsonl"
+    log.write_text(
+        json.dumps({"at": "2026-11-13T00:00:00Z", "kind": "parked", "pane": "w1:p1"}) + "\n"
+    )
+    s2.run([say, "--parent", RESULT], env=env)
+    assert lines(d / "prompts") == [f"w1:p5\t{RESULT}"], lines(d / "prompts")
+    show("parent parked: delivered to its live agent w1:p5, director received: nothing")
+
+    s2 = sub(s, "implementer")
+    d, env = worker_world(s2)
+    ran = s2.run([say, "w0:p1", RESULT], want=77, env=env | {"OCTO_FEATHER_ROLE": "implementer"})
+    assert to(d, "w0:p1") == [], lines(d / "prompts")
+    show(f"implementer to the director w0:p1: exit 77: {ran.err.strip()}")
+
+    s2 = sub(s, "nodirector")
+    d, env = worker_world(s2, "gone")
+    agents = json.loads((d / "agents.json").read_text())
+    del agents["w0:p1"]
+    (d / "agents.json").write_text(json.dumps(agents))
+    ran = s2.run([say, "--parent", RESULT], want=68, env=env)
+    assert "alert NOT delivered to the director (pane w0:p1" in ran.err, ran.err
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    show(f"no director reachable: exit 68: {ran.err.strip().splitlines()[-1]}")
 
 
 def merged_repo(s: Scratch) -> tuple[Path, str]:
@@ -201,4 +326,6 @@ def post_merge_busy(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(spawn_ready_late, say_lookup_fails, say_stalled, post_merge_busy)
+    main(
+        spawn_ready_late, say_lookup_fails, say_stalled, post_merge_busy, worker_route, parent_gone
+    )
