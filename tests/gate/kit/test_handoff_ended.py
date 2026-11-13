@@ -4,7 +4,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 from collections.abc import Callable
 
 import pytest
-from handoff_ended import no_spawn_line, worker_ended
+from handoff_ended import no_spawn_line, spawn_logs, worker_ended
 
 Case = Callable[..., None]
 
@@ -16,3 +16,7 @@ def test_worker_ended(case: Case) -> None:
 
 def test_no_spawn_line(case: Case) -> None:
     case(no_spawn_line)
+
+
+def test_spawn_logs(case: Case) -> None:
+    case(spawn_logs)

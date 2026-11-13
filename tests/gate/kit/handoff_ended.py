@@ -1,12 +1,14 @@
 """A worker that ended mid-ticket without reporting is recorded, then replaced (comms spec
 #acceptance-worker-ended; the attempt line: #handoff-fields), through the commands with the
 testkit's Herdr stand-in (testkit/herdr.py, its FAKE_HERDR world): herdr-spawn starts the
-worker, `octo-feather-handoff spawn` records its spawn line in the lane hand-off log; while Herdr
-still finds the agent, `octo-feather-handoff attempt --ended-unreported` refuses (75) and the log
-is unchanged; once its session exits (its tab gone), it prints one attempt line, result
-ended-unreported, with the old session, the partial commit and the recovery; the replacement
-herdr-spawn under the same name records a spawn line with a different session. A pane with no
-spawn line, or a spawn line with no session, is refused naming why (65), nothing printed."""
+worker and itself appends its spawn line to the caller's lane hand-off log (the supervisor's,
+by its lane record); while Herdr still finds the agent, `octo-feather-handoff attempt
+--ended-unreported` refuses (75) and the log is unchanged; once its session exits (its tab
+gone), it prints one attempt line, result ended-unreported, with the old session, the partial
+commit and the recovery; the replacement herdr-spawn under the same name records a spawn line
+with a different session. A pane with no spawn line, or a spawn line with no session, is
+refused naming why (65), nothing printed. A spawn by the director lands in the director log;
+one by a pane owning no log records nothing."""
 
 from __future__ import annotations
 
@@ -39,14 +41,18 @@ def world(s: Scratch) -> Path:
     return d
 
 
-def spawn(s: Scratch, log: Path, wt: Path) -> dict[str, object]:
-    """implementer-gh7 started by herdr-spawn in WT, its spawn line appended to LOG; that line."""
+def state(s: Scratch) -> Path:
+    """S's session state dir (octo-feather-state under the scratch HOME), its lanes/ made."""
+    d = s.home / ".local" / "state" / "octo-feather"
+    (d / "lanes").mkdir(parents=True)
+    return d
+
+
+def spawn(s: Scratch, wt: Path, caller: dict[str, str] = SUPERVISOR) -> str:
+    """implementer-gh7 started by herdr-spawn in WT from CALLER's pane; the pane it printed."""
     cmd = [str(SPAWN), "--workspace", "w1", "--name", "implementer-gh7", "--role", "implementer"]
-    printed = s.run([*cmd, "--cwd", str(wt)], env=SUPERVISOR).out
-    line = s.run([kit("octo-feather-handoff"), "spawn", "--ticket", "gh7"], stdin=printed).out
-    with log.open("a") as f:
-        f.write(line + "\n")
-    return json.loads(line)
+    printed = s.run([*cmd, "--cwd", str(wt)], env=caller).out
+    return next(x.removeprefix("pane=") for x in printed.split() if x.startswith("pane="))
 
 
 def worker_ended(s: Scratch) -> None:
@@ -56,9 +62,13 @@ def worker_ended(s: Scratch) -> None:
     s.identity()
     wt = s.root / "wt"
     wt.mkdir()
-    log = s.root / "supervisor-gh7.handoffs.jsonl"
-    old = spawn(s, log, wt)
-    pane = str(old["pane"])
+    lanes = state(s) / "lanes"
+    (lanes / "supervisor-gh7.toml").write_text(f'supervisor = "{SUPERVISOR["HERDR_PANE_ID"]}"\n')
+    log = lanes / "supervisor-gh7.handoffs.jsonl"
+    pane = spawn(s, wt)
+    old = json.loads(log.read_text())
+    assert old["kind"] == "spawn", old
+    assert old["pane"] == pane, old
     assert old["session"], old
     assert (old["ticket"], old["role"]) == ("gh7", "implementer"), old
     attempt = [kit("octo-feather-handoff"), "attempt", "--ended-unreported", str(log), pane]
@@ -74,7 +84,7 @@ def worker_ended(s: Scratch) -> None:
     line = s.run(attempt).out
     with log.open("a") as f:
         f.write(line + "\n")
-    new = spawn(s, log, wt)
+    spawn(s, wt)
     records = [json.loads(x) for x in log.read_text().splitlines()]
     assert log.read_text().startswith(before), log.read_text()
     attempts = [r for r in records if r["kind"] == "attempt"]
@@ -88,6 +98,7 @@ def worker_ended(s: Scratch) -> None:
     assert got["recovery"] == "respawned implementer-gh7 from abc1234", got
     assert isinstance(got["duration_s"], int), got
     assert [r["kind"] for r in records] == ["spawn", "attempt", "spawn"], records
+    new = records[2]
     assert new["name"] == old["name"], (new, old)
     assert new["session"], new
     assert new["session"] != old["session"], (new, old)
@@ -115,5 +126,24 @@ def no_spawn_line(s: Scratch) -> None:
     assert "records no session" in ran.err, ran.err
 
 
+def spawn_logs(s: Scratch) -> None:
+    """The director's spawn lands in the director log; a pane owning no log records nothing."""
+    world(s)
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    d = state(s)
+    (d / "director.toml").write_text('pane = "w0:p1"\n')
+    first = spawn(s, wt, SUPERVISOR | {"HERDR_PANE_ID": "w0:p1"})
+    got = [json.loads(x) for x in (d / "director.handoffs.jsonl").read_text().splitlines()]
+    assert [(g["kind"], g["name"], g["ticket"]) for g in got] == [
+        ("spawn", "implementer-gh7", "gh7")
+    ], got
+    s.run(["herdr", "tab", "close", first.replace(":p", ":t")])  # name implementer-gh7 freed
+    spawn(s, wt, SUPERVISOR | {"HERDR_PANE_ID": "w3:p9"})
+    assert len((d / "director.handoffs.jsonl").read_text().splitlines()) == 1
+    assert not list((d / "lanes").iterdir()), list((d / "lanes").iterdir())
+
+
 if __name__ == "__main__":
-    main(worker_ended, no_spawn_line)
+    main(worker_ended, no_spawn_line, spawn_logs)
