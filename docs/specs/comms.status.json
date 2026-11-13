@@ -11,12 +11,22 @@
       "pr": 24
     },
     "acceptance-parent-gone": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261113T052032Z-5cde4a4f",
+      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-worker-ended": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261113T052032Z-03587a3a",
+      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "tests": [
+        "tests/gate/kit/test_handoff_ended.py"
+      ]
     },
     "acceptance-autonomous-local": {
       "status": "planned",
@@ -35,8 +45,13 @@
       "pr": null
     },
     "acceptance-director-worker-resume": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261113T052032Z-3f834290",
+      "commit": "6c432ac21220aa2478980a20f38f9750628f83ff",
+      "tests": [
+        "tests/gate/kit/herdr_messaging.py"
+      ]
     },
     "acceptance-artifact-supervision": {
       "status": "planned",
