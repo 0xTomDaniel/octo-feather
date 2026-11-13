@@ -2,7 +2,7 @@
 
 Smoke: agents/qc-judge.md run once below (b), driving an MCP-only fixture.
 Smoke: agents/implementer.md .agents/skills/tdd/SKILL.md .skillfile/patches/skills/tdd/SKILL.md.patch .agents/skills/codebase-design/DEEPENING.md .skillfile/patches/skills/codebase-design/DEEPENING.md.patch run once below (self-check, the implementer-deepen-first task verbatim; the run read the patched tdd SKILL.md at its first wording, before the issue-comment sentence was sharpened).
-Smoke: agents/supervisor.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch run once below, (a) round 4 (the supervisor loaded the patched to-tickets SKILL.md).
+Smoke: agents/supervisor.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch run once below, (a) round 6 (the supervisor read the patched to-tickets SKILL.md in round 4's run; round 6 reran it on the declared-client route).
 Removed: the tdd Seams paragraph's single-sentence deepen-first ("deepen it first as its own step: pin current behavior, deepen the module, then test at the new interface"), replaced by four ordered steps each ending on a done condition; implementer.md's dense seam bullet, replaced by the same order.
 
 Issue #795, ticket #796, branch gh795-796. Review round 3 (`/tmp/gh795/review3.md`): implementer-deepen-first failed 3 of 3 runs (QA run 20261112T234850Z-2ce373).
@@ -28,7 +28,7 @@ exit 1
 
 The check accepts only a program the repo declares, an HTTP request or a UI driver, so a standard MCP client (the MCP Inspector CLI) is refused. Per the round 3 brief, stopped and reported to the supervisor as a script gap; no supervisor or to-tickets run.
 
-### Round 4: check extended, supervisor run
+### Round 4: check extended, supervisor run (superseded: that Inspector branch was deleted in round 6, review round 5 proxy-check)
 
 Commit `6705c072` extends `octo-feather-lane ticket`'s demo surface rule: the MCP project's official client, `@modelcontextprotocol/inspector` with `--cli`, passes when its server is an http(s) URL or a command the rule accepts as the repo's own program. The same draft, in a copy of the fixture (`/tmp/gh795/mcpdemo`), with this branch's script:
 
@@ -86,6 +86,73 @@ exit=0
 ````
 
 The draft's demo drives the repo's MCP server through the official MCP client, not a CLI, HTTP or UI, and `octo-feather-lane ticket -` passes it.
+
+### Round 6: declared client, supervisor run
+
+Commit `a8af2287` deletes the round 4/5 Inspector branch (docs/adr/0008 stop rule); an MCP demo now runs a client the repo declares, by the existing exact rule. Fixture copy `/tmp/gh795/mcpsup6` adds a tracked `justfile` recipe, the product's MCP client:
+
+```
+mcp-call *args:
+    npx -y @modelcontextprotocol/inspector@0.17.2 --cli uv run quote-mcp {{args}}
+```
+
+and an `AGENTS.md` Commands line naming it. The check on a draft through the recipe, and on a direct Inspector demo:
+
+```
+stdin: ok
+exit 0
+```
+
+```
+stdin: class: layer-only-ticket: demo runs no surface the repo declares (`npx -y @modelcontextprotocol/inspector@0.17.2 --cli uv run quote-mcp --method tools/call --tool-name quote --tool-arg region=de --tool-arg subtotal=100.00`: @modelcontextprotocol/inspector@0.17.2 is not an executable the repo tracks); fix: make the demo a backticked command through the repo's own public surface (ADR 0009): a program the repo declares (a tracked executable such as scripts/NAME or bin/NAME, a justfile recipe other than check/integrate/qc/qa, a package.json bin or pyproject [project.scripts] entry, e.g. `uv run app hello Ada`, or a tracked script run by its interpreter, e.g. `python harness.py`, only as ADR 0002's fallback), an HTTP request (`curl https://...`), or a UI driver run (`npx playwright test ...`); a demo through MCP or another public protocol runs a client the repo declares, e.g. a justfile recipe `mcp-call` that runs the protocol's client (for MCP, `npx @modelcontextprotocol/inspector --cli ...`) against the repo's server; not printf, echo or another generic tool; or, for a command this ticket creates, declare it exactly with `Creates: `<path>``, form: octo-feather-lane --help (ticket), the demo running that path; or, for one step of a wide refactor, add the line `Expand-contract: expand|migrate|contract`
+exit 1
+```
+
+Supervisor, one run, same brief as round 4 with the path `/tmp/gh795/mcpsup6`, PATH first: logging `gh` and `herdr-say` stubs, then this branch's `scripts/`. Pi session `01a1d2b5-a9a6-779d-a8a5-3c8e2f6521a4` (`~/.pi/agent/sessions/--tmp-gh795-mcpsup6--/`). It read `justfile`, ran the recipe against the server, drafted, and ran `octo-feather-lane ticket -` once: `stdin: ok`. It wrote no direct npx demo, so no refusal arose; the fix text was not exercised by the role. No gh or herdr-say call. Final message, verbatim:
+
+````
+I drafted the ticket and it passed the check. I filed nothing, sent no messages and started no workers.
+
+Two things to know before it's filed:
+- **Main already meets this criterion.** I ran the demo command and the server returned tax `19.00` and total `119.00` for region `de`, subtotal `100.00` (`isError: false`). So this ticket would mostly confirm existing behaviour rather than add any.
+- **The lane is missing a required input.** There is no `docs/specs/quote.status.json` on main, and `just qc` needs it to mark criteria as built.
+
+I set the parent to `#30` only because the lane is called gh30; I haven't confirmed that issue exists.
+
+**Draft:**
+
+```
+## Parent
+
+#30
+
+## What to build
+
+An MCP client quotes a German order: calling tool `quote` on the `quote-mcp` server (stdio) with region `de` and subtotal `100.00` returns tax `19.00` and total `119.00`, at the same decimal precision as the uk quote. The demo runs through the repo's declared MCP client, `just mcp-call` (the MCP Inspector CLI against `quote-mcp`).
+
+## Acceptance criteria
+
+- [ ] quote#acceptance-quote-de: tool `quote` with region `de`, subtotal `100.00` returns tax `19.00` and total `119.00`
+- [ ] demo: `just mcp-call --method tools/call --tool-name quote --tool-arg region=de --tool-arg subtotal=100.00` prints a result with tax `19.00` and total `119.00`
+
+## Blocked by
+
+- None (can start immediately)
+```
+
+**Check command** (run from `/tmp/gh795/mcpsup6`, with the draft saved at `/tmp/gh30-draft/ticket.md`):
+
+```
+octo-feather-lane ticket - < /tmp/gh30-draft/ticket.md; echo "exit=$?"
+```
+
+**Output:**
+
+```
+stdin: ok
+exit=0
+```
+````
 
 ## (b) QC judge drives the MCP interface
 
