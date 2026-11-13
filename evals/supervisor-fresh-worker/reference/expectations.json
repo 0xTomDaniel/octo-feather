@@ -14,6 +14,14 @@
         "fact": "ran",
         "program": "herdr-spawn",
         "args": [
+          "--name",
+          "implementer-gh14"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
           "--resume"
         ],
         "count": 0
@@ -51,6 +59,14 @@
         "fact": "ran",
         "program": "herdr-spawn",
         "args": [
+          "--name",
+          "implementer-gh15"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
           "--resume"
         ],
         "count": 0
@@ -67,6 +83,22 @@
           "implementer"
         ],
         "count": 2
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--name",
+          "implementer-gh14"
+        ]
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--name",
+          "implementer-gh15"
+        ]
       },
       {
         "fact": "ran",
