@@ -52,8 +52,11 @@
       "pr": null
     },
     "acceptance-web-roles": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 833,
+      "record": "20261113T020542Z-8b6a047c",
+      "commit": "e43b44713dbfdc6264b74e047e0fce693c9f7bf9",
+      "tests": []
     },
     "acceptance-web-no-other-mcp": {
       "status": "built",
