@@ -621,9 +621,8 @@ case "$1 $2" in
   *) echo "fake gh: $*" >&2;;
 esac
 '''
-# A case's stand_ins (schema, Case): PROGRAM answering by its argv's leading arguments, the first answer whose args
-# lead argv and whose `after` call (program and leading arguments) a stand-in already answered; none: exit 1 naming
-# the call. Every answered call is appended to $QA_STAND_LOG. @NAME@, @ANSWERS@: the program and the case's list for it.
+# A case's stand_ins (rule: schema, Case). $QA_STAND_LOG: the calls answered so far. @NAME@, @ANSWERS@: the program
+# and the case's list for it.
 STAND_IN = r'''#!/usr/bin/env python3
 import json, os, sys
 log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
@@ -787,7 +786,7 @@ def prep(setup):
     if on.get("fake_qa"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
         Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
-    if stands:   # {repo} and {head} in an answer's stdout: the case repo's path and HEAD, as in its task (schema, Case)
+    if stands:   # rule: schema, Case (stand_ins)
         env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
         here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
         for p, answers in stands.items():
