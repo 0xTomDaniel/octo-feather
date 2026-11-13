@@ -411,5 +411,8 @@
   "implementer-missing-recording-heldout": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "branch_paths", "untouched": ["tests/"]}]},
   "prior-art-extends": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/names.py"}]}]},
   "prior-art-extends-stated": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
-  "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]}
+  "prior-art-extends-held-out": {"facts": [{"fact": "field_lines", "field": "Verdict", "includes": [{"text": "blocking"}]}, {"fact": "declared_includes", "field": "blocking", "items": [{"path": "src/app/version.py"}]}]},
+  "reviewer-seam-shallow-unagreed": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "declared_includes", "field": "blocking", "items": [{"test": "tests/test_quote.py::test_tax_rate_de"}, {"test": "tests/test_quote.py::test_quote_json_shows_discount"}]}]},
+  "reviewer-seam-listed-deep-clear": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
+  "implementer-deepen-first": {"facts": []}
 }

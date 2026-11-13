@@ -1,0 +1,14 @@
+Seeded defect: a vendored file is compared with upstream plus patch on its first line only, so drift below it is never reported (check-vendored gate).
+diff --git a/scripts/check-vendored b/scripts/check-vendored
+index 01083c3f..b466cea2 100755
+--- a/scripts/check-vendored
++++ b/scripts/check-vendored
+@@ -385,7 +385,7 @@ def gate(ents, vendored):
+                     print(f"{TAG}: {name}: {shown} is missing; upstream {origin} has it", file=sys.stderr)
+                 elif rel not in want_files:
+                     print(f"{TAG}: {name}: {shown} is not in upstream {origin}", file=sys.stderr)
+-                elif have[rel] != want_files[rel]:
++                elif have[rel].splitlines()[:1] != want_files[rel].splitlines()[:1]:
+                     print(f"{TAG}: {name}: {shown} differs from upstream {origin}", file=sys.stderr)
+                     d = difflib.unified_diff(want_files[rel].decode(errors="replace").splitlines(),
+                                              have[rel].decode(errors="replace").splitlines(),

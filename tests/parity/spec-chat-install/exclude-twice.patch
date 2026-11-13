@@ -1,0 +1,14 @@
+Seeded defect: each run appends every link's info/exclude line again, so a rerun writes it twice (a rerun changes nothing).
+diff --git a/scripts/octo-feather-spec-chat b/scripts/octo-feather-spec-chat
+index 4ff884eb..a5f6a340 100755
+--- a/scripts/octo-feather-spec-chat
++++ b/scripts/octo-feather-spec-chat
+@@ -35,7 +35,7 @@ for l in "$repo"/.agents/skills/*; do
+   dest="$(realpath -m "$l")"
+   [[ "$dest" == "$clone"/* ]] || continue
+   line="/.agents/skills/$(basename "$l")"
+-  if ! grep -qxF "$line" "$exclude"; then
++  if true; then
+     [[ -s "$exclude" && "$(tail -c1 "$exclude")" != "" ]] && echo >> "$exclude"
+     echo "$line" >> "$exclude"
+   fi
