@@ -1,0 +1,11 @@
+# The parity lever's case for tests/check-templates.sh, kept as a shell script and given a nested check-languages case (#815; tests/parity/lever.py --help).
+old = "tests/check-templates.sh"
+old_at = "d62452c4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none (tests/gate/conftest.py is a kit file it compares, in its copy of every tracked file).
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/check-templates.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the copy's scripts/check-templates, run by its justfile, outside the kit's own path, which coverage.py's map does not name.
+[ran]
+"scripts/check-templates" = "exec scripts/check-templates"
