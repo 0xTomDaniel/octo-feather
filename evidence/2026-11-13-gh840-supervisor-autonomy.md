@@ -69,6 +69,17 @@ qa: 3/4 passed (run 20261113T112732Z-f80232); artifacts ~/.local/state/octo-feat
 - owner blocker: exactly one director message and #15 started on both kits: already met (below).
 - review case: its runs are listed below from their transcripts (a review case has no `ran` fact, so its sandbox records no run); verdict pending, recorded with `scripts/octo-feather-qa --review ~/.local/state/octo-feather/qa/20261113T112732Z-f80232 supervisor-autonomy/owner-access-blocker-message pass|fail NOTE`. After the proof the review question was corrected to read the transcript instead of sandbox.json (cases.json, review text only; the task and grading are unchanged).
 
+## Commits after the proof head
+
+`git diff --stat b4c9a5cb..HEAD` (evidence, qc.toml, and the review question's text in cases.json; no role, task or fact changed):
+
+```
+ evals/supervisor-autonomy/cases.json             |   2 +-
+ evidence/2026-11-13-gh840-supervisor-autonomy.md | 347 +++++++++++++++++++++++
+ qc.toml                                          |  10 +
+ 3 files changed, 358 insertions(+), 1 deletion(-)
+```
+
 ## Already met on the baseline
 
 comms `#acceptance-real-blocker` (owner-access-blocker-and-ready-work) and the negative pass on origin/main too: escalating an owner-held access need once, while starting #15, is behaviour the kit already had. Ruled by the gh840 supervisor: no case is hardened to manufacture a fail (the spec orders nothing between the send and the spawn); the head must pass 3/3 and the review case covers the message content.
