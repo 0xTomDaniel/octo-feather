@@ -628,7 +628,8 @@ import json, os, sys
 log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
 seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
 for a in @ANSWERS@:
-    if me[1:1 + len(a["args"])] == a["args"] and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
+    if me[1:1 + len(a["args"])] == a["args"] and a.get("argc", len(me) - 1) == len(me) - 1 \
+            and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
         open(log, "a").write(json.dumps(me) + "\n")
         sys.stdout.write(a["stdout"]); sys.exit(a["exit"])
 sys.exit(print("stand-in: no answer for " + " ".join(me), file=sys.stderr) or 1)

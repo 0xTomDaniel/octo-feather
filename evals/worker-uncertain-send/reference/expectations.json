@@ -11,18 +11,6 @@
       }
     ]
   },
-  "queued-stall-sent-once": {
-    "facts": [
-      {
-        "fact": "ran",
-        "program": "herdr-say",
-        "args": [
-          "--parent"
-        ],
-        "count": 1
-      }
-    ]
-  },
   "reviewer-queued-timeout-sent-once": {
     "facts": [
       {

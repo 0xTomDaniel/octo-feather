@@ -66,9 +66,10 @@ rf FAIL rclater | grep -q 'ran runme --role count 1: 2 matching runs: ' || fail 
 python3 - "$t/rf/rf" <<'PY'
 import json, sys
 d = sys.argv[1]
-step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
+step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say --parent < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
                  "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD"]]
-stands = {"herdr-say": [{"args": ["--parent"], "stdout": "delivered\n", "exit": 0}],
+stands = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n", "exit": 0},
+                        {"args": ["--parent"], "stdout": "usage: herdr-say\n", "exit": 64}],
           "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
                     {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0}],
           "herdr-close": [{"args": [], "stdout": "", "exit": 0}]}
@@ -82,8 +83,8 @@ grep -q '^PASS rf/rstand: ran herdr-say --parent hi there count 1: 1 matching ru
   || fail "stand_ins: want PASS on the recorded stand-in call: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 so="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/rf/rstand/transcript.jsonl")"
-grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -q '^stand-in: no answer for .*herdr-say other x$' <<< "$so" && grep -qx 'rc=1' <<< "$so" \
-  || fail "stand_ins: want the canned answer, exit 0, then the no-answer exit 1: $so"
+grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -qx 'usage: herdr-say' <<< "$so" && grep -qx 'rc=64' <<< "$so" && grep -q '^stand-in: no answer for .*herdr-say other x$' <<< "$so" && grep -qx 'rc=1' <<< "$so" \
+  || fail "stand_ins: want the canned answer, exit 0, the argc-mismatch answer, exit 64, then the no-answer exit 1: $so"
 repo="$(sed -n 's/^REPO=//p' <<< "$so")"
 [[ -n "$repo" ]] && grep -qx "up in $repo" <<< "$so" && grep -qx 'gone' <<< "$so" \
   || fail "stand_ins: want {repo} filled, then the after-close answer: $so"

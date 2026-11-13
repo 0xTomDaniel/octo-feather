@@ -8,9 +8,57 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr": [
@@ -20,48 +68,6 @@
             "get"
           ],
           "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"gh2\", \"pane_id\": \"w1:p1\", \"tab_id\": \"w1:t1\", \"workspace_id\": \"w1\"}, \"type\": \"agent_info\"}}\n",
-          "exit": 0
-        },
-        {
-          "args": [
-            "agent",
-            "read"
-          ],
-          "stdout": " pi\n\nAuto-compacting... (escape to cancel)\nSteering: Ticket T2 (hello-shout) done: commit\n > \n",
-          "exit": 0
-        },
-        {
-          "args": [
-            "pane",
-            "read"
-          ],
-          "stdout": " pi\n\nAuto-compacting... (escape to cancel)\nSteering: Ticket T2 (hello-shout) done: commit\n > \n",
-          "exit": 0
-        }
-      ]
-    }
-  },
-  {
-    "id": "queued-stall-sent-once",
-    "role": "implementer",
-    "fixture": "python-app-tiers",
-    "branch": "implementer-t2",
-    "task": "Ticket T2 (lane gh2, parent #2): `app hello NAME --shout` prints the greeting upper-cased with a trailing \"!\" (`app hello Ada --shout` prints `HELLO, ADA!`; with --json the \"text\" field is the shouted text, \"name\" as typed after trimming). Without --shout nothing changes.\nAcceptance criterion: hello-shout. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t2, integration branch main (cut from it).\nYour parent is the gh2 supervisor (herdr-say --parent).\nSandbox run: GitHub is offline.",
-    "stand_ins": {
-      "herdr-say": [
-        {
-          "args": [],
-          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"agent_prompt_stalled\", \"message\": \"agent did not start working within 5000ms\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
-          "exit": 1
-        }
-      ],
-      "herdr": [
-        {
-          "args": [
-            "agent",
-            "get"
-          ],
-          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"gh2\", \"pane_id\": \"w1:p1\", \"tab_id\": \"w1:t1\", \"workspace_id\": \"w1\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -96,9 +102,57 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
           "exit": 124
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "{\"id\": \"cli:agent:prompt\", \"error\": {\"code\": \"timeout\", \"message\": \"timed out waiting for agent status\"}}\nherdr-say: w1:p1 still holds the message queued after 900s (compacting): queued, not consumed; not resent, do not resend (comms spec #delivery-recovery)\n",
+          "exit": 124
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr": [
@@ -138,7 +192,26 @@
     "stand_ins": {
       "herdr-say": [
         {
-          "args": [],
+          "args": [
+            "--help"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "-h"
+          ],
+          "argc": 1,
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "",
           "exit": 0,
           "after": [
@@ -147,9 +220,77 @@
           ]
         },
         {
-          "args": [],
+          "args": [
+            "--parent"
+          ],
+          "argc": 2,
           "stdout": "herdr-say: w1:p1 is blocked on interactive input; not delivered\n",
           "exit": 75
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0,
+          "after": [
+            "herdr-say",
+            "--timeout"
+          ]
+        },
+        {
+          "args": [
+            "--timeout"
+          ],
+          "argc": 4,
+          "stdout": "herdr-say: w1:p1 is blocked on interactive input; not delivered\n",
+          "exit": 75
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0,
+          "after": [
+            "herdr-say",
+            "--kind"
+          ]
+        },
+        {
+          "args": [
+            "--kind"
+          ],
+          "argc": 4,
+          "stdout": "herdr-say: w1:p1 is blocked on interactive input; not delivered\n",
+          "exit": 75
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "",
+          "exit": 0,
+          "after": [
+            "herdr-say",
+            "--artifact"
+          ]
+        },
+        {
+          "args": [
+            "--artifact"
+          ],
+          "argc": 4,
+          "stdout": "herdr-say: w1:p1 is blocked on interactive input; not delivered\n",
+          "exit": 75
+        },
+        {
+          "args": [],
+          "stdout": "usage: herdr-say [--kind KIND] [--artifact REF] [--timeout SECONDS] (TARGET | --parent) MESSAGE | --parked TARGET\n",
+          "exit": 64
         }
       ],
       "herdr": [
