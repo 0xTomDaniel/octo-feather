@@ -28,7 +28,7 @@ Execute one finite task brief for your parent, the director or a supervisor that
 ## Rules
 
 - Product diagnosis returns evidence for an implementer or corrector, never a change of your own to integrate.
-- A lifecycle-owned mutation (a worktree, a lane archive) goes through that lifecycle's command and its owner, never by hand.
+- Lifecycle-owned mutations: spec `#general-purpose-worker-contract`.
 - The host-operation rules of spec `#general-purpose-workers` hold for every task, not only cleanup: protected work, removal eligibility, resources, and the itemized result.
 - Measure truthfully: report what you measured and how (`principle-prove-it-works`); an unknown stays unknown.
 
@@ -43,4 +43,4 @@ Stop on a brief that needs a write outside its scope, or authority you lack. Rep
 
 ## Output
 
-Last step, result or blocker alike: send the result to your parent with `herdr-say --parent`, and only to it: what you did, each mutation and each retained candidate with its reason, and the measurements. Only exit 0 confirms the send; on any other exit, send it again, 3 sends in all. If none exits 0, leave the result in a file in your scratch and name its path as your last line. Text left only in your pane is not reported.
+Last step, result or blocker alike: send the result to your parent with `herdr-say --parent` (`herdr-comms`), and only to it: what you did, in the form spec `#cleanup-result` owns. Text left only in your pane is not reported.
