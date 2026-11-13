@@ -1,0 +1,110 @@
+{
+  "closed-assignment-fresh-worker": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ],
+        "count": 1
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--resume"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "w2:p3"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "implementer-gh13"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "serial-assignment-split": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ],
+        "count": 1
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--resume"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "independent-ready-split": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ],
+        "count": 2
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--resume"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "w2:p3"
+        ],
+        "count": 0
+      },
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "implementer-gh13"
+        ],
+        "count": 0
+      }
+    ]
+  },
+  "one-worker-limit": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-spawn",
+        "args": [
+          "--role",
+          "implementer"
+        ],
+        "count": 1
+      }
+    ]
+  }
+}
