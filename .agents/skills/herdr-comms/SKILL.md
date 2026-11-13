@@ -142,9 +142,8 @@ herdr-close --park PANE >>"$(octo-feather-state)/director.handoffs.jsonl"   # th
 `herdr-spawn` exported into PANE's tab, closes its tab, or its whole space when
 that tab is the space's only one (a supervisor in its own space), and prints
 one parked line (`at kind pane name role cwd session label parent`) on stdout, even when the
-close fails; the close report goes to stderr. The parker appends the line: the
-director for a supervisor (its lane's log) and for its own general worker (the
-director log), the supervisor for a worker (its lane's log). An agent Herdr does not report
+close fails; the close report goes to stderr. The parker appends the line to the
+log comms spec `#roles-park` names (the two commands above). An agent Herdr does not report
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.
 
@@ -212,14 +211,11 @@ is either delivered now or reported as not delivered.
 Native Herdr refuses to prompt a blocked agent, so an open dialog is never
 typed into.
 
-A target Herdr does not find may be parked. The latest parked line naming it,
-by pane or name, in the director log or any lane hand-off log in `$lanes` decides:
-a live agent under the line's name gets the message; otherwise the agent is resumed
-with the line's role, session and parent (a supervisor, the line named after its
-log, in its lane space when that still exists, else a new one; a worker in its
-parent's workspace while that parent is live, else the caller's), gets the
-message prefixed `Resumed from park as pane=PANE. `, and `herdr-say` prints its
-new `pane=`. `herdr-say --parked TARGET` prints that line, or exits 1.
+A target Herdr does not find may be parked (comms spec `#roles-park`): which
+parked line counts, `octo-feather-handoff --help` (parked); where the agent
+resumes, `herdr-say`'s header. A resumed agent gets the message prefixed
+`Resumed from park as pane=PANE. `, and `herdr-say` prints its new `pane=`.
+`herdr-say --parked TARGET` prints that line, or exits 1.
 `herdr-wake check` counts a parked supervisor as present, so a spec review hand-off
 resumes it.
 
