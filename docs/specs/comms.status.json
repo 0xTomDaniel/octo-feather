@@ -27,8 +27,11 @@
       "pr": null
     },
     "acceptance-no-routine-traffic": {
-      "status": "planned",
-      "pr": null
+      "status": "built",
+      "pr": 882,
+      "record": "20261113T093900Z-9c514334",
+      "commit": "7251e3c7f646f7029a0a0420249328d14343f5c2",
+      "tests": []
     },
     "acceptance-queued-completion": {
       "status": "planned",
