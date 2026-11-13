@@ -148,6 +148,22 @@ director log), the supervisor for a worker (its lane's log). An agent Herdr does
 idle is refused with exit 75, one not spawned by `herdr-spawn` with 65; nothing
 is closed.
 
+## Replace a worker that ended without reporting
+
+A worker whose pane holds no finished result (comms spec `#roles-goal`):
+
+```
+herdr-close PANE                       # when herdr agent get PANE still finds it
+octo-feather-handoff attempt --ended-unreported "$lanes/<lane>.handoffs.jsonl" PANE \
+  --partial "<commit, branch, what it left>" --recovery "<what replaces it>" [--commit C] \
+  >>"$lanes/<lane>.handoffs.jsonl"
+herdr-spawn ...                        # the replacement, a fresh session
+```
+
+The attempt reads the old session from the spawn line `herdr-spawn` recorded
+(`herdr-spawn --help`); its refusals: `octo-feather-handoff --help`. The
+line's fields: comms spec `#handoff-fields`.
+
 ## Send a message
 
 ```
