@@ -3,7 +3,7 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from commit_identity import applied, read_only, unset
+from commit_identity import applied, no_commit, read_only, unset
 
 Case = Callable[..., None]
 
@@ -18,3 +18,7 @@ def test_unset(case: Case) -> None:
 
 def test_read_only(case: Case) -> None:
     case(read_only)
+
+
+def test_no_commit(case: Case) -> None:
+    case(no_commit)

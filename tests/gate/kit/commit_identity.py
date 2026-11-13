@@ -142,5 +142,16 @@ def read_only(s: Scratch) -> None:
     assert ran.out == "", ran.out
 
 
+def no_commit(s: Scratch) -> None:
+    """No setting: the launch of a role that edits and writes but never commits (the general worker,
+    #829) is not refused and applies no identity, while the implementer's is still refused."""
+    repo = world(s)
+    ran = s.run(
+        [kit("pi-role"), "--print-env", str(ROOT / "agents" / "general-worker.md")], cwd=repo
+    )
+    assert ran.out == "", ran.out
+    s.run([kit("pi-role"), "--print-env", str(ROOT / "agents" / "implementer.md")], want=1, cwd=repo)
+
+
 if __name__ == "__main__":
-    main(applied, unset, read_only)
+    main(applied, unset, read_only, no_commit)

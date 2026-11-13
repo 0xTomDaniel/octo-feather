@@ -119,7 +119,7 @@ run() {
 
 ro="bash find grep ls read"; rw="bash edit find grep ls read write"; web="mcp__webstub__fetch mcp__webstub__search"
 sorted() { tr ' ' '\n' <<<"$*" | sort | tr '\n' ' ' | sed 's/ $//'; }
-for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:" "qc-judge:$ro:"; do
+for rt in "director:$ro:$web" "code-reviewer:$ro:$web" "implementer:$rw:$web" "general-worker:$rw:$web" "corrector:$rw:$web" "shaper:$rw:$web" "supervisor:$rw:" "qc-judge:$ro:"; do
   IFS=: read -r role tools mcp <<<"$rt"
   want="$(sorted codemode $tools $mcp)|$(sorted $tools $mcp)"
   got="$(run "$role")"

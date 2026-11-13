@@ -1022,7 +1022,7 @@ def drive_role_launch(f: Feature) -> None:
     v = f.s.contract.values
     if "web_roles" not in v or "web_servers" not in v:
         die("qc.toml [values] needs web_roles and web_servers: the role-launch drive's expected web roles and servers")
-    roles = ("director", "supervisor", "implementer", "corrector", "code-reviewer", "qc-judge", "shaper")
+    roles = ("director", "supervisor", "implementer", "general-worker", "corrector", "code-reviewer", "qc-judge", "shaper")
     servers = v["web_servers"].split()
     sc = RUN_DIR / "scratch" / "role-launch"
     shutil.rmtree(sc, ignore_errors=True)
@@ -1075,6 +1075,9 @@ def drive_role_launch(f: Feature) -> None:
     f.run("identity-unset", "pi-role", "--print-env", f"{f.s.repo}/agents/implementer.md")
     f.check("identity-unset", lambda c: c.code == 1 and "[identity] name and email in the box onboarding file" in c.err
             and "--set-identity" in c.err and c.out == "")
+    # A role that edits and writes but never commits (the general worker, #829) starts unset, applying no identity.
+    f.run("identity-unset-general-worker", "pi-role", "--print-env", f"{f.s.repo}/agents/general-worker.md")
+    f.check("identity-unset-general-worker", lambda c: c.code == 0 and c.out == "")
     f.env = {**base_env, "XDG_STATE_HOME": str(sc / "state")}
     f.run("identity-set", "pi-role", "--set-identity", "Verify Identity", "verify@octo-feather.invalid")
     f.check("identity-set", lambda c: c.code == 0)
