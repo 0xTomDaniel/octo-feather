@@ -3,11 +3,12 @@
 FAKE_HERDR world): herdr-spawn returns only once its Pi takes input (#871: Herdr reads a booting
 Pi idle before that), so an agent that turns ready late is not returned early, and a herdr-say
 right after it is delivered, as is a herdr-say that resumes a parked agent; a spawn whose Pi
-never reports, or whose integration install fails, fails closed naming it; a herdr-say whose `herdr agent get` lookup fails names that lookup (not the up-chain
-refusal, 77); a prompt Herdr reports stalled exits non-zero naming the pane and its state; and
-`octo-feather-lane post-merge` step 4 to a busy (working) supervisor returns within its bound,
-its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send command) and going
-on to tell the others (director rule #619)."""
+never reports, or whose integration install fails, fails closed naming it; a herdr-say whose
+`herdr agent get` lookup fails names that lookup (not the up-chain refusal, 77); a prompt Herdr
+reports stalled exits non-zero naming the pane and its state; and `octo-feather-lane post-merge`
+step 4 to a busy (working) supervisor returns within its bound, its step 4 line naming the
+supervisor NOT told (lane, pane, timeout, the re-send command) and going on to tell the others
+(director rule #619)."""
 
 from __future__ import annotations
 
@@ -245,4 +246,11 @@ def post_merge_busy(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(spawn_ready_late, spawn_fails_closed, say_resumes_parked, say_lookup_fails, say_stalled, post_merge_busy)
+    main(
+        spawn_ready_late,
+        spawn_fails_closed,
+        say_resumes_parked,
+        say_lookup_fails,
+        say_stalled,
+        post_merge_busy,
+    )

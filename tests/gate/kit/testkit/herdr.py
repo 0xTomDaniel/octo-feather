@@ -18,8 +18,8 @@ IDLE_FALLBACK s after its start `idle`, as Herdr 0.9.5's screen fallback reads a
 file `integration install pi` wrote): once it takes input, `agent_session` (source herdr:pi).
 `integration install pi` writes that file to $PI_CODING_AGENT_DIR/extensions (else
 $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so with a file
-`install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report. `agent get T` (by name
-or pane), as Herdr 0.9.5 prints it:
+`install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report.
+`agent get T` (by name or pane), as Herdr 0.9.5 prints it:
 found, the agent on stdout; else agent_not_found on stderr, exit 1; a file `get-down` makes it
 fail plain (`herdr: server not reachable`, exit 1). `agent wait T --until S... --timeout MS`
 returns once T reads a state S, else `timeout`. `agent prompt T TEXT --wait [--until S...]
