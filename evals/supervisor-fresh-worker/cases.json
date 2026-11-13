@@ -157,6 +157,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh14"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -199,6 +215,22 @@
           "args": [
             "agent",
             "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p10"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -241,6 +273,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh15"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -275,6 +323,22 @@
             "herdr-spawn",
             "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ]
@@ -357,7 +421,27 @@
         {
           "args": [
             "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ],
@@ -530,6 +614,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh14"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -572,6 +672,22 @@
           "args": [
             "agent",
             "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p10"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -614,6 +730,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh15"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -648,6 +780,22 @@
             "herdr-spawn",
             "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ]
@@ -730,7 +878,27 @@
         {
           "args": [
             "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ],
@@ -903,6 +1071,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh14"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -945,6 +1129,22 @@
           "args": [
             "agent",
             "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p10"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -987,6 +1187,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh15"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -1021,6 +1237,22 @@
             "herdr-spawn",
             "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ]
@@ -1103,7 +1335,27 @@
         {
           "args": [
             "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ],
@@ -1276,6 +1528,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh14"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -1318,6 +1586,22 @@
           "args": [
             "agent",
             "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p10"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p10 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -1360,6 +1644,22 @@
           "args": [
             "agent",
             "get",
+            "w2:p10"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "implementer-gh15"
           ],
           "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
@@ -1394,6 +1694,22 @@
             "herdr-spawn",
             "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p10\", \"tab_id\": \"w2:t10\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn",
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ]
@@ -1476,7 +1792,27 @@
         {
           "args": [
             "--workspace",
+            "",
+            "--name",
+            "implementer-gh14"
+          ],
+          "stdout": "name=implementer-gh14 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo}/../wt-gh14 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
             "w2",
+            "--name",
+            "implementer-gh15"
+          ],
+          "stdout": "name=implementer-gh15 role=implementer tab=w2:t10 pane=w2:p10 cwd={repo}/../wt-gh15 contract=ok provider_session_id=s-w2:p10\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "--workspace",
+            "",
             "--name",
             "implementer-gh15"
           ],
