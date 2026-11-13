@@ -96,8 +96,8 @@ those leave to the caller:
   agent by name and by pane, so a `herdr-say` right after it is delivered;
   `herdr-say`'s resume and `octo-feather-start` go through it. A failed install
   exits 69 before any tab; no report or not idle within
-  `HERDR_SPAWN_READY_TIMEOUT` seconds (default 120): exit 69, tab closed, the
-  cause named.
+  `HERDR_SPAWN_READY_TIMEOUT` seconds (default 120, one bound for the whole
+  wait; `assets/herdr_ready.py` waits): exit 69, tab closed, the cause named.
 
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 

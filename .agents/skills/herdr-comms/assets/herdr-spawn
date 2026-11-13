@@ -228,30 +228,11 @@ if [[ "$cleared" != 1 ]]; then
   esac
 fi
 
-# Readiness (#585, #666, #871): Pi's own report through Herdr's integration (agent_session), then
-# idle on Herdr's own `herdr agent wait`, then found by name and by pane; why and the bound:
-# herdr-comms SKILL.md, Spawn an agent. Herdr has no wait on a session report, so it is read until
-# it lands, within the same bound.
-ready_s="${HERDR_SPAWN_READY_TIMEOUT:-120}"; end=$((SECONDS + ready_s))
-until herdr agent get "$pane" 2>/dev/null | jq -e '.result.agent.agent_session.source == "herdr:pi"' >/dev/null 2>&1; do
-  if ((SECONDS >= end)); then
-    echo "herdr-spawn: agent $name (pane $pane) never reported to Herdr within ${ready_s}s (Herdr's Pi integration, agent_session); not ready for prompts; closing tab $tab" >&2
-    close_orphan_tab; exit 69
-  fi
-  sleep 0.2
-done
-if ! err="$(herdr agent wait "$pane" --until idle --timeout "$((ready_s * 1000))" 2>&1 >/dev/null)"; then
-  [[ -n "$err" ]] && printf '%s\n' "$err" >&2
-  state="$(herdr agent get "$pane" 2>/dev/null | jq -r '.result.agent.agent_status // empty' 2>/dev/null || true)"
-  echo "herdr-spawn: agent $name (pane $pane) not idle within ${ready_s}s (herdr agent wait; state ${state:-unknown}); not ready for prompts; closing tab $tab" >&2
+# Readiness (#585, #666, #871): herdr_ready.py beside this script; what it waits for and the bound:
+# herdr-comms SKILL.md, Spawn an agent.
+if ! "$(dirname "$(readlink -f "$0")")/herdr_ready.py" "$pane" "$name"; then
+  echo "herdr-spawn: closing tab $tab" >&2
   close_orphan_tab; exit 69
 fi
-for t in "$name" "$pane"; do
-  found="$(herdr agent get "$t" 2>&1)" || true
-  if [[ "$(jq -r '.result.agent.pane_id // empty' <<<"$found" 2>/dev/null || true)" != "$pane" ]]; then
-    echo "herdr-spawn: herdr agent get $t does not find pane $pane ($(tail -1 <<<"$found")); closing tab $tab" >&2
-    close_orphan_tab; exit 69
-  fi
-done
 
 echo "name=$name role=$role tab=$tab pane=$pane cwd=$cwd contract=$contract provider_session_id=$session"
