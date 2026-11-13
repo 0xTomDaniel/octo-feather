@@ -2,7 +2,7 @@
 # Integration test for scripts/octo-feather-qa (factory evals) and scripts/check-evals (eval case shape),
 # driven as commands with a stub `pi` and a fake `herdr` first on PATH: no model, no live Herdr (tests/lib/qa.sh).
 # One section of the factory-evals test per gate item (#506): tests/qa.sh and each tests/qa-*.sh.
-# Proves: role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head,
+# Proves: role-transcript setup head/branches/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head,
 # truncated; a fixture-only skill), declared_includes pass/missing/not a list, a kit_contract_edit fact failing on an
 # unread skill; the rt suite's cases on the plain fixtures (the rest: tests/qa-rt-targets.sh).
 # Run by `just check`; needs unprivileged user namespaces (`unshare -rm`), as tests/qc.sh does.
@@ -38,7 +38,9 @@ o = "".join(json.loads(l)["result"]["structuredContent"]["output"] for l in open
 repo, cwd, head, rev = re.search(r"repo=(\S+) cwd=(\S+) head=(\S+) rev=(\S+)", o).groups()
 assert "branch=work" in o and "msg=head msg" in o and "\n2\n" in o and "test_y.py" in o, o   # hb: fixture + head commit
 assert repo == cwd and head == rev and len(rev) == 40, o
+wb = re.search(r"wb=worker msg wbup=(\S+) hbrev=(\S+) wbtree=(\S+)", o)   # branches: cut from head, its own tree
+assert wb and wb.group(1) == wb.group(2) and wb.group(3) == "README.md,", o
 assert "origin=1" in o and re.search(r"gh=/tmp/\S+/bin/gh", o), o
 assert json.load(open(f"{d}/setup/input.json"))["task"].count("{repo}") == 1, "input.json should keep the case's task as written"
 EOF
-echo "qa-rt: ok (role-transcript setup head/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), declared_includes pass/missing/not a list)"
+echo "qa-rt: ok (role-transcript setup head/branches/branch/origin/fake gh/{repo}{head}, skill load (read, cat; ls, grep, head, truncated), declared_includes pass/missing/not a list)"

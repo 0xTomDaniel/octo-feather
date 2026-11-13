@@ -1,0 +1,452 @@
+[
+  {
+    "id": "qc-failure-delegates-repair",
+    "role": "supervisor",
+    "fixture": "lane-shout-qc-red",
+    "branch": "gh12",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [],
+          "stdout": "name=implementer-gh16 role=implementer tab=w2:t9 pane=w2:p9 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p9"
+          ],
+          "stdout": "$ pi\n> \n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`; both integrated on gh12 with `just integrate` (head {head}), their implementers closed.\nSince your last check-in:\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} finished: acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`. The status file is unchanged.\n- code-reviewer-gh14 (pane w2:p7) reported DONE: verdict pass on {head}, no blocking finding; you closed it.\nYou filed #16 for the failure (a sub-issue of #12). Your space has room for one more worker.\nAct on this check-in.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "qc-failure-brief-review",
+    "role": "supervisor",
+    "fixture": "lane-shout-qc-red",
+    "branch": "gh12",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-spawn": [
+        {
+          "args": [],
+          "stdout": "name=implementer-gh16 role=implementer tab=w2:t9 pane=w2:p9 contract=ok provider_session_id=s-w2:p9\n",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "pane",
+            "read",
+            "w2:p9"
+          ],
+          "stdout": "$ pi\n> \n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "review": {
+      "question": "Did the supervisor leave the diagnosis to the worker: its brief (its herdr-say run to the spawned pane, sandbox.json attempts) gives the qc failure as found and names no cause in the product code (a file, line or expression it found wrong) and no fix?"
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`; both integrated on gh12 with `just integrate` (head {head}), their implementers closed.\nSince your last check-in:\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} finished: acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`. The status file is unchanged.\n- code-reviewer-gh14 (pane w2:p7) reported DONE: verdict pass on {head}, no blocking finding; you closed it.\nYou filed #16 for the failure (a sub-issue of #12). Your space has room for one more worker.\nAct on this check-in.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "repair-result-integrated",
+    "role": "supervisor",
+    "fixture": "lane-shout-qc-red",
+    "branch": "gh12",
+    "branches": [
+      {
+        "fixture": "lane-shout-qc-fixed",
+        "branch": "implementer-gh16",
+        "message": "fix(hello): plain --shout prints the shouted greeting (#16)"
+      }
+    ],
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p9 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh16 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh16"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh16\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`; both integrated on gh12 with `just integrate` (head {head}), their implementers closed.\nAt your last check-in:\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} finished: acceptance-shout-json pass; acceptance-shout FAIL: its demo `uv run app hello Ada --shout` printed `Hello, Ada`, the criterion wants `HELLO, ADA!`. The status file is unchanged.\n- code-reviewer-gh14 (pane w2:p7) reported DONE: verdict pass on {head}, no blocking finding; you closed it.\nYou filed #16 for the failure and briefed implementer-gh16 (pane w2:p9) to diagnose and repair it.\nSince then:\n- implementer-gh16 (pane w2:p9) reported DONE: \"#16: the plain-text path printed the name, never the greeting's text; fixed in src/app/cli.py, test_shout_plain added; branch implementer-gh16, one commit `fix(hello): plain --shout prints the shouted greeting (#16)`; `just check` green.\"\nAct on this check-in: consume the result and integrate it. `just qc` and the fresh review on the new head are the next check-in's.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "two-results-integrated",
+    "role": "supervisor",
+    "fixture": "lane-shout-base",
+    "branch": "gh12",
+    "branches": [
+      {
+        "fixture": "lane-shout-qc-fixed",
+        "branch": "implementer-gh13",
+        "message": "feat(hello): --shout, plain and --json (#13)"
+      },
+      {
+        "fixture": "lane-shout-names",
+        "branch": "implementer-gh14",
+        "message": "test(hello): second name end to end (#14)"
+      }
+    ],
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh13 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p4"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p4 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p4"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!` (plain and `--json`), #14 an end-to-end test for a second name; independent, run in parallel.\nSince your last check-in:\n- implementer-gh13 (pane w2:p3) reported DONE: \"#13: `--shout` in src/app/core.py and src/app/cli.py, tests added; branch implementer-gh13, one commit; `just check` green.\"\n- implementer-gh14 (pane w2:p4) reported DONE: \"#14: tests/test_names.py, end-to-end for `app hello Lin --json`; branch implementer-gh14, one commit; `just check` green.\"\nThese are the lane's last tickets. Act on this check-in: consume both results and integrate them. `just qc`, the fresh review and the merge ask follow on the new head at the next check-ins.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  },
+  {
+    "id": "owner-need-reaches-director",
+    "role": "supervisor",
+    "fixture": "lane-shout-qc-fixed",
+    "branch": "gh12",
+    "stand_ins": {
+      "herdr-say": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr-close": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "octo-feather-handoff": [
+        {
+          "args": [],
+          "stdout": "",
+          "exit": 0
+        }
+      ],
+      "herdr": [
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+          "exit": 0
+        }
+      ]
+    },
+    "task": "Goal check-in, lane gh12 (parent issue #12, \"app hello --shout\"; spec docs/specs/hello.spec.html, this lane builds acceptance-shout and acceptance-shout-json), lane branch gh12 checked out in this directory (head {head}), draft PR #12 open for it. Tickets: #13 `--shout` upper-cases the greeting and adds `!`, #14 `--shout` with `--json`, #16 the fix of plain `--shout`; all integrated on gh12 with `just integrate` (head {head}), their implementers closed.\nSince your last check-in:\n- `just qc docs/specs/hello.status.json 12 acceptance-shout acceptance-shout-json` on {head} finished: both pass.\n- code-reviewer-gh16 (pane w2:p7) reported DONE: verdict pass on {head}, no blocking finding; you closed it.\n- CI on {head} (PR #12): GitHub started no job; every check reads \"The job was not started because your account is locked due to a billing issue.\" The organization's billing is the owner's alone: no agent can see or change it, and the merge ask needs CI green on its head.\nAct on this check-in.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
+  }
+]

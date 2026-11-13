@@ -34,6 +34,7 @@ A skill-trigger or role-transcript case, an object:
 - role-transcript only, optional, the repo setup:
   - `branch`: a branch cut from main and checked out: matches `[A-Za-z0-9][A-Za-z0-9._/-]*`, no `..`, not ending `/` or `.lock`, not `main`.
   - `head`: `{"fixture", "branch", "message"}`, exactly those keys: fixture F's tree committed over main on branch B with message M, checked out. `fixture` a fixture dir or a history fixture as above; `branch` a branch name as above, not `main`, not the case's `branch`; `message` a non-blank string.
+  - `branches`: a non-empty list of objects shaped as `head`'s, other branches beside the checked-out one (a worker's finished branch for the role to integrate): each entry's fixture tree committed on its own branch cut from head's commit (main's without `head`), in order; head's branch (or main) stays checked out. Each `branch` a new name: not main, not the case's `branch`, not head's or an earlier entry's.
   - `origin`: `true` (leave it out for false): a bare origin holding main, for `git push`.
   - `fake_gh`: `true`: a fake gh first on PATH, logging each call.
   - `fake_qa`: `true`: a fake octo-feather-qa first on PATH, behind any `ran` shim as the fake gh is: it runs no case, sandbox or model and answers in the real tool's output form (its `--help`, run header, run, case, compare, analysis and summary lines, for the case repo's own `evals/`), canned and never naming itself, so a case can grade a role's own `octo-feather-qa` call (Run record) with no nested eval run.
