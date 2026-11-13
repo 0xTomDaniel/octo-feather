@@ -39,9 +39,12 @@ done
 # No provider link dirs: the repo top holds only what it had.
 [[ "$(ls -A "$repo" | tr '\n' ' ')" == ".agents .git " ]] || fail "repo top changed: $(ls -A "$repo")"
 
+# Every real installer run writes its onboarding state; a fresh state dir that stays
+# empty of it proves the installer never ran for a subdir REPO.
 mkdir -p "$repo/sub"
-out="$(run "$clone" repo/sub 2>&1)" && fail "subdir REPO succeeded"
+out="$(XDG_STATE_HOME="$t/state-sub" run "$clone" repo/sub 2>&1)" && fail "subdir REPO succeeded"
 grep -q "pass $repo\$" <<<"$out" || fail "subdir error does not name the top: $out"
+[[ ! -e "$t/state-sub/spec-chat/onboarding.toml" ]] || fail "installer ran for a subdir REPO"
 [[ -z "$(ls -A "$repo/sub")" ]] || fail "created in subdir: $(ls -A "$repo/sub")"
 
 # A linked worktree top is a checkout top: accepted, its links ignored too.
