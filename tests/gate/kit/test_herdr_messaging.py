@@ -3,7 +3,14 @@ docstring), each run as that file's command through `case` (tests/gate/kit/conft
 
 from collections.abc import Callable
 
-from herdr_messaging import post_merge_busy, say_lookup_fails, say_stalled, spawn_ready_late
+import pytest
+from herdr_messaging import (
+    post_merge_busy,
+    queued_completion,
+    say_lookup_fails,
+    say_stalled,
+    spawn_ready_late,
+)
 
 Case = Callable[..., None]
 
@@ -22,3 +29,10 @@ def test_say_stalled(case: Case) -> None:
 
 def test_post_merge_busy(case: Case) -> None:
     case(post_merge_busy)
+
+
+@pytest.mark.criterion(
+    "comms#acceptance-queued-completion", source="tests/gate/kit/herdr_messaging.py"
+)
+def test_queued_completion(case: Case) -> None:
+    case(queued_completion)

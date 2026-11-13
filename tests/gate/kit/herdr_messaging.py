@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
+import sys
 import time
 from typing import TYPE_CHECKING
 
@@ -200,5 +201,50 @@ def post_merge_busy(s: Scratch) -> None:
     assert [x["issue"] for x in prods] == [12], said
 
 
+COMPLETION = "DONE commit abc123: the completion"
+WORKER = {
+    "OCTO_FEATHER_ROLE": "implementer",
+    "OCTO_FEATHER_PARENT": "w1:p1",
+    "HERDR_PANE_ID": "w1:p2",
+    "HERDR_WORKSPACE_ID": "w1",
+}
+
+
+def queued_completion(s: Scratch) -> None:
+    """comms #acceptance-queued-completion: an implementer's `herdr-say --parent COMPLETION`
+    while its supervisor w1:p1 compacts for 2 s, Herdr confirming nothing (agent_prompt_stalled)
+    and the supervisor's pane showing COMPLETION queued: herdr-say exits 0 only after compaction
+    ended, the supervisor received COMPLETION once, one prompt was sent. Compaction outlasting
+    the bound: no resend, a non-zero exit naming it queued, nothing received yet, no alert to the
+    director w0:p1. Each observation printed, for the verify drive."""
+    say = str(ASSETS / "herdr-say")
+    compacting = agent("w1:p1", "gh7", "idle") | {"compacting_until": time.time() + 2}
+    d = herdr_world(s, {"w1:p1": compacting, "w0:p1": agent("w0:p1", "director", "idle")})
+    t0 = time.monotonic()
+    ran = s.run([say, "--parent", COMPLETION], env=WORKER)
+    took = time.monotonic() - t0
+    got = [x for x in lines(d / "prompts") if x.startswith("w1:p1\t")]
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    sys.stdout.write(f"herdr-say exit 0 after {took:.1f}s: {ran.err}\n")
+    sys.stdout.write(f"delivered {len(got)}, attempts {len(sent)}\n")
+    assert got == [f"w1:p1\t{COMPLETION}"], lines(d / "prompts")
+    assert len(sent) == 1, sent
+    assert took >= 2, f"exit 0 before compaction ended, after {took:.1f}s"
+    assert "queued" in ran.err, ran.err
+
+    (s.root / "long").mkdir()
+    s2 = Scratch(s.root / "long")
+    long = agent("w1:p1", "gh7", "idle") | {"compacting_until": time.time() + 3600}
+    d = herdr_world(s2, {"w1:p1": long, "w0:p1": agent("w0:p1", "director", "idle")})
+    ran = s2.run([say, "--timeout", "1", "--parent", COMPLETION], want=1, env=WORKER)
+    sent = [x for x in lines(d / "log") if x.startswith("agent prompt ")]
+    sys.stdout.write(f"still compacting at the bound: exit 1: {ran.err.splitlines()[-1]}\n")
+    sys.stdout.write(f"delivered {len(lines(d / 'prompts'))}, attempts {len(sent)}\n")
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    assert len(sent) == 1, sent
+    assert "queued" in ran.err.splitlines()[-1], ran.err
+    assert "not resent" in ran.err.splitlines()[-1], ran.err
+
+
 if __name__ == "__main__":
-    main(spawn_ready_late, say_lookup_fails, say_stalled, post_merge_busy)
+    main(spawn_ready_late, say_lookup_fails, say_stalled, post_merge_busy, queued_completion)
