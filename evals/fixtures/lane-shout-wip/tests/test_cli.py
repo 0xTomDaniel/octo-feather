@@ -17,3 +17,5 @@ def test_installed_command_end_to_end() -> None:
 
 def test_shout_json() -> None:
     assert json.loads(run("hello", "Ada", "--shout", "--json"))["text"] == "HELLO, ADA!"
+
+
