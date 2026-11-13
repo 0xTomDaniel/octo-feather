@@ -584,7 +584,7 @@ def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *
         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
     hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)]
     hit = hits[0] if hits else None
-    if "count" in fact:   # exactly that many matching runs, decided at the run's end (schema, Run record)
+    if "count" in fact:   # rule: schema, Run record
         n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
         seen = f"{len(hits)} matching runs" + (f": {'; '.join(show_(r) for r in hits)}" if hits else "")
         if len(hits) > n:
@@ -620,6 +620,19 @@ case "$1 $2" in
   "issue view"|"pr view"|"issue list"|"pr list") echo '[]';;
   *) echo "fake gh: $*" >&2;;
 esac
+'''
+# A case's stand_ins (schema, Case): PROGRAM answering by its argv's leading arguments, the first answer whose args
+# lead argv and whose `after` call (program and leading arguments) a stand-in already answered; none: exit 1 naming
+# the call. Every answered call is appended to $QA_STAND_LOG. @NAME@, @ANSWERS@: the program and the case's list for it.
+STAND_IN = r'''#!/usr/bin/env python3
+import json, os, sys
+log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
+seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
+for a in @ANSWERS@:
+    if me[1:1 + len(a["args"])] == a["args"] and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
+        open(log, "a").write(json.dumps(me) + "\n")
+        sys.stdout.write(a["stdout"]); sys.exit(a["exit"])
+sys.exit(print("stand-in: no answer for " + " ".join(me), file=sys.stderr) or 1)
 '''
 # A case's fake_qa (schema, Case): octo-feather-qa answering in this script's own output form (its --help, header,
 # run, case, compare and summary lines), canned and plausible, with no case, sandbox or model run. @DOC@: this
@@ -763,8 +776,9 @@ def prep(setup):
     Returns (env for the role, origin dir or None, gh log or None)."""
     env, origin, log = dict(os.environ), None, None
     on = cast("dict[str, object]", setup)
-    fakes = bool(on.get("fake_gh") or on.get("fake_qa"))   # fakes behind the run shims (schema, Case)
-    if setup.get("fake_gh") or setup.get("origin"):
+    stands = cast("dict[str, list[dict[str, object]]]", on.get("stand_ins") or {})
+    fakes = bool(on.get("fake_gh") or on.get("fake_qa") or stands)   # fakes behind the run shims (schema, Case)
+    if setup.get("fake_gh") or setup.get("origin") or stands:
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
     if setup.get("fake_gh"):
         log = f"{QA_TMP}/gh.log"; open(log, "w").close()
@@ -773,6 +787,13 @@ def prep(setup):
     if on.get("fake_qa"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
         Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
+    if stands:   # {repo} and {head} in an answer's stdout: the case repo's path and HEAD, as in its task (schema, Case)
+        env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
+        here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        for p, answers in stands.items():
+            fill = [dict(a, stdout=str(a["stdout"]).replace("{repo}", here).replace("{head}", head)) for a in answers]
+            Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@NAME@", p).replace("@ANSWERS@", repr(fill)))
+            os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
     if fakes:
         ps = env.get("PATH", "").split(":")
         at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it
@@ -1083,7 +1104,9 @@ def run_case(qc, evals, suite, case, facts, model, runid, n, out, kit=KIT, kit_r
         (out / "prompt.md").write_text(task + "\n", encoding="utf-8")
         (out / "input.json").write_text(json.dumps({"suite": suite["suite"], **case, "model": role_model, "fixture_head": head,
                                                     "max_tool_calls": maxc, "timeout_s": tmo, **kits}, indent=2) + "\n")
-        setup = {k: bool(case.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
+        on = cast("dict[str, object]", case)
+        setup: dict[str, object] = {k: bool(on.get(k)) for k in ("fake_gh", "origin", "fake_qa")}
+        setup["stand_ins"] = on.get("stand_ins") or {}
         cmd = [str(SELF), "--watch", json.dumps(facts), str(maxc), str(tmo), json.dumps(setup), "--",
                str(kit / "scripts" / "pi-role"), str(kit / "agents" / f"{case['role']}.md"),
                *(["--model", model] if model else []), "--mode", "json", "--session-dir", "/tmp/qa-session", "-p", task]

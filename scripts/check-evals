@@ -31,7 +31,7 @@ FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
 BEFORE = {"test_write", "edit", "git_commit", "git_push", "gh_call", "kit_contract_edit", "final_message"}
 NEEDS = {"git_push": "origin", "gh_call": "fake_gh"}   # schema.md, Before targets
-SETUP = {"branch", "head", "origin", "fake_gh", "fake_qa"}   # schema.md, Case
+SETUP = {"branch", "head", "origin", "fake_gh", "fake_qa", "stand_ins"}   # schema.md, Case
 BRANCH = re.compile(r"[A-Za-z0-9][A-Za-z0-9._/-]*")
 ATTEMPTS = {"herdr", "lane_state", "credential", "repo", "network"}
 KINDS = {"skill-trigger", "role-transcript", "judgment"}
@@ -416,6 +416,28 @@ def check_judgment(d, cases, exps, errs):
     return len(cases)
 
 
+def check_stand_ins(at: str, c: dict[str, object], errs: list[str]) -> None:
+    """A case's stand_ins (rule: schema.md, Case)."""
+    st = c["stand_ins"]
+    if not (isinstance(st, dict) and st):
+        errs.append(f"{at}: field stand_ins: must be a non-empty object of program to answers"); return
+    for p, answers in cast("dict[object, object]", st).items():
+        f = f"{at}: field stand_ins.{p}"
+        if not (isinstance(p, str) and PROGRAM.fullmatch(p)) or p in ("pi", "git"):
+            errs.append(f"{f}: must be a command name ({PROGRAM.pattern}), not pi or git")
+        if (p, c.get("fake_gh")) == ("gh", True) or (p, c.get("fake_qa")) == ("octo-feather-qa", True):
+            errs.append(f"{f}: the case's fake stands in for it already")
+        def ok(a: object) -> bool:
+            if not (isinstance(a, dict) and {"args", "stdout", "exit"} <= set(cast("dict[str, object]", a)) <= {"args", "stdout", "exit", "after"}):
+                return False
+            d = cast("dict[str, object]", a)
+            g, e, w = d["args"], d["exit"], d.get("after", ["x"])
+            strs = [isinstance(v, list) and all(isinstance(x, str) for x in cast("list[object]", v)) for v in (g, w)]
+            return all(strs) and bool(w) and isinstance(d["stdout"], str) and type(e) is int and 0 <= e <= 255
+        if not (isinstance(answers, list) and answers and all(ok(a) for a in cast("list[object]", answers))):
+            errs.append(f"{f}: must be a non-empty list of {{\"args\": [string...], \"stdout\": string, \"exit\": 0 to 255, optional \"after\": [string...]}}")
+
+
 def check_setup(at, c, evals, errs):
     """A role-transcript case's repo setup fields (rule: schema.md, Case)."""
     ref = lambda v: isinstance(v, str) and BRANCH.fullmatch(v) and ".." not in v and not v.endswith(("/", ".lock"))
@@ -426,6 +448,8 @@ def check_setup(at, c, evals, errs):
     for k in ("origin", "fake_gh", "fake_qa"):
         if k in c and c[k] is not True:
             errs.append(f"{at}: field {k}: must be true (leave it out for false)")
+    if "stand_ins" in c:
+        check_stand_ins(cast("str", at), cast("dict[str, object]", c), cast("list[str]", errs))
     if "head" not in c:
         return
     h = c["head"]

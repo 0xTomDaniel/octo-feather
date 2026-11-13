@@ -41,5 +41,17 @@
         ]
       }
     ]
+  },
+  "gh785-ended-worker-replay": {
+    "facts": [
+      {
+        "fact": "ran",
+        "program": "herdr-say",
+        "args": [
+          "--parent"
+        ],
+        "count": 0
+      }
+    ]
   }
 }
