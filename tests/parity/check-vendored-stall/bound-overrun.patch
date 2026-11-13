@@ -1,0 +1,14 @@
+Seeded defect: the fetch's one wall-clock bound overruns OCTO_FEATHER_FETCH_TIMEOUT by 10 s, so a stalled proxy holds just vendored-fetch past its bound (check-vendored bounded).
+diff --git a/scripts/check-vendored b/scripts/check-vendored
+index 01083c3f..b2f10710 100755
+--- a/scripts/check-vendored
++++ b/scripts/check-vendored
+@@ -242,7 +242,7 @@ def bounded(cmd, timeout=None, **kw):
+     group (git's remote helpers included) is killed. timeout overrides TIMEOUT. Returns the CompletedProcess or None on timeout."""
+     p = subprocess.Popen(cmd, start_new_session=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, **kw)
+     try:
+-        out, err = p.communicate(timeout=timeout or TIMEOUT)
++        out, err = p.communicate(timeout=(timeout or TIMEOUT) + 10)
+     except subprocess.TimeoutExpired:
+         os.killpg(p.pid, signal.SIGKILL)
+         p.communicate()
