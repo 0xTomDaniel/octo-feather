@@ -20,8 +20,9 @@
 <section data-spec-section="user-stories" data-anchor="user-stories" id="user-stories">
 <h2>User stories</h2>
 <p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-owner-one-voice">As the owner, I hear from the factory only through the director, so asks reach me filtered and in context instead of fragmented from every agent.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-autonomous-outcomes">As the owner, delegated work advances without routine permission requests, while decisions I own and reliable completion still reach me.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-no-wrong-pane">As a supervisor, a worker that follows a wrong habit cannot type into another lane or straight to the director while its supervisor is reachable.</p>
-<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: a worker that ends without reporting is noticed, recovered and reported up.</p>
+<p data-user-story data-user-facing="true" data-guided-journey="no" data-anchor="story-never-stalls">As the owner, a lane never stalls silently: outstanding worker results are accounted for, and required completion and outside-authority blockers reach the parent.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-lane-state">As the director, I read every lane's current state and history, findings included, from plain files, so I can audit lanes and count repeated finding classes without asking each supervisor.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-factory-report">As the director, I read the whole factory in one report built only from what already records it, so I answer the owner from facts, waits on the owner included, instead of reading each lane's panes.</p>
 <p data-user-story data-user-facing="false" data-anchor="story-reflection">As the owner, the factory reviews each closed lane and the director's own work, routes what it finds to where the work is written, and sharpens its own questions when a gap slips past them, so I am no longer the one who catches what it missed.</p>
@@ -31,8 +32,14 @@
 <h2>Acceptance criteria</h2>
 <p data-acceptance-criterion data-anchor="acceptance-guard-other-lane" data-story="story-no-wrong-pane"><span data-acceptance-scenario>Given an implementer in workspace gh12, When it sends a message to the supervisor of gh13,</span> <span data-acceptance-observable>Then the message is refused, nothing is typed in gh13, and the implementer is told it may message only its parent, proven by an integration test: no screen shows it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-parent-delivery" data-story="story-no-wrong-pane"><span data-acceptance-scenario>Given an implementer finishing its ticket, When it sends its result to its parent,</span> <span data-acceptance-observable>Then its supervisor's tab shows the result as a message from that implementer.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-parent-gone" data-story="story-never-stalls"><span data-acceptance-scenario>Given a worker whose supervisor's pane closed before it reports, needs an induced failure: the supervisor pane closes, When the worker finishes,</span> <span data-acceptance-observable>Then the director's tab shows the worker's result, and the worker's tab shows it idle, no longer sending.</span></p>
-<p data-acceptance-criterion data-anchor="acceptance-worker-ended" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor waiting on a worker that ends without reporting, needs an induced failure: the worker's session exits mid-ticket, When the supervisor's goal next checks in,</span> <span data-acceptance-observable>Then the director's tab shows a message from the supervisor naming that worker as ended without reporting and the worker started in its place.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-parent-gone" data-story="story-never-stalls"><span data-acceptance-scenario>Given a worker whose supervisor's pane closed before it reports, needs an induced failure: the supervisor pane closes, When the worker finishes then sends its result to its parent,</span> <span data-acceptance-observable>Then the director's tab shows one parent-gone alert naming the lane and the worker holding the result, without the result's text, and the worker's tab shows it idle with its result kept.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-worker-ended" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor waiting on a worker that exits mid-ticket without reporting, needs an induced failure: the worker session exits, When the supervisor reconciles its outstanding work,</span> <span data-acceptance-observable>Then an attempt records the unreported ending, partial result and diagnosed recovery; a replacement has a different provider-session identity and no competing writer remains.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-autonomous-local" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing a recoverable local validation failure and independent ready work within its delegation, When the supervisor assigns the repair then advances the independent work,</span> <span data-acceptance-observable>Then both assignments advance within the lane without a director permission request, and their evidence is retained locally.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-real-blocker" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing an owner-held access blocker and independent ready work, When the supervisor escalates the access need then advances the independent work,</span> <span data-acceptance-observable>Then the director receives one actionable access decision naming the blocked branch, attempts and options, while the independent assignment advances.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-no-routine-traffic" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a supervisor with a fixture to be added containing routine worker progress, several finished ticket results and a lane ready for its merge ask, When the supervisor consumes those results then sends the merge ask,</span> <span data-acceptance-observable>Then the director receives the merge ask with evidence pointers as its only message from that lane, and no individual worker or ticket result.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-queued-completion" data-story="story-never-stalls"><span data-acceptance-scenario>Given a worker with a fixture to be added containing a completed result and a compacting supervisor, needs an induced failure: native delivery confirmation is unavailable while the result is visibly queued, When the worker sends its completion then reconciles the uncertain send,</span> <span data-acceptance-observable>Then the supervisor receives the completion once after compaction and the worker's action history contains one completion-send attempt, without a duplicate replay.</span></p>
+<p data-acceptance-criterion data-story="story-never-stalls" data-anchor="acceptance-director-worker-resume"><span data-acceptance-scenario>Given a director with a fixture to be added containing its general worker waiting on the same unfinished assignment, When the director parks that worker then continues its assignment,</span> <span data-acceptance-observable>Then the worker resumes with its recorded role and provider-session identity and returns its result to that director, without starting an independent assignment in the old context.</span></p>
+<p data-acceptance-criterion data-anchor="acceptance-artifact-supervision" data-story="story-autonomous-outcomes"><span data-acceptance-scenario>Given a director with a fixture to be added containing a supervisor whose activity label disagrees with its live deliverable evidence, When the director reconciles that lane,</span> <span data-acceptance-observable>Then its intervention names the evidence mismatch and the needed next action to the supervisor, rather than issuing a purposeless status nudge.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-resume-live-space" data-story="story-never-stalls"><span data-acceptance-scenario>Given a parked supervisor whose lane workspace still holds one of its workers' tabs, When the director sends it a message,</span> <span data-acceptance-observable>Then Herdr shows the supervisor resumed in a new tab of that same workspace, and the message it receives names its new pane.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-close-report-first" data-story="story-never-stalls"><span data-acceptance-scenario>Given a supervisor whose pull request merged, When it closes the lane,</span> <span data-acceptance-observable>Then the director's tab shows the supervisor's close report while the supervisor's worktree still exists, and the worktree is gone only after the director removes it.</span></p>
 <p data-acceptance-criterion data-anchor="acceptance-escalation-content" data-story="story-owner-one-voice"><span data-acceptance-scenario>Given an implementer blocked by a scope conflict its supervisor cannot settle, When the conflict reaches the owner,</span> <span data-acceptance-observable>Then it arrives from the director, naming what is blocked, what was tried, and the options.</span></p>
@@ -88,7 +95,9 @@
 <text x="185" y="100" text-anchor="middle" font-size="11">try first</text><text x="385" y="100" text-anchor="middle" font-size="11">try first</text><text x="585" y="100" text-anchor="middle" font-size="11">try first</text>
 </g>
 </svg>
-<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed. No level skips past a reachable level, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
+<figcaption data-anchor="escalation-caption">Every escalation names what is blocked, what was tried, and the options or what is needed.
+Product workers escalate through their supervisor; general workers report to the director or supervisor that owns their finite assignment (<a href="./roles.spec.html#general-purpose-workers">general-purpose workers</a>, ADR 0029).
+Neither skips a reachable parent, and only the director brings anything to the owner (ADR 0015). The shaper, outside the factory, talks with the owner directly while shaping (<a href="./roles.spec.html#roles-shaper">roles</a>).</figcaption>
 </figure>
 </section>
 <section data-anchor="messages" id="messages">
@@ -99,14 +108,75 @@
 <tbody>
 <tr data-anchor="say-parent"><td>Sender uses <code>--parent</code></td><td>Delivered to the pane that spawned the sender; the parent survives park and resume</td></tr>
 <tr data-anchor="say-wrong-target"><td>A worker targets anything but its parent, or a supervisor targets anything but its parent or an agent in its own workspace</td><td>Refused, exit 77, nothing typed. An accident guard, not security: any process can still call Herdr directly</td></tr>
-<tr data-anchor="say-parent-gone"><td>A worker's parent is unreachable</td><td>The worker may send its result once to the director's pane, then stops</td></tr>
+<tr data-anchor="say-parent-gone"><td>A worker's parent is gone: Herdr finds no agent and no parked record names it</td><td>Not delivered; the worker keeps its result and stops. <code>herdr-say</code> itself sends the director one fixed alert naming the lane, the gone parent and the worker holding the result, with no text from the worker. Timeouts and uncertain delivery never trigger it, and a worker never messages the director (ADR 0030)</td></tr>
 <tr data-anchor="say-blocked"><td>The target waits on an interactive prompt</td><td>Not delivered, exit 75, nothing typed; the sender retries once it frees</td></tr>
 <tr data-anchor="say-no-parent"><td><code>--parent</code> with no recorded parent</td><td>Refused, exit 64</td></tr>
 </tbody>
 </table>
 </div>
-<p data-anchor="roles-goal">Every report goes to its recipient through <code>herdr-say</code>; text left in the sender's own pane is not reported. A sender ends its turn after sending instead of polling for a reply; the reply arrives as a new message, and Herdr reports the sender done. Each supervisor runs under a goal for its lane; at each check-in it reads the Herdr state of every worker it waits on, consumes a finished result left on a worker's pane, otherwise recovers or restarts the worker, and tells the director which worker ended without reporting and what it did.</p>
-<p data-anchor="roles-park">Waiting agents hold no memory: the director parks a supervisor idle at an owner gate, waiting on another lane or held back for load; a supervisor parks a worker it would otherwise keep idle through a long wait. A message to a parked agent resumes it under the same name with its conversation intact; a parked agent is resumed, never relaunched fresh. A parked supervisor resumes in its lane's workspace when that workspace still exists, and in a new lane workspace otherwise. The message that resumes an agent tells it it was resumed and names its new pane.</p>
+<p data-anchor="roles-goal">Required reports go through <code>herdr-say</code>; text left in the sender's pane is not delivery.
+A sender does not poll for an acknowledgement or stop ready work after a notification.
+Each supervisor retains its lane goal and reconciles every outstanding assignment from results, artifacts, dependencies and native state.
+It consumes a recoverable finished result before considering restart; a DONE label alone proves neither completion nor death.
+The director has the same reconciliation duty for its directly parented general workers, not another lane's workers.
+Assignments and their disposition stay in the existing parent log and native worker identity: lane attempt lines for lane children, director note entries for its own general workers, without a fabricated product lane or new inbox.
+A successfully recovered unreported ending stays local: an attempt line with result ended-unreported records it, so reports and reflection can count it, and no director notice is sent unless another table event applies.</p>
+<p data-anchor="roles-park">Consume completed artifacts and exhaust actionable owned work before parking.
+An activity label or pending final gate alone is not a reason to park ready work.
+Record the exact blocker, authority holder and wake condition in existing parent evidence.
+The director parks genuinely waiting supervisors and its own general workers; supervisors park their genuinely waiting workers.
+Lane children use their lane hand-off log; director children use the director log's parked entry.
+Shared parked lookup reads both the director log and lane logs, honoring the recorded parent, role, working directory and provider session.
+Only the same unfinished assignment may resume its conversation; an independent assignment gets a unique name and fresh session as <a href="./roles.spec.html#context-handoff-choice">roles</a> requires.
+A finished assignment's old name is not a destination for new work.
+A parked supervisor resumes in its lane workspace when it exists, otherwise in a new lane workspace; a general worker resumes in its actual parent's workspace.
+The resume message names the new pane and the same assignment.</p>
+</section>
+<section data-anchor="parent-notifications" id="parent-notifications">
+<h2>Parent notifications</h2>
+<p data-anchor="notification-default">BLOCKED and DONE are the normal parent outcomes.
+The event table is the complete parent-notification allowlist, not a report-everything fallback.
+Routine pilot, smoke and recovered local validation results stay in existing evidence, not messages.
+The director receives lane milestones, never individual worker or ticket results: a lane's merge ask, its close, and blockers, gates, spec calls and risks the table routes to it.
+Notification supplies information; permission is needed only outside durable delegation or at an actual owner gate.
+Owner acceptance, merge, consequential product/risk, security, immediate spec calls and cross-lane needs retain their own gates.</p>
+<div class="table-scroll" data-anchor="notification-table-wrap">
+<table data-anchor="notification-table"><caption>Who wakes, who decides, and what stops</caption>
+<thead><tr><th>Event</th><th>Route and decision owner</th><th>Sender continuation</th></tr></thead>
+<tbody>
+<tr data-anchor="notify-blocked"><td>BLOCKED: an action is outside authority after bounded owned attempts; a previously escalated need changes materially or resolves</td><td>Product worker to supervisor; unresolved lane need to director; director-owned general worker to its director parent; only owner-held decisions to owner through director. Name scope, attempts, evidence and options, or the resolved condition.</td><td>Stop only the affected action. Continue independent ready work. Send the changed or resolved condition once, not repeated reminders.</td></tr>
+<tr data-anchor="notify-done"><td>DONE: assigned result complete, including review verdict, merge report and lane close</td><td>Worker to actual parent with result and current revision/evidence. Supervisor consumes every worker result itself and reports to director only the lane milestone: its merge ask and its close. Director consumes its general workers and reports meaningful owner outcomes.</td><td>No ACK wait. A completion report does not close an implementation assignment before its required review and verification, or authorize integration, acceptance or merge.</td></tr>
+<tr data-anchor="notify-gates"><td>Required owner review and merge asks</td><td>Supervisor to director to owner, with current head and required evidence. Spec acceptance stays outside the factory.</td><td>Wait only at the actual gate; preserve independent work and safe parking.</td></tr>
+<tr data-anchor="notify-spec"><td>Spec calls requiring immediate notice</td><td>Supervisor to director to owner exactly as <a href="./issue-lifecycle.spec.html#gates-call-loudness">spec call loudness</a> requires. Other calls stay in the merge ask.</td><td>Nonblocking notice, with owner approval or denial at merge.</td></tr>
+<tr data-anchor="notify-risk"><td>Material security exposure or cross-lane impact, even after local containment</td><td>Worker through its actual parent chain to director; director coordinates affected supervisors and brings owner-held risk decisions to owner. Name impact, containment and needed decision without exposing secrets.</td><td>Contain within authority; stop unsafe or conflicting actions, not unrelated safe work.</td></tr>
+<tr data-anchor="notify-delivery"><td>Required result cannot reach a parent proven gone</td><td><code>herdr-say</code>, not the worker, sends the current director one fixed parent-gone alert naming the lane, the gone parent and where the result is held. The director recovers the parent, which reconciles the retained result. If no director is reachable, the result stays retained for reconciliation.</td><td>The worker retains its result and stops. No worker message to the director, no peer route or fallback loop. Unknown or queued delivery is not proof of a gone parent.</td></tr>
+<tr data-anchor="notify-terminal"><td>Provider recovery exhausted</td><td>Existing runtime recovery sends the terminal stopped notice to parent under ADR 0023; headless failure returns to its caller.</td><td>Do not silently suppress terminal failure or invent an outage from one failed session.</td></tr>
+</tbody></table></div>
+<p data-anchor="notification-records">Routine details and recovery evidence remain in existing lane records, hand-off logs, tracker results and revision-bound artifacts, not a second status store.
+A partial branch blocker does not mark every independent assignment blocked.
+The supervisor keeps each outstanding result accounted for until consumed or explicitly reconciled into a replacement's scope.</p>
+<p data-anchor="notification-granularity">Each message names the lane or assignment, outcome, evidence pointer and any required decision with its owner.
+Consolidate worker details at the supervisor; do not relay raw chatter.
+Report a changed blocker or a resolved previously escalated blocker once, not repeated reminders without new evidence.
+Owner dialogue does not suspend required risk, decision or completion delivery; routine updates do not interrupt it.</p>
+</section>
+<section data-anchor="delivery-recovery" id="delivery-recovery">
+<h2>Delivery evidence and recovery</h2>
+<div class="table-scroll" data-anchor="delivery-evidence-wrap">
+<table data-anchor="delivery-evidence"><caption>Evidence is not permission and transport is not consumption</caption>
+<thead><tr><th>Evidence</th><th>What may be concluded</th><th>Safe next action</th></tr></thead><tbody>
+<tr data-anchor="delivery-confirmed"><td>Native send confirms a state change</td><td>Transport confirmation only, not semantic consumption</td><td>Continue under existing delegation; no ACK gate.</td></tr>
+<tr data-anchor="delivery-queued"><td>Bounded authorized native observation shows the content queued during compaction</td><td>Queued, not consumed; preserve the original unsuccessful send result</td><td>No replay or disruptive recovery while compaction is observed.</td></tr>
+<tr data-anchor="delivery-unknown"><td>Timeout or prompt-stalled with no decisive queue or consumption evidence</td><td>Unknown, not rejected, delivered or unreachable</td><td>Retain the result for the parent's outstanding-work reconciliation. No replay just because confirmation is absent; replay once only after compaction has ended and inspection shows the result absent. Uncertain delivery never triggers the parent-gone alert.</td></tr>
+<tr data-anchor="delivery-rejected"><td>Native refusal explicitly proves nothing was typed</td><td>Rejected without delivery</td><td>Correct the cause within authority, then send when the target is eligible.</td></tr>
+<tr data-anchor="delivery-consumed"><td>The recipient's resulting artifact or action demonstrates use of this result</td><td>Consumed to the extent that evidence proves</td><td>Reconcile against current head; never demand a separate read receipt.</td></tr>
+</tbody></table></div>
+<p data-anchor="delivery-safety">Recovery is cause-based and bounded by existing runtime and resource constraints.
+Ordinary task instructions and worker results are not blindly replayed, cancelled or restarted solely because of DONE, timeout or compaction.
+Existing ADR 0023 runtime terminal stopped-notice retries are the one explicit exception; duplicating a terminal notice differs from replaying executable work or a worker result.
+Before replacement account for partial commits, uncommitted work and late results, establish a single writer, and verify current assignment and head.
+A late result is compared with current artifacts before unique findings are reused.
+No custom inbox, daemon, scheduler or new message protocol is added.</p>
 </section>
 <section data-anchor="lane-record" id="lane-record">
 <h2>Lane state</h2>
@@ -148,14 +218,14 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <table data-anchor="handoff-fields"><caption>Hand-off log: one JSON line per hand-off moment; every line has <code>at</code> and <code>kind</code></caption>
 <thead><tr><th>kind</th><th>Written when</th><th>Fields</th></tr></thead>
 <tbody>
-<tr data-anchor="handoff-kind-attempt"><td>attempt</td><td>A worker's result is consumed</td><td>role, ticket, worker, commit, result, duration_s</td></tr>
+<tr data-anchor="handoff-kind-attempt"><td>attempt</td><td>A worker result or an unreported ending is reconciled</td><td>role, ticket when in a lane, worker, session (provider-session identity), commit when present, result, duration_s; ended-unreported identifies an ending without a report and retains its partial-result and recovery evidence</td></tr>
 <tr data-anchor="handoff-kind-review"><td>review</td><td>A review verdict is consumed</td><td>ticket, commit, verdict, blockers, round</td></tr>
 <tr data-anchor="handoff-kind-finding"><td>finding</td><td>A code-review, product-judge or reflection finding is consumed, one line per finding</td><td>source (code-review, qc or reflection), class, blocking, summary; a reflection finding adds question and route</td></tr>
 <tr data-anchor="handoff-kind-reflection"><td>reflection</td><td>A lane reflection ran</td><td>findings (its count), questions (the ids it answered)</td></tr>
 <tr data-anchor="handoff-kind-integration"><td>integration</td><td>The lane branch moves</td><td>commit</td></tr>
 <tr data-anchor="handoff-kind-gate"><td>gate</td><td>An owner gate is asked or answered</td><td>gate, event, answer</td></tr>
 <tr data-anchor="handoff-kind-blocked"><td>blocked</td><td>The lane becomes blocked</td><td>reason</td></tr>
-<tr data-anchor="handoff-kind-parked"><td>parked</td><td>An idle agent is parked</td><td>pane, name, role, cwd, session</td></tr>
+<tr data-anchor="handoff-kind-parked"><td>parked</td><td>A waiting lane agent is parked for the same unfinished assignment</td><td>pane, name, role, cwd, session, label, parent</td></tr>
 <tr data-anchor="handoff-kind-scope"><td>scope</td><td>Scope or ship grouping changes</td><td>change</td></tr>
 </tbody>
 </table>
@@ -165,6 +235,7 @@ waiting_on = ""                        # "", "blocked", "director", or another l
 <thead><tr><th>kind</th><th>Written when</th><th>Fields</th></tr></thead>
 <tbody>
 <tr data-anchor="handoff-director-note"><td>note</td><td>The director tells the owner something worth keeping</td><td>issue when about one lane, text</td></tr>
+<tr data-anchor="handoff-director-parked"><td>parked</td><td>The director parks its own waiting general worker for the same unfinished assignment</td><td>pane, name, role, cwd, session, label, parent; shared parked lookup reads these director entries as well as lane entries</td></tr>
 <tr data-anchor="handoff-director-prod"><td>prod</td><td>The director wakes or redirects a supervisor</td><td>issue, note</td></tr>
 <tr data-anchor="handoff-director-finding"><td>finding</td><td>The director records a finding worth counting by class</td><td>class, starting <code>owner-caught-</code> when the owner caught what the factory should have; issue when about one lane; summary; a reflection finding adds source reflection, question and route</td></tr>
 <tr data-anchor="handoff-director-reflection"><td>reflection</td><td>A director reflection ran</td><td>findings (its count), questions (the ids it answered)</td></tr>
