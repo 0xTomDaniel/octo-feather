@@ -9,10 +9,8 @@ its step 4 line naming the supervisor NOT told (lane, pane, timeout, the re-send
 on to tell the others (director rule #619). A general worker routes like every worker (roles
 spec #acceptance-task-worker-route): its parent reached, a peer lane refused (77); and a worker
 never messages the director: its parent proven gone, herdr-say itself sends the director one
-fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). The director parks
-its own general worker into the director log and its next message resumes it, with its recorded
-role, session and parent, in its parent's workspace (comms spec
-#acceptance-director-worker-resume); a parked lane worker still resumes as before."""
+fixed alert, a timeout or a stall none (comms spec #acceptance-parent-gone). director_worker_resume
+drives comms spec #acceptance-director-worker-resume (its docstring names each step)."""
 
 from __future__ import annotations
 
