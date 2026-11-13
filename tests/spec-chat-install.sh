@@ -1,31 +1,19 @@
 #!/usr/bin/env bash
 # Integration test for `just spec-chat REPO` (scripts/octo-feather-spec-chat),
-# offline: a fake Spec Chat clone whose installer stub records its argv and links
-# skills like the real one. Links land in REPO/.agents/skills, ignored in
-# info/exclude once, nothing under HOME, no provider dirs. Run by `just check`.
+# offline, over the pinned Spec Chat and its real installer (the Skillfile fetch-only
+# entries spec-chat and spec-chat-installer, `check-vendored --extract`, #96, #817).
+# Links land in REPO/.agents/skills, ignored in info/exclude once, nothing under HOME,
+# no provider dirs (so the kit passed --agents-only and --prefix REPO). Run by `just check`.
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 t="$(cd "$t" && pwd -P)"
 fail() { echo "spec-chat-install test: $*" >&2; exit 1; }
-export HOME="$t/home" XDG_STATE_HOME="$t/state"; mkdir -p "$HOME"
-
-clone="$t/clone"; mkdir -p "$clone/scripts"
-for s in shape-spec review-spec repair-specs; do mkdir -p "$clone/skill/$s"; echo "# $s" > "$clone/skill/$s/SKILL.md"; done
-cat > "$clone/scripts/install-spec-chat" <<'EOF'
-#!/usr/bin/env bash
-set -euo pipefail
-root="$(cd "$(dirname "$0")/.." && pwd -P)"
-printf '%s\n' "$@" > "$root/argv"
-prefix=""; while [[ $# -gt 0 ]]; do [[ "$1" == --prefix ]] && { prefix="$2"; shift; }; shift; done
-mkdir -p "$prefix/.agents/skills" "$XDG_STATE_HOME/spec-chat"
-for p in spec-chat-shape:shape-spec spec-chat-review:review-spec repair-specs:repair-specs; do
-  [[ -L "$prefix/.agents/skills/${p%%:*}" ]] || ln -s "$root/skill/${p#*:}" "$prefix/.agents/skills/${p%%:*}"
+clone="$t/clone"
+for e in spec-chat spec-chat-installer; do
+  "$kit/scripts/check-vendored" --extract "$e" "$clone" > /dev/null || fail "no pinned $e (message above)"
 done
-echo 'status = "pending"' > "$XDG_STATE_HOME/spec-chat/onboarding.toml"
-echo "fake installer: linked into $prefix"
-EOF
-chmod +x "$clone/scripts/install-spec-chat"
+export HOME="$t/home" XDG_STATE_HOME="$t/state"; mkdir -p "$HOME"
 
 repo="$t/work/repo"; mkdir -p "$repo"; git -c init.defaultBranch=main init -q "$repo"
 # A committed link elsewhere is the repo's own: never ignored.
@@ -36,10 +24,8 @@ run() { (cd "$t/work" && SPEC_CHAT_CLONE="$1" just --justfile "$kit/justfile" sp
 
 for i in 1 2; do
   out="$(run "$clone" repo 2>&1)" || fail "run $i failed: $out"
-  grep -q "fake installer: linked into $repo" <<<"$out" || fail "installer output not passed through: $out"
+  grep -q "spec-chat onboarding pending: $XDG_STATE_HOME/spec-chat/onboarding.toml" <<<"$out" || fail "installer output not passed through: $out"
 done
-want=$'--agents-only\n--prefix\n'"$repo"
-[[ "$(cat "$clone/argv")" == "$want" ]] || fail "installer argv: $(tr '\n' ' ' < "$clone/argv")"
 for s in spec-chat-shape spec-chat-review repair-specs; do
   [[ -L "$repo/.agents/skills/$s" && -f "$repo/.agents/skills/$s/SKILL.md" ]] || fail "missing link $s"
 done
@@ -53,10 +39,9 @@ done
 # No provider link dirs: the repo top holds only what it had.
 [[ "$(ls -A "$repo" | tr '\n' ' ')" == ".agents .git " ]] || fail "repo top changed: $(ls -A "$repo")"
 
-rm "$clone/argv"; mkdir -p "$repo/sub"
+mkdir -p "$repo/sub"
 out="$(run "$clone" repo/sub 2>&1)" && fail "subdir REPO succeeded"
 grep -q "pass $repo\$" <<<"$out" || fail "subdir error does not name the top: $out"
-[[ ! -e "$clone/argv" ]] || fail "installer ran for a subdir REPO"
 [[ -z "$(ls -A "$repo/sub")" ]] || fail "created in subdir: $(ls -A "$repo/sub")"
 
 # A linked worktree top is a checkout top: accepted, its links ignored too.

@@ -1,0 +1,14 @@
+Seeded defect: the gate-recipe check looks for the wrong recipe, so a gate without check-languages passes (check-templates check_wiring; #362).
+diff --git a/scripts/check-templates b/scripts/check-templates
+index 293b841e..2f472c30 100755
+--- a/scripts/check-templates
++++ b/scripts/check-templates
+@@ -155,7 +155,7 @@ def check_wiring(template: Path) -> None:
+         new = {str(d["recipe"]) for d in deps} - gate
+         gate |= new
+         todo += new
+-    if "check-languages" not in gate:
++    if "check-language" in gate:
+         msg = (
+             f"{template}/justfile: the gate never runs check-languages; add it to GATE_RECIPES"
+             " or as a dependency of check"
