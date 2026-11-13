@@ -60,6 +60,8 @@ if a[0] == "api" and (r := re.fullmatch(r"repos/(?:o/r|\{owner\}/\{repo\})/(bran
 if a[0] == "api" and "-X" not in a and (r := re.fullmatch(r"repos/(?:\{owner\}/\{repo\}|o/r)/commits/([0-9a-f]+)/check-runs(\?.*)?", a[1])):
     p = f"{D}/runs/{r.group(1)}.json"   # a commit's check runs (REST), none when the file is absent
     print(open(p).read() if os.path.exists(p) else '{"total_count": 0, "check_runs": []}'); sys.exit(0)
+if a[0] == "api" and "/actions/runs?" in a[1]:
+    print(open(f"{D}/actions.json").read()); sys.exit(0)
 if a[0] == "api":
     m, p = a[a.index("-X") + 1], a[a.index("-X") + 2].replace("{owner}/{repo}", "o/r")
     if os.environ.get("FAKE_GH_FAIL") == "write": die("gh: Server Error (HTTP 502)")
@@ -410,6 +412,49 @@ grep -q "Judged: commit ${C:0:12} 'fix: y' after the judged head ${J:0:12} chang
 # the judged head is the PR head and its check skipped (a draft's run, PR #608 at d0e4381): refused, J's green run aside
 HEADL="${J:0:12}" JUDGEDL="${J:0:12} is the PR head" bad "Checks: skipped on head ${J:0:12}: check; a skipped check is no pass" \
   "$skipped; d['headRefOid'] = '$J'"
+# gh786: draft skips and eligible success coexist on the SAME PR head.
+python3 - "$FAKE_GH" "$H" <<'PY'
+import json, sys
+folder, head = sys.argv[1:]
+runs = [{"id": i, "name": name, "head_sha": head, "app": {"id": 1},
+         "check_suite": {"id": suite}, "html_url": f"https://github.com/o/r/actions/runs/{suite}/job/{i}",
+         "status": "completed", "conclusion": conclusion}
+        for i, name, suite, conclusion in [(1,"scope",10,"skipped"),(2,"check",10,"skipped"),
+                                            (3,"scope",20,"success"),(4,"check",20,"success")]]
+json.dump({"total_count":4,"check_runs":runs},open(f"{folder}/runs/{head}.json","w"))
+json.dump({"workflow_runs":[{"id":s,"check_suite_id":s,"workflow_id":5,"head_sha":head} for s in (10,20)]},open(f"{folder}/actions.json","w"))
+rollup = [{"__typename":"CheckRun","name":r["name"],"status":r["status"].upper(),
+           "conclusion":r["conclusion"].upper(),"workflowName":"check","detailsUrl":r["html_url"]} for r in runs]
+json.dump(rollup,open(f"{folder}/rollup.json","w"))
+PY
+projection="d['statusCheckRollup'] = json.load(open('$FAKE_GH/rollup.json'))"
+setpr "$projection"
+run 0 merge-ask 7 "${ST[@]}"
+cp "$FAKE_GH/runs/$H.json" "$t/current-runs"; cp "$FAKE_GH/actions.json" "$t/current-actions"
+for variant in failure pending cancelled unknown missing wrong-head app workflow metadata legacy; do
+  cp "$t/current-runs" "$FAKE_GH/runs/$H.json"; cp "$t/current-actions" "$FAKE_GH/actions.json"
+  python3 - "$FAKE_GH" "$H" "$variant" <<'PY'
+import json, sys
+folder, head, variant = sys.argv[1:]
+p = f"{folder}/runs/{head}.json"; data = json.load(open(p)); rs = data["check_runs"]
+if variant in ("failure", "cancelled", "unknown"): rs[-1]["conclusion"] = variant
+elif variant == "pending": rs[-1].update(status="in_progress", conclusion=None)
+elif variant == "missing": rs.pop()
+elif variant == "wrong-head": rs[-1]["head_sha"] = "0" * 40
+elif variant == "app": rs[-1]["app"]["id"] = 2
+elif variant == "workflow":
+    ap = f"{folder}/actions.json"; a = json.load(open(ap)); a["workflow_runs"][-1]["workflow_id"] = 6
+    json.dump(a, open(ap, "w"))
+elif variant == "metadata": del rs[-1]["app"]
+json.dump(data, open(p, "w"))
+PY
+  setpr "$projection"
+  if [[ "$variant" == legacy ]]; then
+    setpr "$projection; d['statusCheckRollup'].append({'__typename':'StatusContext','context':'required/security','state':'FAILURE'})"
+  fi
+  run 1 merge-ask 7 "${ST[@]}"
+  grep -q 'Checks:' <<<"$err" || fail "$variant: no check refusal: $err"
+done
 rm -r "$FAKE_GH/runs"
 ROWS="| demo#acceptance-a | pass | judged $JS | r |" bad "criterion row demo#acceptance-b: missing (it is in Built)"
 ROWS=$'| demo#acceptance-a | pass | judged '"$JS"$' | r |\n| demo#acceptance-b | pass | judged '"$JS"$' | |' bad "criterion row demo#acceptance-b: no evidence"
