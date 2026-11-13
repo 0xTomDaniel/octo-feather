@@ -12,10 +12,12 @@ line in its `log`. `agents.json` maps each pane id to its agent, {name, pane_id,
 tab_id, agent_status}, and `ready_at` (an epoch time: `unknown` until then, a Pi still booting);
 a scenario may write it. `tab create --workspace W` makes tab W:tN, pane W:pN; `tab close T` drops
 T's agents; `agent start NAME --pane P -- ARGS` starts Pi NAME there, taking input the seconds
-in the file `ready_after` later (0 without one). Until then Herdr reads it `unknown`, and from
-IDLE_FALLBACK s after its start `idle`, as Herdr 0.9.5's screen fallback reads a booting Pi
-(#871). Pi reports itself only when ARGS load Herdr's Pi integration (`--extension F`, F the
-file `integration install pi` wrote): once it takes input, `agent_session` (source herdr:pi).
+in the file `ready_after` later (0 without one), then reading the state in the file `start-status`
+(idle without one). Until then Herdr reads it `unknown`, and from
+IDLE_FALLBACK s after its start `idle` (Herdr 0.9.5's screen fallback; why that is not ready:
+herdr-comms SKILL.md, Spawn an agent). Pi reports itself only when ARGS load Herdr's Pi
+integration (`--extension F`, F the file `integration install pi` wrote): once it takes input,
+`agent_session` (source herdr:pi).
 `integration install pi` writes that file to $PI_CODING_AGENT_DIR/extensions (else
 $HOME/.pi/agent/extensions); with no agent dir it fails, as Herdr does, and so with a file
 `install-down` (`herdr: integration install failed`); a file `no-report` makes Pi never report.
@@ -110,8 +112,10 @@ class World:
         ext = [Path(x) for x in opts(a[a.index("--") :] if "--" in a else [], "--extension")]
         reports = any(x.is_file() and x.read_text() == INTEGRATION for x in ext)
         reports = reports and not (self.dir / "no-report").exists()
+        state = self.dir / "start-status"
+        status = state.read_text().strip() if state.exists() else "idle"
         now = time.time()
-        g |= {"name": a[2], "agent_status": "idle", "ready_at": now + delay, "started_at": now}
+        g |= {"name": a[2], "agent_status": status, "ready_at": now + delay, "started_at": now}
         g["reports"] = reports
         self.save()
         return 0

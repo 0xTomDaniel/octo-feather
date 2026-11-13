@@ -3,7 +3,8 @@
 FAKE_HERDR world): herdr-spawn returns only once its Pi takes input (#871: Herdr reads a booting
 Pi idle before that), so an agent that turns ready late is not returned early, and a herdr-say
 right after it is delivered, as is a herdr-say that resumes a parked agent; a spawn whose Pi
-never reports, or whose integration install fails, fails closed naming it; a herdr-say whose
+never reports, or whose integration install fails, fails closed naming it, within one readiness
+bound for the report and the idle wait together; a herdr-say whose
 `herdr agent get` lookup fails names that lookup (not the up-chain refusal, 77); a prompt Herdr
 reports stalled exits non-zero naming the pane and its state; and `octo-feather-lane post-merge`
 step 4 to a busy (working) supervisor returns within its bound, its step 4 line naming the
@@ -101,6 +102,26 @@ def spawn_fails_closed(s: Scratch) -> None:
     (d / "no-report").touch()
     ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "1"})
     assert "never reported to Herdr" in ran.err, ran.err
+    assert json.loads((d / "agents.json").read_text()) == {}, "tab left open"
+
+
+def spawn_one_bound(s: Scratch) -> None:
+    """A Pi that reports 3 s after its start and then stays working: herdr-spawn exits 69 naming
+    it not idle, no tab left, within one HERDR_SPAWN_READY_TIMEOUT for the report and the idle wait
+    together, never a fresh bound for the idle wait after the report."""
+    d = herdr_world(s)
+    (d / "ready_after").write_text("3")
+    (d / "start-status").write_text("working")
+    s.identity()
+    wt = s.root / "wt"
+    wt.mkdir()
+    spawn = [str(ASSETS / "herdr-spawn"), "--workspace", "w1", "--name", "implementer-gh1"]
+    spawn += ["--role", "implementer", "--cwd", str(wt)]
+    t0 = time.monotonic()
+    ran = s.run(spawn, want=69, env=SUPERVISOR | {"HERDR_SPAWN_READY_TIMEOUT": "4"})
+    took = time.monotonic() - t0
+    assert "not idle within 4s" in ran.err, ran.err
+    assert took < 4 + 2, f"took {took:.1f}s, past the 4 s bound"
     assert json.loads((d / "agents.json").read_text()) == {}, "tab left open"
 
 
@@ -249,6 +270,7 @@ if __name__ == "__main__":
     main(
         spawn_ready_late,
         spawn_fails_closed,
+        spawn_one_bound,
         say_resumes_parked,
         say_lookup_fails,
         say_stalled,

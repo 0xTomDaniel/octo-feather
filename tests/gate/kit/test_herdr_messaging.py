@@ -9,6 +9,7 @@ from herdr_messaging import (
     say_resumes_parked,
     say_stalled,
     spawn_fails_closed,
+    spawn_one_bound,
     spawn_ready_late,
 )
 
@@ -21,6 +22,10 @@ def test_spawn_ready_late(case: Case) -> None:
 
 def test_spawn_fails_closed(case: Case) -> None:
     case(spawn_fails_closed)
+
+
+def test_spawn_one_bound(case: Case) -> None:
+    case(spawn_one_bound)
 
 
 def test_say_resumes_parked(case: Case) -> None:
