@@ -55,7 +55,7 @@ The running state of one work item while its supervisor works on it: its record,
 _Avoid_: Worklane, track
 
 **Tracer bullet**:
-A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through the app's CLI, HTTP or UI, or the target's runnable script when it has none (ADR 0002). Every ticket is one.
+A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol), or the target's runnable script when it has none (ADR 0002). Every ticket is one.
 _Avoid_: Layer task, horizontal slice
 
 **Pilot**:
@@ -103,7 +103,7 @@ A problem passed one level up the chain (worker, supervisor, director, owner) af
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
-Code that proves product behaviour the spec states: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test at the interface of a deep module with a stable interface, public or internal, at a seam written down from the ticket before any test (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
+Code that proves product behaviour the spec states: end to end through a public interface the product offers its users (quality spec `#acceptance-public-surfaces`), an integration test at the interface of a deep module with a stable interface, public or internal, at a seam written down from the ticket before any test (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
 _Avoid_: Test gate, unit test
 
 **Check**:
