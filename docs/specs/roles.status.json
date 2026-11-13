@@ -59,8 +59,8 @@
     "acceptance-web-roles": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T044858Z-e25f9289",
-      "commit": "0fbff1b021e438e076eaa35b7522826ca11915f2",
+      "record": "20261113T051455Z-c2041751",
+      "commit": "291f86c6b5b87af804e03e41118113beb62231e7",
       "tests": []
     },
     "acceptance-web-no-other-mcp": {
@@ -90,8 +90,8 @@
     "acceptance-task-worker-route": {
       "status": "built",
       "pr": 833,
-      "record": "20261113T044526Z-8cd834a3",
-      "commit": "0fbff1b021e438e076eaa35b7522826ca11915f2",
+      "record": "20261113T051134Z-780b27f3",
+      "commit": "291f86c6b5b87af804e03e41118113beb62231e7",
       "tests": [
         "tests/gate/kit/herdr_messaging.py"
       ]
