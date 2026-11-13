@@ -19,13 +19,6 @@
           "exit": 0
         }
       ],
-      "octo-feather-handoff": [
-        {
-          "args": [],
-          "stdout": "",
-          "exit": 0
-        }
-      ],
       "herdr-spawn": [
         {
           "args": [],
@@ -104,13 +97,6 @@
         }
       ],
       "herdr-close": [
-        {
-          "args": [],
-          "stdout": "",
-          "exit": 0
-        }
-      ],
-      "octo-feather-handoff": [
         {
           "args": [],
           "stdout": "",
@@ -211,13 +197,6 @@
           "exit": 0
         }
       ],
-      "octo-feather-handoff": [
-        {
-          "args": [],
-          "stdout": "",
-          "exit": 0
-        }
-      ],
       "herdr": [
         {
           "args": [
@@ -299,13 +278,6 @@
         }
       ],
       "herdr-close": [
-        {
-          "args": [],
-          "stdout": "",
-          "exit": 0
-        }
-      ],
-      "octo-feather-handoff": [
         {
           "args": [],
           "stdout": "",
@@ -423,13 +395,6 @@
         }
       ],
       "herdr-close": [
-        {
-          "args": [],
-          "stdout": "",
-          "exit": 0
-        }
-      ],
-      "octo-feather-handoff": [
         {
           "args": [],
           "stdout": "",
