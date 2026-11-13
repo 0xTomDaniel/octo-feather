@@ -21,6 +21,10 @@ unsent (a line in `typed`), `agent_prompt_stalled`; any other gets it submitted 
 "PANE<TAB>TEXT" in `prompts`): an idle one turns working, then idle, so the wait matches; a
 working one (busy, as #619 saw it) never matches, so the wait ends only at --timeout
 (`timeout`), else never.
+An agent holding `compacting_until` (an epoch time) is a Pi compacting until then: a prompt to it
+is queued, not submitted (a line in `queued`), Herdr seeing no turn start (`agent_prompt_stalled`),
+and `agent read` shows Pi's compaction line and each queued text as Pi does (`Steering: TEXT`);
+once that time passed, the next call has Pi take each queued text (a line in `prompts`).
 `pane read` shows a ready Pi prompt; `pane send-keys|send-text` log only. Anything else exits 2.
 """
 
@@ -74,6 +78,36 @@ class World:
             return "unknown"
         return str(g["agent_status"])
 
+    @staticmethod
+    def compacting(g: dict[str, object]) -> bool:
+        until = g.get("compacting_until")
+        return isinstance(until, (int, float)) and time.time() < until
+
+    def settle(self) -> None:
+        """Pi takes what it queued once its compaction ended: each queued text submitted."""
+        q = self.dir / "queued"
+        kept = list[str]()
+        for x in q.read_text().splitlines() if q.exists() else []:
+            g = self.agents.get(x.split("\t")[0])
+            if g and self.compacting(g):
+                kept.append(x)
+            else:
+                self.note("prompts", x)
+        if q.exists():
+            q.write_text("".join(f"{x}\n" for x in kept))
+
+    def agent_read(self, a: list[str]) -> int:
+        g = self.find(a[2])
+        if g is None:
+            return fail("agent_not_found")
+        q = self.dir / "queued"
+        pane = f"{g['pane_id']}\t"
+        queued = q.read_text().splitlines() if q.exists() else []
+        shown = [f"Steering: {x[len(pane) :]}" for x in queued if x.startswith(pane)]
+        busy = ["Auto-compacting... (escape to cancel)"] if self.compacting(g) else []
+        sys.stdout.write("\n".join([" pi", "", *busy, *shown, " > "]) + "\n")
+        return 0
+
     def tab_create(self, a: list[str]) -> int:
         w, n = opts(a, "--workspace")[0], len(self.agents) + 1
         pane, tab = f"{w}:p{n}", f"{w}:t{n}"
@@ -125,6 +159,9 @@ class World:
         s = self.status(g)
         if s == "blocked":
             return fail("agent_blocked")
+        if self.compacting(g):
+            self.note("queued", f"{g['pane_id']}\t{a[3]}")
+            return fail("agent_prompt_stalled")
         if s == "unknown":
             self.note("typed", f"{g['pane_id']}\t{a[3]}")
             return fail("agent_prompt_stalled")
@@ -138,6 +175,7 @@ class World:
     def call(self, a: list[str]) -> int:
         """One call A, logged."""
         self.note("log", " ".join(a))
+        self.settle()
         two = (a[0], a[1]) if len(a) > 1 else (" ".join(a), "")
         if two == ("pane", "read"):
             sys.stdout.write(" pi\n\n > \n")
@@ -151,6 +189,7 @@ class World:
             ("agent", "get"): self.agent_get,
             ("agent", "wait"): self.agent_wait,
             ("agent", "prompt"): self.agent_prompt,
+            ("agent", "read"): self.agent_read,
         }
         if two not in verbs:
             sys.stderr.write(f"fake herdr: unhandled: {' '.join(a)}\n")

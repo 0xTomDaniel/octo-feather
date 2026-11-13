@@ -31,7 +31,7 @@ from typing import Any, NoReturn, cast
 import tomllib
 
 ME = "verify-octo-feather"
-FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots")
+FEATURES = ("new-repo", "install-check", "contract", "evidence", "lane-archive", "director-reflection", "correction-lane", "correction-intake", "factory-report", "role-launch", "skill-loading", "shape", "qc-capture", "qc-browser", "qc-sandbox", "qc-sandbox-cost", "qc-advisory", "qc-fallback", "qc-insufficient", "qc-stale", "gate-tiers", "merge-ask-proof", "pilot-pr", "template-tiers", "one-execution", "one-execution-incomplete", "starter-acceptance", "qa-runs", "qa-baseline", "qa-analyst", "qa-review", "qa-history", "run-slots", "queued-completion")
 SCRIPT_DIR = Path(os.path.realpath(os.path.dirname(os.path.abspath(__file__))))
 REPO = Path(os.path.realpath(SCRIPT_DIR / "../../../.."))
 CONTRACT = REPO / "qc.toml"
@@ -2967,6 +2967,37 @@ def drive_run_slots(f: Feature) -> None:
     say(f"run-slots evidence: {f.d}")
 
 
+def drive_queued_completion(f: Feature) -> None:
+    """A worker's completion sent while its supervisor compacts, Herdr stood in by the kit's testkit Herdr
+    (tests/gate/kit/testkit/herdr.py, its FAKE_HERDR world): an implementer's `herdr-say --parent` to supervisor
+    w9:p1 compacting for 2 s, Herdr confirming nothing and the pane showing the completion queued; then one
+    compacting past the send's bound. Each prints the delivered and attempt counts. Cases: features/queued-completion.md."""
+    sc = RUN_DIR / "scratch" / "queued-completion"
+    shutil.rmtree(sc, ignore_errors=True)
+    (sc / "bin").mkdir(parents=True)
+    (sc / "bin" / "herdr").symlink_to(Path(f.s.repo) / "tests" / "gate" / "kit" / "testkit" / "herdr.py")
+    say_cmd = str(Path(f.s.repo) / ".agents" / "skills" / "herdr-comms" / "assets" / "herdr-say")
+    done = "DONE commit abc123: the completion"
+    for name, secs, args, want in (("delivered-once", 2, (), 0), ("still-queued", 3600, ("--timeout", "1"), 1)):
+        world = sc / name
+        world.mkdir()
+        sup = {"name": "gh9", "pane_id": "w9:p1", "workspace_id": "w9", "tab_id": "w9:t1", "agent_status": "idle",
+               "compacting_until": datetime.now(UTC).timestamp() + secs}
+        (world / "agents.json").write_text(json.dumps({"w9:p1": sup}))
+        f.env = {"PATH": f"{sc / 'bin'}:{os.environ['PATH']}", "FAKE_HERDR": str(world), "OCTO_FEATHER_ROLE": "implementer",
+                 "OCTO_FEATHER_PARENT": "w9:p1", "HERDR_PANE_ID": "w9:p3", "HERDR_WORKSPACE_ID": "w9"}
+        f.run(name, say_cmd, *args, "--parent", done)
+        got = (world / "prompts").read_text().splitlines() if (world / "prompts").exists() else []
+        sent = [x for x in (world / "log").read_text().splitlines() if x.startswith("agent prompt ")]
+        f.obs(name, "delivered", str(got.count(f"w9:p1\t{done}")))
+        f.obs(name, "attempts", str(len(sent)))
+        say(f"{name}: delivered {len(got)}, attempts {len(sent)}")
+        f.check(name, lambda c, want=want, n=int(want == 0): c.code == want and c.o["delivered"] == str(n)
+                and c.o["attempts"] == "1" and "queued" in c.err and "resent" in c.err)
+    f.env = {}
+    say(f"queued-completion evidence: {f.d}")
+
+
 DRIVES: dict[str, Callable[[Feature], None]] = {
     "new-repo": drive_new_repo,
     "install-check": drive_install_check,
@@ -3001,6 +3032,7 @@ DRIVES: dict[str, Callable[[Feature], None]] = {
     "qa-review": drive_qa_review,
     "qa-history": drive_qa_history,
     "run-slots": drive_run_slots,
+    "queued-completion": drive_queued_completion,
 }
 
 

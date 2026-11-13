@@ -157,7 +157,10 @@ Wraps `herdr agent prompt TARGET TEXT --wait --until working --until idle
 by `--timeout` (default 900 s); a prompt Herdr reports stalled
 (`agent_prompt_stalled`: typed, never seen to land) or still unconfirmed at the
 bound (a busy target that stays `working`) exits 1 or 124, Herdr's error kept,
-the last line naming the target's pane and its state.
+the last line naming the target's pane and its state. Either one while the
+target's pane shows the message queued during compaction is never resent: it
+waits, within the bound, and exits 0 once Pi took it, else its 1 or 124 says
+queued, not resent (comms spec `#delivery-recovery`).
 
 Exit codes are the contract:
 

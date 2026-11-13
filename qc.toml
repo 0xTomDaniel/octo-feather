@@ -225,3 +225,10 @@ covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/20
 [demo."issue-lifecycle#acceptance-pilot-pr"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 pilot-pr"
 covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+
+# Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py, queued_completion) and this demo, herdr-say against the
+# testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
+# after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent.
+[demo."comms#acceptance-queued-completion"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py"]
