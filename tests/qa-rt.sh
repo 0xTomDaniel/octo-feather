@@ -38,7 +38,7 @@ o = "".join(json.loads(l)["result"]["structuredContent"]["output"] for l in open
 repo, cwd, head, rev = re.search(r"repo=(\S+) cwd=(\S+) head=(\S+) rev=(\S+)", o).groups()
 assert "branch=work" in o and "msg=head msg" in o and "\n2\n" in o and "test_y.py" in o, o   # hb: fixture + head commit
 assert repo == cwd and head == rev and len(rev) == 40, o
-wb = re.search(r"wb=worker msg wbup=(\S+) hbrev=(\S+) wbtree=(\S+)", o)   # branches: cut from head, its own tree
+wb = re.search(r"wb=worker msg wbup=(\S+) hbrev=(\S+) wbtree=(\S+)", o)   # schema.md, Case, branches
 assert wb and wb.group(1) == wb.group(2) and wb.group(3) == "README.md,", o
 assert "origin=1" in o and re.search(r"gh=/tmp/\S+/bin/gh", o), o
 assert json.load(open(f"{d}/setup/input.json"))["task"].count("{repo}") == 1, "input.json should keep the case's task as written"
