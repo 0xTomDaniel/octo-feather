@@ -4,9 +4,9 @@
   octo-feather-qc --capture-case NOTE -- CMD...   (a capturing gate's tagged case; tests/gate/conftest.py)
   octo-feather-qc --capture-store SESSION         (that gate's records, after its run)
 
-Run in a lane worktree at its integrated head. STATUS...: the first argument, then each next one ending .status.json,
-one per spec the lane builds, so one run, and the head's one full gate, serves them all (issue-lifecycle spec
-#qc-interim); each ID must be in exactly one of them, and is judged against that one's spec. Which named criteria keep an earlier head's result: quality spec
+Run in a lane worktree at its integrated head. STATUS...: the first argument, then each next one ending .status.json;
+which status files and ids one run names: issue-lifecycle spec #qc-interim. Each ID is judged against the spec of
+the STATUS holding it. Which named criteria keep an earlier head's result: quality spec
 #qc-carry (code: carry below); stderr names why each other one with a built row is judged again. A named criterion a tagged test proves is judged from the record its
 head's full gate captured, never rerun, nor sent to the demo or the fallback (rules: quality spec #qc-capture,
 #qc-judgment, #qc-fallback; code: capture_store, tested, tagged_cases, unrecorded below). Capture first, no model: each other
