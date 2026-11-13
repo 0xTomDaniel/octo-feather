@@ -64,6 +64,8 @@ bad 'del e["rpass"]["facts"][0]["program"]' "case rpass fact #1: field program: 
 bad 'e["rpass"]["facts"][0]["program"] = "a/b"' "case rpass fact #1: field program: must be a command name" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["args"] = "lane show"' "case rpass fact #1: field args: must be a list of strings" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["count"] = -1' "case rpass fact #1: field count: must be an integer >= 0, got -1" "$t/ran-good" ran
+bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "stdout": "", "exit": 300}]}' "case rpass: field stand_ins.herdr: must be a non-empty list of" "$t/ran-good" ran
+bad 'c[0]["stand_ins"] = {"pi": [{"args": [], "stdout": "", "exit": 0}]}' "case rpass: field stand_ins.pi: must be a command name" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["count"] = True' "case rpass fact #1: field count: must be an integer >= 0, got True" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["exit"] = 0' "case rpass fact #1: field exit: unknown field for ran" "$t/ran-good" ran
 bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl

@@ -29,9 +29,7 @@ def test_installed_command_end_to_end() -> None:
 
 
 def test_shout_json(capsys: pytest.CaptureFixture[str]) -> None:
-    name = "Ada"
-    assert main(["hello", name, "--shout", "--json"]) == 0
-    expected = f"Hello, {name}".upper() + "!"
-    assert json.loads(capsys.readouterr().out)["text"] == expected
+    assert main(["hello", "Ada", "--shout", "--json"]) == 0
+    assert json.loads(capsys.readouterr().out)["text"] == "HELLO, ADA!"
 
 
