@@ -7,7 +7,7 @@ Repo skills: verify-octo-feather
 ## Rules
 
 - `just check` is the only gate. A red gate blocks handoff.
-- Tests are integration and end-to-end only: a test runs a script as a command and feeds it inputs, never loads or reads it.
+- Tests are integration and end-to-end only. An end-to-end test runs a script as a command and feeds it inputs, never loads or reads it. An integration test drives the interface of a deep module with a stable interface, at a seam written down from the ticket's criteria before any test; never a private helper or a shallow wrapper.
 - `AGENTS.md` is the only instruction file.
 
 ## Layout

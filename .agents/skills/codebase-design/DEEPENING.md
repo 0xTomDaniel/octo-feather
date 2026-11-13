@@ -8,7 +8,7 @@ When assessing a candidate for deepening, classify its dependencies. The categor
 
 ### 1. In-process
 
-Pure computation, in-memory state, no I/O. Always deepenable: merge the modules and test through the public surface that reaches the new interface. No adapter needed.
+Pure computation, in-memory state, no I/O. Always deepenable: merge the modules and test through the new interface directly. No adapter needed.
 
 ### 2. Local-substitutable
 
@@ -31,7 +31,8 @@ Third-party services (Stripe, Twilio, etc.) you don't control. The deepened modu
 
 ## Testing strategy: replace, don't layer
 
-- Old unit tests on shallow modules become waste once tests through the public surface cover the deepened module; delete them.
-- Write new tests through the public surface (app CLI, HTTP, UI, or a public library function) that reaches the deepened module; when the module's interface is itself a public library function, the **interface is the test surface**.
+- **Deepen first**, when no deep module with a stable interface exists at the seam a ticket's criterion needs: follow the `tdd` skill's Seams steps ([../tdd/SKILL.md](../tdd/SKILL.md)), which order the pin, the deepening and the tests. Product code changed to give a real deep interface is no test leak; a test-only flag, hook or branch still is.
+- Old unit tests on shallow modules become waste once tests at the deepened module's interface exist; delete them.
+- Write new tests at the deepened module's interface once it is deep and stable, at a seam written down from the ticket's criteria before any test (docs/adr/0002): both are hard requirements, never a private helper or a shallow wrapper whose interface mirrors its implementation. The **interface is the test surface**.
 - Tests assert on observable outcomes through the interface, not internal state.
 - Tests should survive internal refactors, since they describe behaviour, not implementation. If a test has to change when the implementation changes, it's testing past the interface.

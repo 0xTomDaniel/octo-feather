@@ -397,7 +397,18 @@ def scratch_state(f: Feature) -> Path:
 def fake_tracker(kit: str, sc: Path) -> dict[str, str]:
     """The scratch env that fakes the tracker: the kit's offline gh (tests/fixtures/tracker-gh) first on PATH, its
     store under SC, so a correction lane a reflection files never reaches GitHub (SKILL.md)."""
-    return {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+    # All four callers drive reflection: its required director is synthetic, not the box's.
+    env = {"PATH": f"{kit}/tests/fixtures/tracker-gh:{os.environ.get('PATH', '')}", "FAKE_GH_STORE": str(sc / "gh.json")}
+    fixture = Path(kit) / "tests/fixtures/reflection-director"
+    binary = sc / "reflection-bin"
+    binary.mkdir(exist_ok=True)
+    shutil.copy2(fixture, binary / "herdr")
+    (binary / "herdr").chmod(0o755)
+    env["REFLECT_DIRECTOR_FILE"] = str(sc / "director-source.jsonl")
+    subprocess.run([sys.executable, str(fixture), "seed", str(sc / "state/octo-feather")],
+                   env=os.environ | env, check=True, capture_output=True, text=True)
+    env["PATH"] = f"{binary}:{env['PATH']}"
+    return env
 
 
 def fresh_path(p: Path) -> None:
@@ -682,26 +693,47 @@ def drive_director_reflection(f: Feature) -> None:
     # Three lanes, one code-review class in each (two archived, gh913 open); gh911's lane reflection found no gap
     # before gh913's review found the class again. The director log: a director reflection two days ago, then an
     # owner-caught finding.
+    now = datetime.now(UTC)
+    def at(hours: int) -> str:
+        return datetime.fromtimestamp(now.timestamp() - hours * 3600, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     def cr(at: str, cls: str, summary: str) -> str:
         return json.dumps({"at": at, "kind": "finding", "source": "code-review", "class": cls, "blocking": True, "summary": summary}) + "\n"
     (lanes / "archive" / "gh911.handoffs.jsonl").write_text(
-        cr("2026-10-20T00:00:00Z", "duplicated-rule", "help text restates the archive refusal rule of comms #reflection-lane")
-        + '{"at": "2026-10-20T01:00:00Z", "kind": "reflection", "findings": 0, "questions": ["caught-by-hand", "slow-or-from-memory", '
-          '"undetected-rule", "check-misfired", "mechanical-step", "writer-mistake", "reflection-missed"]}\n')
+        cr(at(36), "duplicated-rule", "help text restates the archive refusal rule of comms #reflection-lane")
+        + json.dumps({"at": at(35), "kind": "reflection", "findings": 0, "questions": ["caught-by-hand", "slow-or-from-memory",
+                      "undetected-rule", "check-misfired", "mechanical-step", "writer-mistake", "reflection-missed"]}) + "\n")
     (lanes / "archive" / "gh912.handoffs.jsonl").write_text(
-        cr("2026-10-22T00:00:00Z", "duplicated-rule", "test comment restates the hand-off line fields of comms #handoff-kind-finding"))
+        cr(at(24), "duplicated-rule", "test comment restates the hand-off line fields of comms #handoff-kind-finding"))
     (lanes / "gh913.toml").write_text('supervisor = "w93:p2"\nissue = "gh913"\ngoal = "scratch lane"\n')
     (lanes / "gh913.handoffs.jsonl").write_text(
-        cr("2026-10-26T00:00:00Z", "duplicated-rule", "eval prompt restates the reflection output rule of comms #reflection-output"))
-    two_days = datetime.fromtimestamp(datetime.now(UTC).timestamp() - 2 * 86400, UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+        cr(at(12), "duplicated-rule", "eval prompt restates the reflection output rule of comms #reflection-output"))
+    two_days = at(48)
     seeded = (json.dumps({"at": two_days, "kind": "reflection", "findings": 0, "questions": ["owner-asked"]}) + "\n"
-              + json.dumps({"at": "2026-10-27T00:00:00Z", "kind": "finding", "class": "owner-caught-stranded-worker", "issue": "gh913",
+              + json.dumps({"at": at(1), "kind": "finding", "class": "owner-caught-stranded-worker", "issue": "gh913",
                             "summary": "owner asked why lane gh913 had not moved for an hour: implementer-gh913 sat at Pi's trust prompt; "
                                        "the director had read no pane"}) + "\n")
     dlog.write_text(seeded)
-    args = " ".join(["--no-session", os.environ.get("OCTO_FEATHER_REFLECT_ARGS", "")]).strip()
+    extra = shlex.split(os.environ.get("OCTO_FEATHER_REFLECT_ARGS", ""))
+    retain = "--session-dir" in extra
+    args = shlex.join(extra if retain else ["--no-session", *extra])
     f.env = {"XDG_STATE_HOME": str(sc / "state"), "HERDR_SESSION": "", "HERDR_SOCKET_PATH": str(sc / "no-herdr.sock"),
              "OCTO_FEATHER_REFLECT_ARGS": args, "OCTO_FEATHER_REFLECT_TIMEOUT": "120", **fake_tracker(f.s.repo, sc)}
+    # Synthetic source episodes match the fresh review and owner-intervention records.
+    conversation = [
+        (36, "assistant", "In gh911 I copied the archive refusal contract into help text from memory instead of referring to its source."),
+        (36, "user", "Review gh911: that help text restates comms #reflection-lane. Please remove the independent wording."),
+        (35, "assistant", "I fixed that text and closed gh911's reflection with no gap; I treated it as isolated."),
+        (24, "assistant", "In gh912 I again wrote a local version of the hand-off field contract, this time in a test comment."),
+        (24, "user", "Review gh912: the comment restates comms #handoff-kind-finding. The same writing habit happened again."),
+        (12, "assistant", "In gh913 I wrote an eval prompt with its own reflection output instructions rather than a reference."),
+        (12, "user", "Review gh913: that prompt restates comms #reflection-output. The earlier local fixes did not change our writing habit."),
+        (1, "user", "Why has gh913 not moved for an hour? I opened the implementer's pane and found a trust prompt waiting for input."),
+        (1, "assistant", "I had not read the pane before reporting progress, nor connected the repeated review corrections across these lanes."),
+    ]
+    with Path(f.env["REFLECT_DIRECTOR_FILE"]).open("a") as source:
+        source.writelines(json.dumps({"type": "message", "timestamp": at(hours),
+                                      "message": {"role": role, "content": [{"type": "text", "text": text}]}}) + "\n"
+                          for hours, role, text in conversation)
     if not has_netns():
         f.summary("FAIL refuse-unreachable: no network namespace (unshare -Un) on this box; the reflector would reach its model")
         f.fails += 1
@@ -736,7 +768,7 @@ def drive_director_reflection(f: Feature) -> None:
                 and last["kind"] == "reflection" and sorted(last["questions"]) == sorted(ids)
                 and all(x["kind"] == "finding" and x["source"] == "reflection" and "blocking" not in x
                         and x["question"] in ids and x["route"] and x["summary"] and x["class"] for x in found)
-                and any("duplicated-rule" in x["class"] + x["summary"] and re.search(r"\b(3|three)\b", x["summary"])
+                and any("duplicated-rule" in x["class"] + x["summary"] and re.search(r"\b(3|three)\b", x["summary"], re.IGNORECASE)
                         and not re.fullmatch(r"(code[- ])?review.*", x["route"], re.IGNORECASE) for x in found))
 
     f.check("reflect-live", reflected)
@@ -798,7 +830,7 @@ def drive_correction_lane(f: Feature) -> None:
 # reflection asked (the director's when its brief says Director reflection, else the lane's).
 REFLECT_STUB_PI = r"""#!/usr/bin/env python3
 import os, sys
-who = "director" if any("Director reflection" in a for a in sys.argv) else "lane"
+who = "director" if "Director reflection" in sys.stdin.read() else "lane"
 sys.stdout.write(open(os.path.join(os.environ["REFLECT_STUB_DIR"], f"reply.{who}")).read())
 """
 

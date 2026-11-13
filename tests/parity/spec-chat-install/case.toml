@@ -1,0 +1,11 @@
+# The parity lever's case for tests/spec-chat-install.sh, kept as a shell script and moved onto the pinned Spec Chat installer (#817; tests/parity/lever.py --help).
+old = "tests/spec-chat-install.sh"
+old_at = "d62452c4"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+# The same script, as its gate item: `just test` collects no .sh path.
+new = "tests/gate/test_gate.py::test_script[tests/spec-chat-install.sh]"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): exec: the copy's scripts/octo-feather-spec-chat, run by its justfile's spec-chat recipe, outside the kit's own path, which coverage.py's map does not name.
+[ran]
+"scripts/octo-feather-spec-chat" = "exec scripts/octo-feather-spec-chat"

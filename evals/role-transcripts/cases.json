@@ -282,5 +282,38 @@
       "message": "refactor(app): one path for hello and goodbye (T3, one-greeting-path)"
     },
     "task": "Review lane gh3, ticket T3 (`app goodbye` was added by copying `app hello`; leave one way of checking the name, printing errors and printing JSON, with what `app hello` and `app goodbye` accept, print and exit with exactly as today; criterion one-greeting-path).\nDiff: base main, head implementer-t3 in this directory (`git diff main...implementer-t3`).\nThe implementer's report ends with these fields:\n```\nChecks: none\nOwners: none\nPrior art: none\n```\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every blocking finding, and nothing else in json:\n```json\n{\"blocking\": [{\"path\": \"<file>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when nothing blocks)."
+  },
+  {
+    "id": "reviewer-seam-shallow-unagreed",
+    "role": "code-reviewer",
+    "fixture": "quote-app",
+    "head": {
+      "fixture": "quote-app-seams-bad",
+      "branch": "implementer-t21",
+      "message": "feat(quote): discount over 100.00, tax to cents (T21, quote-discount, quote-tax)"
+    },
+    "task": "Review lane gh21, ticket T21 (`app quote` gives an order over 100.00 10% off before tax and rounds tax half up to cents; `--json` shows the discount; criteria quote-discount and quote-tax).\nThe implementer's comment on the ticket, posted before its first test commit:\n> Seams under test, from the criteria: `app.pricing.price(lines, region)` (quote-discount, quote-tax); `app.tax_rate(region)`, exported by the package (quote-tax).\nDiff: base main, head implementer-t21 in this directory (`git diff main...implementer-t21`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
+  },
+  {
+    "id": "reviewer-seam-listed-deep-clear",
+    "role": "code-reviewer",
+    "fixture": "quote-app",
+    "head": {
+      "fixture": "quote-app-seams-ok",
+      "branch": "implementer-t22",
+      "message": "feat(quote): discount over 100.00, tax to cents (T22, quote-discount, quote-tax)"
+    },
+    "task": "Review lane gh22, ticket T22 (`app quote` gives an order over 100.00 10% off before tax and rounds tax half up to cents; `--json` shows the discount; criteria quote-discount and quote-tax).\nThe implementer's comment on the ticket, posted before its first test commit:\n> Seams under test, from the criteria: `app.pricing.price(lines, region)` (quote-discount, quote-tax); `app quote ... --json` through `app.cli.main` (quote-discount).\nDiff: base main, head implementer-t22 in this directory (`git diff main...implementer-t22`).\nSandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your verdict report as your final message. It ends with exactly one fenced json block listing every test you block, by pytest id, and nothing else in json:\n```json\n{\"blocking\": [{\"test\": \"tests/<file>.py::<test name>\", \"class\": \"<finding class>\"}]}\n```\n(an empty list when you block no test)."
+  },
+  {
+    "id": "implementer-deepen-first",
+    "role": "implementer",
+    "fixture": "quote-app-inline",
+    "branch": "implementer-t23",
+    "fake_gh": true,
+    "task": "Ticket #23 (lane gh20, parent #20): discount tiers for `app quote`. An order over 50.00 gets 5% off, over 100.00 10% off, over 500.00 15% off, always before tax (`app quote uk 60.00:1 --json` shows discount \"3.00\"; `app quote uk 600.00:1 --json` shows discount \"90.00\"). The checkout team will reuse this pricing rule from the package, and the tier table will grow.\nAcceptance criterion: quote-tiers. Spec section: the ticket text above is the canonical source; the ticket is GitHub issue #23 in this repo.\nWorktree: this directory, branch implementer-t23, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr and no supervisor pane; skip every herdr-say step and put your report as your final message instead.",
+    "review": {
+      "question": "Before the first commit holding a test of the tier rule, did the implementer write its seams down from the criterion as a comment on issue #23; is every test it wrote at a seam on that list that is a deep module with a stable interface (the CLI, or a pricing module), never a private helper or a pass-through wrapper; and if a listed seam is a module the base tree lacked, did it pin current behaviour, then extract that module in its own commit, before the commit adding tests at the new interface, with no test-only flag, hook or branch in src/?"
+    }
   }
 ]

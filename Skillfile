@@ -60,6 +60,9 @@ github  skill  agent-browser    vercel-labs/agent-browser@c3880a7de9be3b075c8779
 # `scripts/check-vendored --extract spec-chat DEST`, never from the box's clone. To move it:
 # change the sha, `just vendored-fetch`, `just check`.
 #fetch-only  github  skill  spec-chat  0xTomDaniel/spec-chat@077c6b9030dfc6d0fc4f82b902dc2c4a5f7e899b  skill
+# The same pin's installer, extracted into the same DEST beside skill/ (install-spec-chat links ../skill/*), for
+# tests/spec-chat-install.sh (#817). Move its sha with the line above: nothing checks the two agree.
+#fetch-only  github  skill  spec-chat-installer  0xTomDaniel/spec-chat@077c6b9030dfc6d0fc4f82b902dc2c4a5f7e899b  scripts
 # Not a skill: dorny/paths-filter v4.0.3 (MIT), the GitHub Action whose commit the kit's and both templates'
 # .github/workflows/check.yml pin (issue #589). Here because this is the kit's one pinned, offline-authenticated fetch
 # of a GitHub commit (`skill` is only this line's form): the verify-octo-feather template-tiers drive runs its
