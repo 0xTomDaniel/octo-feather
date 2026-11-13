@@ -416,5 +416,5 @@
   "reviewer-seam-listed-deep-clear": {"facts": [{"fact": "skill_read", "skill": "tdd"}, {"fact": "field_lines", "field": "Verdict", "includes": [{"text": "clear"}]}]},
   "implementer-deepen-first": {"facts": []},
   "implementer-python-edge": {"facts": [{"fact": "ran", "program": "uv", "args": ["add", "pydantic"]}, {"fact": "branch_paths", "touched": ["pyproject.toml", "uv.lock"]}, {"fact": "field_lines", "field": "Prior art"}]},
-  "implementer-typescript-edge": {"facts": [{"fact": "ran", "program": "pnpm", "args": ["add", "zod"]}, {"fact": "branch_paths", "touched": ["package.json", "pnpm-lock.yaml"]}, {"fact": "field_lines", "field": "Prior art"}]}
+  "implementer-typescript-edge": {"facts": [{"fact": "branch_paths", "touched": ["package.json", "pnpm-lock.yaml"]}, {"fact": "field_lines", "field": "Prior art"}]}
 }
