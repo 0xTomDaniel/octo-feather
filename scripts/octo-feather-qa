@@ -622,13 +622,17 @@ case "$1 $2" in
 esac
 '''
 # A case's stand_ins (schema, Case): PROGRAM answering by its argv's leading arguments, the first answer whose args
-# lead argv; none: exit 1 naming the call. @ANSWERS@: the case's list for PROGRAM.
+# lead argv and whose `after` call (program and leading arguments) a stand-in already answered; none: exit 1 naming
+# the call. Every answered call is appended to $QA_STAND_LOG. @NAME@, @ANSWERS@: the program and the case's list for it.
 STAND_IN = r'''#!/usr/bin/env python3
-import sys
+import json, os, sys
+log, me = os.environ["QA_STAND_LOG"], ["@NAME@", *sys.argv[1:]]
+seen = [json.loads(l) for l in open(log)] if os.path.exists(log) else []
 for a in @ANSWERS@:
-    if sys.argv[1:1 + len(a["args"])] == a["args"]:
+    if me[1:1 + len(a["args"])] == a["args"] and ("after" not in a or any(c[:len(a["after"])] == a["after"] for c in seen)):
+        open(log, "a").write(json.dumps(me) + "\n")
         sys.stdout.write(a["stdout"]); sys.exit(a["exit"])
-sys.exit(print("stand-in: no answer for " + " ".join(sys.argv), file=sys.stderr) or 1)
+sys.exit(print("stand-in: no answer for " + " ".join(me), file=sys.stderr) or 1)
 '''
 # A case's fake_qa (schema, Case): octo-feather-qa answering in this script's own output form (its --help, header,
 # run, case, compare and summary lines), canned and plausible, with no case, sandbox or model run. @DOC@: this
@@ -783,8 +787,13 @@ def prep(setup):
     if on.get("fake_qa"):
         os.makedirs(f"{QA_TMP}/bin", exist_ok=True)
         Path(f"{QA_TMP}/bin/octo-feather-qa").write_text(FAKE_QA.replace("@DOC@", repr(__doc__))); os.chmod(f"{QA_TMP}/bin/octo-feather-qa", 0o755)
-    for p, answers in stands.items():
-        Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@ANSWERS@", repr(answers))); os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
+    if stands:   # {repo} and {head} in an answer's stdout: the case repo's path and HEAD, as in its task (schema, Case)
+        env["QA_STAND_LOG"] = f"{QA_TMP}/stand-ins.log"
+        here, head = os.getcwd(), subprocess.run(["git", "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
+        for p, answers in stands.items():
+            fill = [dict(a, stdout=str(a["stdout"]).replace("{repo}", here).replace("{head}", head)) for a in answers]
+            Path(f"{QA_TMP}/bin/{p}").write_text(STAND_IN.replace("@NAME@", p).replace("@ANSWERS@", repr(fill)))
+            os.chmod(f"{QA_TMP}/bin/{p}", 0o755)
     if fakes:
         ps = env.get("PATH", "").split(":")
         at = 1 if ps[0] == env.get("OCTO_FEATHER_QC_RUN_SHIMS") else 0   # behind the run shims: a ran fake records it

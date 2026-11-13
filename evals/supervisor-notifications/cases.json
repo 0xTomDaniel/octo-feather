@@ -23,7 +23,40 @@
             "get",
             "w2:p7"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p7\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t7\", \"name\": \"code-reviewer-gh14\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p7 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -39,9 +72,42 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p3"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p3\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t3\", \"name\": \"implementer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -50,7 +116,16 @@
             "get",
             "w2:p5"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p5\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t5\", \"name\": \"code-reviewer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -59,7 +134,16 @@
             "get",
             "w2:p6"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p6\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t6\", \"name\": \"implementer-gh14\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -68,16 +152,46 @@
             "get",
             "w2:p4"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p4\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t4\", \"name\": \"implementer-gh15\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
           "args": [
             "agent",
             "get",
-            "w3:p9"
+            "implementer-gh15"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w3:p9\", \"workspace_id\": \"w3\", \"tab_id\": \"w3:t9\", \"name\": \"replacement\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
         }
       ],
@@ -91,7 +205,7 @@
       "herdr-spawn": [
         {
           "args": [],
-          "stdout": "name=code-reviewer-gh14 role=implementer tab=w3:t9 pane=w3:p9 cwd=/tmp/wt-replacement contract=ok provider_session_id=s-9\n",
+          "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],
@@ -129,7 +243,40 @@
             "get",
             "w2:p7"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p7\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t7\", \"name\": \"code-reviewer-gh15\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p7 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh15"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh15 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -138,8 +285,32 @@
             "read",
             "w2:p7"
           ],
-          "stdout": "$ pi\n> Review of the lane's final head done.\n  Verdict: clear (pass), no blocking finding.\n  Posted: octo-feather-lane verdict 12 <head> report.md\n(session ended)\n$ \n",
+          "stdout": "$ pi\n> Review of the lane's final head done.\n  Verdict: clear (pass), no blocking finding.\n  Posted: octo-feather-lane verdict 12 {head} report.md\n(session ended)\n$ \n",
           "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh15"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
         },
         {
           "args": [
@@ -147,7 +318,16 @@
             "get",
             "w2:p3"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p3\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t3\", \"name\": \"implementer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -156,7 +336,16 @@
             "get",
             "w2:p5"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p5\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t5\", \"name\": \"code-reviewer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -165,25 +354,46 @@
             "get",
             "w2:p6"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p6\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t6\", \"name\": \"implementer-gh14\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
           "args": [
             "agent",
             "get",
-            "w2:p4"
+            "implementer-gh14"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p4\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t4\", \"name\": \"implementer-gh15\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
           "args": [
             "agent",
-            "get",
-            "w3:p9"
+            "list"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w3:p9\", \"workspace_id\": \"w3\", \"tab_id\": \"w3:t9\", \"name\": \"replacement\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh15\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
         }
       ],
@@ -197,7 +407,7 @@
       "herdr-spawn": [
         {
           "args": [],
-          "stdout": "name=code-reviewer-gh15 role=implementer tab=w3:t9 pane=w3:p9 cwd=/tmp/wt-replacement contract=ok provider_session_id=s-9\n",
+          "stdout": "name=code-reviewer-gh15 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],
@@ -235,7 +445,40 @@
             "get",
             "w2:p7"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p7\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t7\", \"name\": \"code-reviewer-gh14\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p7 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target code-reviewer-gh14 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p7"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -251,9 +494,42 @@
           "args": [
             "agent",
             "get",
+            "w2:p9"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
             "w2:p3"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p3\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t3\", \"name\": \"implementer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -262,7 +538,16 @@
             "get",
             "w2:p5"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p5\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t5\", \"name\": \"code-reviewer-gh13\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "code-reviewer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -271,7 +556,16 @@
             "get",
             "w2:p6"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p6\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t6\", \"name\": \"implementer-gh14\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh14"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -280,16 +574,46 @@
             "get",
             "w2:p4"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p4\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t4\", \"name\": \"implementer-gh15\", \"agent_status\": \"working\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
           "args": [
             "agent",
             "get",
-            "w3:p9"
+            "implementer-gh15"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w3:p9\", \"workspace_id\": \"w3\", \"tab_id\": \"w3:t9\", \"name\": \"replacement\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p3\", \"tab_id\": \"w2:t3\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh13\", \"pane_id\": \"w2:p5\", \"tab_id\": \"w2:t5\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh14\", \"pane_id\": \"w2:p6\", \"tab_id\": \"w2:t6\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"working\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh15\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"code-reviewer-gh14\", \"pane_id\": \"w2:p7\", \"tab_id\": \"w2:t7\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
         }
       ],
@@ -303,7 +627,7 @@
       "herdr-spawn": [
         {
           "args": [],
-          "stdout": "name=code-reviewer-gh14 role=implementer tab=w3:t9 pane=w3:p9 cwd=/tmp/wt-replacement contract=ok provider_session_id=s-9\n",
+          "stdout": "name=code-reviewer-gh14 role=code-reviewer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],
@@ -341,7 +665,40 @@
             "get",
             "w2:p4"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w2:p4\", \"workspace_id\": \"w2\", \"tab_id\": \"w2:t4\", \"name\": \"implementer-gh12-3\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target w2:p4 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh12-3"
+          ],
+          "stdout": "{\"error\": {\"code\": \"agent_not_found\", \"message\": \"agent target implementer-gh12-3 not found\"}, \"id\": \"cli:agent:get\"}\n",
+          "exit": 1,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "w2:p4"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh12-3\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh12-3"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh12-3\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
           "exit": 0
         },
         {
@@ -350,16 +707,61 @@
             "read",
             "w2:p4"
           ],
-          "stdout": "$ pi\n> Working on #13: add widgets list command.\n  Edited src/widgets/cli.py (list: unsorted, --json still to do).\n  git commit -m 'wip: widgets list command' -> 9f1e2d3\n(session ended)\n$ \n",
+          "stdout": "$ pi\n> Working on #13: add widgets list command.\n  Edited src/widgets/cli.py (list: unsorted, --json still to do).\n  git commit -m 'wip: widgets list command' -> {head}\n(session ended)\n$ \n",
           "exit": 0
         },
         {
           "args": [
             "agent",
             "get",
-            "w3:p9"
+            "w2:p9"
           ],
-          "stdout": "{\"result\": {\"agent\": {\"pane_id\": \"w3:p9\", \"workspace_id\": \"w3\", \"tab_id\": \"w3:t9\", \"name\": \"implementer-gh13\", \"agent_status\": \"idle\", \"kind\": \"pi\"}}}\n",
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "get",
+            "implementer-gh13"
+          ],
+          "stdout": "{\"id\": \"cli:agent:get\", \"result\": {\"agent\": {\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}, \"type\": \"agent_info\"}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh13\", \"pane_id\": \"w2:p9\", \"tab_id\": \"w2:t9\", \"workspace_id\": \"w2\"}]}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-spawn"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": []}}\n",
+          "exit": 0,
+          "after": [
+            "herdr-close"
+          ]
+        },
+        {
+          "args": [
+            "agent",
+            "list"
+          ],
+          "stdout": "{\"id\": \"cli:agent:list\", \"result\": {\"agents\": [{\"agent\": \"pi\", \"agent_status\": \"idle\", \"cwd\": \"{repo}\", \"interactive_ready\": true, \"name\": \"implementer-gh12-3\", \"pane_id\": \"w2:p4\", \"tab_id\": \"w2:t4\", \"workspace_id\": \"w2\"}]}}\n",
           "exit": 0
         }
       ],
@@ -373,7 +775,7 @@
       "herdr-spawn": [
         {
           "args": [],
-          "stdout": "name=implementer-gh13 role=implementer tab=w3:t9 pane=w3:p9 cwd=/tmp/gh785-smoke/wt-gh13 contract=ok provider_session_id=s-9\n",
+          "stdout": "name=implementer-gh13 role=implementer tab=w2:t9 pane=w2:p9 cwd={repo} contract=ok provider_session_id=s-w2:p9\n",
           "exit": 0
         }
       ],

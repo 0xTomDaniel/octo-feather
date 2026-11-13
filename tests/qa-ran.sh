@@ -62,14 +62,19 @@ rf PASS rc0 | grep -q 'ran runme --role count 0: 0 matching runs (' || fail "ran
 rf FAIL rc1 | grep -q 'ran runme --role count 1: 2 matching runs: ' || fail "ran count 1: want FAIL on the second run: $out"
 rf FAIL rc0hit | grep -q 'ran runme --role count 0: [12] matching runs: ' || fail "ran count 0: want FAIL at the first run: $out"
 rf FAIL rclater | grep -q 'ran runme --role count 1: 2 matching runs: ' || fail "ran count 1: want FAIL on a later call's run after a fact beside it was decided: $out"
-# stand_ins (schema.md, Case): a stand-in answers by leading arguments behind the ran shim, which records the call and
-# its exit; a call no answer leads exits 1 naming it.
+# stand_ins (schema.md, Case): a stand-in answers by leading arguments, {repo} filled, an `after` answer only once
+# its call was answered, behind the ran shim, which records the call and its exit; a call no answer leads exits 1.
 python3 - "$t/rf/rf" <<'PY'
 import json, sys
 d = sys.argv[1]
-step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?"]]
+step = [["bash", "herdr-say --parent 'hi there' < /dev/null; echo rc=$?; herdr-say other x < /dev/null; echo rc=$?; "
+                 "herdr agent get p1; echo rc=$?; herdr-close p1; herdr agent get p1; echo rc=$?; echo REPO=$PWD"]]
+stands = {"herdr-say": [{"args": ["--parent"], "stdout": "delivered\n", "exit": 0}],
+          "herdr": [{"args": ["agent", "get", "p1"], "stdout": "gone\n", "exit": 1, "after": ["herdr-close", "p1"]},
+                    {"args": ["agent", "get", "p1"], "stdout": "up in {repo}\n", "exit": 0}],
+          "herdr-close": [{"args": [], "stdout": "", "exit": 0}]}
 json.dump([{"id": "rstand", "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(step),
-            "stand_ins": {"herdr-say": [{"args": ["--parent"], "stdout": "delivered\n", "exit": 0}]}}], open(f"{d}/cases.json", "w"))
+            "stand_ins": stands}], open(f"{d}/cases.json", "w"))
 json.dump({"rstand": {"facts": [{"fact": "ran", "program": "herdr-say", "args": ["--parent", "hi there"], "count": 1}]}},
           open(f"{d}/reference/expectations.json", "w"))
 PY
@@ -80,6 +85,9 @@ d="$(ls -dt "$t"/out/*/ | head -1)"
 so="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/rf/rstand/transcript.jsonl")"
 grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -q '^stand-in: no answer for .*herdr-say other x$' <<< "$so" && grep -qx 'rc=1' <<< "$so" \
   || fail "stand_ins: want the canned answer, exit 0, then the no-answer exit 1: $so"
+repo="$(sed -n 's/^REPO=//p' <<< "$so")"
+[[ -n "$repo" ]] && grep -qx "up in $repo" <<< "$so" && grep -qx 'gone' <<< "$so" \
+  || fail "stand_ins: want {repo} filled, then the after-close answer: $so"
 # fake_qa (schema.md, Case): the role's own octo-feather-qa call recorded by the ran shim and answered in the real
 # tool's output form, with no case run; a poison octo-feather-qa further down PATH (where the kit's real one would be
 # found) never runs. The case repo holds an eval suite (fixture fxe: fx plus evals/s1, case c1).
