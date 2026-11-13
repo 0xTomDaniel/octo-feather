@@ -32,11 +32,10 @@
   "repair-result-integrated": {
     "facts": [
       {
-        "fact": "ran",
-        "program": "octo-feather-integrate",
-        "args": [
-          "12",
-          "implementer-gh16"
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_cli.py"
         ]
       },
       {
@@ -52,10 +51,10 @@
   "two-results-integrated": {
     "facts": [
       {
-        "fact": "ran",
-        "program": "octo-feather-integrate",
-        "args": [
-          "12"
+        "fact": "branch_paths",
+        "touched": [
+          "src/app/cli.py",
+          "tests/test_names.py"
         ]
       },
       {
