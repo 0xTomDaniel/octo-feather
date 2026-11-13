@@ -2,7 +2,7 @@
 failures), through octo-feather-qc (what `just qc` runs) in a scratch target with its judge the
 stub classifier pi: uv colours even a path under FORCE_COLOR (as a CI runner sets it), so the
 sandbox asks for it uncoloured, and its proof names uv's cache (as `uv cache dir` names it) an
-overlay. A uv whose path output is no directory fails the run, naming the command and what it
+overlay. A uv cache path that is no directory fails the run, naming the command and what it
 printed, never binding nothing in silence (scripts/octo-feather-qc-sandbox, step 5)."""
 
 from __future__ import annotations
@@ -65,21 +65,25 @@ def colored(s: Scratch) -> None:
 
 
 def not_a_dir(s: Scratch) -> None:
-    """A uv whose cache path output is no directory (a coloured path, whatever it is asked): the
-    run fails before the judge starts, naming the command and what it printed."""
+    """The real uv's cache dir a regular file (UV_CACHE_DIR): the run fails before the judge
+    starts, naming the command and what it printed."""
     s.prepare("qc-uv-cache", build)
     uvd = s.root / "uv"
     uvd.mkdir()
-    (uvd / "uv").write_text("#!/bin/sh\nprintf '\\033[36m%s\\033[0m\\n' \"$HOME/.cache/uv\"\n")
-    (uvd / "uv").chmod(0o755)
-    (s.home / ".cache" / "uv").mkdir(parents=True)
+    (uvd / "uv").symlink_to(kit_uv())
+    uc = s.root / "uv-cache-file"
+    uc.write_text("")
     path = f"{uvd}{os.pathsep}{s.env['PATH']}"
-    ran = qc(s, s.root / "repo", "5", "acceptance-a", want=66, env={"PATH": path})
-    want = (
-        rf"qc sandbox: FAIL uv --color never cache dir printed .*\[36m{re.escape(str(s.home))}"
-        r"/\.cache/uv.*\[0m.*: not a directory.*"
+    ran = qc(
+        s,
+        s.root / "repo",
+        "5",
+        "acceptance-a",
+        want=66,
+        env={"UV_CACHE_DIR": str(uc), "PATH": path},
     )
-    assert any(re.fullmatch(want, x) for x in ran.err.splitlines()), ran.err
+    want = f"qc sandbox: FAIL uv --color never cache dir printed '{uc}': not a directory"
+    assert want in ran.err.splitlines(), ran.err
 
 
 if __name__ == "__main__":

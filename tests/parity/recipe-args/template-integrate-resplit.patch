@@ -1,0 +1,14 @@
+Seeded defect: the python template's just integrate re-splits its arguments (an unquoted $@): a REF with a space reaches octo-feather-integrate as several.
+diff --git a/templates/python/justfile b/templates/python/justfile
+index 5732f23d..6cfe674b 100644
+--- a/templates/python/justfile
++++ b/templates/python/justfile
+@@ -95,7 +95,7 @@ test *args:
+ 
+ # Integrate worker commits onto the lane of TICKET (12, ENG-123), its branch the lane key (octo-feather kit script on PATH).
+ integrate issue +refs:
+-    octo-feather-integrate "$@"
++    octo-feather-integrate $@
+ 
+ # Product QC on the lane head: passed criteria become built (octo-feather kit script on PATH; never in check).
+ qc $status $pr +$ids:

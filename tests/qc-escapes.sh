@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# gate: e2e
 # The qc sandbox test's escapes section (#508; setup tests/lib/qc.sh): a failed proof check (live Herdr reachable,
 # a Linear key re-entering the judge's env, a repo mask that cannot be set up) aborts before the judge; a judge
 # trying each escape (#33) fails at every one, masks cannot be unmounted, leftovers are killed and agents counted,
