@@ -1,0 +1,8 @@
+# gh838: the spec PR's merge actor points to issue-lifecycle #gates-merge
+
+Change: agents/director.md (Merges, Spec PR) and agents/supervisor.md (lane start, Merge) no longer say the owner merges the spec PR; each site points to issue-lifecycle spec `#gates-merge`, whose last sentence (call 2026-11-13T01:05:42Z, lane gh785, owner ruling 2026-11-13) has the owner approve, the director relay to a supervisor it names, and that supervisor merge pinned. ADR 0031 records it; ADR 0021 gains only its superseded line; docs/kickoff-brief.md MERGES points to `#gates-merge`.
+
+Smoke: agents/director.md, `scripts/pi-role --json agents/director.md` at the working tree before commit: exit 0; its cached prompt file (~/.cache/octo-feather/roles/director-da1dda0b692d.md) holds "Every merge, a lane PR's or a spec PR's, and your relay in it: spec `#gates-merge`" and "on the owner's approval, relay it as spec `#gates-merge` says", and no "owner merges". No live Pi run: box over capacity (supervisor ruling, 2026-11-13).
+Smoke: agents/supervisor.md, `scripts/pi-role --json agents/supervisor.md` at the same tree: exit 0; its cached prompt file (~/.cache/octo-feather/roles/supervisor-7a8a7bb4e965.md) holds "Merge: you run your lane's, and a spec PR's the director names you for, exactly as spec `#gates-merge` says". No live Pi run, same reason.
+
+Removed: from agents/director.md, "The owner merges the spec PR", "A PR you opened waits for the owner like any other" and "the owner merges it" (Spec PR); from agents/supervisor.md, "the owner accepted and merged to main". Incident: code review at c69d91ef (class duplicated-rule) and owner ruling 2026-11-13 (#785, PR #827 merged by supervisor gh785).
