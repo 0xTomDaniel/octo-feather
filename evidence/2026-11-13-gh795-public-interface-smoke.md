@@ -2,7 +2,7 @@
 
 Smoke: agents/qc-judge.md run once below (b), driving an MCP-only fixture.
 Smoke: agents/implementer.md .agents/skills/tdd/SKILL.md .skillfile/patches/skills/tdd/SKILL.md.patch .agents/skills/codebase-design/DEEPENING.md .skillfile/patches/skills/codebase-design/DEEPENING.md.patch run once below (self-check, the implementer-deepen-first task verbatim; the run read the patched tdd SKILL.md at its first wording, before the issue-comment sentence was sharpened).
-Smoke: agents/supervisor.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch not run: (a) stopped at its precondition, `octo-feather-lane ticket -` refuses an MCP-client demo (probe below), a script gap for the supervisor.
+Smoke: agents/supervisor.md .agents/skills/to-tickets/SKILL.md .skillfile/patches/skills/to-tickets/SKILL.md.patch run once below, (a) round 4 (the supervisor loaded the patched to-tickets SKILL.md).
 Removed: the tdd Seams paragraph's single-sentence deepen-first ("deepen it first as its own step: pin current behavior, deepen the module, then test at the new interface"), replaced by four ordered steps each ending on a done condition; implementer.md's dense seam bullet, replaced by the same order.
 
 Issue #795, ticket #796, branch gh795-796. Review round 3 (`/tmp/gh795/review3.md`): implementer-deepen-first failed 3 of 3 runs (QA run 20261112T234850Z-2ce373).
@@ -15,7 +15,9 @@ Transcripts of QA run 20261112T234850Z-2ce373 current/run-1 and run-2: each impl
 
 `/tmp/gh795/mcpfx` (throwaway git repo, head `abf59bf`): Python package `quotemcp`, `mcp` SDK pinned in `uv.lock`, `[project.scripts] quote-mcp` a stdio MCP server with tool `quote(region, subtotal)`. `AGENTS.md`: "Its only public interface is the MCP server `quote-mcp` ... There is no CLI, HTTP API or UI for users." Spec `docs/specs/quote.spec.html`, criteria `acceptance-quote-tax`, `acceptance-quote-de`, each "When an MCP client calls tool `quote` ...".
 
-## (a) Ticket demo through MCP: blocked by the ticket check
+## (a) Ticket demo through MCP
+
+### Round 3: blocked by the ticket check
 
 The draft demo a supervisor or `to-tickets` would write for the MCP interface, run through the ticket check before any role run:
 
@@ -25,6 +27,65 @@ exit 1
 ```
 
 The check accepts only a program the repo declares, an HTTP request or a UI driver, so a standard MCP client (the MCP Inspector CLI) is refused. Per the round 3 brief, stopped and reported to the supervisor as a script gap; no supervisor or to-tickets run.
+
+### Round 4: check extended, supervisor run
+
+Commit `6705c072` extends `octo-feather-lane ticket`'s demo surface rule: the MCP project's official client, `@modelcontextprotocol/inspector` with `--cli`, passes when its server is an http(s) URL or a command the rule accepts as the repo's own program. The same draft, in a copy of the fixture (`/tmp/gh795/mcpdemo`), with this branch's script:
+
+```
+stdin: ok
+exit 0
+```
+
+Supervisor, one run, from a copy `/tmp/gh795/mcpsup`, PATH first: logging `gh` and `herdr-say` stubs, then this branch's `scripts/`:
+
+```
+scripts/pi-role agents/supervisor.md -p "Lane gh30 in this repo (/tmp/gh795/mcpsup, branch main). Draft one ticket, for criterion quote#acceptance-quote-de (docs/specs/quote.spec.html), as you would file it, but do not file it: there is no tracker, no Herdr and no worker in this run, so skip every issue-create, herdr-say and spawn step. Check the draft with octo-feather-lane ticket before you stop. Your final message: the draft verbatim, then the check command you ran and its output verbatim."
+```
+
+Pi session `01a1d267-d8f7-779a-a298-710581616527` (`~/.pi/agent/sessions/--tmp-gh795-mcpsup--/`). It read the patched `.agents/skills/to-tickets/SKILL.md`, ran the inspector demo against the server before drafting, and checked the draft with the branch's `octo-feather-lane` (first on PATH). No gh or herdr-say call. Final message, verbatim:
+
+````
+Here is the draft ticket. The check passed (exit 0). Nothing was filed, sent or spawned.
+
+Before you file it, two things:
+- **The behaviour already works on main.** The server already has a `de` rate. I ran the demo command against the current code and it returned subtotal `100.00`, tax `19.00`, total `119.00`, isError false. So this ticket's job is to prove the criterion and lock it in with a test, not to add the feature.
+- **The status file is missing.** `docs/specs/quote.status.json` does not exist, and `just qc` can't mark this criterion built without it. The repo also has no tests yet.
+
+I left out the `## Parent` section because there is no tracker and so no parent key to link to.
+
+**Draft** (saved at `/tmp/gh30-draft/ticket.md`):
+
+```
+## What to build
+
+An MCP client calling tool `quote` on the `quote-mcp` server (stdio) with region `de` and subtotal `100.00` gets tax `19.00` and total `119.00` (German VAT 19%). Main already returns this from the `de` rate; this ticket proves it end to end through the MCP interface and locks it in with a regression test that drives the server over stdio as a client would, so the `de` path cannot silently regress. Use the MCP SDK's own client (prefer the existing `mcp` dependency) for the test, not a hand-rolled protocol. Keep the `uk` quote (quote#acceptance-quote-tax) unchanged.
+
+## Acceptance criteria
+
+- [ ] quote#acceptance-quote-de: tool `quote` called over MCP stdio with region `de`, subtotal `100.00` returns tax `19.00` and total `119.00`; a test asserts this through an MCP client session and passes
+- [ ] demo: `npx -y @modelcontextprotocol/inspector --cli uv run quote-mcp --method tools/call --tool-name quote --tool-arg region=de --tool-arg subtotal=100.00` prints structuredContent with subtotal `100.00`, tax `19.00`, total `119.00` and isError false
+
+## Blocked by
+
+- None (can start immediately)
+```
+
+**Check command** (run from `/tmp/gh795/mcpsup`):
+
+```
+octo-feather-lane ticket - < /tmp/gh30-draft/ticket.md; echo "exit=$?"
+```
+
+**Output:**
+
+```
+stdin: ok
+exit=0
+```
+````
+
+The draft's demo drives the repo's MCP server through the official MCP client, not a CLI, HTTP or UI, and `octo-feather-lane ticket -` passes it.
 
 ## (b) QC judge drives the MCP interface
 
