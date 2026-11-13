@@ -22,7 +22,9 @@ login`, and a file $FAKE_GH/down is the network down. Every call is one line in 
 --workflow (workflowName) when given, a run storing no such field kept, and none whose createdAt
 (GitHub's ISO time) is still to come; --limit N the N newest. `run watch N --exit-status` waits
 for run N as gh does: completed, it prints gh's own line on it; in progress, it completes it with
-its stored `completes` conclusion (no line); exit 1 unless it concluded success. A file
+its stored `completes` conclusion (no line), first blocking until its stored `completesAt` (GitHub's
+ISO time) when still to come, as gh blocks while the run goes on; exit 1 unless it concluded
+success. A file
 $FAKE_GH/watch-fails makes every run watch fail as gh does on a rejected token, the run unchanged.
 `gh api PATH --jq .F` prints field F of api/PATH.json, a string bare (a compare's status).
 run watch's texts are real gh's (gh 2.102.0 on vuejs/core, 2026-11-13; watch() names each call).
@@ -33,6 +35,7 @@ import json
 import os
 import re
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -135,6 +138,9 @@ def watch(a: list[str]) -> None:
             f"Run {d['workflowName']} ({n}) has already completed with '{d['conclusion']}'\n"
         )
     else:
+        if to_come(end := str(d.get("completesAt", ""))):
+            left = datetime.fromisoformat(end) - datetime.now(UTC)
+            time.sleep(max(0, left.total_seconds()))
         d |= {"status": "completed", "conclusion": d["completes"]}
         p.write_text(json.dumps(d))
     sys.exit(0 if d["conclusion"] == "success" else 1)
