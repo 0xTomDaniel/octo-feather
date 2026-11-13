@@ -1,0 +1,14 @@
+Seeded defect: a hand-off by the agent side counts as the owner's Accept (octo-feather-accepted, ADR 0021).
+diff --git a/scripts/octo-feather-accepted b/scripts/octo-feather-accepted
+index 3206382..2558349 100755
+--- a/scripts/octo-feather-accepted
++++ b/scripts/octo-feather-accepted
+@@ -91,7 +91,7 @@ def newest_handoff(spool: Path):
+             event = json.loads(f.read_text())
+         except (OSError, ValueError):
+             continue
+-        if isinstance(event, dict) and event.get("event") == "handoff" and event.get("actor", SPOOL_SIDE) == SPOOL_SIDE:
++        if isinstance(event, dict) and event.get("event") == "handoff":
+             found.append((f.name, event))
+     return max(found, key=lambda fe: fe[0], default=None)
+ 

@@ -1,0 +1,14 @@
+Seeded defect: GATE_RECIPES is never read, so check-languages listed there counts as never run (check-templates check_wiring; #362).
+diff --git a/scripts/check-templates b/scripts/check-templates
+index 293b841e..f9d382f4 100755
+--- a/scripts/check-templates
++++ b/scripts/check-templates
+@@ -147,7 +147,7 @@ def check_wiring(template: Path) -> None:
+         raise TemplateError(msg)
+     check_hook(template)
+     assignments = cast("dict[str, dict[str, object]]", data["assignments"])
+-    gate = set(str(assignments.get("GATE_RECIPES", {}).get("value", "")).split())
++    gate: set[str] = set()
+     todo = ["check"]
+     while todo:
+         recipe = recipes.get(todo.pop(), {})
