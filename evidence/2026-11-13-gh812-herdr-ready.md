@@ -96,3 +96,20 @@ Files read: `.agents/skills/herdr-comms/SKILL.md`
 ## Incident during the repro
 
 The first `probe.sh resume` wrote its parked line to a log named after the throwaway itself. herdr-say therefore took the supervisor path and resumed it through `octo-feather-start` as role `supervisor`. That agent read "Resumed from park" and rewrote the real `lanes/gh812.toml` (`supervisor = "w7S:p2"`), then reported to this pane. Its space w7S was closed, the record was set back to `w7K:p2`, and the supervisor confirmed. The probe was changed to use a separate log stem, so resumes go through herdr-spawn as code-reviewer workers in w7K.
+
+## 5. Review round 1 (PR #881): readiness in Python, one bound
+
+herdr-spawn's readiness moved to `.agents/skills/herdr-comms/assets/herdr_ready.py` (commit 537c21bc): the report poll, then `herdr agent wait --until idle` with what is left of the one `HERDR_SPAWN_READY_TIMEOUT`, then found by name and pane. herdr-spawn keeps the tab close and exit 69.
+
+- `just test tests/gate/kit/test_herdr_messaging.py`: `7 passed`. New `spawn_one_bound` (report at 3 s, then working; bound 4 s) on the previous herdr-spawn: `AssertionError: took 6.5s, past the 4 s bound`.
+- `bash tests/herdr-spawn.sh`, `bash tests/herdr-say.sh`: ok.
+
+Live demo, 2026-11-13 07:23 UTC, workspace w7K, role code-reviewer, each `herdr-spawn` then at once `env -u OCTO_FEATHER_ROLE -u OCTO_FEATHER_PARENT .agents/skills/herdr-comms/assets/herdr-say <pane> "reply ok"`, first send, no retry:
+
+```
+run 1 07:23:28 spawn rc=0 (4s) pane=w7K:p1N say rc=0 state=working
+run 2 07:23:34 spawn rc=0 (3s) pane=w7K:p1P say rc=0 state=working
+run 3 07:23:40 spawn rc=0 (3s) pane=w7K:p1Q say rc=0 state=done
+```
+
+Each pane then showed `reply ok` and the agent's `ok`. Each closed with `herdr-close <pane>` (`tab_close_rc=0`); `herdr agent list` shows no probe left.
