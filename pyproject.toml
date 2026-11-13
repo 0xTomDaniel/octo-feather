@@ -58,6 +58,7 @@ extend-include = [
   "scripts/octo-feather-lane",
   "scripts/octo-feather-lint",
   "scripts/octo-feather-mise-install",
+  "scripts/octo-feather-queued",
   "scripts/octo-feather-qa",
   "scripts/octo-feather-qc",
   "scripts/octo-feather-qc-ghsnap",
