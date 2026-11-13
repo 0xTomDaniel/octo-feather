@@ -154,7 +154,8 @@ for failure in malformed timeout; do
     want="0 Questions lines"; delay=0; deadline=30
   else
     printf '%s\nFindings: none\n' "$DQ" >"$t/reply.director"
-    want="reflector ran past"; delay=2; deadline=0.5
+    # The deadline covers the lane reflection too, which runs first unslept: under load its start alone took over 0.5s.
+    want="reflector ran past"; delay=15; deadline=5
   fi
   set +e
   out="$(STUB_SLEEP="$delay" OCTO_FEATHER_REFLECT_TIMEOUT="$deadline" "$L" archive gh5 2>&1)"; rc=$?
