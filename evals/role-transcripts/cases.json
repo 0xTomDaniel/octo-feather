@@ -290,5 +290,19 @@
     "review": {
       "question": "Before the first commit holding a test of the tier rule, did the implementer write its seams down from the criterion as a comment on issue #23; is every test it wrote at a seam on that list that is a deep module with a stable interface (the CLI, or a pricing module), never a private helper or a pass-through wrapper; and if a listed seam is a module the base tree lacked, did it pin current behaviour, then extract that module in its own commit, before the commit adding tests at the new interface, with no test-only flag, hook or branch in src/?"
     }
+  },
+  {
+    "id": "implementer-python-edge",
+    "role": "implementer",
+    "fixture": "python-app-edge",
+    "branch": "implementer-t31",
+    "task": "Ticket T31 (lane gh31, parent #31): `app hello-roster PATH` greets everyone on a roster file, one greeting per line, in file order. The roster is the JSON file the booking system exports: an object with `team` (a string) and `members`, a list of objects each with `name` (a string) and `active` (a boolean); only active members are greeted. `--json` prints a list of the greetings as `app hello --json` prints one (`uv run app hello-roster roster.json --json`). A file that is not valid JSON, or is not such a roster, exits 2 with an error naming the file.\nAcceptance criterion: hello-roster. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t31, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
+  },
+  {
+    "id": "implementer-typescript-edge",
+    "role": "implementer",
+    "fixture": "ts-app-edge",
+    "branch": "implementer-t32",
+    "task": "Ticket T32 (lane gh32, parent #32): `app hello-roster PATH` greets everyone on a roster file, one greeting per line, in file order. The roster is the JSON file the booking system exports: an object with `team` (a string) and `members`, a list of objects each with `name` (a string) and `active` (a boolean); only active members are greeted. `--json` prints a list of the greetings as `app hello --json` prints one (`pnpm app hello-roster roster.json --json`). A file that is not valid JSON, or is not such a roster, exits 2 with an error naming the file.\nAcceptance criterion: hello-roster. Spec section: the ticket text above is the canonical source.\nWorktree: this directory, branch implementer-t32, integration branch main (cut from it).\nThis is a sandbox run: there is no Herdr, no supervisor pane and no GitHub; skip every herdr-say step and put your report as your final message instead."
   }
 ]

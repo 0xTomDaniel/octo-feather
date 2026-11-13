@@ -33,25 +33,19 @@ new TypeScript surfaces.
 
 - Never use `any`.
 - Import and reuse existing interfaces and types instead of redefining them.
-- Validate external structured inputs and outputs at application boundaries
-  using the repo's established schema validation library. A new repo with none
-  uses Zod 4, with `z.strictObject` at wire boundaries.
-- Never use Zod `.passthrough()`.
 
-## External Structured Input Validation
+## Data At Edges
 
-- Treat parsed config files, provider/API payloads, process/env-derived
-  structured config, persisted local files, and other untrusted or externally
-  supplied structured data as external boundaries.
-- Parse wire and file formats with a structured parser first, such as JSON,
-  TOML, YAML, CSV, or URL/form parsers. Treat the parsed result as `unknown`
-  until it is validated.
-- Validate the parsed value with the repo's established schema validation
-  library (Zod 4 in a new repo), then map the validated result to internal domain types or
-  env-shaped runtime config.
-- Do not hand-roll ad hoc shape checks when a schema library is already
-  established in the repo, unless the reason is documented in the code or
-  issue evidence.
+The rule for data crossing the product's edge: quality spec
+`#acceptance-edge-validated`. TypeScript practice:
+
+- Use the repo's established schema library; a repo with none adds the one
+  templates spec `#tpl-edge` names (`pnpm add zod`).
+- Parse with the format's real parser (`JSON.parse`, a TOML, YAML or CSV
+  parser, `URL`) and hold the result as `unknown` until the schema parses it.
+- Object schemas at the edge are `z.strictObject`; never use Zod `.passthrough()`.
+- Map the parsed value to the domain's types (`z.infer` or an explicit
+  mapping); code past the edge takes typed values, never `unknown`.
 
 ## Testing Stack
 
