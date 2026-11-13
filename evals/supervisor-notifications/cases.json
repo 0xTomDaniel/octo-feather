@@ -787,6 +787,6 @@
         }
       ]
     },
-    "task": "Goal check-in, lane gh12 (target {repo}, lane log $(octo-feather-state)/lanes/gh12.handoffs.jsonl). You await one result: implementer-gh12-3 (pane w2:p4, ticket #13: add widgets list command, branch implementer-gh13, worktree {repo}). No report from it has arrived. Act on this check-in."
+    "task": "Goal check-in, lane gh12 (target {repo}, lane log $(octo-feather-state)/lanes/gh12.handoffs.jsonl). You await one result: implementer-gh12-3 (pane w2:p4, ticket #13: add widgets list command, branch implementer-gh13, worktree {repo}). No report from it has arrived. Act on this check-in.\nSandbox run: GitHub is offline, and the lane record and log under octo-feather-state are absent."
   }
 ]
