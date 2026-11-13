@@ -215,3 +215,9 @@ covers = ["scripts/pi-role", "extensions/skills-loaded.ts", "scripts/check-skill
 [demo."skills#acceptance-skill-frontmatter"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run skill-loading"
 covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-notifications --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route, 18 runs of minutes each: not a qc demo. The agent
+# fallback judge reads its run in evidence/2026-11-13-gh840-supervisor-notifications.md (pass rates on both kits).
+[demo."comms#acceptance-no-routine-traffic"]
+covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-notifications.md"]
