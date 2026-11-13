@@ -1,4 +1,4 @@
-# The parity lever's case for tests/accepted.sh, kept as a shell script, its human hand-offs now written by the pinned review-serve (#816; tests/parity/lever.py --help).
+# The parity lever's case for tests/accepted.sh, kept as a shell script, its owner hand-offs now written by the pinned review-serve (#816; tests/parity/lever.py --help).
 old = "tests/accepted.sh"
 old_at = "d62452c4"
 # Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help).
