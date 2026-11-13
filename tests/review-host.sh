@@ -13,7 +13,9 @@
 set -euo pipefail
 kit="$(cd "$(dirname "$0")/.." && pwd -P)"
 t="$(mktemp -d)"
-"$kit/scripts/check-vendored" --extract spec-chat "$t/sc" > /dev/null || { rm -rf "$t"; echo "review-host test: no pinned Spec Chat (message above)" >&2; exit 1; }
+for e in spec-chat spec-chat-installer; do   # review-serve.py loads the clone's scripts/design-set-sync
+  "$kit/scripts/check-vendored" --extract "$e" "$t/sc" > /dev/null || { rm -rf "$t"; echo "review-host test: no pinned $e (message above)" >&2; exit 1; }
+done
 clone="$(cd "$t/sc" && pwd -P)"; server="$clone/skill/review-spec/assets/review-serve.py"
 export SPEC_CHAT_CLONE="$clone"
 state="$t/state space"; registry="$state/registry.toml"
