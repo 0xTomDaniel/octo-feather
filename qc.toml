@@ -155,6 +155,10 @@ covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.to
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 merge-ask-proof"
 covers = ["scripts/octo-feather-lane", "tests/gate/conftest.py", "gate-budget.toml"]
 
+# Proven by its tagged test, tests/web-tools.sh (headless roles and herdr-spawn tab launches, real Pi, codemode).
+[demo."roles#acceptance-codemode-every-role"]
+covers = ["scripts/pi-role", ".agents/skills/herdr-comms/assets/herdr-spawn", "agents/director.md", "agents/supervisor.md", "agents/general-worker.md", "agents/implementer.md", "agents/corrector.md", "agents/code-reviewer.md", "agents/qc-judge.md", "extensions/web-servers.ts", "web-mcp.json", "pi-version"]
+
 [demo."roles#acceptance-shaper-launch"]
 covers = ["scripts/octo-feather-shape", "scripts/pi-role", "agents/shaper.md", "justfile"]
 

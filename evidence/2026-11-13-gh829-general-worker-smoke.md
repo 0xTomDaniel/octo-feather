@@ -6,3 +6,8 @@ Smoke: agents/general-worker.md, live headless `pi-role agents/general-worker.md
 Smoke: .agents/skills/verify-octo-feather/features/role-launch.md, `verify-octo-feather drive role-launch` at 707e58f PASS (cases `general-worker`, `list-once-general-worker`, `identity-unset-general-worker` among them); evidence record 20261113T010916Z-a568e270 (roles#acceptance-web-roles).
 
 Removed: nothing deleted; the incident: #785, the director had no reusable role for finite non-lane work (ADR 0029).
+
+## Review round (e43b4471): output and rules point to their spec owners
+
+Smoke: agents/general-worker.md, live headless `pi-role agents/general-worker.md --no-session --mode json -p <count list.txt, report to your parent>` in a scratch git repo at 3f4020c's role file: exit 0; it read `herdr-comms`, ran `herdr-say --parent` once (no parent: headless), made no retry and wrote no scratch fallback file (scratch/ empty, `git status` only the run's own files).
+Removed: from agents/general-worker.md Output, the 3-send retry and the scratch-file fallback (prose-duty: delivery and a gone parent are herdr-say's, ADR 0030), and the restated lifecycle-mutation and result-form rules (now pointers to roles `#general-purpose-worker-contract`, `#cleanup-result`).
