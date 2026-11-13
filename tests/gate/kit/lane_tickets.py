@@ -538,12 +538,20 @@ def scripts(s: Scratch) -> None:
 def mcp_demos(s: Scratch) -> None:
     """A demo through the official MCP client (spec issue-lifecycle #acceptance-tracer-tickets:
     MCP or another public protocol): the inspector's --cli over the repo's declared server
-    passes; over a server the repo does not declare it fails naming that server."""
+    passes, whatever the order of the client's options and its server or URL; over a server the
+    repo does not declare it fails naming that server."""
     lt = Lt(s)
     mcp = "npx -y @modelcontextprotocol/inspector@0.17.2 --cli"
     call = "--method tools/call --tool-name quote --tool-arg region=uk"
     out = lt.lane(0, "ticket", "-", stdin=jd(f"{mcp} uv run app {call}"))
     assert out == "stdin: ok", out
+    # Options before the server, in the orders the client itself accepts (review round 4).
+    for demo in (
+        f"{mcp} --transport http https://example.test/mcp --method tools/list",
+        f"{mcp} -e REGION=uk uv run app {call}",
+    ):
+        out = lt.lane(0, "ticket", "-", stdin=jd(demo))
+        assert out == "stdin: ok", out
     out = lt.lane(1, "ticket", "-", stdin=jd(f"{mcp} uv run ghost-server {call}"))
     has(
         out,
