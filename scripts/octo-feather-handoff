@@ -4,18 +4,126 @@
 Kit-only stdlib json suffices; Herdr still owns transport. Encode prints one JSON
 line for redirection, with string fields via --field KEY VALUE and arbitrary JSON
 fields via --json-field KEY JSON. No handoff schema or policy is imposed.
+
+spawn [--ticket T] reads herdr-spawn's printed line on stdin (name= role= tab= pane=
+cwd= contract= provider_session_id=) and prints one spawn line for redirection into
+the lane hand-off log: {at, kind: spawn, name, role, pane, cwd, session, ticket when given}.
+
+attempt --ended-unreported LOG PANE --partial X --recovery Y [--commit C] prints the
+attempt line for a worker that ended without reporting (fields: comms spec
+#handoff-fields, attempt): role, ticket, worker, session and duration_s come from
+the latest spawn or worker-spawn line in LOG naming PANE. Refused, nothing printed:
+exit 65 when no such line, or one without a session; exit 75 while `herdr agent
+get PANE` still finds the agent (close it first, so no competing writer remains);
+exit 69 when that lookup fails another way.
 """
 
 import argparse
+import datetime as dt
 import json
+import re
+import subprocess
 import sys
 from pathlib import Path
 from typing import cast
 
 from handoff_log import encode, read_log
 
+SPAWN_KINDS = ("spawn", "worker-spawn")
 
-def main() -> int:
+
+def now() -> str:
+    return dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def spawn_line(text: str, ticket: str | None) -> dict[str, object] | None:
+    """The spawn line for herdr-spawn's printed TEXT, or None when it names no pane or session."""
+    line = next((x for x in text.splitlines() if x.startswith("name=")), "")
+    got = dict(re.findall(r"(\w+)=(.*?)(?= \w+=|$)", line))
+    if not got.get("pane") or not got.get("provider_session_id"):
+        return None
+    record: dict[str, object] = {"at": now(), "kind": "spawn"}
+    record |= {k: got.get(k, "") for k in ("name", "role", "pane", "cwd")}
+    record["session"] = got["provider_session_id"]
+    if ticket:
+        record["ticket"] = ticket
+    return record
+
+
+def refuse(why: str, code: int) -> int:
+    """CODE, after naming WHY on stderr: nothing printed, nothing to record."""
+    sys.stderr.write(f"octo-feather-handoff: {why}; not recorded\n")
+    return code
+
+
+def record_spawn(args: argparse.Namespace) -> int:
+    """Print the spawn line for herdr-spawn's line on stdin, or refuse (module docstring)."""
+    line = spawn_line(sys.stdin.read(), args.ticket)
+    if line is None:
+        return refuse("stdin holds no herdr-spawn line with pane= and provider_session_id=", 65)
+    sys.stdout.write(encode(line) + "\n")
+    return 0
+
+
+def agent_gone(pane: str) -> int:
+    """0 when Herdr finds no agent at PANE, else the refusal's exit code (message on stderr)."""
+    get = ["herdr", "agent", "get", pane]
+    try:
+        got = subprocess.run(get, capture_output=True, text=True, check=False)
+    except OSError as e:
+        return refuse(f"herdr agent get {pane} failed ({e})", 69)
+    if got.returncode == 0:
+        why = f"herdr agent get {pane} still finds the agent; close it first (herdr-close {pane})"
+        return refuse(f"{why} so no competing writer remains", 75)
+    if "agent_not_found" in got.stdout + got.stderr:
+        return 0
+    said = (got.stderr or got.stdout).strip().splitlines()
+    why = f"herdr agent get {pane} failed ({said[-1] if said else 'no output'})"
+    return refuse(f"{why}: cannot check the agent is gone", 69)
+
+
+def seconds_since(at: object) -> int | None:
+    """Whole seconds from the UTC instant AT (a log line's `at`) to now, or None when unreadable."""
+    try:
+        began = dt.datetime.fromisoformat(str(at).replace("Z", "+00:00"))
+        return int((dt.datetime.now(dt.timezone.utc) - began).total_seconds())
+    except (TypeError, ValueError):
+        return None
+
+
+def ended_unreported(args: argparse.Namespace) -> int:
+    """Print the ended-unreported attempt line for ARGS' pane, or refuse (module docstring)."""
+    log, pane = cast("Path", args.log), cast("str", args.pane)
+    records = read_log(log)[0] if log.is_file() else []
+    spawns = [r for r in records if r.get("kind") in SPAWN_KINDS and r.get("pane") == pane]
+    if not spawns:
+        return refuse(f"no spawn or worker-spawn line names pane {pane} in {log}", 65)
+    spawn = spawns[-1]
+    worker = str(spawn.get("name") or spawn.get("worker") or spawn.get("to") or "")
+    if not spawn.get("session"):
+        named = f"pane {pane} ({worker or 'unnamed'})"
+        return refuse(f"the latest spawn line for {named} in {log} records no session", 65)
+    refused = agent_gone(pane)
+    if refused:
+        return refused
+    # A worker's name is <role>-<ticket> (roles spec #transport-spawn-name).
+    role, _, ticket = worker.rpartition("-")
+    record: dict[str, object] = {"at": now(), "kind": "attempt", "role": spawn.get("role") or role}
+    record |= {"ticket": spawn.get("ticket") or ticket, "worker": worker, "pane": pane}
+    record["session"] = spawn["session"]
+    if args.commit:
+        record["commit"] = args.commit
+    record["result"] = "ended-unreported"
+    record["duration_s"] = seconds_since(spawn.get("at"))
+    record |= {"partial": args.partial, "recovery": args.recovery}
+    sys.stdout.write(encode(record) + "\n")
+    return 0
+
+
+LEVERS = {"spawn": record_spawn, "attempt": ended_unreported}
+
+
+def main() -> int:  # noqa: C901 (encode and parked, then the levers' dispatch)
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     writer = commands.add_parser("encode")
@@ -24,7 +132,18 @@ def main() -> int:
     parked = commands.add_parser("parked")
     parked.add_argument("target")
     parked.add_argument("lanes", type=Path)
+    spawn = commands.add_parser("spawn")
+    spawn.add_argument("--ticket")
+    attempt = commands.add_parser("attempt")
+    attempt.add_argument("--ended-unreported", action="store_true", required=True)
+    attempt.add_argument("log", type=Path)
+    attempt.add_argument("pane")
+    attempt.add_argument("--partial", required=True)
+    attempt.add_argument("--recovery", required=True)
+    attempt.add_argument("--commit")
     args = parser.parse_args()
+    if args.command in LEVERS:
+        return LEVERS[args.command](args)
     if args.command == "encode":
         record: dict[str, object] = dict(args.field)
         for key, value in args.json_field:
