@@ -14,14 +14,6 @@
         "program": "herdr-spawn",
         "args": [
           "--name",
-          "implementer-gh14"
-        ]
-      },
-      {
-        "fact": "ran",
-        "program": "herdr-spawn",
-        "args": [
-          "--name",
           "implementer-gh15"
         ]
       },
