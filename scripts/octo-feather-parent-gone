@@ -21,10 +21,12 @@ import json
 import os
 import subprocess
 import sys
-import tomllib
 from pathlib import Path
 
+import tomllib
+
 GONE = 68
+ARGC = 3  # the command, PARENT, SECONDS
 HERE = Path(__file__).resolve().parent
 
 
@@ -52,14 +54,18 @@ def lane_of(state: Path, parent: str, director: str) -> str:
             return f"lane {p.stem}"
     if parent == director:
         return "no lane (parent is the director pane in director.toml)"
-    return "no lane (no lane record names it supervisor: a director-owned worker, or its lane record gone)"
+    return (
+        "no lane (no lane record names it supervisor: a director-owned worker, "
+        "or its lane record gone)"
+    )
 
 
 def worker_name(pane: str) -> str:
     """The caller's Herdr agent name, or unnamed."""
     if not pane:
         return "unnamed"
-    p = subprocess.run(["herdr", "agent", "get", pane], capture_output=True, text=True, check=False)
+    get = ["herdr", "agent", "get", pane]
+    p = subprocess.run(get, capture_output=True, text=True, check=False)
     try:
         name = json.loads(p.stdout)["result"]["agent"]["name"]
     except (json.JSONDecodeError, KeyError, TypeError):
@@ -68,7 +74,7 @@ def worker_name(pane: str) -> str:
 
 
 def main() -> int:
-    if len(sys.argv) != 3 or not sys.argv[2].isdigit():
+    if len(sys.argv) != ARGC or not sys.argv[2].isdigit():
         sys.stderr.write("usage: octo-feather-parent-gone PARENT SECONDS\n")
         return 64
     parent, bound = sys.argv[1], int(sys.argv[2])
@@ -80,19 +86,23 @@ def main() -> int:
         ).stdout.strip()
     )
     say(
-        f"parent {parent} is gone (agent_not_found, no parked line names it): not delivered; keep your result and stop, do not re-send"
+        f"parent {parent} is gone (agent_not_found, no parked line names it): not delivered; "
+        "keep your result and stop, do not re-send"
     )
     rec = toml(state / "director.toml")
     director = rec.get("pane") if isinstance(rec, dict) else None
     if not isinstance(director, str) or not director:
         why = rec if isinstance(rec, str) else f"no pane in {state / 'director.toml'}"
         say(
-            f"parent-gone alert NOT delivered: no director reachable ({why}); your result stays retained for reconciliation"
+            f"parent-gone alert NOT delivered: no director reachable ({why}); "
+            "your result stays retained for reconciliation"
         )
         return GONE
     alert = (
-        f"parent-gone alert from herdr-say (comms spec #say-parent-gone): {lane_of(state, parent, director)}: "
-        f"parent {parent} is gone (Herdr: agent_not_found; no parked line names it). Worker {worker_name(me)} "
+        "parent-gone alert from herdr-say (comms spec #say-parent-gone): "
+        f"{lane_of(state, parent, director)}: "
+        f"parent {parent} is gone (Herdr: agent_not_found; no parked line names it). "
+        f"Worker {worker_name(me)} "
         f"(pane {me or 'unknown'}, role {role or 'unknown'}) holds its result, undelivered. "
         "Recover the parent; it reconciles the retained result."
     )
@@ -116,7 +126,8 @@ def main() -> int:
     else:
         last = (p.stderr or p.stdout).strip().splitlines()[-1:] or ["no output"]
         say(
-            f"parent-gone alert NOT delivered to the director (pane {director}, exit {p.returncode}: {last[0]}); "
+            f"parent-gone alert NOT delivered to the director (pane {director}, "
+            f"exit {p.returncode}: {last[0]}); "
             "your result stays retained for reconciliation"
         )
     return GONE
