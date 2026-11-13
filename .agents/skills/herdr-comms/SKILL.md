@@ -86,10 +86,18 @@ those leave to the caller:
   spawn fails closed (exit 69, tab closed, pane text on stderr).
 - A cleared dialog is not readiness: a booting agent reads `unknown`, and a
   prompt sent then is typed but never submitted (`agent_prompt_stalled`, #585).
-  The spawn returns only once `herdr agent wait PANE --until idle` matches and
-  `herdr agent get` finds the agent by name and by pane, so a `herdr-say` right
-  after it is delivered. Not idle within `HERDR_SPAWN_READY_TIMEOUT` seconds
-  (default 120): exit 69, tab closed, the state named.
+  Nor is `idle` alone: Herdr reads Pi's screen only, and reads a booting Pi
+  `idle` (its fallback) before Pi takes input (#871). So the spawn loads
+  Herdr's own Pi integration (`herdr integration install pi`, written to
+  `~/.cache/octo-feather/herdr-pi/`, never the user's Pi profile), which
+  reports from inside Pi once its TUI runs. The spawn returns only once
+  `herdr agent get` shows that report (`agent_session`, source `herdr:pi`),
+  `herdr agent wait PANE --until idle` matches, and `herdr agent get` finds the
+  agent by name and by pane, so a `herdr-say` right after it is delivered;
+  `herdr-say`'s resume and `octo-feather-start` go through it. A failed install
+  exits 69 before any tab; no report or not idle within
+  `HERDR_SPAWN_READY_TIMEOUT` seconds (default 120): exit 69, tab closed, the
+  cause named.
 
 Any failure closes the tab, so a failed spawn never leaves an orphan.
 
