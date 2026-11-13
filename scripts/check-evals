@@ -25,7 +25,7 @@ FACTS = {"skill_read": {"skill"}, "skill_not_read": {"skill"}, "skill_read_befor
          "field_lines": {"field"}, "branch_paths": set(), "tool_called": {"tools"}, "ran": {"program", "args"},
          "tool_called_before": {"tools", "before"}}
 PROGRAM = re.compile(r"[A-Za-z0-9_+-][A-Za-z0-9._+-]*")   # a ran fact's program: a command name (schema.md, Facts)
-OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}, "ran": {"count"}}
+OPTIONAL = {"field_lines": {"none", "includes", "every"}, "branch_paths": {"untouched", "touched"}, "ran": {"count", "exit"}}
 FIELD_KEYS = {"Check": {"path", "rule", "owner", "reads", "class"}, "Owner": {"path", "rule", "restated"}}   # schema.md, Field lines
 FIELD_NAME = re.compile(r"[A-Z][A-Za-z-]*(?: [A-Za-z-]+)*")
 PATH = re.compile(r"(?!/)(?!.*(?:^|/)\.\.(?:/|$))\S+")
@@ -613,6 +613,8 @@ def check_exp(at, exp, errs, fixture=None, *, review: bool = False):
             cast("list[str]", errs).append(f"{fa}: field args: must be a list of strings")
         if t == "ran" and "count" in f and not (type(n := cast("object", f["count"])) is int and n >= 0):
             cast("list[str]", errs).append(f"{fa}: field count: must be an integer >= 0, got {n!r}")
+        if t == "ran" and "exit" in f and not (type(x := cast("object", f["exit"])) is int and 0 <= x <= 255):
+            cast("list[str]", errs).append(f"{fa}: field exit: must be an integer 0 to 255, got {x!r}")
         if t == "branch_paths":
             if not set(f) & OPTIONAL[t]:
                 errs.append(f"{fa}: field untouched: missing (give untouched, touched or both)")

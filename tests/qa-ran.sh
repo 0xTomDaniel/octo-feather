@@ -75,12 +75,15 @@ stands = {"herdr-say": [{"args": ["--parent"], "argc": 2, "stdout": "delivered\n
           "herdr-close": [{"args": [], "stdout": "", "exit": 0}]}
 json.dump([{"id": "rstand", "role": "implementer", "fixture": "fx", "task": "Do it. STUB-STEPS:" + json.dumps(step),
             "stand_ins": stands}], open(f"{d}/cases.json", "w"))
-json.dump({"rstand": {"facts": [{"fact": "ran", "program": "herdr-say", "args": ["--parent", "hi there"], "count": 1}]}},
+json.dump({"rstand": {"facts": [{"fact": "ran", "program": "herdr-say", "args": ["--parent", "hi there"], "count": 1},
+                                 {"fact": "ran", "program": "herdr-say", "args": ["--parent"], "exit": 64, "count": 1}]}},
           open(f"{d}/reference/expectations.json", "w"))
 PY
 run 0 "$Q" --evals "$t/rf"
 grep -q '^PASS rf/rstand: ran herdr-say --parent hi there count 1: 1 matching runs: herdr-say --parent hi there (exit 0)' <<< "$out" \
   || fail "stand_ins: want PASS on the recorded stand-in call: $out"
+grep -q 'ran herdr-say --parent exit 64 count 1: 1 matching runs: herdr-say --parent (exit 64)' <<< "$out" \
+  || fail "ran exit 64 count 1: want PASS counting only the run that exited 64, not the --parent run that exited 0: $out"
 d="$(ls -dt "$t"/out/*/ | head -1)"
 so="$(jq -r 'select(.type == "tool_execution_end") | .result.structuredContent.output' "$d/rf/rstand/transcript.jsonl")"
 grep -qx 'delivered' <<< "$so" && grep -qx 'rc=0' <<< "$so" && grep -qx 'usage: herdr-say' <<< "$so" && grep -qx 'rc=64' <<< "$so" && grep -q '^stand-in: no answer for .*herdr-say other x$' <<< "$so" && grep -qx 'rc=1' <<< "$so" \

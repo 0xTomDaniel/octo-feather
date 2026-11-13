@@ -70,7 +70,7 @@ bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "stdout": "", "exit": 300}]}' "
 bad 'c[0]["stand_ins"] = {"herdr": [{"args": [], "argc": -1, "stdout": "", "exit": 0}]}' "case rpass: field stand_ins.herdr: must be a non-empty list of" "$t/ran-good" ran
 bad 'c[0]["stand_ins"] = {"pi": [{"args": [], "stdout": "", "exit": 0}]}' "case rpass: field stand_ins.pi: must be a command name" "$t/ran-good" ran
 bad 'e["rpass"]["facts"][0]["count"] = True' "case rpass fact #1: field count: must be an integer >= 0, got True" "$t/ran-good" ran
-bad 'e["rpass"]["facts"][0]["exit"] = 0' "case rpass fact #1: field exit: unknown field for ran" "$t/ran-good" ran
+bad 'e["rpass"]["facts"][0]["exit"] = 300' "case rpass fact #1: field exit: must be an integer 0 to 255, got 300" "$t/ran-good" ran
 bad 'e["fweb"]["facts"][0]["tools"] = []' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
 bad 'e["fweb"]["facts"][0]["tools"] = ["web a"]' "case fweb fact #1: field tools: must be a non-empty list of tool names" "$t/fl-good" fl
 bad 'del e["fweb"]["facts"][0]["tools"]' "case fweb fact #1: field tools: missing" "$t/fl-good" fl

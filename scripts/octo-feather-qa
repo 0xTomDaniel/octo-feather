@@ -575,14 +575,15 @@ def args_match(want: list[str], got: list[str], head: str | None) -> bool:
 def judge_ran(fact: dict[str, object], record: list[dict[str, object]] | None, *, final: bool) -> tuple[str, str]:
     """ran PROGRAM ARGS over the sandbox's RECORD (rule: schema, Run record)."""
     p, want, head = str(fact["program"]), [str(x) for x in cast("list[object]", fact["args"])], fact.get("_head")
-    name = f"ran {' '.join([p, *want])}"
+    name = f"ran {' '.join([p, *want])}" + (f" exit {fact['exit']}" if "exit" in fact else "")
     if record is None:   # sandbox.json attempts_error, or a record not whole (schema, Attempt record)
         return "fail", f"{name}: the sandbox sent no whole attempt record"
     runs = [(r, [str(x) for x in cast("list[object]", r["argv"])]) for r in record
             if r.get("kind") == "run" and r.get("program") == p and isinstance(r.get("argv"), list)]
     def show_(r: dict[str, object]) -> str:
         return f"{str(r.get('what', ''))[:120]} ({str(r.get('result', ''))[:80]})"
-    hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)]
+    hits = [r for r, a in runs if args_match(want, a, head if isinstance(head, str) else None)
+            and ("exit" not in fact or r.get("exit") == fact["exit"])]
     hit = hits[0] if hits else None
     if "count" in fact:   # rule: schema, Run record
         n, name = cast("int", fact["count"]), f"{name} count {fact['count']}"
