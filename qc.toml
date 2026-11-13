@@ -228,3 +228,13 @@ covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/20
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
+# evidence/2026-11-13-gh840-supervisor-autonomy.md (pass rates on both kits, director messages, hand-off log lines).
+[demo."comms#acceptance-autonomous-local"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
+
+# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message.
+[demo."comms#acceptance-real-blocker"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
