@@ -1,0 +1,47 @@
+[project]
+name = "app"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = ["pydantic==2.12.4"]
+
+[project.scripts]
+app = "app.cli:main"
+
+[dependency-groups]
+dev = ["basedpyright", "import-linter", "pytest", "ruff"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+  "COM812",  # conflicts with the formatter
+  "CPY001",  # no per-file copyright headers
+  "D",       # docstrings are optional; names carry intent
+  "S101",    # pytest asserts
+  "S603",    # E2E tests run the app as a subprocess
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["INP001", "PLR2004"]  # tests are not a package; exit codes are literal
+
+[tool.basedpyright]
+typeCheckingMode = "strict"
+include = ["src", "tests"]
+
+[tool.importlinter]
+root_package = "app"
+
+[[tool.importlinter.contracts]]
+name = "core never imports the CLI"
+type = "layers"
+layers = ["app.cli", "app.core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--strict-markers"
