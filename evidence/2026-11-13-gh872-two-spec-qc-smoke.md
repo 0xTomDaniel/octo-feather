@@ -1,0 +1,6 @@
+# gh872: one `just qc` over two specs, smoke
+
+Change (ticket #872, lane gh858, commit 106cfc24): `scripts/octo-feather-qc` takes `STATUS... PR ID...`; the verify-octo-feather one-execution drive and its feature map gain a two-spec case.
+
+Smoke: .agents/skills/verify-octo-feather/features/one-execution.md driven live by `.agents/skills/verify-octo-feather/scripts/verify-octo-feather run one-execution` at 106cfc24 (clean): run PASS, evidence record 20261113T055954Z-e8251ae5. Scratch target with specs demo and other: one `OCTO_FEATHER_QC_CLAIMS='demo#acceptance-a other#acceptance-c' just check`, then one `just qc docs/specs/demo.status.json docs/specs/other.status.json 7 acceptance-a acceptance-c`: `PASS acceptance-a` and `PASS acceptance-c`, each `1/1 tagged cases passed in the gate's run at 9a3c1530c696, not rerun`, `evidence complete; decision tagged test assertions; record <the gate's id>`; one report per spec; one commit on the head changing only `docs/specs/demo.status.json` and `docs/specs/other.status.json`.
+Smoke: .agents/skills/verify-octo-feather/features/README.md index line for one-execution, read against the drive above (same run); the one-execution-incomplete drive, unchanged in shape, `run one-execution-incomplete` at 106cfc24: run PASS, evidence record 20261113T055958Z-f51b4670.
