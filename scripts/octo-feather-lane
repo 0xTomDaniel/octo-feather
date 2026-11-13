@@ -198,9 +198,9 @@ evaluating no backtick; every option, parameter and default is just's to read, a
 the one whose answer this reads), fails naming just's answer; check-gate-free's just_runs, #240), a package.json bin or pyproject
 [project.scripts] name; a tracked script run by its interpreter, e.g. `python harness.py`,
 when program() finds none of these: the ADR 0002 fallback, #121 D11), curl/http to an http(s) URL, playwright,
-or the MCP project's official client (`@modelcontextprotocol/inspector`) with --cli whose server
-is an http(s) URL or a command this rule accepts as the repo's own program (another protocol: a client the repo
-declares); never the gate alone
+or the MCP project's official client (`@modelcontextprotocol/inspector`) with --cli whose argv
+holds an http(s) URL or a run of words this rule accepts as the repo's own program, in any order (another protocol:
+a client the repo declares); never the gate alone
 or a generic tool (printf, echo). The
 wide-refactor line `Expand-contract: expand|migrate|contract` waives the demo rules. A demo may run a
 command the ticket itself creates when the ticket declares it exactly in a line
@@ -2365,8 +2365,6 @@ INTERPRETERS = {"python", "python3", "node", "bash", "sh", "ruby", "perl", "deno
 HTTP = {"curl", "http", "https", "wget", "xh", "httpie"}
 # The official MCP client (modelcontextprotocol.io), its CLI mode: a demo through a repo's MCP server. Another
 # protocol's demo runs a client the repo declares.
-MCP_OPTIONS = {"--method", "--tool-name", "--tool-arg", "--uri", "--prompt-name", "--prompt-args", "--log-level",
-               "--transport", "--header", "--config", "--server", "--target"}   # the client's own, after its server
 MCP_CLIENT = re.compile(r"(.*/)?(@modelcontextprotocol/inspector(@[^/\s]+)?|mcp-inspector)")
 NOT_DEMO_RECIPES = re.compile(r"check(-.*)?|integrate|qc|qa")
 
@@ -2530,19 +2528,29 @@ class Surface:
 
 
     def mcp_why(self, prog: str, args: list[str]) -> str | None:
-        """The MCP client's --cli target (its words up to the client's own next option): an http(s) URL, or a
-        server command this check accepts as the repo's own program."""
+        """The MCP client in its --cli mode passes when its argv holds an http(s) URL, or a run of words this
+        check accepts as the repo's own program, wherever either sits among the client's options.
+
+        Hand-written on purpose, with no model of the client's options: its real parser (commander, in
+        inspector cli/build/cli.js and index.js, 0.17.2) is not exported and parses only inside the run that
+        starts the server, and the client has no parse-only, dry-run or --json mode (its --help, checked
+        2026-11-13). Stated limit: a declared program name given as another option's value counts too."""
         if "--cli" not in args:
             return f"{prog} without --cli (the client's command-line mode)"
-        rest = args[args.index("--cli") + 1:]
-        target = rest[:next((i for i, a in enumerate(rest) if a.split("=", 1)[0] in MCP_OPTIONS), len(rest))]
-        if not target:
-            return f"{prog} --cli names no server"
-        if re.match(r"https?://", target[0]):
+        words = [a for a in args if a != "--cli"]
+        if any(re.match(r"https?://", a) for a in words):
             return None
-        why = self.word_why_not(program_words(shlex.join(target)))
-        return f"its MCP server `{shlex.join(target)}`: {why}" if why else None
-
+        whys: list[str] = []
+        for i, w in enumerate(words):
+            if w.startswith("-"):
+                continue
+            why = self.word_why_not(program_words(shlex.join(words[i:])))
+            if why is None:
+                return None
+            whys.append(why)
+        if not whys:
+            return f"{prog} --cli names no server"
+        return f"{prog} --cli names no http(s) URL and no program the repo declares ({'; '.join(dict.fromkeys(whys))})"
 
 def program_words(stage: str) -> list[str]:
     """STAGE's words from its program on: env assignments and runners (uv run, npx...) dropped."""
