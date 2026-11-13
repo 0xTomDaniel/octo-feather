@@ -7,4 +7,4 @@ Smoke: agents/director.md, same run: the park line points to spec `#roles-park` 
 Red: before the change, the same scenario failed at `herdr-say --parked general-worker-a1: exit 1, want 0` (lane logs only), and with the lookup fixed, the director-sent lane worker resumed in w0 (caller's workspace), not its parent's w1.
 Regression: tests/herdr-say.sh, tests/herdr-spawn.sh (parked supervisor resumes in its live lane workspace, else a new one; resumed worker told its new pane), tests/handoff-park.sh, tests/lane-post-merge-tell.sh and every tests/gate/kit/test_herdr_messaging.py and test_handoff_ended.py item: 13 passed (`just check-tests` with those ids).
 
-Removed: nothing from agents/director.md; the incident that justifies the added line: #837, the director had no park for its own general workers (comms spec `#roles-park`, `#handoff-operator` director log parked kind).
+Removed: nothing from agents/director.md; the incident that justifies the added line: #837, the director had no park for its own general workers (comms spec `#roles-park`; the director log's parked kind).
