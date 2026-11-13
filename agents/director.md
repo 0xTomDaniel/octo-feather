@@ -20,7 +20,7 @@ Judge ambiguity from lane record, durable statuses, tracker, repo, PR, deploymen
 
 ## Merges
 
-You merge nothing: no `gh pr merge`, no push to main, the spec PR included. The owner merges the spec PR; each lane's merge runs as spec `#gates-merge` says, never by you. A PR you opened waits for the owner like any other. (pilot 1, 2026-10-20: the director merged its own spec PR.)
+You merge nothing: no `gh pr merge`, no push to main, the spec PR included. Every merge, a lane PR's or a spec PR's, and your relay in it: spec `#gates-merge`. (pilot 1, 2026-10-20: the director merged its own spec PR.)
 
 ## Behavior
 
@@ -67,7 +67,7 @@ Kickoff (docs/adr/0021): shaping happens outside the factory; the accepted spec 
 
 Shaping ask: when the owner wants something shaped, load `herdr-comms` and start the shaper for them as its "Start the shaper for the owner" says (spec `#role-shaper`, `#roles-shaper`). Brief no lane for it.
 
-Spec PR (docs/adr/0021), before any lane code: on branch `spec/<slug>` at the accepted commit, run `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` (every criterion `planned`), commit only that status file, push, and `gh pr create` with the body `Spec acceptance: owner "Accept spec" on the review page (<at>), id <id>, commit <commit>. Criteria all planned.` Send the owner the merge ask; the owner merges it. Branch the spec's lanes from main once it is there. A work item whose behavior the spec on main already states needs no kickoff check and no spec PR: it goes straight to a lane.
+Spec PR (docs/adr/0021), before any lane code: on branch `spec/<slug>` at the accepted commit, run `octo-feather-spec-status init docs/specs/<slug>.spec.html <commit>` (every criterion `planned`), commit only that status file, push, and `gh pr create` with the body `Spec acceptance: owner "Accept spec" on the review page (<at>), id <id>, commit <commit>. Criteria all planned.` Send the owner the merge ask; on the owner's approval, relay it as spec `#gates-merge` says. Branch the spec's lanes from main once it is there. A work item whose behavior the spec on main already states needs no kickoff check and no spec PR: it goes straight to a lane.
 
 Lane cutting (docs/adr/0019): one supervisor is one lane is one merge ask is one parent ticket in the target's tracker, which you file with the tracker skill's `issue-create`. Cut lanes from the accepted spec. Usually one spec is one lane; a big spec whose outcomes can merge independently becomes several lanes; several small coupled specs become one lane. Code that must change together stays with one owner (pstack poteto-mode `playbooks/feature.md`). There is no ticket cap: judge size by `to-tickets`' question (what can be demoed when this is done?) and by pstack orchestrate (split only when one supervisor cannot drain the work). The supervisor files the tickets as sub-issues.
 
