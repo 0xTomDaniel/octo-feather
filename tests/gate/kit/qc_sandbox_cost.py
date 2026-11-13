@@ -27,14 +27,6 @@ def installed_herdr(s: Scratch) -> str:
     return str(Path(herdr).absolute())
 
 
-def selection(s: Scratch) -> None:
-    """Probe executable identity separately so the cost workload starts with cold caches."""
-    herdr = installed_herdr(s)
-    ran = s.run([herdr, "--version"])
-    assert re.search(r"herdr \d+\.\d+\.\d+", ran.out), ran.out
-    sys.stdout.write(f"qc-sandbox-cost installed Herdr: {herdr}: {ran.out}\n")
-
-
 def exercise(s: Scratch, drive: Path = DRIVE) -> str:
     env = tool_homes() | {
         "QC_HERDR": installed_herdr(s),
@@ -78,7 +70,7 @@ def over_target(s: Scratch) -> None:
     folder = repo / ".agents/skills/verify-octo-feather"
     (folder / "scripts").mkdir(parents=True)
     drive = folder / "scripts" / DRIVE.name
-    os.link(DRIVE, drive)
+    shutil.copy2(DRIVE, drive)
     (folder / "features").symlink_to(DRIVE.parent.parent / "features")
     workload = repo / "entry.py"
     workload.write_text(
@@ -123,4 +115,4 @@ def over_target(s: Scratch) -> None:
 
 
 if __name__ == "__main__":
-    main(cost, selection, over_target)
+    main(cost, over_target)

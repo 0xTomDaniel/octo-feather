@@ -1,0 +1,12 @@
+# The parity lever's case for tests/recipe-args.sh, rewritten as tests/gate/kit/test_recipe_args.py (tests/parity/lever.py --help).
+old = "tests/recipe-args.sh"
+old_at = "644fad70"
+# Every file under tests/ the old test sources, runs or reads at old_at (lever.py --help): none.
+needs = []
+new = "tests/gate/kit/test_recipe_args.py"
+
+# How the clean old run shows it ran each file a defect patches (lever.py --help): run: just read the justfile to run
+# the recipe the defect patches.
+[ran]
+"justfile" = "run just new-repo"
+"templates/python/justfile" = "run just integrate"

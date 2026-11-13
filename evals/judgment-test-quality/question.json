@@ -1,6 +1,6 @@
 {
   "id": "a-test-quality",
-  "question": "Judged against the code it exercises, is this test tautological (its expected value is computed the same way the code computes it, so it cannot disagree with the code), implementation-coupled (it reaches past the public surface into private functions, source text or internal collaborators, so a behaviour-preserving refactor breaks it), or ok (it drives a public surface and compares against an independent expected value)?",
+  "question": "Judged against the code it exercises, is this test tautological (its expected value is computed the same way the code computes it, so it cannot disagree with the code), implementation-coupled (it reaches past its seam into private functions, source text or internal collaborators, so a behaviour-preserving refactor breaks it), or ok (it drives a public surface or a deep module's stable interface and compares against an independent expected value)?",
   "labels": [
     "tautological",
     "implementation-coupled",
@@ -9,7 +9,7 @@
   "label_help": {
     "tautological": "expected value restates the code's own computation (same operation, same helper, or the code's own output); passes by construction. Takes precedence when a test is also coupled.",
     "implementation-coupled": "reaches internals: imports or rewrites private helpers, mocks internal collaborators, reads or edits source text, asserts call counts; breaks on a rename that keeps behaviour.",
-    "ok": "drives a public surface (CLI, HTTP, UI, public library function; fakes only at external boundaries such as PATH stubs, fake services, OS namespaces) and compares to an independent literal or oracle."
+    "ok": "drives a public interface (CLI, HTTP, UI, MCP or another public protocol) or the stable interface of a deep module, public or internal, never a private helper or shallow wrapper (fakes only at external boundaries such as PATH stubs, fake services, OS namespaces) and compares to an independent literal or oracle."
   },
   "state_shape": "'Test:' the test excerpt, trimmed from its source, then optionally 'Code it exercises:' with the minimum of the code under test or a one-line note naming the public surface. No reviewer verdict, finding class or label."
 }

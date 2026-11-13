@@ -5,16 +5,20 @@ A factory of agents that turns accepted work items into finished, verified work,
 ## Roles
 
 **Director**:
-The one agent that owns the whole program: it opens work items, puts a supervisor on each, removes blockers, and brings the owner only the decisions that need an owner. It never does the work itself.
+The one agent accountable for the whole factory's outcome, as a chief executive to the owner's board: it opens work items, puts a supervisor on each, keeps the factory running, removes blockers without the owner, and brings the owner only the decisions that need an owner. It never does the work itself.
 _Avoid_: Orchestrator, manager
 
 **Supervisor**:
-The agent that owns one work item until it merges, breaking it into tickets, assigning workers, getting every result independently reviewed, and running the merge the owner approved. It directs the work and never does it.
+The delegated goal owner for one work item and its PR until merge, planning its delivery, assigning workers, getting every result independently reviewed, and running the merge the owner approved. It directs the work and never does it.
 _Avoid_: Lane owner, orchestrator, production supervisor, issue supervisor
 
 **Worker**:
-An agent that does one assigned piece of work (a ticket, a review, a correction) inside its own isolated copy of the work and reports the result to its supervisor. Implementers, correctors and code reviewers are specialist workers.
+An agent that performs one finite assignment and reports its result to its actual parent. Product implementation workers report to their supervisor; a general-purpose worker reports to the director or supervisor that assigned its task. Implementers, correctors and code reviewers are specialist workers.
 _Avoid_: Agent (too broad), subagent
+
+**General-purpose worker**:
+A finite-task executor using one reusable role contract for varied research, diagnosis, preparation and operational tasks. Its parent is the director or supervisor that owns the task; it is neither a lane goal owner nor an unrestricted agent.
+_Avoid_: Task-specific specialist, unroled agent, unrestricted agent
 
 **Implementer**:
 A worker that produces the change for one ticket.
@@ -37,7 +41,7 @@ The agent that shapes what the owner wants into a spec with them, before the fac
 _Avoid_: Shaping chat, spec writer
 
 **Owner**:
-The person the factory works for, who accepts specs and results at gates. Acceptance is never delegated to an agent. Spec Chat's `--owner` flag is that tool's own name for the pane it wakes, not this term.
+The person the factory works for, holding its board-level decisions: spec acceptance, merge approval, owner-held access and consequential product or risk decisions. Acceptance is never delegated to an agent. Spec Chat's `--owner` flag is that tool's own name for the pane it wakes, not this term.
 _Avoid_: Human, user, operator
 
 ## Work
@@ -55,7 +59,7 @@ The running state of one work item while its supervisor works on it: its record,
 _Avoid_: Worklane, track
 
 **Tracer bullet**:
-A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through the app's CLI, HTTP or UI, or the target's runnable script when it has none (ADR 0002). Every ticket is one.
+A ticket that cuts a thin path through every layer of the work and ends on something that can be demoed through a public interface the product offers its users (its CLI, HTTP, UI, MCP or another public protocol), or the target's runnable script when it has none (ADR 0002). Every ticket is one.
 _Avoid_: Layer task, horizontal slice
 
 **Pilot**:
@@ -99,16 +103,20 @@ The owner telling the director to build one or more accepted specs. The director
 _Avoid_: Launch, go
 
 **Escalation**:
-A problem passed one level up the chain (worker, supervisor, director, owner) after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
+A problem passed to the next authority in the sender's actual parent chain after the sender tried to solve it within its own authority, naming what is blocked, what was tried, and the options or what is needed. A lane's chain is worker, supervisor, director, owner; a director-owned general-purpose worker's parent is the director. Escalations never skip up past a reachable level, and only the director brings anything to the owner.
 _Avoid_: Ping, flag, bubbling up
 
 **Test**:
-Code that proves product behaviour the spec states, through a public surface: end to end through the CLI, MCP, HTTP or UI where there is one, an integration test through a public function. Which code is product and who builds it: docs/adr/0008, Who builds what.
+Code that proves product behaviour the spec states: end to end through a public interface the product offers its users (quality spec `#acceptance-public-surfaces`), an integration test at the interface of a deep module with a stable interface, public or internal, at a seam written down from the ticket before any test (docs/adr/0002). Which code is product and who builds it: docs/adr/0008, Who builds what.
 _Avoid_: Test gate, unit test
 
 **Check**:
 A rule the gate enforces on the repo's own code or text: lint, types, structure, a scan, a banned pattern, an eval grader judging an agent. A file under `tests/` that scans the repo's own text (lane #82's former `tests/tracker-prose.sh`) is a check and is judged as one. Only an exact check is allowed (docs/adr/0008); who builds one is ruled there too.
 _Avoid_: Test (for a scan), guard, lint (for anything that is not a linter)
+
+**Delegation envelope**:
+The authority a role holds for one piece of work: its role contract, accepted spec, applicable ADRs and recorded owner delegation, narrowed by the assignment's brief. A choice inside it belongs to the assigned role; outside it, to the authority that can grant it.
+_Avoid_: Blanket permission, command approval
 
 **Gate**:
 A point where work stops until the owner decides, such as accepting a spec or a merge.

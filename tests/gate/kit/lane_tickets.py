@@ -104,7 +104,8 @@ def build_repo(s: Scratch) -> None:
     for p in (ROOT / "docs" / "specs").glob("*.spec.html"):
         shutil.copy(p, sp)
     shutil.copy(FIXTURES / "spec-status" / "good" / "demo.spec.html", sp)
-    # Its declared surface: bin/demo (tracked executable), pyproject's `app`, justfile `serve`;
+    # Its declared surface: bin/demo (tracked executable), pyproject's `app`, justfile `serve` and
+    # `mcp-call` (the repo's own MCP client: a recipe running the protocol's client on its server);
     # tests/demo.sh is tracked and executable but a test, not the app's surface.
     for d in ("bin", "tests", "scripts", "docs/adr"):
         (r / d).mkdir(parents=True, exist_ok=True)
@@ -124,7 +125,8 @@ def build_repo(s: Scratch) -> None:
         "</ol>\n"
     )
     (r / "justfile").write_text(
-        'check:\n    true\n\nserve port="8000":\n    true\n\nqc:\n    true\n'
+        'check:\n    true\n\nserve port="8000":\n    true\n\n'
+        "mcp-call *args:\n    true\n\nqc:\n    true\n"
     )
     s.git(r, "init", "-q", "-b", "main")
     s.git(r, "add", "-A")
@@ -532,6 +534,24 @@ def scripts(s: Scratch) -> None:
     (bare / "justfile").write_text("mod sub\n")
     s.git(bare, "add", "-A")
     lt.lane(0, "ticket", str(p), cwd=bare, env={"JUST_UNSTABLE": "1"})
+    lt.read_only()
+
+
+def mcp_demos(s: Scratch) -> None:
+    """A demo through MCP or another public protocol (spec issue-lifecycle
+    #acceptance-tracer-tickets) runs a client the repo declares: the repo's `just mcp-call`
+    recipe passes; the protocol's client run directly is no surface the repo declares, and the
+    fix names the declared-client route."""
+    lt = Lt(s)
+    out = lt.lane(0, "ticket", "-", stdin=jd("just mcp-call --method tools/list"))
+    assert out == "stdin: ok", out
+    direct = "npx -y @modelcontextprotocol/inspector@0.17.2 --cli uv run app --method tools/list"
+    out = lt.lane(1, "ticket", "-", stdin=jd(direct))
+    has(
+        out,
+        "stdin: class: layer-only-ticket: demo runs no surface the repo declares",
+        "a demo through MCP or another public protocol runs a client the repo declares",
+    )
     lt.read_only()
 
 
@@ -1012,4 +1032,5 @@ if __name__ == "__main__":
         just_demos,
         errors,
         linear,
+        mcp_demos,
     )
