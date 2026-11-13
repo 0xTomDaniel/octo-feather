@@ -189,7 +189,8 @@ def parent_gone(s: Scratch) -> None:
     general worker's `--parent RESULT` exits 68 and the director receives exactly one fixed alert
     naming lane, gone parent and worker, without RESULT; no other pane receives anything. A
     parked line naming the parent, a timeout and a stall raise no alert; an implementer may not
-    reach the director; with no director reachable, the exit says the alert was not delivered."""
+    reach the director; with no director reachable or no director.toml, the exit says the alert
+    was not delivered; a parent no lane record names still alerts, naming no lane."""
     say = str(ASSETS / "herdr-say")
     d, env = worker_world(s, "gone")
     ran = s.run([say, "--parent", RESULT], want=68, env=env)
@@ -226,12 +227,37 @@ def parent_gone(s: Scratch) -> None:
     assert to(d, "w0:p1") == [], lines(d / "prompts")
     show(f"implementer to the director w0:p1: exit 77: {ran.err.strip()}")
 
+    no_director(s, say)
+
+
+def no_director(s: Scratch, say: str) -> None:
+    """parent_gone's cases with no director reachable (its pane gone, or no director.toml), and a
+    gone parent no lane record names."""
     s2 = sub(s, "nodirector")
     d, env = worker_world(s2, "gone", director=False)
     ran = s2.run([say, "--parent", RESULT], want=68, env=env)
     assert "alert NOT delivered to the director (pane w0:p1" in ran.err, ran.err
     assert lines(d / "prompts") == [], lines(d / "prompts")
     show(f"no director reachable: exit 68: {ran.err.strip().splitlines()[-1]}")
+
+    s2 = sub(s, "notoml")
+    d, env = worker_world(s2, "gone")
+    (s2.home / ".local" / "state" / "octo-feather" / "director.toml").unlink()
+    ran = s2.run([say, "--parent", RESULT], want=68, env=env)
+    assert "alert NOT delivered: no director reachable (no " in ran.err, ran.err
+    assert "result stays retained" in ran.err, ran.err
+    assert lines(d / "prompts") == [], lines(d / "prompts")
+    show(f"no director.toml: exit 68: {ran.err.strip().splitlines()[-1]}")
+
+    s2 = sub(s, "nolane")
+    d, env = worker_world(s2, "gone")
+    ran = s2.run([say, "--parent", RESULT], want=68, env=env | {"OCTO_FEATHER_PARENT": "w0:p9"})
+    alerts = to(d, "w0:p1")
+    assert len(alerts) == 1, alerts
+    for named in ("no lane", "parent w0:p9 is gone", "general-worker-gh7"):
+        assert named in alerts[0], alerts
+    assert "RESULT-TEXT" not in alerts[0], alerts
+    show(f"parent w0:p9 in no lane record: exit 68, director received: {alerts}")
 
 
 def state_dir(s: Scratch) -> Path:

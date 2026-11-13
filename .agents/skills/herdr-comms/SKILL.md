@@ -168,7 +168,7 @@ Exit codes are the contract:
 | 0 | delivered, and Herdr observed the agent change state |
 | 75 | target is blocked on interactive input; retry when it frees |
 | 124 | not confirmed within `--timeout` (still not seen to start or finish a turn); named |
-| 68 | a worker's parent is proven gone (comms spec `#say-parent-gone`): not delivered; herdr-say itself sent the director its fixed alert, or names why not; keep your result and stop, never re-send |
+| 68 | comms spec `#say-parent-gone` |
 | 69 | the up-chain guard's `herdr agent get TARGET` lookup failed; named, nothing sent (one answering `agent_not_found` is an answer: 77, the lookup named) |
 | other | anything else |
 
