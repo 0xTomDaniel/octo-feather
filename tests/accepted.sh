@@ -29,6 +29,8 @@ t="$(mktemp -d)"; trap 'rm -rf "$t"' EXIT
 fail() { echo "accepted test: $*" >&2; exit 1; }
 
 sc="$("$kit/scripts/check-vendored" --extract spec-chat "$t/sc")" || fail "no pinned Spec Chat (message above)"
+# review-serve.py loads the clone's scripts/design-set-sync, the installer entry's folder.
+"$kit/scripts/check-vendored" --extract spec-chat-installer "$t/sc" > /dev/null || fail "no pinned spec-chat-installer (message above)"
 
 g() { git -c user.name=t -c user.email=t@t -c init.defaultBranch=main "$@"; }
 r="$t/repo"; s=docs/specs/a.spec.html
@@ -42,7 +44,7 @@ mkdir -p "$r/docs/specs/x"; cp "$fx/a.spec.html" "$fx/a-edited.spec.html" "$r/do
 : > "$t/serve.log"   # exists before the first read below: the background redirect may not have opened it yet
 XDG_STATE_HOME="$t/xdg-serve" python3 "$sc/review-spec/assets/review-serve.py" "$r/docs/specs" --port 0 >"$t/serve.log" 2>&1 &
 serve=$!; trap 'kill "$serve" 2>/dev/null || true; rm -rf "$t"' EXIT
-for _ in $(seq 100); do url="$(sed -n 's|^spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done
+for _ in $(seq 100); do url="$(sed -n 's|^.*spec-chat review-serve on \(http://[^ ]*\)$|\1|p' "$t/serve.log")"; [[ -z "$url" ]] || break; sleep 0.1; done
 [[ -n "$url" ]] || fail "pinned review-serve did not start: $(cat "$t/serve.log")"
 etag() { curl -sf -D - -o /dev/null "$url/$1" | tr -d '\r' | sed -n 's/^[Ee][Tt][Aa][Gg]: "\(.*\)"$/\1/p'; }
 got="$(etag x/a.spec.html)"$'\n'"$(etag x/a-edited.spec.html)"
