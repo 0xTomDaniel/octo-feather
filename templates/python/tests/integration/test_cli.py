@@ -20,6 +20,20 @@ def test_hello_text_in_process(greetings: Path, capsys: pytest.CaptureFixture[st
         assert capsys.readouterr().out == f"{want['text']}\n"
 
 
+def test_request_greets(greetings: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    for want in json.loads(greetings.read_text(encoding="utf-8")):
+        assert main(["hello", "--request", json.dumps({"name": want["name"]}), "--json"]) == 0
+        assert json.loads(capsys.readouterr().out) == want
+
+
+def test_request_unknown_field_is_named(capsys: pytest.CaptureFixture[str]) -> None:
+    assert main(["hello", "--request", '{"name": "Ada", "mood": "glad"}', "--json"]) == 2
+    assert json.loads(capsys.readouterr().out) == {
+        "error": "invalid request",
+        "issues": [{"field": "mood", "problem": "Extra inputs are not permitted"}],
+    }
+
+
 def test_empty_name_is_a_json_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["hello", "  ", "--json"]) == 2
     assert json.loads(capsys.readouterr().out) == {"error": "name must not be empty"}

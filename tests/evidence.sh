@@ -26,15 +26,14 @@ for lang in python typescript; do
   (cd "$kit/templates/$lang" && git ls-files -z | xargs -0 cp --parents -t "$repo")
   # Offline: typescript's packages copied first from the run's one offline install of the template from the pnpm
   # store (tests/lib/prepared.py) (its helper reads qc.toml with smol-toml), its setup
-  # then a no-op; python's setup a bare venv (the helper's python), the entry the source on PYTHONPATH.
+  # then a no-op; python's setup the template's own sync, offline from the uv cache (CI's uv step fills it).
   sed -i -e 's/^setup = .*/setup = "true"/' "$repo/qc.toml"
   if [[ "$lang" == typescript ]]; then
     p="$(python3 "$kit/tests/lib/prepared.py" typescript "$t")" && cp -a "$p/node_modules" "$repo/" \
       || fail "typescript: pnpm install --offline failed: fill the pnpm store first (pnpm fetch in templates/typescript)"
   fi
   if [[ "$lang" == python ]]; then
-    sed -i -e 's|^setup = .*|setup = '"'"'python3 -m venv "$QC_REPO/.venv"'"'"'|' \
-      -e 's|^command = .*|command = '"'"'PYTHONPATH="$QC_REPO/src" "$QC_REPO/.venv/bin/python" -m app.cli'"'"'|' "$repo/qc.toml"
+    sed -i -e 's|^setup = .*|setup = "UV_OFFLINE=1 uv sync --locked --quiet"|' "$repo/qc.toml"
   fi
   git -C "$repo" init -q && gitc add -A && gitc commit -qm init
   export VERIFY_APP_RUN_DIR="$t/va-$lang/run" VERIFY_APP_EVIDENCE_DIR="$t/va-$lang/evidence"
