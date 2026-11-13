@@ -300,7 +300,7 @@ def main_ci(s: Scratch) -> None:
         joins()
     lane.repo = ""
     lane.store([green | {"from_list": 2}])  # created after the first run list
-    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "1")
+    r = lane.run(3, "post-merge", "7", H, "--lane", "gh7", "--wait", "3")
     says(r, "late run", f"step 2 main CI: ok: 1 push run on {m12} concluded success")
     lane.store([red, lint])
     r = lane.run(1, "post-merge", "7", H, "--lane", "gh7")
