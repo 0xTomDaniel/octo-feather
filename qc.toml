@@ -229,11 +229,11 @@ covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
 # receives exactly the fixed alert; timeout and stall raise none, an implementer cannot reach the director.
 [demo."roles#acceptance-task-worker-route"]
 command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
 
 [demo."comms#acceptance-parent-gone"]
 command = "python3 tests/gate/kit/herdr_messaging.py worker_route && python3 tests/gate/kit/herdr_messaging.py parent_gone"
-covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
+covers = [".agents/skills/herdr-comms/assets/herdr-say", "scripts/octo-feather-parent-gone", "tests/gate/kit/herdr_messaging.py", "tests/gate/kit/testkit/herdr.py"]
 
 # Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py) and this demo, the kit's commands against the testkit's
 # Herdr stand-in: the director parks its general worker stand-in (herdr-close --park, appended to the director log),
