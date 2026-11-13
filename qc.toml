@@ -222,9 +222,32 @@ covers = ["scripts/check-skills", "extensions/skills-loaded.ts"]
 [demo."comms#acceptance-no-routine-traffic"]
 covers = ["agents/supervisor.md", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-notifications.md"]
 
+[demo."issue-lifecycle#acceptance-pilot-pr"]
+command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 pilot-pr"
+covers = ["scripts/octo-feather-integrate", "scripts/octo-feather-qc", "scripts/octo-feather-lane", "tests/fixtures/tracker-gh/gh"]
+
 # Proven by its tagged test (tests/gate/kit/test_herdr_messaging.py, queued_completion) and this demo, herdr-say against the
 # testkit's Herdr stand-in: a worker's --parent completion while its supervisor compacts is never resent, delivered once
 # after compaction (delivered 1, attempts 1); compaction past the bound leaves it queued, not resent.
 [demo."comms#acceptance-queued-completion"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run --unreachable-exit 77 queued-completion"
 covers = [".agents/skills/herdr-comms/assets/herdr-say", "tests/gate/kit/testkit/herdr.py"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-delegation --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run
+# in evidence/2026-11-13-gh840-supervisor-delegation.md (pass rates on both kits).
+[demo."roles#acceptance-supervisor-delegates-execution"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+
+[demo."roles#acceptance-delegated-pr"]
+covers = ["agents/supervisor.md", "evals/supervisor-delegation", "evals/supervisor-notifications", "evidence/2026-11-13-gh840-supervisor-delegation.md"]
+
+# No command: the proof is a model eval (scripts/octo-feather-qa --suite supervisor-autonomy --runs 3 --baseline
+# origin/main), which needs the eval slot and a real model route: not a qc demo. The agent fallback judge reads its run in
+# evidence/2026-11-13-gh840-supervisor-autonomy.md (pass rates on both kits, director messages, hand-off log lines).
+[demo."comms#acceptance-autonomous-local"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]
+
+# As comms#acceptance-autonomous-local above; the message content is the review case owner-access-blocker-message.
+[demo."comms#acceptance-real-blocker"]
+covers = ["agents/supervisor.md", "evals/supervisor-autonomy", "evidence/2026-11-13-gh840-supervisor-autonomy.md"]

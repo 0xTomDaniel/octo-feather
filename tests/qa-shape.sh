@@ -41,6 +41,8 @@ bad 'del c[4]["head"]["message"]' "rt/cases.json case setup: field head.message:
 bad 'c[4]["head"]["fixture"] = "nope"' "rt/cases.json case setup: field head.fixture: no fixture dir" "$t/rt-good" rt
 bad 'c[4]["head"]["branch"] = "work"' "rt/cases.json case setup: field head.branch: must be a new branch name" "$t/rt-good" rt
 bad 'c[4]["head"] = "fx2"' "rt/cases.json case setup: field head: must be an object" "$t/rt-good" rt
+bad 'c[4]["branches"][0]["branch"] = "hb"' "rt/cases.json case setup: field branches[0].branch: must be a new branch name" "$t/rt-good" rt
+bad 'c[4]["branches"] = []' "rt/cases.json case setup: field branches: must be a non-empty list" "$t/rt-good" rt
 bad 'del c[0]["origin"]' "case order fact #4: field before: git_push needs the case's origin: true" "$t/rt-good" rt
 bad 'del c[0]["fake_gh"]' "case order fact #5: field before: gh_call needs the case's fake_gh: true" "$t/rt-good" rt
 bad 'c[0]["fixture"] = "fx"' "case order fact #1: field before: test_write needs fixture fx to declare its tests" "$t/rt-good" rt
