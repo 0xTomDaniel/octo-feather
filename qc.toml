@@ -200,6 +200,10 @@ covers = ["scripts/octo-feather-reflect", "scripts/octo-feather-lane"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run correction-intake"
 covers = ["scripts/octo-feather-lane", "scripts/octo-feather-reflect"]
 
+# Proven by its tagged test, tests/gate/kit/test_handoff_ended.py (Herdr stand-in; the scenario prints the lane hand-off log).
+[demo."comms#acceptance-worker-ended"]
+covers = ["scripts/octo-feather-handoff", "scripts/handoff_log.py", "agents/supervisor.md", "tests/gate/kit/handoff_ended.py"]
+
 [demo."comms#acceptance-report-owner-caught-headline"]
 command = ".agents/skills/verify-octo-feather/scripts/verify-octo-feather run factory-report"
 covers = ["scripts/octo-feather-lane"]
