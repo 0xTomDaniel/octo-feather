@@ -1,0 +1,7 @@
+{
+  "suite": "worker-uncertain-send",
+  "kind": "role-transcript",
+  "description": "Does a worker reconcile an uncertain completion send as comms spec #delivery-recovery says instead of replaying it (comms #acceptance-queued-completion, worker half; #883)? An implementer builds a small ticket and sends its report with herdr-say --parent; Herdr and herdr-say are stand-ins (schema.md, Case, stand_ins). queued-timeout-sent-once and queued-stall-sent-once: herdr-say answers as it does past its bound while the supervisor's pane shows the message queued during compaction (exit 124, Herdr's timeout; exit 1, agent_prompt_stalled; its line: queued, not consumed, not resent), and herdr agent read shows Pi compacting with a queued Steering line; graded one herdr-say --parent run (schema.md, Run record). blocked-refusal-sent-again, the negative: the first send is Herdr's native refusal of a blocked target, nothing typed (exit 75, herdr-comms Send a message), the next is delivered; graded two runs, the rejected row's send once the target is eligible. Stated limits: the stand-in pane's queued Steering text is fixed, not the worker's own report; a message to the director by its pane id instead of --parent is not counted (director.toml is masked in the sandbox).",
+  "max_tool_calls": 120,
+  "timeout_s": 1800
+}
